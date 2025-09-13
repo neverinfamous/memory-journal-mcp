@@ -149,3 +149,27 @@ INSERT OR IGNORE INTO tags (name, category) VALUES
 ('mathematics', 'domain'),
 ('linguistics', 'domain'),
 ('temporal', 'type');
+
+-- Vector embeddings table for semantic search
+CREATE TABLE IF NOT EXISTS memory_journal_embeddings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    embedding_model TEXT NOT NULL DEFAULT 'all-MiniLM-L6-v2',
+    embedding_vector BLOB NOT NULL,
+    embedding_dimension INTEGER NOT NULL DEFAULT 384,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (entry_id) REFERENCES memory_journal (id) ON DELETE CASCADE
+);
+
+-- Index for faster embedding lookups
+CREATE INDEX IF NOT EXISTS idx_embeddings_entry_id ON memory_journal_embeddings(entry_id);
+CREATE INDEX IF NOT EXISTS idx_embeddings_model ON memory_journal_embeddings(embedding_model);
+
+-- Trigger to automatically generate embeddings for new entries
+CREATE TRIGGER IF NOT EXISTS memory_journal_embedding_insert
+AFTER INSERT ON memory_journal
+BEGIN
+    -- Note: Actual embedding generation will be handled by the server
+    -- This trigger serves as a placeholder for future automatic embedding generation
+    NULL;
+END;

@@ -10,8 +10,10 @@ import sqlite3
 import os
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
+import numpy as np
+import pickle
 
 try:
     from mcp.server import Server, NotificationOptions, InitializationOptions
@@ -21,6 +23,17 @@ try:
 except ImportError:
     print("MCP library not found. Install with: pip install mcp")
     exit(1)
+
+# Vector search imports (optional - graceful degradation if not available)
+try:
+    from sentence_transformers import SentenceTransformer
+    import faiss
+    VECTOR_SEARCH_AVAILABLE = True
+    print("Vector search capabilities enabled")
+except ImportError:
+    VECTOR_SEARCH_AVAILABLE = False
+    print("Vector search dependencies not found. Install with: pip install sentence-transformers faiss-cpu")
+    print("Continuing without semantic search capabilities...")
 
 # Thread pool for non-blocking database operations
 thread_pool = ThreadPoolExecutor(max_workers=2)
@@ -197,6 +210,159 @@ class MemoryJournalDB:
 # Initialize database
 db = MemoryJournalDB(DB_PATH)
 
+class VectorSearchManager:
+    """Manages vector embeddings and semantic search functionality."""
+    
+    def __init__(self, db_path: str, model_name: str = 'all-MiniLM-L6-v2'):
+        self.db_path = db_path
+        self.model_name = model_name
+        self.model = None
+        self.faiss_index = None
+        self.entry_id_map = {}  # Maps FAISS index positions to entry IDs
+        self.initialized = False
+        
+        if VECTOR_SEARCH_AVAILABLE:
+            try:
+                self._initialize()
+            except Exception as e:
+                print(f"Warning: Vector search initialization failed: {e}")
+                self.initialized = False
+    
+    def _initialize(self):
+        """Initialize the sentence transformer model and FAISS index."""
+        if not VECTOR_SEARCH_AVAILABLE:
+            return
+            
+        print(f"Initializing sentence transformer model: {self.model_name}")
+        self.model = SentenceTransformer(self.model_name)
+        
+        # Create FAISS index (384 dimensions for all-MiniLM-L6-v2)
+        self.faiss_index = faiss.IndexFlatIP(384)  # Inner product for cosine similarity
+        
+        # Load existing embeddings from database
+        self._load_existing_embeddings()
+        
+        self.initialized = True
+        print(f"Vector search initialized with {self.faiss_index.ntotal} embeddings")
+    
+    def _load_existing_embeddings(self):
+        """Load existing embeddings from database into FAISS index."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT entry_id, embedding_vector 
+                FROM memory_journal_embeddings 
+                WHERE embedding_model = ?
+                ORDER BY entry_id
+            """, (self.model_name,))
+            
+            vectors = []
+            entry_ids = []
+            
+            for entry_id, embedding_blob in cursor.fetchall():
+                # Deserialize the embedding vector
+                embedding = pickle.loads(embedding_blob)
+                vectors.append(embedding)
+                entry_ids.append(entry_id)
+            
+            if vectors:
+                # Normalize vectors for cosine similarity
+                vectors = np.array(vectors, dtype=np.float32)
+                faiss.normalize_L2(vectors)
+                
+                # Add to FAISS index
+                self.faiss_index.add(vectors)
+                
+                # Update entry ID mapping
+                for i, entry_id in enumerate(entry_ids):
+                    self.entry_id_map[i] = entry_id
+    
+    async def generate_embedding(self, text: str) -> np.ndarray:
+        """Generate embedding for text using sentence transformer."""
+        if not self.initialized:
+            raise RuntimeError("Vector search not initialized")
+        
+        # Run in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        embedding = await loop.run_in_executor(
+            thread_pool, 
+            lambda: self.model.encode([text], convert_to_tensor=False)[0]
+        )
+        
+        return embedding.astype(np.float32)
+    
+    async def add_entry_embedding(self, entry_id: int, content: str) -> bool:
+        """Generate and store embedding for a journal entry."""
+        if not self.initialized:
+            return False
+        
+        try:
+            # Generate embedding
+            embedding = await self.generate_embedding(content)
+            
+            # Normalize for cosine similarity
+            embedding_norm = embedding.copy()
+            faiss.normalize_L2(embedding_norm.reshape(1, -1))
+            
+            # Store in database
+            def store_embedding():
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute("""
+                        INSERT OR REPLACE INTO memory_journal_embeddings 
+                        (entry_id, embedding_model, embedding_vector, embedding_dimension)
+                        VALUES (?, ?, ?, ?)
+                    """, (entry_id, self.model_name, pickle.dumps(embedding), len(embedding)))
+            
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(thread_pool, store_embedding)
+            
+            # Add to FAISS index
+            self.faiss_index.add(embedding_norm.reshape(1, -1))
+            
+            # Update entry ID mapping
+            new_index = self.faiss_index.ntotal - 1
+            self.entry_id_map[new_index] = entry_id
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error adding embedding for entry {entry_id}: {e}")
+            return False
+    
+    async def semantic_search(self, query: str, limit: int = 10, similarity_threshold: float = 0.3) -> List[Tuple[int, float]]:
+        """Perform semantic search and return entry IDs with similarity scores."""
+        if not self.initialized or self.faiss_index.ntotal == 0:
+            return []
+        
+        try:
+            # Generate query embedding
+            query_embedding = await self.generate_embedding(query)
+            
+            # Normalize for cosine similarity
+            query_norm = query_embedding.copy()
+            faiss.normalize_L2(query_norm.reshape(1, -1))
+            
+            # Search FAISS index
+            scores, indices = self.faiss_index.search(query_norm.reshape(1, -1), min(limit * 2, self.faiss_index.ntotal))
+            
+            # Convert to entry IDs and filter by threshold
+            results = []
+            for score, idx in zip(scores[0], indices[0]):
+                if idx != -1 and score >= similarity_threshold:  # -1 means no more results
+                    entry_id = self.entry_id_map.get(idx)
+                    if entry_id:
+                        results.append((entry_id, float(score)))
+            
+            # Sort by similarity score (descending) and limit results
+            results.sort(key=lambda x: x[1], reverse=True)
+            return results[:limit]
+            
+        except Exception as e:
+            print(f"Error in semantic search: {e}")
+            return []
+
+# Initialize vector search manager
+vector_search = VectorSearchManager(DB_PATH) if VECTOR_SEARCH_AVAILABLE else None
+
 @server.list_resources()
 async def list_resources() -> List[Resource]:
     """List available resources."""
@@ -342,6 +508,20 @@ async def list_tools() -> List[Tool]:
                 },
                 "required": ["content"]
             }
+        ),
+        Tool(
+            name="semantic_search",
+            description="Perform semantic/vector search on journal entries",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query for semantic similarity"},
+                    "limit": {"type": "integer", "default": 10, "description": "Maximum number of results"},
+                    "similarity_threshold": {"type": "number", "default": 0.3, "description": "Minimum similarity score (0.0-1.0)"},
+                    "is_personal": {"type": "boolean", "description": "Filter by personal entries"}
+                },
+                "required": ["query"]
+            }
         )
     ]
 
@@ -418,6 +598,18 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         loop = asyncio.get_event_loop()
         entry_id = await loop.run_in_executor(thread_pool, create_entry_in_db)
         print(f"DEBUG: Database operation completed, entry_id: {entry_id}")
+        
+        # Generate and store embedding for semantic search (if available)
+        if vector_search and vector_search.initialized:
+            try:
+                print("DEBUG: Generating embedding for semantic search...")
+                embedding_success = await vector_search.add_entry_embedding(entry_id, content)
+                if embedding_success:
+                    print(f"DEBUG: Embedding generated successfully for entry #{entry_id}")
+                else:
+                    print(f"DEBUG: Failed to generate embedding for entry #{entry_id}")
+            except Exception as e:
+                print(f"DEBUG: Error generating embedding: {e}")
         
         result = [types.TextContent(
             type="text",
@@ -559,6 +751,90 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
             type="text",
             text=f"✅ Minimal entry created #{entry_id}"
         )]
+    
+    elif name == "semantic_search":
+        query = arguments.get("query")
+        limit = arguments.get("limit", 10)
+        similarity_threshold = arguments.get("similarity_threshold", 0.3)
+        is_personal = arguments.get("is_personal")
+        
+        if not query:
+            return [types.TextContent(
+                type="text",
+                text="❌ Query parameter is required for semantic search"
+            )]
+        
+        if not vector_search or not vector_search.initialized:
+            return [types.TextContent(
+                type="text", 
+                text="❌ Vector search not available. Install dependencies: pip install sentence-transformers faiss-cpu"
+            )]
+        
+        try:
+            # Perform semantic search
+            search_results = await vector_search.semantic_search(query, limit, similarity_threshold)
+            
+            if not search_results:
+                return [types.TextContent(
+                    type="text",
+                    text=f"🔍 No semantically similar entries found for: '{query}'"
+                )]
+            
+            # Fetch entry details from database
+            def get_entry_details():
+                entry_ids = [result[0] for result in search_results]
+                with sqlite3.connect(DB_PATH) as conn:
+                    placeholders = ','.join(['?'] * len(entry_ids))
+                    sql = f"""
+                        SELECT id, entry_type, content, timestamp, is_personal
+                        FROM memory_journal 
+                        WHERE id IN ({placeholders})
+                    """
+                    if is_personal is not None:
+                        sql += " AND is_personal = ?"
+                        entry_ids.append(is_personal)
+                    
+                    cursor = conn.execute(sql, entry_ids)
+                    entries = {}
+                    for row in cursor.fetchall():
+                        entries[row[0]] = {
+                            'id': row[0],
+                            'entry_type': row[1],
+                            'content': row[2],
+                            'timestamp': row[3],
+                            'is_personal': bool(row[4])
+                        }
+                    return entries
+            
+            loop = asyncio.get_event_loop()
+            entries = await loop.run_in_executor(thread_pool, get_entry_details)
+            
+            # Format results
+            result_text = f"🔍 **Semantic Search Results** for: '{query}'\n"
+            result_text += f"Found {len(search_results)} semantically similar entries:\n\n"
+            
+            for entry_id, similarity_score in search_results:
+                if entry_id in entries:
+                    entry = entries[entry_id]
+                    result_text += f"**Entry #{entry['id']}** (similarity: {similarity_score:.3f})\n"
+                    result_text += f"Type: {entry['entry_type']} | Personal: {entry['is_personal']} | {entry['timestamp']}\n"
+                    
+                    # Show content preview
+                    content_preview = entry['content'][:200]
+                    if len(entry['content']) > 200:
+                        content_preview += "..."
+                    result_text += f"Content: {content_preview}\n\n"
+            
+            return [types.TextContent(
+                type="text",
+                text=result_text
+            )]
+            
+        except Exception as e:
+            return [types.TextContent(
+                type="text",
+                text=f"❌ Error in semantic search: {str(e)}"
+            )]
     
     else:
         raise ValueError(f"Unknown tool: {name}")

@@ -1,5 +1,5 @@
 # Memory Journal MCP Server
-* Last Updated September 13, 2025 3:02 PM EST *
+* Last Updated September 13, 2025 4:05 PM EST *
 
 A **fully functional** Model Context Protocol (MCP) server for personal journaling with rich context awareness and powerful search capabilities. This system provides the perfect balance of sophisticated features and practical simplicity for daily use.
 
@@ -20,6 +20,7 @@ A **fully functional** Model Context Protocol (MCP) server for personal journali
 - **Context Bundles**: Automatically capture Git repository, branch, commit information, and GitHub issues
 - **Smart Tagging**: Auto-create tags with usage tracking
 - **Full-Text Search**: Powered by SQLite FTS5 with result highlighting
+- **Semantic Search**: Vector similarity search using sentence-transformers and FAISS
 - **Relationship Mapping**: Link related entries with typed relationships
 - **Significance Classification**: Mark important entries for easy retrieval
 - **Async Operations**: Non-blocking Git operations with aggressive timeouts
@@ -70,7 +71,11 @@ A **fully functional** Model Context Protocol (MCP) server for personal journali
 
 2. **Install dependencies**:
    ```bash
+   # Core dependencies
    pip install -r requirements.txt
+   
+   # Optional: For semantic search capabilities
+   pip install sentence-transformers faiss-cpu
    ```
 
 3. **Add to Cursor MCP configuration** (`~/.cursor/mcp.json`):
@@ -316,6 +321,13 @@ Context: memory-journal-mcp (main branch)
 - **Fallback**: If GitHub CLI unavailable, context bundle works without issue data
 - **Performance**: GitHub issue queries use same aggressive timeouts as Git operations
 
+**🔍 Semantic Search:**
+- **Dependencies**: `pip install sentence-transformers faiss-cpu` (optional)
+- **Model**: Uses `all-MiniLM-L6-v2` (384-dimensional embeddings, ~100MB download)
+- **Performance**: Embeddings generated automatically for new entries
+- **Graceful Degradation**: System works without vector search if dependencies unavailable
+- **Storage**: Embeddings stored as BLOB in SQLite with FAISS index for fast similarity search
+
 ## 🛠️ **Tools Available** (Programmatic Access)
 
 ### **Core Tools**
@@ -350,6 +362,18 @@ create_entry(
 search_entries(query="MCP prompts", limit=5, is_personal=false)
 ```
 
+#### **`semantic_search`** - Vector Similarity Search
+**Parameters:**
+- `query` (required): Search query for semantic similarity
+- `limit` (optional): Max results (default: 10)
+- `similarity_threshold` (optional): Minimum similarity score 0.0-1.0 (default: 0.3)
+- `is_personal` (optional): Filter by personal/project entries
+
+**Example Usage:**
+```python
+semantic_search(query="project development challenges", limit=5, similarity_threshold=0.4)
+```
+
 #### **`get_recent_entries`** - Retrieve Recent Entries
 **Parameters:**
 - `limit` (optional): Number of entries (default: 5)
@@ -361,6 +385,10 @@ Returns all tags with usage statistics.
 ### **Diagnostic Tools**
 - **`test_simple`**: Basic connectivity test
 - **`create_entry_minimal`**: Minimal entry creation for debugging
+
+### **Search Tools**
+- **`search_entries`**: Full-text search with FTS5
+- **`semantic_search`**: Vector similarity search with embeddings
 
 ## 🎯 **Prompts Available**
 
@@ -379,10 +407,10 @@ This MCP server runs independently of any existing Memory Journal V2 (Cloudflare
 ## 🚀 **Future Enhancements**
 
 Potential additions for future versions:
+- **Vector Search**: Semantic search using embeddings
+- **Export/Import**: Backup and migration utilities. Import entries from memory journal v2 and maybe even v1.
 - **Visual Relationship Mapping**: Graph visualization of entry connections
 - **Temporal Summaries**: Automated weekly/monthly summary generation
-- **Vector Search**: Semantic search using embeddings
-- **Export/Import**: Backup and migration utilities
 - **Web Dashboard**: Optional visualization interface
 
 ## 📄 **License**

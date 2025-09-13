@@ -1,2 +1,7 @@
 # Memory Journal MCP Server Dependencies
 mcp>=1.0.0
+
+# Vector Search Dependencies
+sentence-transformers>=2.2.2
+faiss-cpu>=1.7.4
+numpy>=1.21.0
