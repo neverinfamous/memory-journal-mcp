@@ -121,31 +121,48 @@ async def list_resources() -> List[Resource]:
 @server.read_resource()
 async def read_resource(uri: str) -> str:
     """Read a specific resource."""
+    # Debug logging
+    print(f"DEBUG: Requested resource URI: '{uri}' (type: {type(uri)})")
+    
+    # Normalize URI (strip whitespace, ensure consistent format)
+    uri = uri.strip()
+    
     if uri == "memory://recent":
-        with db.get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT id, entry_type, content, timestamp, is_personal, project_context
-                FROM memory_journal 
-                ORDER BY timestamp DESC 
-                LIMIT 10
-            """)
-            entries = [dict(row) for row in cursor.fetchall()]
-            return json.dumps(entries, indent=2)
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT id, entry_type, content, timestamp, is_personal, project_context
+                    FROM memory_journal 
+                    ORDER BY timestamp DESC 
+                    LIMIT 10
+                """)
+                entries = [dict(row) for row in cursor.fetchall()]
+                print(f"DEBUG: Found {len(entries)} recent entries")
+                return json.dumps(entries, indent=2)
+        except Exception as e:
+            print(f"DEBUG: Error reading recent entries: {e}")
+            raise
     
     elif uri == "memory://significant":
-        with db.get_connection() as conn:
-            cursor = conn.execute("""
-                SELECT se.significance_type, se.significance_rating,
-                       mj.id, mj.entry_type, mj.content, mj.timestamp
-                FROM significant_entries se
-                JOIN memory_journal mj ON se.entry_id = mj.id
-                ORDER BY se.significance_rating DESC
-                LIMIT 10
-            """)
-            entries = [dict(row) for row in cursor.fetchall()]
-            return json.dumps(entries, indent=2)
+        try:
+            with db.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT se.significance_type, se.significance_rating,
+                           mj.id, mj.entry_type, mj.content, mj.timestamp
+                    FROM significant_entries se
+                    JOIN memory_journal mj ON se.entry_id = mj.id
+                    ORDER BY se.significance_rating DESC
+                    LIMIT 10
+                """)
+                entries = [dict(row) for row in cursor.fetchall()]
+                print(f"DEBUG: Found {len(entries)} significant entries")
+                return json.dumps(entries, indent=2)
+        except Exception as e:
+            print(f"DEBUG: Error reading significant entries: {e}")
+            raise
     
     else:
+        print(f"DEBUG: No match for URI '{uri}'. Available: memory://recent, memory://significant")
         raise ValueError(f"Unknown resource: {uri}")
 
 @server.list_tools()
@@ -202,6 +219,9 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
     """Handle tool calls."""
     
+    # Debug logging
+    print(f"DEBUG: Tool call received: {name} with args: {list(arguments.keys())}")
+    
     if name == "create_entry":
         content = arguments["content"]
         is_personal = arguments.get("is_personal", True)
@@ -245,13 +265,15 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                     ) VALUES (?, ?, 0.8)
                 """, (entry_id, significance_type))
         
-        return [types.TextContent(
+        result = [types.TextContent(
             type="text",
             text=f"✅ Created journal entry #{entry_id}\n"
                  f"Type: {entry_type}\n"
                  f"Personal: {is_personal}\n"
                  f"Tags: {', '.join(tags) if tags else 'None'}"
         )]
+        print(f"DEBUG: create_entry completed successfully, returning result")
+        return result
     
     elif name == "search_entries":
         query = arguments.get("query")
