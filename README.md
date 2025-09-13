@@ -1,32 +1,81 @@
-# Memory Journal MCP Server
-* Last Updated September 13, 2025 5:00 PM EST *
+# 🛠️ Memory Journal MCP Server
 
-A **fully functional** Model Context Protocol (MCP) server for personal journaling with rich context awareness and powerful search capabilities. This system provides the perfect balance of sophisticated features and practical simplicity for daily use.
+*A developer's project journal and context manager*
 
-## 🎯 **Current Status: PRODUCTION READY**
+The **Memory Journal MCP Server** is a Model Context Protocol server built for developers who want more than scattered notes and TODOs. Think of it as a **scrapbook for your projects** — one that captures technical details, GitHub issues, code context, and even the personal threads that shape a project's story.
 
-### **🎉 Enterprise-Grade Personal Journaling System**
+Whether you're tracking a feature sprint, logging a bug hunt, planning strategy, or leaving behind breadcrumbs for future-you (or your team), this system gives you a structured but flexible way to journal your dev work.
 
-**✅ Core Features (100% Complete)**
-- **7 MCP Tools**: Full tool suite including semantic search capability
-- **2 Resources**: Recent and significant entries with JSON formatting  
-- **2 Prompts**: User-friendly context bundle and recent entries access
-- **Context Bundles**: Git + GitHub integration with robust timeout handling
-- **Full-Text Search**: SQLite FTS5 with highlighting and advanced filtering
-- **Semantic Search**: Vector similarity search with graceful degradation
+---
 
-**✅ Security & Performance (100% Complete)**
-- **WAL Mode**: Write-Ahead Logging for concurrency and crash recovery
-- **Database Optimization**: 64MB cache, 256MB mmap, optimized PRAGMA settings
-- **Input Validation**: Length limits, character filtering, SQL injection prevention
-- **Docker Security**: Non-root execution, minimal privileges, container hardening
-- **Privacy Protection**: Local-first, no external dependencies, full data ownership
+## 🚀 **Why Developers Use This**
 
-**✅ Production Deployment (100% Complete)**
-- **Docker Images**: Lite (fast) and Full (with ML dependencies) versions
-- **Comprehensive Documentation**: Setup, security, Docker, and usage guides
-- **System Testing**: All features tested and verified working
-- **Ready for Public Release**: Production-grade, security-hardened system
+* **Project context on tap** → Git + GitHub issues, branch, commit, and working directory auto-captured
+* **Journaling tuned for dev work** → `technical_achievement`, `milestone`, `development_note` entry types
+* **Productivity & organization** → search, tags, significance markers, relationship mapping
+* **Performance reviews & retros** → chart your progress, revisit major breakthroughs
+* **Scrapbook of the process** → capture not only *what* you built but *how it felt building it*
+* **Team continuity** → leave breadcrumbs for future-you and your teammates
+
+---
+
+## ⚡ **Core Features**
+
+* **7 MCP Tools**: Entry creation, search, semantic search, context bundle retrieval
+* **Git & GitHub integration**: Pulls in commits and recent issues automatically
+* **Full-text + semantic search**: SQLite FTS5 plus FAISS embeddings (optional)
+* **Typed relationships**: Connect entries (`implements`, `references`, `clarifies`)
+* **Significance classification**: Flag breakthroughs, milestones, completions
+* **Portable, private, local-first**: Each user owns a single SQLite `.db` file
+
+---
+
+## 🏗️ **Developer-Friendly Design**
+
+* **Zero friction** → no auth, no external API limits
+* **Context-aware** → project state captured automatically
+* **Dockerized** → Lite (fast) and Full (with ML for semantic search) images
+* **Secure** → WAL mode, input validation, non-root containers, no data leakage
+* **Extensible** → semantic search, relationship mapping, future summaries
+
+---
+
+## 📊 **Example Use Cases**
+
+**Track technical breakthroughs:**
+```javascript
+create_entry({
+  content: "Implemented async Git operations with 2s fail-fast timeout to stop MCP hangs.",
+  entry_type: "technical_achievement",
+  tags: ["git", "async", "performance"],
+  significance_type: "technical_breakthrough",
+  auto_context: true
+})
+```
+
+**Log a milestone:**
+```javascript
+create_entry({
+  content: "Shipped v1.0 of the journaling system with full Docker support.",
+  entry_type: "milestone",
+  is_personal: false,
+  tags: ["release", "deployment"]
+})
+```
+
+**Search your history:**
+```javascript
+search_entries({ query: "async Git timeout", limit: 5 })
+semantic_search({ query: "performance optimization challenges", limit: 3 })
+```
+
+**Capture project context automatically:**
+```javascript
+// Context bundle includes: Git repo, branch, commit, GitHub issues, working directory
+/get-context-bundle  // Available in Cursor prompt palette
+```
+
+---
 
 ## 🚀 **Features**
 
@@ -72,43 +121,50 @@ A **fully functional** Model Context Protocol (MCP) server for personal journali
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## ⚡ **Installation**
+## 🛠️ **Setup in 3 Steps**
 
-### **Prerequisites**
-- Python 3.8+
-- MCP-compatible client (Cursor recommended)
-- Git (optional, for context capture)
+**Option 1: Docker (Recommended)**
+```bash
+# 1. Clone and build
+git clone <repo-url>
+cd memory-journal-mcp
+docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
 
-### **Setup**
-1. **Clone this repository**:
-   ```bash
-   git clone <repo-url>
-   cd memory-journal-mcp
-   ```
+# 2. Add to your MCP config (~/.cursor/mcp.json)
+{
+  "mcpServers": {
+    "memory-journal": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "-v", "/path/to/data:/app/data", "memory-journal-mcp-lite", "python", "src/server.py"]
+    }
+  }
+}
 
-2. **Install dependencies**:
-   ```bash
-   # Core dependencies
-   pip install -r requirements.txt
-   
-   # Optional: For semantic search capabilities
-   pip install sentence-transformers faiss-cpu
-   ```
+# 3. Restart Cursor → Start journaling!
+```
 
-3. **Add to Cursor MCP configuration** (`~/.cursor/mcp.json`):
-   ```json
-   {
-     "mcpServers": {
-       "memory-journal": {
-         "command": "python",
-         "args": ["C:\\Users\\chris\\Desktop\\memory-journal-mcp\\src\\server.py"],
-         "priority": 1
-       }
-     }
-   }
-   ```
+**Option 2: Manual Installation**
+```bash
+# 1. Clone the repo
+git clone <repo-url>
+cd memory-journal-mcp
 
-4. **Restart Cursor** to load the MCP server
+# 2. Install dependencies
+pip install -r requirements.txt
+# Optional: semantic search
+pip install sentence-transformers faiss-cpu
+
+# 3. Add to MCP config
+{
+  "mcpServers": {
+    "memory-journal": {
+      "command": "python",
+      "args": ["path/to/memory-journal-mcp/src/server.py"],
+      "priority": 1
+    }
+  }
+}
+```
 
 ## 📝 **Usage**
 
@@ -429,52 +485,48 @@ This MCP server runs independently of any existing Memory Journal V2 (Cloudflare
 - **Manual import** of key entries possible if desired
 - **Gradual adoption** as MCP server proves itself in daily use
 
-## 🚀 **Future Enhancements**
+## 🔮 **Future Roadmap**
 
-Potential additions for future versions:
-- **Vector Search**: Semantic search using embeddings
-- **Export/Import**: Backup and migration utilities. Import entries from memory journal version one and two.
-- **Visual Relationship Mapping**: Graph visualization of entry connections
-- **Temporal Summaries**: Automated weekly/monthly summary generation
-- **Web Dashboard**: Optional visualization interface
+**Next up for developers:**
+- **Weekly/monthly auto-summaries** → "Here's what you shipped this sprint"
+- **Graph visualization** → See how your entries and projects connect
+- **Import/export utilities** → Migrate from other systems, backup your history
+- **LLM/AI progress tracking** → Chart how your AI assistants evolve alongside you
+- **Team features** → Share context bundles, collaborative project journals
+- **IDE integrations** → Beyond Cursor, into VS Code, IntelliJ, etc.
 
 ## 📄 **License**
 
-MIT License - see LICENSE file for details.
+MIT License — do whatever you want, just don't blame us if it writes your autobiography.
 
 ## 🤝 **Contributing**
 
-This project is part of the Adamic initiative. Contributions welcome through issues and pull requests.
+Built by developers, for developers. PRs welcome, especially for:
+- New entry types that make sense for dev work
+- Better Git/GitHub integrations
+- Performance improvements
+- Cool semantic search features
 
 ---
 
-## 🚀 **Ready for Public Release**
+## 🎯 **Production Status**
 
-The Memory Journal MCP Server has achieved **production-grade status** with:
+**✅ Ready for developers**
+- All 7 MCP tools working and tested
+- Docker images built and validated  
+- Security hardened (WAL mode, input validation, non-root containers)
+- Comprehensive docs (setup, security, Docker guides)
+- 15+ entries created during testing — system is solid
 
-### **📊 System Validation**
-- **15+ entries** created during comprehensive testing
-- **All 7 tools** verified working with proper error handling
-- **Security hardening** implemented and tested
-- **Docker deployment** validated on multiple platforms
-- **Performance optimization** confirmed with WAL mode and caching
+**✅ Battle-tested features**
+- Context bundles capture Git + GitHub seamlessly
+- Full-text search with highlighting works great
+- Semantic search gracefully degrades without ML deps
+- Tag management and relationship mapping functional
+- Performance optimized with 64MB cache and memory mapping
 
-### **🏆 Quality Assurance**
-- **✅ Feature Complete**: All planned functionality implemented
-- **✅ Security Audited**: Comprehensive security measures in place
-- **✅ Performance Optimized**: Database tuned for production workloads
-- **✅ Documentation Complete**: User guides, security docs, Docker setup
-- **✅ System Tested**: End-to-end testing of all components
-- **✅ Production Ready**: Ready for public distribution and use
-
-### **🎯 Distribution Channels**
-- **GitHub Repository**: Complete source code with comprehensive documentation
-- **Docker Hub**: Pre-built containers for easy deployment
-- **Documentation**: SECURITY.md, DOCKER.md, and comprehensive README
-- **Examples**: Working MCP configuration files and usage examples
-
-**The Memory Journal MCP Server is now ready for public release as a production-grade, security-hardened personal journaling system!** 🎉
+**Ready to be your dev journal companion.** 🚀
 
 ---
 
-*Built with dedication by Chris & Mike as part of the ongoing exploration of AI consciousness and human-machine collaboration. This system represents a successful fusion of sophisticated features with practical usability.*
+*Built by developers who got tired of scattered notes and wanted something better.*
