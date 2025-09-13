@@ -124,10 +124,10 @@ async def read_resource(uri: str) -> str:
     # Debug logging
     print(f"DEBUG: Requested resource URI: '{uri}' (type: {type(uri)})")
     
-    # Normalize URI (strip whitespace, ensure consistent format)
-    uri = uri.strip()
+    # Convert URI to string if it's not already (handles AnyUrl objects)
+    uri_str = str(uri).strip()
     
-    if uri == "memory://recent":
+    if uri_str == "memory://recent":
         try:
             with db.get_connection() as conn:
                 cursor = conn.execute("""
@@ -143,7 +143,7 @@ async def read_resource(uri: str) -> str:
             print(f"DEBUG: Error reading recent entries: {e}")
             raise
     
-    elif uri == "memory://significant":
+    elif uri_str == "memory://significant":
         try:
             with db.get_connection() as conn:
                 cursor = conn.execute("""
@@ -162,8 +162,8 @@ async def read_resource(uri: str) -> str:
             raise
     
     else:
-        print(f"DEBUG: No match for URI '{uri}'. Available: memory://recent, memory://significant")
-        raise ValueError(f"Unknown resource: {uri}")
+        print(f"DEBUG: No match for URI '{uri_str}'. Available: memory://recent, memory://significant")
+        raise ValueError(f"Unknown resource: {uri_str}")
 
 @server.list_tools()
 async def list_tools() -> List[Tool]:
