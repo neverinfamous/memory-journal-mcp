@@ -480,11 +480,12 @@ Returns all tags with usage statistics.
 
 **Next up for developers:**
 - **Graph visualization** → See how your entries and projects connect
-- **Import/export utilities** → Backup and restore your history
+- **Import/export utilities** → Backup and restore history
 - **Weekly/monthly auto-summaries** → "Here's what you shipped this sprint"
+- **Add elements to database without forking** → "I want to extend the project (e.g., add monitoring to this data) without having to fork and maintain a separate codebase"
 - **LLM/AI progress tracking** → Chart how your AI assistants evolve alongside you
 - **Team features** → Share context bundles, collaborative project journals
-- **IDE integrations** → Beyond Cursor, into VS Code, IntelliJ, etc.
+- **IDE integrations** → VS Code, IntelliJ, etc.
 
 ## 📄 **License**
 
@@ -500,7 +501,7 @@ Built by developers, for developers. PRs welcome, especially for:
 
 ---
 
-## 🎯 **Production Status**
+## 🎯 **Status**
 
 **✅ Ready for developers**
 - All 7 MCP tools working and tested
@@ -515,7 +516,3 @@ Built by developers, for developers. PRs welcome, especially for:
 - Semantic search gracefully degrades without ML deps
 - Tag management and relationship mapping functional
 - Performance optimized with 64MB cache and memory mapping
-
----
-
-*Built by developers who got tired of scattered notes and wanted something better.*
