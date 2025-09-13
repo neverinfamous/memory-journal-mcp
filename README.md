@@ -123,19 +123,18 @@ semantic_search({ query: "performance optimization challenges", limit: 3 })
 
 ## 🛠️ **Setup in 3 Steps**
 
-**Option 1: Docker (Recommended)**
+**Option 1: Docker Hub (Recommended)**
 ```bash
-# 1. Clone and build
-git clone <repo-url>
-cd memory-journal-mcp
-docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
+# 1. Pull and run (no build needed!)
+docker pull writenotenow/memory-journal-mcp:lite
+mkdir data  # Create data directory
 
 # 2. Add to your MCP config (~/.cursor/mcp.json)
 {
   "mcpServers": {
     "memory-journal": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "-v", "/path/to/data:/app/data", "memory-journal-mcp-lite", "python", "src/server.py"]
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:lite", "python", "src/server.py"]
     }
   }
 }
@@ -143,7 +142,25 @@ docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
 # 3. Restart Cursor → Start journaling!
 ```
 
-**Option 2: Manual Installation**
+**Option 2: Build from Source**
+```bash
+# 1. Clone and build
+git clone <repo-url>
+cd memory-journal-mcp
+docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
+
+# 2. Add to MCP config (use local image)
+{
+  "mcpServers": {
+    "memory-journal": {
+      "command": "docker", 
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-lite", "python", "src/server.py"]
+    }
+  }
+}
+```
+
+**Option 3: Manual Installation**
 ```bash
 # 1. Clone the repo
 git clone <repo-url>
@@ -165,6 +182,19 @@ pip install sentence-transformers faiss-cpu
   }
 }
 ```
+
+### **🐳 Docker Hub Images**
+
+**Available on Docker Hub:**
+- **`writenotenow/memory-journal-mcp:lite`** - Core features, fast build (~200MB)
+- **`writenotenow/memory-journal-mcp:latest`** - Full version with semantic search (~2GB)
+
+**Quick test:**
+```bash
+docker run --rm writenotenow/memory-journal-mcp:lite python -c "print('✅ Memory Journal MCP ready!')"
+```
+
+---
 
 ## 📝 **Usage**
 
