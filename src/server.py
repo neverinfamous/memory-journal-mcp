@@ -228,6 +228,16 @@ async def list_tools() -> List[Tool]:
             name="list_tags",
             description="List all available tags",
             inputSchema={"type": "object", "properties": {}}
+        ),
+        Tool(
+            name="test_simple",
+            description="Simple test tool that just returns a message",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "default": "Hello"}
+                }
+            }
         )
     ]
 
@@ -409,6 +419,15 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
             result += f" - used {tag['usage_count']} times\n"
         
         return [types.TextContent(type="text", text=result)]
+    
+    elif name == "test_simple":
+        print("DEBUG: Running simple test...")
+        message = arguments.get("message", "Hello")
+        print(f"DEBUG: Simple test completed with message: {message}")
+        return [types.TextContent(
+            type="text",
+            text=f"✅ Simple test successful! Message: {message}"
+        )]
     
     else:
         raise ValueError(f"Unknown tool: {name}")
