@@ -173,7 +173,7 @@ pip install sentence-transformers faiss-cpu
 **Personal Reflection:**
 ```javascript
 create_entry({
-  content: "Today I reflected on consciousness development and the emergence of new patterns in my thinking...",
+  content: "Today I reflected on new patterns in my thinking...",
   is_personal: true,
   entry_type: "personal_reflection",
   tags: ["consciousness", "growth", "reflection"],
@@ -476,21 +476,12 @@ Returns all tags with usage statistics.
 1. **`get-context-bundle`**: Get current project context as JSON
 2. **`get-recent-entries`**: Get formatted display of recent journal entries
 
-## 🔄 **Migration from V2**
-
-This MCP server runs independently of any existing Memory Journal V2 (Cloudflare) system:
-
-- **No migration required** - starts fresh with its own SQLite database
-- **Can coexist** with V2 system during transition period
-- **Manual import** of key entries possible if desired
-- **Gradual adoption** as MCP server proves itself in daily use
-
 ## 🔮 **Future Roadmap**
 
 **Next up for developers:**
-- **Weekly/monthly auto-summaries** → "Here's what you shipped this sprint"
 - **Graph visualization** → See how your entries and projects connect
-- **Import/export utilities** → Migrate from other systems, backup your history
+- **Import/export utilities** → Backup and restore your history
+- **Weekly/monthly auto-summaries** → "Here's what you shipped this sprint"
 - **LLM/AI progress tracking** → Chart how your AI assistants evolve alongside you
 - **Team features** → Share context bundles, collaborative project journals
 - **IDE integrations** → Beyond Cursor, into VS Code, IntelliJ, etc.
@@ -524,8 +515,6 @@ Built by developers, for developers. PRs welcome, especially for:
 - Semantic search gracefully degrades without ML deps
 - Tag management and relationship mapping functional
 - Performance optimized with 64MB cache and memory mapping
-
-**Ready to be your dev journal companion.** 🚀
 
 ---
 
