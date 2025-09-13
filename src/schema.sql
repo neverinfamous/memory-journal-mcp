@@ -171,5 +171,5 @@ AFTER INSERT ON memory_journal
 BEGIN
     -- Note: Actual embedding generation will be handled by the server
     -- This trigger serves as a placeholder for future automatic embedding generation
-    NULL;
+    SELECT 1; -- Valid SQL statement that does nothing
 END;
