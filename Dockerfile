@@ -26,8 +26,12 @@ RUN pip install --no-cache-dir \
 # Copy source code
 COPY src/ ./src/
 
-# Create data directory for SQLite database
-RUN mkdir -p /app/data
+# Create data directory for SQLite database with proper permissions
+RUN mkdir -p /app/data && chmod 700 /app/data
+
+# Create non-root user for security
+RUN useradd -r -s /bin/false -m -d /app/user appuser && \
+    chown -R appuser:appuser /app
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -35,6 +39,9 @@ ENV DB_PATH=/app/data/memory_journal.db
 
 # Expose the port (though MCP uses stdio, this is for potential future web interface)
 EXPOSE 8000
+
+# Switch to non-root user
+USER appuser
 
 # Health check to ensure the server can start
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

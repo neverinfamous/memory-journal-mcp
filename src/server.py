@@ -47,27 +47,136 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "..", "memory_journal.db")
 class MemoryJournalDB:
     """Database operations for the Memory Journal system."""
     
+    # Security constants
+    MAX_CONTENT_LENGTH = 50000  # 50KB max for journal entries
+    MAX_TAG_LENGTH = 100
+    MAX_ENTRY_TYPE_LENGTH = 50
+    MAX_SIGNIFICANCE_TYPE_LENGTH = 50
+    
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._validate_db_path()
         self.init_database()
     
+    def _validate_db_path(self):
+        """Validate database path for security."""
+        # Ensure the database path is within allowed directories
+        abs_db_path = os.path.abspath(self.db_path)
+        
+        # Get the directory containing the database
+        db_dir = os.path.dirname(abs_db_path)
+        
+        # Ensure directory exists and create if it doesn't
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir, mode=0o700)  # Restrictive permissions
+        
+        # Set restrictive permissions on database file if it exists
+        if os.path.exists(abs_db_path):
+            os.chmod(abs_db_path, 0o600)  # Read/write for owner only
+    
     def init_database(self):
-        """Initialize database with schema."""
+        """Initialize database with schema and optimal settings."""
         schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
         
         with sqlite3.connect(self.db_path) as conn:
+            # Enable foreign key constraints
             conn.execute("PRAGMA foreign_keys = ON")
+            
+            # Enable WAL mode for better performance and concurrency
+            conn.execute("PRAGMA journal_mode = WAL")
+            
+            # Set synchronous mode to NORMAL for good balance of safety and performance
+            conn.execute("PRAGMA synchronous = NORMAL")
+            
+            # Increase cache size for better performance (default is usually too small)
+            # 64MB cache (64 * 1024 * 1024 / page_size), assuming 4KB pages = ~16384 pages
+            conn.execute("PRAGMA cache_size = -64000")  # Negative value = KB
+            
+            # Enable memory-mapped I/O for better performance (256MB)
+            conn.execute("PRAGMA mmap_size = 268435456")
+            
+            # Set temp store to memory for better performance
+            conn.execute("PRAGMA temp_store = MEMORY")
+            
+            # Optimize for better query performance
+            conn.execute("PRAGMA optimize")
+            
+            # Security: Set a reasonable timeout for busy database
+            conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
             
             if os.path.exists(schema_path):
                 with open(schema_path, 'r') as f:
                     conn.executescript(f.read())
+            
+            # Run ANALYZE to update query planner statistics
+            conn.execute("ANALYZE")
+    
+    def maintenance(self):
+        """Perform database maintenance operations."""
+        with self.get_connection() as conn:
+            # Update query planner statistics
+            conn.execute("ANALYZE")
+            
+            # Optimize database
+            conn.execute("PRAGMA optimize")
+            
+            # Clean up unused space (VACUUM is expensive but thorough)
+            # Only run if database is not too large
+            db_size = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
+            if db_size < 100 * 1024 * 1024:  # Less than 100MB
+                conn.execute("VACUUM")
+            
+            # Verify database integrity
+            integrity_check = conn.execute("PRAGMA integrity_check").fetchone()
+            if integrity_check[0] != "ok":
+                print(f"WARNING: Database integrity issue: {integrity_check[0]}")
+            
+            print("Database maintenance completed successfully")
     
     def get_connection(self):
         """Get database connection with proper settings."""
         conn = sqlite3.connect(self.db_path)
+        
+        # Apply consistent PRAGMA settings for all connections
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+        conn.execute("PRAGMA cache_size = -64000")
+        conn.execute("PRAGMA temp_store = MEMORY")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        
         conn.row_factory = sqlite3.Row
         return conn
+    
+    def _validate_input(self, content: str, entry_type: str, tags: List[str], significance_type: str = None):
+        """Validate input parameters for security."""
+        # Validate content length
+        if len(content) > self.MAX_CONTENT_LENGTH:
+            raise ValueError(f"Content exceeds maximum length of {self.MAX_CONTENT_LENGTH} characters")
+        
+        # Validate entry type
+        if len(entry_type) > self.MAX_ENTRY_TYPE_LENGTH:
+            raise ValueError(f"Entry type exceeds maximum length of {self.MAX_ENTRY_TYPE_LENGTH} characters")
+        
+        # Validate tags
+        for tag in tags:
+            if len(tag) > self.MAX_TAG_LENGTH:
+                raise ValueError(f"Tag '{tag}' exceeds maximum length of {self.MAX_TAG_LENGTH} characters")
+            # Check for potentially dangerous characters
+            if any(char in tag for char in ['<', '>', '"', "'", '&', '\x00']):
+                raise ValueError(f"Tag contains invalid characters: {tag}")
+        
+        # Validate significance type if provided
+        if significance_type and len(significance_type) > self.MAX_SIGNIFICANCE_TYPE_LENGTH:
+            raise ValueError(f"Significance type exceeds maximum length of {self.MAX_SIGNIFICANCE_TYPE_LENGTH} characters")
+        
+        # Basic SQL injection prevention (though we use parameterized queries)
+        dangerous_patterns = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'CREATE', 'ALTER', 'EXEC', 'UNION']
+        content_upper = content.upper()
+        for pattern in dangerous_patterns:
+            if f' {pattern} ' in content_upper or content_upper.startswith(f'{pattern} '):
+                # This is just a warning since legitimate content might contain these words
+                print(f"WARNING: Content contains potentially sensitive SQL keyword: {pattern}")
     
     def auto_create_tags(self, tag_names: List[str]) -> List[int]:
         """Auto-create tags if they don't exist, return tag IDs."""
@@ -540,6 +649,15 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         tags = arguments.get("tags", [])
         significance_type = arguments.get("significance_type")
         auto_context = arguments.get("auto_context", True)
+        
+        # Validate input for security
+        try:
+            db._validate_input(content, entry_type, tags, significance_type)
+        except ValueError as e:
+            return [types.TextContent(
+                type="text",
+                text=f"❌ Input validation failed: {str(e)}"
+            )]
         
         print(f"DEBUG: Parsed arguments - content length: {len(content)}, tags: {len(tags)}")
         
