@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 try:
     from mcp.server import Server, NotificationOptions, InitializationOptions
-    from mcp.types import Resource, Tool, TextContent
+    from mcp.types import Resource, Tool, TextContent, Prompt, PromptMessage
     import mcp.server.stdio
     import mcp.types as types
 except ImportError:
@@ -518,6 +518,143 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
     
     else:
         raise ValueError(f"Unknown tool: {name}")
+
+@server.list_prompts()
+async def list_prompts() -> List[Prompt]:
+    """List available prompts."""
+    return [
+        Prompt(
+            name="get-context-bundle",
+            description="Get current project context as JSON",
+            arguments=[
+                {
+                    "name": "include_git",
+                    "description": "Include Git repository information",
+                    "required": False
+                }
+            ]
+        ),
+        Prompt(
+            name="get-recent-entries",
+            description="Get the last X journal entries",
+            arguments=[
+                {
+                    "name": "count",
+                    "description": "Number of recent entries to retrieve (default: 5)",
+                    "required": False
+                },
+                {
+                    "name": "personal_only",
+                    "description": "Only show personal entries (true/false)",
+                    "required": False
+                }
+            ]
+        )
+    ]
+
+@server.get_prompt()
+async def get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptResult:
+    """Handle prompt requests."""
+    
+    if name == "get-context-bundle":
+        include_git = arguments.get("include_git", "true").lower() == "true"
+        
+        if include_git:
+            # Get full context with Git info
+            context = await db.get_project_context()
+        else:
+            # Get basic context without Git operations
+            context = {
+                'cwd': os.getcwd(),
+                'timestamp': datetime.now().isoformat(),
+                'git_disabled': 'Git operations skipped by request'
+            }
+        
+        context_json = json.dumps(context, indent=2)
+        
+        return types.GetPromptResult(
+            description="Current project context bundle",
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(
+                        type="text",
+                        text=f"Here is the current project context bundle:\n\n```json\n{context_json}\n```\n\nThis includes repository information, current working directory, and timestamp. You can use this context to understand the current project state when creating journal entries."
+                    )
+                )
+            ]
+        )
+    
+    elif name == "get-recent-entries":
+        count = int(arguments.get("count", "5"))
+        personal_only = arguments.get("personal_only", "false").lower() == "true"
+        
+        # Get recent entries using existing database functionality
+        def get_entries_sync():
+            with db.get_connection() as conn:
+                sql = "SELECT id, entry_type, content, timestamp, is_personal, project_context FROM memory_journal"
+                params = []
+                
+                if personal_only:
+                    sql += " WHERE is_personal = ?"
+                    params.append(True)
+                
+                sql += " ORDER BY timestamp DESC LIMIT ?"
+                params.append(count)
+                
+                cursor = conn.execute(sql, params)
+                entries = []
+                for row in cursor.fetchall():
+                    entry = {
+                        'id': row[0],
+                        'entry_type': row[1], 
+                        'content': row[2],
+                        'timestamp': row[3],
+                        'is_personal': bool(row[4]),
+                        'project_context': json.loads(row[5]) if row[5] else None
+                    }
+                    entries.append(entry)
+                return entries
+        
+        # Run in thread pool
+        loop = asyncio.get_event_loop()
+        entries = await loop.run_in_executor(thread_pool, get_entries_sync)
+        
+        # Format entries for display
+        entries_text = f"Here are the {len(entries)} most recent journal entries"
+        if personal_only:
+            entries_text += " (personal only)"
+        entries_text += ":\n\n"
+        
+        for i, entry in enumerate(entries, 1):
+            entries_text += f"**Entry #{entry['id']}** ({entry['entry_type']}) - {entry['timestamp']}\n"
+            entries_text += f"Personal: {entry['is_personal']}\n"
+            entries_text += f"Content: {entry['content'][:200]}"
+            if len(entry['content']) > 200:
+                entries_text += "..."
+            entries_text += "\n"
+            
+            if entry['project_context']:
+                ctx = entry['project_context']
+                if 'repo_name' in ctx:
+                    entries_text += f"Context: {ctx['repo_name']} ({ctx.get('branch', 'unknown branch')})\n"
+            entries_text += "\n"
+        
+        return types.GetPromptResult(
+            description=f"Last {count} journal entries",
+            messages=[
+                PromptMessage(
+                    role="user", 
+                    content=types.TextContent(
+                        type="text",
+                        text=entries_text
+                    )
+                )
+            ]
+        )
+    
+    else:
+        raise ValueError(f"Unknown prompt: {name}")
 
 async def main():
     """Run the server."""
