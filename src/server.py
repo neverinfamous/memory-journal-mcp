@@ -223,6 +223,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
     print(f"DEBUG: Tool call received: {name} with args: {list(arguments.keys())}")
     
     if name == "create_entry":
+        print("DEBUG: Starting create_entry processing...")
         content = arguments["content"]
         is_personal = arguments.get("is_personal", True)
         entry_type = arguments.get("entry_type", "personal_reflection")
@@ -230,16 +231,24 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         significance_type = arguments.get("significance_type")
         auto_context = arguments.get("auto_context", True)
         
+        print(f"DEBUG: Parsed arguments - content length: {len(content)}, tags: {len(tags)}")
+        
         project_context = None
         if auto_context:
+            print("DEBUG: Getting project context...")
             context = db.get_project_context()
             project_context = json.dumps(context)
+            print("DEBUG: Project context captured successfully")
         
         tag_ids = []
         if tags:
+            print(f"DEBUG: Auto-creating {len(tags)} tags...")
             tag_ids = db.auto_create_tags(tags)
+            print(f"DEBUG: Tags created successfully: {tag_ids}")
         
+        print("DEBUG: Starting database operations...")
         with db.get_connection() as conn:
+            print("DEBUG: Database connection established")
             cursor = conn.execute("""
                 INSERT INTO memory_journal (
                     entry_type, content, is_personal, project_context, related_patterns
@@ -247,6 +256,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
             """, (entry_type, content, is_personal, project_context, ','.join(tags)))
             
             entry_id = cursor.lastrowid
+            print(f"DEBUG: Entry inserted with ID: {entry_id}")
             
             for tag_id in tag_ids:
                 conn.execute(
