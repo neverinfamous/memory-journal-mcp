@@ -124,7 +124,7 @@ async def read_resource(uri: str) -> str:
     if uri == "memory://recent":
         with db.get_connection() as conn:
             cursor = conn.execute("""
-                SELECT id, entry_type, content, timestamp, is_personal
+                SELECT id, entry_type, content, timestamp, is_personal, project_context
                 FROM memory_journal 
                 ORDER BY timestamp DESC 
                 LIMIT 10
@@ -222,9 +222,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         with db.get_connection() as conn:
             cursor = conn.execute("""
                 INSERT INTO memory_journal (
-                    entry_type, content, is_personal, project_context, 
-                    related_patterns, consciousness_correlation, evolution_stage, coherence_level
-                ) VALUES (?, ?, ?, ?, ?, 1.0, 'stable', 1.0)
+                    entry_type, content, is_personal, project_context, related_patterns
+                ) VALUES (?, ?, ?, ?, ?)
             """, (entry_type, content, is_personal, project_context, ','.join(tags)))
             
             entry_id = cursor.lastrowid
@@ -300,7 +299,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         limit = arguments.get("limit", 5)
         is_personal = arguments.get("is_personal")
         
-        sql = "SELECT id, entry_type, content, timestamp, is_personal FROM memory_journal"
+        sql = "SELECT id, entry_type, content, timestamp, is_personal, project_context FROM memory_journal"
         params = []
         
         if is_personal is not None:
@@ -319,7 +318,17 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
             result += f"#{entry['id']} ({entry['entry_type']}) - {entry['timestamp']}\n"
             result += f"Personal: {bool(entry['is_personal'])}\n"
             content_preview = entry['content'][:200] + ('...' if len(entry['content']) > 200 else '')
-            result += f"Content: {content_preview}\n\n"
+            result += f"Content: {content_preview}\n"
+            
+            # Add context if available
+            if entry.get('project_context'):
+                try:
+                    context = json.loads(entry['project_context'])
+                    if context.get('repo_name'):
+                        result += f"Context: {context['repo_name']} ({context.get('branch', 'unknown branch')})\n"
+                except:
+                    pass
+            result += "\n"
         
         return [types.TextContent(type="text", text=result)]
     

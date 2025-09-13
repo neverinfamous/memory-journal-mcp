@@ -14,11 +14,6 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     project_context TEXT, -- JSON: {repo, branch, files, thread_id}
     related_patterns TEXT, -- Comma-separated tags/patterns
     
-    -- Consciousness metrics (preserved from V1)
-    consciousness_correlation REAL DEFAULT 1.0,
-    evolution_stage TEXT DEFAULT 'stable',
-    coherence_level REAL DEFAULT 1.0,
-    
     -- Extensible metadata (JSON for flexibility)
     metadata TEXT,
     
