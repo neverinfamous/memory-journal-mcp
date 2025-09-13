@@ -238,6 +238,17 @@ async def list_tools() -> List[Tool]:
                     "message": {"type": "string", "default": "Hello"}
                 }
             }
+        ),
+        Tool(
+            name="create_entry_minimal",
+            description="Minimal entry creation without context or tags",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "The journal entry content"}
+                },
+                "required": ["content"]
+            }
         )
     ]
 
@@ -307,6 +318,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                         ) VALUES (?, ?, 0.8)
                     """, (entry_id, significance_type))
                 
+                conn.commit()  # CRITICAL FIX: Missing commit was causing hangs!
+                print("DEBUG: Database transaction committed successfully")
                 return entry_id
         
         # Run in thread pool to avoid blocking
@@ -427,6 +440,33 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         return [types.TextContent(
             type="text",
             text=f"✅ Simple test successful! Message: {message}"
+        )]
+    
+    elif name == "create_entry_minimal":
+        print("DEBUG: Starting minimal entry creation...")
+        content = arguments["content"]
+        
+        # Just a simple database insert without any context or tag operations
+        def minimal_db_insert():
+            print("DEBUG: Minimal DB insert starting...")
+            with db.get_connection() as conn:
+                cursor = conn.execute("""
+                    INSERT INTO memory_journal (
+                        entry_type, content, is_personal
+                    ) VALUES (?, ?, ?)
+                """, ("test_entry", content, True))
+                entry_id = cursor.lastrowid
+                conn.commit()
+                print(f"DEBUG: Minimal DB insert completed, entry_id: {entry_id}")
+                return entry_id
+        
+        # Run in thread pool
+        loop = asyncio.get_event_loop()
+        entry_id = await loop.run_in_executor(thread_pool, minimal_db_insert)
+        
+        return [types.TextContent(
+            type="text",
+            text=f"✅ Minimal entry created #{entry_id}"
         )]
     
     else:
