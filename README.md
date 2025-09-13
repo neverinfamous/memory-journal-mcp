@@ -17,7 +17,7 @@ A **fully functional** Model Context Protocol (MCP) server for personal journali
 
 ### **Core Capabilities**
 - **Personal & Project Journaling**: Separate personal reflections from technical entries
-- **Context Bundles**: Automatically capture Git repository, branch, and commit information
+- **Context Bundles**: Automatically capture Git repository, branch, commit information, and GitHub issues
 - **Smart Tagging**: Auto-create tags with usage tracking
 - **Full-Text Search**: Powered by SQLite FTS5 with result highlighting
 - **Relationship Mapping**: Link related entries with typed relationships
@@ -235,9 +235,9 @@ Returns the 5 most recent journal entries with full content and metadata.
 ### **memory://significant**  
 Returns entries marked with significance classifications, useful for reviewing important developments.
 
-## 🎯 **MCP Prompts**
+## 🎯 **MCP Prompts** (User-Initiated)
 
-The server provides interactive prompts for easy access to context and entries:
+The server provides interactive prompts accessible through your MCP client's prompt palette (typically `/` in Cursor):
 
 ### **get-context-bundle**
 Get current project context as structured JSON for the AI assistant.
@@ -245,13 +245,42 @@ Get current project context as structured JSON for the AI assistant.
 **Arguments:**
 - `include_git` (optional): Include Git repository information (default: true)
 
-**Usage:**
-```
-/get-context-bundle
-/get-context-bundle include_git=false
-```
+**How to Use:**
+1. In Cursor, type `/` to open prompt palette
+2. Select `get-context-bundle` from the list
+3. Optionally add `include_git=false` to skip Git operations
 
-**Output:** Formatted JSON with repository info, branch, last commit, working directory, and timestamp.
+**Sample Output:**
+```json
+{
+  "repo_name": "memory-journal-mcp",
+  "repo_path": "C:\\Users\\chris\\Desktop\\memory-journal-mcp", 
+  "branch": "main",
+  "last_commit": {
+    "hash": "5ee4651",
+    "message": "Update memory journal readme"
+  },
+  "github_issues": {
+    "count": 2,
+    "recent_issues": [
+      {
+        "number": 15,
+        "title": "Add GitHub issue context to memory journal entries",
+        "state": "OPEN",
+        "created": "2025-09-13"
+      },
+      {
+        "number": 12,
+        "title": "Improve MCP prompt error handling and timeout management",
+        "state": "OPEN", 
+        "created": "2025-09-12"
+      }
+    ]
+  },
+  "cwd": "C:\\Users\\chris\\Desktop\\memory-journal-mcp",
+  "timestamp": "2025-09-13T15:41:28.080365"
+}
+```
 
 ### **get-recent-entries** 
 Get the last X journal entries with formatted display.
@@ -260,23 +289,78 @@ Get the last X journal entries with formatted display.
 - `count` (optional): Number of entries to retrieve (default: 5)
 - `personal_only` (optional): Only show personal entries (default: false)
 
-**Usage:**
+**How to Use:**
+1. In Cursor, type `/` to open prompt palette
+2. Select `get-recent-entries` from the list
+3. Optionally add arguments like `count=10` or `personal_only=true`
+
+**Sample Output:**
 ```
-/get-recent-entries
-/get-recent-entries count=10
-/get-recent-entries count=3 personal_only=true
+Here are the 1 most recent journal entries:
+
+**Entry #10** (milestone) - 2025-09-13 19:41:28
+Personal: False
+Content: Successfully implemented MCP prompts functionality for the Memory Journal system! Added two powerful prompts: get-context-bundle for retrieving project context as JSON...
+
+Context: memory-journal-mcp (main branch)
 ```
 
-**Output:** Formatted list of recent entries with content previews, timestamps, and context information.
+**💡 Troubleshooting Prompts:**
+- If prompts don't appear in `/` palette, restart Cursor after server changes
+- If Git operations timeout, use `include_git=false` for faster context capture
+- Prompts work from any directory - they capture context of the current working directory
 
-## 🛠️ **Tools Available**
+**🔗 GitHub Integration:**
+- **GitHub CLI Required**: Install `gh` and authenticate with `gh auth login`
+- **Context Includes**: Recent open issues (limit 3), issue numbers, titles, and creation dates
+- **Fallback**: If GitHub CLI unavailable, context bundle works without issue data
+- **Performance**: GitHub issue queries use same aggressive timeouts as Git operations
 
-1. **`create_entry`**: Create new journal entries with full context capture
-2. **`search_entries`**: Full-text search with highlighting and filtering
-3. **`get_recent_entries`**: Retrieve recent entries with optional filtering
-4. **`list_tags`**: Show all tags with usage statistics
-5. **`test_simple`**: Basic connectivity test (diagnostic)
-6. **`create_entry_minimal`**: Minimal entry creation (diagnostic)
+## 🛠️ **Tools Available** (Programmatic Access)
+
+### **Core Tools**
+
+#### **`create_entry`** - Create Journal Entries
+**Parameters:**
+- `content` (required): The journal entry content
+- `entry_type` (optional): Type classification (default: "personal_reflection")
+- `is_personal` (optional): Personal vs project entry (default: true)
+- `significance_type` (optional): Mark as significant ("milestone", "breakthrough", etc.)
+- `tags` (optional): Array of tags (auto-created if they don't exist)
+
+**Example Usage:**
+```python
+create_entry(
+    content="Successfully implemented MCP prompts functionality!",
+    entry_type="milestone", 
+    is_personal=false,
+    significance_type="technical_achievement",
+    tags=["mcp", "prompts", "development"]
+)
+```
+
+#### **`search_entries`** - Full-Text Search
+**Parameters:**
+- `query` (required): Search terms
+- `limit` (optional): Max results (default: 10)
+- `is_personal` (optional): Filter by personal/project entries
+
+**Example Usage:**
+```python
+search_entries(query="MCP prompts", limit=5, is_personal=false)
+```
+
+#### **`get_recent_entries`** - Retrieve Recent Entries
+**Parameters:**
+- `limit` (optional): Number of entries (default: 5)
+- `is_personal` (optional): Filter by personal/project entries
+
+#### **`list_tags`** - Show All Tags
+Returns all tags with usage statistics.
+
+### **Diagnostic Tools**
+- **`test_simple`**: Basic connectivity test
+- **`create_entry_minimal`**: Minimal entry creation for debugging
 
 ## 🎯 **Prompts Available**
 

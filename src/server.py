@@ -129,6 +129,50 @@ class MemoryJournalDB:
         except Exception as e:
             context['git_error'] = f'Git error: {str(e)}'
         
+        # Get GitHub issue context if we have a valid repo
+        if 'repo_path' in context and context.get('git_status') == 'repo_found':
+            try:
+                # Check if GitHub CLI is available and authenticated
+                result = subprocess.run(['gh', 'auth', 'status'], 
+                                      capture_output=True, text=True, 
+                                      timeout=git_timeout, shell=False)
+                if result.returncode == 0:
+                    # Get current open issues (limit to 3 most recent)
+                    try:
+                        result = subprocess.run(['gh', 'issue', 'list', '--limit', '3', '--json', 'number,title,state,createdAt'], 
+                                              capture_output=True, text=True, cwd=context['repo_path'], 
+                                              timeout=git_timeout, shell=False)
+                        if result.returncode == 0 and result.stdout.strip():
+                            import json
+                            issues = json.loads(result.stdout.strip())
+                            if issues:
+                                context['github_issues'] = {
+                                    'count': len(issues),
+                                    'recent_issues': [
+                                        {
+                                            'number': issue['number'],
+                                            'title': issue['title'][:60] + ('...' if len(issue['title']) > 60 else ''),
+                                            'state': issue['state'],
+                                            'created': issue['createdAt'][:10]  # Just the date
+                                        }
+                                        for issue in issues
+                                    ]
+                                }
+                            else:
+                                context['github_issues'] = {'count': 0, 'message': 'No open issues'}
+                    except subprocess.TimeoutExpired:
+                        context['github_issues_error'] = 'GitHub issues query timed out'
+                    except json.JSONDecodeError:
+                        context['github_issues_error'] = 'Failed to parse GitHub issues JSON'
+                else:
+                    context['github_issues_error'] = 'GitHub CLI not authenticated'
+            except FileNotFoundError:
+                context['github_issues_error'] = 'GitHub CLI (gh) not found in PATH'
+            except subprocess.TimeoutExpired:
+                context['github_issues_error'] = 'GitHub auth check timed out'
+            except Exception as e:
+                context['github_issues_error'] = f'GitHub error: {str(e)}'
+        
         context['cwd'] = os.getcwd()
         context['timestamp'] = datetime.now().isoformat()
         
