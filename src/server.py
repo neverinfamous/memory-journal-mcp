@@ -80,37 +80,52 @@ class MemoryJournalDB:
         """Get current project context (git repo, branch, etc.) - synchronous version for thread pool."""
         context = {}
         
+        # AGGRESSIVE TIMEOUT: Use much shorter timeouts and fail fast
+        git_timeout = 2  # 2 seconds max per Git command
+        
         try:
-            # Get git repository root
+            # Get git repository root with aggressive timeout
             result = subprocess.run(['git', 'rev-parse', '--show-toplevel'], 
-                                  capture_output=True, text=True, cwd=os.getcwd(), timeout=5)
+                                  capture_output=True, text=True, cwd=os.getcwd(), 
+                                  timeout=git_timeout, shell=False)
             if result.returncode == 0:
                 repo_path = result.stdout.strip()
                 context['repo_path'] = repo_path
                 context['repo_name'] = os.path.basename(repo_path)
+                context['git_status'] = 'repo_found'
                 
-                # Get current branch
-                result = subprocess.run(['git', 'branch', '--show-current'], 
-                                      capture_output=True, text=True, cwd=repo_path, timeout=5)
-                if result.returncode == 0:
-                    context['branch'] = result.stdout.strip()
+                # Get current branch with aggressive timeout
+                try:
+                    result = subprocess.run(['git', 'branch', '--show-current'], 
+                                          capture_output=True, text=True, cwd=repo_path, 
+                                          timeout=git_timeout, shell=False)
+                    if result.returncode == 0:
+                        context['branch'] = result.stdout.strip()
+                except subprocess.TimeoutExpired:
+                    context['branch_error'] = 'Branch query timed out'
                 
-                # Get last commit info
-                result = subprocess.run(['git', 'log', '-1', '--format=%H:%s'], 
-                                      capture_output=True, text=True, cwd=repo_path, timeout=5)
-                if result.returncode == 0:
-                    commit_info = result.stdout.strip()
-                    if ':' in commit_info:
-                        commit_hash, commit_msg = commit_info.split(':', 1)
-                        context['last_commit'] = {
-                            'hash': commit_hash[:8],  # Short hash
-                            'message': commit_msg.strip()
-                        }
+                # Get last commit info with aggressive timeout
+                try:
+                    result = subprocess.run(['git', 'log', '-1', '--format=%H:%s'], 
+                                          capture_output=True, text=True, cwd=repo_path, 
+                                          timeout=git_timeout, shell=False)
+                    if result.returncode == 0:
+                        commit_info = result.stdout.strip()
+                        if ':' in commit_info:
+                            commit_hash, commit_msg = commit_info.split(':', 1)
+                            context['last_commit'] = {
+                                'hash': commit_hash[:8],  # Short hash
+                                'message': commit_msg.strip()
+                            }
+                except subprocess.TimeoutExpired:
+                    context['commit_error'] = 'Commit query timed out'
+            else:
+                context['git_status'] = 'not_a_repo'
         
         except subprocess.TimeoutExpired:
-            context['git_error'] = 'Git operations timed out'
+            context['git_error'] = f'Git operations timed out after {git_timeout}s'
         except FileNotFoundError:
-            context['git_error'] = 'Git not found'
+            context['git_error'] = 'Git not found in PATH'
         except Exception as e:
             context['git_error'] = f'Git error: {str(e)}'
         
@@ -122,7 +137,18 @@ class MemoryJournalDB:
     async def get_project_context(self) -> Dict[str, Any]:
         """Get current project context (git repo, branch, etc.) - async version."""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(thread_pool, self.get_project_context_sync)
+        try:
+            # Add overall timeout to the async operation itself
+            return await asyncio.wait_for(
+                loop.run_in_executor(thread_pool, self.get_project_context_sync),
+                timeout=10.0  # 10 seconds total timeout
+            )
+        except asyncio.TimeoutError:
+            return {
+                'git_error': 'Async Git operations timed out after 10s',
+                'cwd': os.getcwd(),
+                'timestamp': datetime.now().isoformat()
+            }
 
 # Initialize database
 db = MemoryJournalDB(DB_PATH)
