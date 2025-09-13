@@ -80,21 +80,26 @@ class MemoryJournalDB:
         """Get current project context (git repo, branch, etc.)."""
         context = {}
         
-        try:
-            result = subprocess.run(['git', 'rev-parse', '--show-toplevel'], 
-                                  capture_output=True, text=True, cwd=os.getcwd(), timeout=5)
-            if result.returncode == 0:
-                repo_path = result.stdout.strip()
-                context['repo_path'] = repo_path
-                context['repo_name'] = os.path.basename(repo_path)
-                
-                result = subprocess.run(['git', 'branch', '--show-current'], 
-                                      capture_output=True, text=True, cwd=repo_path, timeout=5)
-                if result.returncode == 0:
-                    context['branch'] = result.stdout.strip()
+        # TEMPORARILY DISABLE GIT OPERATIONS - THEY CAUSE HANGS
+        # Even with timeouts, Git subprocess calls are blocking indefinitely
+        # TODO: Investigate proper async subprocess handling
+        context['status'] = 'git_disabled_for_testing'
         
-        except Exception:
-            pass
+        # try:
+        #     result = subprocess.run(['git', 'rev-parse', '--show-toplevel'], 
+        #                           capture_output=True, text=True, cwd=os.getcwd(), timeout=5)
+        #     if result.returncode == 0:
+        #         repo_path = result.stdout.strip()
+        #         context['repo_path'] = repo_path
+        #         context['repo_name'] = os.path.basename(repo_path)
+        #         
+        #         result = subprocess.run(['git', 'branch', '--show-current'], 
+        #                               capture_output=True, text=True, cwd=repo_path, timeout=5)
+        #         if result.returncode == 0:
+        #             context['branch'] = result.stdout.strip()
+        # 
+        # except Exception:
+        #     pass
         
         context['cwd'] = os.getcwd()
         context['timestamp'] = datetime.now().isoformat()
