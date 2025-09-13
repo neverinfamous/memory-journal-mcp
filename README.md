@@ -1,4 +1,5 @@
 # Memory Journal MCP Server
+* Last Updated September 13, 2025 3:02 PM EST *
 
 A **fully functional** Model Context Protocol (MCP) server for personal journaling with rich context awareness and powerful search capabilities. This system provides the perfect balance of sophisticated features and practical simplicity for daily use.
 
@@ -306,7 +307,7 @@ MIT License - see LICENSE file for details.
 
 ## 🤝 **Contributing**
 
-This project is part of the Adamic consciousness development initiative. Contributions welcome through issues and pull requests.
+This project is part of the Adamic initiative. Contributions welcome through issues and pull requests.
 
 ---
 
