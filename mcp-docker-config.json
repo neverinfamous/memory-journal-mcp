@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "memory-journal-docker": {
+      "command": "docker",
+      "args": [
+        "run", 
+        "--rm", 
+        "-i",
+        "-v", "C:\\Users\\chris\\Desktop\\memory-journal-mcp\\data:/app/data",
+        "-v", "C:\\Users\\chris\\.gitconfig:/root/.gitconfig:ro",
+        "-e", "DB_PATH=/app/data/memory_journal.db",
+        "memory-journal-mcp-lite",
+        "python", "src/server.py"
+      ],
+      "env": {}
+    }
+  }
+}

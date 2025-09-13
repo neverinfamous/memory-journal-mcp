@@ -408,7 +408,7 @@ This MCP server runs independently of any existing Memory Journal V2 (Cloudflare
 
 Potential additions for future versions:
 - **Vector Search**: Semantic search using embeddings
-- **Export/Import**: Backup and migration utilities. Import entries from memory journal v2 and maybe even v1.
+- **Export/Import**: Backup and migration utilities. Import entries from memory journal version one and two.
 - **Visual Relationship Mapping**: Graph visualization of entry connections
 - **Temporal Summaries**: Automated weekly/monthly summary generation
 - **Web Dashboard**: Optional visualization interface

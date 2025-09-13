@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  memory-journal-mcp:
+    build: .
+    container_name: memory-journal-mcp
+    volumes:
+      # Mount local data directory for persistent SQLite database
+      - ./data:/app/data
+      # Mount git config for context bundle functionality
+      - ${HOME}/.gitconfig:/root/.gitconfig:ro
+      # Mount SSH keys for GitHub access (optional)
+      - ${HOME}/.ssh:/root/.ssh:ro
+    environment:
+      - DB_PATH=/app/data/memory_journal.db
+      - PYTHONPATH=/app
+    stdin_open: true
+    tty: true
+    # For MCP stdio communication
+    command: python src/server.py
+    restart: unless-stopped
+
+  # Alternative service for testing without git/ssh mounts
+  memory-journal-mcp-basic:
+    build: .
+    container_name: memory-journal-mcp-basic
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DB_PATH=/app/data/memory_journal.db
+      - PYTHONPATH=/app
+    stdin_open: true
+    tty: true
+    command: python src/server.py
+    restart: unless-stopped
+    profiles:
+      - basic

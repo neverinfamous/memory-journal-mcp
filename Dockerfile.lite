@@ -1,0 +1,39 @@
+# Memory Journal MCP Server (Lite Version - No Vector Search)
+# A lightweight containerized MCP server without semantic search dependencies
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
+
+# Install only core Python dependencies (no vector search)
+RUN pip install --no-cache-dir mcp
+
+# Copy source code
+COPY src/ ./src/
+
+# Create data directory for SQLite database
+RUN mkdir -p /app/data
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV DB_PATH=/app/data/memory_journal.db
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.path.append('/app'); from src.server import *; print('Server healthy')" || exit 1
+
+# Run the MCP server
+CMD ["python", "src/server.py"]
+
+# Labels
+LABEL maintainer="Memory Journal MCP"
+LABEL description="Lightweight MCP server for personal journaling (no semantic search)"
+LABEL version="1.0.0-lite"
