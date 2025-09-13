@@ -11,6 +11,7 @@ import os
 import subprocess
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from mcp.server import Server, NotificationOptions, InitializationOptions
@@ -20,6 +21,9 @@ try:
 except ImportError:
     print("MCP library not found. Install with: pip install mcp")
     exit(1)
+
+# Thread pool for non-blocking database operations
+thread_pool = ThreadPoolExecutor(max_workers=2)
 
 # Initialize the MCP server
 server = Server("memory-journal")
@@ -129,34 +133,46 @@ async def read_resource(uri: str) -> str:
     
     if uri_str == "memory://recent":
         try:
-            with db.get_connection() as conn:
-                cursor = conn.execute("""
-                    SELECT id, entry_type, content, timestamp, is_personal, project_context
-                    FROM memory_journal 
-                    ORDER BY timestamp DESC 
-                    LIMIT 10
-                """)
-                entries = [dict(row) for row in cursor.fetchall()]
-                print(f"DEBUG: Found {len(entries)} recent entries")
-                return json.dumps(entries, indent=2)
+            def get_recent_entries():
+                with db.get_connection() as conn:
+                    cursor = conn.execute("""
+                        SELECT id, entry_type, content, timestamp, is_personal, project_context
+                        FROM memory_journal 
+                        ORDER BY timestamp DESC 
+                        LIMIT 10
+                    """)
+                    entries = [dict(row) for row in cursor.fetchall()]
+                    print(f"DEBUG: Found {len(entries)} recent entries")
+                    return entries
+            
+            # Run in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            entries = await loop.run_in_executor(thread_pool, get_recent_entries)
+            return json.dumps(entries, indent=2)
         except Exception as e:
             print(f"DEBUG: Error reading recent entries: {e}")
             raise
     
     elif uri_str == "memory://significant":
         try:
-            with db.get_connection() as conn:
-                cursor = conn.execute("""
-                    SELECT se.significance_type, se.significance_rating,
-                           mj.id, mj.entry_type, mj.content, mj.timestamp
-                    FROM significant_entries se
-                    JOIN memory_journal mj ON se.entry_id = mj.id
-                    ORDER BY se.significance_rating DESC
-                    LIMIT 10
-                """)
-                entries = [dict(row) for row in cursor.fetchall()]
-                print(f"DEBUG: Found {len(entries)} significant entries")
-                return json.dumps(entries, indent=2)
+            def get_significant_entries():
+                with db.get_connection() as conn:
+                    cursor = conn.execute("""
+                        SELECT se.significance_type, se.significance_rating,
+                               mj.id, mj.entry_type, mj.content, mj.timestamp
+                        FROM significant_entries se
+                        JOIN memory_journal mj ON se.entry_id = mj.id
+                        ORDER BY se.significance_rating DESC
+                        LIMIT 10
+                    """)
+                    entries = [dict(row) for row in cursor.fetchall()]
+                    print(f"DEBUG: Found {len(entries)} significant entries")
+                    return entries
+            
+            # Run in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            entries = await loop.run_in_executor(thread_pool, get_significant_entries)
+            return json.dumps(entries, indent=2)
         except Exception as e:
             print(f"DEBUG: Error reading significant entries: {e}")
             raise
@@ -236,44 +252,58 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         project_context = None
         if auto_context:
             print("DEBUG: Getting project context...")
-            context = db.get_project_context()
+            # Run context capture in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            context = await loop.run_in_executor(thread_pool, db.get_project_context)
             project_context = json.dumps(context)
             print("DEBUG: Project context captured successfully")
         
         tag_ids = []
         if tags:
             print(f"DEBUG: Auto-creating {len(tags)} tags...")
-            tag_ids = db.auto_create_tags(tags)
+            # Run tag creation in thread pool to avoid blocking  
+            loop = asyncio.get_event_loop()
+            tag_ids = await loop.run_in_executor(thread_pool, db.auto_create_tags, tags)
             print(f"DEBUG: Tags created successfully: {tag_ids}")
         
-        print("DEBUG: Starting database operations...")
-        with db.get_connection() as conn:
-            print("DEBUG: Database connection established")
-            cursor = conn.execute("""
-                INSERT INTO memory_journal (
-                    entry_type, content, is_personal, project_context, related_patterns
-                ) VALUES (?, ?, ?, ?, ?)
-            """, (entry_type, content, is_personal, project_context, ','.join(tags)))
-            
-            entry_id = cursor.lastrowid
-            print(f"DEBUG: Entry inserted with ID: {entry_id}")
-            
-            for tag_id in tag_ids:
-                conn.execute(
-                    "INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)",
-                    (entry_id, tag_id)
-                )
-                conn.execute(
-                    "UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?",
-                    (tag_id,)
-                )
-            
-            if significance_type:
-                conn.execute("""
-                    INSERT INTO significant_entries (
-                        entry_id, significance_type, significance_rating
-                    ) VALUES (?, ?, 0.8)
-                """, (entry_id, significance_type))
+        # Run database operations in thread pool to avoid blocking event loop
+        def create_entry_in_db():
+            print("DEBUG: Starting database operations...")
+            with db.get_connection() as conn:
+                print("DEBUG: Database connection established")
+                cursor = conn.execute("""
+                    INSERT INTO memory_journal (
+                        entry_type, content, is_personal, project_context, related_patterns
+                    ) VALUES (?, ?, ?, ?, ?)
+                """, (entry_type, content, is_personal, project_context, ','.join(tags)))
+                
+                entry_id = cursor.lastrowid
+                print(f"DEBUG: Entry inserted with ID: {entry_id}")
+                
+                for tag_id in tag_ids:
+                    conn.execute(
+                        "INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)",
+                        (entry_id, tag_id)
+                    )
+                    conn.execute(
+                        "UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?",
+                        (tag_id,)
+                    )
+                
+                if significance_type:
+                    conn.execute("""
+                        INSERT INTO significant_entries (
+                            entry_id, significance_type, significance_rating
+                        ) VALUES (?, ?, 0.8)
+                    """, (entry_id, significance_type))
+                
+                return entry_id
+        
+        # Run in thread pool to avoid blocking
+        print("DEBUG: Submitting database operation to thread pool...")
+        loop = asyncio.get_event_loop()
+        entry_id = await loop.run_in_executor(thread_pool, create_entry_in_db)
+        print(f"DEBUG: Database operation completed, entry_id: {entry_id}")
         
         result = [types.TextContent(
             type="text",
