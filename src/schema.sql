@@ -79,7 +79,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memory_journal_fts USING fts5(
     content,
     entry_type,
     related_patterns,
-    content_rowid=memory_journal
+    content='memory_journal',
+    content_rowid='id'
 );
 
 -- Indexes for performance

@@ -76,35 +76,53 @@ class MemoryJournalDB:
         
         return tag_ids
     
-    def get_project_context(self) -> Dict[str, Any]:
-        """Get current project context (git repo, branch, etc.)."""
+    def get_project_context_sync(self) -> Dict[str, Any]:
+        """Get current project context (git repo, branch, etc.) - synchronous version for thread pool."""
         context = {}
         
-        # TEMPORARILY DISABLE GIT OPERATIONS - THEY CAUSE HANGS
-        # Even with timeouts, Git subprocess calls are blocking indefinitely
-        # TODO: Investigate proper async subprocess handling
-        context['status'] = 'git_disabled_for_testing'
+        try:
+            # Get git repository root
+            result = subprocess.run(['git', 'rev-parse', '--show-toplevel'], 
+                                  capture_output=True, text=True, cwd=os.getcwd(), timeout=5)
+            if result.returncode == 0:
+                repo_path = result.stdout.strip()
+                context['repo_path'] = repo_path
+                context['repo_name'] = os.path.basename(repo_path)
+                
+                # Get current branch
+                result = subprocess.run(['git', 'branch', '--show-current'], 
+                                      capture_output=True, text=True, cwd=repo_path, timeout=5)
+                if result.returncode == 0:
+                    context['branch'] = result.stdout.strip()
+                
+                # Get last commit info
+                result = subprocess.run(['git', 'log', '-1', '--format=%H:%s'], 
+                                      capture_output=True, text=True, cwd=repo_path, timeout=5)
+                if result.returncode == 0:
+                    commit_info = result.stdout.strip()
+                    if ':' in commit_info:
+                        commit_hash, commit_msg = commit_info.split(':', 1)
+                        context['last_commit'] = {
+                            'hash': commit_hash[:8],  # Short hash
+                            'message': commit_msg.strip()
+                        }
         
-        # try:
-        #     result = subprocess.run(['git', 'rev-parse', '--show-toplevel'], 
-        #                           capture_output=True, text=True, cwd=os.getcwd(), timeout=5)
-        #     if result.returncode == 0:
-        #         repo_path = result.stdout.strip()
-        #         context['repo_path'] = repo_path
-        #         context['repo_name'] = os.path.basename(repo_path)
-        #         
-        #         result = subprocess.run(['git', 'branch', '--show-current'], 
-        #                               capture_output=True, text=True, cwd=repo_path, timeout=5)
-        #         if result.returncode == 0:
-        #             context['branch'] = result.stdout.strip()
-        # 
-        # except Exception:
-        #     pass
+        except subprocess.TimeoutExpired:
+            context['git_error'] = 'Git operations timed out'
+        except FileNotFoundError:
+            context['git_error'] = 'Git not found'
+        except Exception as e:
+            context['git_error'] = f'Git error: {str(e)}'
         
         context['cwd'] = os.getcwd()
         context['timestamp'] = datetime.now().isoformat()
         
         return context
+    
+    async def get_project_context(self) -> Dict[str, Any]:
+        """Get current project context (git repo, branch, etc.) - async version."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(thread_pool, self.get_project_context_sync)
 
 # Initialize database
 db = MemoryJournalDB(DB_PATH)
@@ -278,9 +296,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         project_context = None
         if auto_context:
             print("DEBUG: Getting project context...")
-            # Run context capture in thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            context = await loop.run_in_executor(thread_pool, db.get_project_context)
+            context = await db.get_project_context()
             project_context = json.dumps(context)
             print("DEBUG: Project context captured successfully")
         
