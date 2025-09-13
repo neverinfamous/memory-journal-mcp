@@ -78,14 +78,14 @@ class MemoryJournalDB:
         
         try:
             result = subprocess.run(['git', 'rev-parse', '--show-toplevel'], 
-                                  capture_output=True, text=True, cwd=os.getcwd())
+                                  capture_output=True, text=True, cwd=os.getcwd(), timeout=5)
             if result.returncode == 0:
                 repo_path = result.stdout.strip()
                 context['repo_path'] = repo_path
                 context['repo_name'] = os.path.basename(repo_path)
                 
                 result = subprocess.run(['git', 'branch', '--show-current'], 
-                                      capture_output=True, text=True, cwd=repo_path)
+                                      capture_output=True, text=True, cwd=repo_path, timeout=5)
                 if result.returncode == 0:
                     context['branch'] = result.stdout.strip()
         
