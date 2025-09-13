@@ -8,6 +8,7 @@ A **fully functional** Model Context Protocol (MCP) server for personal journali
 ✅ **Async Git operations with fail-fast timeouts**  
 ✅ **Full-text search with highlighting**  
 ✅ **Context capture and tag management**  
+✅ **MCP prompts for easy user interaction**  
 ✅ **Non-blocking performance**  
 ✅ **Comprehensive error handling**
 
@@ -233,6 +234,40 @@ Returns the 5 most recent journal entries with full content and metadata.
 ### **memory://significant**  
 Returns entries marked with significance classifications, useful for reviewing important developments.
 
+## 🎯 **MCP Prompts**
+
+The server provides interactive prompts for easy access to context and entries:
+
+### **get-context-bundle**
+Get current project context as structured JSON for the AI assistant.
+
+**Arguments:**
+- `include_git` (optional): Include Git repository information (default: true)
+
+**Usage:**
+```
+/get-context-bundle
+/get-context-bundle include_git=false
+```
+
+**Output:** Formatted JSON with repository info, branch, last commit, working directory, and timestamp.
+
+### **get-recent-entries** 
+Get the last X journal entries with formatted display.
+
+**Arguments:**
+- `count` (optional): Number of entries to retrieve (default: 5)
+- `personal_only` (optional): Only show personal entries (default: false)
+
+**Usage:**
+```
+/get-recent-entries
+/get-recent-entries count=10
+/get-recent-entries count=3 personal_only=true
+```
+
+**Output:** Formatted list of recent entries with content previews, timestamps, and context information.
+
 ## 🛠️ **Tools Available**
 
 1. **`create_entry`**: Create new journal entries with full context capture
@@ -241,6 +276,11 @@ Returns entries marked with significance classifications, useful for reviewing i
 4. **`list_tags`**: Show all tags with usage statistics
 5. **`test_simple`**: Basic connectivity test (diagnostic)
 6. **`create_entry_minimal`**: Minimal entry creation (diagnostic)
+
+## 🎯 **Prompts Available**
+
+1. **`get-context-bundle`**: Get current project context as JSON
+2. **`get-recent-entries`**: Get formatted display of recent journal entries
 
 ## 🔄 **Migration from V2**
 
