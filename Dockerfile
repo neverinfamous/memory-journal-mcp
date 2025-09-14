@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 # A containerized Model Context Protocol server for personal journaling
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app

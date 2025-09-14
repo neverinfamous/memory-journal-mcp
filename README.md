@@ -207,9 +207,9 @@ pip install sentence-transformers faiss-cpu
 
 | Tag | Size | Features | Best For |
 |-----|------|----------|----------|
-| **`:alpine`** | 80MB | Core journaling, FTS5 search, Git context | **Production, maximum security** |
-| **`:lite`** | 116MB | Core journaling, FTS5 search, Git context | Most users, fast startup |
-| **`:latest`** | 4.3GB | Everything + semantic search (ML models) | Advanced users, vector search |
+| **`:alpine`** | 50MB | Core journaling, FTS5 search, Git context *(no semantic search)* | **Maximum security, production** |
+| **`:lite`** | 116MB | Core journaling, FTS5 search, Git context *(no semantic search)* | Most users, fast startup |
+| **`:latest`** | 4.3GB | Everything + semantic search (ML models) | Advanced users, full features |
 
 **Quick test:**
 ```bash
@@ -224,10 +224,10 @@ docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Mem
 ```
 
 **Version Comparison:**
-- **Alpine**: Most secure, smallest size, production-ready
-- **Lite**: All core features, perfect for 99% of users
-- **Full**: Adds semantic search with sentence-transformers and FAISS
-- **All variants**: Same functionality, different security/size profiles
+- **Alpine**: Most secure, smallest size, Alpine Linux base (no ML dependencies)
+- **Lite**: Fast startup, Debian-based, same core features (no ML dependencies)
+- **Full**: Complete feature set with semantic search and ML models
+- **Choice**: Alpine vs Lite = Security vs Compatibility, Full = All features
 
 ### **🔄 Automated Deployment**
 

@@ -1,5 +1,5 @@
 # Alpine-based lightweight MCP server for maximum security
-FROM python:3.12-alpine
+FROM python:3.11-alpine
 
 # Set working directory
 WORKDIR /app
@@ -10,34 +10,42 @@ RUN apk add --no-cache \
     ca-certificates \
     && apk upgrade
 
-# Create non-root user
+# Upgrade setuptools to fix security vulnerabilities
+RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1
+
+# Install only core Python dependencies (same as lite, no vector search)
+RUN pip install --no-cache-dir mcp numpy
+
+# Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Copy requirements first for better Docker layer caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
+# Copy source code and license
 COPY src/ ./src/
-COPY README.md LICENSE ./
+COPY LICENSE ./LICENSE
+
+# Create data directory for SQLite database with proper permissions
+RUN mkdir -p /app/data && chmod 700 /app/data
 
 # Set ownership and permissions
 RUN chown -R appuser:appgroup /app && \
     chmod -R 755 /app
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV DB_PATH=/app/data/memory_journal.db
 
 # Switch to non-root user
 USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import src.server; print('Health check passed')" || exit 1
-
-# Expose port (if needed for future features)
-EXPOSE 8000
+    CMD python -c "import sys; sys.path.append('/app'); from src.server import *; print('Server healthy')" || exit 1
 
 # Run the MCP server
 CMD ["python", "src/server.py"]
+
+# Labels
+LABEL maintainer="Memory Journal MCP"
+LABEL description="Alpine-based MCP server for maximum security (no semantic search)"
+LABEL version="1.0.0-alpine"
