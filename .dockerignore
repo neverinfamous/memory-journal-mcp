@@ -1,6 +1,13 @@
 # Git and version control
 .git
 .gitignore
+.github/
+
+# GitHub-specific files
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+.github/
+SECURITY.md
 
 # Python
 __pycache__/
@@ -40,10 +47,11 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Documentation
+# Documentation (keep README for Docker Hub description)
 docs/
-*.md
-README.md
+DOCKER.md
+DOCKER_PUBLISH.md
+memory_journal_v*.md
 
 # Data directory (will be mounted as volume)
 data/
@@ -57,3 +65,17 @@ tmp/
 # Logs
 *.log
 logs/
+
+# Database files (runtime only)
+*.db
+*.db-shm
+*.db-wal
+
+# Development files
+docker-compose.yml
+mcp-config-example.json
+tools.json
+
+# CI/CD files
+.github/workflows/
+dependabot.yml
