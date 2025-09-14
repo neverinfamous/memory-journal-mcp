@@ -133,11 +133,14 @@ semantic_search({ query: "performance optimization challenges", limit: 3 })
 **Option 1: Docker Hub (Recommended)**
 
 Choose your version:
-- **`:lite`** (116MB) - Core features, fast startup, perfect for most users
+- **`:alpine`** (80MB) - **Most secure**, Alpine Linux base, minimal attack surface
+- **`:lite`** (116MB) - Core features, fast startup, perfect for most users  
 - **`:latest`** (4.3GB) - Full version with semantic search capabilities
 
 ```bash
 # 1. Pull your preferred version (no build needed!)
+docker pull writenotenow/memory-journal-mcp:alpine   # Most secure for production
+# OR
 docker pull writenotenow/memory-journal-mcp:lite     # Recommended for most users
 # OR
 docker pull writenotenow/memory-journal-mcp:latest   # Full version with semantic search
@@ -149,7 +152,7 @@ mkdir data  # Create data directory
   "mcpServers": {
     "memory-journal": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:lite", "python", "src/server.py"]
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:alpine", "python", "src/server.py"]
     }
   }
 }
@@ -204,11 +207,15 @@ pip install sentence-transformers faiss-cpu
 
 | Tag | Size | Features | Best For |
 |-----|------|----------|----------|
+| **`:alpine`** | 80MB | Core journaling, FTS5 search, Git context | **Production, maximum security** |
 | **`:lite`** | 116MB | Core journaling, FTS5 search, Git context | Most users, fast startup |
 | **`:latest`** | 4.3GB | Everything + semantic search (ML models) | Advanced users, vector search |
 
 **Quick test:**
 ```bash
+# Test alpine version (most secure)
+docker run --rm writenotenow/memory-journal-mcp:alpine python -c "print('✅ Memory Journal MCP Alpine ready!')"
+
 # Test lite version (recommended)
 docker run --rm writenotenow/memory-journal-mcp:lite python -c "print('✅ Memory Journal MCP Lite ready!')"
 
@@ -217,9 +224,10 @@ docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Mem
 ```
 
 **Version Comparison:**
+- **Alpine**: Most secure, smallest size, production-ready
 - **Lite**: All core features, perfect for 99% of users
 - **Full**: Adds semantic search with sentence-transformers and FAISS
-- **Both**: Same security, performance, and reliability
+- **All variants**: Same functionality, different security/size profiles
 
 ### **🔄 Automated Deployment**
 

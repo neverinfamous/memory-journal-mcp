@@ -25,6 +25,9 @@ jobs:
           - name: lite
             dockerfile: Dockerfile.lite
             platforms: linux/amd64,linux/arm64
+          - name: alpine
+            dockerfile: Dockerfile.alpine
+            platforms: linux/amd64,linux/arm64
           - name: full
             dockerfile: Dockerfile
             platforms: linux/amd64
@@ -75,15 +78,15 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Test Docker image (lite only)
-      if: matrix.variant.name == 'lite'
+    - name: Test Docker image (lite and alpine)
+      if: matrix.variant.name == 'lite' || matrix.variant.name == 'alpine'
       run: |
-        docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-lite python -c "
+        docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.variant.name }} python -c "
         import sys
         sys.path.append('src')
         try:
             import server
-            print('✅ Lite image: Server imports successfully')
+            print('✅ ${{ matrix.variant.name }} image: Server imports successfully')
         except ImportError as e:
             print(f'❌ Import failed: {e}')
             sys.exit(1)
@@ -110,7 +113,7 @@ jobs:
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-lite
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-alpine
         format: 'sarif'
         output: 'trivy-results.sarif'
 

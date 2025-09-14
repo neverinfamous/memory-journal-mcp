@@ -1,0 +1,43 @@
+# Alpine-based lightweight MCP server for maximum security
+FROM python:3.12-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apk add --no-cache \
+    git \
+    ca-certificates \
+    && apk upgrade
+
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
+
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY src/ ./src/
+COPY README.md LICENSE ./
+
+# Set ownership and permissions
+RUN chown -R appuser:appgroup /app && \
+    chmod -R 755 /app
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import src.server; print('Health check passed')" || exit 1
+
+# Expose port (if needed for future features)
+EXPOSE 8000
+
+# Run the MCP server
+CMD ["python", "src/server.py"]

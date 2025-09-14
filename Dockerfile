@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 # A containerized Model Context Protocol server for personal journaling
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set working directory
 WORKDIR /app
@@ -8,10 +8,11 @@ WORKDIR /app
 # Install system dependencies for sentence-transformers and git
 RUN apt-get update && apt-get install -y \
     git \
-    curl \
+    ca-certificates \
     build-essential \
     && apt-get upgrade -y \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
