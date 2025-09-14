@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/neverinfamous/memory-journal-mcp/blob/main/README.md
+    about: Check the comprehensive README for setup instructions and usage examples
+  - name: 🐳 Docker Hub
+    url: https://hub.docker.com/r/writenotenow/memory-journal-mcp
+    about: View the official Docker images and installation instructions
+  - name: 💬 GitHub Discussions
+    url: https://github.com/neverinfamous/memory-journal-mcp/discussions
+    about: Ask questions, share ideas, and discuss with the community
