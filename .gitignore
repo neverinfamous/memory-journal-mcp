@@ -132,3 +132,12 @@ Thumbs.db
 # Memory Journal specific
 memory_journal.db
 memory_journal.db-*
+
+# Temporary build/deployment scripts
+*rebuild*.bat
+*fix-security*.bat
+build-and-push.sh
+docker-run.sh
+
+# Local development configs
+mcp-docker-config.json

@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "memory-journal": {
+      "command": "docker",
+      "args": [
+        "run", 
+        "--rm", 
+        "-i",
+        "-v", "./data:/app/data",
+        "writenotenow/memory-journal-mcp:lite",
+        "python", "src/server.py"
+      ]
+    }
+  }
+}
