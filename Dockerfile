@@ -26,8 +26,9 @@ RUN pip install --no-cache-dir \
     sentence-transformers \
     faiss-cpu
 
-# Copy source code
+# Copy source code and license
 COPY src/ ./src/
+COPY LICENSE ./LICENSE
 
 # Create data directory for SQLite database with proper permissions
 RUN mkdir -p /app/data && chmod 700 /app/data

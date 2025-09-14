@@ -3,7 +3,9 @@
 
 *A developer's project journal and context manager*
 
-**🚀 Available on Docker Hub:** `writenotenow/memory-journal-mcp` - Get started in 30 seconds!
+**🚀 Available on Docker Hub:** [`writenotenow/memory-journal-mcp`](https://hub.docker.com/r/writenotenow/memory-journal-mcp) - Get started in 30 seconds!
+
+**📋 Docker MCP Registry:** Submitted to [Docker's official MCP catalog](https://github.com/docker/mcp-registry) for inclusion in Docker Desktop's MCP Toolkit
 
 The **Memory Journal MCP Server** is a Model Context Protocol server built for developers who want more than scattered notes and TODOs. Think of it as a **scrapbook for your projects** — one that captures technical details, GitHub issues, code context, and even the personal threads that shape a project's story.
 
