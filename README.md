@@ -1,9 +1,11 @@
 # 🛠️ Memory Journal MCP Server
-* Last Updated September 14, 2025 9:14 AM EST *
+* Last Updated September 14, 2025 3:54 PM EST *
 
 *A developer's project journal and context manager*
 
 **🚀 Available on Docker Hub:** [`writenotenow/memory-journal-mcp`](https://hub.docker.com/r/writenotenow/memory-journal-mcp) - Get started in 30 seconds!
+
+**⚡ Auto-Deployed:** Images automatically built and pushed on every commit - always up-to-date!
 
 **📋 Docker MCP Registry:** Submitted to [Docker's official MCP catalog](https://github.com/docker/mcp-registry) for inclusion in Docker Desktop's MCP Toolkit
 
@@ -218,6 +220,18 @@ docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Mem
 - **Lite**: All core features, perfect for 99% of users
 - **Full**: Adds semantic search with sentence-transformers and FAISS
 - **Both**: Same security, performance, and reliability
+
+### **🔄 Automated Deployment**
+
+**Always Fresh Images** - Docker images are automatically built and deployed on every commit to `main`:
+
+- **Latest builds**: Available within 5-10 minutes of code changes
+- **Security scanned**: Every image automatically scanned for vulnerabilities  
+- **Multi-platform**: Lite images support both Intel and Apple Silicon
+- **Version tagged**: Git tags automatically create versioned Docker releases
+- **Quality tested**: Images tested before deployment to ensure they work
+
+**No stale images** - What's on GitHub is what's on Docker Hub! 🚀
 
 ---
 
@@ -536,11 +550,10 @@ Returns all tags with usage statistics.
 **Next up for developers:**
 - **Graph visualization** → See how your entries and projects connect
 - **Import/export utilities** → Backup and restore history
-- **Weekly/monthly auto-summaries** → "Here's what you shipped this sprint"
-- **Add elements to database without forking** → "I want to extend the project (e.g., add monitoring to this data) without having to fork and maintain a separate codebase"
-- **LLM/AI progress tracking** → Chart how your AI assistants evolve alongside you
 - **Team features** → Share context bundles, collaborative project journals
-- **IDE integrations** → VS Code, IntelliJ, etc.
+- **Add elements to database without forking** → "I want to extend the project (e.g., add monitoring to this data) without having to fork and maintain a separate codebase"
+- **Weekly/monthly auto-summaries** → "Here's what you shipped this sprint"
+- **LLM/AI progress tracking** → Chart how your AI assistants evolve alongside you
 
 ## 📄 **License**
 
@@ -560,8 +573,10 @@ Built by developers, for developers. PRs welcome, especially for:
 
 **✅ Ready for developers**
 - All 7 MCP tools working and tested
-- Docker images built and validated  
+- Docker images auto-deployed and validated
 - Security hardened (WAL mode, input validation, non-root containers)
+- Community standards compliant (Code of Conduct, Contributing guidelines, issue templates)
+- Automated CI/CD with dependency management (Dependabot enabled)
 - Comprehensive docs (setup, security, Docker guides)
 - 15+ entries created during testing — system is solid
 
