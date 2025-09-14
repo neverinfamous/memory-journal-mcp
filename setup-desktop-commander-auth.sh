@@ -27,7 +27,9 @@ cp -r /host/Users/chris/.docker ~/.docker 2>/dev/null
 
 # Set up GitHub CLI with working token
 echo "🐙 Setting up GitHub CLI..."
-echo "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" | gh auth login --with-token > /dev/null 2>&1
+echo "⚠️  GitHub CLI requires manual setup due to security:"
+echo "   Run: gh auth login --web"
+echo "   This ensures tokens are never stored in files"
 
 # Test Git authentication
 echo "🧪 Testing Git authentication..."
