@@ -1,0 +1,110 @@
+# Dependabot configuration for Memory Journal MCP Server
+# Manages 72+ dependencies including ML libraries and NVIDIA CUDA packages
+
+version: 2
+updates:
+  # Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "neverinfamous"
+    labels:
+      - "dependencies"
+      - "python"
+    # Group ML/AI related packages to reduce PR noise
+    groups:
+      ml-packages:
+        patterns:
+          - "torch*"
+          - "nvidia-*"
+          - "transformers*"
+          - "sentence-transformers*"
+          - "huggingface-*"
+          - "scikit-learn*"
+          - "scipy*"
+          - "numpy*"
+          - "faiss-*"
+          - "pillow*"
+          - "tokenizers*"
+          - "safetensors*"
+        update-types:
+          - "minor"
+          - "patch"
+      mcp-core:
+        patterns:
+          - "mcp*"
+          - "pydantic*"
+          - "httpx*"
+          - "starlette*"
+          - "uvicorn*"
+        update-types:
+          - "minor"
+          - "patch"
+      utilities:
+        patterns:
+          - "tqdm*"
+          - "click*"
+          - "pyyaml*"
+          - "requests*"
+          - "urllib3*"
+          - "certifi*"
+          - "charset-normalizer*"
+          - "idna*"
+          - "filelock*"
+          - "packaging*"
+          - "attrs*"
+        update-types:
+          - "patch"
+    # Ignore specific packages that might cause compatibility issues
+    ignore:
+      # NVIDIA CUDA packages - only update for security fixes
+      - dependency-name: "nvidia-*"
+        update-types: ["version-update:semver-minor"]
+      # PyTorch - be conservative with updates
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "triton"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "neverinfamous"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      actions:
+        patterns:
+          - "actions/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker dependencies (if using Docker Compose)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "neverinfamous"
+    labels:
+      - "dependencies"
+      - "docker"
