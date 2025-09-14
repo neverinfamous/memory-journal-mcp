@@ -1,5 +1,5 @@
 # 🛠️ Memory Journal MCP Server
-* Last Updated September 14, 2025 4:31 PM EST *
+* Last Updated September 14, 2025 6:33 PM EST *
 
 *A developer's project journal and context manager*
 
@@ -133,17 +133,14 @@ semantic_search({ query: "performance optimization challenges", limit: 3 })
 **Option 1: Docker Hub (Recommended)**
 
 Choose your version:
-- **`:alpine`** (80MB) - **Most secure**, Alpine Linux base, minimal attack surface
-- **`:lite`** (116MB) - Core features, fast startup, perfect for most users  
-- **`:latest`** (4.3GB) - Full version with semantic search capabilities
+- **`:alpine`** (65MB) - **Recommended for most users**, maximum security, core features
+- **`:latest`** (4.04GB) - Full version with semantic search capabilities
 
 ```bash
 # 1. Pull your preferred version (no build needed!)
-docker pull writenotenow/memory-journal-mcp:alpine   # Most secure for production
+docker pull writenotenow/memory-journal-mcp:alpine   # Recommended - secure & fast
 # OR
-docker pull writenotenow/memory-journal-mcp:lite     # Recommended for most users
-# OR
-docker pull writenotenow/memory-journal-mcp:latest   # Full version with semantic search
+docker pull writenotenow/memory-journal-mcp:latest   # Full features with ML/semantic search
 
 mkdir data  # Create data directory
 
@@ -207,27 +204,22 @@ pip install sentence-transformers faiss-cpu
 
 | Tag | Size | Features | Best For |
 |-----|------|----------|----------|
-| **`:alpine`** | 50MB | Core journaling, FTS5 search, Git context *(no semantic search)* | **Maximum security, production** |
-| **`:lite`** | 116MB | Core journaling, FTS5 search, Git context *(no semantic search)* | Most users, fast startup |
-| **`:latest`** | 4.3GB | Everything + semantic search (ML models) | Advanced users, full features |
+| **`:alpine`** | 65MB | Core journaling, FTS5 search, Git context | **Recommended - secure & fast** |
+| **`:latest`** | 4.04GB | Everything + semantic search (ML models) | Advanced users, full features |
 
 **Quick test:**
 ```bash
-# Test alpine version (most secure)
+# Test alpine version (recommended)
 docker run --rm writenotenow/memory-journal-mcp:alpine python -c "print('✅ Memory Journal MCP Alpine ready!')"
-
-# Test lite version (recommended)
-docker run --rm writenotenow/memory-journal-mcp:lite python -c "print('✅ Memory Journal MCP Lite ready!')"
 
 # Test full version
 docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Memory Journal MCP Full ready!')"
 ```
 
 **Version Comparison:**
-- **Alpine**: Most secure, smallest size, Alpine Linux base (no ML dependencies)
-- **Lite**: Fast startup, Debian-based, same core features (no ML dependencies)
-- **Full**: Complete feature set with semantic search and ML models
-- **Choice**: Alpine vs Lite = Security vs Compatibility, Full = All features
+- **Alpine**: Recommended for most users - secure, fast, all core features
+- **Latest**: For users who need semantic search and ML-powered features
+- **Simple choice**: Alpine (secure & complete) vs Latest (all features including ML)
 
 ### **🔄 Automated Deployment**
 
