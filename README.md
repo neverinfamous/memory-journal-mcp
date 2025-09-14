@@ -10,7 +10,7 @@
 
 **📋 Docker MCP Registry:** Submitted to [Docker's official MCP catalog](https://github.com/docker/mcp-registry) for inclusion in Docker Desktop's MCP Toolkit
 
-The **Memory Journal MCP Server** is a Model Context Protocol server built for developers who want more than scattered notes and TODOs. Think of it as a **scrapbook for your projects** — one that captures technical details, GitHub issues, code context, and even the personal threads that shape a project's story.
+A MCP server built for developers enabling Git based project management with project and personal journaling. Think of it as a scrapbook for your projects— one that captures technical details, GitHub issues, code context, and the personal threads that shape a project's story.
 
 Whether you're tracking a feature sprint, logging a bug hunt, planning strategy, or leaving behind breadcrumbs for future-you (or your team), this system gives you a structured but flexible way to journal your dev work.
 

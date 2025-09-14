@@ -1,0 +1,15 @@
+name: memory-journal-mcp
+description: >
+  A lightweight journal MCP server using GraphQL + SQLite.
+  Each user controls their own `.db` file for security and portability.
+version: "0.1.0"
+license: MIT
+repository: https://github.com/writenotenow/memory-journal-mcp
+image: writenotenow/memory-journal-mcp:latest
+
+mcp:
+  servers:
+    - id: journal
+      type: server
+      entrypoint: memory-journal
+      description: Journal storage and query engine via GraphQL + SQLite
