@@ -6,8 +6,8 @@ Run these commands from the `memory-journal-mcp` directory:
 
 ### 1. Build Both Images
 ```bash
-# Build lite version (fast, ~200MB)
-docker build -f Dockerfile.lite -t writenotenow/memory-journal-mcp:lite .
+# Build alpine version (fast, ~65MB)
+docker build -f Dockerfile.alpine -t writenotenow/memory-journal-mcp:alpine .
 
 # Build full version (with ML, ~2GB) 
 docker build -f Dockerfile -t writenotenow/memory-journal-mcp:latest .

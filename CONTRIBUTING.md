@@ -19,7 +19,7 @@ git clone https://github.com/YOUR_USERNAME/memory-journal-mcp.git
 cd memory-journal-mcp
 
 # Build and test with Docker
-docker build -f Dockerfile.lite -t memory-journal-dev .
+docker build -f Dockerfile.alpine -t memory-journal-dev .
 docker run --rm -v ./data:/app/data memory-journal-dev python src/server.py
 
 # Test the MCP server
@@ -90,9 +90,9 @@ print('✅ Server imports successfully')
 
 ### Docker Testing
 ```bash
-# Test lite build
-docker build -f Dockerfile.lite -t test-lite .
-docker run --rm test-lite python -c "print('Lite build works!')"
+# Test alpine build
+docker build -f Dockerfile.alpine -t test-alpine .
+docker run --rm test-alpine python -c "print('Alpine build works!')"
 
 # Test full build  
 docker build -f Dockerfile -t test-full .
@@ -182,7 +182,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 ### Docker Development
 ```bash
 # Quick rebuild and test cycle
-docker build -f Dockerfile.lite -t dev-test . && \
+docker build -f Dockerfile.alpine -t dev-test . && \
 docker run --rm -v ./data:/app/data dev-test python src/server.py
 ```
 

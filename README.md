@@ -162,14 +162,14 @@ mkdir data  # Create data directory
 # 1. Clone and build
 git clone <repo-url>
 cd memory-journal-mcp
-docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
+docker build -f Dockerfile.alpine -t memory-journal-mcp-alpine .
 
 # 2. Add to MCP config (use local image)
 {
   "mcpServers": {
     "memory-journal": {
       "command": "docker", 
-      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-lite", "python", "src/server.py"]
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-alpine", "python", "src/server.py"]
     }
   }
 }

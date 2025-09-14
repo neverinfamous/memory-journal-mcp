@@ -22,7 +22,7 @@ Docker **solves the dependency installation issues** we encountered and provides
 - ❌ **No semantic search**: FTS5 search only
 
 ```bash
-docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
+docker build -f Dockerfile.alpine -t memory-journal-mcp-alpine .
 ```
 
 ### **Full Version** (With semantic search)
@@ -43,7 +43,7 @@ git clone <your-repo-url>
 cd memory-journal-mcp
 
 # Build lite version (recommended)
-docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
+docker build -f Dockerfile.alpine -t memory-journal-mcp-alpine .
 ```
 
 ### 2. Configure Cursor MCP
