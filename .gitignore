@@ -139,5 +139,8 @@ memory_journal.db-*
 build-and-push.sh
 docker-run.sh
 
-# Local development configs
+# Local development configs and scripts
 mcp-docker-config.json
+setup-desktop-commander-auth.sh
+*auth*.sh
+*setup*.sh
