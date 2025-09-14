@@ -79,3 +79,10 @@ tools.json
 # CI/CD files
 .github/workflows/
 dependabot.yml
+
+# Security files
+trivy-results.sarif
+*.pem
+*.key
+.env
+.env.*

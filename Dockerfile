@@ -8,7 +8,9 @@ WORKDIR /app
 # Install system dependencies for sentence-transformers and git
 RUN apt-get update && apt-get install -y \
     git \
+    curl \
     build-essential \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better Docker layer caching
