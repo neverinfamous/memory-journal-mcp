@@ -12,8 +12,15 @@ import subprocess
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
-import numpy as np
 import pickle
+
+# Import numpy only when needed for vector operations
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+    np = None
 
 try:
     from mcp.server import Server, NotificationOptions, InitializationOptions
@@ -375,6 +382,8 @@ class VectorSearchManager:
             
             if vectors:
                 # Normalize vectors for cosine similarity
+                if not HAS_NUMPY:
+                    raise RuntimeError("numpy is required for vector operations but not installed")
                 vectors = np.array(vectors, dtype=np.float32)
                 faiss.normalize_L2(vectors)
                 
@@ -385,7 +394,7 @@ class VectorSearchManager:
                 for i, entry_id in enumerate(entry_ids):
                     self.entry_id_map[i] = entry_id
     
-    async def generate_embedding(self, text: str) -> np.ndarray:
+    async def generate_embedding(self, text: str):
         """Generate embedding for text using sentence transformer."""
         if not self.initialized:
             raise RuntimeError("Vector search not initialized")
@@ -397,6 +406,8 @@ class VectorSearchManager:
             lambda: self.model.encode([text], convert_to_tensor=False)[0]
         )
         
+        if not HAS_NUMPY:
+            raise RuntimeError("numpy is required for vector operations but not installed")
         return embedding.astype(np.float32)
     
     async def add_entry_embedding(self, entry_id: int, content: str) -> bool:

@@ -2,6 +2,8 @@
 
 *A developer's project journal and context manager*
 
+**🚀 Available on Docker Hub:** `writenotenow/memory-journal-mcp` - Get started in 30 seconds!
+
 The **Memory Journal MCP Server** is a Model Context Protocol server built for developers who want more than scattered notes and TODOs. Think of it as a **scrapbook for your projects** — one that captures technical details, GitHub issues, code context, and even the personal threads that shape a project's story.
 
 Whether you're tracking a feature sprint, logging a bug hunt, planning strategy, or leaving behind breadcrumbs for future-you (or your team), this system gives you a structured but flexible way to journal your dev work.
@@ -124,9 +126,17 @@ semantic_search({ query: "performance optimization challenges", limit: 3 })
 ## 🛠️ **Setup in 3 Steps**
 
 **Option 1: Docker Hub (Recommended)**
+
+Choose your version:
+- **`:lite`** (116MB) - Core features, fast startup, perfect for most users
+- **`:latest`** (4.3GB) - Full version with semantic search capabilities
+
 ```bash
-# 1. Pull and run (no build needed!)
-docker pull writenotenow/memory-journal-mcp:lite
+# 1. Pull your preferred version (no build needed!)
+docker pull writenotenow/memory-journal-mcp:lite     # Recommended for most users
+# OR
+docker pull writenotenow/memory-journal-mcp:latest   # Full version with semantic search
+
 mkdir data  # Create data directory
 
 # 2. Add to your MCP config (~/.cursor/mcp.json)
@@ -185,14 +195,26 @@ pip install sentence-transformers faiss-cpu
 
 ### **🐳 Docker Hub Images**
 
-**Available on Docker Hub:**
-- **`writenotenow/memory-journal-mcp:lite`** - Core features, fast build (~200MB)
-- **`writenotenow/memory-journal-mcp:latest`** - Full version with semantic search (~2GB)
+**Available on Docker Hub:** `writenotenow/memory-journal-mcp`
+
+| Tag | Size | Features | Best For |
+|-----|------|----------|----------|
+| **`:lite`** | 116MB | Core journaling, FTS5 search, Git context | Most users, fast startup |
+| **`:latest`** | 4.3GB | Everything + semantic search (ML models) | Advanced users, vector search |
 
 **Quick test:**
 ```bash
-docker run --rm writenotenow/memory-journal-mcp:lite python -c "print('✅ Memory Journal MCP ready!')"
+# Test lite version (recommended)
+docker run --rm writenotenow/memory-journal-mcp:lite python -c "print('✅ Memory Journal MCP Lite ready!')"
+
+# Test full version
+docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Memory Journal MCP Full ready!')"
 ```
+
+**Version Comparison:**
+- **Lite**: All core features, perfect for 99% of users
+- **Full**: Adds semantic search with sentence-transformers and FAISS
+- **Both**: Same security, performance, and reliability
 
 ---
 
