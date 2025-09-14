@@ -179,7 +179,7 @@ docker build -f Dockerfile.lite -t memory-journal-mcp-lite .
 git clone <repo-url>
 cd memory-journal-mcp
 
-# 2. Install dependencies
+# 2. Install dependencies (requires Python 3.10+)
 pip install -r requirements.txt
 # Optional: semantic search
 pip install sentence-transformers faiss-cpu
