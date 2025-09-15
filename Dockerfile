@@ -14,6 +14,10 @@ RUN apk add --no-cache \
     linux-headers \
     gfortran \
     openblas-dev \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    python3-dev \
     && apk upgrade
 
 # Copy requirements first for better Docker layer caching
@@ -22,10 +26,10 @@ COPY requirements.txt .
 # Upgrade setuptools to fix security vulnerabilities
 RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1
 
-# Install Python dependencies (includes ML libraries for semantic search)
-RUN pip install --no-cache-dir -r requirements.txt
+# Install core dependencies first
+RUN pip install --no-cache-dir mcp aiohttp aiohttp-cors numpy
 
-# Install ML dependencies with fallback (for semantic search)
+# Install ML dependencies with Alpine-compatible approach
 RUN pip install --no-cache-dir \
     torch --index-url https://download.pytorch.org/whl/cpu \
     sentence-transformers \
