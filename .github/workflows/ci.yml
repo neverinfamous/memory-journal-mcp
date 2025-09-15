@@ -67,18 +67,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build Docker Alpine Image
+    - name: Build Docker Latest Image
       run: |
-        docker build -f Dockerfile.alpine -t memory-journal-mcp:alpine-test .
+        docker build -f Dockerfile -t memory-journal-mcp:latest-test .
         
-    - name: Test Docker Alpine Image
+    - name: Test Docker Latest Image
       run: |
-        docker run --rm memory-journal-mcp:alpine-test python -c "print('✅ Alpine Docker image works!')"
-        
-    - name: Build Docker Full Image
-      run: |
-        docker build -f Dockerfile -t memory-journal-mcp:full-test .
-        
-    - name: Test Docker Full Image  
-      run: |
-        docker run --rm memory-journal-mcp:full-test python -c "print('✅ Full Docker image works!')"
+        docker run --rm memory-journal-mcp:latest-test python -c "print('✅ Alpine-based Docker image with full features works!')"

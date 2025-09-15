@@ -79,12 +79,9 @@ jobs:
     strategy:
       matrix:
         variant:
-          - name: alpine
-            dockerfile: Dockerfile.alpine
-            platforms: linux/amd64,linux/arm64
           - name: latest
             dockerfile: Dockerfile
-            platforms: linux/amd64
+            platforms: linux/amd64,linux/arm64
 
     steps:
     - name: Checkout repository
@@ -130,9 +127,9 @@ jobs:
         cache-from: type=gha
 
     # Security scanning with Docker Scout CLI (no Docker Hub credentials needed for local scan)
-    # Skip scanning for large 'latest' image (7.94GB) - too large for CI scanning
+    # Now scanning optimized Alpine-based 'latest' image (225MB) - perfect size for CI scanning
     - name: Docker Scout security scan
-      if: matrix.variant.name == 'alpine'
+      if: matrix.variant.name == 'latest'
       timeout-minutes: 10  # Prevent hanging
       run: |
         # Install Docker Scout CLI
@@ -141,7 +138,7 @@ jobs:
         # Verify image exists
         docker images local-scan:${{ matrix.variant.name }}
         
-        # Run security scan - block critical and high severity vulnerabilities
+        # Run security scan - block vulnerabilities above medium level (critical, high)
         echo "🔍 Running Docker Scout security scan for local-scan:${{ matrix.variant.name }}"
         
         # Run scan with timeout and capture output to analyze

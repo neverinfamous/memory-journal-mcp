@@ -22,12 +22,12 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build lite image for scanning
+    - name: Build latest image for scanning
       uses: docker/build-push-action@v5
       with:
         context: .
-        file: Dockerfile.lite
-        tags: security-test:lite
+        file: Dockerfile
+        tags: security-test:latest
         load: true
         cache-from: type=gha
         cache-to: type=gha,mode=max
@@ -35,26 +35,16 @@ jobs:
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: security-test:lite
+        image-ref: security-test:latest
         format: 'table'
         exit-code: '1'
         ignore-unfixed: true
         severity: 'CRITICAL,HIGH,MEDIUM'
 
-    - name: Build full image for scanning
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: Dockerfile
-        tags: security-test:full
-        load: true
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: Run Trivy scanner on full image
+    - name: Run Trivy scanner for SARIF output
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: security-test:full
+        image-ref: security-test:latest
         format: 'sarif'
         output: 'trivy-results.sarif'
 
