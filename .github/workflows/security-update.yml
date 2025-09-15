@@ -77,7 +77,7 @@ jobs:
             **Scan Details:**
             - Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             - Triggered by: Weekly security scan
-            - Date: ${{ github.event.head_commit.timestamp }}
+            - Scan Date: ${{ github.event.schedule || 'Manual trigger' }}
             
             **Next Steps:**
             - [ ] Review vulnerability details
