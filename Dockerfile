@@ -1,24 +1,34 @@
-# Alpine-based lightweight MCP server for maximum security
-FROM python:3.11-alpine
+# Memory Journal MCP Server - Full Version
+# A containerized Model Context Protocol server for personal journaling with semantic search
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache \
+# Install system dependencies for git and ML libraries
+RUN apt-get update && apt-get install -y \
     git \
     ca-certificates \
-    && apk upgrade
+    build-essential \
+    && apt-get upgrade -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
 
 # Upgrade setuptools to fix security vulnerabilities
 RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1
 
-# Install only core Python dependencies (same as lite, no vector search)
-RUN pip install --no-cache-dir mcp numpy
+# Install Python dependencies (includes ML libraries for semantic search)
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
+# Install ML dependencies with fallback (for semantic search)
+RUN pip install --no-cache-dir \
+    torch --index-url https://download.pytorch.org/whl/cpu \
+    sentence-transformers \
+    faiss-cpu \
+    || echo "ML dependencies failed to install - continuing without semantic search"
 
 # Copy source code and license
 COPY src/ ./src/
@@ -27,25 +37,29 @@ COPY LICENSE ./LICENSE
 # Create data directory for SQLite database with proper permissions
 RUN mkdir -p /app/data && chmod 700 /app/data
 
-# Set ownership and permissions
-RUN chown -R appuser:appgroup /app && \
-    chmod -R 755 /app
+# Create non-root user for security
+RUN useradd -r -s /bin/false -m -d /app/user appuser && \
+    chown -R appuser:appuser /app
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV DB_PATH=/app/data/memory_journal.db
 
+# Expose the port (though MCP uses stdio, this is for potential future web interface)
+EXPOSE 8000
+
 # Switch to non-root user
 USER appuser
 
-# Health check
+# Health check to ensure the server can start
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sys; sys.path.append('/app'); from src.server import *; print('Server healthy')" || exit 1
 
 # Run the MCP server
 CMD ["python", "src/server.py"]
 
-# Labels
+# Labels for Docker Hub
 LABEL maintainer="Memory Journal MCP"
-LABEL description="Alpine-based MCP server for maximum security (no semantic search)"
-LABEL version="1.0.0-alpine"
+LABEL description="A Model Context Protocol server for personal journaling with semantic search"
+LABEL version="1.0.0"
+LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
