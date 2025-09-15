@@ -47,5 +47,5 @@ CMD ["python", "src/server.py"]
 
 # Labels
 LABEL maintainer="Memory Journal MCP"
-LABEL description="Alpine-based MCP server for maximum security (no semantic search)"
-LABEL version="1.0.0-alpine"
+LABEL description="Alpine-based MCP server - lightweight core version (no semantic search)"
+LABEL version="1.0.0-alpine-lite"

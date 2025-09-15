@@ -1,23 +1,20 @@
 # Memory Journal MCP Server - Full Version
 # A containerized Model Context Protocol server for personal journaling with semantic search
-FROM python:3.11-slim
+# Alpine-based for enhanced security while maintaining all features
+FROM python:3.11-alpine
 
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies for git and ML libraries
-# Set environment variables to suppress debconf warnings
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TERM=xterm-256color
-
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
     git \
     ca-certificates \
-    build-essential \
-    man-db \
-    && apt-get upgrade -y \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    build-base \
+    linux-headers \
+    gfortran \
+    openblas-dev \
+    && apk upgrade
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
@@ -43,8 +40,9 @@ COPY LICENSE ./LICENSE
 RUN mkdir -p /app/data && chmod 700 /app/data
 
 # Create non-root user for security
-RUN useradd -r -s /bin/false -m -d /app/user appuser && \
-    chown -R appuser:appuser /app
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app
 
 # Set environment variables
 ENV PYTHONPATH=/app
@@ -66,5 +64,5 @@ CMD ["python", "src/server.py"]
 # Labels for Docker Hub
 LABEL maintainer="Memory Journal MCP"
 LABEL description="A Model Context Protocol server for personal journaling with semantic search"
-LABEL version="1.0.0"
+LABEL version="1.0.0-alpine-secure"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
