@@ -11,7 +11,7 @@ tags: ["journaling", "productivity", "context-awareness", "semantic-search", "gi
 runtime: "container"
 
 startCommand:
-  type: "http"
+  type: "stdio"
   configSchema:
     type: "object"
     properties:
@@ -40,6 +40,11 @@ startCommand:
 build:
   dockerfile: "Dockerfile.smithery"
   dockerBuildPath: "."
+  
+# Additional metadata for Smithery validation
+homepage: "https://github.com/neverinfamous/memory-journal-mcp"
+repository: "https://github.com/neverinfamous/memory-journal-mcp"
+documentation: "https://github.com/neverinfamous/memory-journal-mcp#readme"
 
 env:
   PYTHONPATH: "/app"

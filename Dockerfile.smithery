@@ -1,5 +1,5 @@
 # Memory Journal MCP Server for Smithery
-# HTTP-enabled version for Smithery marketplace deployment
+# Secure Alpine-based build for Smithery marketplace deployment
 FROM python:3.11-alpine
 
 # Set working directory
@@ -11,12 +11,10 @@ RUN apk add --no-cache \
     ca-certificates \
     && apk upgrade
 
-# Install Python dependencies
+# Install Python dependencies (core MCP functionality without ML dependencies)
 RUN pip install --no-cache-dir \
     mcp>=1.0.0 \
-    numpy \
-    aiohttp>=3.8.0 \
-    aiohttp-cors>=0.7.0
+    numpy
 
 # Copy source code and license
 COPY src/ ./src/
@@ -36,14 +34,11 @@ USER appuser
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV DB_PATH=/app/data/memory_journal.db
-ENV PORT=8000
+ENV LOG_LEVEL=INFO
 
-# Expose port
-EXPOSE 8000
-
-# Health check
+# Health check (for container monitoring)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import sys; sys.exit(0)" || exit 1
 
-# Start the HTTP server
-CMD ["python", "src/server_http.py"]
+# Start the MCP server (stdio mode for Smithery)
+CMD ["python", "src/server.py"]
