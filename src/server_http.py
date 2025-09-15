@@ -81,9 +81,16 @@ async def process_mcp_request(request_data):
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {
-                        "tools": {},
-                        "resources": {},
-                        "prompts": {},
+                        "tools": {
+                            "listChanged": True
+                        },
+                        "resources": {
+                            "subscribe": False,
+                            "listChanged": False
+                        },
+                        "prompts": {
+                            "listChanged": False
+                        },
                         "logging": {}
                     },
                     "serverInfo": {
