@@ -10,7 +10,7 @@ import sqlite3
 import os
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import pickle
 
@@ -24,7 +24,7 @@ except ImportError:
 
 try:
     from mcp.server import Server, NotificationOptions, InitializationOptions
-    from mcp.types import Resource, Tool, TextContent, Prompt, PromptMessage
+    from mcp.types import Resource, Tool, Prompt, PromptMessage
     import mcp.server.stdio
     import mcp.types as types
 except ImportError:
@@ -747,7 +747,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                  f"Personal: {is_personal}\n"
                  f"Tags: {', '.join(tags) if tags else 'None'}"
         )]
-        print(f"DEBUG: create_entry completed successfully, returning result")
+        print("DEBUG: create_entry completed successfully, returning result")
         return result
     
     elif name == "search_entries":
@@ -823,7 +823,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                     context = json.loads(entry['project_context'])
                     if context.get('repo_name'):
                         result += f"Context: {context['repo_name']} ({context.get('branch', 'unknown branch')})\n"
-                except:
+                except Exception:
                     pass
             result += "\n"
         

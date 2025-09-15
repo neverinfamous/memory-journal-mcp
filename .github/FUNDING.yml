@@ -1,31 +1,8 @@
-# These are supported funding model platforms
+github: [neverinfamous]
+open_collective: memory-journal-mcp
+issuehunt: neverinfamous
+custom: ['https://www.paypal.me/neverinfamous']
 
-# GitHub Sponsors (replace with your GitHub username if you set up sponsorship)
-# github: [neverinfamous]
-
-# Open Collective (replace with your Open Collective name if you have one)
-# open_collective: memory-journal-mcp
-
-# Ko-fi (replace with your Ko-fi username if you have one)
-# ko_fi: your_kofi_username
-
-# Tidelift (replace with your Tidelift package name if applicable)
-# tidelift: npm/memory-journal-mcp
-
-# Community Bridge (replace with your project name if applicable)
-# community_bridge: memory-journal-mcp
-
-# Liberapay (replace with your Liberapay username if you have one)
-# liberapay: your_liberapay_username
-
-# IssueHunt (replace with your IssueHunt username if you have one)
-# issuehunt: neverinfamous
-
-# Otechie (replace with your Otechie username if you have one)
-# otechie: your_otechie_username
-
-# LFX Mentorship (replace with your project name if applicable)
-# lfx_crowdfunding: memory-journal-mcp
 
 # Custom funding URLs (uncomment and modify as needed)
-# custom: ['https://www.paypal.me/your_paypal', 'https://www.buymeacoffee.com/your_username']
+custom: ['https://www.paypal.me/your_paypal', 'https://www.buymeacoffee.com/your_username']

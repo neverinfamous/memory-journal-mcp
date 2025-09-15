@@ -6,7 +6,6 @@ This version supports HTTP transport for deployment on Smithery.
 """
 
 import asyncio
-import json
 import os
 import sys
 from pathlib import Path
