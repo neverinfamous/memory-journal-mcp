@@ -13,8 +13,8 @@ RUN apk add --no-cache \
 # Upgrade setuptools to fix security vulnerabilities
 RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1
 
-# Install only core Python dependencies (same as lite, no vector search)
-RUN pip install --no-cache-dir mcp numpy
+# Install core Python dependencies (no vector search, but includes HTTP server support)
+RUN pip install --no-cache-dir mcp numpy aiohttp aiohttp-cors
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
