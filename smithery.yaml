@@ -38,7 +38,7 @@ startCommand:
     logLevel: "info"
 
 build:
-  dockerfile: "Dockerfile.smithery"
+  dockerfile: "Dockerfile.alpine"
   dockerBuildPath: "."
   
 # Additional metadata for Smithery validation
