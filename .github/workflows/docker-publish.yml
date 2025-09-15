@@ -72,10 +72,10 @@ jobs:
       matrix:
         variant:
           - name: alpine
-            dockerfile: Dockerfile.alpine
+            dockerfile: Dockerfile
             platforms: linux/amd64,linux/arm64
           - name: latest
-            dockerfile: Dockerfile
+            dockerfile: Dockerfile.full
             platforms: linux/amd64
 
     steps:
