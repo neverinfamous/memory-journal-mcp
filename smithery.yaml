@@ -11,7 +11,7 @@ tags: ["journaling", "productivity", "context-awareness", "semantic-search", "gi
 runtime: "container"
 
 startCommand:
-  type: "stdio"
+  type: "http"
   configSchema:
     type: "object"
     properties:
@@ -36,8 +36,13 @@ startCommand:
     dataPath: "/app/data"
     enableSemanticSearch: false
     logLevel: "info"
+  testConfig:
+    dataPath: "/app/data"
+    enableSemanticSearch: false
+    logLevel: "debug"
 
 build:
+  dockerfile: "Dockerfile.smithery"
   dockerBuildPath: "."
   
 # Additional metadata for Smithery validation

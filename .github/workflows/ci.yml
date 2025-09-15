@@ -67,9 +67,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build Docker Alpine Image (Default)
+    - name: Build Docker Alpine Image
       run: |
-        docker build -f Dockerfile -t memory-journal-mcp:alpine-test .
+        docker build -f Dockerfile.alpine -t memory-journal-mcp:alpine-test .
         
     - name: Test Docker Alpine Image
       run: |
@@ -77,7 +77,7 @@ jobs:
         
     - name: Build Docker Full Image
       run: |
-        docker build -f Dockerfile.full -t memory-journal-mcp:full-test .
+        docker build -f Dockerfile -t memory-journal-mcp:full-test .
         
     - name: Test Docker Full Image  
       run: |
