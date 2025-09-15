@@ -1,6 +1,13 @@
 # Smithery configuration for Memory Journal MCP Server
 # A developer's project journal and context manager with Git integration
 
+name: "Memory Journal MCP Server"
+description: "A personal journaling system with context awareness, semantic search, and Git integration. Helps developers track thoughts, decisions, and project insights with automatic tagging and intelligent search capabilities."
+version: "1.0.0"
+author: "neverinfamous"
+license: "MIT"
+tags: ["journaling", "productivity", "context-awareness", "semantic-search", "git-integration"]
+
 runtime: "container"
 
 startCommand:
