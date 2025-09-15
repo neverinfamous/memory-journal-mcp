@@ -1,64 +1,49 @@
-# Memory Journal MCP Server
-# A containerized Model Context Protocol server for personal journaling
-FROM python:3.11-slim
+# Memory Journal MCP Server for Smithery
+# HTTP-enabled version for Smithery marketplace deployment
+FROM python:3.11-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for sentence-transformers and git
-RUN apt-get update && apt-get install -y \
+# Install system dependencies
+RUN apk add --no-cache \
     git \
     ca-certificates \
-    build-essential \
-    && apt-get upgrade -y \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Copy requirements first for better Docker layer caching
-COPY requirements.txt .
-
-# Upgrade setuptools to fix security vulnerabilities
-RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1
+    && apk upgrade
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install vector search dependencies with CPU-only PyTorch for smaller size
 RUN pip install --no-cache-dir \
-    torch --index-url https://download.pytorch.org/whl/cpu \
-    sentence-transformers \
-    faiss-cpu
+    mcp>=1.0.0 \
+    numpy \
+    aiohttp>=3.8.0 \
+    aiohttp-cors>=0.7.0
 
 # Copy source code and license
 COPY src/ ./src/
 COPY LICENSE ./LICENSE
 
 # Create data directory for SQLite database with proper permissions
-RUN mkdir -p /app/data && chmod 700 /app/data
+RUN mkdir -p /app/data && chmod 755 /app/data
 
 # Create non-root user for security
-RUN useradd -r -s /bin/false -m -d /app/user appuser && \
-    chown -R appuser:appuser /app
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
+
+# Set ownership and permissions
+RUN chown -R appuser:appgroup /app
+USER appuser
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV DB_PATH=/app/data/memory_journal.db
+ENV PORT=8000
 
-# Expose the port (though MCP uses stdio, this is for potential future web interface)
+# Expose port
 EXPOSE 8000
 
-# Switch to non-root user
-USER appuser
-
-# Health check to ensure the server can start
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.path.append('/app'); from src.server import *; print('Server healthy')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
-# Run the MCP server
-CMD ["python", "src/server.py"]
-
-# Labels for Docker Hub
-LABEL maintainer="Memory Journal MCP"
-LABEL description="A Model Context Protocol server for personal journaling with semantic search"
-LABEL version="1.0.0"
-LABEL org.opencontainers.image.source="https://github.com/your-username/memory-journal-mcp"
+# Start the HTTP server
+CMD ["python", "src/server_http.py"]
