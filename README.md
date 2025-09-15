@@ -4,9 +4,12 @@
 
 *A developer's project journal and context manager*
 
-**🚀 Available on Docker Hub:** [`writenotenow/memory-journal-mcp`](https://hub.docker.com/r/writenotenow/memory-journal-mcp) - Get started in 30 seconds!
+**🚀 Multiple Deployment Options:**
+- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine (131MB) & Full (4GB) with semantic search
+- **[Cloudflare Workers](https://memory-journal-mcp-remote.writenotenow.workers.dev)** - Global edge deployment with full features
+- **[Smithery](https://smithery.ai/connect/1_hqoRNf4)** - One-click deploy, no setup required
 
-**⚡ Auto-Deployed:** Images automatically built and pushed on every commit - always up-to-date!
+**⚡ Auto-Deployed:** All versions automatically built and pushed on every commit - always up-to-date!
 
 **📋 Docker MCP Registry:** Submitted to [Docker's official MCP catalog](https://github.com/docker/mcp-registry) for inclusion in Docker Desktop's MCP Toolkit
 
@@ -134,8 +137,8 @@ semantic_search({ query: "performance optimization challenges", limit: 3 })
 **Option 1: Docker Hub (Recommended)**
 
 Choose your version:
-- **`:alpine`** (65MB) - **Recommended for most users**, maximum security, core features
-- **`:latest`** (4.04GB) - Full version with semantic search capabilities
+- **`:alpine`** (131MB) - **Recommended for most users**, Alpine Linux base, maximum security, core features
+- **`:latest`** (4GB) - **Full ML stack**, Debian base, includes PyTorch + semantic search capabilities
 
 ```bash
 # 1. Pull your preferred version (no build needed!)
@@ -205,8 +208,8 @@ pip install sentence-transformers faiss-cpu
 
 | Tag | Size | Features | Best For |
 |-----|------|----------|----------|
-| **`:alpine`** | 65MB | Core journaling, FTS5 search, Git context | **Recommended - secure & fast** |
-| **`:latest`** | 4.04GB | Everything + semantic search (ML models) | Advanced users, full features |
+| **`:alpine`** | 131MB | Core journaling, FTS5 search, Git context | **Recommended - secure & fast** |
+| **`:latest`** | 4GB | Everything + semantic search (PyTorch, ML models) | Advanced users, full features |
 
 **Quick test:**
 ```bash
@@ -233,6 +236,56 @@ docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Mem
 - **Quality tested**: Images tested before deployment to ensure they work
 
 **No stale images** - What's on GitHub is what's on Docker Hub! 🚀
+
+**Option 2: Cloudflare Workers (Remote MCP Server)**
+
+Deploy as a remote MCP server on Cloudflare's global edge network with D1 database persistence:
+
+🌐 **Live Demo:** [memory-journal-mcp-remote.writenotenow.workers.dev](https://memory-journal-mcp-remote.writenotenow.workers.dev)
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-remote": {
+      "command": "npx",
+      "args": [
+        "mcp-remote", 
+        "https://memory-journal-mcp-remote.writenotenow.workers.dev/sse"
+      ]
+    }
+  }
+}
+```
+
+**Features:**
+- ✅ **Full semantic search** capabilities via Cloudflare Workers AI
+- ✅ **Global edge deployment** - sub-100ms response times worldwide  
+- ✅ **Persistent D1 database** - your data stays safe in Cloudflare's database
+- ✅ **Zero server management** - completely serverless, automatic scaling
+- ✅ **All original features** - complete feature parity with local version
+
+**Option 3: Smithery (One-Click Deploy)**
+
+Deploy instantly via Smithery's MCP marketplace:
+
+🚀 **One-Click Deploy:** [smithery.ai/neverinfamous-memory-journal-mcp](https://smithery.ai/connect/1_hqoRNf4)
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-smithery": {
+      "command": "smithery",
+      "args": ["serve", "neverinfamous/memory-journal-mcp"]
+    }
+  }
+}
+```
+
+**Features:**
+- ✅ **Instant deployment** - no Docker or setup required
+- ✅ **HTTP MCP protocol** - streamable connection for real-time updates
+- ✅ **Alpine-based security** - minimal attack surface, regularly updated
+- ✅ **Core features** - journaling, search, Git context (no semantic search)
 
 ---
 
