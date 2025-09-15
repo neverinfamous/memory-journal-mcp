@@ -141,14 +141,19 @@ jobs:
         # Run security scan - block critical and high severity vulnerabilities
         echo "🔍 Running Docker Scout security scan for local-scan:${{ matrix.variant.name }}"
         
-        # Allow only low and medium severity - exit non-zero if critical/high found
-        docker scout cves local-scan:${{ matrix.variant.name }} --exit-code --only-severity low,medium || {
-          echo "❌ Security scan failed - critical or high severity vulnerabilities found"
+        # Run scan and capture output to analyze
+        SCOUT_OUTPUT=$(docker scout cves local-scan:${{ matrix.variant.name }} 2>&1)
+        echo "$SCOUT_OUTPUT"
+        
+        # Check if critical or high vulnerabilities are present in the output
+        if echo "$SCOUT_OUTPUT" | grep -E "(CRITICAL|HIGH)" | grep -v "0  " > /dev/null; then
+          echo "❌ Critical or high severity vulnerabilities detected"
           echo "🚨 Build blocked due to unacceptable security risk"
           exit 1
-        }
-        
-        echo "✅ Security scan passed - no critical/high severity vulnerabilities"
+        else
+          echo "✅ Security scan passed - no critical/high severity vulnerabilities"
+          echo "ℹ️ Low/medium severity vulnerabilities are acceptable"
+        fi
 
     # Only push if security scan passes
     - name: Build and push Docker image
