@@ -41,11 +41,18 @@ jobs:
     
     - name: Lint with flake8
       run: |
+        echo "🔍 Installing and running flake8 linting..."
         pip install flake8
-        # Stop build if there are Python syntax errors or undefined names
+        echo "📁 Checking src/ directory contents:"
+        ls -la src/
+        
+        echo "🚨 Checking for critical errors (syntax, undefined names):"
         flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
+        
+        echo "📊 Running full flake8 analysis:"
         flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        
+        echo "✅ Flake8 linting completed"
     
     - name: Test server import
       run: |
@@ -128,8 +135,16 @@ jobs:
         # Install Docker Scout CLI
         curl -sSfL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh | sh -s --
         
+        # Verify image exists
+        docker images local-scan:${{ matrix.variant.name }}
+        
         # Run security scan - block on critical and high severity issues
-        docker scout cves local-scan:${{ matrix.variant.name }} --severity critical,high --exit-code
+        echo "🔍 Running Docker Scout security scan for local-scan:${{ matrix.variant.name }}"
+        docker scout cves local-scan:${{ matrix.variant.name }} --severity critical,high --exit-code || {
+          echo "❌ Security scan failed - critical or high severity vulnerabilities found"
+          exit 1
+        }
+        echo "✅ Security scan passed - no critical/high severity vulnerabilities"
 
     # Only push if security scan passes
     - name: Build and push Docker image
