@@ -6,6 +6,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies for git and ML libraries
+# Set environment variables to suppress debconf warnings
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TERM=xterm-256color
+
 RUN apt-get update && apt-get install -y \
     git \
     ca-certificates \
