@@ -14,9 +14,8 @@ env:
 permissions:
   contents: read
   packages: write
-  security-events: write  # For Docker Scout security scanning
-  pull-requests: write    # For Scout to comment on PRs
-  security-events: write
+  security-events: write  # For security scanning
+  pull-requests: write    # For PR comments
 
 jobs:
   test:
@@ -70,6 +69,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: test  # Only build if tests pass
+    needs: test  # Only build if tests pass
     strategy:
       matrix:
         variant:
@@ -106,7 +106,7 @@ jobs:
         flavor: |
           latest=false
         tags: |
-          type=raw,value=${{ matrix.variant.name }},enable={{is_default_branch}}
+          type=raw,value=${{ matrix.variant.name }},enable=${{ github.ref == 'refs/heads/main' }}
           type=semver,pattern={{version}}-${{ matrix.variant.name }}
           type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant.name }}
 
