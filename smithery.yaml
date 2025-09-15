@@ -1,15 +1,44 @@
+# smithery.yaml
 name: memory-journal-mcp
 description: >
-  A lightweight journal MCP server using GraphQL + SQLite.
-  Each user controls their own `.db` file for security and portability.
-version: "0.1.0"
-license: MIT
-repository: https://github.com/writenotenow/memory-journal-mcp
-image: writenotenow/memory-journal-mcp:latest
+  A Model Context Protocol (MCP) server for developers who want more than scattered notes
+  and TODOs. Think of it as a scrapbook for your projects — one that captures technical
+  details, GitHub issues, code context, and the personal threads that shape a project's story.
 
+# Docker images to use (multi-flavor support)
+images:
+  - tag: latest
+    image: writenotenow/memory-journal-mcp:latest
+    description: >
+      Full-featured Debian-based build (~2GB) including semantic search
+      with FAISS + sentence-transformers.
+    entrypoint:
+      - python
+      - src/server.py
+
+  - tag: lite
+    image: writenotenow/memory-journal-mcp:lite
+    description: >
+      Lightweight Alpine-based build (~200MB), core journaling + FTS5 search.
+      No semantic search or ML dependencies.
+    entrypoint:
+      - python
+      - src/server.py
+
+# MCP metadata
 mcp:
-  servers:
-    - id: journal
-      type: server
-      entrypoint: memory-journal
-      description: Journal storage and query engine via GraphQL + SQLite
+  tools:
+    - create_entry
+    - search_entries
+    - semantic_search   # present in full image, gracefully degrades in lite
+    - get_recent_entries
+    - list_tags
+  resources:
+    - memory://recent
+    - memory://significant
+  prompts:
+    - get-context-bundle
+    - get-recent-entries
+
+# Runtime settings
+timeout: 30
