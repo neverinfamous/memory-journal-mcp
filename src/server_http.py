@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import the existing server module to reuse its logic
 import server as mcp_server
 
+
 async def handle_mcp(request):
     """Handle MCP requests over HTTP."""
     try:

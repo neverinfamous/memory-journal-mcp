@@ -51,6 +51,7 @@ server = Server("memory-journal")
 # Database path - relative to server location
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "memory_journal.db")
 
+
 class MemoryJournalDB:
     """Database operations for the Memory Journal system."""
 
@@ -215,8 +216,8 @@ class MemoryJournalDB:
         try:
             # Get git repository root with aggressive timeout
             result = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
-                                  capture_output=True, text=True, cwd=os.getcwd(),
-                                  timeout=git_timeout, shell=False)
+                                capture_output=True, text=True, cwd=os.getcwd(),
+                                timeout=git_timeout, shell=False)
             if result.returncode == 0:
                 repo_path = result.stdout.strip()
                 context['repo_path'] = repo_path
@@ -226,8 +227,8 @@ class MemoryJournalDB:
                 # Get current branch with aggressive timeout
                 try:
                     result = subprocess.run(['git', 'branch', '--show-current'],
-                                          capture_output=True, text=True, cwd=repo_path,
-                                          timeout=git_timeout, shell=False)
+                                        capture_output=True, text=True, cwd=repo_path,
+                                        timeout=git_timeout, shell=False)
                     if result.returncode == 0:
                         context['branch'] = result.stdout.strip()
                 except subprocess.TimeoutExpired:
@@ -236,8 +237,8 @@ class MemoryJournalDB:
                 # Get last commit info with aggressive timeout
                 try:
                     result = subprocess.run(['git', 'log', '-1', '--format=%H:%s'],
-                                          capture_output=True, text=True, cwd=repo_path,
-                                          timeout=git_timeout, shell=False)
+                                        capture_output=True, text=True, cwd=repo_path,
+                                        timeout=git_timeout, shell=False)
                     if result.returncode == 0:
                         commit_info = result.stdout.strip()
                         if ':' in commit_info:
@@ -263,8 +264,8 @@ class MemoryJournalDB:
             try:
                 # Check if GitHub CLI is available and authenticated
                 result = subprocess.run(['gh', 'auth', 'status'],
-                                      capture_output=True, text=True,
-                                      timeout=git_timeout, shell=False)
+                                    capture_output=True, text=True,
+                                    timeout=git_timeout, shell=False)
                 if result.returncode == 0:
                     # Get current open issues (limit to 3 most recent)
                     try:
@@ -327,6 +328,7 @@ class MemoryJournalDB:
 
 # Initialize database
 db = MemoryJournalDB(DB_PATH)
+
 
 class VectorSearchManager:
     """Manages vector embeddings and semantic search functionality."""
@@ -486,8 +488,6 @@ class VectorSearchManager:
 vector_search = VectorSearchManager(DB_PATH) if VECTOR_SEARCH_AVAILABLE else None
 
 @server.list_resources()
-
-
 async def list_resources() -> List[Resource]:
     """List available resources."""
     return [
@@ -506,7 +506,6 @@ async def list_resources() -> List[Resource]:
     ]
 
 @server.read_resource()
-
 
 async def read_resource(uri: str) -> str:
     """Read a specific resource."""
@@ -657,7 +656,6 @@ async def list_tools() -> List[Tool]:
     ]
 
 @server.call_tool()
-
 
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
     """Handle tool calls."""
@@ -984,6 +982,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
 @server.list_prompts()
 
 
+
 async def list_prompts() -> List[Prompt]:
     """List available prompts."""
     return [
@@ -1016,9 +1015,8 @@ async def list_prompts() -> List[Prompt]:
         )
     ]
 
+
 @server.get_prompt()
-
-
 async def get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptResult:
     """Handle prompt requests."""
 
