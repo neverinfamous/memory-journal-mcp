@@ -130,7 +130,9 @@ jobs:
         cache-from: type=gha
 
     # Security scanning with Docker Scout CLI (no Docker Hub credentials needed for local scan)
+    # Skip scanning for large 'latest' image (7.94GB) - too large for CI scanning
     - name: Docker Scout security scan
+      if: matrix.variant.name == 'alpine'
       timeout-minutes: 10  # Prevent hanging
       run: |
         # Install Docker Scout CLI
