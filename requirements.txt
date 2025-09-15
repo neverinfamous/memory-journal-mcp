@@ -1,6 +1,10 @@
 # Memory Journal MCP Server Dependencies
 mcp>=1.0.0
 
+# HTTP Server Dependencies (for Smithery)
+aiohttp>=3.8.0
+aiohttp-cors>=0.7.0
+
 # Vector Search Dependencies
 sentence-transformers>=2.2.2
 faiss-cpu>=1.7.4

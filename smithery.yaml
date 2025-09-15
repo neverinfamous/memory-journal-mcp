@@ -1,44 +1,40 @@
-# smithery.yaml
-name: memory-journal-mcp
-description: >
-  A Model Context Protocol (MCP) server for developers who want more than scattered notes
-  and TODOs. Think of it as a scrapbook for your projects — one that captures technical
-  details, GitHub issues, code context, and the personal threads that shape a project's story.
+# Smithery configuration for Memory Journal MCP Server
+# A developer's project journal and context manager with Git integration
 
-# Docker images to use (multi-flavor support)
-images:
-  - tag: latest
-    image: writenotenow/memory-journal-mcp:latest
-    description: >
-      Full-featured Debian-based build (~2GB) including semantic search
-      with FAISS + sentence-transformers.
-    entrypoint:
-      - python
-      - src/server.py
+runtime: "container"
 
-  - tag: lite
-    image: writenotenow/memory-journal-mcp:lite
-    description: >
-      Lightweight Alpine-based build (~200MB), core journaling + FTS5 search.
-      No semantic search or ML dependencies.
-    entrypoint:
-      - python
-      - src/server.py
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    properties:
+      dataPath:
+        type: "string"
+        title: "Data Directory Path"
+        description: "Path where SQLite database and journal data will be stored"
+        default: "/app/data"
+      enableSemanticSearch:
+        type: "boolean"
+        title: "Enable Semantic Search"
+        description: "Enable vector similarity search for journal entries (requires full image)"
+        default: false
+      logLevel:
+        type: "string"
+        title: "Log Level"
+        description: "Logging verbosity level"
+        enum: ["debug", "info", "warning", "error"]
+        default: "info"
+    required: []
+  exampleConfig:
+    dataPath: "/app/data"
+    enableSemanticSearch: false
+    logLevel: "info"
 
-# MCP metadata
-mcp:
-  tools:
-    - create_entry
-    - search_entries
-    - semantic_search   # present in full image, gracefully degrades in lite
-    - get_recent_entries
-    - list_tags
-  resources:
-    - memory://recent
-    - memory://significant
-  prompts:
-    - get-context-bundle
-    - get-recent-entries
+build:
+  dockerfile: "Dockerfile.smithery"
+  dockerBuildPath: "."
 
-# Runtime settings
-timeout: 30
+env:
+  PYTHONPATH: "/app"
+  DB_PATH: "/app/data/memory_journal.db"
+  PYTHONUNBUFFERED: "1"
