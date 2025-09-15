@@ -138,16 +138,17 @@ jobs:
         # Verify image exists
         docker images local-scan:${{ matrix.variant.name }}
         
-        # Run security scan (basic scan without severity filtering for now)
+        # Run security scan - block critical and high severity vulnerabilities
         echo "🔍 Running Docker Scout security scan for local-scan:${{ matrix.variant.name }}"
         
-        # Run basic Docker Scout scan and show results
-        docker scout cves local-scan:${{ matrix.variant.name }} || {
-          echo "⚠️ Docker Scout found vulnerabilities - review output above"
-          echo "ℹ️ Continuing build as this is informational (not blocking critical/high)"
+        # Allow only low and medium severity - exit non-zero if critical/high found
+        docker scout cves local-scan:${{ matrix.variant.name }} --exit-code --only-severity low,medium || {
+          echo "❌ Security scan failed - critical or high severity vulnerabilities found"
+          echo "🚨 Build blocked due to unacceptable security risk"
+          exit 1
         }
         
-        echo "✅ Security scan completed"
+        echo "✅ Security scan passed - no critical/high severity vulnerabilities"
 
     # Only push if security scan passes
     - name: Build and push Docker image
