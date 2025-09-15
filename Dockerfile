@@ -23,11 +23,12 @@ RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install vector search dependencies with CPU-only PyTorch for smaller size
+# Install vector search dependencies (optional - graceful degradation if not available)
 RUN pip install --no-cache-dir \
     torch --index-url https://download.pytorch.org/whl/cpu \
     sentence-transformers \
-    faiss-cpu
+    faiss-cpu \
+    || echo "ML dependencies failed to install - continuing without semantic search"
 
 # Copy source code and license
 COPY src/ ./src/
