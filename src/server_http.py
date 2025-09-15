@@ -39,7 +39,7 @@ async def handle_mcp(request):
                     }
                 }
             })
-        
+
         elif request.method == 'POST':
             # Handle MCP protocol requests
             try:
@@ -52,11 +52,11 @@ async def handle_mcp(request):
                         "message": "Parse error"
                     }
                 }, status=400)
-            
+
             # Process the MCP request
             response = await process_mcp_request(body)
             return web.json_response(response)
-            
+
     except Exception as e:
         return web.json_response({
             "jsonrpc": "2.0",
@@ -72,7 +72,7 @@ async def process_mcp_request(request_data):
         method = request_data.get('method')
         params = request_data.get('params', {})
         request_id = request_data.get('id')
-        
+
         if method == 'initialize':
             return {
                 "jsonrpc": "2.0",
@@ -98,7 +98,7 @@ async def process_mcp_request(request_data):
                     }
                 }
             }
-        
+
         elif method == 'tools/list':
             # Return the list of available tools
             return {
@@ -171,15 +171,15 @@ async def process_mcp_request(request_data):
                     ]
                 }
             }
-        
+
         elif method == 'tools/call':
             tool_name = params.get('name')
             arguments = params.get('arguments', {})
-            
+
             try:
                 # Call the existing tool handler from the original server
                 result_content = await mcp_server.call_tool(tool_name, arguments)
-                
+
                 # Convert the result to the expected format
                 return {
                     "jsonrpc": "2.0",
@@ -197,7 +197,7 @@ async def process_mcp_request(request_data):
                         "message": f"Tool execution failed: {str(e)}"
                     }
                 }
-        
+
         else:
             return {
                 "jsonrpc": "2.0",
@@ -207,7 +207,7 @@ async def process_mcp_request(request_data):
                     "message": f"Method not found: {method}"
                 }
             }
-    
+
     except Exception as e:
         return {
             "jsonrpc": "2.0",
@@ -221,7 +221,7 @@ async def process_mcp_request(request_data):
 async def handle_health(request):
     """Health check endpoint."""
     return web.json_response({
-        "status": "healthy", 
+        "status": "healthy",
         "service": "memory-journal-mcp",
         "version": "1.0.0"
     })
@@ -229,7 +229,7 @@ async def handle_health(request):
 async def create_app():
     """Create and configure the aiohttp application."""
     app = web.Application()
-    
+
     # Configure CORS
     cors = aiohttp_cors.setup(app, defaults={
         "*": aiohttp_cors.ResourceOptions(
@@ -239,15 +239,15 @@ async def create_app():
             allow_methods="*"
         )
     })
-    
+
     # Add routes - CORS setup automatically handles OPTIONS
     mcp_resource = cors.add(app.router.add_resource("/mcp"))
     cors.add(mcp_resource.add_route("GET", handle_mcp))
     cors.add(mcp_resource.add_route("POST", handle_mcp))
-    
+
     health_resource = cors.add(app.router.add_resource("/health"))
     cors.add(health_resource.add_route("GET", handle_health))
-    
+
     return app
 
 async def main():
@@ -255,23 +255,23 @@ async def main():
     # Initialize the database and other components from the original server
     # This ensures the database is set up before we start handling requests
     print("Initializing Memory Journal MCP Server...")
-    
+
     app = await create_app()
-    
+
     # Get port from environment or default to 8000
     port = int(os.environ.get('PORT', 8000))
-    
+
     print(f"Starting Memory Journal MCP Server on port {port}")
     print(f"Health check available at: http://localhost:{port}/health")
     print(f"MCP endpoint available at: http://localhost:{port}/mcp")
-    
+
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    
+
     print("Server is ready.")
-    
+
     # Keep the server running
     try:
         while True:
