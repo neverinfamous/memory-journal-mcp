@@ -5,7 +5,7 @@
 *A developer's project journal and context manager*
 
 **🚀 Multiple Deployment Options:**
-- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine (131MB) & Full (4GB) with semantic search
+- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
 - **[Cloudflare Workers](https://memory-journal-mcp-remote.writenotenow.workers.dev)** - Global edge deployment with full features
 - **[Smithery](https://smithery.ai/connect/1_hqoRNf4)** - One-click deploy, no setup required
 
@@ -45,7 +45,7 @@ Whether you're tracking a feature sprint, logging a bug hunt, planning strategy,
 
 * **Zero friction** → no auth, no external API limits
 * **Context-aware** → project state captured automatically
-* **Dockerized** → Lite (fast) and Full (with ML for semantic search) images
+* **Dockerized** → Alpine-based secure image with full semantic search capabilities
 * **Secure** → WAL mode, input validation, non-root containers, no data leakage
 * **Extensible** → semantic search, relationship mapping, future summaries
 
@@ -136,15 +136,12 @@ semantic_search({ query: "performance optimization challenges", limit: 3 })
 
 **Option 1: Docker Hub (Recommended)**
 
-Choose your version:
-- **`:alpine`** (131MB) - **Recommended for most users**, Alpine Linux base, maximum security, core features
-- **`:latest`** (4GB) - **Full ML stack**, Debian base, includes PyTorch + semantic search capabilities
+**Single Optimized Image:**
+- **`:latest`** (225MB) - **Alpine-based with full features**, includes PyTorch + semantic search, maximum security
 
 ```bash
-# 1. Pull your preferred version (no build needed!)
-docker pull writenotenow/memory-journal-mcp:alpine   # Recommended - secure & fast
-# OR
-docker pull writenotenow/memory-journal-mcp:latest   # Full features with ML/semantic search
+# 1. Pull the optimized image (no build needed!)
+docker pull writenotenow/memory-journal-mcp:latest   # Secure Alpine base with full ML capabilities
 
 mkdir data  # Create data directory
 
@@ -153,7 +150,7 @@ mkdir data  # Create data directory
   "mcpServers": {
     "memory-journal": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:alpine", "python", "src/server.py"]
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "writenotenow/memory-journal-mcp:latest", "python", "src/server.py"]
     }
   }
 }
@@ -166,14 +163,14 @@ mkdir data  # Create data directory
 # 1. Clone and build
 git clone <repo-url>
 cd memory-journal-mcp
-docker build -f Dockerfile.alpine -t memory-journal-mcp-alpine .
+docker build -f Dockerfile -t memory-journal-mcp-local .
 
 # 2. Add to MCP config (use local image)
 {
   "mcpServers": {
     "memory-journal": {
       "command": "docker", 
-      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-alpine", "python", "src/server.py"]
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-local", "python", "src/server.py"]
     }
   }
 }
@@ -208,22 +205,18 @@ pip install sentence-transformers faiss-cpu
 
 | Tag | Size | Features | Best For |
 |-----|------|----------|----------|
-| **`:alpine`** | 131MB | Core journaling, FTS5 search, Git context | **Recommended - secure & fast** |
-| **`:latest`** | 4GB | Everything + semantic search (PyTorch, ML models) | Advanced users, full features |
+| **`:latest`** | 225MB | Complete feature set: journaling, FTS5 search, semantic search, Git context, PyTorch ML | **All users - secure Alpine base with full capabilities** |
 
 **Quick test:**
 ```bash
-# Test alpine version (recommended)
-docker run --rm writenotenow/memory-journal-mcp:alpine python -c "print('✅ Memory Journal MCP Alpine ready!')"
-
-# Test full version
-docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Memory Journal MCP Full ready!')"
+# Test the optimized image
+docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Memory Journal MCP ready with full features!')"
 ```
 
-**Version Comparison:**
-- **Alpine**: Recommended for most users - secure, fast, all core features
-- **Latest**: For users who need semantic search and ML-powered features
-- **Simple choice**: Alpine (secure & complete) vs Latest (all features including ML)
+**Why Alpine-based:**
+- **Security**: Minimal attack surface with Alpine Linux base
+- **Performance**: Optimized 225MB image with full ML capabilities  
+- **Simplicity**: One image covers all use cases - no version confusion
 
 ### **🔄 Automated Deployment**
 
@@ -284,7 +277,7 @@ Deploy instantly via Smithery's MCP marketplace:
 **Features:**
 - ✅ **Instant deployment** - no Docker or setup required
 - ✅ **HTTP MCP protocol** - streamable connection for real-time updates
-- ✅ **Alpine-based security** - minimal attack surface, regularly updated
+- ✅ **Alpine-based security** - minimal attack surface, same as Docker image
 - ✅ **Core features** - journaling, search, Git context (no semantic search)
 
 ---
