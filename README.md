@@ -1,5 +1,7 @@
 # 🛠️ Memory Journal MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@neverinfamous/memory-journal-mcp)](https://smithery.ai/server/@neverinfamous/memory-journal-mcp)
+
 * Last Updated September 14, 2025 7:08 PM EST *
 
 *A developer's project journal and context manager*
