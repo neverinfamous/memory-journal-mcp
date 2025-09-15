@@ -131,6 +131,14 @@ semantic_search({ query: "performance optimization challenges", limit: 3 })
 
 ## 🛠️ **Setup in 3 Steps**
 
+### Installing via Smithery
+
+To install memory-journal-mcp for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@neverinfamous/memory-journal-mcp):
+
+```bash
+npx -y @smithery/cli install @neverinfamous/memory-journal-mcp --client claude
+```
+
 **Option 1: Docker Hub (Recommended)**
 
 Choose your version:
