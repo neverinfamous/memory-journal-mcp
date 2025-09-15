@@ -1,21 +1,8 @@
-name = "memory-journal-mcp"
+name = "memory-journal-mcp-remote"
 compatibility_date = "2025-09-15"
-main = "src/worker.js"
-
-# D1 database for persistent storage
-[[d1_databases]]
-binding = "DB"
-database_name = "memory-journal"
-database_id = "a0941707-86d9-4ee7-bcb6-75dc24f62c37"
-
-# KV for caching and session storage
-[[kv_namespaces]]
-binding = "CACHE"
-id = "9ecfc38419ca4be49aa334aba80b40cb"
+main = "src/remote-server.js"
+compatibility_flags = ["nodejs_compat"]
 
 # Environment variables
 [env.production.vars]
 ENVIRONMENT = "production"
-
-[env.development.vars]
-ENVIRONMENT = "development"
