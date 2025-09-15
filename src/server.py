@@ -216,8 +216,8 @@ class MemoryJournalDB:
         try:
             # Get git repository root with aggressive timeout
             result = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
-                                     capture_output=True, text=True, cwd=os.getcwd(),
-                                     timeout=git_timeout, shell=False)
+                                   capture_output=True, text=True, cwd=os.getcwd(),
+                                   timeout=git_timeout, shell=False)
             if result.returncode == 0:
                 repo_path = result.stdout.strip()
                 context['repo_path'] = repo_path
@@ -227,8 +227,8 @@ class MemoryJournalDB:
                 # Get current branch with aggressive timeout
                 try:
                     result = subprocess.run(['git', 'branch', '--show-current'],
-                                           capture_output=True, text=True, cwd=repo_path,
-                                           timeout=git_timeout, shell=False)
+                                             capture_output=True, text=True, cwd=repo_path,
+                                             timeout=git_timeout, shell=False)
                     if result.returncode == 0:
                         context['branch'] = result.stdout.strip()
                 except subprocess.TimeoutExpired:
@@ -237,8 +237,8 @@ class MemoryJournalDB:
                 # Get last commit info with aggressive timeout
                 try:
                     result = subprocess.run(['git', 'log', '-1', '--format=%H:%s'],
-                                           capture_output=True, text=True, cwd=repo_path,
-                                           timeout=git_timeout, shell=False)
+                                             capture_output=True, text=True, cwd=repo_path,
+                                             timeout=git_timeout, shell=False)
                     if result.returncode == 0:
                         commit_info = result.stdout.strip()
                         if ':' in commit_info:
@@ -264,8 +264,8 @@ class MemoryJournalDB:
             try:
                 # Check if GitHub CLI is available and authenticated
                 result = subprocess.run(['gh', 'auth', 'status'],
-                                       capture_output=True, text=True,
-                                       timeout=git_timeout, shell=False)
+                                         capture_output=True, text=True,
+                                         timeout=git_timeout, shell=False)
                 if result.returncode == 0:
                     # Get current open issues (limit to 3 most recent)
                     try:
@@ -1142,4 +1142,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-        
