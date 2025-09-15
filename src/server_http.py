@@ -9,100 +9,219 @@ import asyncio
 import json
 import os
 import sys
-from urllib.parse import parse_qs, urlparse
+from pathlib import Path
 from aiohttp import web
 import aiohttp_cors
 
-# Import the main server logic
-from server import server, InitializationOptions
+# Add the src directory to Python path
+sys.path.insert(0, str(Path(__file__).parent))
+
+# Import the existing server module to reuse its logic
+import server as mcp_server
 
 async def handle_mcp(request):
     """Handle MCP requests over HTTP."""
     try:
-        # Get configuration from query parameters
-        config = {}
-        for key, value in request.query.items():
-            if key.startswith('config_'):
-                config_key = key[7:]  # Remove 'config_' prefix
-                config[config_key] = value
+        if request.method == 'GET':
+            # Return server capabilities for GET requests
+            return web.json_response({
+                "jsonrpc": "2.0",
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {},
+                        "prompts": {},
+                        "logging": {}
+                    },
+                    "serverInfo": {
+                        "name": "memory-journal",
+                        "version": "1.0.0"
+                    }
+                }
+            })
         
-        # Apply configuration
-        if 'dataPath' in config:
-            os.environ['DB_PATH'] = config['dataPath']
-        if 'logLevel' in config:
-            os.environ['LOG_LEVEL'] = config['logLevel']
-            
-        # Handle POST request with MCP protocol
-        if request.method == 'POST':
-            body = await request.json()
-            
-            # Create mock streams for compatibility with existing server code
-            class MockStream:
-                def __init__(self):
-                    self.messages = []
-                    
-                async def send(self, message):
-                    self.messages.append(message)
-                    
-                async def recv(self):
-                    return body
-            
-            mock_read_stream = MockStream()
-            mock_write_stream = MockStream()
+        elif request.method == 'POST':
+            # Handle MCP protocol requests
+            try:
+                body = await request.json()
+            except Exception:
+                return web.json_response({
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32700,
+                        "message": "Parse error"
+                    }
+                }, status=400)
             
             # Process the MCP request
-            try:
-                await server.run(
-                    mock_read_stream,
-                    mock_write_stream,
-                    InitializationOptions(
-                        server_name="memory-journal",
-                        server_version="1.0.0",
-                        capabilities=server.get_capabilities(
-                            notification_options={},
-                            experimental_capabilities={},
-                        ),
-                    ),
-                )
-                
-                # Return the response
-                if mock_write_stream.messages:
-                    return web.json_response(mock_write_stream.messages[-1])
-                else:
-                    return web.json_response({"result": "success"})
-                    
-            except Exception as e:
-                return web.json_response(
-                    {"error": {"code": -32603, "message": str(e)}}, 
-                    status=500
-                )
-        
-        # Handle GET request - return server info
-        elif request.method == 'GET':
-            return web.json_response({
-                "name": "memory-journal",
-                "version": "1.0.0",
-                "description": "A Model Context Protocol server for personal journaling with context awareness",
-                "capabilities": {
-                    "tools": True,
-                    "resources": True,
-                    "prompts": True
-                },
-                "status": "ready"
-            })
+            response = await process_mcp_request(body)
+            return web.json_response(response)
             
     except Exception as e:
-        return web.json_response(
-            {"error": {"code": -32603, "message": f"Server error: {str(e)}"}}, 
-            status=500
-        )
+        return web.json_response({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32603,
+                "message": f"Internal error: {str(e)}"
+            }
+        }, status=500)
 
-async def health_check(request):
+async def process_mcp_request(request_data):
+    """Process an MCP request and return the response."""
+    try:
+        method = request_data.get('method')
+        params = request_data.get('params', {})
+        request_id = request_data.get('id')
+        
+        if method == 'initialize':
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {},
+                        "resources": {},
+                        "prompts": {},
+                        "logging": {}
+                    },
+                    "serverInfo": {
+                        "name": "memory-journal",
+                        "version": "1.0.0"
+                    }
+                }
+            }
+        
+        elif method == 'tools/list':
+            # Return the list of available tools
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "tools": [
+                        {
+                            "name": "create_entry",
+                            "description": "Create a new journal entry with optional context and tags",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "content": {"type": "string", "description": "The journal entry content"},
+                                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags"},
+                                    "entry_type": {"type": "string", "default": "personal_reflection"},
+                                    "is_personal": {"type": "boolean", "default": True},
+                                    "significance_type": {"type": "string"},
+                                    "auto_context": {"type": "boolean", "default": True}
+                                },
+                                "required": ["content"]
+                            }
+                        },
+                        {
+                            "name": "search_entries",
+                            "description": "Search journal entries by content",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "query": {"type": "string", "description": "Search query"},
+                                    "limit": {"type": "integer", "default": 10},
+                                    "is_personal": {"type": "boolean"}
+                                },
+                                "required": ["query"]
+                            }
+                        },
+                        {
+                            "name": "get_recent_entries",
+                            "description": "Get recent journal entries",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "limit": {"type": "integer", "default": 5},
+                                    "is_personal": {"type": "boolean"}
+                                }
+                            }
+                        },
+                        {
+                            "name": "list_tags",
+                            "description": "List all available tags",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {}
+                            }
+                        },
+                        {
+                            "name": "semantic_search",
+                            "description": "Perform semantic search on journal entries",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "query": {"type": "string", "description": "Search query"},
+                                    "limit": {"type": "integer", "default": 10},
+                                    "similarity_threshold": {"type": "number", "default": 0.3},
+                                    "is_personal": {"type": "boolean"}
+                                },
+                                "required": ["query"]
+                            }
+                        }
+                    ]
+                }
+            }
+        
+        elif method == 'tools/call':
+            tool_name = params.get('name')
+            arguments = params.get('arguments', {})
+            
+            try:
+                # Call the existing tool handler from the original server
+                result_content = await mcp_server.call_tool(tool_name, arguments)
+                
+                # Convert the result to the expected format
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "content": result_content
+                    }
+                }
+            except Exception as e:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": -32603,
+                        "message": f"Tool execution failed: {str(e)}"
+                    }
+                }
+        
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Method not found: {method}"
+                }
+            }
+    
+    except Exception as e:
+        return {
+            "jsonrpc": "2.0",
+            "id": request_data.get('id'),
+            "error": {
+                "code": -32603,
+                "message": f"Internal error: {str(e)}"
+            }
+        }
+
+async def handle_health(request):
     """Health check endpoint."""
-    return web.json_response({"status": "healthy", "service": "memory-journal-mcp"})
+    return web.json_response({
+        "status": "healthy", 
+        "service": "memory-journal-mcp",
+        "version": "1.0.0"
+    })
 
 async def create_app():
-    """Create the HTTP server application."""
+    """Create and configure the aiohttp application."""
     app = web.Application()
     
     # Configure CORS
@@ -115,43 +234,44 @@ async def create_app():
         )
     })
     
-    # Add routes
+    # Add routes - CORS setup automatically handles OPTIONS
     mcp_resource = cors.add(app.router.add_resource("/mcp"))
     cors.add(mcp_resource.add_route("GET", handle_mcp))
     cors.add(mcp_resource.add_route("POST", handle_mcp))
-    cors.add(mcp_resource.add_route("OPTIONS", handle_mcp))
     
     health_resource = cors.add(app.router.add_resource("/health"))
-    cors.add(health_resource.add_route("GET", health_check))
+    cors.add(health_resource.add_route("GET", handle_health))
     
     return app
 
 async def main():
     """Run the HTTP server."""
+    # Initialize the database and other components from the original server
+    # This ensures the database is set up before we start handling requests
+    print("Initializing Memory Journal MCP Server...")
+    
     app = await create_app()
     
     # Get port from environment or default to 8000
     port = int(os.environ.get('PORT', 8000))
     
     print(f"Starting Memory Journal MCP Server on port {port}")
-    print("Endpoints:")
-    print(f"  - MCP: http://localhost:{port}/mcp")
-    print(f"  - Health: http://localhost:{port}/health")
+    print(f"Health check available at: http://localhost:{port}/health")
+    print(f"MCP endpoint available at: http://localhost:{port}/mcp")
     
     runner = web.AppRunner(app)
     await runner.setup()
-    
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
     
-    print("Server started successfully!")
+    print("Server is ready.")
     
     # Keep the server running
     try:
-        await asyncio.Future()  # Run forever
+        while True:
+            await asyncio.sleep(3600)
     except KeyboardInterrupt:
         print("Shutting down server...")
-    finally:
         await runner.cleanup()
 
 if __name__ == "__main__":
