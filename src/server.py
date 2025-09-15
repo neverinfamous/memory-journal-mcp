@@ -216,8 +216,8 @@ class MemoryJournalDB:
         try:
             # Get git repository root with aggressive timeout
             result = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
-                                capture_output=True, text=True, cwd=os.getcwd(),
-                                timeout=git_timeout, shell=False)
+                                     capture_output=True, text=True, cwd=os.getcwd(),
+                                     timeout=git_timeout, shell=False)
             if result.returncode == 0:
                 repo_path = result.stdout.strip()
                 context['repo_path'] = repo_path
@@ -227,8 +227,8 @@ class MemoryJournalDB:
                 # Get current branch with aggressive timeout
                 try:
                     result = subprocess.run(['git', 'branch', '--show-current'],
-                                        capture_output=True, text=True, cwd=repo_path,
-                                        timeout=git_timeout, shell=False)
+                                           capture_output=True, text=True, cwd=repo_path,
+                                           timeout=git_timeout, shell=False)
                     if result.returncode == 0:
                         context['branch'] = result.stdout.strip()
                 except subprocess.TimeoutExpired:
@@ -237,8 +237,8 @@ class MemoryJournalDB:
                 # Get last commit info with aggressive timeout
                 try:
                     result = subprocess.run(['git', 'log', '-1', '--format=%H:%s'],
-                                        capture_output=True, text=True, cwd=repo_path,
-                                        timeout=git_timeout, shell=False)
+                                           capture_output=True, text=True, cwd=repo_path,
+                                           timeout=git_timeout, shell=False)
                     if result.returncode == 0:
                         commit_info = result.stdout.strip()
                         if ':' in commit_info:
@@ -264,8 +264,8 @@ class MemoryJournalDB:
             try:
                 # Check if GitHub CLI is available and authenticated
                 result = subprocess.run(['gh', 'auth', 'status'],
-                                    capture_output=True, text=True,
-                                    timeout=git_timeout, shell=False)
+                                       capture_output=True, text=True,
+                                       timeout=git_timeout, shell=False)
                 if result.returncode == 0:
                     # Get current open issues (limit to 3 most recent)
                     try:
@@ -325,6 +325,7 @@ class MemoryJournalDB:
                 'cwd': os.getcwd(),
                 'timestamp': datetime.now().isoformat()
             }
+
 
 # Initialize database
 db = MemoryJournalDB(DB_PATH)
@@ -484,8 +485,10 @@ class VectorSearchManager:
             print(f"Error in semantic search: {e}")
             return []
 
+
 # Initialize vector search manager
 vector_search = VectorSearchManager(DB_PATH) if VECTOR_SEARCH_AVAILABLE else None
+
 
 @server.list_resources()
 async def list_resources() -> List[Resource]:
@@ -505,8 +508,8 @@ async def list_resources() -> List[Resource]:
         )
     ]
 
-@server.read_resource()
 
+@server.read_resource()
 async def read_resource(uri: str) -> str:
     """Read a specific resource."""
     # Debug logging
@@ -565,9 +568,8 @@ async def read_resource(uri: str) -> str:
         print(f"DEBUG: No match for URI '{uri_str}'. Available: memory://recent, memory://significant")
         raise ValueError(f"Unknown resource: {uri_str}")
 
+
 @server.list_tools()
-
-
 async def list_tools() -> List[Tool]:
     """List available tools."""
     return [
@@ -655,8 +657,8 @@ async def list_tools() -> List[Tool]:
         )
     ]
 
-@server.call_tool()
 
+@server.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
     """Handle tool calls."""
 
@@ -979,10 +981,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
     else:
         raise ValueError(f"Unknown tool: {name}")
 
+
 @server.list_prompts()
-
-
-
 async def list_prompts() -> List[Prompt]:
     """List available prompts."""
     return [
@@ -1122,6 +1122,7 @@ async def get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptRes
 
     else:
         raise ValueError(f"Unknown prompt: {name}")
+
 
 async def main():
     """Run the server."""

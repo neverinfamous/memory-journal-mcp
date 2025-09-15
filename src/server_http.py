@@ -67,6 +67,7 @@ async def handle_mcp(request):
             }
         }, status=500)
 
+
 async def process_mcp_request(request_data):
     """Process an MCP request and return the response."""
     try:
@@ -219,6 +220,7 @@ async def process_mcp_request(request_data):
             }
         }
 
+
 async def handle_health(request):
     """Health check endpoint."""
     return web.json_response({
@@ -226,6 +228,7 @@ async def handle_health(request):
         "service": "memory-journal-mcp",
         "version": "1.0.0"
     })
+
 
 async def create_app():
     """Create and configure the aiohttp application."""
@@ -250,6 +253,7 @@ async def create_app():
     cors.add(health_resource.add_route("GET", handle_health))
 
     return app
+
 
 async def main():
     """Run the HTTP server."""

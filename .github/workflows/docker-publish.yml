@@ -106,9 +106,9 @@ jobs:
         flavor: |
           latest=false
         tags: |
-          type=raw,value=${{ matrix.variant.name }},enable=${{ github.ref == 'refs/heads/main' }}
-          type=semver,pattern={{version}}-${{ matrix.variant.name }}
-          type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant.name }}
+          type=raw,value=${{ matrix.variant.name }}
+          # type=semver,pattern={{version}}-${{ matrix.variant.name }}
+          # type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant.name }}
 
     # Build locally first for security scanning (single platform)
     - name: Build Docker image for scanning
