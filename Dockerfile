@@ -1,7 +1,7 @@
 # Memory Journal MCP Server - Full Version
 # A containerized Model Context Protocol server for personal journaling with semantic search
 # Alpine-based for enhanced security while maintaining all features
-FROM python:3.11-alpine
+FROM python:3.13-alpine
 
 # Set working directory
 WORKDIR /app
