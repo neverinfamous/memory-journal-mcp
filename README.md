@@ -1,6 +1,6 @@
 # 🛠️ Memory Journal MCP Server
 
-* Last Updated September 15, 2025 10:21 AM EST *
+* Last Updated September 16, 2025 12:39 PM EST *
 
 *A developer's project journal and context manager*
 
@@ -596,11 +596,9 @@ Returns all tags with usage statistics.
 
 **Next up for developers:**
 - **Graph visualization** → See how your entries and projects connect
-- **Import/export utilities** → Backup and restore history
 - **Team features** → Share context bundles, collaborative project journals
-- **Add elements to database without forking** → "I want to extend the project (e.g., add monitoring to this data) without having to fork and maintain a separate codebase"
-- **Weekly/monthly auto-summaries** → "Here's what you shipped this sprint"
-- **LLM/AI progress tracking** → Chart how your AI assistants evolve alongside you
+- **Import/export utilities** → Backup and restore history, markdown or json or git commit hooks
+- **Minimal CLI client** → CLI (Python or Node) that wraps create_entry and search_entries would let devs journal without needing to hit MCP directly
 
 ## 📄 **License**
 
