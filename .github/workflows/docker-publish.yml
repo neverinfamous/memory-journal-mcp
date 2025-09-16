@@ -116,7 +116,7 @@ jobs:
 
     # Build locally first for security scanning (single platform)
     - name: Build Docker image for scanning
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ${{ matrix.variant.dockerfile }}
@@ -165,7 +165,7 @@ jobs:
     # Only push if security scan passes
     - name: Build and push Docker image
       if: success()
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ${{ matrix.variant.dockerfile }}
