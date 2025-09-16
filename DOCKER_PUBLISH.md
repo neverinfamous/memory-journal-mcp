@@ -6,33 +6,27 @@ Run these commands from the `memory-journal-mcp` directory:
 
 ### 1. Build Both Images
 ```bash
-# Build alpine version (fast, ~65MB)
-docker build -f Dockerfile.alpine -t writenotenow/memory-journal-mcp:alpine .
-
-# Build full version (with ML, ~2GB) 
+# Build optimized Alpine-based version (with ML, ~225MB) 
 docker build -f Dockerfile -t writenotenow/memory-journal-mcp:latest .
 docker build -f Dockerfile -t writenotenow/memory-journal-mcp:full .
 ```
 
 ### 2. Push to Docker Hub
 ```bash
-# Push lite version
-docker push writenotenow/memory-journal-mcp:lite
-
-# Push full versions
+# Push optimized Alpine versions
 docker push writenotenow/memory-journal-mcp:latest
 docker push writenotenow/memory-journal-mcp:full
 ```
 
 ### 3. Test the Published Images
 ```bash
-# Test lite version
-docker pull writenotenow/memory-journal-mcp:lite
-docker run --rm -v ./data:/app/data writenotenow/memory-journal-mcp:lite python -c "print('✅ Lite version works!')"
+# Test Alpine version
+docker pull writenotenow/memory-journal-mcp:latest
+docker run --rm -v ./data:/app/data writenotenow/memory-journal-mcp:latest python -c "print('✅ Alpine version works!')"
 
 # Test full version  
-docker pull writenotenow/memory-journal-mcp:latest
-docker run --rm -v ./data:/app/data writenotenow/memory-journal-mcp:latest python -c "print('✅ Full version works!')"
+docker pull writenotenow/memory-journal-mcp:full
+docker run --rm -v ./data:/app/data writenotenow/memory-journal-mcp:full python -c "print('✅ Full version works!')"
 ```
 
 ## After Publishing
