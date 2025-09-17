@@ -1,6 +1,6 @@
 # 🛠️ Memory Journal MCP Server
 
-  * Last Updated September 16, 2025 8:38 AM EST *
+  * Last Updated September 16, 2025 9:35 AM EST *
 
 *A developer's project journal and context manager*
 
@@ -8,7 +8,6 @@
 
   - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
   - **[Cloudflare Workers](https://memory-journal-mcp-remote.writenotenow.workers.dev)** - Global edge deployment with full features
-  - **[Smithery](https://smithery.ai/connect/1_hqoRNf4)** - One-click deploy, no setup required
 
 **⚡ Auto-Deployed:** All versions automatically built and pushed on every commit - always up-to-date\!
 
@@ -138,32 +137,7 @@ Deploy as a remote MCP server on Cloudflare's global edge network with D1 databa
   - ✅ **Persistent D1 database** managed by Cloudflare.
   - ✅ **Zero server management** and automatic scaling.
 
-### Option 3: Smithery (One-Click Deploy)
-
-Deploy instantly via Smithery's MCP marketplace with no local setup required.
-
-🚀 **One-Click Deploy:** [smithery.ai/neverinfamous-memory-journal-mcp](https://smithery.ai/connect/1_hqoRNf4)
-
-**Configuration:**
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-smithery": {
-      "command": "smithery",
-      "args": ["serve", "neverinfamous/memory-journal-mcp"]
-    }
-  }
-}
-```
-
-**Features:**
-
-  - ✅ **Instant deployment** with no Docker dependency.
-  - ✅ **HTTP MCP protocol** for real-time updates.
-  - ✅ **Core features**: journaling, search, and Git context (semantic search not included).
-
-### Option 4: Advanced Local Setup
+### Option 3: Advanced Local Setup
 
 **Build from Source:**
 
