@@ -1,15 +1,16 @@
 # 🛠️ Memory Journal MCP Server
 
-* Last Updated September 16, 2025 4:45 PM EST *
+  * Last Updated September 16, 2025 8:38 AM EST *
 
 *A developer's project journal and context manager*
 
 **🚀 Multiple Deployment Options:**
-- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
-- **[Cloudflare Workers](https://memory-journal-mcp-remote.writenotenow.workers.dev)** - Global edge deployment with full features
-- **[Smithery](https://smithery.ai/connect/1_hqoRNf4)** - One-click deploy, no setup required
 
-**⚡ Auto-Deployed:** All versions automatically built and pushed on every commit - always up-to-date!
+  - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
+  - **[Cloudflare Workers](https://memory-journal-mcp-remote.writenotenow.workers.dev)** - Global edge deployment with full features
+  - **[Smithery](https://smithery.ai/connect/1_hqoRNf4)** - One-click deploy, no setup required
+
+**⚡ Auto-Deployed:** All versions automatically built and pushed on every commit - always up-to-date\!
 
 **📋 Docker MCP Registry:** Submitted to [Docker's official MCP catalog](https://github.com/docker/mcp-registry) for inclusion in Docker Desktop's MCP Toolkit
 
@@ -17,135 +18,66 @@ A MCP server built for developers enabling Git based project management with pro
 
 Whether you're tracking a feature sprint, logging a bug hunt, planning strategy, or leaving behind breadcrumbs for future-you (or your team), this system gives you a structured but flexible way to journal your dev work.
 
----
+-----
 
-## 🚀 **Why Developers Use This**
+## ✨ Features
 
-* **Project context on tap** → Git + GitHub issues, branch, commit, and working directory auto-captured
-* **Journaling tuned for dev work** → `technical_achievement`, `milestone`, `development_note` entry types
-* **Productivity & organization** → search, tags, significance markers, relationship mapping
-* **Performance reviews & retros** → chart your progress, revisit major breakthroughs
-* **Scrapbook of the process** → capture not only *what* you built but *how it felt building it*
-* **Team continuity** → leave breadcrumbs for future-you and your teammates
+### Why Memory Journal? (The Benefits)
 
----
+  * **Project context on tap** → Git, GitHub issues, branch, commit, and working directory are auto-captured.
+  * **Journaling tuned for dev work** → Specialized entry types like `technical_achievement`, `milestone`, and `development_note`.
+  * **Productivity & organization** → Powerful search, tags, significance markers, and relationship mapping.
+  * **Performance reviews & retros** → Chart your progress and revisit major breakthroughs with ease.
+  * **Scrapbook of the process** → Capture not only *what* you built but *how it felt building it*.
+  * **Team continuity** → Leave clear breadcrumbs for future-you and your teammates.
 
-## ⚡ **Core Features**
+### Core Capabilities
 
-* **7 MCP Tools**: Entry creation, search, semantic search, context bundle retrieval
-* **Git & GitHub integration**: Pulls in commits and recent issues automatically
-* **Full-text + semantic search**: SQLite FTS5 plus FAISS embeddings (optional)
-* **Typed relationships**: Connect entries (`implements`, `references`, `clarifies`)
-* **Significance classification**: Flag breakthroughs, milestones, completions
-* **Portable, private, local-first**: Each user owns a single SQLite `.db` file
+  * **7 MCP Tools**: Entry creation, search, semantic search, context bundle retrieval, and more.
+  * **Git & GitHub Integration**: Automatically captures commits, branches, and recent issues.
+  * **Dual Search**: High-performance full-text search (SQLite FTS5) with result highlighting, plus optional semantic/vector search (FAISS).
+  * **Relationship Mapping**: Link related entries with typed relationships like `implements`, `references`, and `clarifies`.
+  * **Significance Classification**: Flag breakthroughs, milestones, and project completions for easy retrieval.
+  * **Context Bundles**: On-demand capture of the complete project state.
+  * **Async Operations**: Non-blocking Git operations with aggressive timeouts to ensure server responsiveness.
 
----
+### Developer-Friendly Design
 
-## 🏗️ **Developer-Friendly Design**
+  * **Zero Friction**: No authentication, API keys, or external rate limits to worry about.
+  * **Secure & Private**: Local-first architecture where you own your data. Hardened with input validation, WAL mode, and non-root Docker containers.
+  * **Portable**: Your entire journal, including tags and relationships, is a single SQLite `.db` file.
+  * **Context-Aware**: The server automatically captures the project state without any manual input.
+  * **Extensible**: Designed to support future capabilities like graph visualization and team-based features.
+  * **Performant & Resilient**: Utilizes a thread pool for blocking operations, fail-fast timeouts, and comprehensive error handling.
 
-* **Zero friction** → no auth, no external API limits
-* **Context-aware** → project state captured automatically
-* **Dockerized** → Alpine-based secure image with full semantic search capabilities
-* **Secure** → WAL mode, input validation, non-root containers, no data leakage
-* **Extensible** → semantic search, relationship mapping, future summaries
+-----
 
----
+## 🚀 Installation & Deployment
 
-## 📊 **Example Use Cases**
+Choose the option that best fits your workflow.
 
-**Track technical breakthroughs:**
-```javascript
-create_entry({
-  content: "Implemented async Git operations with 2s fail-fast timeout to stop MCP hangs.",
-  entry_type: "technical_achievement",
-  tags: ["git", "async", "performance"],
-  significance_type: "technical_breakthrough",
-  auto_context: true
-})
-```
+### Option 1: Docker (Recommended)
 
-**Log a milestone:**
-```javascript
-create_entry({
-  content: "Shipped v1.0 of the journaling system with full Docker support.",
-  entry_type: "milestone",
-  is_personal: false,
-  tags: ["release", "deployment"]
-})
-```
+The simplest way to run the full-featured server locally. This single, optimized image includes all dependencies for semantic search.
 
-**Search your history:**
-```javascript
-search_entries({ query: "async Git timeout", limit: 5 })
-semantic_search({ query: "performance optimization challenges", limit: 3 })
-```
-
-**Capture project context automatically:**
-```javascript
-// Context bundle includes: Git repo, branch, commit, GitHub issues, working directory
-/get-context-bundle  // Available in Cursor prompt palette
-```
-
----
-
-## 🚀 **Features**
-
-### **Core Capabilities**
-- **Personal & Project Journaling**: Separate personal reflections from technical entries
-- **Context Bundles**: Automatically capture Git repository, branch, commit information, and GitHub issues
-- **Smart Tagging**: Auto-create tags with usage tracking
-- **Full-Text Search**: Powered by SQLite FTS5 with result highlighting
-- **Semantic Search**: Vector similarity search using sentence-transformers and FAISS
-- **Relationship Mapping**: Link related entries with typed relationships
-- **Significance Classification**: Mark important entries for easy retrieval
-- **Async Operations**: Non-blocking Git operations with aggressive timeouts
-
-### **Design Principles**
-- **Friction-Free**: No authentication or API limitations
-- **Context-Aware**: Automatically captures current project state
-- **Portable**: Single SQLite database contains everything
-- **Performant**: Thread pool execution prevents blocking
-- **Resilient**: Fail-fast timeouts and comprehensive error handling
-- **Secure**: Production-grade security with input validation and WAL mode
-- **Privacy-First**: Local-only operation, no external data transmission
-
-## 🏗️ **Architecture**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ MCP Server Layer (Async/Await)                             │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Entry Creation  │  │ FTS5 Search     │  │ Resource    │  │
-│  │ with Context    │  │ with Highlight  │  │ Management  │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│ Thread Pool Execution Layer                                │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Git Operations  │  │ Database Ops    │  │ Tag Creation│  │
-│  │ (2s timeout)    │  │ with Commit     │  │ Auto-Mgmt   │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
-├─────────────────────────────────────────────────────────────┤
-│ SQLite Database with FTS5                                  │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ entries + tags + relationships + significance + FTS    ││
-│  └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-```
-
-## 🛠️ **Setup in 3 Steps**
-
-**Option 1: Docker Hub (Recommended)**
-
-**Single Optimized Image:**
-- **`:latest`** (225MB) - **Alpine-based with full features**, includes PyTorch + semantic search, maximum security
+**1. Pull the Image**
 
 ```bash
-# 1. Pull the optimized image (no build needed!)
-docker pull writenotenow/memory-journal-mcp:latest   # Secure Alpine base with full ML capabilities
+# Pull the secure, Alpine-based image with full ML capabilities
+docker pull writenotenow/memory-journal-mcp:latest
+```
 
-mkdir data  # Create data directory
+**2. Create a Data Directory**
+This directory will persist your SQLite database on your host machine.
 
-# 2. Add to your MCP config (~/.cursor/mcp.json)
+```bash
+mkdir data
+```
+
+**3. Configure Your MCP Client**
+Add the server to your `~/.cursor/mcp.json` file:
+
+```json
 {
   "mcpServers": {
     "memory-journal": {
@@ -154,87 +86,36 @@ mkdir data  # Create data directory
     }
   }
 }
-
-# 3. Restart Cursor → Start journaling!
 ```
 
-**Option 2: Build from Source**
-```bash
-# 1. Clone and build
-git clone <repo-url>
-cd memory-journal-mcp
-docker build -f Dockerfile -t memory-journal-mcp-local .
+**4. Restart Your Client**
+Restart Cursor or your MCP client, and you're ready to start journaling\!
 
-# 2. Add to MCP config (use local image)
-{
-  "mcpServers": {
-    "memory-journal": {
-      "command": "docker", 
-      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-local", "python", "src/server.py"]
-    }
-  }
-}
-```
-
-**Option 3: Manual Installation**
-```bash
-# 1. Clone the repo
-git clone <repo-url>
-cd memory-journal-mcp
-
-# 2. Install dependencies (requires Python 3.10+)
-pip install -r requirements.txt
-# Optional: semantic search
-pip install sentence-transformers faiss-cpu
-
-# 3. Add to MCP config
-{
-  "mcpServers": {
-    "memory-journal": {
-      "command": "python",
-      "args": ["path/to/memory-journal-mcp/src/server.py"],
-      "priority": 1
-    }
-  }
-}
-```
-
-### **🐳 Docker Hub Images**
-
-**Available on Docker Hub:** `writenotenow/memory-journal-mcp`
+**Docker Image Details**
 
 | Tag | Size | Features | Best For |
-|-----|------|----------|----------|
+|---|---|---|---|
 | **`:latest`** | 225MB | Complete feature set: journaling, FTS5 search, semantic search, Git context, PyTorch ML | **All users - secure Alpine base with full capabilities** |
 
-**Quick test:**
-```bash
-# Test the optimized image
-docker run --rm writenotenow/memory-journal-mcp:latest python -c "print('✅ Memory Journal MCP ready with full features!')"
-```
+  * **Security**: Minimal attack surface with Alpine Linux.
+  * **Performance**: Optimized 225MB image size with full ML capabilities.
+  * **Simplicity**: One image covers all use cases.
 
-**Why Alpine-based:**
-- **Security**: Minimal attack surface with Alpine Linux base
-- **Performance**: Optimized 225MB image with full ML capabilities  
-- **Simplicity**: One image covers all use cases - no version confusion
+**Automated Deployment**
 
-### **🔄 Automated Deployment**
+Docker images are automatically built and deployed from `main` on every commit, ensuring you always have the latest version.
 
-**Always Fresh Images** - Docker images are automatically built and deployed on every commit to `main`:
+  * **Always Fresh**: Images are available on Docker Hub within 5-10 minutes of a code change.
+  * **Security Scanned**: Every image is automatically scanned for vulnerabilities.
+  * **Quality Tested**: Images are tested before deployment.
 
-- **Latest builds**: Available within 5-10 minutes of code changes
-- **Security scanned**: Every image automatically scanned for vulnerabilities  
-- **Multi-platform**: Lite images support both Intel and Apple Silicon
-- **Version tagged**: Git tags automatically create versioned Docker releases
-- **Quality tested**: Images tested before deployment to ensure they work
+### Option 2: Cloudflare Workers (Global Edge)
 
-**No stale images** - What's on GitHub is what's on Docker Hub! 🚀
-
-**Option 2: Cloudflare Workers (Remote MCP Server)**
-
-Deploy as a remote MCP server on Cloudflare's global edge network with D1 database persistence:
+Deploy as a remote MCP server on Cloudflare's global edge network with D1 database persistence.
 
 🌐 **Live Demo:** [memory-journal-mcp-remote.writenotenow.workers.dev](https://memory-journal-mcp-remote.writenotenow.workers.dev)
+
+**Configuration:**
 
 ```json
 {
@@ -251,17 +132,19 @@ Deploy as a remote MCP server on Cloudflare's global edge network with D1 databa
 ```
 
 **Features:**
-- ✅ **Full semantic search** capabilities via Cloudflare Workers AI
-- ✅ **Global edge deployment** - sub-100ms response times worldwide  
-- ✅ **Persistent D1 database** - your data stays safe in Cloudflare's database
-- ✅ **Zero server management** - completely serverless, automatic scaling
-- ✅ **All original features** - complete feature parity with local version
 
-**Option 3: Smithery (One-Click Deploy)**
+  - ✅ **Full semantic search** via Cloudflare Workers AI.
+  - ✅ **Global edge deployment** for sub-100ms response times.
+  - ✅ **Persistent D1 database** managed by Cloudflare.
+  - ✅ **Zero server management** and automatic scaling.
 
-Deploy instantly via Smithery's MCP marketplace:
+### Option 3: Smithery (One-Click Deploy)
+
+Deploy instantly via Smithery's MCP marketplace with no local setup required.
 
 🚀 **One-Click Deploy:** [smithery.ai/neverinfamous-memory-journal-mcp](https://smithery.ai/connect/1_hqoRNf4)
+
+**Configuration:**
 
 ```json
 {
@@ -275,43 +158,79 @@ Deploy instantly via Smithery's MCP marketplace:
 ```
 
 **Features:**
-- ✅ **Instant deployment** - no Docker or setup required
-- ✅ **HTTP MCP protocol** - streamable connection for real-time updates
-- ✅ **Alpine-based security** - minimal attack surface, same as Docker image
-- ✅ **Core features** - journaling, search, Git context (no semantic search)
 
----
+  - ✅ **Instant deployment** with no Docker dependency.
+  - ✅ **HTTP MCP protocol** for real-time updates.
+  - ✅ **Core features**: journaling, search, and Git context (semantic search not included).
 
-## 📝 **Usage**
+### Option 4: Advanced Local Setup
 
-### **Creating Entries**
+**Build from Source:**
 
-**Personal Reflection:**
+```bash
+# 1. Clone and build
+git clone <repo-url>
+cd memory-journal-mcp
+docker build -f Dockerfile -t memory-journal-mcp-local .
+
+# 2. Add to MCP config (use local image name)
+# ... (similar to Docker Hub config but with "memory-journal-mcp-local")
+```
+
+**Manual Installation:**
+
+```bash
+# 1. Clone the repo and install dependencies (Python 3.10+)
+git clone <repo-url>
+cd memory-journal-mcp
+pip install -r requirements.txt
+# Optional: for semantic search
+pip install sentence-transformers faiss-cpu
+
+# 2. Add to MCP config
+{
+  "mcpServers": {
+    "memory-journal": {
+      "command": "python",
+      "args": ["path/to/memory-journal-mcp/src/server.py"]
+    }
+  }
+}
+```
+
+-----
+
+## 📝 Usage Examples
+
+### Creating Entries
+
+**Log a Technical Achievement:**
+
+```javascript
+create_entry({
+  content: "Successfully implemented async Git operations with fail-fast timeouts, resolving the MCP server hanging issue.",
+  entry_type: "technical_achievement",
+  tags: ["git", "async", "performance", "debugging"],
+  significance_type: "technical_breakthrough",
+  auto_context: true // Captures Git repo, branch, commit info
+})
+```
+
+**Capture a Personal Reflection:**
+
 ```javascript
 create_entry({
   content: "Today I reflected on new patterns in my thinking...",
   is_personal: true,
   entry_type: "personal_reflection",
-  tags: ["consciousness", "growth", "reflection"],
-  significance_type: "identity_development"
+  tags: ["consciousness", "growth", "reflection"]
 })
 ```
 
-**Technical Achievement:**
-```javascript
-create_entry({
-  content: "Successfully implemented async Git operations with fail-fast timeouts, resolving the MCP server hanging issue",
-  is_personal: false,
-  entry_type: "technical_achievement",
-  tags: ["git", "async", "performance", "debugging"],
-  significance_type: "technical_breakthrough",
-  auto_context: true  // Captures Git repo, branch, commit info
-})
-```
-
-### **Searching Entries**
+### Searching Entries
 
 **Full-Text Search with Highlighting:**
+
 ```javascript
 search_entries({
   query: "async Git timeout",
@@ -320,39 +239,176 @@ search_entries({
 // Returns: "Testing **async** **Git** operations with aggressive timeouts..."
 ```
 
-**Filter by Type:**
+**Semantic Search for Concepts:**
+
 ```javascript
-search_entries({
-  is_personal: false,  // Technical entries only
-  limit: 10
+semantic_search({
+  query: "performance optimization challenges",
+  limit: 3
 })
 ```
 
-**Recent Entries:**
+**Filter by Type or Recency:**
+
 ```javascript
-get_recent_entries({
-  limit: 5,
-  is_personal: true
-})
+search_entries({ is_personal: false, limit: 10 }) // Technical entries only
+get_recent_entries({ limit: 5 }) // Most recent 5 entries
 ```
 
-### **Tag Management**
+### Tag Management
+
 ```javascript
-list_tags()  // Shows all tags with usage counts
+list_tags() // Shows all tags with usage counts
 ```
 
-## 🗄️ **Database Schema**
+-----
 
-### **Core Tables**
-- **`entries`**: Main journal entries with content and metadata
-- **`tags`**: Auto-managed tag system with usage tracking  
-- **`entry_tags`**: Many-to-many relationships between entries and tags
-- **`relationships`**: Typed connections between entries
-- **`significant_entries`**: Classification of important entries
-- **`memory_journal_fts`**: FTS5 full-text search index
+## 🏗️ Architecture
 
-### **Context Bundle Example**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ MCP Server Layer (Async/Await)                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │ Entry Creation  │  │ FTS5 Search     │  │ Resource    │  │
+│  │ with Context    │  │ with Highlight  │  │ Management  │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│ Thread Pool Execution Layer                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
+│  │ Git Operations  │  │ Database Ops    │  │ Tag Creation│  │
+│  │ (2s timeout)    │  │ with Commit     │  │ Auto-Mgmt   │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────┘  │
+├─────────────────────────────────────────────────────────────┤
+│ SQLite Database with FTS5                                   │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ entries + tags + relationships + significance + FTS     ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+-----
+
+## 🛠️ Tools Available (Programmatic API)
+
+### Core Tools
+
+#### `create_entry` - Create Journal Entries
+
+**Parameters:**
+
+  - `content` (required): The journal entry content.
+  - `entry_type` (optional): `personal_reflection`, `technical_achievement`, etc.
+  - `is_personal` (optional): Boolean to separate personal vs project entries.
+  - `significance_type` (optional): Mark as significant (`milestone`, `technical_breakthrough`).
+  - `tags` (optional): Array of string tags.
+
+#### `search_entries` - Full-Text Search
+
+**Parameters:**
+
+  - `query` (required): Search terms.
+  - `limit` (optional): Max results (default: 10).
+
+#### `semantic_search` - Vector Similarity Search
+
+**Parameters:**
+
+  - `query` (required): Search query for semantic similarity.
+  - `limit` (optional): Max results (default: 10).
+  - `similarity_threshold` (optional): Minimum score 0.0-1.0 (default: 0.3).
+
+#### `get_recent_entries` - Retrieve Recent Entries
+
+**Parameters:**
+
+  - `limit` (optional): Number of entries (default: 5).
+
+#### `list_tags` - Show All Tags
+
+Returns all tags with usage statistics.
+
+### Diagnostic Tools
+
+  - **`test_simple`**: Basic connectivity test.
+  - **`create_entry_minimal`**: Minimal entry creation for debugging.
+
+-----
+
+## 🎯 MCP Prompts (User-Initiated)
+
+The server provides interactive prompts accessible through your MCP client's prompt palette (e.g., `/` in Cursor).
+
+### `get-context-bundle`
+
+Get the current project context as structured JSON.
+
+**Arguments:**
+
+  - `include_git` (optional, default: `true`): Include Git repository information.
+
+**Sample Output:**
+
+```json
+{
+  "repo_name": "memory-journal-mcp",
+  "repo_path": "C:\\Users\\chris\\Desktop\\memory-journal-mcp", 
+  "branch": "main",
+  "last_commit": { "hash": "5ee4651", "message": "Update memory journal readme" },
+  "github_issues": {
+    "count": 2,
+    "recent_issues": [
+      { "number": 15, "title": "Add GitHub issue context...", "state": "OPEN" }
+    ]
+  },
+  "cwd": "C:\\Users\\chris\\Desktop\\memory-journal-mcp",
+  "timestamp": "2025-09-13T15:41:28.080365"
+}
+```
+
+### `get-recent-entries`
+
+Get the last X journal entries with formatted display.
+
+**Arguments:**
+
+  - `count` (optional, default: `5`): Number of entries to retrieve.
+  - `personal_only` (optional, default: `false`): Only show personal entries.
+
+**Sample Output:**
+
+```
+Here are the 1 most recent journal entries:
+
+**Entry #10** (milestone) - 2025-09-13 19:41:28
+Personal: False
+Content: Successfully implemented MCP prompts functionality...
+
+Context: memory-journal-mcp (main branch)
+```
+
+**💡 Troubleshooting & Notes:**
+
+  - **GitHub CLI Required**: For issue data, install `gh` and authenticate with `gh auth login`. The tool falls back gracefully if `gh` is unavailable.
+  - Prompts not appearing? Restart your MCP client after server changes.
+  - Git operations timing out? Use `include_git=false` for faster context capture.
+
+-----
+
+## 🗄️ Data & Schema
+
+### Database Schema
+
+  - **`entries`**: Main journal entries with content and metadata.
+  - **`tags`**: Auto-managed tags with usage tracking.
+  - **`entry_tags`**: Many-to-many relationship between entries and tags.
+  - **`relationships`**: Typed connections between entries.
+  - **`significant_entries`**: Classification of important entries.
+  - **`memory_journal_fts`**: FTS5 full-text search index.
+
+### Context Bundle Example
+
 Each entry automatically captures rich project context:
+
 ```json
 {
   "repo_name": "memory-journal-mcp",
@@ -367,267 +423,65 @@ Each entry automatically captures rich project context:
 }
 ```
 
-## 📊 **Entry Types**
+### Entry, Relationship, and Significance Types
 
-Supports various entry types for different use cases:
-- `personal_reflection` (default)
-- `technical_achievement`
-- `milestone`
-- `development_note`
-- `test_entry`
-- `project_context`
-- `thread_initialization`
+  - **Entry Types**: `personal_reflection`, `technical_achievement`, `milestone`, `development_note`, etc.
+  - **Relationship Types**: `evolves_from`, `references`, `implements`, `clarifies`, `response_to`.
+  - **Significance Types**: `identity_development`, `technical_breakthrough`, `project_completion`, `major_breakthrough`.
 
-## 🔗 **Relationship Types**
+-----
 
-Link related entries with semantic relationships:
-- `evolves_from`: Entry represents evolution from target
-- `references`: Entry explicitly references target
-- `related_to`: Entries are thematically related
-- `implements`: Entry implements concepts from target
-- `clarifies`: Entry clarifies concepts in target
-- `response_to`: Entry directly responds to target
+## 🔧 Technical Implementation Details
 
-## ⭐ **Significance Classification**
+### Performance & Security
 
-Mark important entries for easy retrieval:
-- `identity_development`: Key identity formations
-- `technical_breakthrough`: Major technical achievements  
-- `major_breakthrough`: Significant discoveries
-- `project_completion`: Milestone completions
-- `consciousness_emergence`: Awareness developments
+  - **Thread Pool Execution**: All blocking I/O (database, Git) runs in background threads to keep the server responsive.
+  - **Aggressive Timeouts**: Git operations timeout after 2 seconds per command.
+  - **WAL Mode**: Write-Ahead Logging is enabled for better concurrency and crash recovery.
+  - **Database Optimization**: 64MB cache, 256MB memory-mapped I/O, and `NORMAL` synchronous mode for a balance of speed and safety.
+  - **Input Validation**: Length limits (50KB entries), character filtering, and parameterized queries to prevent SQL injection.
+  - **Docker Security**: Non-root user execution and minimal container privileges.
 
-## 🔧 **Technical Implementation**
+### Semantic Search
 
-### **Performance Optimizations**
-- **Thread Pool Execution**: All blocking operations run in background threads
-- **Aggressive Timeouts**: Git operations timeout after 2 seconds per command
-- **Fail-Fast Approach**: Operations complete quickly even if Git hangs
-- **Database Transactions**: Proper commit handling prevents hanging
-- **FTS5 Integration**: Efficient full-text search with highlighting
+  - **Dependencies**: Requires `pip install sentence-transformers faiss-cpu` (optional).
+  - **Model**: Uses `all-MiniLM-L6-v2` (384-dimensional embeddings, \~100MB download).
+  - **Graceful Degradation**: The system functions perfectly without these dependencies; the `semantic_search` tool will simply be unavailable.
+  - **Storage**: Embeddings are stored as `BLOB` in SQLite, with a FAISS index for fast similarity search.
 
-### **Error Handling**
-- **Git Timeouts**: Graceful fallback when Git operations exceed timeout
-- **Missing Git**: Continues operation when Git binary not found
-- **Database Locks**: Proper transaction management prevents deadlocks
-- **Async Safety**: All operations designed for async/await patterns
+### Resources Provided
 
-### **Key Technical Fixes Applied**
-1. **FTS5 Configuration**: `content='memory_journal', content_rowid='id'`
-2. **Async Timeouts**: `asyncio.wait_for()` with 10-second total limit
-3. **Subprocess Handling**: `timeout=2, shell=False` for Git commands
-4. **Database Commits**: Added missing `conn.commit()` calls
-5. **Thread Safety**: All database operations in thread pool
+The server provides two MCP resources for direct data access:
 
-## 📈 **Resources**
+  - **`memory://recent`**: Returns the 5 most recent journal entries.
+  - **`memory://significant`**: Returns all entries marked with a significance classification.
 
-The server provides two MCP resources:
+-----
 
-### **memory://recent**
-Returns the 5 most recent journal entries with full content and metadata.
+## 🔮 Future Roadmap
 
-### **memory://significant**  
-Returns entries marked with significance classifications, useful for reviewing important developments.
+  - **Graph visualization** → See how your entries and projects connect.
+  - **Team features** → Share context bundles and collaborate on project journals.
+  - **Import/export utilities** → Backup/restore via markdown or JSON.
+  - **Minimal CLI client** → Journal from the command line without a full MCP client.
 
-## 🎯 **MCP Prompts** (User-Initiated)
-
-The server provides interactive prompts accessible through your MCP client's prompt palette (typically `/` in Cursor):
-
-### **get-context-bundle**
-Get current project context as structured JSON for the AI assistant.
-
-**Arguments:**
-- `include_git` (optional): Include Git repository information (default: true)
-
-**How to Use:**
-1. In Cursor, type `/` to open prompt palette
-2. Select `get-context-bundle` from the list
-3. Optionally add `include_git=false` to skip Git operations
-
-**Sample Output:**
-```json
-{
-  "repo_name": "memory-journal-mcp",
-  "repo_path": "C:\\Users\\chris\\Desktop\\memory-journal-mcp", 
-  "branch": "main",
-  "last_commit": {
-    "hash": "5ee4651",
-    "message": "Update memory journal readme"
-  },
-  "github_issues": {
-    "count": 2,
-    "recent_issues": [
-      {
-        "number": 15,
-        "title": "Add GitHub issue context to memory journal entries",
-        "state": "OPEN",
-        "created": "2025-09-13"
-      },
-      {
-        "number": 12,
-        "title": "Improve MCP prompt error handling and timeout management",
-        "state": "OPEN", 
-        "created": "2025-09-12"
-      }
-    ]
-  },
-  "cwd": "C:\\Users\\chris\\Desktop\\memory-journal-mcp",
-  "timestamp": "2025-09-13T15:41:28.080365"
-}
-```
-
-### **get-recent-entries** 
-Get the last X journal entries with formatted display.
-
-**Arguments:**
-- `count` (optional): Number of entries to retrieve (default: 5)
-- `personal_only` (optional): Only show personal entries (default: false)
-
-**How to Use:**
-1. In Cursor, type `/` to open prompt palette
-2. Select `get-recent-entries` from the list
-3. Optionally add arguments like `count=10` or `personal_only=true`
-
-**Sample Output:**
-```
-Here are the 1 most recent journal entries:
-
-**Entry #10** (milestone) - 2025-09-13 19:41:28
-Personal: False
-Content: Successfully implemented MCP prompts functionality for the Memory Journal system! Added two powerful prompts: get-context-bundle for retrieving project context as JSON...
-
-Context: memory-journal-mcp (main branch)
-```
-
-**💡 Troubleshooting Prompts:**
-- If prompts don't appear in `/` palette, restart Cursor after server changes
-- If Git operations timeout, use `include_git=false` for faster context capture
-- Prompts work from any directory - they capture context of the current working directory
-
-**🔗 GitHub Integration:**
-- **GitHub CLI Required**: Install `gh` and authenticate with `gh auth login`
-- **Context Includes**: Recent open issues (limit 3), issue numbers, titles, and creation dates
-- **Fallback**: If GitHub CLI unavailable, context bundle works without issue data
-- **Performance**: GitHub issue queries use same aggressive timeouts as Git operations
-
-**🔍 Semantic Search:**
-- **Dependencies**: `pip install sentence-transformers faiss-cpu` (optional)
-- **Model**: Uses `all-MiniLM-L6-v2` (384-dimensional embeddings, ~100MB download)
-- **Performance**: Embeddings generated automatically for new entries
-- **Graceful Degradation**: System works without vector search if dependencies unavailable
-- **Storage**: Embeddings stored as BLOB in SQLite with FAISS index for fast similarity search
-
-**🔒 Security & Performance:**
-- **WAL Mode**: Write-Ahead Logging enabled for better concurrency and crash recovery
-- **Database Optimization**: 64MB cache, 256MB memory-mapped I/O, NORMAL synchronous mode
-- **Input Validation**: Length limits (50KB entries), character filtering, SQL injection prevention
-- **File Security**: Restrictive permissions (600 for database, 700 for directories)
-- **Docker Security**: Non-root user execution, minimal container privileges
-- **Privacy**: Local-first architecture, no external data transmission, full data ownership
-
-## 🛠️ **Tools Available** (Programmatic Access)
-
-### **Core Tools**
-
-#### **`create_entry`** - Create Journal Entries
-**Parameters:**
-- `content` (required): The journal entry content
-- `entry_type` (optional): Type classification (default: "personal_reflection")
-- `is_personal` (optional): Personal vs project entry (default: true)
-- `significance_type` (optional): Mark as significant ("milestone", "breakthrough", etc.)
-- `tags` (optional): Array of tags (auto-created if they don't exist)
-
-**Example Usage:**
-```python
-create_entry(
-    content="Successfully implemented MCP prompts functionality!",
-    entry_type="milestone", 
-    is_personal=false,
-    significance_type="technical_achievement",
-    tags=["mcp", "prompts", "development"]
-)
-```
-
-#### **`search_entries`** - Full-Text Search
-**Parameters:**
-- `query` (required): Search terms
-- `limit` (optional): Max results (default: 10)
-- `is_personal` (optional): Filter by personal/project entries
-
-**Example Usage:**
-```python
-search_entries(query="MCP prompts", limit=5, is_personal=false)
-```
-
-#### **`semantic_search`** - Vector Similarity Search
-**Parameters:**
-- `query` (required): Search query for semantic similarity
-- `limit` (optional): Max results (default: 10)
-- `similarity_threshold` (optional): Minimum similarity score 0.0-1.0 (default: 0.3)
-- `is_personal` (optional): Filter by personal/project entries
-
-**Example Usage:**
-```python
-semantic_search(query="project development challenges", limit=5, similarity_threshold=0.4)
-```
-
-#### **`get_recent_entries`** - Retrieve Recent Entries
-**Parameters:**
-- `limit` (optional): Number of entries (default: 5)
-- `is_personal` (optional): Filter by personal/project entries
-
-#### **`list_tags`** - Show All Tags
-Returns all tags with usage statistics.
-
-### **Diagnostic Tools**
-- **`test_simple`**: Basic connectivity test
-- **`create_entry_minimal`**: Minimal entry creation for debugging
-
-### **Search Tools**
-- **`search_entries`**: Full-text search with FTS5
-- **`semantic_search`**: Vector similarity search with embeddings
-
-## 🎯 **Prompts Available**
-
-1. **`get-context-bundle`**: Get current project context as JSON
-2. **`get-recent-entries`**: Get formatted display of recent journal entries
-
-## 🔮 **Future Roadmap**
-
-**Next up for developers:**
-- **Graph visualization** → See how your entries and projects connect
-- **Team features** → Share context bundles, collaborative project journals
-- **Import/export utilities** → Backup and restore history, markdown or json or git commit hooks
-- **Minimal CLI client** → CLI (Python or Node) that wraps create_entry and search_entries would let devs journal without needing to hit MCP directly
-
-## 📄 **License**
+## 📄 License
 
 MIT License — do whatever you want, just don't blame us if it writes your autobiography.
 
-## 🤝 **Contributing**
+## 🤝 Contributing
 
-Built by developers, for developers. PRs welcome, especially for:
-- New entry types that make sense for dev work
-- Better Git/GitHub integrations
-- Performance improvements
-- Cool semantic search features
+Built by developers, for developers. PRs are welcome, especially for new entry types, better Git/GitHub integrations, and performance improvements.
 
----
+-----
 
-## 🎯 **Status**
+## 🎯 Status
 
-**✅ Ready for developers**
-- All 7 MCP tools working and tested
-- Docker images auto-deployed and validated
-- Security hardened (WAL mode, input validation, non-root containers)
-- Community standards compliant (Code of Conduct, Contributing guidelines, issue templates)
-- Automated CI/CD with dependency management (Dependabot enabled)
-- Comprehensive docs (setup, security, Docker guides)
-- 15+ entries created during testing — system is solid
+**✅ Ready for developers & Battle-tested**
 
-**✅ Battle-tested features**
-- Context bundles capture Git + GitHub seamlessly
-- Full-text search with highlighting works great
-- Semantic search gracefully degrades without ML deps
-- Tag management and relationship mapping functional
-- Performance optimized with 64MB cache and memory mapping
+  - All 7 MCP tools are working and tested.
+  - Docker images are auto-deployed and validated.
+  - Security has been hardened (WAL mode, input validation, non-root containers).
+  - Context bundles seamlessly capture Git + GitHub data.
+  - Both full-text and semantic search are functional and optimized.
+  - The system is stable, with over 15+ entries created during development and testing.
