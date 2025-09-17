@@ -1,13 +1,12 @@
 # 🛠️ Memory Journal MCP Server
 
-  * Last Updated September 16, 2025 10:03 AM EST *
+* Last Updated September 17, 2025 10:54 PM EST *
 
 *A developer's project journal and context manager*
 
-**🚀 Multiple Deployment Options:**
+**🚀 Docker Deployment:**
 
   - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
-  - **[Cloudflare Workers](https://memory-journal-mcp-remote.writenotenow.workers.dev)** - Global edge deployment with full features
 
 **⚡ Auto-Deployed:** All versions automatically built and pushed on every commit - always up-to-date\!
 
@@ -108,36 +107,7 @@ Docker images are automatically built and deployed from `main` on every commit, 
   * **Security Scanned**: Every image is automatically scanned for vulnerabilities.
   * **Quality Tested**: Images are tested before deployment.
 
-### Option 2: Cloudflare Workers (Global Edge)
-
-Deploy as a remote MCP server on Cloudflare's global edge network with D1 database persistence.
-
-🌐 **Live Demo:** [memory-journal-mcp-remote.writenotenow.workers.dev](https://memory-journal-mcp-remote.writenotenow.workers.dev)
-
-**Configuration:**
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-remote": {
-      "command": "npx",
-      "args": [
-        "mcp-remote", 
-        "https://memory-journal-mcp-remote.writenotenow.workers.dev/sse"
-      ]
-    }
-  }
-}
-```
-
-**Features:**
-
-  - ✅ **Full semantic search** via Cloudflare Workers AI.
-  - ✅ **Global edge deployment** for sub-100ms response times.
-  - ✅ **Persistent D1 database** managed by Cloudflare.
-  - ✅ **Zero server management** and automatic scaling.
-
-### Option 3: Advanced Local Setup
+### Option 2: Advanced Local Setup
 
 **Build from Source:**
 
