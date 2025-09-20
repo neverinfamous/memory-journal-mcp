@@ -21,6 +21,37 @@ A MCP server built for developers enabling Git based project management with pro
 
 Whether you're tracking a feature sprint, logging a bug hunt, planning strategy, or leaving behind breadcrumbs for future-you (or your team), this system gives you a structured but flexible way to journal your dev work.
 
+---
+
+## 📋 Table of Contents
+
+### Overview & Features
+- [✨ Features](#-features)
+  - [Why Memory Journal? (The Benefits)](#why-memory-journal-the-benefits)
+  - [Core Capabilities](#core-capabilities)
+  - [Developer-Friendly Design](#developer-friendly-design)
+
+### Getting Started
+- [🚀 Installation & Deployment](#-installation--deployment)
+  - [Option 1: Docker (Recommended)](#option-1-docker-recommended)
+  - [Option 2: Advanced Local Setup](#option-2-advanced-local-setup)
+- [📝 Usage Examples](#-usage-examples)
+
+### Technical Documentation
+- [🏗️ Architecture](#-architecture)
+- [🛠️ Tools Available (Programmatic API)](#-tools-available-programmatic-api)
+- [🎯 MCP Prompts (User-Initiated)](#-mcp-prompts-user-initiated)
+- [🗄️ Data & Schema](#-data--schema)
+- [🔧 Technical Implementation Details](#-technical-implementation-details)
+
+### Project Information
+- [🔮 Future Roadmap](#-future-roadmap)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+- [🔗 Additional Resources](#-additional-resources)
+
+---
+
 -----
 
 ## ✨ Features
@@ -52,6 +83,8 @@ Whether you're tracking a feature sprint, logging a bug hunt, planning strategy,
   * **Context-Aware**: The server automatically captures the project state without any manual input.
   * **Extensible**: Designed to support future capabilities like graph visualization and team-based features.
   * **Performant & Resilient**: Utilizes a thread pool for blocking operations, fail-fast timeouts, and comprehensive error handling.
+
+[⬆️ Back to Table of Contents](#-table-of-contents)
 
 -----
 
@@ -147,6 +180,8 @@ pip install sentence-transformers faiss-cpu
 }
 ```
 
+[⬆️ Back to Table of Contents](#-table-of-contents)
+
 -----
 
 ## 📝 Usage Examples
@@ -210,6 +245,8 @@ get_recent_entries({ limit: 5 }) // Most recent 5 entries
 list_tags() // Shows all tags with usage counts
 ```
 
+[⬆️ Back to Table of Contents](#-table-of-contents)
+
 -----
 
 ## 🏗️ Architecture
@@ -234,6 +271,8 @@ list_tags() // Shows all tags with usage counts
 │  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
 ```
+
+[⬆️ Back to Table of Contents](#-table-of-contents)
 
 -----
 
@@ -280,6 +319,8 @@ Returns all tags with usage statistics.
 
   - **`test_simple`**: Basic connectivity test.
   - **`create_entry_minimal`**: Minimal entry creation for debugging.
+
+[⬆️ Back to Table of Contents](#-table-of-contents)
 
 -----
 
@@ -341,6 +382,8 @@ Context: memory-journal-mcp (main branch)
   - Prompts not appearing? Restart your MCP client after server changes.
   - Git operations timing out? Use `include_git=false` for faster context capture.
 
+[⬆️ Back to Table of Contents](#-table-of-contents)
+
 -----
 
 ## 🗄️ Data & Schema
@@ -378,6 +421,8 @@ Each entry automatically captures rich project context:
   - **Relationship Types**: `evolves_from`, `references`, `implements`, `clarifies`, `response_to`.
   - **Significance Types**: `identity_development`, `technical_breakthrough`, `project_completion`, `major_breakthrough`.
 
+[⬆️ Back to Table of Contents](#-table-of-contents)
+
 -----
 
 ## 🔧 Technical Implementation Details
@@ -405,6 +450,8 @@ The server provides two MCP resources for direct data access:
   - **`memory://recent`**: Returns the 5 most recent journal entries.
   - **`memory://significant`**: Returns all entries marked with a significance classification.
 
+[⬆️ Back to Table of Contents](#-table-of-contents)
+
 -----
 
 ## 🔮 Future Roadmap
@@ -414,23 +461,28 @@ The server provides two MCP resources for direct data access:
   - **Import/export utilities** → Backup/restore via markdown or JSON.
   - **Minimal CLI client** → Journal from the command line without a full MCP client.
 
+[⬆️ Back to Table of Contents](#-table-of-contents)
+
 ## 📄 License
 
 MIT License — do whatever you want, just don't blame us if it writes your autobiography.
+
+[⬆️ Back to Table of Contents](#-table-of-contents)
 
 ## 🤝 Contributing
 
 Built by developers, for developers. PRs are welcome, especially for new entry types, better Git/GitHub integrations, and performance improvements.
 
------
+[⬆️ Back to Table of Contents](#-table-of-contents)
 
-## 🎯 Status
+## 🔗 **Additional Resources**
 
-**✅ Ready for developers & Battle-tested**
+- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Container images and deployment
+- **[GitHub Repository](https://github.com/neverinfamous/memory-journal-mcp)** - Source code and issues
+- **[Contributing](./CONTRIBUTING.md)** - How to contribute to the project
+- **[Security Policy](./SECURITY.md)** - Security guidelines and reporting
+- **[Code of Conduct](./CODE_OF_CONDUCT.md)** - Community guidelines
+- **[GitHub Releases](https://github.com/neverinfamous/memory-journal-mcp/releases)** - Version history
+- **[Adamic Tech Blog](https://adamic.tech/)** - Project announcements and releases
 
-  - All 7 MCP tools are working and tested.
-  - Docker images are auto-deployed and validated.
-  - Security has been hardened (WAL mode, input validation, non-root containers).
-  - Context bundles seamlessly capture Git + GitHub data.
-  - Both full-text and semantic search are functional and optimized.
-  - The system is stable, with over 15+ entries created during development and testing.
+[⬆️ Back to Table of Contents](#-table-of-contents)
