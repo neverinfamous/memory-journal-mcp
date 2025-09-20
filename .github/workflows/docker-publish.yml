@@ -108,11 +108,14 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         flavor: |
-          latest=false
+          latest=auto
         tags: |
-          type=raw,value=${{ matrix.variant.name }}
-          # type=semver,pattern={{version}}-${{ matrix.variant.name }}
-          # type=semver,pattern={{major}}.{{minor}}-${{ matrix.variant.name }}
+          # Always create latest tag for main branch pushes
+          type=raw,value=latest,enable={{is_default_branch}}
+          # Create version tags (v1.0.0) when pushing git tags
+          type=semver,pattern={{version}}
+          # Create version tags from pyproject.toml on main branch pushes
+          type=raw,value=v1.0.0,enable={{is_default_branch}}
 
     # Build locally first for security scanning (single platform)
     - name: Build Docker image for scanning
