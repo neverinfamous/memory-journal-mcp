@@ -1,6 +1,6 @@
 # 🛠️ Memory Journal MCP Server
 
-* Last Updated September 17, 2025 10:54 PM EST *
+* Last Updated September 20, 2025 8:54 AM EST *
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 ![License](https://img.shields.io/badge/license-MIT-blue)
@@ -483,6 +483,6 @@ Built by developers, for developers. PRs are welcome, especially for new entry t
 - **[Security Policy](./SECURITY.md)** - Security guidelines and reporting
 - **[Code of Conduct](./CODE_OF_CONDUCT.md)** - Community guidelines
 - **[GitHub Releases](https://github.com/neverinfamous/memory-journal-mcp/releases)** - Version history
-- **[Adamic Tech Blog](https://adamic.tech/)** - Project announcements and releases
+- **[Adamic Support Blog](https://adamic.tech/)** - Project announcements and releases
 
 [⬆️ Back to Table of Contents](#-table-of-contents)
