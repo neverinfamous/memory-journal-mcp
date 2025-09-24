@@ -137,14 +137,22 @@ For enhanced security and reproducible builds, use SHA-pinned images:
 # Find available SHA tags at: https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags
 # Look for tags starting with "sha256-" for cryptographically verified builds
 
-# Example: Pull a specific SHA-pinned build
-docker pull writenotenow/memory-journal-mcp:sha256-<hash>
+# Option 1: Multi-arch manifest digest (recommended)
+docker pull writenotenow/memory-journal-mcp:sha256-<manifest-digest>
+
+# Option 2: Direct manifest digest (maximum security)
+docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 ```
 
 **How to Find SHA Tags:**
 1. Visit [Docker Hub Tags](https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags)
-2. Look for tags starting with `sha256-` (content-addressed builds)
-3. Copy the exact tag name for reproducible builds
+2. **For convenience**: Use `sha256-<hash>` tags (manifest digests, multi-arch safe)
+3. **For maximum security**: Use `@sha256:<hash>` direct digest references
+
+**Understanding SHA Tags:**
+- 🔒 **`sha256-<manifest-digest>`** - Multi-arch manifest digest (works on all architectures)
+- 🎯 **`@sha256:<manifest-digest>`** - Direct digest reference (immutable, cryptographically verified)
+- ⚠️ **Architecture-specific digests** - Only for debugging specific architectures
 
 **Security Features:**
 - ✅ **Build Provenance** - Cryptographic proof of build process
