@@ -18,7 +18,8 @@ RUN apk add --no-cache \
     libffi-dev \
     openssl-dev \
     python3-dev \
-    && apk upgrade
+    && apk upgrade \
+    && apk add --no-cache expat>=2.7.2-r0
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
