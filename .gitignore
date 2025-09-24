@@ -145,3 +145,9 @@ mcp-docker-config.json
 setup-desktop-commander-auth.sh
 *auth*.sh
 *setup*.sh
+# MCP Registry tokens and temporary files (sensitive)
+.mcpregistry_github_token
+.mcpregistry_registry_token
+mcp-publisher.exe
+auth.json
+github_auth.json
