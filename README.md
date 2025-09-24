@@ -1,6 +1,6 @@
 # 🛠️ Memory Journal MCP Server
 
-* Last Updated September 20, 2025 8:54 AM EST *
+* Last Updated September 24, 2025 12:23 AM EST *
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 ![License](https://img.shields.io/badge/license-MIT-blue)
@@ -134,9 +134,17 @@ docker pull writenotenow/memory-journal-mcp:latest
 For enhanced security and reproducible builds, use SHA-pinned images:
 
 ```bash
-# SHA-pinned image with supply chain attestations
-docker pull writenotenow/memory-journal-mcp@sha256:461a3b4e739a53d476133ec5496003631765165122bad01fc67743790b78d4d0
+# Find available SHA tags at: https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags
+# Look for tags starting with "sha256-" for cryptographically verified builds
+
+# Example: Pull a specific SHA-pinned build
+docker pull writenotenow/memory-journal-mcp:sha256-<hash>
 ```
+
+**How to Find SHA Tags:**
+1. Visit [Docker Hub Tags](https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags)
+2. Look for tags starting with `sha256-` (content-addressed builds)
+3. Copy the exact tag name for reproducible builds
 
 **Security Features:**
 - ✅ **Build Provenance** - Cryptographic proof of build process
