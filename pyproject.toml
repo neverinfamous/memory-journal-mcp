@@ -15,6 +15,26 @@ requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.0.0",
 ]
+keywords = ["mcp", "journaling", "git", "context", "model-context-protocol", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers", 
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11", 
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing",
+]
+
+[project.urls]
+Homepage = "https://github.com/neverinfamous/memory-journal-mcp"
+Repository = "https://github.com/neverinfamous/memory-journal-mcp"
+Issues = "https://github.com/neverinfamous/memory-journal-mcp/issues"
+Documentation = "https://github.com/neverinfamous/memory-journal-mcp#readme"
 
 [project.optional-dependencies]
 dev = [
@@ -24,7 +44,13 @@ dev = [
 ]
 
 [project.scripts]
-memory-journal-mcp = "memory_journal_mcp.server:main"
+memory-journal-mcp = "server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = "memory_journal_mcp"
 
 [tool.black]
 line-length = 100
