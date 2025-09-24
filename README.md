@@ -129,6 +129,21 @@ The simplest way to run the full-featured server locally. This single, optimized
 docker pull writenotenow/memory-journal-mcp:latest
 ```
 
+#### 🛡️ **Supply Chain Security**
+
+For enhanced security and reproducible builds, use SHA-pinned images:
+
+```bash
+# SHA-pinned image with supply chain attestations
+docker pull writenotenow/memory-journal-mcp@sha256:461a3b4e739a53d476133ec5496003631765165122bad01fc67743790b78d4d0
+```
+
+**Security Features:**
+- ✅ **Build Provenance** - Cryptographic proof of build process
+- ✅ **SBOM Available** - Complete software bill of materials
+- ✅ **Supply Chain Attestations** - Verifiable build integrity
+- ✅ **Reproducible Builds** - Exact image verification for compliance
+
 **2. Create a Data Directory**
 This directory will persist your SQLite database on your host machine.
 
