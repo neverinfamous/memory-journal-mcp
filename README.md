@@ -92,7 +92,33 @@ Whether you're tracking a feature sprint, logging a bug hunt, planning strategy,
 
 Choose the option that best fits your workflow.
 
-### Option 1: Docker (Recommended)
+### Option 1: PyPI Package (Simple)
+
+The fastest way to get started. Install directly from PyPI and run locally.
+
+**1. Install the Package**
+
+```bash
+pip install memory-journal-mcp
+```
+
+**2. Configure Your MCP Client**
+Add the server to your `~/.cursor/mcp.json` file:
+
+```json
+{
+  "mcpServers": {
+    "memory-journal": {
+      "command": "memory-journal-mcp"
+    }
+  }
+}
+```
+
+**3. Restart Your Client**
+Restart Cursor or your MCP client, and you're ready to start journaling!
+
+### Option 2: Docker (Recommended for Full Features)
 
 The simplest way to run the full-featured server locally. This single, optimized image includes all dependencies for semantic search.
 
@@ -145,7 +171,7 @@ Docker images are automatically built and deployed from `main` on every commit, 
   * **Security Scanned**: Every image is automatically scanned for vulnerabilities.
   * **Quality Tested**: Images are tested before deployment.
 
-### Option 2: Advanced Local Setup
+### Option 3: Advanced Local Setup
 
 **Build from Source:**
 
