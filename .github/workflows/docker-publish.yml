@@ -118,6 +118,10 @@ jobs:
           type=semver,pattern={{version}}
           # Create version tags from pyproject.toml on main branch pushes
           type=raw,value=v1.0.0,enable={{is_default_branch}}
+          # Create SHA-based tags for supply chain security (sha256-xxx format using image digest)
+          type=sha,prefix=sha256-,format=long
+          # Create master-xxx branch tags for main branch commits (e.g., master-a317583)
+          type=sha,prefix=master-,format=short,enable={{is_default_branch}}
 
     # Build locally first for security scanning (single platform)
     - name: Build Docker image for scanning
