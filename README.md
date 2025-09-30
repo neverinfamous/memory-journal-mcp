@@ -125,7 +125,6 @@ The simplest way to run the full-featured server locally. This single, optimized
 **1. Pull the Image**
 
 ```bash
-# Pull the secure, Alpine-based image with full ML capabilities
 docker pull writenotenow/memory-journal-mcp:latest
 ```
 
@@ -133,14 +132,16 @@ docker pull writenotenow/memory-journal-mcp:latest
 
 For enhanced security and reproducible builds, use SHA-pinned images:
 
+Find available SHA tags at: https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags
+Look for tags starting with "sha256-" for cryptographically verified builds
+
+Option 1: Multi-arch manifest digest (recommended)
 ```bash
-# Find available SHA tags at: https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags
-# Look for tags starting with "sha256-" for cryptographically verified builds
-
-# Option 1: Multi-arch manifest digest (recommended)
 docker pull writenotenow/memory-journal-mcp:sha256-<manifest-digest>
+```
 
-# Option 2: Direct manifest digest (maximum security)
+Option 2: Direct manifest digest (maximum security)
+```bash
 docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 ```
 
@@ -206,27 +207,57 @@ Docker images are automatically built and deployed from `main` on every commit, 
 
 **Build from Source:**
 
+1. Clone the repository:
 ```bash
-# 1. Clone and build
 git clone <repo-url>
-cd memory-journal-mcp
-docker build -f Dockerfile -t memory-journal-mcp-local .
+```
 
-# 2. Add to MCP config (use local image name)
-# ... (similar to Docker Hub config but with "memory-journal-mcp-local")
+2. Navigate to directory:
+```bash
+cd memory-journal-mcp
+```
+
+3. Build Docker image:
+```bash
+docker build -f Dockerfile -t memory-journal-mcp-local .
+```
+
+4. Add to MCP config (use local image name):
+```json
+{
+  "mcpServers": {
+    "memory-journal": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-local", "python", "src/server.py"]
+    }
+  }
+}
 ```
 
 **Manual Installation:**
 
+1. Clone the repository:
 ```bash
-# 1. Clone the repo and install dependencies (Python 3.10+)
 git clone <repo-url>
-cd memory-journal-mcp
-pip install -r requirements.txt
-# Optional: for semantic search
-pip install sentence-transformers faiss-cpu
+```
 
-# 2. Add to MCP config
+2. Navigate to directory:
+```bash
+cd memory-journal-mcp
+```
+
+3. Install dependencies (Python 3.10+):
+```bash
+pip install -r requirements.txt
+```
+
+4. Optional: Install semantic search dependencies:
+```bash
+pip install sentence-transformers faiss-cpu
+```
+
+5. Add to MCP config:
+```json
 {
   "mcpServers": {
     "memory-journal": {
