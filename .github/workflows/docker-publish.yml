@@ -211,15 +211,10 @@ jobs:
         
         echo "✅ ${{ matrix.variant.name }} image tests passed"
 
-    # Generate GitHub attestations for supply chain security
-    - name: Generate artifact attestation
-      if: github.event_name != 'pull_request'
-      uses: actions/attest-build-provenance@v3
-      with:
-        subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        subject-digest: ${{ steps.build.outputs.digest }}
-        push-to-registry: true
-
+    # Attestations are handled automatically by Docker build with:
+    # attestations: true, provenance: true, and sbom: true (lines 189-191)
+    # This provides attestations for ALL tags without creating extra sha256- tags
+    
     # Docker Hub description update removed to eliminate secret warnings
     # README.md can be updated manually on Docker Hub if needed
 
