@@ -6,6 +6,9 @@ FROM python:3.13-alpine
 # Set working directory
 WORKDIR /app
 
+# Upgrade OpenSSL to patched version FIRST (CVE-2025-9230 fix)
+RUN apk add --no-cache --upgrade openssl=3.5.4-r0
+
 # Install system dependencies for git and ML libraries
 RUN apk add --no-cache \
     git \
