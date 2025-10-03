@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "memory-journal-mcp"
-version = "1.0.0"
+version = "1.0.1"
 description = "A Model Context Protocol server for personal journaling with context awareness"
 authors = [
-    {name = "Chris & Mike", email = "writenotenow@gmail.com"}
+    {name = "Chris LeRoux", email = "writenotenow@gmail.com"}
 ]
 readme = "README.md"
 license = {text = "MIT"}
