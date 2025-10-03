@@ -6,8 +6,8 @@ FROM python:3.13-alpine
 # Set working directory
 WORKDIR /app
 
-# Upgrade OpenSSL to patched version FIRST (CVE-2025-9230 fix)
-RUN apk add --no-cache --upgrade openssl=3.5.4-r0
+# Upgrade OpenSSL and curl to patched versions FIRST (CVE-2025-9230, CVE-2025-9086 fixes)
+RUN apk add --no-cache --upgrade openssl=3.5.4-r0 curl=8.14.1-r2
 
 # Install system dependencies for git and ML libraries
 RUN apk add --no-cache \
@@ -72,5 +72,5 @@ CMD ["python", "src/server.py"]
 # Labels for Docker Hub
 LABEL maintainer="Memory Journal MCP"
 LABEL description="A Model Context Protocol server for personal journaling with semantic search"
-LABEL version="1.0.0-alpine-secure"
+LABEL version="1.0.1-alpine-secure"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
