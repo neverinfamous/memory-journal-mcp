@@ -114,10 +114,10 @@ jobs:
         tags: |
           # Always create latest tag for main branch pushes
           type=raw,value=latest,enable={{is_default_branch}}
-          # Create version tags (v1.0.0) when pushing git tags
+          # Create version tags (v1.0.2) when pushing git tags
           type=semver,pattern={{version}}
           # Create version tags from pyproject.toml on main branch pushes
-          type=raw,value=v1.0.0,enable={{is_default_branch}}
+          type=raw,value=v1.0.2,enable={{is_default_branch}}
           # Create short SHA tags for all commits (e.g., sha-a317583)
           type=sha,prefix=sha-
           # Create timestamped master branch tags (e.g., master-20250930-161652-a317583)
