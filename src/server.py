@@ -10,7 +10,7 @@ import sqlite3
 import os
 import subprocess
 from datetime import datetime
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor
 import pickle
 
@@ -156,7 +156,7 @@ class MemoryJournalDB:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _validate_input(self, content: str, entry_type: str, tags: List[str], significance_type: str = None):
+    def _validate_input(self, content: str, entry_type: str, tags: List[str], significance_type: Optional[str] = None):
         """Validate input parameters for security."""
         # Validate content length
         if len(content) > self.MAX_CONTENT_LENGTH:
@@ -671,7 +671,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         is_personal = arguments.get("is_personal", True)
         entry_type = arguments.get("entry_type", "personal_reflection")
         tags = arguments.get("tags", [])
-        significance_type = arguments.get("significance_type")
+        significance_type: Optional[str] = arguments.get("significance_type")
         auto_context = arguments.get("auto_context", True)
 
         # Validate input for security
@@ -712,6 +712,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                 """, (entry_type, content, is_personal, project_context, ','.join(tags)))
 
                 entry_id = cursor.lastrowid
+                if entry_id is None:
+                    raise RuntimeError("Failed to get entry ID after insert")
                 print(f"DEBUG: Entry inserted with ID: {entry_id}")
 
                 for tag_id in tag_ids:
@@ -738,24 +740,24 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         # Run in thread pool to avoid blocking
         print("DEBUG: Submitting database operation to thread pool...")
         loop = asyncio.get_event_loop()
-        entry_id = await loop.run_in_executor(thread_pool, create_entry_in_db)
-        print(f"DEBUG: Database operation completed, entry_id: {entry_id}")
+        result_entry_id: int = await loop.run_in_executor(thread_pool, create_entry_in_db)
+        print(f"DEBUG: Database operation completed, entry_id: {result_entry_id}")
 
         # Generate and store embedding for semantic search (if available)
         if vector_search and vector_search.initialized:
             try:
                 print("DEBUG: Generating embedding for semantic search...")
-                embedding_success = await vector_search.add_entry_embedding(entry_id, content)
+                embedding_success = await vector_search.add_entry_embedding(result_entry_id, content)
                 if embedding_success:
-                    print(f"DEBUG: Embedding generated successfully for entry #{entry_id}")
+                    print(f"DEBUG: Embedding generated successfully for entry #{result_entry_id}")
                 else:
-                    print(f"DEBUG: Failed to generate embedding for entry #{entry_id}")
+                    print(f"DEBUG: Failed to generate embedding for entry #{result_entry_id}")
             except Exception as e:
                 print(f"DEBUG: Error generating embedding: {e}")
 
         result = [types.TextContent(
             type="text",
-            text=f"✅ Created journal entry #{entry_id}\n"
+            text=f"✅ Created journal entry #{result_entry_id}\n"
                  f"Type: {entry_type}\n"
                  f"Personal: {is_personal}\n"
                  f"Tags: {', '.join(tags) if tags else 'None'}"
@@ -881,13 +883,15 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                     ) VALUES (?, ?, ?)
                 """, ("test_entry", content, True))
                 entry_id = cursor.lastrowid
+                if entry_id is None:
+                    raise RuntimeError("Failed to get entry ID after insert")
                 conn.commit()
                 print(f"DEBUG: Minimal DB insert completed, entry_id: {entry_id}")
                 return entry_id
 
         # Run in thread pool
         loop = asyncio.get_event_loop()
-        entry_id = await loop.run_in_executor(thread_pool, minimal_db_insert)
+        entry_id: int = await loop.run_in_executor(thread_pool, minimal_db_insert)
 
         return [types.TextContent(
             type="text",
