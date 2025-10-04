@@ -1807,12 +1807,16 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         else:  # json
             output = json.dumps(entries, indent=2)
 
+        # Format output preview
+        truncated_suffix = '...\n[truncated]' if len(output) > 2000 else ''
+        output_preview = output[:2000] + truncated_suffix
+        
         return [types.TextContent(
             type="text",
             text=f"📦 **Export Complete**\n\n"
                  f"Format: {format_type.upper()}\n"
                  f"Entries: {len(entries)}\n\n"
-                 f"```{format_type}\n{output[:2000]}{'...\n[truncated]' if len(output) > 2000 else ''}\n```"
+                 f"```{format_type}\n{output_preview}\n```"
         )]
 
     elif name == "visualize_relationships":
