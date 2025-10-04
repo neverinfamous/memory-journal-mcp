@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "memory-journal-mcp"
-version = "1.0.2"
-description = "A Model Context Protocol server for personal journaling with context awareness"
+version = "1.1.0"
+description = "A Model Context Protocol server for personal journaling with context awareness, relationships, and visualization"
 authors = [
     {name = "Chris LeRoux", email = "writenotenow@gmail.com"}
 ]
@@ -15,9 +15,9 @@ requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.0.0",
 ]
-keywords = ["mcp", "journaling", "git", "context", "model-context-protocol", "developer-tools"]
+keywords = ["mcp", "journaling", "git", "context", "model-context-protocol", "developer-tools", "visualization", "relationships"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers", 
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -34,7 +34,7 @@ classifiers = [
 Homepage = "https://github.com/neverinfamous/memory-journal-mcp"
 Repository = "https://github.com/neverinfamous/memory-journal-mcp"
 Issues = "https://github.com/neverinfamous/memory-journal-mcp/issues"
-Documentation = "https://github.com/neverinfamous/memory-journal-mcp#readme"
+Documentation = "https://github.com/neverinfamous/memory-journal-mcp/wiki"
 
 [project.optional-dependencies]
 dev = [
