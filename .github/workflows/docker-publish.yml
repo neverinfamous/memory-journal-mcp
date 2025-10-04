@@ -119,10 +119,8 @@ jobs:
         flavor: |
           latest=auto
         tags: |
-          # When pushing Git tag v1.1.2, create: v1.1.2, v1.1, v1
+          # When pushing Git tag v1.1.2, create only: v1.1.2 (exact version)
           type=semver,pattern=v{{version}}
-          type=semver,pattern=v{{major}}.{{minor}}
-          type=semver,pattern=v{{major}}
           # When pushing to main branch, read version from pyproject.toml
           type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}}
           type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}},suffix=-main
