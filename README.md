@@ -1,4 +1,5 @@
 # 🛠️ Memory Journal MCP Server
+Last Updated October 4, 2025 3:20 PM EST
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 ![License](https://img.shields.io/badge/license-MIT-blue)
