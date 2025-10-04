@@ -112,16 +112,15 @@ jobs:
         flavor: |
           latest=auto
         tags: |
-          # Always create latest tag for main branch pushes
+          # Tag priority for version tags (v1.1.2):
+          # When pushing tag v1.1.2, create: v1.1.2, v1.1, v1, latest
+          type=semver,pattern=v{{version}}
+          type=semver,pattern=v{{major}}.{{minor}}
+          type=semver,pattern=v{{major}}
+          # Create SHA-pinned tags for security (sha256-abc123...)
+          type=sha,prefix=sha256-,format=long
+          # Latest tag for main branch pushes
           type=raw,value=latest,enable={{is_default_branch}}
-          # Create version tags (v1.0.2) when pushing git tags
-          type=semver,pattern={{version}}
-          # Create version tags from pyproject.toml on main branch pushes
-          type=raw,value=v1.0.2,enable={{is_default_branch}}
-          # Create short SHA tags for all commits (e.g., sha-a317583)
-          type=sha,prefix=sha-
-          # Create timestamped master branch tags (e.g., master-20250930-161652-a317583)
-          type=sha,prefix=master-{{date 'YYYYMMDD-HHmmss'}}-,enable={{is_default_branch}}
 
     # Build locally first for security scanning (single platform)
     - name: Build Docker image for scanning
