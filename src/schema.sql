@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     -- Extensible metadata (JSON for flexibility)
     metadata TEXT,
     
+    -- Soft delete support
+    deleted_at TEXT,
+    
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -51,6 +54,18 @@ CREATE TABLE IF NOT EXISTS memory_journal_relationships (
     timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (source_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE,
     FOREIGN KEY (target_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+);
+
+-- Simplified relationships table for direct entry linking
+CREATE TABLE IF NOT EXISTS relationships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_entry_id INTEGER NOT NULL,
+    to_entry_id INTEGER NOT NULL,
+    relationship_type TEXT NOT NULL DEFAULT 'references',
+    description TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (from_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
 );
 
 -- Significant entries (key V1 pattern for important moments)
@@ -88,11 +103,14 @@ CREATE INDEX IF NOT EXISTS idx_memory_journal_timestamp ON memory_journal(timest
 CREATE INDEX IF NOT EXISTS idx_memory_journal_type ON memory_journal(entry_type);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_personal ON memory_journal(is_personal);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_updated ON memory_journal(updated_at);
+CREATE INDEX IF NOT EXISTS idx_memory_journal_deleted ON memory_journal(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_source ON memory_journal_relationships(source_entry_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_target ON memory_journal_relationships(target_entry_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_type ON memory_journal_relationships(relationship_type);
+CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entry_id);
+CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id);
 CREATE INDEX IF NOT EXISTS idx_significant_entries_type ON significant_entries(significance_type);
 
 -- Triggers for updated_at and FTS sync
