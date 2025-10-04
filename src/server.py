@@ -9,6 +9,7 @@ import json
 import sqlite3
 import os
 import subprocess
+import sys
 from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -31,16 +32,20 @@ except ImportError:
     print("MCP library not found. Install with: pip install mcp")
     exit(1)
 
-# Vector search imports (optional - graceful degradation if not available)
+# Vector search availability check (defer actual imports for faster startup)
+VECTOR_SEARCH_AVAILABLE = False
 try:
-    from sentence_transformers import SentenceTransformer
-    import faiss
-    VECTOR_SEARCH_AVAILABLE = True
-    print("Vector search capabilities enabled")
-except ImportError:
-    VECTOR_SEARCH_AVAILABLE = False
-    print("Vector search dependencies not found. Install with: pip install sentence-transformers faiss-cpu")
-    print("Continuing without semantic search capabilities...")
+    import importlib.util
+    if importlib.util.find_spec("sentence_transformers") and importlib.util.find_spec("faiss"):
+        VECTOR_SEARCH_AVAILABLE = True
+        print("Vector search capabilities available (will load on first use)", file=sys.stderr)
+except Exception:
+    print("Vector search dependencies not found. Install with: pip install sentence-transformers faiss-cpu", file=sys.stderr)
+    print("Continuing without semantic search capabilities...", file=sys.stderr)
+
+# Lazy imports for vector search (loaded on first use)
+SentenceTransformer = None
+faiss = None
 
 # Thread pool for non-blocking database operations
 thread_pool = ThreadPoolExecutor(max_workers=2)
@@ -106,18 +111,55 @@ class MemoryJournalDB:
             # Set temp store to memory for better performance
             conn.execute("PRAGMA temp_store = MEMORY")
 
-            # Optimize for better query performance
-            conn.execute("PRAGMA optimize")
-
             # Security: Set a reasonable timeout for busy database
             conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
+
+            # Run migrations BEFORE applying schema (for existing databases)
+            self._run_migrations(conn)
 
             if os.path.exists(schema_path):
                 with open(schema_path, 'r') as f:
                     conn.executescript(f.read())
 
-            # Run ANALYZE to update query planner statistics
-            conn.execute("ANALYZE")
+            # Note: PRAGMA optimize and ANALYZE are expensive and only run during maintenance
+            # They don't need to run on every startup
+
+    def _run_migrations(self, conn):
+        """Run database migrations for schema updates."""
+        # Check if deleted_at column exists
+        cursor = conn.execute("PRAGMA table_info(memory_journal)")
+        columns = {row[1] for row in cursor.fetchall()}
+        
+        if 'deleted_at' not in columns:
+            print("Running migration: Adding deleted_at column to memory_journal table", file=sys.stderr)
+            conn.execute("ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_journal_deleted ON memory_journal(deleted_at)")
+            conn.commit()
+            print("Migration completed: deleted_at column added", file=sys.stderr)
+        
+        # Check if relationships table exists
+        cursor = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='relationships'
+        """)
+        if not cursor.fetchone():
+            print("Running migration: Creating relationships table", file=sys.stderr)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS relationships (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    from_entry_id INTEGER NOT NULL,
+                    to_entry_id INTEGER NOT NULL,
+                    relationship_type TEXT NOT NULL DEFAULT 'references',
+                    description TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (from_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE,
+                    FOREIGN KEY (to_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entry_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id)")
+            conn.commit()
+            print("Migration completed: relationships table created", file=sys.stderr)
 
     def maintenance(self):
         """Perform database maintenance operations."""
@@ -184,25 +226,25 @@ class MemoryJournalDB:
         for pattern in dangerous_patterns:
             if f' {pattern} ' in content_upper or content_upper.startswith(f'{pattern} '):
                 # This is just a warning since legitimate content might contain these words
-                print(f"WARNING: Content contains potentially sensitive SQL keyword: {pattern}")
+                print(f"WARNING: Content contains potentially sensitive SQL keyword: {pattern}", file=sys.stderr)
 
     def auto_create_tags(self, tag_names: List[str]) -> List[int]:
-        """Auto-create tags if they don't exist, return tag IDs."""
+        """Auto-create tags if they don't exist, return tag IDs. Thread-safe with INSERT OR IGNORE."""
         tag_ids = []
 
         with self.get_connection() as conn:
             for tag_name in tag_names:
+                # Use INSERT OR IGNORE to handle race conditions
+                conn.execute(
+                    "INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 1)",
+                    (tag_name,)
+                )
+                
+                # Now fetch the tag ID (whether we just created it or it already existed)
                 cursor = conn.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
                 row = cursor.fetchone()
-
                 if row:
                     tag_ids.append(row['id'])
-                else:
-                    cursor = conn.execute(
-                        "INSERT INTO tags (name, usage_count) VALUES (?, 1)",
-                        (tag_name,)
-                    )
-                    tag_ids.append(cursor.lastrowid)
 
         return tag_ids
 
@@ -341,30 +383,46 @@ class VectorSearchManager:
         self.faiss_index = None
         self.entry_id_map = {}  # Maps FAISS index positions to entry IDs
         self.initialized = False
+        self._initialization_attempted = False
 
-        if VECTOR_SEARCH_AVAILABLE:
-            try:
-                self._initialize()
-            except Exception as e:
-                print(f"Warning: Vector search initialization failed: {e}")
-                self.initialized = False
+        # Don't initialize immediately - do it lazily on first use for faster startup
 
-    def _initialize(self):
-        """Initialize the sentence transformer model and FAISS index."""
+    def _ensure_initialized(self):
+        """Lazy initialization - only initialize on first use."""
+        if self.initialized or self._initialization_attempted:
+            return
+        
+        self._initialization_attempted = True
+        
         if not VECTOR_SEARCH_AVAILABLE:
             return
 
-        print(f"Initializing sentence transformer model: {self.model_name}")
-        self.model = SentenceTransformer(self.model_name)
+        try:
+            # Lazy import of heavy dependencies (only on first use)
+            global SentenceTransformer, faiss
+            if SentenceTransformer is None:
+                print("Loading vector search dependencies (first use)...", file=sys.stderr)
+                from sentence_transformers import SentenceTransformer as ST
+                import faiss as faiss_module
+                SentenceTransformer = ST
+                faiss = faiss_module
+                print("Vector search dependencies loaded", file=sys.stderr)
 
-        # Create FAISS index (384 dimensions for all-MiniLM-L6-v2)
-        self.faiss_index = faiss.IndexFlatIP(384)  # Inner product for cosine similarity
+            # Use stderr for initialization messages to avoid MCP JSON parsing errors
+            print(f"Initializing sentence transformer model: {self.model_name}", file=sys.stderr)
+            self.model = SentenceTransformer(self.model_name)
 
-        # Load existing embeddings from database
-        self._load_existing_embeddings()
+            # Create FAISS index (384 dimensions for all-MiniLM-L6-v2)
+            self.faiss_index = faiss.IndexFlatIP(384)  # Inner product for cosine similarity
 
-        self.initialized = True
-        print(f"Vector search initialized with {self.faiss_index.ntotal} embeddings")
+            # Load existing embeddings from database
+            self._load_existing_embeddings()
+
+            self.initialized = True
+            print(f"Vector search initialized with {self.faiss_index.ntotal} embeddings", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Vector search initialization failed: {e}", file=sys.stderr)
+            self.initialized = False
 
     def _load_existing_embeddings(self):
         """Load existing embeddings from database into FAISS index."""
@@ -401,6 +459,8 @@ class VectorSearchManager:
 
     async def generate_embedding(self, text: str):
         """Generate embedding for text using sentence transformer."""
+        self._ensure_initialized()
+        
         if not self.initialized:
             raise RuntimeError("Vector search not initialized")
 
@@ -417,6 +477,8 @@ class VectorSearchManager:
 
     async def add_entry_embedding(self, entry_id: int, content: str) -> bool:
         """Generate and store embedding for a journal entry."""
+        self._ensure_initialized()
+        
         if not self.initialized:
             return False
 
@@ -455,6 +517,8 @@ class VectorSearchManager:
 
     async def semantic_search(self, query: str, limit: int = 10, similarity_threshold: float = 0.3) -> List[Tuple[int, float]]:
         """Perform semantic search and return entry IDs with similarity scores."""
+        self._ensure_initialized()
+        
         if not self.initialized or self.faiss_index.ntotal == 0:
             return []
 
@@ -505,6 +569,12 @@ async def list_resources() -> List[Resource]:
             name="Significant Entries",
             description="Entries marked as significant",
             mimeType="application/json"
+        ),
+        Resource(
+            uri="memory://graph/recent",
+            name="Relationship Graph (Recent)",
+            description="Mermaid graph visualization of recent entries with relationships",
+            mimeType="text/plain"
         )
     ]
 
@@ -564,8 +634,92 @@ async def read_resource(uri: str) -> str:
             print(f"DEBUG: Error reading significant entries: {e}")
             raise
 
+    elif uri_str == "memory://graph/recent":
+        try:
+            def get_graph():
+                with db.get_connection() as conn:
+                    # Get recent entries that have relationships
+                    cursor = conn.execute("""
+                        SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+                        FROM memory_journal mj
+                        WHERE mj.deleted_at IS NULL
+                          AND mj.id IN (
+                              SELECT DISTINCT from_entry_id FROM relationships
+                              UNION
+                              SELECT DISTINCT to_entry_id FROM relationships
+                          )
+                        ORDER BY mj.timestamp DESC
+                        LIMIT 20
+                    """)
+                    entries = {row[0]: dict(row) for row in cursor.fetchall()}
+
+                    if not entries:
+                        return None, None
+
+                    # Get relationships between these entries
+                    entry_ids = list(entries.keys())
+                    placeholders = ','.join(['?' for _ in entry_ids])
+                    cursor = conn.execute(f"""
+                        SELECT from_entry_id, to_entry_id, relationship_type
+                        FROM relationships
+                        WHERE from_entry_id IN ({placeholders})
+                          AND to_entry_id IN ({placeholders})
+                    """, entry_ids + entry_ids)
+                    relationships = cursor.fetchall()
+
+                    return entries, relationships
+
+            loop = asyncio.get_event_loop()
+            entries, relationships = await loop.run_in_executor(thread_pool, get_graph)
+
+            if not entries:
+                return "No entries with relationships found"
+
+            # Generate Mermaid diagram
+            mermaid = "```mermaid\ngraph TD\n"
+            
+            for entry_id, entry in entries.items():
+                content_preview = entry['content'][:40].replace('\n', ' ')
+                if len(entry['content']) > 40:
+                    content_preview += '...'
+                content_preview = content_preview.replace('"', "'").replace('[', '(').replace(']', ')')
+                
+                entry_type_short = entry['entry_type'][:20]
+                node_label = f"#{entry_id}: {content_preview}<br/>{entry_type_short}"
+                mermaid += f"    E{entry_id}[\"{node_label}\"]\n"
+
+            mermaid += "\n"
+
+            relationship_symbols = {
+                'references': '-->',
+                'implements': '==>',
+                'clarifies': '-.->',
+                'evolves_from': '-->',
+                'response_to': '<-->'
+            }
+
+            if relationships:
+                for rel in relationships:
+                    from_id, to_id, rel_type = rel
+                    arrow = relationship_symbols.get(rel_type, '-->')
+                    mermaid += f"    E{from_id} {arrow}|{rel_type}| E{to_id}\n"
+
+            mermaid += "\n"
+            for entry_id, entry in entries.items():
+                if entry['is_personal']:
+                    mermaid += f"    style E{entry_id} fill:#E3F2FD\n"
+                else:
+                    mermaid += f"    style E{entry_id} fill:#FFF3E0\n"
+
+            mermaid += "```"
+            
+            return mermaid
+        except Exception as e:
+            print(f"DEBUG: Error generating relationship graph: {e}", file=sys.stderr)
+            raise
+
     else:
-        print(f"DEBUG: No match for URI '{uri_str}'. Available: memory://recent, memory://significant")
+        print(f"DEBUG: No match for URI '{uri_str}'. Available: memory://recent, memory://significant, memory://graph/recent")
         raise ValueError(f"Unknown resource: {uri_str}")
 
 
@@ -653,6 +807,135 @@ async def list_tools() -> List[Tool]:
                     "is_personal": {"type": "boolean", "description": "Filter by personal entries"}
                 },
                 "required": ["query"]
+            }
+        ),
+        Tool(
+            name="update_entry",
+            description="Update an existing journal entry",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "ID of the entry to update"},
+                    "content": {"type": "string", "description": "New content for the entry"},
+                    "entry_type": {"type": "string", "description": "Update entry type"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Replace tags"},
+                    "is_personal": {"type": "boolean", "description": "Update personal flag"}
+                },
+                "required": ["entry_id"]
+            }
+        ),
+        Tool(
+            name="delete_entry",
+            description="Delete a journal entry (soft delete with timestamp)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "ID of the entry to delete"},
+                    "permanent": {"type": "boolean", "default": False, "description": "Permanently delete (true) or soft delete (false)"}
+                },
+                "required": ["entry_id"]
+            }
+        ),
+        Tool(
+            name="get_entry_by_id",
+            description="Get a specific journal entry by ID with full details",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "ID of the entry to retrieve"},
+                    "include_relationships": {"type": "boolean", "default": True, "description": "Include related entries"}
+                },
+                "required": ["entry_id"]
+            }
+        ),
+        Tool(
+            name="link_entries",
+            description="Create a relationship between two journal entries",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "from_entry_id": {"type": "integer", "description": "Source entry ID"},
+                    "to_entry_id": {"type": "integer", "description": "Target entry ID"},
+                    "relationship_type": {
+                        "type": "string", 
+                        "description": "Type of relationship (evolves_from, references, implements, clarifies, response_to)",
+                        "default": "references"
+                    },
+                    "description": {"type": "string", "description": "Optional description of the relationship"}
+                },
+                "required": ["from_entry_id", "to_entry_id"]
+            }
+        ),
+        Tool(
+            name="search_by_date_range",
+            description="Search journal entries within a date range",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
+                    "end_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
+                    "is_personal": {"type": "boolean", "description": "Filter by personal entries"},
+                    "entry_type": {"type": "string", "description": "Filter by entry type"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"}
+                },
+                "required": ["start_date", "end_date"]
+            }
+        ),
+        Tool(
+            name="get_statistics",
+            description="Get journal statistics and analytics",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD, optional)"},
+                    "end_date": {"type": "string", "description": "End date (YYYY-MM-DD, optional)"},
+                    "group_by": {
+                        "type": "string", 
+                        "description": "Group statistics by period (day, week, month)",
+                        "default": "week"
+                    }
+                }
+            }
+        ),
+        Tool(
+            name="export_entries",
+            description="Export journal entries to JSON or Markdown format",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "format": {
+                        "type": "string", 
+                        "description": "Export format (json or markdown)",
+                        "default": "json"
+                    },
+                    "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD, optional)"},
+                    "end_date": {"type": "string", "description": "End date (YYYY-MM-DD, optional)"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"},
+                    "entry_types": {"type": "array", "items": {"type": "string"}, "description": "Filter by entry types"}
+                }
+            }
+        ),
+        Tool(
+            name="visualize_relationships",
+            description="Generate a Mermaid diagram visualization of entry relationships",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "entry_id": {"type": "integer", "description": "Specific entry ID to visualize (shows connected entries)"},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter entries by tags"},
+                    "depth": {
+                        "type": "integer", 
+                        "description": "Relationship traversal depth (1-3)",
+                        "default": 2,
+                        "minimum": 1,
+                        "maximum": 3
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of entries to include",
+                        "default": 20
+                    }
+                }
             }
         )
     ]
@@ -927,7 +1210,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                 )]
 
             # Fetch entry details from database
-            def get_entry_details():
+            def get_semantic_entry_details():
                 entry_ids = [result[0] for result in search_results]
                 with sqlite3.connect(DB_PATH) as conn:
                     placeholders = ','.join(['?'] * len(entry_ids))
@@ -953,7 +1236,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                     return entries
 
             loop = asyncio.get_event_loop()
-            entries = await loop.run_in_executor(thread_pool, get_entry_details)
+            entries = await loop.run_in_executor(thread_pool, get_semantic_entry_details)
 
             # Format results
             result_text = f"🔍 **Semantic Search Results** for: '{query}'\n"
@@ -981,6 +1264,705 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                 type="text",
                 text=f"❌ Error in semantic search: {str(e)}"
             )]
+
+    elif name == "update_entry":
+        entry_id = arguments.get("entry_id")  # type: ignore
+        content = arguments.get("content")
+        entry_type = arguments.get("entry_type")
+        tags = arguments.get("tags")
+        is_personal = arguments.get("is_personal")
+
+        if not entry_id:
+            return [types.TextContent(type="text", text="❌ Entry ID is required")]
+
+        def update_entry_in_db():
+            with db.get_connection() as conn:
+                # Check if entry exists
+                cursor = conn.execute("SELECT id FROM memory_journal WHERE id = ?", (entry_id,))
+                if not cursor.fetchone():
+                    return None
+
+                # Build dynamic update query
+                updates = []
+                params = []
+                
+                if content is not None:
+                    updates.append("content = ?")
+                    params.append(content)
+                
+                if entry_type is not None:
+                    updates.append("entry_type = ?")
+                    params.append(entry_type)
+                
+                if is_personal is not None:
+                    updates.append("is_personal = ?")
+                    params.append(is_personal)
+
+                if updates:
+                    params.append(entry_id)
+                    conn.execute(
+                        f"UPDATE memory_journal SET {', '.join(updates)} WHERE id = ?",
+                        params
+                    )
+
+                # Update tags if provided
+                if tags is not None:
+                    # Remove old tags
+                    conn.execute("DELETE FROM entry_tags WHERE entry_id = ?", (entry_id,))
+                    
+                    # Add new tags (using same connection to avoid locks)
+                    for tag_name in tags:
+                        tag_cursor = conn.execute("SELECT id FROM tags WHERE name = ?", (tag_name,))
+                        tag_row = tag_cursor.fetchone()
+                        
+                        if tag_row:
+                            tag_id = tag_row[0]
+                        else:
+                            tag_cursor = conn.execute(
+                                "INSERT INTO tags (name, usage_count) VALUES (?, 1)",
+                                (tag_name,)
+                            )
+                            tag_id = tag_cursor.lastrowid
+                        
+                        conn.execute(
+                            "INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)",
+                            (entry_id, tag_id)
+                        )
+                        conn.execute(
+                            "UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?",
+                            (tag_id,)
+                        )
+
+                conn.commit()
+                return entry_id
+
+        loop = asyncio.get_event_loop()
+        result_id = await loop.run_in_executor(thread_pool, update_entry_in_db)
+
+        if result_id is None:
+            return [types.TextContent(type="text", text=f"❌ Entry #{entry_id} not found")]
+
+        # Update embedding if content changed and vector search is available
+        if content and vector_search and vector_search.initialized:
+            try:
+                await vector_search.add_entry_embedding(entry_id, content)
+            except Exception as e:
+                print(f"Warning: Failed to update embedding: {e}")
+
+        return [types.TextContent(
+            type="text",
+            text=f"✅ Updated entry #{entry_id}\n"
+                 f"Updated fields: {', '.join(k for k, v in [('content', content), ('entry_type', entry_type), ('is_personal', is_personal), ('tags', tags)] if v is not None)}"
+        )]
+
+    elif name == "delete_entry":
+        entry_id = arguments.get("entry_id")  # type: ignore
+        permanent = arguments.get("permanent", False)
+
+        if not entry_id:
+            return [types.TextContent(type="text", text="❌ Entry ID is required")]
+
+        def delete_entry_in_db():
+            with db.get_connection() as conn:
+                # Check if entry exists
+                cursor = conn.execute("SELECT id FROM memory_journal WHERE id = ?", (entry_id,))
+                if not cursor.fetchone():
+                    return None
+
+                if permanent:
+                    # Permanent delete - remove from all tables
+                    conn.execute("DELETE FROM entry_tags WHERE entry_id = ?", (entry_id,))
+                    conn.execute("DELETE FROM significant_entries WHERE entry_id = ?", (entry_id,))
+                    conn.execute("DELETE FROM relationships WHERE from_entry_id = ? OR to_entry_id = ?", 
+                               (entry_id, entry_id))
+                    conn.execute("DELETE FROM memory_journal WHERE id = ?", (entry_id,))
+                else:
+                    # Soft delete - add deleted_at timestamp
+                    conn.execute(
+                        "UPDATE memory_journal SET deleted_at = ? WHERE id = ?",
+                        (datetime.now().isoformat(), entry_id)
+                    )
+
+                conn.commit()
+                return entry_id
+
+        loop = asyncio.get_event_loop()
+        result_id = await loop.run_in_executor(thread_pool, delete_entry_in_db)
+
+        if result_id is None:
+            return [types.TextContent(type="text", text=f"❌ Entry #{entry_id} not found")]
+
+        delete_type = "permanently deleted" if permanent else "soft deleted"
+        return [types.TextContent(
+            type="text",
+            text=f"✅ Entry #{entry_id} {delete_type}"
+        )]
+
+    elif name == "get_entry_by_id":
+        entry_id = arguments.get("entry_id")  # type: ignore
+        include_relationships = arguments.get("include_relationships", True)
+
+        if not entry_id:
+            return [types.TextContent(type="text", text="❌ Entry ID is required")]
+
+        def get_entry_details():
+            with db.get_connection() as conn:
+                # Get main entry
+                cursor = conn.execute("""
+                    SELECT id, entry_type, content, timestamp, is_personal, project_context, related_patterns
+                    FROM memory_journal
+                    WHERE id = ? AND deleted_at IS NULL
+                """, (entry_id,))
+                entry = cursor.fetchone()
+                
+                if not entry:
+                    return None
+
+                result = dict(entry)
+                
+                # Get tags
+                cursor = conn.execute("""
+                    SELECT t.name FROM tags t
+                    JOIN entry_tags et ON t.id = et.tag_id
+                    WHERE et.entry_id = ?
+                """, (entry_id,))
+                result['tags'] = [row[0] for row in cursor.fetchall()]
+
+                # Get significance
+                cursor = conn.execute("""
+                    SELECT significance_type, significance_rating
+                    FROM significant_entries
+                    WHERE entry_id = ?
+                """, (entry_id,))
+                sig = cursor.fetchone()
+                if sig:
+                    result['significance'] = dict(sig)
+
+                # Get relationships if requested
+                if include_relationships:
+                    cursor = conn.execute("""
+                        SELECT r.to_entry_id, r.relationship_type, r.description,
+                               m.content, m.entry_type
+                        FROM relationships r
+                        JOIN memory_journal m ON r.to_entry_id = m.id
+                        WHERE r.from_entry_id = ? AND m.deleted_at IS NULL
+                    """, (entry_id,))
+                    result['relationships_to'] = [dict(row) for row in cursor.fetchall()]
+
+                    cursor = conn.execute("""
+                        SELECT r.from_entry_id, r.relationship_type, r.description,
+                               m.content, m.entry_type
+                        FROM relationships r
+                        JOIN memory_journal m ON r.from_entry_id = m.id
+                        WHERE r.to_entry_id = ? AND m.deleted_at IS NULL
+                    """, (entry_id,))
+                    result['relationships_from'] = [dict(row) for row in cursor.fetchall()]
+
+                return result
+
+        loop = asyncio.get_event_loop()
+        entry = await loop.run_in_executor(thread_pool, get_entry_details)
+
+        if entry is None:
+            return [types.TextContent(type="text", text=f"❌ Entry #{entry_id} not found")]
+
+        # Format output
+        output = f"**Entry #{entry['id']}** ({entry['entry_type']})\n"
+        output += f"Timestamp: {entry['timestamp']}\n"
+        output += f"Personal: {bool(entry['is_personal'])}\n\n"
+        output += f"**Content:**\n{entry['content']}\n\n"
+        
+        if entry['tags']:
+            output += f"**Tags:** {', '.join(entry['tags'])}\n\n"
+
+        if entry.get('significance'):
+            output += f"**Significance:** {entry['significance']['significance_type']} (rating: {entry['significance']['significance_rating']})\n\n"
+
+        if entry.get('project_context'):
+            try:
+                ctx = json.loads(entry['project_context'])
+                if ctx.get('repo_name'):
+                    output += f"**Context:** {ctx['repo_name']} ({ctx.get('branch', 'unknown')})\n\n"
+            except:
+                pass
+
+        if include_relationships and (entry.get('relationships_to') or entry.get('relationships_from')):
+            output += "**Relationships:**\n"
+            for rel in entry.get('relationships_to', []):
+                output += f"  → {rel['relationship_type']}: Entry #{rel['to_entry_id']} ({rel['entry_type'][:50]}...)\n"
+            for rel in entry.get('relationships_from', []):
+                output += f"  ← {rel['relationship_type']}: Entry #{rel['from_entry_id']} ({rel['entry_type'][:50]}...)\n"
+
+        return [types.TextContent(type="text", text=output)]
+
+    elif name == "link_entries":
+        from_entry_id = arguments.get("from_entry_id")
+        to_entry_id = arguments.get("to_entry_id")
+        relationship_type = arguments.get("relationship_type", "references")
+        description = arguments.get("description")
+
+        if not from_entry_id or not to_entry_id:
+            return [types.TextContent(type="text", text="❌ Both from_entry_id and to_entry_id are required")]
+
+        if from_entry_id == to_entry_id:
+            return [types.TextContent(type="text", text="❌ Cannot link an entry to itself")]
+
+        def create_relationship():
+            with db.get_connection() as conn:
+                # Verify both entries exist
+                cursor = conn.execute(
+                    "SELECT COUNT(*) FROM memory_journal WHERE id IN (?, ?) AND deleted_at IS NULL",
+                    (from_entry_id, to_entry_id)
+                )
+                if cursor.fetchone()[0] != 2:
+                    return None
+
+                # Check if relationship already exists
+                cursor = conn.execute("""
+                    SELECT id FROM relationships 
+                    WHERE from_entry_id = ? AND to_entry_id = ? AND relationship_type = ?
+                """, (from_entry_id, to_entry_id, relationship_type))
+                
+                if cursor.fetchone():
+                    return "exists"
+
+                # Create relationship
+                conn.execute("""
+                    INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type, description)
+                    VALUES (?, ?, ?, ?)
+                """, (from_entry_id, to_entry_id, relationship_type, description))
+                
+                conn.commit()
+                return "created"
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(thread_pool, create_relationship)
+
+        if result is None:
+            return [types.TextContent(type="text", text="❌ One or both entries not found")]
+        elif result == "exists":
+            return [types.TextContent(
+                type="text",
+                text=f"ℹ️  Relationship already exists: Entry #{from_entry_id} -{relationship_type}-> Entry #{to_entry_id}"
+            )]
+        else:
+            return [types.TextContent(
+                type="text",
+                text=f"✅ Created relationship: Entry #{from_entry_id} -{relationship_type}-> Entry #{to_entry_id}"
+            )]
+
+    elif name == "search_by_date_range":
+        start_date = arguments.get("start_date")
+        end_date = arguments.get("end_date")
+        is_personal = arguments.get("is_personal")
+        entry_type = arguments.get("entry_type")
+        tags = arguments.get("tags", [])
+
+        if not start_date or not end_date:
+            return [types.TextContent(type="text", text="❌ Both start_date and end_date are required (YYYY-MM-DD)")]
+
+        def search_entries():
+            with db.get_connection() as conn:
+                sql = """
+                    SELECT DISTINCT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
+                    FROM memory_journal m
+                    WHERE m.deleted_at IS NULL
+                    AND DATE(m.timestamp) >= DATE(?)
+                    AND DATE(m.timestamp) <= DATE(?)
+                """
+                params = [start_date, end_date]
+
+                if is_personal is not None:
+                    sql += " AND m.is_personal = ?"
+                    params.append(is_personal)
+
+                if entry_type:
+                    sql += " AND m.entry_type = ?"
+                    params.append(entry_type)
+
+                if tags:
+                    sql += """ AND m.id IN (
+                        SELECT et.entry_id FROM entry_tags et
+                        JOIN tags t ON et.tag_id = t.id
+                        WHERE t.name IN ({})
+                    )""".format(','.join(['?'] * len(tags)))
+                    params.extend(tags)
+
+                sql += " ORDER BY m.timestamp DESC"
+
+                cursor = conn.execute(sql, params)
+                return [dict(row) for row in cursor.fetchall()]
+
+        loop = asyncio.get_event_loop()
+        entries = await loop.run_in_executor(thread_pool, search_entries)
+
+        if not entries:
+            return [types.TextContent(
+                type="text",
+                text=f"🔍 No entries found between {start_date} and {end_date}"
+            )]
+
+        result = f"📅 Found {len(entries)} entries between {start_date} and {end_date}:\n\n"
+        for entry in entries:
+            result += f"**Entry #{entry['id']}** ({entry['entry_type']}) - {entry['timestamp']}\n"
+            preview = entry['content'][:150] + ('...' if len(entry['content']) > 150 else '')
+            result += f"{preview}\n\n"
+
+        return [types.TextContent(type="text", text=result)]
+
+    elif name == "get_statistics":
+        start_date = arguments.get("start_date")
+        end_date = arguments.get("end_date")
+        group_by = arguments.get("group_by", "week")
+
+        def calculate_stats():
+            with db.get_connection() as conn:
+                stats = {}
+
+                # Base WHERE clause
+                where = "WHERE deleted_at IS NULL"
+                params = []
+                
+                if start_date:
+                    where += " AND DATE(timestamp) >= DATE(?)"
+                    params.append(start_date)
+                if end_date:
+                    where += " AND DATE(timestamp) <= DATE(?)"
+                    params.append(end_date)
+
+                # Total entries
+                cursor = conn.execute(f"SELECT COUNT(*) FROM memory_journal {where}", params)
+                stats['total_entries'] = cursor.fetchone()[0]
+
+                # Entries by type
+                cursor = conn.execute(f"""
+                    SELECT entry_type, COUNT(*) as count
+                    FROM memory_journal {where}
+                    GROUP BY entry_type
+                    ORDER BY count DESC
+                """, params)
+                stats['by_type'] = {row[0]: row[1] for row in cursor.fetchall()}
+
+                # Personal vs Project
+                cursor = conn.execute(f"""
+                    SELECT is_personal, COUNT(*) as count
+                    FROM memory_journal {where}
+                    GROUP BY is_personal
+                """, params)
+                personal_stats = {bool(row[0]): row[1] for row in cursor.fetchall()}
+                stats['personal_entries'] = personal_stats.get(True, 0)
+                stats['project_entries'] = personal_stats.get(False, 0)
+
+                # Top tags
+                cursor = conn.execute(f"""
+                    SELECT t.name, COUNT(*) as count
+                    FROM tags t
+                    JOIN entry_tags et ON t.id = et.tag_id
+                    JOIN memory_journal m ON et.entry_id = m.id
+                    {where}
+                    GROUP BY t.name
+                    ORDER BY count DESC
+                    LIMIT 10
+                """, params)
+                stats['top_tags'] = {row[0]: row[1] for row in cursor.fetchall()}
+
+                # Significant entries
+                cursor = conn.execute(f"""
+                    SELECT se.significance_type, COUNT(*) as count
+                    FROM significant_entries se
+                    JOIN memory_journal m ON se.entry_id = m.id
+                    {where}
+                    GROUP BY se.significance_type
+                """, params)
+                stats['significant_entries'] = {row[0]: row[1] for row in cursor.fetchall()}
+
+                # Activity by period
+                if group_by == "day":
+                    date_format = "%Y-%m-%d"
+                elif group_by == "month":
+                    date_format = "%Y-%m"
+                else:  # week
+                    date_format = "%Y-W%W"
+
+                cursor = conn.execute(f"""
+                    SELECT strftime('{date_format}', timestamp) as period, COUNT(*) as count
+                    FROM memory_journal {where}
+                    GROUP BY period
+                    ORDER BY period
+                """, params)
+                stats['activity_by_period'] = {row[0]: row[1] for row in cursor.fetchall()}
+
+                return stats
+
+        loop = asyncio.get_event_loop()
+        stats = await loop.run_in_executor(thread_pool, calculate_stats)
+
+        # Format output
+        output = "📊 **Journal Statistics**\n\n"
+        output += f"**Total Entries:** {stats['total_entries']}\n"
+        output += f"**Personal:** {stats['personal_entries']} | **Project:** {stats['project_entries']}\n\n"
+
+        if stats['by_type']:
+            output += "**Entries by Type:**\n"
+            for entry_type, count in stats['by_type'].items():
+                output += f"  • {entry_type}: {count}\n"
+            output += "\n"
+
+        if stats['top_tags']:
+            output += "**Top Tags:**\n"
+            for tag, count in list(stats['top_tags'].items())[:10]:
+                output += f"  • {tag}: {count}\n"
+            output += "\n"
+
+        if stats['significant_entries']:
+            output += "**Significant Entries:**\n"
+            for sig_type, count in stats['significant_entries'].items():
+                output += f"  • {sig_type}: {count}\n"
+            output += "\n"
+
+        if stats['activity_by_period']:
+            output += f"**Activity by {group_by.capitalize()}:**\n"
+            for period, count in list(stats['activity_by_period'].items())[-10:]:
+                output += f"  • {period}: {count} entries\n"
+
+        return [types.TextContent(type="text", text=output)]
+
+    elif name == "export_entries":
+        format_type = arguments.get("format", "json")
+        start_date = arguments.get("start_date")
+        end_date = arguments.get("end_date")
+        tags = arguments.get("tags", [])
+        entry_types = arguments.get("entry_types", [])
+
+        def get_entries_for_export():
+            with db.get_connection() as conn:
+                sql = """
+                    SELECT DISTINCT m.id, m.entry_type, m.content, m.timestamp, 
+                           m.is_personal, m.project_context, m.related_patterns
+                    FROM memory_journal m
+                    WHERE m.deleted_at IS NULL
+                """
+                params = []
+
+                if start_date:
+                    sql += " AND DATE(m.timestamp) >= DATE(?)"
+                    params.append(start_date)
+                if end_date:
+                    sql += " AND DATE(m.timestamp) <= DATE(?)"
+                    params.append(end_date)
+
+                if tags:
+                    sql += """ AND m.id IN (
+                        SELECT et.entry_id FROM entry_tags et
+                        JOIN tags t ON et.tag_id = t.id
+                        WHERE t.name IN ({})
+                    )""".format(','.join(['?'] * len(tags)))
+                    params.extend(tags)
+
+                if entry_types:
+                    sql += " AND m.entry_type IN ({})".format(','.join(['?'] * len(entry_types)))
+                    params.extend(entry_types)
+
+                sql += " ORDER BY m.timestamp"
+
+                cursor = conn.execute(sql, params)
+                entries = []
+                
+                for row in cursor.fetchall():
+                    entry = dict(row)
+                    entry_id = entry['id']
+                    
+                    # Get tags for this entry
+                    tag_cursor = conn.execute("""
+                        SELECT t.name FROM tags t
+                        JOIN entry_tags et ON t.id = et.tag_id
+                        WHERE et.entry_id = ?
+                    """, (entry_id,))
+                    entry['tags'] = [t[0] for t in tag_cursor.fetchall()]
+                    
+                    entries.append(entry)
+
+                return entries
+
+        loop = asyncio.get_event_loop()
+        entries = await loop.run_in_executor(thread_pool, get_entries_for_export)
+
+        if not entries:
+            return [types.TextContent(type="text", text="📦 No entries found matching the criteria")]
+
+        if format_type == "markdown":
+            output = f"# Journal Export\n\n"
+            output += f"Exported {len(entries)} entries\n"
+            if start_date or end_date:
+                output += f"Date range: {start_date or 'beginning'} to {end_date or 'end'}\n"
+            output += f"\n---\n\n"
+
+            for entry in entries:
+                output += f"## Entry #{entry['id']} - {entry['timestamp']}\n\n"
+                output += f"**Type:** {entry['entry_type']}  \n"
+                output += f"**Personal:** {bool(entry['is_personal'])}  \n"
+                if entry['tags']:
+                    output += f"**Tags:** {', '.join(entry['tags'])}  \n"
+                output += f"\n{entry['content']}\n\n---\n\n"
+        else:  # json
+            output = json.dumps(entries, indent=2)
+
+        return [types.TextContent(
+            type="text",
+            text=f"📦 **Export Complete**\n\n"
+                 f"Format: {format_type.upper()}\n"
+                 f"Entries: {len(entries)}\n\n"
+                 f"```{format_type}\n{output[:2000]}{'...\n[truncated]' if len(output) > 2000 else ''}\n```"
+        )]
+
+    elif name == "visualize_relationships":
+        entry_id = arguments.get("entry_id")  # type: ignore
+        tags = arguments.get("tags", [])
+        depth = arguments.get("depth", 2)
+        limit = arguments.get("limit", 20)
+
+        def generate_graph():
+            with db.get_connection() as conn:
+                # Build the query to get entries and their relationships
+                entries_query = """
+                    SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+                    FROM memory_journal mj
+                    WHERE mj.deleted_at IS NULL
+                """
+                params: List[Any] = []
+
+                if entry_id:
+                    # Get the specified entry and all connected entries up to depth
+                    entries_query = f"""
+                        WITH RECURSIVE connected_entries(id, distance) AS (
+                            SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
+                            UNION
+                            SELECT DISTINCT 
+                                CASE 
+                                    WHEN r.from_entry_id = ce.id THEN r.to_entry_id
+                                    ELSE r.from_entry_id
+                                END,
+                                ce.distance + 1
+                            FROM connected_entries ce
+                            JOIN relationships r ON r.from_entry_id = ce.id OR r.to_entry_id = ce.id
+                            WHERE ce.distance < ?
+                        )
+                        SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+                        FROM memory_journal mj
+                        JOIN connected_entries ce ON mj.id = ce.id
+                        WHERE mj.deleted_at IS NULL
+                        LIMIT ?
+                    """
+                    params = [entry_id, depth, limit]
+                elif tags:
+                    # Filter by tags
+                    placeholders = ','.join(['?' for _ in tags])
+                    entries_query += f"""
+                        AND mj.id IN (
+                            SELECT et.entry_id FROM entry_tags et
+                            JOIN tags t ON et.tag_id = t.id
+                            WHERE t.name IN ({placeholders})
+                        )
+                        LIMIT ?
+                    """
+                    params = tags + [limit]
+                else:
+                    # Get recent entries with relationships
+                    entries_query += """
+                        AND mj.id IN (
+                            SELECT DISTINCT from_entry_id FROM relationships
+                            UNION
+                            SELECT DISTINCT to_entry_id FROM relationships
+                        )
+                        ORDER BY mj.timestamp DESC
+                        LIMIT ?
+                    """
+                    params = [limit]
+
+                cursor = conn.execute(entries_query, params)
+                entries = {row[0]: dict(row) for row in cursor.fetchall()}
+
+                if not entries:
+                    return None, None
+
+                # Get all relationships between these entries
+                entry_ids = list(entries.keys())
+                placeholders = ','.join(['?' for _ in entry_ids])
+                relationships_query = f"""
+                    SELECT from_entry_id, to_entry_id, relationship_type
+                    FROM relationships
+                    WHERE from_entry_id IN ({placeholders})
+                      AND to_entry_id IN ({placeholders})
+                """
+                cursor = conn.execute(relationships_query, entry_ids + entry_ids)
+                relationships = cursor.fetchall()
+
+                return entries, relationships
+
+        loop = asyncio.get_event_loop()
+        entries, relationships = await loop.run_in_executor(thread_pool, generate_graph)
+
+        if not entries:
+            return [types.TextContent(
+                type="text",
+                text="❌ No entries found with relationships matching your criteria"
+            )]
+
+        # Generate Mermaid diagram
+        mermaid = "```mermaid\ngraph TD\n"
+        
+        # Add nodes with truncated content
+        for entry_id_key, entry in entries.items():
+            content_preview = entry['content'][:40].replace('\n', ' ')
+            if len(entry['content']) > 40:
+                content_preview += '...'
+            # Escape special characters for Mermaid
+            content_preview = content_preview.replace('"', "'").replace('[', '(').replace(']', ')')
+            
+            entry_type_short = entry['entry_type'][:20]
+            node_label = f"#{entry_id_key}: {content_preview}<br/>{entry_type_short}"
+            mermaid += f"    E{entry_id_key}[\"{node_label}\"]\n"
+
+        mermaid += "\n"
+
+        # Add relationships
+        relationship_symbols = {
+            'references': '-->',
+            'implements': '==>',
+            'clarifies': '-.->',
+            'evolves_from': '-->',
+            'response_to': '<-->'
+        }
+
+        if relationships:
+            for rel in relationships:
+                from_id, to_id, rel_type = rel
+                arrow = relationship_symbols.get(rel_type, '-->')
+                mermaid += f"    E{from_id} {arrow}|{rel_type}| E{to_id}\n"
+
+        # Add styling
+        mermaid += "\n"
+        for entry_id_key, entry in entries.items():
+            if entry['is_personal']:
+                mermaid += f"    style E{entry_id_key} fill:#E3F2FD\n"
+            else:
+                mermaid += f"    style E{entry_id_key} fill:#FFF3E0\n"
+
+        mermaid += "```"
+
+        summary = f"🔗 **Relationship Graph**\n\n"
+        summary += f"**Entries:** {len(entries)}\n"
+        summary += f"**Relationships:** {len(relationships) if relationships else 0}\n"
+        if entry_id:
+            summary += f"**Root Entry:** #{entry_id}\n"
+            summary += f"**Depth:** {depth}\n"
+        summary += f"\n{mermaid}\n\n"
+        summary += "**Legend:**\n"
+        summary += "- Blue nodes: Personal entries\n"
+        summary += "- Orange nodes: Project entries\n"
+        summary += "- `-->` references / evolves_from | `==>` implements | `-.->` clarifies | `<-->` response_to"
+
+        return [types.TextContent(type="text", text=summary)]
 
     else:
         raise ValueError(f"Unknown tool: {name}")
@@ -1013,6 +1995,97 @@ async def list_prompts() -> List[Prompt]:
                 {
                     "name": "personal_only",
                     "description": "Only show personal entries (true/false)",
+                    "required": False
+                }
+            ]
+        ),
+        Prompt(
+            name="analyze-period",
+            description="Analyze journal entries over a specific time period for insights, patterns, and achievements",
+            arguments=[
+                {
+                    "name": "start_date",
+                    "description": "Start date for analysis (YYYY-MM-DD)",
+                    "required": True
+                },
+                {
+                    "name": "end_date",
+                    "description": "End date for analysis (YYYY-MM-DD)",
+                    "required": True
+                },
+                {
+                    "name": "focus_area",
+                    "description": "Optional focus area (e.g., 'technical', 'personal', 'productivity')",
+                    "required": False
+                }
+            ]
+        ),
+        Prompt(
+            name="prepare-standup",
+            description="Prepare daily standup summary from recent technical journal entries",
+            arguments=[
+                {
+                    "name": "days_back",
+                    "description": "Number of days to look back (default: 1)",
+                    "required": False
+                }
+            ]
+        ),
+        Prompt(
+            name="prepare-retro",
+            description="Prepare sprint retrospective with achievements, learnings, and areas for improvement",
+            arguments=[
+                {
+                    "name": "sprint_start",
+                    "description": "Sprint start date (YYYY-MM-DD)",
+                    "required": True
+                },
+                {
+                    "name": "sprint_end",
+                    "description": "Sprint end date (YYYY-MM-DD)",
+                    "required": True
+                }
+            ]
+        ),
+        Prompt(
+            name="find-related",
+            description="Find entries related to a specific entry using semantic similarity and tags",
+            arguments=[
+                {
+                    "name": "entry_id",
+                    "description": "Entry ID to find related entries for",
+                    "required": True
+                },
+                {
+                    "name": "similarity_threshold",
+                    "description": "Minimum similarity score (0.0-1.0, default: 0.3)",
+                    "required": False
+                }
+            ]
+        ),
+        Prompt(
+            name="weekly-digest",
+            description="Generate a formatted summary of journal entries for a specific week",
+            arguments=[
+                {
+                    "name": "week_offset",
+                    "description": "Week offset (0 = current week, -1 = last week, etc.)",
+                    "required": False
+                }
+            ]
+        ),
+        Prompt(
+            name="goal-tracker",
+            description="Track progress on goals and milestones from journal entries",
+            arguments=[
+                {
+                    "name": "project_name",
+                    "description": "Optional project name to filter by",
+                    "required": False
+                },
+                {
+                    "name": "goal_type",
+                    "description": "Type of goal (milestone, technical_breakthrough, etc.)",
                     "required": False
                 }
             ]
@@ -1124,6 +2197,561 @@ async def get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptRes
             ]
         )
 
+    elif name == "analyze-period":
+        start_date = arguments.get("start_date")
+        end_date = arguments.get("end_date")
+        focus_area = arguments.get("focus_area", "all")
+
+        def get_period_data():
+            with db.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
+                    FROM memory_journal m
+                    WHERE m.deleted_at IS NULL
+                    AND DATE(m.timestamp) >= DATE(?)
+                    AND DATE(m.timestamp) <= DATE(?)
+                    ORDER BY m.timestamp
+                """, (start_date, end_date))
+                
+                entries = [dict(row) for row in cursor.fetchall()]
+                
+                # Get tags for entries
+                for entry in entries:
+                    tag_cursor = conn.execute("""
+                        SELECT t.name FROM tags t
+                        JOIN entry_tags et ON t.id = et.tag_id
+                        WHERE et.entry_id = ?
+                    """, (entry['id'],))
+                    entry['tags'] = [t[0] for t in tag_cursor.fetchall()]
+                
+                # Get significant entries
+                cursor = conn.execute("""
+                    SELECT se.entry_id, se.significance_type
+                    FROM significant_entries se
+                    JOIN memory_journal m ON se.entry_id = m.id
+                    WHERE DATE(m.timestamp) >= DATE(?)
+                    AND DATE(m.timestamp) <= DATE(?)
+                    AND m.deleted_at IS NULL
+                """, (start_date, end_date))
+                
+                significant = {row[0]: row[1] for row in cursor.fetchall()}
+                
+                return entries, significant
+
+        loop = asyncio.get_event_loop()
+        entries, significant = await loop.run_in_executor(thread_pool, get_period_data)
+
+        # Analyze the data
+        analysis = f"# 📊 Period Analysis: {start_date} to {end_date}\n\n"
+        
+        if not entries:
+            analysis += "No entries found for this period.\n"
+        else:
+            # Summary stats
+            personal_count = sum(1 for e in entries if e['is_personal'])
+            project_count = len(entries) - personal_count
+            
+            analysis += f"## Summary\n"
+            analysis += f"- **Total Entries**: {len(entries)}\n"
+            analysis += f"- **Personal**: {personal_count} | **Project**: {project_count}\n"
+            analysis += f"- **Significant Entries**: {len(significant)}\n\n"
+            
+            # Entry types breakdown
+            type_counts = {}
+            for e in entries:
+                type_counts[e['entry_type']] = type_counts.get(e['entry_type'], 0) + 1
+            
+            analysis += f"## Activity Breakdown\n"
+            for entry_type, count in sorted(type_counts.items(), key=lambda x: x[1], reverse=True):
+                analysis += f"- {entry_type}: {count}\n"
+            analysis += "\n"
+            
+            # Significant achievements
+            if significant:
+                analysis += f"## 🏆 Significant Achievements\n"
+                for entry in entries:
+                    if entry['id'] in significant:
+                        analysis += f"- **Entry #{entry['id']}** ({significant[entry['id']]}): {entry['content'][:100]}...\n"
+                analysis += "\n"
+            
+            # Top tags
+            all_tags = {}
+            for e in entries:
+                for tag in e['tags']:
+                    all_tags[tag] = all_tags.get(tag, 0) + 1
+            
+            if all_tags:
+                analysis += f"## 🏷️ Top Tags\n"
+                for tag, count in sorted(all_tags.items(), key=lambda x: x[1], reverse=True)[:10]:
+                    analysis += f"- {tag}: {count}\n"
+                analysis += "\n"
+            
+            # Key insights section
+            analysis += f"## 💡 Ready for Analysis\n"
+            analysis += f"The data above shows your activity from {start_date} to {end_date}. "
+            analysis += f"Use this information to identify patterns, celebrate wins, and plan improvements.\n"
+
+        return types.GetPromptResult(
+            description=f"Period analysis from {start_date} to {end_date}",
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text=analysis)
+                )
+            ]
+        )
+
+    elif name == "prepare-standup":
+        days_back = int(arguments.get("days_back", "1"))
+        
+        def get_standup_data():
+            with db.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT m.id, m.entry_type, m.content, m.timestamp
+                    FROM memory_journal m
+                    WHERE m.deleted_at IS NULL
+                    AND m.is_personal = 0
+                    AND DATE(m.timestamp) >= DATE('now', '-' || ? || ' days')
+                    ORDER BY m.timestamp DESC
+                """, (days_back,))
+                
+                return [dict(row) for row in cursor.fetchall()]
+
+        loop = asyncio.get_event_loop()
+        entries = await loop.run_in_executor(thread_pool, get_standup_data)
+
+        standup = f"# 🎯 Daily Standup Summary\n\n"
+        standup += f"*Last {days_back} day(s) of technical work*\n\n"
+        
+        if not entries:
+            standup += "## ✅ What I Did\n"
+            standup += "No technical entries logged in the specified period.\n\n"
+        else:
+            # Group by achievements, blockers, and plans
+            achievements = []
+            blockers = []
+            others = []
+            
+            for entry in entries:
+                content_lower = entry['content'].lower()
+                if 'blocked' in content_lower or 'issue' in content_lower or 'problem' in content_lower:
+                    blockers.append(entry)
+                elif entry['entry_type'] in ['technical_achievement', 'milestone']:
+                    achievements.append(entry)
+                else:
+                    others.append(entry)
+            
+            if achievements:
+                standup += "## ✅ What I Did\n"
+                for entry in achievements:
+                    preview = entry['content'][:200] + ('...' if len(entry['content']) > 200 else '')
+                    standup += f"- {preview}\n"
+                standup += "\n"
+            
+            if blockers:
+                standup += "## 🚧 Blockers/Issues\n"
+                for entry in blockers:
+                    preview = entry['content'][:200] + ('...' if len(entry['content']) > 200 else '')
+                    standup += f"- {preview}\n"
+                standup += "\n"
+            
+            if others:
+                standup += "## 📝 Other Work\n"
+                for entry in others[:5]:  # Limit to 5
+                    preview = entry['content'][:150] + ('...' if len(entry['content']) > 150 else '')
+                    standup += f"- {preview}\n"
+                standup += "\n"
+
+        standup += "## 🎯 What's Next\n"
+        standup += "*Add your plans for today here*\n"
+
+        return types.GetPromptResult(
+            description="Daily standup preparation",
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text=standup)
+                )
+            ]
+        )
+
+    elif name == "prepare-retro":
+        sprint_start = arguments.get("sprint_start")
+        sprint_end = arguments.get("sprint_end")
+
+        def get_retro_data():
+            with db.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
+                    FROM memory_journal m
+                    WHERE m.deleted_at IS NULL
+                    AND DATE(m.timestamp) >= DATE(?)
+                    AND DATE(m.timestamp) <= DATE(?)
+                    ORDER BY m.timestamp
+                """, (sprint_start, sprint_end))
+                
+                entries = [dict(row) for row in cursor.fetchall()]
+                
+                # Get significant entries
+                cursor = conn.execute("""
+                    SELECT se.entry_id, se.significance_type
+                    FROM significant_entries se
+                    JOIN memory_journal m ON se.entry_id = m.id
+                    WHERE DATE(m.timestamp) >= DATE(?)
+                    AND DATE(m.timestamp) <= DATE(?)
+                    AND m.deleted_at IS NULL
+                """, (sprint_start, sprint_end))
+                
+                significant = {row[0]: row[1] for row in cursor.fetchall()}
+                
+                return entries, significant
+
+        loop = asyncio.get_event_loop()
+        entries, significant = await loop.run_in_executor(thread_pool, get_retro_data)
+
+        retro = f"# 🔄 Sprint Retrospective\n\n"
+        retro += f"**Sprint Period**: {sprint_start} to {sprint_end}\n"
+        retro += f"**Total Entries**: {len(entries)}\n\n"
+
+        if not entries:
+            retro += "No entries found for this sprint period.\n"
+        else:
+            # What went well
+            went_well = [e for e in entries if e['entry_type'] in ['technical_achievement', 'milestone'] or e['id'] in significant]
+            if went_well:
+                retro += "## ✅ What Went Well\n"
+                for entry in went_well:
+                    sig_marker = f" ({significant.get(entry['id'], '')})" if entry['id'] in significant else ""
+                    preview = entry['content'][:200] + ('...' if len(entry['content']) > 200 else '')
+                    retro += f"- **Entry #{entry['id']}**{sig_marker}: {preview}\n"
+                retro += "\n"
+            
+            # What could be improved (looking for entries with problem indicators)
+            improvements = []
+            for entry in entries:
+                content_lower = entry['content'].lower()
+                if any(word in content_lower for word in ['struggled', 'difficult', 'challenge', 'problem', 'issue', 'blocked']):
+                    improvements.append(entry)
+            
+            if improvements:
+                retro += "## 🔧 What Could Be Improved\n"
+                for entry in improvements[:10]:  # Limit to 10
+                    preview = entry['content'][:200] + ('...' if len(entry['content']) > 200 else '')
+                    retro += f"- **Entry #{entry['id']}**: {preview}\n"
+                retro += "\n"
+            
+            # Action items section
+            retro += "## 🎯 Action Items\n"
+            retro += "*Based on the above, what specific actions should we take?*\n"
+            retro += "- [ ] Action item 1\n"
+            retro += "- [ ] Action item 2\n"
+
+        return types.GetPromptResult(
+            description=f"Sprint retrospective for {sprint_start} to {sprint_end}",
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text=retro)
+                )
+            ]
+        )
+
+    elif name == "find-related":
+        entry_id_str = arguments.get("entry_id")
+        similarity_threshold = float(arguments.get("similarity_threshold", "0.3"))
+
+        if not entry_id_str:
+            return types.GetPromptResult(
+                description="Error",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=types.TextContent(type="text", text="❌ Entry ID is required")
+                    )
+                ]
+            )
+
+        try:
+            entry_id = int(entry_id_str)
+        except ValueError:
+            return types.GetPromptResult(
+                description="Error",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=types.TextContent(type="text", text="❌ Entry ID must be a number")
+                    )
+                ]
+            )
+
+        def get_entry_and_tags():
+            with db.get_connection() as conn:
+                # Get the entry
+                cursor = conn.execute("""
+                    SELECT id, content, entry_type
+                    FROM memory_journal
+                    WHERE id = ? AND deleted_at IS NULL
+                """, (entry_id,))
+                entry = cursor.fetchone()
+                
+                if not entry:
+                    return None, []
+                
+                # Get entry tags
+                cursor = conn.execute("""
+                    SELECT t.name FROM tags t
+                    JOIN entry_tags et ON t.id = et.tag_id
+                    WHERE et.entry_id = ?
+                """, (entry_id,))
+                tags = [row[0] for row in cursor.fetchall()]
+                
+                # Find entries with similar tags
+                if tags:
+                    placeholders = ','.join(['?'] * len(tags))
+                    cursor = conn.execute(f"""
+                        SELECT DISTINCT m.id, m.content, m.entry_type, COUNT(*) as tag_matches
+                        FROM memory_journal m
+                        JOIN entry_tags et ON m.id = et.entry_id
+                        JOIN tags t ON et.tag_id = t.id
+                        WHERE t.name IN ({placeholders})
+                        AND m.id != ?
+                        AND m.deleted_at IS NULL
+                        GROUP BY m.id
+                        ORDER BY tag_matches DESC
+                        LIMIT 10
+                    """, (*tags, entry_id))
+                    tag_related = [dict(row) for row in cursor.fetchall()]
+                else:
+                    tag_related = []
+                
+                return dict(entry), tags, tag_related
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(thread_pool, get_entry_and_tags)
+        
+        if result[0] is None:
+            return types.GetPromptResult(
+                description="Error",
+                messages=[
+                    PromptMessage(
+                        role="user",
+                        content=types.TextContent(type="text", text=f"❌ Entry #{entry_id} not found")
+                    )
+                ]
+            )
+
+        entry, tags, tag_related = result
+
+        output = f"# 🔗 Related Entries for Entry #{entry_id}\n\n"
+        output += f"**Original Entry**: {entry['content'][:150]}...\n"
+        output += f"**Type**: {entry['entry_type']}\n"
+        if tags:
+            output += f"**Tags**: {', '.join(tags)}\n"
+        output += "\n---\n\n"
+
+        # Try semantic search if available
+        semantic_related = []
+        if vector_search and vector_search.initialized:
+            try:
+                semantic_results = await vector_search.semantic_search(entry['content'], limit=10, similarity_threshold=similarity_threshold)
+                if semantic_results:
+                    def get_semantic_entries():
+                        entry_ids = [r[0] for r in semantic_results if r[0] != entry_id]
+                        if not entry_ids:
+                            return []
+                        with db.get_connection() as conn:
+                            placeholders = ','.join(['?'] * len(entry_ids))
+                            cursor = conn.execute(f"""
+                                SELECT id, content, entry_type
+                                FROM memory_journal
+                                WHERE id IN ({placeholders})
+                            """, entry_ids)
+                            entries = {row[0]: dict(row) for row in cursor.fetchall()}
+                        
+                        return [(entries[r[0]], r[1]) for r in semantic_results if r[0] in entries]
+                    
+                    semantic_related = await loop.run_in_executor(thread_pool, get_semantic_entries)
+            except Exception as e:
+                print(f"Semantic search error: {e}")
+
+        if semantic_related:
+            output += "## 🧠 Semantically Similar Entries\n"
+            for entry_data, score in semantic_related[:5]:
+                preview = entry_data['content'][:150] + ('...' if len(entry_data['content']) > 150 else '')
+                output += f"- **Entry #{entry_data['id']}** (similarity: {score:.2f}): {preview}\n"
+            output += "\n"
+
+        if tag_related:
+            output += "## 🏷️ Entries with Shared Tags\n"
+            for related in tag_related[:5]:
+                preview = related['content'][:150] + ('...' if len(related['content']) > 150 else '')
+                output += f"- **Entry #{related['id']}** ({related['tag_matches']} shared tags): {preview}\n"
+            output += "\n"
+
+        if not semantic_related and not tag_related:
+            output += "No related entries found.\n"
+
+        return types.GetPromptResult(
+            description=f"Related entries for entry #{entry_id}",
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text=output)
+                )
+            ]
+        )
+
+    elif name == "weekly-digest":
+        week_offset = int(arguments.get("week_offset", "0"))
+        
+        def get_week_entries():
+            with db.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
+                    FROM memory_journal m
+                    WHERE m.deleted_at IS NULL
+                    AND DATE(m.timestamp) >= DATE('now', 'weekday 0', '-7 days', ? || ' weeks')
+                    AND DATE(m.timestamp) < DATE('now', 'weekday 0', ? || ' weeks')
+                    ORDER BY m.timestamp
+                """, (week_offset - 1, week_offset))
+                
+                return [dict(row) for row in cursor.fetchall()]
+
+        loop = asyncio.get_event_loop()
+        entries = await loop.run_in_executor(thread_pool, get_week_entries)
+
+        week_label = "This Week" if week_offset == 0 else f"{abs(week_offset)} Week(s) Ago"
+        
+        digest = f"# 📅 Weekly Digest: {week_label}\n\n"
+        
+        if not entries:
+            digest += "No entries found for this week.\n"
+        else:
+            personal = [e for e in entries if e['is_personal']]
+            project = [e for e in entries if not e['is_personal']]
+            
+            digest += f"**Summary**: {len(entries)} total entries ({len(project)} project, {len(personal)} personal)\n\n"
+            
+            # Group by day
+            from datetime import datetime as dt
+            by_day = {}
+            for entry in entries:
+                day = entry['timestamp'][:10]
+                if day not in by_day:
+                    by_day[day] = []
+                by_day[day].append(entry)
+            
+            for day in sorted(by_day.keys()):
+                day_entries = by_day[day]
+                digest += f"## {day} ({len(day_entries)} entries)\n"
+                for entry in day_entries:
+                    icon = "🔒" if entry['is_personal'] else "💼"
+                    preview = entry['content'][:150] + ('...' if len(entry['content']) > 150 else '')
+                    digest += f"- {icon} **Entry #{entry['id']}** ({entry['entry_type']}): {preview}\n"
+                digest += "\n"
+
+        return types.GetPromptResult(
+            description=f"Weekly digest: {week_label}",
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text=digest)
+                )
+            ]
+        )
+
+    elif name == "goal-tracker":
+        project_name = arguments.get("project_name")
+        goal_type = arguments.get("goal_type")
+
+        def get_goals():
+            with db.get_connection() as conn:
+                sql = """
+                    SELECT m.id, m.entry_type, m.content, m.timestamp, m.project_context,
+                           se.significance_type, se.significance_rating
+                    FROM memory_journal m
+                    LEFT JOIN significant_entries se ON m.id = se.entry_id
+                    WHERE m.deleted_at IS NULL
+                    AND (se.significance_type IS NOT NULL OR m.entry_type = 'milestone')
+                """
+                params = []
+                
+                if goal_type:
+                    sql += " AND se.significance_type = ?"
+                    params.append(goal_type)
+                
+                sql += " ORDER BY m.timestamp DESC"
+                
+                cursor = conn.execute(sql, params)
+                goals = []
+                
+                for row in cursor.fetchall():
+                    goal = dict(row)
+                    # Filter by project name if specified
+                    if project_name and goal['project_context']:
+                        try:
+                            ctx = json.loads(goal['project_context'])
+                            if ctx.get('repo_name', '').lower() != project_name.lower():
+                                continue
+                        except:
+                            pass
+                    goals.append(goal)
+                
+                return goals
+
+        loop = asyncio.get_event_loop()
+        goals = await loop.run_in_executor(thread_pool, get_goals)
+
+        tracker = f"# 🎯 Goal Tracker\n\n"
+        
+        if project_name:
+            tracker += f"**Project**: {project_name}\n"
+        if goal_type:
+            tracker += f"**Goal Type**: {goal_type}\n"
+        
+        tracker += f"\n**Total Milestones/Goals**: {len(goals)}\n\n"
+        
+        if not goals:
+            tracker += "No goals or milestones found matching the criteria.\n"
+        else:
+            # Group by month
+            by_month = {}
+            for goal in goals:
+                month = goal['timestamp'][:7]  # YYYY-MM
+                if month not in by_month:
+                    by_month[month] = []
+                by_month[month].append(goal)
+            
+            for month in sorted(by_month.keys(), reverse=True):
+                month_goals = by_month[month]
+                tracker += f"## {month} ({len(month_goals)} milestones)\n"
+                for goal in month_goals:
+                    sig_type = goal.get('significance_type', goal['entry_type'])
+                    preview = goal['content'][:200] + ('...' if len(goal['content']) > 200 else '')
+                    
+                    # Get project name from context
+                    project = ""
+                    if goal['project_context']:
+                        try:
+                            ctx = json.loads(goal['project_context'])
+                            if ctx.get('repo_name'):
+                                project = f" [{ctx['repo_name']}]"
+                        except:
+                            pass
+                    
+                    tracker += f"- ✅ **Entry #{goal['id']}** ({sig_type}){project}: {preview}\n"
+                tracker += "\n"
+
+        return types.GetPromptResult(
+            description="Goal and milestone tracker",
+            messages=[
+                PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text=tracker)
+                )
+            ]
+        )
+
     else:
         raise ValueError(f"Unknown prompt: {name}")
 
@@ -1136,7 +2764,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="memory-journal",
-                server_version="1.0.2",
+                server_version="1.1.0",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},
