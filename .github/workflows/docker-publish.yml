@@ -104,6 +104,13 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
 
+    - name: Read version from pyproject.toml
+      id: version
+      run: |
+        VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Detected version: $VERSION"
+    
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
@@ -112,14 +119,18 @@ jobs:
         flavor: |
           latest=auto
         tags: |
-          # Tag priority for version tags (v1.1.2):
-          # When pushing tag v1.1.2, create: v1.1.2, v1.1, v1, latest
+          # When pushing Git tag v1.1.2, create: v1.1.2, v1.1, v1
           type=semver,pattern=v{{version}}
           type=semver,pattern=v{{major}}.{{minor}}
           type=semver,pattern=v{{major}}
-          # Create SHA-pinned tags for security (sha256-abc123...)
+          # When pushing to main branch, read version from pyproject.toml
+          type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}}
+          type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}},suffix=-main
+          # Master-timestamped tags for main branch (master-YYYYMMDD-HHMMSS-sha)
+          type=raw,value=master-{{date 'YYYYMMDD-HHmmss'}}-{{sha}},enable={{is_default_branch}}
+          # SHA-pinned tags for security (sha256-fullhash)
           type=sha,prefix=sha256-,format=long
-          # Latest tag for main branch pushes
+          # Latest tag
           type=raw,value=latest,enable={{is_default_branch}}
 
     # Build locally first for security scanning (single platform)
