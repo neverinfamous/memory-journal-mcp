@@ -1,36 +1,46 @@
 # 🛠️ Memory Journal MCP Server
 
-*Last Updated October 4, 2025*
-
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.1.0-green)
+![Version](https://img.shields.io/badge/version-v1.1.2-green)
+![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
 
-*A developer's project journal with Git integration, semantic search, and visual relationship mapping*
+*A production-ready developer journal with knowledge graphs, visual relationship mapping, and intelligent search*
+
+**🎉 Now Production/Stable!** Memory Journal has graduated from beta with powerful relationship mapping, 10x faster startup, and comprehensive documentation.
 
 **🚀 Quick Deploy:**
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - `pip install memory-journal-mcp`
-- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
+  - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
 - **[MCP Registry](https://registry.modelcontextprotocol.io/)** - Discoverable by MCP clients
 
 **📚 Full Documentation:** [GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)
 
 ---
 
-## ✨ What's New in v1.1.0
+## ✨ What's New in v1.1.2
 
-### 🔗 **Entry Relationships**
-Link entries with typed relationships to build your knowledge graph:
-- `evolves_from` - Track how ideas develop
-- `references` - Connect related work
-- `implements` - Link implementations to specs
-- `clarifies` - Add explanations
-- `response_to` - Thread conversations
+### 🎉 **Production/Stable Release**
+Memory Journal has officially graduated from beta! This release includes:
+- 15 MCP tools (up from 13)
+- 8 workflow prompts (up from 6)
+- 3 MCP resources (up from 2)
+- 17 comprehensive wiki pages
+- Automatic schema migrations
+- Production-grade stability
+
+### 🔗 **Entry Relationships & Knowledge Graphs**
+Build connections between your entries with typed relationships:
+- `references` - General connections between work
+- `implements` - Link implementations to specs/designs
+- `clarifies` - Add explanations and elaborations
+- `evolves_from` - Track how ideas develop over time
+- `response_to` - Thread conversations and replies
 
 ### 📊 **Visual Relationship Mapping**
-Generate beautiful Mermaid diagrams to visualize how your entries connect:
+Generate beautiful Mermaid diagrams showing how your work connects:
 
 ```mermaid
 graph TD
@@ -46,24 +56,37 @@ graph TD
     style E57 fill:#FFF3E0
 ```
 
-**New Tools:**
-- `visualize_relationships` - Generate graph visualizations with depth control and tag filtering
+### ⚡ **Performance Revolution**
+- **10x faster startup** - Lazy loading reduces init time from 14s → 2-3s
+- **Thread-safe operations** - Zero race conditions in concurrent tag creation
+- **Database lock prevention** - Single-connection transactions eliminate conflicts
+- **Optimized queries** - Strategic indexes for relationship traversal
+
+### 🛠️ **New Tools** (15 Total, +2 from v1.0)
+- `visualize_relationships` - Generate Mermaid diagrams with depth control
 - `link_entries` - Create typed relationships between entries
-- `update_entry` - Edit existing entries
-- `delete_entry` - Soft or permanent deletion
-- `get_entry_by_id` - Retrieve entries with full relationship details
-- `search_by_date_range` - Time-based filtering
-- `get_statistics` - Comprehensive analytics
-- `export_entries` - JSON/Markdown export
+- Plus comprehensive CRUD, triple search, analytics, and export
 
-**New Resources:**
-- `memory://graph/recent` - Live relationship graph of recent entries
+### 🎯 **Enhanced Workflow Prompts** (8 Total, +2 from v1.0)
+- `find-related` - Discover connected entries via semantic similarity
+- `prepare-standup` - Daily standup summaries
+- `prepare-retro` - Sprint retrospectives
+- `weekly-digest` - Day-by-day weekly summaries
+- `analyze-period` - Deep period analysis with insights
+- `goal-tracker` - Milestone and achievement tracking
+- `get-context-bundle` - Project context with Git/GitHub
+- `get-recent-entries` - Formatted recent entries
 
-**Enhanced Features:**
-- ⚡ **10x faster startup** - Lazy loading of ML dependencies (~2-3 seconds vs 14 seconds)
-- 🔒 **Thread-safe tag creation** - Zero race conditions
-- 🛡️ **Database lock prevention** - Single-connection transactions
-- 🎨 **8 workflow prompts** - Standups, retros, weekly digests, goal tracking
+### 📡 **New Resources** (3 Total, +1 from v1.0)
+- `memory://graph/recent` - **NEW** Live Mermaid diagram of recent relationships
+- `memory://recent` - 10 most recent entries
+- `memory://significant` - Significant milestones and breakthroughs
+
+### 🗄️ **Database Improvements**
+- Automatic schema migrations (seamless v1.0 → v1.1 upgrades)
+- Soft delete support with `deleted_at` column
+- New `relationships` table with cascading deletes
+- Enhanced indexes for optimal query performance
 
 ---
 
@@ -118,31 +141,77 @@ mkdir data
 
 ## 📋 Core Capabilities
 
-### 🛠️ **15 MCP Tools**
-Complete CRUD operations, triple search system (FTS5 + date + semantic), relationships, analytics, and data export.
+### 🛠️ **15 MCP Tools** - Complete Development Workflow
+**Entry Management:**
+- `create_entry` / `create_entry_minimal` - Create entries with auto-context
+- `update_entry` - Edit existing entries (thread-safe)
+- `delete_entry` - Soft or permanent deletion
+- `get_entry_by_id` - Retrieve with full relationship details
 
-### 🎯 **8 Workflow Prompts**
-Interactive prompts for standups, retrospectives, weekly digests, period analysis, goal tracking, and context bundles.
+**Search & Discovery:**
+- `search_entries` - FTS5 full-text search with highlighting
+- `search_by_date_range` - Time-based filtering with tags
+- `semantic_search` - ML-powered similarity (optional)
+- `get_recent_entries` - Quick access to recent work
 
-### 🔍 **Triple Search System**
-- **Full-text search** - SQLite FTS5 with highlighting
-- **Date range search** - Time-based filtering with tags
-- **Semantic search** - FAISS vector similarity (optional)
+**Relationships & Visualization:**
+- `link_entries` - Create typed relationships
+- `visualize_relationships` - Generate Mermaid diagrams
 
-### 🔗 **Entry Relationships**
-Build a knowledge graph with typed relationships and visualize connections with Mermaid diagrams.
+**Organization & Analytics:**
+- `list_tags` - Tag usage statistics
+- `get_statistics` - Comprehensive analytics by time period
+- `export_entries` - JSON/Markdown export
+- `test_simple` - Connectivity testing
 
-### 📊 **Comprehensive Analytics**
-Track entry counts, top tags, activity patterns by week/month, and significant milestones.
+### 🎯 **8 Workflow Prompts** - Automated Productivity
+- **`prepare-standup`** - Daily standup summaries from recent entries
+- **`prepare-retro`** - Sprint retrospectives with achievements and learnings
+- **`weekly-digest`** - Day-by-day weekly summaries
+- **`analyze-period`** - Deep analysis with pattern insights
+- **`goal-tracker`** - Milestone and achievement tracking
+- **`find-related`** - Discover connected entries via semantic similarity
+- **`get-context-bundle`** - Complete project context (Git + GitHub)
+- **`get-recent-entries`** - Formatted display of recent work
 
-### 🎨 **Visual Relationship Graphs**
-Generate Mermaid diagrams showing how entries connect, with customizable depth and filtering.
+### 🔍 **Triple Search System** - Find Anything, Any Way
+1. **Full-text search** - SQLite FTS5 with result highlighting and rank ordering
+2. **Date range search** - Time-based filtering with tag and type filters
+3. **Semantic search** - FAISS vector similarity for concept-based discovery (optional)
 
-### 🔄 **Git & GitHub Integration**
-Auto-captures commits, branches, repo info, and recent issues for project context.
+### 🔗 **Entry Relationships** - Build Your Knowledge Graph
+- **5 relationship types** - references, implements, clarifies, evolves_from, response_to
+- **Bidirectional linking** - See both incoming and outgoing relationships
+- **Graph visualization** - Generate Mermaid diagrams with depth control
+- **Smart discovery** - Find related entries via semantic similarity and shared tags
 
-### 📦 **Data Export**
-Export to JSON or Markdown with flexible filtering by date, tags, and entry types.
+### 📊 **Comprehensive Analytics** - Track Your Progress
+- Entry counts by type (achievements, notes, milestones, etc.)
+- Top tags with usage statistics
+- Activity patterns by day/week/month
+- Significant milestone tracking
+- Export-ready statistics for reports
+
+### 🎨 **Visual Relationship Graphs** - See How Work Connects
+- **3 visualization modes** - Entry-centric, tag-based, recent activity
+- **Customizable depth** - Control relationship traversal (1-3 hops)
+- **Tag filtering** - Focus on specific projects or topics
+- **Color-coded nodes** - Personal (blue) vs Project (orange) entries
+- **Typed arrows** - Different styles for different relationship types
+
+### 🔄 **Git & GitHub Integration** - Automatic Context Capture
+- Repository name and path
+- Current branch
+- Latest commit (hash + message)
+- Recent GitHub issues (via `gh` CLI)
+- Working directory
+- Timestamp for all context
+
+### 📦 **Data Export** - Own Your Data
+- **JSON format** - Machine-readable with full metadata
+- **Markdown format** - Human-readable with beautiful formatting
+- **Flexible filtering** - By date range, tags, entry types
+- **Portable** - Take your journal anywhere
 
 ---
 
