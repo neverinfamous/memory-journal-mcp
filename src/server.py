@@ -126,6 +126,15 @@ class MemoryJournalDB:
 
     def _run_migrations(self, conn):
         """Run database migrations for schema updates."""
+        # Check if memory_journal table exists first
+        cursor = conn.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='memory_journal'
+        """)
+        if not cursor.fetchone():
+            # Table doesn't exist yet, skip migrations (schema will create it)
+            return
+        
         # Check if deleted_at column exists
         cursor = conn.execute("PRAGMA table_info(memory_journal)")
         columns = {row[1] for row in cursor.fetchall()}
