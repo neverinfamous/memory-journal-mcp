@@ -123,7 +123,6 @@ jobs:
           type=semver,pattern=v{{version}}
           # When pushing to main branch, read version from pyproject.toml
           type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}}
-          type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}},suffix=-main
           # Master-timestamped tags for main branch (master-YYYYMMDD-HHMMSS-sha)
           type=raw,value=master-{{date 'YYYYMMDD-HHmmss'}}-{{sha}},enable={{is_default_branch}}
           # SHA-pinned tags for security (sha256-fullhash)
