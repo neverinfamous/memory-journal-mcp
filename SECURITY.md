@@ -138,4 +138,16 @@ If you discover a security vulnerability, please:
 - **Dependency updates**: Keep Python packages updated
 - **Security patches**: Apply host system security updates
 
+### **Recent Security Fixes**
+
+#### **CVE-2025-8869: pip Symbolic Link Vulnerability** (Fixed: October 5, 2025)
+- **Issue**: pip 25.2 missing checks on symbolic link extraction in fallback tar implementation
+- **Severity**: MEDIUM
+- **Mitigation**: 
+  - ✅ Using Python 3.13 which implements PEP 706 (secure tar extraction)
+  - ✅ Explicitly upgrading pip to >=25.0 in all build processes
+  - ✅ Updated CI/CD pipelines to enforce pip version requirements
+- **Impact**: No known exploitation; proactive security measure
+- **Reference**: [CVE-2025-8869](https://nvd.nist.gov/vuln/detail/CVE-2025-8869)
+
 The Memory Journal MCP server is designed with **security-first principles** to protect your personal journal data while maintaining excellent performance and usability.

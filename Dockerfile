@@ -27,8 +27,9 @@ RUN apk add --no-cache \
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
 
-# Upgrade setuptools to fix security vulnerabilities
-RUN pip install --no-cache-dir --upgrade setuptools>=78.1.1
+# Upgrade pip and setuptools to fix security vulnerabilities
+# CVE-2025-8869: Upgrade pip to latest version (Python 3.13 implements PEP 706)
+RUN pip install --no-cache-dir --upgrade pip>=25.0 setuptools>=78.1.1
 
 # Install core dependencies first
 RUN pip install --no-cache-dir mcp aiohttp aiohttp-cors numpy

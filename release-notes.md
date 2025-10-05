@@ -138,6 +138,9 @@ Resources provide always-updated context that can be embedded directly in prompt
 - **Migration Logic (v1.1.2)** - Fixed migration check to properly handle fresh database installations
 - **Mermaid Syntax** - Corrected invalid arrow syntax for proper diagram rendering across all platforms
 
+**Security Patches:**
+- **CVE-2025-8869 (Oct 5, 2025)** - Mitigated pip symbolic link vulnerability by explicitly upgrading to pip >=25.0 and leveraging Python 3.13's PEP 706 implementation for secure tar extraction
+
 **Stability Enhancements:**
 - Thread-safe tag creation prevents duplicate key violations
 - Improved error handling for Git operations (graceful degradation when not in a repository)
