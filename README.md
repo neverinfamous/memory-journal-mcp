@@ -343,11 +343,24 @@ memory://graph/recent  // Most recent 20 entries with relationships
 - [Examples & Tutorials](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)
 - [Architecture Deep Dive](https://github.com/neverinfamous/memory-journal-mcp/wiki/Architecture)
 
+### GitHub Gists: Practical Examples & Use Cases
+
+**[→ View All Memory Journal Gists](https://gist.github.com/neverinfamous/ffedec3bdb5da08376a381733b80c1a7)**
+
+Explore 5 curated gists with real-world examples and implementation patterns:
+
+1. **[Complete Feature Showcase](https://gist.github.com/neverinfamous/ffedec3bdb5da08376a381733b80c1a7)** - All 15 tools, 8 prompts, and 3 resources
+2. **[Relationship Mapping & Knowledge Graphs](https://gist.github.com/neverinfamous/e5f3638dc76b2536df04a02af9647abd)** - Build knowledge graphs with typed relationships
+3. **[Triple Search System Guide](https://gist.github.com/neverinfamous/a484535fea7014e8822887abbd8abb38)** - Master FTS5, date range, and semantic search
+4. **[Workflow Automation & Prompts](https://gist.github.com/neverinfamous/5d77fb0bf37179effcdc64ecce4f4de2)** - Standup, retrospectives, and weekly digests
+5. **[Git Integration & Context Capture](https://gist.github.com/neverinfamous/bf31ca9f0949993275d9d947a2284598)** - Automatic project context from Git and GitHub
+
 ---
 
 ## 🔗 Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
+- **[GitHub Gists](https://gist.github.com/neverinfamous/ffedec3bdb5da08376a381733b80c1a7)** - 5 practical examples and use cases
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Container images
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - Python package
 - **[MCP Registry](https://registry.modelcontextprotocol.io/)** - Official MCP listing

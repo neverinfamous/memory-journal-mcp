@@ -6,8 +6,8 @@ FROM python:3.13-alpine
 # Set working directory
 WORKDIR /app
 
-# Upgrade OpenSSL and curl to patched versions FIRST (CVE-2025-9230, CVE-2025-9086 fixes)
-RUN apk add --no-cache --upgrade openssl=3.5.4-r0 curl=8.14.1-r2
+# Upgrade OpenSSL, curl, and expat to latest patched versions FIRST (CVE fixes)
+RUN apk add --no-cache --upgrade openssl=3.5.4-r0 curl=8.14.1-r2 expat=2.7.3-r0
 
 # Install system dependencies for git and ML libraries
 RUN apk add --no-cache \
@@ -21,8 +21,7 @@ RUN apk add --no-cache \
     libffi-dev \
     openssl-dev \
     python3-dev \
-    && apk upgrade \
-    && apk add --no-cache expat>=2.7.2-r0
+    && apk upgrade
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
