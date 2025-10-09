@@ -1,4 +1,4 @@
-# Memory Journal MCP v1.1.2 - Production/Stable 🎉
+# Memory Journal MCP v1.1.3 - Production/Stable 🎉
 
 ## 🌟 Major Release Highlights
 
@@ -149,9 +149,9 @@ Resources provide always-updated context that can be embedded directly in prompt
 - Async Git context capture prevents UI blocking
 - Input validation for all tool parameters
 
-## 📊 What's Changed: v1.0.x → v1.1.2
+## 📊 What's Changed: v1.0.x → v1.1.3
 
-| Feature | v1.0.2 (Beta) | v1.1.2 (Stable) |
+| Feature | v1.0.2 (Beta) | v1.1.3 (Stable) |
 |---------|---------------|-----------------|
 | **Status** | Beta | Production/Stable |
 | **Tools** | 13 | 15 (+2 new) |
@@ -169,7 +169,7 @@ Resources provide always-updated context that can be embedded directly in prompt
 ## 📚 Documentation Links
 - **Wiki**: https://github.com/neverinfamous/memory-journal-mcp/wiki
 - **GitHub**: https://github.com/neverinfamous/memory-journal-mcp
-- **PyPI**: https://pypi.org/project/memory-journal-mcp/1.1.2/
+- **PyPI**: https://pypi.org/project/memory-journal-mcp/1.1.3/
 - **Docker Hub**: https://hub.docker.com/r/writenotenow/memory-journal-mcp
 
 ## 📦 Installation
@@ -261,5 +261,5 @@ Stay tuned for these exciting features! Follow the project on [GitHub](https://g
 
 ---
 
-**Full Changelog**: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.0.2...v1.1.2
+**Full Changelog**: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.0.2...v1.1.3
 

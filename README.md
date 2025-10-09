@@ -1,9 +1,9 @@
 # 🛠️ Memory Journal MCP Server
-Last Updated October 4, 2025 3:20 PM EST
+Last Updated October 8, 2025 3:50 PM EST
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-v1.1.2-green)
+![Version](https://img.shields.io/badge/version-v1.1.3-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
@@ -21,7 +21,7 @@ Last Updated October 4, 2025 3:20 PM EST
 
 ---
 
-## ✨ What's New in v1.1.2
+## ✨ What's New in v1.1.3
 
 ### 🎉 **Production/Stable Release**
 Memory Journal has officially graduated from beta! This release includes:

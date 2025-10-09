@@ -1,6 +1,6 @@
 # Docker Deployment Setup Guide
 
-*Last Updated: October 8, 2025 - Production/Stable v1.1.2*
+*Last Updated: October 9, 2025 - Production/Stable v1.1.3*
 
 ## 🚀 Automated Docker Deployment
 
@@ -9,7 +9,7 @@ This repository is configured for **automatic Docker image deployment** to Docke
 ## 📋 Current Status
 
 ### ✅ Production-Ready Deployment
-- **Version**: v1.1.2 (Production/Stable)
+- **Version**: v1.1.3 (Production/Stable)
 - **Base Image**: `python:3.13-alpine` (Alpine Linux 3.22)
 - **Docker Hub**: `writenotenow/memory-journal-mcp`
 - **Image Size**: ~225MB (Alpine-based with full ML capabilities)
@@ -69,7 +69,7 @@ Before the Docker deployment workflow can run, you need to add these secrets to 
 ### Tags Generated on Each Push
 When you push to `main` branch, the workflow automatically creates:
 - `latest` - Always points to most recent main branch build
-- `v1.1.2` - Current version from pyproject.toml
+- `v1.1.3` - Current version from pyproject.toml
 - `master-YYYYMMDD-HHMMSS-sha` - Timestamped build (e.g., `master-20251008-212041-294c0e5`)
 - `sha256-<git-hash>` - Git commit SHA pinned tag (e.g., `sha256-294c0e5c94dee...`)
 
@@ -214,8 +214,8 @@ docker run --rm -i \
 #### Test Specific Version
 ```bash
 # Test by version tag
-docker pull writenotenow/memory-journal-mcp:v1.1.2
-docker run --rm writenotenow/memory-journal-mcp:v1.1.2 python -c "print('v1.1.2 works!')"
+docker pull writenotenow/memory-journal-mcp:v1.1.3
+docker run --rm writenotenow/memory-journal-mcp:v1.1.3 python -c "print('v1.1.3 works!')"
 
 # Test by commit SHA
 docker pull writenotenow/memory-journal-mcp:sha256-294c0e5c94dee...
