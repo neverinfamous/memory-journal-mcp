@@ -7,6 +7,7 @@ Last Updated October 13, 2025 1:55 AM EST
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Version](https://img.shields.io/badge/version-v1.1.3-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/servers/io.github.neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
 
@@ -16,8 +17,8 @@ Last Updated October 13, 2025 1:55 AM EST
 
 **🚀 Quick Deploy:**
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - `pip install memory-journal-mcp`
-  - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
-- **[MCP Registry](https://registry.modelcontextprotocol.io/)** - Discoverable by MCP clients
+- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
+- **[MCP Registry](https://registry.modelcontextprotocol.io/servers/io.github.neverinfamous/memory-journal-mcp)** - Discoverable by MCP clients
 
 **📚 Full Documentation:** [GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)
 
