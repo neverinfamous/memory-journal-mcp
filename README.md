@@ -22,7 +22,7 @@ Last Updated October 13, 2025 6:31 AM EST - Production/Stable v1.1.3
 **🚀 Quick Deploy:**
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - `pip install memory-journal-mcp`
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
-- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers/io.github.neverinfamous/memory-journal-mcp)** - Discoverable by MCP clients
+- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)** - Discoverable by MCP clients
 
 **📚 Full Documentation:** [GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)
 
