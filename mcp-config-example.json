@@ -7,7 +7,7 @@
         "--rm", 
         "-i",
         "-v", "./data:/app/data",
-        "writenotenow/memory-journal-mcp:lite",
+        "writenotenow/memory-journal-mcp:latest",
         "python", "src/server.py"
       ]
     }
