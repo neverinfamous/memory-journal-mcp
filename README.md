@@ -1,15 +1,19 @@
-# 🛠️ Memory Journal MCP Server
-Last Updated October 13, 2025 2:32 AM EST
+# Memory Journal MCP Server
+
+Last Updated October 13, 2025 6:31 AM EST - Production/Stable v1.1.3
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
-![License](https://img.shields.io/badge/license-MIT-blue)
+[![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 ![Version](https://img.shields.io/badge/version-v1.1.3-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers/io.github.neverinfamous/memory-journal-mcp)
-[![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
+[![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
+[![CodeQL](https://img.shields.io/badge/CodeQL-Passing-brightgreen.svg)](https://github.com/neverinfamous/memory-journal-mcp/security/code-scanning)
+[![Type Safety](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
 *A production-ready developer journal with knowledge graphs, visual relationship mapping, and intelligent search*
 
