@@ -320,6 +320,7 @@ memory://graph/recent  // Most recent 20 entries with relationships
 ## 🔧 Technical Highlights
 
 ### Performance & Security
+- **Python 3.14** - Latest Python with free-threaded support (PEP 779), deferred annotations (PEP 649), and performance optimizations
 - **10x faster startup** - Lazy loading of ML dependencies (2-3s vs 14s)
 - **Thread-safe operations** - Zero race conditions in tag creation
 - **WAL mode** - Better concurrency and crash recovery
