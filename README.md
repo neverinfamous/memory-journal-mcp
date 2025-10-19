@@ -102,11 +102,15 @@ graph TD
 
 ### Option 1: PyPI (Fastest - 30 seconds)
 
-```bash
-# Install
-pip install memory-journal-mcp
+**Step 1: Install the package**
 
-# Add to ~/.cursor/mcp.json
+```bash
+pip install memory-journal-mcp
+```
+
+**Step 2: Add to ~/.cursor/mcp.json**
+
+```json
 {
   "mcpServers": {
     "memory-journal": {
@@ -114,20 +118,29 @@ pip install memory-journal-mcp
     }
   }
 }
-
-# Restart Cursor → Start journaling!
 ```
+
+**Step 3: Restart Cursor**
+
+Restart Cursor or your MCP client, then start journaling!
 
 ### Option 2: Docker (Full Features - 2 minutes)
 
+**Step 1: Pull the Docker image**
+
 ```bash
-# Pull image
 docker pull writenotenow/memory-journal-mcp:latest
+```
 
-# Create data directory
+**Step 2: Create data directory**
+
+```bash
 mkdir data
+```
 
-# Add to ~/.cursor/mcp.json
+**Step 3: Add to ~/.cursor/mcp.json**
+
+```json
 {
   "mcpServers": {
     "memory-journal": {
@@ -141,9 +154,11 @@ mkdir data
     }
   }
 }
-
-# Restart Cursor → Start journaling!
 ```
+
+**Step 4: Restart Cursor**
+
+Restart Cursor or your MCP client, then start journaling!
 
 ---
 
@@ -165,7 +180,9 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&confi
 - ✅ ~500MB disk space for data directory
 
 ### **Configuration**
-After installation, Cursor will use this Docker-based configuration:
+
+After installation, Cursor will use this Docker-based configuration. If you prefer manual setup, add this to your `~/.cursor/mcp.json`:
+
 ```json
 {
   "memory-journal": {
