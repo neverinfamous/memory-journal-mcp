@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated October 13, 2025 6:31 AM EST - Production/Stable v1.1.3
+Last Updated October 18, 2025 8:24 PM EST - Production/Stable v1.1.3
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -144,6 +144,43 @@ mkdir data
 
 # Restart Cursor → Start journaling!
 ```
+
+---
+
+## ⚡ **Install to Cursor IDE**
+
+### **One-Click Installation**
+
+Click the button below to install directly into Cursor:
+
+[![Install to Cursor](https://img.shields.io/badge/Install%20to%20Cursor-Click%20Here-blue?style=for-the-badge)](cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbCI6eyJhcmdzIjpbInJ1biIsIi0tcm0iLCItaSIsIi12IiwiLi9kYXRhOi9hcHAvZGF0YSIsIndyaXRlbm90ZW5vdy9tZW1vcnktam91cm5hbC1tY3A6bGF0ZXN0IiwicHl0aG9uIiwic3JjL3NlcnZlci5weSJdLCJjb21tYW5kIjoiZG9ja2VyIn19)
+
+Or copy this deep link:
+```
+cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbCI6eyJhcmdzIjpbInJ1biIsIi0tcm0iLCItaSIsIi12IiwiLi9kYXRhOi9hcHAvZGF0YSIsIndyaXRlbm90ZW5vdy9tZW1vcnktam91cm5hbC1tY3A6bGF0ZXN0IiwicHl0aG9uIiwic3JjL3NlcnZlci5weSJdLCJjb21tYW5kIjoiZG9ja2VyIn19
+```
+
+### **Prerequisites**
+- ✅ Docker installed and running
+- ✅ ~500MB disk space for data directory
+
+### **Configuration**
+After installation, Cursor will use this Docker-based configuration:
+```json
+{
+  "memory-journal": {
+    "command": "docker",
+    "args": [
+      "run", "--rm", "-i",
+      "-v", "./data:/app/data",
+      "writenotenow/memory-journal-mcp:latest",
+      "python", "src/server.py"
+    ]
+  }
+}
+```
+
+**📖 [See Full Installation Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation)**
 
 ---
 
