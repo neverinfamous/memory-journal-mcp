@@ -27,7 +27,10 @@ RUN apk add --no-cache \
 COPY requirements.txt .
 
 # Upgrade pip and setuptools to fix security vulnerabilities
-# CVE-2025-8869: Upgrade pip to latest version (Python 3.13 implements PEP 706)
+# CVE-2025-8869: Insecure tar extraction in pip without PEP 706
+# Mitigated by: (1) pip>=25.0, (2) Python 3.14-alpine implements PEP 706
+# See: https://github.com/advisories/GHSA-mm33-vqpx-wvg7
+# Reference: https://peps.python.org/pep-0706/
 RUN pip install --no-cache-dir --upgrade pip>=25.0 setuptools>=78.1.1
 
 # Install core dependencies first

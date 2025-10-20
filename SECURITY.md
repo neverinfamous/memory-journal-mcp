@@ -140,14 +140,23 @@ If you discover a security vulnerability, please:
 
 ### **Recent Security Fixes**
 
-#### **CVE-2025-8869: pip Symbolic Link Vulnerability** (Fixed: October 5, 2025)
-- **Issue**: pip 25.2 missing checks on symbolic link extraction in fallback tar implementation
+#### **CVE-2025-8869: pip Symbolic Link Vulnerability** (Fixed: October 20, 2025)
+- **Issue**: pip missing checks on symbolic link extraction in fallback tar implementation (when Python doesn't implement PEP 706)
 - **Severity**: MEDIUM
-- **Mitigation**: 
-  - ✅ Using Python 3.13 which implements PEP 706 (secure tar extraction)
-  - ✅ Explicitly upgrading pip to >=25.0 in all build processes
-  - ✅ Updated CI/CD pipelines to enforce pip version requirements
-- **Impact**: No known exploitation; proactive security measure
-- **Reference**: [CVE-2025-8869](https://nvd.nist.gov/vuln/detail/CVE-2025-8869)
+- **Affected Package**: pip <25.0 (with Python versions without PEP 706 support)
+- **Comprehensive Mitigations**:
+  - ✅ **Python Version**: Minimum requirement bumped to 3.10.12+ (all versions ≥3.10.12 implement PEP 706)
+  - ✅ **pip Upgrade**: Explicitly upgrading to pip>=25.0 in all build processes (CI, Docker, local)
+  - ✅ **Docker Base Image**: Using Python 3.14-alpine which fully implements PEP 706
+  - ✅ **CI/CD Pipelines**: Updated to test against minimum Python 3.10.12
+  - ✅ **pyproject.toml**: Enforced minimum Python version requirement
+- **Technical Details**: 
+  - PEP 706 provides secure tar extraction with symlink validation
+  - When Python implements PEP 706, pip uses the secure implementation
+  - Otherwise, pip falls back to its own implementation which had the vulnerability
+  - Our fix addresses both the pip version and underlying Python version
+- **Verification**: Run `pip --version` to confirm pip>=25.0
+- **Impact**: Prevents potential exploitation during package installation via tar extraction
+- **Reference**: [CVE-2025-8869](https://nvd.nist.gov/vuln/detail/CVE-2025-8869) | [PEP 706](https://peps.python.org/pep-0706/)
 
 The Memory Journal MCP server is designed with **security-first principles** to protect your personal journal data while maintaining excellent performance and usability.
