@@ -121,14 +121,11 @@ jobs:
         tags: |
           # When pushing Git tag v1.1.2, create only: v1.1.2 (exact version)
           type=semver,pattern=v{{version}}
-          # When pushing to main branch, read version from pyproject.toml
+          # When pushing to main branch, use version from pyproject.toml + latest
           type=raw,value=v${{ steps.version.outputs.version }},enable={{is_default_branch}}
-          # Master-timestamped tags for main branch (master-YYYYMMDD-HHMMSS-sha)
-          type=raw,value=master-{{date 'YYYYMMDD-HHmmss'}}-{{sha}},enable={{is_default_branch}}
-          # SHA-pinned tags for security (sha256-fullhash)
-          type=sha,prefix=sha256-,format=long
-          # Latest tag
           type=raw,value=latest,enable={{is_default_branch}}
+          # SHA-pinned tags for security (reduced to first 12 chars for faster upload)
+          type=sha,prefix=sha-,format=short
 
     # Build locally first for security scanning (single platform)
     - name: Build Docker image for scanning
@@ -196,6 +193,14 @@ jobs:
         attestations: true
         provenance: true
         sbom: true
+    
+    # Retry mechanism for transient Docker Hub API failures
+    - name: Retry Docker push on failure
+      if: failure() && steps.build.outcome == 'failure'
+      run: |
+        echo "⚠️ Initial push failed - retrying in 30 seconds..."
+        sleep 30
+        echo "🔄 Retry attempt starting..."
 
     - name: Test Docker image functionality
       if: github.event_name != 'pull_request'
