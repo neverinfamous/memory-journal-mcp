@@ -3,11 +3,11 @@
   "name": "io.github.neverinfamous/memory-journal-mcp",
   "title": "Memory Journal MCP",
   "description": "Developer journal with knowledge graphs, relationships, Git context, and semantic search",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "docker.io/writenotenow/memory-journal-mcp:v1.2.1",
+      "identifier": "docker.io/writenotenow/memory-journal-mcp:v1.2.2",
       "transport": {
         "type": "stdio"
       }

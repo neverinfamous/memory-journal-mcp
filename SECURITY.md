@@ -140,6 +140,28 @@ If you discover a security vulnerability, please:
 
 ### **Recent Security Fixes**
 
+#### **CodeQL #110, #111: URL Substring Sanitization Vulnerability** (Fixed: October 26, 2025)
+- **Issue**: Incomplete URL substring sanitization in GitHub remote URL parsing
+- **Severity**: MEDIUM
+- **Affected Code**: `_extract_repo_owner_from_remote()` function in server.py
+- **Vulnerability Details**:
+  - Used unsafe substring checks: `'github.com' in remote_url` and `'github.com/' in remote_url`
+  - Could allow malicious URLs to bypass hostname validation
+  - Example bypasses: `http://evil.com/github.com/fake/repo` or `http://github.com.evil.com/fake/repo`
+- **Mitigation**:
+  - ✅ **Proper URL Parsing**: Implemented `urllib.parse.urlparse()` for HTTPS/HTTP URLs
+  - ✅ **Exact Hostname Matching**: Validates `parsed.hostname == 'github.com'` (not substring or endswith)
+  - ✅ **SSH URL Validation**: Explicit `startswith('git@github.com:')` check for SSH format
+  - ✅ **Defense in Depth**: Returns `None` for any non-GitHub URLs instead of attempting to parse
+- **Technical Details**:
+  - Vulnerability: CWE-20 (Improper Input Validation)
+  - CodeQL Rule: `py/incomplete-url-substring-sanitization`
+  - Context: Limited impact as this only parses Git remote URLs from local repositories
+  - However, could be exploited if an attacker could manipulate Git config files
+- **Verification**: Review `_extract_repo_owner_from_remote()` function for proper urlparse usage
+- **Impact**: Prevents URL spoofing attacks in repository owner detection
+- **Reference**: [OWASP: SSRF](https://owasp.org/www-community/attacks/Server_Side_Request_Forgery) | [CWE-20](https://cwe.mitre.org/data/definitions/20.html)
+
 #### **CVE-2025-58050: PCRE2 Heap Buffer Overflow** (Fixed: October 26, 2025)
 - **Issue**: PCRE2 heap-buffer-overflow read in match_ref due to missing boundary restoration
 - **Severity**: CRITICAL

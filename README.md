@@ -1,13 +1,13 @@
 # Memory Journal MCP Server
 
-Last Updated October 26, 2025 - Production/Stable v1.2.1
+Last Updated October 26, 2025 - Production/Stable v1.2.2
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v1.2.1-green)
+![Version](https://img.shields.io/badge/version-v1.2.2-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
@@ -27,6 +27,25 @@ Last Updated October 26, 2025 - Production/Stable v1.2.1
 **📚 Full Documentation:** [GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)
 
 **📰 [Read the v1.1.2 Release Article](https://adamic.tech/articles/2025-10-04-memory-journal-mcp-v1-1-2)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
+
+---
+
+## ✨ What's New in v1.2.2 (Security Patch - October 26, 2025)
+
+### 🔒 **Security Fix: URL Parsing Vulnerability (CodeQL #110, #111)**
+Fixed incomplete URL substring sanitization in GitHub remote URL parsing:
+- **Proper URL validation** - Implemented `urllib.parse.urlparse()` with exact hostname matching
+- **Prevented URL spoofing** - Blocks malicious URLs like `http://evil.com/github.com/fake/repo`
+- **Enhanced security** - SSH URLs use explicit prefix validation, HTTPS URLs use proper parsing
+- **No breaking changes** - Drop-in replacement maintaining full compatibility
+
+### Technical Details
+- **Vulnerability**: CWE-20 (Improper Input Validation)
+- **Severity**: Medium (limited to Git remote URL parsing in local repositories)
+- **Fix**: Replaced substring checks (`'github.com' in url`) with proper `urlparse()` validation
+- **Reference**: [CodeQL Rule py/incomplete-url-substring-sanitization](https://codeql.github.com/codeql-query-help/python/py-incomplete-url-substring-sanitization/)
+
+This security patch maintains full compatibility with v1.2.x - simply upgrade to receive the fix.
 
 ---
 

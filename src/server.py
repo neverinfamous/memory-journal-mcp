@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor
 import pickle
+from urllib.parse import urlparse
 
 # Import numpy only when needed for vector operations
 try:
@@ -650,7 +651,11 @@ class GitHubProjectsIntegration:
         return headers
     
     def _extract_repo_owner_from_remote(self, repo_path: str) -> Optional[str]:
-        """Extract repository owner from Git remote URL."""
+        """Extract repository owner from Git remote URL.
+        
+        Security: Uses proper URL parsing to prevent URL substring sanitization bypasses.
+        Validates that the hostname is exactly 'github.com' (not a subdomain or malicious domain).
+        """
         try:
             result = subprocess.run(
                 ['git', 'config', '--get', 'remote.origin.url'],
@@ -659,19 +664,39 @@ class GitHubProjectsIntegration:
             )
             if result.returncode == 0:
                 remote_url = result.stdout.strip()
+                
                 # Parse GitHub URL formats:
                 # https://github.com/owner/repo.git
                 # git@github.com:owner/repo.git
-                if 'github.com' in remote_url:
-                    if remote_url.startswith('git@github.com:'):
-                        parts = remote_url.replace('git@github.com:', '').replace('.git', '').split('/')
-                    elif 'github.com/' in remote_url:
-                        parts = remote_url.split('github.com/')[1].replace('.git', '').split('/')
-                    else:
-                        return None
-                    
-                    if len(parts) >= 1:
+                
+                # Handle SSH format: git@github.com:owner/repo.git
+                if remote_url.startswith('git@github.com:'):
+                    # SSH URLs don't have a scheme, so handle specially
+                    # Format: git@github.com:owner/repo.git
+                    path_part = remote_url.split('git@github.com:', 1)[1]
+                    path_part = path_part.replace('.git', '').strip('/')
+                    parts = path_part.split('/')
+                    if len(parts) >= 1 and parts[0]:
                         return parts[0]
+                    return None
+                
+                # Handle HTTPS/HTTP format: https://github.com/owner/repo.git
+                try:
+                    parsed = urlparse(remote_url)
+                    # Security: Verify the hostname is exactly 'github.com'
+                    # This prevents bypasses like:
+                    # - http://evil.com/github.com/fake/repo
+                    # - http://github.com.evil.com/fake/repo
+                    if parsed.hostname == 'github.com':
+                        # Extract owner from path: /owner/repo.git
+                        path = parsed.path.strip('/').replace('.git', '')
+                        parts = path.split('/')
+                        if len(parts) >= 1 and parts[0]:
+                            return parts[0]
+                except ValueError:
+                    # urlparse failed, not a valid URL
+                    pass
+                    
         except Exception as e:
             print(f"Error extracting repo owner: {e}", file=sys.stderr)
         return None
@@ -4055,7 +4080,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="memory-journal",
-                server_version="1.2.1",
+                server_version="1.2.2",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

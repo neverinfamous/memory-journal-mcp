@@ -1,11 +1,11 @@
 # Memory Journal MCP Server
 
-Last Updated October 26, 2025 - Production/Stable v1.2.1
+Last Updated October 26, 2025 - Production/Stable v1.2.2
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v1.2.1-green)
+![Version](https://img.shields.io/badge/version-v1.2.2-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)

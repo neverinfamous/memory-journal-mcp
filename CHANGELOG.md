@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2025-10-26
+
+### Security
+- **URL Parsing Vulnerability Fix (CodeQL #110, #111)** - Fixed incomplete URL substring sanitization in GitHub remote URL parsing
+  - **Impact**: Prevented potential URL spoofing attacks where malicious URLs could bypass GitHub hostname checks
+  - **Root Cause**: Used substring checks (`'github.com' in url`) instead of proper URL parsing
+  - **Fix**: Implemented proper `urllib.parse.urlparse()` validation with exact hostname matching
+  - **Details**:
+    - SSH URLs: Explicit prefix validation with `startswith('git@github.com:')`
+    - HTTPS/HTTP URLs: Parse with `urlparse()` and verify `hostname == 'github.com'`
+    - Prevents bypasses like `http://evil.com/github.com/fake` or `http://github.com.evil.com/fake`
+  - **Severity**: Medium (limited to Git remote URL parsing in local repository context)
+  - **Reference**: [CWE-20: Improper Input Validation](https://cwe.mitre.org/data/definitions/20.html)
+
 ## [1.2.1] - 2025-10-26
 
 ### Fixed
