@@ -14,7 +14,7 @@ Last Updated October 26, 2025 - Production/Stable v1.2.1
 
 **Production-ready developer journal with knowledge graphs, visual relationship mapping, intelligent search, and advanced GitHub Projects integration**
 
-🎉 **Now with Phase 2!** Build your personal knowledge graph with 16 tools, 10 workflow prompts, and advanced project analytics.
+🎉 **Now with V1.1** Build your personal knowledge graph with 16 tools, 10 workflow prompts, and advanced project analytics.
 
 **🚀 Multiple Deployment Options:**
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (~225MB) multi-platform support
@@ -40,17 +40,17 @@ This patch release maintains full compatibility with v1.2.0 - simply upgrade and
 
 ---
 
-## ✨ What's New in v1.2.0 (Phase 3 - Organization Support)
+## ✨ What's New in v1.2.0 (Organization Support)
 
 ### 🏢 **Organization-Level GitHub Projects** - Team Collaboration Ready
 Full support for organization-level projects alongside user projects:
 - **Automatic Owner Detection** - Detects whether repo belongs to user or organization
 - **Dual Project Lookup** - Shows both user and org projects in context
-- **Org Project Analytics** - All Phase 2 features work seamlessly with org projects
+- **Org Project Analytics** - All features work seamlessly with org projects
 - **Separate Token Support** - Optional `GITHUB_ORG_TOKEN` for org-specific permissions
-- **Zero Breaking Changes** - Fully backward compatible with Phase 1 & 2
+- **Zero Breaking Changes** - Fully backward compatible
 
-### 🔧 **Enhanced Phase 2 Features for Organizations**
+### 🔧 **Enhanced Features for Organizations**
 All advanced project analytics now support org projects:
 - **Cross-Project Insights** - Analyze patterns across user AND org projects
 - **Status Summaries** - Comprehensive reports for org project teams
@@ -71,7 +71,7 @@ All advanced project analytics now support org projects:
 - **Project Timeline Resource** - Live activity feed combining journal + GitHub events
 - **Item Status Monitoring** - Track completion rates and project item states
 
-### 🔗 **GitHub Projects Integration (Phase 1)** - Enhanced Context Awareness
+### 🔗 **GitHub Projects Integration** - Enhanced Context Awareness
 - **Automatic Project Detection** - Detects GitHub Projects associated with current repository (user & org)
 - **Active Work Items** - Shows what you're actively working on from projects
 - **Entry-Project Linking** - Associate journal entries with specific projects and items
@@ -269,11 +269,11 @@ Every entry can automatically include:
 - Current branch
 - Latest commit (hash + message)
 - Recent GitHub issues (via `gh` CLI)
-- **GitHub Projects (Phase 1)** - Automatic project detection and tracking (user & org)
-- **Organization Support (Phase 3)** - Full support for org-level projects alongside user projects
-- **Project Analytics (Phase 2 & 3)** - Cross-project insights, status summaries, milestone tracking (user & org)
-- **Smart API Caching (Phase 2 & 3)** - 80%+ API call reduction (24hr owner type, 1hr projects, 15min items)
-- **Auto Owner Detection (Phase 3)** - Automatically determines if repo belongs to user or organization
+- **GitHub Projects** - Automatic project detection and tracking (user & org)
+- **Organization Support** - Full support for org-level projects alongside user projects
+- **Project Analytics** - Cross-project insights, status summaries, milestone tracking (user & org)
+- **Smart API Caching** - 80%+ API call reduction (24hr owner type, 1hr projects, 15min items)
+- **Auto Owner Detection** - Automatically determines if repo belongs to user or organization
 - Working directory
 - Timestamp for all context
 
@@ -407,7 +407,7 @@ docker run --rm -i \
   python src/server.py
 ```
 
-**Organization Projects (Phase 3):**
+**Organization Projects:**
 
 For organization-level projects, you can optionally use a separate token:
 
