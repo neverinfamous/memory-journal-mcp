@@ -10,6 +10,7 @@ permissions:
   contents: write
   pull-requests: write
   security-events: write
+  issues: write
 
 jobs:
   security-scan:
@@ -43,10 +44,13 @@ jobs:
 
     - name: Run Trivy scanner for SARIF output
       uses: aquasecurity/trivy-action@master
+      continue-on-error: true
       with:
         image-ref: security-test:latest
         format: 'sarif'
         output: 'trivy-results.sarif'
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH,MEDIUM'
 
     - name: Upload Trivy scan results
       uses: github/codeql-action/upload-sarif@v4

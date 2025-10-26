@@ -140,6 +140,22 @@ If you discover a security vulnerability, please:
 
 ### **Recent Security Fixes**
 
+#### **CVE-2025-58050: PCRE2 Heap Buffer Overflow** (Fixed: October 26, 2025)
+- **Issue**: PCRE2 heap-buffer-overflow read in match_ref due to missing boundary restoration
+- **Severity**: CRITICAL
+- **Affected Package**: pcre2 <10.46-r0
+- **Mitigation**:
+  - ✅ **Alpine Package**: Explicitly upgraded to pcre2=10.46-r0 in Dockerfile
+  - ✅ **Early Installation**: Upgraded in first layer to ensure all subsequent packages use patched version
+  - ✅ **Docker Base Image**: Using Python 3.14-alpine with latest security patches
+- **Technical Details**: 
+  - Vulnerability could allow heap buffer overflow attacks during regex pattern matching
+  - Fixed version restores boundaries correctly in match_ref function
+  - PCRE2 is a system dependency used by various tools including git and grep
+- **Verification**: Run `apk info pcre2` in Alpine container to confirm version ≥10.46-r0
+- **Impact**: Prevents potential remote code execution via malformed regex patterns
+- **Reference**: [CVE-2025-58050](https://avd.aquasec.com/nvd/cve-2025-58050)
+
 #### **CVE-2025-8869: pip Symbolic Link Vulnerability** (Fixed: October 20, 2025)
 - **Issue**: pip missing checks on symbolic link extraction in fallback tar implementation (when Python doesn't implement PEP 706)
 - **Severity**: MEDIUM

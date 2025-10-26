@@ -6,8 +6,8 @@ FROM python:3.14-alpine
 # Set working directory
 WORKDIR /app
 
-# Upgrade OpenSSL, curl, and expat to latest patched versions FIRST (CVE fixes)
-RUN apk add --no-cache --upgrade openssl=3.5.4-r0 curl=8.14.1-r2 expat=2.7.3-r0
+# Upgrade OpenSSL, curl, expat, and pcre2 to latest patched versions FIRST (CVE fixes)
+RUN apk add --no-cache --upgrade openssl=3.5.4-r0 curl=8.14.1-r2 expat=2.7.3-r0 pcre2=10.46-r0
 
 # Install system dependencies for git and ML libraries
 RUN apk add --no-cache \
