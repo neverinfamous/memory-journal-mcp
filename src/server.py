@@ -25,7 +25,8 @@ except ImportError:
 
 try:
     from mcp.server import Server, NotificationOptions, InitializationOptions
-    from mcp.types import Resource, Tool, Prompt, PromptMessage
+    from mcp.types import Resource, Tool, Prompt, PromptMessage, PromptArgument
+    from pydantic import AnyUrl
     import mcp.server.stdio
     import mcp.types as types
 except ImportError:
@@ -38,7 +39,7 @@ try:
     import importlib.util
     if importlib.util.find_spec("sentence_transformers") and importlib.util.find_spec("faiss"):
         VECTOR_SEARCH_AVAILABLE = True
-        print("Vector search capabilities available (will load on first use)", file=sys.stderr)
+        print("[INFO] Vector search capabilities available (will load on first use)", file=sys.stderr)
 except Exception:
     print("Vector search dependencies not found. Install with: pip install sentence-transformers faiss-cpu", file=sys.stderr)
     print("Continuing without semantic search capabilities...", file=sys.stderr)
@@ -47,8 +48,20 @@ except Exception:
 SentenceTransformer = None
 faiss = None
 
-# Thread pool for non-blocking database operations
-thread_pool = ThreadPoolExecutor(max_workers=2)
+# Try importing at module level if available
+if VECTOR_SEARCH_AVAILABLE:
+    try:
+        from sentence_transformers import SentenceTransformer as ST
+        import faiss as faiss_module
+        SentenceTransformer = ST
+        faiss = faiss_module
+        print("[INFO] Vector search dependencies pre-loaded at startup", file=sys.stderr)
+    except Exception as e:
+        print(f"[WARNING] Could not pre-load vector search dependencies: {e}", file=sys.stderr)
+        VECTOR_SEARCH_AVAILABLE = False
+
+# Thread pool for non-blocking database operations and ML model loading
+thread_pool = ThreadPoolExecutor(max_workers=4)  # Increased for ML model loading
 
 # Initialize the MCP server
 server = Server("memory-journal")
@@ -169,6 +182,20 @@ class MemoryJournalDB:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id)")
             conn.commit()
             print("Migration completed: relationships table created", file=sys.stderr)
+        
+        # Migration: Add GitHub Projects columns (Phase 1 - Issue #15)
+        cursor = conn.execute("PRAGMA table_info(memory_journal)")
+        columns = {row[1] for row in cursor.fetchall()}
+        
+        if 'project_number' not in columns:
+            print("Running migration: Adding GitHub Projects columns to memory_journal table", file=sys.stderr)
+            conn.execute("ALTER TABLE memory_journal ADD COLUMN project_number INTEGER")
+            conn.execute("ALTER TABLE memory_journal ADD COLUMN project_item_id INTEGER")
+            conn.execute("ALTER TABLE memory_journal ADD COLUMN github_project_url TEXT")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_journal_project_number ON memory_journal(project_number)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_journal_project_item_id ON memory_journal(project_item_id)")
+            conn.commit()
+            print("Migration completed: GitHub Projects columns added", file=sys.stderr)
 
     def maintenance(self):
         """Perform database maintenance operations."""
@@ -229,13 +256,8 @@ class MemoryJournalDB:
         if significance_type and len(significance_type) > self.MAX_SIGNIFICANCE_TYPE_LENGTH:
             raise ValueError(f"Significance type exceeds maximum length of {self.MAX_SIGNIFICANCE_TYPE_LENGTH} characters")
 
-        # Basic SQL injection prevention (though we use parameterized queries)
-        dangerous_patterns = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'CREATE', 'ALTER', 'EXEC', 'UNION']
-        content_upper = content.upper()
-        for pattern in dangerous_patterns:
-            if f' {pattern} ' in content_upper or content_upper.startswith(f'{pattern} '):
-                # This is just a warning since legitimate content might contain these words
-                print(f"WARNING: Content contains potentially sensitive SQL keyword: {pattern}", file=sys.stderr)
+        # Note: We rely on parameterized queries for SQL injection prevention
+        # No need for content warnings since we never execute user content as SQL
 
     def auto_create_tags(self, tag_names: List[str]) -> List[int]:
         """Auto-create tags if they don't exist, return tag IDs. Thread-safe with INSERT OR IGNORE."""
@@ -355,6 +377,15 @@ class MemoryJournalDB:
                 context['github_issues_error'] = 'GitHub auth check timed out'
             except Exception as e:
                 context['github_issues_error'] = f'GitHub error: {str(e)}'
+        
+        # Get GitHub Projects context (Phase 1 - Issue #15)
+        if 'repo_path' in context and context.get('git_status') == 'repo_found':
+            try:
+                github_projects_context = github_projects.get_projects_context(context['repo_path'])
+                if github_projects_context:
+                    context['github_projects'] = github_projects_context
+            except Exception as e:
+                context['github_projects_error'] = f'GitHub Projects error: {str(e)}'
 
         context['cwd'] = os.getcwd()
         context['timestamp'] = datetime.now().isoformat()
@@ -392,46 +423,67 @@ class VectorSearchManager:
         self.faiss_index = None
         self.entry_id_map = {}  # Maps FAISS index positions to entry IDs
         self.initialized = False
-        self._initialization_attempted = False
+        self._initialization_lock = asyncio.Lock()
+        self._initialization_task = None
 
         # Don't initialize immediately - do it lazily on first use for faster startup
 
-    def _ensure_initialized(self):
-        """Lazy initialization - only initialize on first use."""
-        if self.initialized or self._initialization_attempted:
+    async def _ensure_initialized(self):
+        """Lazy initialization - only initialize on first use (async to avoid blocking)."""
+        # If already initialized, return immediately
+        if self.initialized:
             return
         
-        self._initialization_attempted = True
-        
-        if not VECTOR_SEARCH_AVAILABLE:
-            return
+        # If initialization is in progress, wait for it to complete
+        async with self._initialization_lock:
+            # Double-check after acquiring lock (another task might have completed it)
+            if self.initialized:
+                return
+            
+            if not VECTOR_SEARCH_AVAILABLE:
+                return
 
-        try:
-            # Lazy import of heavy dependencies (only on first use)
-            global SentenceTransformer, faiss
-            if SentenceTransformer is None:
-                print("Loading vector search dependencies (first use)...", file=sys.stderr)
-                from sentence_transformers import SentenceTransformer as ST
-                import faiss as faiss_module
-                SentenceTransformer = ST
-                faiss = faiss_module
-                print("Vector search dependencies loaded", file=sys.stderr)
+            try:
+                # Dependencies should already be imported at module level
+                if SentenceTransformer is None or faiss is None:
+                    print("[ERROR] Vector search dependencies not available", file=sys.stderr)
+                    self.initialized = False
+                    return
 
-            # Use stderr for initialization messages to avoid MCP JSON parsing errors
-            print(f"Initializing sentence transformer model: {self.model_name}", file=sys.stderr)
-            self.model = SentenceTransformer(self.model_name)
+                # Use stderr for initialization messages to avoid MCP JSON parsing errors
+                print(f"[INFO] Step 1/3: Loading ML model ({self.model_name})...", file=sys.stderr)
+                
+                # Run model loading in thread pool to avoid blocking the event loop
+                loop = asyncio.get_event_loop()
+                assert SentenceTransformer is not None, "SentenceTransformer should be imported"
+                
+                # Add explicit flush to ensure message appears
+                sys.stderr.flush()
+                
+                self.model = await loop.run_in_executor(
+                    thread_pool,
+                    lambda: SentenceTransformer(self.model_name)  # type: ignore[misc]
+                )
+                print("[INFO] Step 1/3: ✅ Model loaded", file=sys.stderr)
 
-            # Create FAISS index (384 dimensions for all-MiniLM-L6-v2)
-            self.faiss_index = faiss.IndexFlatIP(384)  # Inner product for cosine similarity
+                # Create FAISS index (384 dimensions for all-MiniLM-L6-v2)
+                print("[INFO] Step 2/3: Creating FAISS index...", file=sys.stderr)
+                self.faiss_index = faiss.IndexFlatIP(384)  # Inner product for cosine similarity
+                print("[INFO] Step 2/3: ✅ FAISS index created", file=sys.stderr)
 
-            # Load existing embeddings from database
-            self._load_existing_embeddings()
+                # Load existing embeddings from database
+                print("[INFO] Step 3/3: Loading existing embeddings from database...", file=sys.stderr)
+                self._load_existing_embeddings()
+                print(f"[INFO] Step 3/3: ✅ Loaded {self.faiss_index.ntotal} embeddings", file=sys.stderr)
 
-            self.initialized = True
-            print(f"Vector search initialized with {self.faiss_index.ntotal} embeddings", file=sys.stderr)
-        except Exception as e:
-            print(f"Warning: Vector search initialization failed: {e}", file=sys.stderr)
-            self.initialized = False
+                self.initialized = True
+                print(f"[INFO] 🎉 Semantic search ready! ({self.faiss_index.ntotal} entries indexed)", file=sys.stderr)
+                sys.stderr.flush()
+            except Exception as e:
+                print(f"[ERROR] Vector search initialization failed: {e}", file=sys.stderr)
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+                self.initialized = False
 
     def _load_existing_embeddings(self):
         """Load existing embeddings from database into FAISS index."""
@@ -457,10 +509,10 @@ class VectorSearchManager:
                 if not HAS_NUMPY:
                     raise RuntimeError("numpy is required for vector operations but not installed")
                 vectors = np.array(vectors, dtype=np.float32)
-                faiss.normalize_L2(vectors)
+                faiss.normalize_L2(vectors)  # type: ignore[call-arg]
 
                 # Add to FAISS index
-                self.faiss_index.add(vectors)
+                self.faiss_index.add(vectors)  # type: ignore[call-arg]
 
                 # Update entry ID mapping
                 for i, entry_id in enumerate(entry_ids):
@@ -468,7 +520,7 @@ class VectorSearchManager:
 
     async def generate_embedding(self, text: str):
         """Generate embedding for text using sentence transformer."""
-        self._ensure_initialized()
+        await self._ensure_initialized()
         
         if not self.initialized:
             raise RuntimeError("Vector search not initialized")
@@ -486,7 +538,7 @@ class VectorSearchManager:
 
     async def add_entry_embedding(self, entry_id: int, content: str) -> bool:
         """Generate and store embedding for a journal entry."""
-        self._ensure_initialized()
+        await self._ensure_initialized()
         
         if not self.initialized:
             return False
@@ -512,7 +564,7 @@ class VectorSearchManager:
             await loop.run_in_executor(thread_pool, store_embedding)
 
             # Add to FAISS index
-            self.faiss_index.add(embedding_norm.reshape(1, -1))
+            self.faiss_index.add(embedding_norm.reshape(1, -1))  # type: ignore[call-arg]
 
             # Update entry ID mapping
             new_index = self.faiss_index.ntotal - 1
@@ -526,7 +578,7 @@ class VectorSearchManager:
 
     async def semantic_search(self, query: str, limit: int = 10, similarity_threshold: float = 0.3) -> List[Tuple[int, float]]:
         """Perform semantic search and return entry IDs with similarity scores."""
-        self._ensure_initialized()
+        await self._ensure_initialized()
         
         if not self.initialized or self.faiss_index.ntotal == 0:
             return []
@@ -537,10 +589,10 @@ class VectorSearchManager:
 
             # Normalize for cosine similarity
             query_norm = query_embedding.copy()
-            faiss.normalize_L2(query_norm.reshape(1, -1))
+            faiss.normalize_L2(query_norm.reshape(1, -1))  # type: ignore[call-arg]
 
             # Search FAISS index
-            scores, indices = self.faiss_index.search(query_norm.reshape(1, -1), min(limit * 2, self.faiss_index.ntotal))
+            scores, indices = self.faiss_index.search(query_norm.reshape(1, -1), min(limit * 2, self.faiss_index.ntotal))  # type: ignore[call-arg]
 
             # Convert to entry IDs and filter by threshold
             results = []
@@ -563,38 +615,574 @@ class VectorSearchManager:
 vector_search = VectorSearchManager(DB_PATH) if VECTOR_SEARCH_AVAILABLE else None
 
 
+class GitHubProjectsIntegration:
+    """GitHub Projects API integration for context awareness (Phase 1, 2 & 3)."""
+    
+    def __init__(self, db_connection: Optional['MemoryJournalDB'] = None):
+        """Initialize GitHub Projects integration."""
+        self.github_token = os.environ.get('GITHUB_TOKEN')
+        self.github_org_token = os.environ.get('GITHUB_ORG_TOKEN')  # Phase 3: Optional separate org token
+        self.default_org = os.environ.get('DEFAULT_ORG')  # Phase 3: Default org for ambiguous contexts
+        self.api_base = 'https://api.github.com'
+        self.api_timeout = 5  # 5 seconds timeout per API call
+        self.db_connection = db_connection
+        
+        # Cache TTLs (Phase 2 - Issue #16)
+        self.project_ttl = 3600  # 1 hour for project metadata
+        self.items_ttl = 900  # 15 minutes for project items
+        self.milestone_ttl = 3600  # 1 hour for milestones
+        self.owner_type_ttl = 86400  # Phase 3: 24 hours for owner type (rarely changes)
+        
+    def _get_headers(self, use_org_token: bool = False) -> Dict[str, str]:
+        """Get GitHub API headers.
+        
+        Args:
+            use_org_token: If True and GITHUB_ORG_TOKEN is set, use org token instead
+        """
+        headers = {
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
+        # Phase 3: Use org token if requested and available, otherwise fall back to user token
+        token = self.github_org_token if (use_org_token and self.github_org_token) else self.github_token
+        if token:
+            headers['Authorization'] = f'token {token}'
+        return headers
+    
+    def _extract_repo_owner_from_remote(self, repo_path: str) -> Optional[str]:
+        """Extract repository owner from Git remote URL."""
+        try:
+            result = subprocess.run(
+                ['git', 'config', '--get', 'remote.origin.url'],
+                capture_output=True, text=True, cwd=repo_path,
+                timeout=2, shell=False
+            )
+            if result.returncode == 0:
+                remote_url = result.stdout.strip()
+                # Parse GitHub URL formats:
+                # https://github.com/owner/repo.git
+                # git@github.com:owner/repo.git
+                if 'github.com' in remote_url:
+                    if remote_url.startswith('git@github.com:'):
+                        parts = remote_url.replace('git@github.com:', '').replace('.git', '').split('/')
+                    elif 'github.com/' in remote_url:
+                        parts = remote_url.split('github.com/')[1].replace('.git', '').split('/')
+                    else:
+                        return None
+                    
+                    if len(parts) >= 1:
+                        return parts[0]
+        except Exception as e:
+            print(f"Error extracting repo owner: {e}", file=sys.stderr)
+        return None
+    
+    def detect_owner_type(self, owner: str) -> str:
+        """Determine if owner is a user or organization (Phase 3 - Issue #17).
+        
+        Args:
+            owner: GitHub username or organization name
+            
+        Returns:
+            'user', 'org', or 'unknown'
+            
+        Uses caching (Phase 2) with 24hr TTL since owner type rarely changes.
+        """
+        # Check cache first (Phase 2 infrastructure)
+        cache_key = f"owner_type:{owner}"
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+        
+        if not self.github_token:
+            return 'unknown'
+        
+        try:
+            import requests  # type: ignore[import-not-found]
+            # Query GitHub API: GET /users/{owner}
+            url = f"{self.api_base}/users/{owner}"
+            response = requests.get(
+                url,
+                headers=self._get_headers(),
+                timeout=self.api_timeout
+            )
+            
+            if response.status_code == 200:
+                user_data = response.json()
+                # Check response 'type' field ('User' or 'Organization')
+                owner_type_raw = user_data.get('type', 'unknown')
+                # Normalize to lowercase
+                if owner_type_raw == 'User':
+                    owner_type = 'user'
+                elif owner_type_raw == 'Organization':
+                    owner_type = 'org'
+                else:
+                    owner_type = 'unknown'
+                
+                # Cache result for 24 hours
+                self._set_cache(cache_key, owner_type, self.owner_type_ttl)
+                return owner_type
+            else:
+                print(f"GitHub API error detecting owner type: {response.status_code}", file=sys.stderr)
+        except ImportError:
+            print("requests library not available for owner type detection", file=sys.stderr)
+        except Exception as e:
+            print(f"Error detecting owner type: {e}", file=sys.stderr)
+        
+        return 'unknown'
+    
+    def get_projects(self, owner: str, owner_type: str = 'user') -> List[Dict[str, Any]]:
+        """Get GitHub Projects for a user or org with Phase 2 caching (Phase 3 - Issue #17).
+        
+        Args:
+            owner: GitHub username or organization name
+            owner_type: 'user' or 'org'
+            
+        Returns:
+            List of project dictionaries with 'source' field indicating 'user' or 'org'
+        """
+        # Normalize owner_type
+        if owner_type not in ['user', 'org']:
+            owner_type = 'user'
+        
+        # Check cache first (Phase 2 infrastructure)
+        cache_key = f"projects:{owner_type}:{owner}"
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+        
+        if not self.github_token:
+            return []
+        
+        # Use org token for org projects if available
+        use_org_token = (owner_type == 'org')
+        
+        try:
+            import requests  # type: ignore[import-not-found]
+            # Select endpoint based on owner type
+            endpoint = f'/users/{owner}/projects' if owner_type == 'user' else f'/orgs/{owner}/projects'
+            url = f"{self.api_base}{endpoint}"
+            response = requests.get(
+                url,
+                headers=self._get_headers(use_org_token=use_org_token),
+                timeout=self.api_timeout
+            )
+            
+            if response.status_code == 200:
+                projects = response.json()
+                result = [{
+                    'number': proj.get('number'),
+                    'name': proj.get('name'),
+                    'description': proj.get('body'),
+                    'url': proj.get('html_url'),
+                    'state': proj.get('state'),
+                    'created_at': proj.get('created_at'),
+                    'updated_at': proj.get('updated_at'),
+                    'source': owner_type,  # Phase 3: Mark source (user vs org)
+                    'owner': owner  # Phase 3: Store owner name
+                } for proj in projects]
+                # Cache for 1 hour (existing Phase 2 TTL)
+                self._set_cache(cache_key, result, self.project_ttl)
+                return result
+            elif response.status_code == 403:
+                print(f"GitHub API permission error for {owner_type} projects: 403 Forbidden", file=sys.stderr)
+                return []
+            else:
+                print(f"GitHub API error: {response.status_code}", file=sys.stderr)
+        except ImportError:
+            print("requests library not available, using gh CLI fallback", file=sys.stderr)
+            return self._get_projects_via_gh_cli(owner, owner_type)
+        except Exception as e:
+            print(f"Error fetching projects: {e}", file=sys.stderr)
+        
+        return []
+    
+    def get_user_projects(self, username: str) -> List[Dict[str, Any]]:
+        """Get GitHub Projects for a user (backward compatibility wrapper)."""
+        return self.get_projects(username, 'user')
+    
+    def _get_projects_via_gh_cli(self, owner: str, owner_type: str = 'user') -> List[Dict[str, Any]]:
+        """Fallback: Get projects using gh CLI (Phase 3: supports user and org)."""
+        try:
+            result = subprocess.run(
+                ['gh', 'project', 'list', '--owner', owner, '--format', 'json'],
+                capture_output=True, text=True,
+                timeout=self.api_timeout, shell=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                projects = json.loads(result.stdout.strip())
+                return [{
+                    'number': proj.get('number'),
+                    'name': proj.get('title'),
+                    'description': proj.get('body'),
+                    'url': proj.get('url'),
+                    'state': proj.get('state', 'OPEN'),
+                    'created_at': proj.get('createdAt'),
+                    'updated_at': proj.get('updatedAt'),
+                    'source': owner_type,  # Phase 3: Mark source
+                    'owner': owner  # Phase 3: Store owner name
+                } for proj in projects.get('projects', [])]
+        except Exception as e:
+            print(f"Error with gh CLI fallback: {e}", file=sys.stderr)
+        return []
+    
+    def get_project_items(self, username: str, project_number: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get items from a GitHub Project."""
+        if not self.github_token:
+            return []
+        
+        try:
+            import requests  # type: ignore[import-not-found]
+            url = f"{self.api_base}/users/{username}/projects/{project_number}/items"
+            response = requests.get(
+                url,
+                headers=self._get_headers(),
+                params={'per_page': limit},
+                timeout=self.api_timeout
+            )
+            
+            if response.status_code == 200:
+                items = response.json()
+                return [{
+                    'id': item.get('id'),
+                    'content_type': item.get('content_type'),
+                    'content_url': item.get('content_url'),
+                    'created_at': item.get('created_at'),
+                    'updated_at': item.get('updated_at')
+                } for item in items]
+        except ImportError:
+            print("requests library not available, using gh CLI fallback", file=sys.stderr)
+            return self._get_project_items_via_gh_cli(username, project_number, limit)
+        except Exception as e:
+            print(f"Error fetching project items: {e}", file=sys.stderr)
+        
+        return []
+    
+    def _get_project_items_via_gh_cli(self, username: str, project_number: int, limit: int) -> List[Dict[str, Any]]:
+        """Fallback: Get project items using gh CLI."""
+        try:
+            result = subprocess.run(
+                ['gh', 'project', 'item-list', str(project_number), '--owner', username, '--format', 'json', '--limit', str(limit)],
+                capture_output=True, text=True,
+                timeout=self.api_timeout, shell=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                items = json.loads(result.stdout.strip())
+                return [{
+                    'id': item.get('id'),
+                    'content_type': item.get('type'),
+                    'title': item.get('title'),
+                    'status': item.get('status'),
+                    'created_at': item.get('createdAt'),
+                    'updated_at': item.get('updatedAt')
+                } for item in items.get('items', [])]
+        except Exception as e:
+            print(f"Error with gh CLI fallback for items: {e}", file=sys.stderr)
+        return []
+    
+    def get_projects_context(self, repo_path: str) -> Dict[str, Any]:
+        """Get GitHub Projects context for the current repository (Phase 3: user + org support)."""
+        context: Dict[str, Any] = {
+            'github_projects': {
+                'user_projects': [],
+                'org_projects': []
+            },
+            'active_items': []
+        }
+        
+        # Extract repo owner from Git remote
+        owner = self._extract_repo_owner_from_remote(repo_path)
+        if not owner:
+            return context
+        
+        # Phase 3: Detect owner type (user or org)
+        owner_type = self.detect_owner_type(owner)
+        
+        # Query user projects
+        user_projects = self.get_projects(owner, 'user')
+        if user_projects:
+            context['github_projects']['user_projects'] = user_projects
+        
+        # Query org projects if owner is an org
+        if owner_type == 'org':
+            org_projects = self.get_projects(owner, 'org')
+            if org_projects:
+                context['github_projects']['org_projects'] = org_projects
+        
+        # Get active items from first project (prioritize org projects for org repos)
+        all_projects = []
+        if owner_type == 'org' and context['github_projects']['org_projects']:
+            all_projects = context['github_projects']['org_projects']
+        elif context['github_projects']['user_projects']:
+            all_projects = context['github_projects']['user_projects']
+        
+        if len(all_projects) > 0:
+            first_project = all_projects[0]
+            project_number = first_project.get('number')
+            project_owner = first_project.get('owner', owner)
+            if project_number:
+                items = self.get_project_items(project_owner, project_number, limit=5)
+                context['active_items'] = items
+        
+        return context
+    
+    # Phase 2 - Issue #16: Advanced Features
+    
+    def _get_cache(self, key: str) -> Optional[Any]:
+        """Get value from cache if not expired."""
+        if not self.db_connection:
+            return None
+        
+        try:
+            with self.db_connection.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT cache_value, cached_at, ttl_seconds
+                    FROM github_project_cache
+                    WHERE cache_key = ?
+                """, (key,))
+                row = cursor.fetchone()
+                
+                if row:
+                    cache_value, cached_at, ttl_seconds = row
+                    import time
+                    current_time = int(time.time())
+                    
+                    # Check if cache is still valid
+                    if current_time - cached_at < ttl_seconds:
+                        return json.loads(cache_value)
+                    else:
+                        # Cache expired, delete it
+                        conn.execute("DELETE FROM github_project_cache WHERE cache_key = ?", (key,))
+        except Exception as e:
+            print(f"Cache read error: {e}", file=sys.stderr)
+        
+        return None
+    
+    def _set_cache(self, key: str, value: Any, ttl: int) -> None:
+        """Set value in cache with TTL."""
+        if not self.db_connection:
+            return
+        
+        try:
+            import time
+            with self.db_connection.get_connection() as conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO github_project_cache (cache_key, cache_value, cached_at, ttl_seconds)
+                    VALUES (?, ?, ?, ?)
+                """, (key, json.dumps(value), int(time.time()), ttl))
+        except Exception as e:
+            print(f"Cache write error: {e}", file=sys.stderr)
+    
+    def get_project_details(self, owner: str, project_number: int, owner_type: str = 'user') -> Optional[Dict[str, Any]]:
+        """Get detailed information about a specific GitHub Project with caching (Phase 3: org support)."""
+        # Normalize owner_type
+        if owner_type not in ['user', 'org']:
+            owner_type = 'user'
+        
+        cache_key = f"project_details:{owner_type}:{owner}:{project_number}"
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+        
+        if not self.github_token:
+            return None
+        
+        # Use org token for org projects if available
+        use_org_token = (owner_type == 'org')
+        
+        try:
+            import requests  # type: ignore[import-not-found]
+            # Select endpoint based on owner type
+            endpoint = f'/users/{owner}/projects/{project_number}' if owner_type == 'user' else f'/orgs/{owner}/projects/{project_number}'
+            url = f"{self.api_base}{endpoint}"
+            response = requests.get(
+                url,
+                headers=self._get_headers(use_org_token=use_org_token),
+                timeout=self.api_timeout
+            )
+            
+            if response.status_code == 200:
+                project = response.json()
+                result = {
+                    'number': project.get('number'),
+                    'name': project.get('name'),
+                    'description': project.get('body'),
+                    'url': project.get('html_url'),
+                    'state': project.get('state'),
+                    'created_at': project.get('created_at'),
+                    'updated_at': project.get('updated_at'),
+                    'creator': project.get('creator', {}).get('login'),
+                    'source': owner_type,  # Phase 3
+                    'owner': owner  # Phase 3
+                }
+                self._set_cache(cache_key, result, self.project_ttl)
+                return result
+        except Exception as e:
+            print(f"Error fetching project details: {e}", file=sys.stderr)
+        
+        return None
+    
+    def get_repo_milestones(self, owner: str, repo: str) -> List[Dict[str, Any]]:
+        """Get milestones for a GitHub repository with caching."""
+        cache_key = f"milestones:{owner}:{repo}"
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+        
+        if not self.github_token:
+            return []
+        
+        try:
+            import requests  # type: ignore[import-not-found]
+            url = f"{self.api_base}/repos/{owner}/{repo}/milestones"
+            response = requests.get(
+                url,
+                headers=self._get_headers(),
+                params={'state': 'all', 'per_page': 100},
+                timeout=self.api_timeout
+            )
+            
+            if response.status_code == 200:
+                milestones = response.json()
+                result = [{
+                    'number': m.get('number'),
+                    'title': m.get('title'),
+                    'description': m.get('description'),
+                    'state': m.get('state'),
+                    'open_issues': m.get('open_issues'),
+                    'closed_issues': m.get('closed_issues'),
+                    'due_on': m.get('due_on'),
+                    'created_at': m.get('created_at'),
+                    'updated_at': m.get('updated_at'),
+                    'url': m.get('html_url')
+                } for m in milestones]
+                self._set_cache(cache_key, result, self.milestone_ttl)
+                return result
+        except Exception as e:
+            print(f"Error fetching milestones: {e}", file=sys.stderr)
+        
+        return []
+    
+    def get_project_items_with_fields(self, owner: str, project_number: int, limit: int = 100, owner_type: str = 'user') -> List[Dict[str, Any]]:
+        """Get project items with full field data (status, priority, etc.) with caching (Phase 3: org support)."""
+        # Normalize owner_type
+        if owner_type not in ['user', 'org']:
+            owner_type = 'user'
+        
+        cache_key = f"project_items_full:{owner_type}:{owner}:{project_number}:{limit}"
+        cached = self._get_cache(cache_key)
+        if cached:
+            return cached
+        
+        # Try gh CLI for detailed field information (works for both user and org projects)
+        try:
+            result = subprocess.run(
+                ['gh', 'project', 'item-list', str(project_number), '--owner', owner, '--format', 'json', '--limit', str(limit)],
+                capture_output=True, text=True,
+                timeout=self.api_timeout, shell=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                data = json.loads(result.stdout.strip())
+                items = [{
+                    'id': item.get('id'),
+                    'content_type': item.get('type'),
+                    'title': item.get('title'),
+                    'status': item.get('status'),
+                    'priority': item.get('priority'),
+                    'assignees': item.get('assignees', []),
+                    'labels': item.get('labels', []),
+                    'created_at': item.get('createdAt'),
+                    'updated_at': item.get('updatedAt')
+                } for item in data.get('items', [])]
+                self._set_cache(cache_key, items, self.items_ttl)
+                return items
+        except Exception as e:
+            print(f"Error fetching project items via gh CLI: {e}", file=sys.stderr)
+        
+        # Fallback to basic items
+        basic_items = self.get_project_items(owner, project_number, limit)
+        self._set_cache(cache_key, basic_items, self.items_ttl)
+        return basic_items
+    
+    def get_project_timeline(self, owner: str, project_number: int, days: int = 30, owner_type: str = 'user') -> List[Dict[str, Any]]:
+        """Generate timeline of project activity combining items and updates (Phase 3: org support)."""
+        timeline = []
+        
+        # Get project items
+        items = self.get_project_items_with_fields(owner, project_number, limit=100, owner_type=owner_type)
+        
+        # Add items to timeline
+        import time
+        from datetime import datetime, timedelta
+        cutoff_time = datetime.now() - timedelta(days=days)
+        
+        for item in items:
+            try:
+                updated_str = item.get('updated_at', '')
+                if updated_str:
+                    # Handle ISO format timestamp
+                    if 'T' in updated_str:
+                        updated_time = datetime.fromisoformat(updated_str.replace('Z', '+00:00'))
+                    else:
+                        updated_time = datetime.fromisoformat(updated_str)
+                    
+                    if updated_time >= cutoff_time:
+                        timeline.append({
+                            'type': 'project_item',
+                            'timestamp': updated_str,
+                            'title': item.get('title', 'Untitled'),
+                            'status': item.get('status', 'unknown'),
+                            'content_type': item.get('content_type', 'unknown')
+                        })
+            except Exception as e:
+                print(f"Error parsing item timestamp: {e}", file=sys.stderr)
+                continue
+        
+        # Sort by timestamp descending
+        timeline.sort(key=lambda x: x['timestamp'], reverse=True)
+        
+        return timeline[:50]  # Limit to 50 events
+
+
+# Initialize GitHub Projects integration (will be set after db init)
+github_projects: Optional[GitHubProjectsIntegration] = None
+
+
 @server.list_resources()
 async def list_resources() -> List[Resource]:
     """List available resources."""
+    from pydantic_core import Url
     return [
         Resource(
-            uri="memory://recent",
+            uri=Url("memory://recent"),  # type: ignore[arg-type]
             name="Recent Journal Entries",
             description="Most recent journal entries",
             mimeType="application/json"
         ),
         Resource(
-            uri="memory://significant",
+            uri=Url("memory://significant"),  # type: ignore[arg-type]
             name="Significant Entries",
             description="Entries marked as significant",
             mimeType="application/json"
         ),
         Resource(
-            uri="memory://graph/recent",
+            uri=Url("memory://graph/recent"),  # type: ignore[arg-type]
             name="Relationship Graph (Recent)",
             description="Mermaid graph visualization of recent entries with relationships",
             mimeType="text/plain"
+        ),
+        Resource(
+            uri=Url("memory://projects/{project_number}/timeline"),  # type: ignore[arg-type]
+            name="Project Activity Timeline (Phase 2 & 3)",
+            description="Chronological timeline of journal entries and GitHub Project activity for a specific project. Supports: memory://projects/{number}/timeline or memory://projects/{owner}/{owner_type}/{number}/timeline",
+            mimeType="text/markdown"
         )
     ]
 
 
 @server.read_resource()
-async def read_resource(uri: str) -> str:
+async def read_resource(uri: AnyUrl) -> str:
     """Read a specific resource."""
-    # Debug logging
-    print(f"DEBUG: Requested resource URI: '{uri}' (type: {type(uri)})")
-
-    # Convert URI to string if it's not already (handles AnyUrl objects)
+    # Convert URI to string (AnyUrl is always a valid URL object)
     uri_str = str(uri).strip()
 
     if uri_str == "memory://recent":
@@ -608,7 +1196,6 @@ async def read_resource(uri: str) -> str:
                         LIMIT 10
                     """)
                     entries = [dict(row) for row in cursor.fetchall()]
-                    print(f"DEBUG: Found {len(entries)} recent entries")
                     return entries
 
             # Run in thread pool to avoid blocking
@@ -616,7 +1203,6 @@ async def read_resource(uri: str) -> str:
             entries = await loop.run_in_executor(thread_pool, get_recent_entries)
             return json.dumps(entries, indent=2)
         except Exception as e:
-            print(f"DEBUG: Error reading recent entries: {e}")
             raise
 
     elif uri_str == "memory://significant":
@@ -632,7 +1218,6 @@ async def read_resource(uri: str) -> str:
                         LIMIT 10
                     """)
                     entries = [dict(row) for row in cursor.fetchall()]
-                    print(f"DEBUG: Found {len(entries)} significant entries")
                     return entries
 
             # Run in thread pool to avoid blocking
@@ -640,7 +1225,6 @@ async def read_resource(uri: str) -> str:
             entries = await loop.run_in_executor(thread_pool, get_significant_entries)
             return json.dumps(entries, indent=2)
         except Exception as e:
-            print(f"DEBUG: Error reading significant entries: {e}")
             raise
 
     elif uri_str == "memory://graph/recent":
@@ -724,11 +1308,114 @@ async def read_resource(uri: str) -> str:
             
             return mermaid
         except Exception as e:
-            print(f"DEBUG: Error generating relationship graph: {e}", file=sys.stderr)
+            raise
+
+    elif uri_str.startswith("memory://projects/") and "/timeline" in uri_str:
+        # Phase 2 - Issue #16: Project Timeline Resource (Phase 3: org support)
+        try:
+            # Extract parameters from URI
+            # Supports: memory://projects/1/timeline or memory://projects/my-company/org/1/timeline
+            parts = uri_str.split("/")
+            
+            # Determine format
+            if len(parts) == 5:  # memory://projects/{number}/timeline
+                project_number = int(parts[3])
+                owner = None
+                owner_type = 'user'
+            elif len(parts) == 7:  # memory://projects/{owner}/{owner_type}/{number}/timeline
+                owner = parts[3]
+                owner_type = parts[4] if parts[4] in ['user', 'org'] else 'user'
+                project_number = int(parts[5])
+            else:
+                raise ValueError(f"Invalid URI format. Expected: memory://projects/{{number}}/timeline or memory://projects/{{owner}}/{{owner_type}}/{{number}}/timeline")
+
+            def get_timeline_data():
+                with db.get_connection() as conn:
+                    # Get journal entries for this project (last 30 days)
+                    from datetime import datetime, timedelta
+                    cutoff_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+                    
+                    cursor = conn.execute("""
+                        SELECT id, entry_type, content, timestamp
+                        FROM memory_journal
+                        WHERE project_number = ? AND deleted_at IS NULL
+                          AND DATE(timestamp) >= DATE(?)
+                        ORDER BY timestamp DESC
+                        LIMIT 50
+                    """, (project_number, cutoff_date))
+                    entries = [dict(row) for row in cursor.fetchall()]
+                    return entries
+
+            loop = asyncio.get_event_loop()
+            entries = await loop.run_in_executor(thread_pool, get_timeline_data)
+
+            # Get GitHub project timeline if available (Phase 3: use owner param if provided)
+            project_context = await db.get_project_context()
+            if not owner and 'repo_path' in project_context:
+                owner = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+                if owner:
+                    owner_type = github_projects.detect_owner_type(owner)
+
+            github_timeline = []
+            if owner:
+                github_timeline = github_projects.get_project_timeline(owner, project_number, days=30, owner_type=owner_type)
+
+            # Combine timelines
+            combined = []
+            
+            # Add journal entries
+            for entry in entries:
+                combined.append({
+                    'type': 'journal_entry',
+                    'timestamp': entry['timestamp'],
+                    'id': entry['id'],
+                    'entry_type': entry['entry_type'],
+                    'content': entry['content'][:200] + ('...' if len(entry['content']) > 200 else '')
+                })
+            
+            # Add GitHub project items
+            combined.extend(github_timeline)
+            
+            # Sort by timestamp
+            combined.sort(key=lambda x: x['timestamp'], reverse=True)
+            
+            # Format as Markdown timeline
+            timeline = f"# Project #{project_number} Activity Timeline\n\n"
+            timeline += f"*Last 30 days of activity - {len(combined)} events*\n\n"
+            timeline += "---\n\n"
+            
+            current_date = None
+            for event in combined[:50]:
+                event_date = event['timestamp'][:10]
+                
+                # Add date header when date changes
+                if event_date != current_date:
+                    timeline += f"\n## {event_date}\n\n"
+                    current_date = event_date
+                
+                # Format event based on type
+                if event['type'] == 'journal_entry':
+                    timeline += f"### 📝 Journal Entry #{event['id']}\n"
+                    timeline += f"**Type:** {event['entry_type']}  \n"
+                    timeline += f"**Time:** {event['timestamp'][11:16]}  \n"
+                    timeline += f"{event['content']}\n\n"
+                elif event['type'] == 'project_item':
+                    timeline += f"### 🎯 Project Item Updated\n"
+                    timeline += f"**Title:** {event['title']}  \n"
+                    timeline += f"**Status:** {event['status']}  \n"
+                    timeline += f"**Type:** {event['content_type']}  \n\n"
+            
+            if not combined:
+                timeline += "*No activity in the last 30 days*\n"
+            
+            return timeline
+            
+        except (ValueError, IndexError) as e:
+            raise ValueError(f"Invalid project timeline URI: {uri_str}. Expected format: memory://projects/<number>/timeline")
+        except Exception as e:
             raise
 
     else:
-        print(f"DEBUG: No match for URI '{uri_str}'. Available: memory://recent, memory://significant, memory://graph/recent")
         raise ValueError(f"Unknown resource: {uri_str}")
 
 
@@ -738,7 +1425,7 @@ async def list_tools() -> List[Tool]:
     return [
         Tool(
             name="create_entry",
-            description="Create a new journal entry with context and tags",
+            description="Create a new journal entry with context and tags (Phase 3: org project support)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -747,7 +1434,12 @@ async def list_tools() -> List[Tool]:
                     "entry_type": {"type": "string", "default": "personal_reflection"},
                     "tags": {"type": "array", "items": {"type": "string"}},
                     "significance_type": {"type": "string"},
-                    "auto_context": {"type": "boolean", "default": True}
+                    "auto_context": {"type": "boolean", "default": True},
+                    "project_number": {"type": "integer", "description": "GitHub Project number (optional)"},
+                    "project_item_id": {"type": "integer", "description": "GitHub Project item ID (optional)"},
+                    "github_project_url": {"type": "string", "description": "GitHub Project URL (optional)"},
+                    "project_owner": {"type": "string", "description": "GitHub Project owner (username or org name) - optional, auto-detected from context"},
+                    "project_owner_type": {"type": "string", "enum": ["user", "org"], "description": "Project owner type (user or org) - optional, auto-detected"}
                 },
                 "required": ["content"]
             }
@@ -760,7 +1452,8 @@ async def list_tools() -> List[Tool]:
                 "properties": {
                     "query": {"type": "string"},
                     "is_personal": {"type": "boolean"},
-                    "limit": {"type": "integer", "default": 10}
+                    "limit": {"type": "integer", "default": 10},
+                    "project_number": {"type": "integer", "description": "Filter by GitHub Project number (optional)"}
                 }
             }
         ),
@@ -796,7 +1489,10 @@ async def list_tools() -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "content": {"type": "string", "description": "The journal entry content"}
+                    "content": {"type": "string", "description": "The journal entry content"},
+                    "project_number": {"type": "integer", "description": "GitHub Project number (optional)"},
+                    "project_item_id": {"type": "integer", "description": "GitHub Project item ID (optional)"},
+                    "github_project_url": {"type": "string", "description": "GitHub Project URL (optional)"}
                 },
                 "required": ["content"]
             }
@@ -885,14 +1581,15 @@ async def list_tools() -> List[Tool]:
                     "end_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
                     "is_personal": {"type": "boolean", "description": "Filter by personal entries"},
                     "entry_type": {"type": "string", "description": "Filter by entry type"},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"}
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"},
+                    "project_number": {"type": "integer", "description": "Filter by GitHub Project number (optional)"}
                 },
                 "required": ["start_date", "end_date"]
             }
         ),
         Tool(
             name="get_statistics",
-            description="Get journal statistics and analytics",
+            description="Get journal statistics and analytics (Phase 2: includes project breakdown)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -902,6 +1599,11 @@ async def list_tools() -> List[Tool]:
                         "type": "string", 
                         "description": "Group statistics by period (day, week, month)",
                         "default": "week"
+                    },
+                    "project_breakdown": {
+                        "type": "boolean",
+                        "description": "Include breakdown by GitHub Project number (Phase 2)",
+                        "default": False
                     }
                 }
             }
@@ -946,6 +1648,22 @@ async def list_tools() -> List[Tool]:
                     }
                 }
             }
+        ),
+        Tool(
+            name="get_cross_project_insights",
+            description="Analyze patterns across all GitHub Projects tracked in journal entries (Phase 2)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "Start date (YYYY-MM-DD, optional)"},
+                    "end_date": {"type": "string", "description": "End date (YYYY-MM-DD, optional)"},
+                    "min_entries": {
+                        "type": "integer",
+                        "description": "Minimum entries to include project",
+                        "default": 3
+                    }
+                }
+            }
         )
     ]
 
@@ -954,17 +1672,20 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
     """Handle tool calls."""
 
-    # Debug logging
-    print(f"DEBUG: Tool call received: {name} with args: {list(arguments.keys())}")
-
     if name == "create_entry":
-        print("DEBUG: Starting create_entry processing...")
         content = arguments["content"]
         is_personal = arguments.get("is_personal", True)
         entry_type = arguments.get("entry_type", "personal_reflection")
         tags = arguments.get("tags", [])
         significance_type: Optional[str] = arguments.get("significance_type")
         auto_context = arguments.get("auto_context", True)
+        
+        # GitHub Projects parameters (Phase 1 - Issue #15, Phase 3 - Issue #17)
+        project_number = arguments.get("project_number")
+        project_item_id = arguments.get("project_item_id")
+        github_project_url = arguments.get("github_project_url")
+        project_owner = arguments.get("project_owner")  # Phase 3
+        project_owner_type = arguments.get("project_owner_type")  # Phase 3
 
         # Validate input for security
         try:
@@ -975,38 +1696,64 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                 text=f"❌ Input validation failed: {str(e)}"
             )]
 
-        print(f"DEBUG: Parsed arguments - content length: {len(content)}, tags: {len(tags)}")
-
         project_context = None
+        context_data = None
         if auto_context:
-            print("DEBUG: Getting project context...")
-            context = await db.get_project_context()
-            project_context = json.dumps(context)
-            print("DEBUG: Project context captured successfully")
+            context_data = await db.get_project_context()
+            project_context = json.dumps(context_data)
+            
+            # Auto-populate project info from context if not explicitly set (Phase 3: org support)
+            if not project_number and context_data and 'github_projects' in context_data:
+                github_projects_data = context_data['github_projects']
+                # Phase 3: Handle new structure with user_projects and org_projects
+                if isinstance(github_projects_data, dict):
+                    # Try org_projects first (prioritize for org repos)
+                    projects_list = None
+                    if 'org_projects' in github_projects_data and github_projects_data['org_projects']:
+                        projects_list = github_projects_data['org_projects']
+                        if not project_owner_type:
+                            project_owner_type = 'org'
+                    elif 'user_projects' in github_projects_data and github_projects_data['user_projects']:
+                        projects_list = github_projects_data['user_projects']
+                        if not project_owner_type:
+                            project_owner_type = 'user'
+                    # Backward compatibility: old Phase 1 structure
+                    elif 'github_projects' in github_projects_data:
+                        projects_list = github_projects_data['github_projects']
+                    
+                    if projects_list and len(projects_list) > 0:
+                        # Use the first (most recent) project
+                        first_project = projects_list[0]
+                        if not project_number and 'number' in first_project:
+                            project_number = first_project['number']
+                        if not github_project_url and 'url' in first_project:
+                            github_project_url = first_project['url']
+                        if not project_owner and 'owner' in first_project:
+                            project_owner = first_project['owner']
+                        # Detect owner_type from project if not set
+                        if not project_owner_type and 'source' in first_project:
+                            project_owner_type = first_project['source']
 
         tag_ids = []
         if tags:
-            print(f"DEBUG: Auto-creating {len(tags)} tags...")
             # Run tag creation in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             tag_ids = await loop.run_in_executor(thread_pool, db.auto_create_tags, tags)
-            print(f"DEBUG: Tags created successfully: {tag_ids}")
 
         # Run database operations in thread pool to avoid blocking event loop
         def create_entry_in_db():
-            print("DEBUG: Starting database operations...")
             with db.get_connection() as conn:
-                print("DEBUG: Database connection established")
                 cursor = conn.execute("""
                     INSERT INTO memory_journal (
-                        entry_type, content, is_personal, project_context, related_patterns
-                    ) VALUES (?, ?, ?, ?, ?)
-                """, (entry_type, content, is_personal, project_context, ','.join(tags)))
+                        entry_type, content, is_personal, project_context, related_patterns,
+                        project_number, project_item_id, github_project_url
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (entry_type, content, is_personal, project_context, ','.join(tags),
+                      project_number, project_item_id, github_project_url))
 
                 entry_id = cursor.lastrowid
                 if entry_id is None:
                     raise RuntimeError("Failed to get entry ID after insert")
-                print(f"DEBUG: Entry inserted with ID: {entry_id}")
 
                 for tag_id in tag_ids:
                     conn.execute(
@@ -1026,26 +1773,18 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                     """, (entry_id, significance_type))
 
                 conn.commit()  # CRITICAL FIX: Missing commit was causing hangs!
-                print("DEBUG: Database transaction committed successfully")
                 return entry_id
 
         # Run in thread pool to avoid blocking
-        print("DEBUG: Submitting database operation to thread pool...")
         loop = asyncio.get_event_loop()
         result_entry_id: int = await loop.run_in_executor(thread_pool, create_entry_in_db)
-        print(f"DEBUG: Database operation completed, entry_id: {result_entry_id}")
 
         # Generate and store embedding for semantic search (if available)
         if vector_search and vector_search.initialized:
             try:
-                print("DEBUG: Generating embedding for semantic search...")
-                embedding_success = await vector_search.add_entry_embedding(result_entry_id, content)
-                if embedding_success:
-                    print(f"DEBUG: Embedding generated successfully for entry #{result_entry_id}")
-                else:
-                    print(f"DEBUG: Failed to generate embedding for entry #{result_entry_id}")
-            except Exception as e:
-                print(f"DEBUG: Error generating embedding: {e}")
+                await vector_search.add_entry_embedding(result_entry_id, content)
+            except Exception:
+                pass  # Silently fail if embedding generation fails
 
         result = [types.TextContent(
             type="text",
@@ -1054,35 +1793,69 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                  f"Personal: {is_personal}\n"
                  f"Tags: {', '.join(tags) if tags else 'None'}"
         )]
-        print("DEBUG: create_entry completed successfully, returning result")
         return result
 
     elif name == "search_entries":
         query = arguments.get("query")
         is_personal = arguments.get("is_personal")
         limit = arguments.get("limit", 10)
+        project_number = arguments.get("project_number")
 
         if query:
+            # Escape special FTS5 characters and properly quote the query
+            # FTS5 special chars: + - " * ( ) : . AND OR NOT
+            # If query contains special chars, wrap individual terms in quotes
+            def escape_fts5_query(q: str) -> str:
+                """Escape FTS5 special characters for safe querying."""
+                # Check if query contains FTS5 operators or special chars
+                special_chars = ['-', '+', '*', '(', ')', '"', '.', ':']
+                has_special = any(char in q for char in special_chars)
+                
+                if has_special:
+                    # For queries with special chars, we need to escape them within quotes
+                    # Replace double quotes with escaped quotes
+                    escaped = q.replace('"', '""')
+                    # Wrap the entire query in quotes for literal matching
+                    return f'"{escaped}"'
+                else:
+                    # No special chars, return as-is for natural FTS5 matching
+                    return q
+            
+            escaped_query = escape_fts5_query(query)
+            
             sql = """
-                SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal,
+                SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal, m.project_number,
                        snippet(memory_journal_fts, 0, '**', '**', '...', 20) AS snippet
                 FROM memory_journal_fts
                 JOIN memory_journal m ON memory_journal_fts.rowid = m.id
                 WHERE memory_journal_fts MATCH ?
+                AND m.deleted_at IS NULL
             """
-            params = [query]
+            params = [escaped_query]
+            
+            if is_personal is not None:
+                sql += " AND m.is_personal = ?"
+                params.append(is_personal)
+            
+            if project_number is not None:
+                sql += " AND m.project_number = ?"
+                params.append(project_number)
         else:
             sql = """
-                SELECT id, entry_type, content, timestamp, is_personal,
+                SELECT id, entry_type, content, timestamp, is_personal, project_number,
                        substr(content, 1, 100) || '...' AS snippet
                 FROM memory_journal
-                WHERE 1=1
+                WHERE deleted_at IS NULL
             """
             params = []
-
-        if is_personal is not None:
-            sql += " AND is_personal = ?"
-            params.append(is_personal)
+            
+            if is_personal is not None:
+                sql += " AND is_personal = ?"
+                params.append(is_personal)
+            
+            if project_number is not None:
+                sql += " AND project_number = ?"
+                params.append(project_number)
 
         sql += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
@@ -1153,32 +1926,33 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         return [types.TextContent(type="text", text=result)]
 
     elif name == "test_simple":
-        print("DEBUG: Running simple test...")
         message = arguments.get("message", "Hello")
-        print(f"DEBUG: Simple test completed with message: {message}")
         return [types.TextContent(
             type="text",
             text=f"✅ Simple test successful! Message: {message}"
         )]
 
     elif name == "create_entry_minimal":
-        print("DEBUG: Starting minimal entry creation...")
         content = arguments["content"]
+        
+        # GitHub Projects parameters (Phase 1 - Issue #15)
+        project_number = arguments.get("project_number")
+        project_item_id = arguments.get("project_item_id")
+        github_project_url = arguments.get("github_project_url")
 
         # Just a simple database insert without any context or tag operations
         def minimal_db_insert():
-            print("DEBUG: Minimal DB insert starting...")
             with db.get_connection() as conn:
                 cursor = conn.execute("""
                     INSERT INTO memory_journal (
-                        entry_type, content, is_personal
-                    ) VALUES (?, ?, ?)
-                """, ("test_entry", content, True))
+                        entry_type, content, is_personal,
+                        project_number, project_item_id, github_project_url
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                """, ("test_entry", content, True, project_number, project_item_id, github_project_url))
                 entry_id = cursor.lastrowid
                 if entry_id is None:
                     raise RuntimeError("Failed to get entry ID after insert")
                 conn.commit()
-                print(f"DEBUG: Minimal DB insert completed, entry_id: {entry_id}")
                 return entry_id
 
         # Run in thread pool
@@ -1202,10 +1976,19 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                 text="❌ Query parameter is required for semantic search"
             )]
 
-        if not vector_search or not vector_search.initialized:
+        if not vector_search:
             return [types.TextContent(
                 type="text",
                 text="❌ Vector search not available. Install dependencies: pip install sentence-transformers faiss-cpu"
+            )]
+        
+        # Trigger lazy initialization on first use (await since it's now async)
+        await vector_search._ensure_initialized()
+        
+        if not vector_search.initialized:
+            return [types.TextContent(
+                type="text",
+                text="❌ Vector search initialization failed. Check server logs for details."
             )]
 
         try:
@@ -1416,9 +2199,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
 
         def get_entry_details():
             with db.get_connection() as conn:
-                # Get main entry
+                # Get main entry (including GitHub Projects columns - Phase 1 Issue #15)
                 cursor = conn.execute("""
-                    SELECT id, entry_type, content, timestamp, is_personal, project_context, related_patterns
+                    SELECT id, entry_type, content, timestamp, is_personal, project_context, related_patterns,
+                           project_number, project_item_id, github_project_url
                     FROM memory_journal
                     WHERE id = ? AND deleted_at IS NULL
                 """, (entry_id,))
@@ -1566,6 +2350,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         is_personal = arguments.get("is_personal")
         entry_type = arguments.get("entry_type")
         tags = arguments.get("tags", [])
+        project_number = arguments.get("project_number")
 
         if not start_date or not end_date:
             return [types.TextContent(type="text", text="❌ Both start_date and end_date are required (YYYY-MM-DD)")]
@@ -1573,7 +2358,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         def search_entries():
             with db.get_connection() as conn:
                 sql = """
-                    SELECT DISTINCT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
+                    SELECT DISTINCT m.id, m.entry_type, m.content, m.timestamp, m.is_personal, m.project_number
                     FROM memory_journal m
                     WHERE m.deleted_at IS NULL
                     AND DATE(m.timestamp) >= DATE(?)
@@ -1588,6 +2373,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                 if entry_type:
                     sql += " AND m.entry_type = ?"
                     params.append(entry_type)
+                
+                if project_number is not None:
+                    sql += " AND m.project_number = ?"
+                    params.append(project_number)
 
                 if tags:
                     sql += """ AND m.id IN (
@@ -1623,6 +2412,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
         start_date = arguments.get("start_date")
         end_date = arguments.get("end_date")
         group_by = arguments.get("group_by", "week")
+        project_breakdown = arguments.get("project_breakdown", False)
 
         def calculate_stats():
             with db.get_connection() as conn:
@@ -1701,6 +2491,27 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
                 """, params)
                 stats['activity_by_period'] = {row[0]: row[1] for row in cursor.fetchall()}
 
+                # Phase 2 - Project Breakdown
+                if project_breakdown:
+                    cursor = conn.execute(f"""
+                        SELECT project_number, COUNT(*) as count
+                        FROM memory_journal
+                        {where} AND project_number IS NOT NULL
+                        GROUP BY project_number
+                        ORDER BY count DESC
+                    """, params)
+                    stats['by_project'] = {f"Project #{row[0]}": row[1] for row in cursor.fetchall()}
+                    
+                    # Active days per project
+                    cursor = conn.execute(f"""
+                        SELECT project_number, COUNT(DISTINCT DATE(timestamp)) as active_days
+                        FROM memory_journal
+                        {where} AND project_number IS NOT NULL
+                        GROUP BY project_number
+                        ORDER BY active_days DESC
+                    """, params)
+                    stats['project_active_days'] = {f"Project #{row[0]}": row[1] for row in cursor.fetchall()}
+
                 return stats
 
         loop = asyncio.get_event_loop()
@@ -1733,6 +2544,14 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
             output += f"**Activity by {group_by.capitalize()}:**\n"
             for period, count in list(stats['activity_by_period'].items())[-10:]:
                 output += f"  • {period}: {count} entries\n"
+
+        # Phase 2 - Project Breakdown
+        if project_breakdown and 'by_project' in stats and stats['by_project']:
+            output += "\n**📦 Project Breakdown (Phase 2):**\n"
+            for project, count in stats['by_project'].items():
+                active_days = stats['project_active_days'].get(project, 0)
+                output += f"  • {project}: {count} entries ({active_days} active days)\n"
+            output += "\n"
 
         return [types.TextContent(type="text", text=output)]
 
@@ -1977,6 +2796,141 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextCont
 
         return [types.TextContent(type="text", text=summary)]
 
+    elif name == "get_cross_project_insights":
+        # Phase 2 - Issue #16: Cross-project insights
+        start_date = arguments.get("start_date")
+        end_date = arguments.get("end_date")
+        min_entries = arguments.get("min_entries", 3)
+
+        def analyze_projects():
+            with db.get_connection() as conn:
+                # Base WHERE clause
+                where = "WHERE deleted_at IS NULL AND project_number IS NOT NULL"
+                params = []
+                
+                if start_date:
+                    where += " AND DATE(timestamp) >= DATE(?)"
+                    params.append(start_date)
+                if end_date:
+                    where += " AND DATE(timestamp) <= DATE(?)"
+                    params.append(end_date)
+
+                # Get active projects (ranked by entry count)
+                cursor = conn.execute(f"""
+                    SELECT project_number, COUNT(*) as entry_count,
+                           MIN(DATE(timestamp)) as first_entry,
+                           MAX(DATE(timestamp)) as last_entry,
+                           COUNT(DISTINCT DATE(timestamp)) as active_days
+                    FROM memory_journal {where}
+                    GROUP BY project_number
+                    HAVING entry_count >= ?
+                    ORDER BY entry_count DESC
+                """, params + [min_entries])
+                projects = [dict(row) for row in cursor.fetchall()]
+
+                # Get most productive day per project
+                productivity = {}
+                for proj in projects:
+                    project_num = proj['project_number']
+                    cursor = conn.execute(f"""
+                        SELECT strftime('%A', timestamp) as day_of_week, COUNT(*) as count
+                        FROM memory_journal
+                        WHERE project_number = ? AND deleted_at IS NULL
+                        GROUP BY day_of_week
+                        ORDER BY count DESC
+                        LIMIT 1
+                    """, (project_num,))
+                    result = cursor.fetchone()
+                    if result:
+                        productivity[project_num] = {'day': result[0], 'count': result[1]}
+
+                # Get top tags per project
+                project_tags = {}
+                for proj in projects:
+                    project_num = proj['project_number']
+                    cursor = conn.execute(f"""
+                        SELECT t.name, COUNT(*) as count
+                        FROM tags t
+                        JOIN entry_tags et ON t.id = et.tag_id
+                        JOIN memory_journal m ON et.entry_id = m.id
+                        WHERE m.project_number = ? AND m.deleted_at IS NULL
+                        GROUP BY t.name
+                        ORDER BY count DESC
+                        LIMIT 5
+                    """, (project_num,))
+                    project_tags[project_num] = [dict(row) for row in cursor.fetchall()]
+
+                # Identify low-activity projects (last entry > 7 days ago)
+                from datetime import datetime, timedelta
+                cutoff_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+                cursor = conn.execute(f"""
+                    SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
+                    FROM memory_journal
+                    WHERE deleted_at IS NULL AND project_number IS NOT NULL
+                    GROUP BY project_number
+                    HAVING last_entry_date < ?
+                """, (cutoff_date,))
+                inactive_projects = [dict(row) for row in cursor.fetchall()]
+
+                return {
+                    'projects': projects,
+                    'productivity': productivity,
+                    'project_tags': project_tags,
+                    'inactive_projects': inactive_projects
+                }
+
+        loop = asyncio.get_event_loop()
+        insights = await loop.run_in_executor(thread_pool, analyze_projects)
+
+        # Format output
+        output = "📊 **Cross-Project Insights (Phase 2)**\n\n"
+        
+        if not insights['projects']:
+            output += f"No projects found with at least {min_entries} entries.\n"
+            return [types.TextContent(type="text", text=output)]
+
+        output += f"**Active Projects:** {len(insights['projects'])}\n"
+        if start_date or end_date:
+            output += f"**Period:** {start_date or 'start'} to {end_date or 'now'}\n"
+        output += "\n"
+
+        # Project ranking
+        output += "**Projects by Activity:**\n"
+        for i, proj in enumerate(insights['projects'][:10], 1):
+            proj_num = proj['project_number']
+            output += f"{i}. **Project #{proj_num}**\n"
+            output += f"   - Entries: {proj['entry_count']}\n"
+            output += f"   - Active Days: {proj['active_days']}\n"
+            output += f"   - Period: {proj['first_entry']} to {proj['last_entry']}\n"
+            
+            # Productivity info
+            if proj_num in insights['productivity']:
+                prod = insights['productivity'][proj_num]
+                output += f"   - Most Productive: {prod['day']} ({prod['count']} entries)\n"
+            
+            # Top tags
+            if proj_num in insights['project_tags'] and insights['project_tags'][proj_num]:
+                tags = [f"{t['name']} ({t['count']})" for t in insights['project_tags'][proj_num][:3]]
+                output += f"   - Top Tags: {', '.join(tags)}\n"
+            
+            output += "\n"
+
+        # Time distribution summary
+        total_entries = sum(p['entry_count'] for p in insights['projects'])
+        output += "**Time Distribution:**\n"
+        for proj in insights['projects'][:5]:
+            percentage = (proj['entry_count'] / total_entries) * 100
+            output += f"  • Project #{proj['project_number']}: {percentage:.1f}%\n"
+        output += "\n"
+
+        # Suggested focus areas
+        if insights['inactive_projects']:
+            output += "**⚠️ Suggested Focus Areas (>7 days since last entry):**\n"
+            for proj in insights['inactive_projects'][:5]:
+                output += f"  • Project #{proj['project_number']} - Last entry: {proj['last_entry_date']}\n"
+
+        return [types.TextContent(type="text", text=output)]
+
     else:
         raise ValueError(f"Unknown tool: {name}")
 
@@ -1989,126 +2943,187 @@ async def list_prompts() -> List[Prompt]:
             name="get-context-bundle",
             description="Get current project context as JSON",
             arguments=[
-                {
-                    "name": "include_git",
-                    "description": "Include Git repository information",
-                    "required": False
-                }
+                PromptArgument(
+                    name="include_git",
+                    description="Include Git repository information",
+                    required=False
+                )
             ]
         ),
         Prompt(
             name="get-recent-entries",
             description="Get the last X journal entries",
             arguments=[
-                {
-                    "name": "count",
-                    "description": "Number of recent entries to retrieve (default: 5)",
-                    "required": False
-                },
-                {
-                    "name": "personal_only",
-                    "description": "Only show personal entries (true/false)",
-                    "required": False
-                }
+                PromptArgument(
+                    name="count",
+                    description="Number of recent entries to retrieve (default: 5)",
+                    required=False
+                ),
+                PromptArgument(
+                    name="personal_only",
+                    description="Only show personal entries (true/false)",
+                    required=False
+                )
             ]
         ),
         Prompt(
             name="analyze-period",
             description="Analyze journal entries over a specific time period for insights, patterns, and achievements",
             arguments=[
-                {
-                    "name": "start_date",
-                    "description": "Start date for analysis (YYYY-MM-DD)",
-                    "required": True
-                },
-                {
-                    "name": "end_date",
-                    "description": "End date for analysis (YYYY-MM-DD)",
-                    "required": True
-                },
-                {
-                    "name": "focus_area",
-                    "description": "Optional focus area (e.g., 'technical', 'personal', 'productivity')",
-                    "required": False
-                }
+                PromptArgument(
+                    name="start_date",
+                    description="Start date for analysis (YYYY-MM-DD)",
+                    required=True
+                ),
+                PromptArgument(
+                    name="end_date",
+                    description="End date for analysis (YYYY-MM-DD)",
+                    required=True
+                ),
+                PromptArgument(
+                    name="focus_area",
+                    description="Optional focus area (e.g., 'technical', 'personal', 'productivity')",
+                    required=False
+                )
             ]
         ),
         Prompt(
             name="prepare-standup",
             description="Prepare daily standup summary from recent technical journal entries",
             arguments=[
-                {
-                    "name": "days_back",
-                    "description": "Number of days to look back (default: 1)",
-                    "required": False
-                }
+                PromptArgument(
+                    name="days_back",
+                    description="Number of days to look back (default: 1)",
+                    required=False
+                )
             ]
         ),
         Prompt(
             name="prepare-retro",
             description="Prepare sprint retrospective with achievements, learnings, and areas for improvement",
             arguments=[
-                {
-                    "name": "sprint_start",
-                    "description": "Sprint start date (YYYY-MM-DD)",
-                    "required": True
-                },
-                {
-                    "name": "sprint_end",
-                    "description": "Sprint end date (YYYY-MM-DD)",
-                    "required": True
-                }
+                PromptArgument(
+                    name="sprint_start",
+                    description="Sprint start date (YYYY-MM-DD)",
+                    required=True
+                ),
+                PromptArgument(
+                    name="sprint_end",
+                    description="Sprint end date (YYYY-MM-DD)",
+                    required=True
+                )
             ]
         ),
         Prompt(
             name="find-related",
             description="Find entries related to a specific entry using semantic similarity and tags",
             arguments=[
-                {
-                    "name": "entry_id",
-                    "description": "Entry ID to find related entries for",
-                    "required": True
-                },
-                {
-                    "name": "similarity_threshold",
-                    "description": "Minimum similarity score (0.0-1.0, default: 0.3)",
-                    "required": False
-                }
+                PromptArgument(
+                    name="entry_id",
+                    description="Entry ID to find related entries for",
+                    required=True
+                ),
+                PromptArgument(
+                    name="similarity_threshold",
+                    description="Minimum similarity score (0.0-1.0, default: 0.3)",
+                    required=False
+                )
             ]
         ),
         Prompt(
             name="weekly-digest",
             description="Generate a formatted summary of journal entries for a specific week",
             arguments=[
-                {
-                    "name": "week_offset",
-                    "description": "Week offset (0 = current week, -1 = last week, etc.)",
-                    "required": False
-                }
+                PromptArgument(
+                    name="week_offset",
+                    description="Week offset (0 = current week, -1 = last week, etc.)",
+                    required=False
+                )
             ]
         ),
         Prompt(
             name="goal-tracker",
             description="Track progress on goals and milestones from journal entries",
             arguments=[
-                {
-                    "name": "project_name",
-                    "description": "Optional project name to filter by",
-                    "required": False
-                },
-                {
-                    "name": "goal_type",
-                    "description": "Type of goal (milestone, technical_breakthrough, etc.)",
-                    "required": False
-                }
+                PromptArgument(
+                    name="project_name",
+                    description="Optional project name to filter by",
+                    required=False
+                ),
+                PromptArgument(
+                    name="goal_type",
+                    description="Type of goal (milestone, technical_breakthrough, etc.)",
+                    required=False
+                )
+            ]
+        ),
+        Prompt(
+            name="project-status-summary",
+            description="Generate comprehensive GitHub Project status report (Phase 2 & 3: org support)",
+            arguments=[
+                PromptArgument(
+                    name="project_number",
+                    description="GitHub Project number",
+                    required=True
+                ),
+                PromptArgument(
+                    name="time_period",
+                    description="Time period (week, sprint, month, default: week)",
+                    required=False
+                ),
+                PromptArgument(
+                    name="include_items",
+                    description="Include project item status (true/false, default: true)",
+                    required=False
+                ),
+                PromptArgument(
+                    name="owner",
+                    description="Phase 3: Project owner (username or org name) - optional, auto-detected from context",
+                    required=False
+                ),
+                PromptArgument(
+                    name="owner_type",
+                    description="Phase 3: Project owner type (user or org) - optional, auto-detected",
+                    required=False
+                )
+            ]
+        ),
+        Prompt(
+            name="project-milestone-tracker",
+            description="Track GitHub Project milestones with velocity analysis (Phase 2 & 3: org support)",
+            arguments=[
+                PromptArgument(
+                    name="project_number",
+                    description="GitHub Project number",
+                    required=True
+                ),
+                PromptArgument(
+                    name="milestone_name",
+                    description="Optional milestone name to filter by",
+                    required=False
+                ),
+                PromptArgument(
+                    name="owner",
+                    description="Phase 3: Project owner (username or org name) - optional, auto-detected from context",
+                    required=False
+                ),
+                PromptArgument(
+                    name="owner_type",
+                    description="Phase 3: Project owner type (user or org) - optional, auto-detected",
+                    required=False
+                )
             ]
         )
     ]
 
 
 @server.get_prompt()
-async def get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptResult:
+async def get_prompt(name: str, arguments: Dict[str, str] | None) -> types.GetPromptResult:  # type: ignore[misc]
     """Handle prompt requests."""
+    
+    # Ensure arguments is not None
+    if arguments is None:
+        arguments = {}
 
     if name == "get-context-bundle":
         include_git = arguments.get("include_git", "true").lower() == "true"
@@ -2118,9 +3133,10 @@ async def get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptRes
             context = await db.get_project_context()
         else:
             # Get basic context without Git operations
+            from datetime import datetime as dt_now
             context = {
                 'cwd': os.getcwd(),
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': dt_now.now().isoformat(),
                 'git_disabled': 'Git operations skipped by request'
             }
 
@@ -2765,19 +3781,281 @@ async def get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptRes
             ]
         )
 
+    elif name == "project-status-summary":
+        # Phase 2 - Issue #16: Project Status Summary (Phase 3: org support)
+        project_number = int(arguments.get("project_number", "0"))
+        time_period = arguments.get("time_period", "week")
+        include_items = arguments.get("include_items", "true").lower() == "true"
+        owner_arg = arguments.get("owner")  # Phase 3
+        owner_type_arg = arguments.get("owner_type")  # Phase 3
+
+        if not project_number:
+            return types.GetPromptResult(
+                description="Project status summary error",
+                messages=[PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text="❌ project_number is required")
+                )]
+            )
+
+        # Calculate date range based on time period
+        from datetime import datetime, timedelta
+        end_date = datetime.now()
+        if time_period == "month":
+            start_date = end_date - timedelta(days=30)
+        elif time_period == "sprint":
+            start_date = end_date - timedelta(days=14)
+        else:  # week
+            start_date = end_date - timedelta(days=7)
+
+        start_str = start_date.strftime('%Y-%m-%d')
+        end_str = end_date.strftime('%Y-%m-%d')
+
+        def get_project_data():
+            with db.get_connection() as conn:
+                # Get journal entries for this project
+                cursor = conn.execute("""
+                    SELECT id, entry_type, content, timestamp
+                    FROM memory_journal
+                    WHERE project_number = ? AND deleted_at IS NULL
+                      AND DATE(timestamp) >= DATE(?) AND DATE(timestamp) <= DATE(?)
+                    ORDER BY timestamp DESC
+                """, (project_number, start_str, end_str))
+                entries = [dict(row) for row in cursor.fetchall()]
+
+                # Get project statistics
+                cursor = conn.execute("""
+                    SELECT COUNT(*) as total,
+                           COUNT(DISTINCT DATE(timestamp)) as active_days,
+                           MIN(timestamp) as first_entry,
+                           MAX(timestamp) as last_entry
+                    FROM memory_journal
+                    WHERE project_number = ? AND deleted_at IS NULL
+                """, (project_number,))
+                stats = dict(cursor.fetchone())
+
+                return entries, stats
+
+        loop = asyncio.get_event_loop()
+        entries, stats = await loop.run_in_executor(thread_pool, get_project_data)
+
+        # Get project details and items from GitHub (Phase 3: use owner params if provided)
+        project_context = await db.get_project_context()
+        owner = owner_arg
+        owner_type = owner_type_arg if owner_type_arg in ['user', 'org'] else 'user'
+        
+        # Auto-detect owner from context if not provided
+        if not owner and 'repo_path' in project_context:
+            owner = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+            if owner:
+                owner_type = github_projects.detect_owner_type(owner)
+
+        project_details = None
+        project_items = []
+        if owner and include_items:
+            project_details = github_projects.get_project_details(owner, project_number, owner_type)
+            project_items = github_projects.get_project_items_with_fields(owner, project_number, limit=50, owner_type=owner_type)
+
+        # Format output
+        summary = f"# 📊 Project #{project_number} Status Summary\n\n"
+        summary += f"**Period:** {start_str} to {end_str} ({time_period})\n"
+        summary += f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+
+        # Project overview
+        if project_details:
+            summary += f"## Project Overview\n"
+            summary += f"**Name:** {project_details.get('name', 'Unknown')}\n"
+            if project_details.get('description'):
+                summary += f"**Description:** {project_details['description']}\n"
+            summary += f"**Status:** {project_details.get('state', 'unknown')}\n"
+            summary += f"**URL:** {project_details.get('url', 'N/A')}\n\n"
+
+        # Journal statistics
+        summary += f"## Journal Activity\n"
+        summary += f"**Total Entries:** {len(entries)}\n"
+        summary += f"**Active Days:** {stats.get('active_days', 0)}\n"
+        if stats.get('first_entry'):
+            summary += f"**First Entry:** {stats['first_entry']}\n"
+        if stats.get('last_entry'):
+            summary += f"**Last Entry:** {stats['last_entry']}\n"
+        summary += "\n"
+
+        # Recent journal entries
+        if entries:
+            summary += f"## Recent Entries\n"
+            for entry in entries[:10]:
+                preview = entry['content'][:150] + ('...' if len(entry['content']) > 150 else '')
+                summary += f"- **#{entry['id']}** ({entry['entry_type']}) - {entry['timestamp'][:10]}\n"
+                summary += f"  {preview}\n\n"
+
+        # Project items status
+        if include_items and project_items:
+            summary += f"## Project Items ({len(project_items)} total)\n"
+            
+            # Group by status
+            by_status = {}
+            for item in project_items:
+                status = item.get('status', 'unknown')
+                if status not in by_status:
+                    by_status[status] = []
+                by_status[status].append(item)
+            
+            for status, items in by_status.items():
+                summary += f"\n### {status.capitalize()} ({len(items)})\n"
+                for item in items[:5]:
+                    title = item.get('title', 'Untitled')
+                    summary += f"- {title}\n"
+
+        # Key insights
+        summary += f"\n## Key Insights\n"
+        if len(entries) > 0:
+            avg_per_day = len(entries) / max(stats.get('active_days', 1), 1)
+            summary += f"- Average entries per active day: {avg_per_day:.1f}\n"
+        
+        if include_items and project_items:
+            completed = len(by_status.get('done', [])) + len(by_status.get('completed', []))
+            total_items = len(project_items)
+            if total_items > 0:
+                completion_rate = (completed / total_items) * 100
+                summary += f"- Project completion rate: {completion_rate:.1f}%\n"
+
+        return types.GetPromptResult(
+            description=f"Project #{project_number} status summary",
+            messages=[PromptMessage(
+                role="user",
+                content=types.TextContent(type="text", text=summary)
+            )]
+        )
+
+    elif name == "project-milestone-tracker":
+        # Phase 2 - Issue #16: Project Milestone Tracker (Phase 3: org support)
+        project_number = int(arguments.get("project_number", "0"))
+        milestone_name = arguments.get("milestone_name")
+        owner_arg = arguments.get("owner")  # Phase 3
+        owner_type_arg = arguments.get("owner_type")  # Phase 3
+
+        if not project_number:
+            return types.GetPromptResult(
+                description="Milestone tracker error",
+                messages=[PromptMessage(
+                    role="user",
+                    content=types.TextContent(type="text", text="❌ project_number is required")
+                )]
+            )
+
+        def get_milestone_data():
+            with db.get_connection() as conn:
+                # Get all journal entries for this project
+                cursor = conn.execute("""
+                    SELECT id, entry_type, content, timestamp,
+                           strftime('%Y-W%W', timestamp) as week
+                    FROM memory_journal
+                    WHERE project_number = ? AND deleted_at IS NULL
+                    ORDER BY timestamp DESC
+                """, (project_number,))
+                entries = [dict(row) for row in cursor.fetchall()]
+
+                # Calculate velocity (entries per week)
+                cursor = conn.execute("""
+                    SELECT strftime('%Y-W%W', timestamp) as week, COUNT(*) as count
+                    FROM memory_journal
+                    WHERE project_number = ? AND deleted_at IS NULL
+                    GROUP BY week
+                    ORDER BY week DESC
+                    LIMIT 12
+                """, (project_number,))
+                velocity = [dict(row) for row in cursor.fetchall()]
+
+                return entries, velocity
+
+        loop = asyncio.get_event_loop()
+        entries, velocity = await loop.run_in_executor(thread_pool, get_milestone_data)
+
+        # Get GitHub milestones (Phase 3: use owner params if provided)
+        project_context = await db.get_project_context()
+        owner = owner_arg
+        repo = None
+        
+        # Auto-detect owner from context if not provided
+        if not owner and 'repo_path' in project_context:
+            owner = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+        
+        if 'repo_name' in project_context:
+            repo = project_context['repo_name']
+
+        milestones = []
+        if owner and repo:
+            milestones = github_projects.get_repo_milestones(owner, repo)
+            if milestone_name:
+                milestones = [m for m in milestones if milestone_name.lower() in m.get('title', '').lower()]
+
+        # Format output
+        tracker = f"# 🎯 Milestone Tracker - Project #{project_number}\n\n"
+        
+        if milestones:
+            tracker += f"## GitHub Milestones\n"
+            for milestone in milestones:
+                tracker += f"\n### {milestone['title']}\n"
+                if milestone.get('description'):
+                    tracker += f"{milestone['description']}\n\n"
+                tracker += f"**Status:** {milestone['state']}\n"
+                tracker += f"**Progress:** {milestone['closed_issues']}/{milestone['open_issues'] + milestone['closed_issues']} issues closed\n"
+                if milestone.get('due_on'):
+                    tracker += f"**Due:** {milestone['due_on'][:10]}\n"
+                tracker += f"**URL:** {milestone['url']}\n"
+        else:
+            tracker += f"No GitHub milestones found for this project.\n\n"
+
+        # Journal entries summary
+        tracker += f"\n## Journal Activity\n"
+        tracker += f"**Total Entries:** {len(entries)}\n"
+        if entries:
+            tracker += f"**Date Range:** {entries[-1]['timestamp'][:10]} to {entries[0]['timestamp'][:10]}\n"
+        tracker += "\n"
+
+        # Velocity tracking
+        if velocity:
+            tracker += f"## Velocity (Last 12 Weeks)\n"
+            total_weeks = len(velocity)
+            total_entries = sum(v['count'] for v in velocity)
+            avg_velocity = total_entries / total_weeks if total_weeks > 0 else 0
+            tracker += f"**Average:** {avg_velocity:.1f} entries/week\n\n"
+            
+            tracker += "```\n"
+            for v in velocity[:8]:
+                bar = '█' * min(v['count'], 50)
+                tracker += f"{v['week']}: {bar} ({v['count']})\n"
+            tracker += "```\n\n"
+
+        # Timeline suggestion
+        tracker += f"## 📅 Suggested Timeline Visualization\n"
+        tracker += f"Use the `memory://projects/{project_number}/timeline` resource to see a detailed activity timeline.\n"
+
+        return types.GetPromptResult(
+            description=f"Project #{project_number} milestone tracker",
+            messages=[PromptMessage(
+                role="user",
+                content=types.TextContent(type="text", text=tracker)
+            )]
+        )
+
     else:
         raise ValueError(f"Unknown prompt: {name}")
 
 
 async def main():
     """Run the server."""
+    # Initialize GitHub Projects integration with db connection (Phase 2)
+    global github_projects
+    github_projects = GitHubProjectsIntegration(db_connection=db)
+    
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
             write_stream,
             InitializationOptions(
                 server_name="memory-journal",
-                server_version="1.1.3",
+                server_version="1.2.1",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

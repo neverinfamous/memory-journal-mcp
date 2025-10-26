@@ -1,13 +1,13 @@
 # Memory Journal MCP Server
 
-Last Updated October 18, 2025 8:24 PM EST - Production/Stable v1.1.3
+Last Updated October 26, 2025 - Production/Stable v1.2.1
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v1.1.3-green)
+![Version](https://img.shields.io/badge/version-v1.2.1-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
@@ -30,16 +30,66 @@ Last Updated October 18, 2025 8:24 PM EST - Production/Stable v1.1.3
 
 ---
 
-## ✨ What's New in v1.1.3
+## ✨ What's New in v1.2.1 (Patch Release - October 26, 2025)
 
-### 🎉 **Production/Stable Release**
-Memory Journal has officially graduated from beta! This release includes:
-- 15 MCP tools (up from 13)
-- 8 workflow prompts (up from 6)
-- 3 MCP resources (up from 2)
-- 17 comprehensive wiki pages
-- Automatic schema migrations
-- Production-grade stability
+### 🐛 **Critical Bug Fix: Semantic Search Initialization**
+Fixed a critical async/lazy loading race condition that could cause semantic search to hang on first use:
+- **First semantic_search now completes in <1 second** (was: could timeout after 30+ seconds)
+- **Eliminated async lock deadlocks** during ML model loading
+- **Enhanced thread pool** from 2 to 4 workers for better concurrent operations
+- **No more need to cancel and retry** - reliable semantic search on every server restart
+
+This patch release maintains full compatibility with v1.2.0 - simply upgrade and restart your MCP client.
+
+---
+
+## ✨ What's New in v1.2.0 (Phase 3 - Organization Support)
+
+### 🏢 **Organization-Level GitHub Projects** - Team Collaboration Ready
+Full support for organization-level projects alongside user projects:
+- **Automatic Owner Detection** - Detects whether repo belongs to user or organization
+- **Dual Project Lookup** - Shows both user and org projects in context
+- **Org Project Analytics** - All Phase 2 features work seamlessly with org projects
+- **Separate Token Support** - Optional `GITHUB_ORG_TOKEN` for org-specific permissions
+- **Zero Breaking Changes** - Fully backward compatible with Phase 1 & 2
+
+### 🔧 **Enhanced Phase 2 Features for Organizations**
+All advanced project analytics now support org projects:
+- **Cross-Project Insights** - Analyze patterns across user AND org projects
+- **Status Summaries** - Comprehensive reports for org project teams
+- **Milestone Tracking** - Track org-level milestones and team velocity
+- **Project Timelines** - Combined journal + GitHub activity for org projects
+- **Smart Caching** - 80%+ API reduction for both user and org projects (24hr owner type cache, 1hr project cache)
+
+### 📊 **Advanced Project Analytics** - Deep Insights Across Projects
+- **Cross-Project Insights** - Analyze patterns across all tracked projects
+- **Project Breakdown** - Time distribution and activity analysis per project
+- **Velocity Tracking** - Measure productivity with entries per week
+- **Smart Caching** - 80%+ reduction in API calls with intelligent caching (1hr TTL)
+- **Inactive Project Detection** - Automatically identify projects needing attention
+
+### 📈 **Project Status & Milestone Tracking**
+- **Status Summary Prompt** - Comprehensive project reports with GitHub data integration
+- **Milestone Tracker** - Progress visualization with velocity charts
+- **Project Timeline Resource** - Live activity feed combining journal + GitHub events
+- **Item Status Monitoring** - Track completion rates and project item states
+
+### 🔗 **GitHub Projects Integration (Phase 1)** - Enhanced Context Awareness
+Seamlessly connect your journal entries with GitHub Projects:
+- **Automatic Project Detection** - Detects GitHub Projects associated with current repository (user & org)
+- **Active Work Items** - Shows what you're actively working on from projects
+- **Entry-Project Linking** - Associate journal entries with specific projects and items
+- **Project Filtering** - Search and filter entries by project number
+- **Graceful Degradation** - Works perfectly without GitHub token (features degrade gracefully)
+
+### 🎉 **v1.2.0 - Phase 2 Capabilities**
+Building on the stable v1.1.3 foundation:
+- **16 MCP tools** (up from 15) - Added `get_cross_project_insights`
+- **10 workflow prompts** (up from 8) - Added `project-status-summary` and `project-milestone-tracker`
+- **4 MCP resources** (up from 3) - Added `memory://projects/{number}/timeline`
+- **Smart caching system** - GitHub API response caching with configurable TTLs
+- **Enhanced analytics** - Project breakdown support in `get_statistics`
+- **Backward compatible** - Seamless upgrade from v1.1.x with automatic schema migration
 
 ### 🔗 **Entry Relationships & Knowledge Graphs**
 Build connections between your entries with typed relationships:
@@ -205,16 +255,16 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 
 ## 📋 Core Capabilities
 
-### 🛠️ **15 MCP Tools** - Complete Development Workflow
+### 🛠️ **16 MCP Tools** - Complete Development Workflow
 **Entry Management:**
-- `create_entry` / `create_entry_minimal` - Create entries with auto-context
+- `create_entry` / `create_entry_minimal` - Create entries with auto-context and GitHub Projects linking
 - `update_entry` - Edit existing entries (thread-safe)
 - `delete_entry` - Soft or permanent deletion
-- `get_entry_by_id` - Retrieve with full relationship details
+- `get_entry_by_id` - Retrieve with full relationship details and project info
 
 **Search & Discovery:**
-- `search_entries` - FTS5 full-text search with highlighting
-- `search_by_date_range` - Time-based filtering with tags
+- `search_entries` - FTS5 full-text search with highlighting and project filtering
+- `search_by_date_range` - Time-based filtering with tags and projects
 - `semantic_search` - ML-powered similarity (optional)
 - `get_recent_entries` - Quick access to recent work
 
@@ -224,11 +274,12 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 
 **Organization & Analytics:**
 - `list_tags` - Tag usage statistics
-- `get_statistics` - Comprehensive analytics by time period
+- `get_statistics` - Comprehensive analytics by time period with project breakdown (Phase 2)
+- `get_cross_project_insights` - **NEW (Phase 2)** - Cross-project pattern analysis
 - `export_entries` - JSON/Markdown export
 - `test_simple` - Connectivity testing
 
-### 🎯 **8 Workflow Prompts** - Automated Productivity
+### 🎯 **10 Workflow Prompts** - Automated Productivity
 - **`prepare-standup`** - Daily standup summaries from recent entries
 - **`prepare-retro`** - Sprint retrospectives with achievements and learnings
 - **`weekly-digest`** - Day-by-day weekly summaries
@@ -237,6 +288,8 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - **`find-related`** - Discover connected entries via semantic similarity
 - **`get-context-bundle`** - Complete project context (Git + GitHub)
 - **`get-recent-entries`** - Formatted display of recent work
+- **`project-status-summary`** - **NEW (Phase 2)** - Comprehensive GitHub Project status reports
+- **`project-milestone-tracker`** - **NEW (Phase 2)** - Milestone progress with velocity tracking
 
 ### 🔍 **Triple Search System** - Find Anything, Any Way
 1. **Full-text search** - SQLite FTS5 with result highlighting and rank ordering
@@ -268,18 +321,90 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - Current branch
 - Latest commit (hash + message)
 - Recent GitHub issues (via `gh` CLI)
+- **GitHub Projects (Phase 1)** - Automatic project detection and tracking (user & org)
+- **Organization Support (Phase 3)** - Full support for org-level projects alongside user projects
+- **Project Analytics (Phase 2 & 3)** - Cross-project insights, status summaries, milestone tracking (user & org)
+- **Smart API Caching (Phase 2 & 3)** - 80%+ API call reduction (24hr owner type, 1hr projects, 15min items)
+- **Timeline Resources (Phase 2 & 3)** - Combined journal + GitHub activity feeds for user & org projects
+- **Auto Owner Detection (Phase 3)** - Automatically determines if repo belongs to user or organization
 - Working directory
 - Timestamp for all context
 
 ### 📦 **Data Export** - Own Your Data
 - **JSON format** - Machine-readable with full metadata
 - **Markdown format** - Human-readable with beautiful formatting
-- **Flexible filtering** - By date range, tags, entry types
+- **Flexible filtering** - By date range, tags, entry types, projects
 - **Portable** - Take your journal anywhere
+
+### 🔧 **Configuration & Setup**
+
+**GitHub Projects Integration (Optional):**
+
+To enable GitHub Projects features, set the `GITHUB_TOKEN` environment variable:
+
+```bash
+# Linux/macOS
+export GITHUB_TOKEN="your_github_personal_access_token"
+
+# Windows PowerShell
+$env:GITHUB_TOKEN="your_github_personal_access_token"
+```
+
+**Organization Projects (Phase 3 - Optional):**
+
+For organization-level projects, you can optionally use a separate token:
+
+```bash
+# Linux/macOS
+export GITHUB_ORG_TOKEN="your_org_access_token"
+export DEFAULT_ORG="your-org-name"  # Optional: default org for ambiguous contexts
+
+# Windows PowerShell
+$env:GITHUB_ORG_TOKEN="your_org_access_token"
+$env:DEFAULT_ORG="your-org-name"
+```
+
+**Required Scopes:**
+- User projects: `repo`, `project`
+- Org projects: `repo`, `project`, `read:org` (minimum)
+- Full org features: Add `admin:org` for team info
+
+**Fallback Options:**
+- Uses GitHub CLI (`gh`) if `GITHUB_TOKEN` is not available
+- Uses `GITHUB_TOKEN` if `GITHUB_ORG_TOKEN` not set
+- Works without GitHub token (project features gracefully disabled)
+- Auto-detects whether owner is user or organization
 
 ---
 
 ## 📖 Usage Examples
+
+### Create an Entry with GitHub Projects
+
+```javascript
+// Create an entry linked to a GitHub Project
+create_entry({
+  content: "Completed Phase 1 of GitHub Projects integration - all core features implemented!",
+  entry_type: "technical_achievement",
+  tags: ["github-projects", "integration", "milestone"],
+  project_number: 1,  // Links to GitHub Project #1
+  significance_type: "technical_breakthrough"
+})
+// Context automatically includes GitHub Projects info
+
+// Search entries by project
+search_entries({
+  project_number: 1,
+  limit: 10
+})
+
+// Filter by project and date range
+search_by_date_range({
+  start_date: "2025-10-01",
+  end_date: "2025-10-31",
+  project_number: 1
+})
+```
 
 ### Create an Entry with Relationships
 
@@ -344,6 +469,99 @@ visualize_relationships({
 
 // Access live graph resource
 memory://graph/recent  // Most recent 20 entries with relationships
+```
+
+### Phase 2: Advanced Project Features
+
+```javascript
+// Cross-project insights
+get_cross_project_insights({
+  start_date: "2025-10-01",
+  end_date: "2025-10-31",
+  min_entries: 3
+})
+// Returns: Active projects ranked by activity, time distribution, productivity patterns, inactive projects
+
+// Project statistics with breakdown
+get_statistics({
+  start_date: "2025-10-01",
+  end_date: "2025-10-31",
+  group_by: "week",
+  project_breakdown: true
+})
+// Returns: Standard stats PLUS entries per project, active days per project
+
+// Project status summary (prompt)
+project-status-summary({
+  project_number: 1,
+  time_period: "sprint",  // week, sprint, month
+  include_items: true
+})
+// Returns: Project overview, journal activity, GitHub items status, key insights
+
+// Milestone tracking (prompt)
+project-milestone-tracker({
+  project_number: 1,
+  milestone_name: "v1.2.0"  // optional filter
+})
+// Returns: Milestone progress, velocity chart, journal activity summary
+
+// Access project timeline resource
+memory://projects/1/timeline
+// Returns: Chronological feed of last 30 days (journal + GitHub events)
+```
+
+### Phase 3: Organization Project Support
+
+```javascript
+// Create entry with explicit org project
+create_entry({
+  content: "Sprint planning meeting - discussed Q4 roadmap",
+  entry_type: "technical_note",
+  tags: ["sprint-planning", "Q4"],
+  project_number: 5,
+  project_owner: "my-company",
+  project_owner_type: "org"
+})
+
+// Auto-detect works for org repos too! (detects owner type automatically)
+create_entry({
+  content: "Fixed critical bug in auth service",
+  project_number: 5  // Owner and type auto-detected from repo context
+})
+
+// Org project status summary
+project-status-summary({
+  project_number: 5,
+  owner: "my-company",
+  owner_type: "org",
+  time_period: "sprint",
+  include_items: true
+})
+// Returns: Org project overview, team activity, GitHub items, insights
+
+// Org milestone tracking
+project-milestone-tracker({
+  project_number: 5,
+  owner: "my-company",
+  owner_type: "org"
+})
+// Returns: Org milestone progress, team velocity, activity summary
+
+// Access org project timeline (explicit format)
+memory://projects/my-company/org/5/timeline
+// Returns: Org project timeline with journal + GitHub events
+
+// Access org project timeline (auto-detect format)
+memory://projects/5/timeline
+// Returns: Auto-detects if project belongs to org and fetches accordingly
+
+// Cross-project insights automatically includes org projects
+get_cross_project_insights({
+  start_date: "2025-10-01",
+  end_date: "2025-10-31"
+})
+// Returns: Insights across BOTH user and org projects
 ```
 
 ---

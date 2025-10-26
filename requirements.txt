@@ -1,6 +1,9 @@
 # Memory Journal MCP Server Dependencies
 mcp>=1.0.0
 
+# GitHub API Integration
+requests>=2.31.0
+
 # Vector Search Dependencies
 sentence-transformers>=2.2.2
 faiss-cpu>=1.7.4

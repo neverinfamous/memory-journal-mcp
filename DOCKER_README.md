@@ -1,20 +1,20 @@
 # Memory Journal MCP Server
 
-Last Updated October 24, 2025 - Production/Stable v1.1.3
+Last Updated October 26, 2025 - Production/Stable v1.2.1
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v1.1.3-green)
+![Version](https://img.shields.io/badge/version-v1.2.1-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Type Safety](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
-**Production-ready developer journal with knowledge graphs, visual relationship mapping, and intelligent search**
+**Production-ready developer journal with knowledge graphs, visual relationship mapping, intelligent search, and advanced GitHub Projects integration**
 
-🎉 **Now Production/Stable!** Build your personal knowledge graph with 15 tools, 8 workflow prompts, and 10x faster startup.
+🎉 **Now with Phase 2!** Build your personal knowledge graph with 16 tools, 10 workflow prompts, and advanced project analytics.
 
 **🚀 Multiple Deployment Options:**
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (~225MB) multi-platform support
@@ -27,15 +27,65 @@ Last Updated October 24, 2025 - Production/Stable v1.1.3
 
 ---
 
-## ✨ What's New in v1.1.3 - Production/Stable
+## ✨ What's New in v1.2.1 (Patch Release - October 26, 2025)
 
-### 🎉 Beta → Production Graduation
-Memory Journal has officially reached Production/Stable status with:
-- **15 MCP tools** (up from 13) - Complete CRUD, relationships, analytics, export
-- **8 workflow prompts** (up from 6) - Automated productivity workflows
-- **3 MCP resources** (up from 2) - Live context and visualizations
-- **17 comprehensive wiki pages** - Complete documentation
-- **Automatic migrations** - Seamless upgrades from v1.0.x
+### 🐛 **Critical Bug Fix: Semantic Search Initialization**
+Fixed a critical async/lazy loading race condition that could cause semantic search to hang on first use:
+- **First semantic_search now completes in <1 second** (was: could timeout after 30+ seconds)
+- **Eliminated async lock deadlocks** during ML model loading
+- **Enhanced thread pool** from 2 to 4 workers for better concurrent operations
+- **No more need to cancel and retry** - reliable semantic search on every server restart
+
+This patch release maintains full compatibility with v1.2.0 - simply upgrade and restart your MCP client.
+
+---
+
+## ✨ What's New in v1.2.0 (Phase 3 - Organization Support)
+
+### 🏢 **Organization-Level GitHub Projects** - Team Collaboration Ready
+Full support for organization-level projects alongside user projects:
+- **Automatic Owner Detection** - Detects whether repo belongs to user or organization
+- **Dual Project Lookup** - Shows both user and org projects in context
+- **Org Project Analytics** - All Phase 2 features work seamlessly with org projects
+- **Separate Token Support** - Optional `GITHUB_ORG_TOKEN` for org-specific permissions
+- **Zero Breaking Changes** - Fully backward compatible with Phase 1 & 2
+
+### 🔧 **Enhanced Phase 2 Features for Organizations**
+All advanced project analytics now support org projects:
+- **Cross-Project Insights** - Analyze patterns across user AND org projects
+- **Status Summaries** - Comprehensive reports for org project teams
+- **Milestone Tracking** - Track org-level milestones and team velocity
+- **Project Timelines** - Combined journal + GitHub activity for org projects
+- **Smart Caching** - 80%+ API reduction for both user and org projects (24hr owner type cache, 1hr project cache)
+
+### 📊 **Advanced Project Analytics** - Deep Insights Across Projects
+- **Cross-Project Insights** - Analyze patterns across all tracked projects
+- **Project Breakdown** - Time distribution and activity analysis per project  
+- **Velocity Tracking** - Measure productivity with entries per week
+- **Smart Caching** - 80%+ reduction in API calls with intelligent caching (1hr TTL)
+- **Inactive Project Detection** - Automatically identify projects needing attention
+
+### 📈 **Project Status & Milestone Tracking**
+- **Status Summary Prompt** - Comprehensive project reports with GitHub data integration
+- **Milestone Tracker** - Progress visualization with velocity charts
+- **Project Timeline Resource** - Live activity feed combining journal + GitHub events
+- **Item Status Monitoring** - Track completion rates and project item states
+
+### 🔗 **GitHub Projects Integration (Phase 1)** - Enhanced Context Awareness
+- **Automatic Project Detection** - Detects GitHub Projects associated with current repository (user & org)
+- **Active Work Items** - Shows what you're actively working on from projects
+- **Entry-Project Linking** - Associate journal entries with specific projects and items
+- **Project Filtering** - Search and filter entries by project number
+- **Graceful Degradation** - Works perfectly without GitHub token (features degrade gracefully)
+
+### 🎉 **v1.2.0 Summary** (October 26, 2025)
+Building on the stable v1.1.3 foundation:
+- **16 MCP tools** (up from 15) - Added `get_cross_project_insights`
+- **10 workflow prompts** (up from 8) - Added `project-status-summary` and `project-milestone-tracker`
+- **4 MCP resources** (up from 3) - Added `memory://projects/{number}/timeline`
+- **Smart caching system** - GitHub API response caching with configurable TTLs
+- **Enhanced analytics** - Project breakdown support in `get_statistics`
+- **Backward compatible** - Seamless upgrade from v1.1.x with automatic schema migration
 
 ### 🔗 Knowledge Graph & Visual Mapping
 Build connections between your work and see how ideas evolve:
@@ -162,14 +212,14 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 ### 🛠️ 15 MCP Tools - Complete Development Workflow
 
 **Entry Management:**
-- `create_entry` / `create_entry_minimal` - Create with auto-context capture
+- `create_entry` / `create_entry_minimal` - Create with auto-context and GitHub Projects linking
 - `update_entry` - Edit entries (thread-safe tag creation)
 - `delete_entry` - Soft or permanent deletion with recovery
-- `get_entry_by_id` - Retrieve with full relationship graph
+- `get_entry_by_id` - Retrieve with full relationship graph and project info
 
 **Search & Discovery:**
-- `search_entries` - FTS5 full-text with result highlighting
-- `search_by_date_range` - Time-based filtering with tags
+- `search_entries` - FTS5 full-text with result highlighting and project filtering
+- `search_by_date_range` - Time-based filtering with tags and projects
 - `semantic_search` - ML-powered similarity search (optional)
 - `get_recent_entries` - Quick access to recent work
 
@@ -219,6 +269,11 @@ Every entry can automatically include:
 - Current branch
 - Latest commit (hash + message)
 - Recent GitHub issues (via `gh` CLI)
+- **GitHub Projects (Phase 1)** - Automatic project detection and tracking (user & org)
+- **Organization Support (Phase 3)** - Full support for org-level projects alongside user projects
+- **Project Analytics (Phase 2 & 3)** - Cross-project insights, status summaries, milestone tracking (user & org)
+- **Smart API Caching (Phase 2 & 3)** - 80%+ API call reduction (24hr owner type, 1hr projects, 15min items)
+- **Auto Owner Detection (Phase 3)** - Automatically determines if repo belongs to user or organization
 - Working directory
 - Timestamp for all context
 
@@ -227,6 +282,26 @@ Perfect for maintaining project journals with rich development context.
 ---
 
 ## 📖 Usage Examples
+
+### Create Entries with GitHub Projects
+
+```javascript
+// Create entry linked to GitHub Project
+create_entry({
+  content: "Completed Phase 1 of GitHub Projects integration",
+  entry_type: "technical_achievement",
+  tags: ["github-projects", "integration", "milestone"],
+  project_number: 1,  // Links to GitHub Project #1
+  significance_type: "technical_breakthrough"
+})
+// Context automatically includes GitHub Projects info
+
+// Search entries by project
+search_entries({
+  project_number: 1,
+  limit: 10
+})
+```
 
 ### Create & Link Entries
 
@@ -263,11 +338,12 @@ search_entries({ query: "startup performance", limit: 5 })
 // Semantic search
 semantic_search({ query: "optimization techniques", limit: 3 })
 
-// Date range with tags
+// Date range with tags and projects
 search_by_date_range({
   start_date: "2025-10-01",
   end_date: "2025-10-31",
-  tags: ["performance"]
+  tags: ["performance"],
+  project_number: 1
 })
 
 // Get analytics
@@ -319,6 +395,43 @@ Mount `./data:/app/data` to persist your SQLite database:
 -e DB_PATH=/app/data/custom.db
 ```
 
+**GitHub Projects Integration:**
+
+To enable GitHub Projects features, pass your GitHub token:
+
+```bash
+docker run --rm -i \
+  -v ./data:/app/data \
+  -e GITHUB_TOKEN=your_github_token_here \
+  writenotenow/memory-journal-mcp:latest \
+  python src/server.py
+```
+
+**Organization Projects (Phase 3):**
+
+For organization-level projects, you can optionally use a separate token:
+
+```bash
+docker run --rm -i \
+  -v ./data:/app/data \
+  -e GITHUB_TOKEN=your_personal_token \
+  -e GITHUB_ORG_TOKEN=your_org_token \
+  -e DEFAULT_ORG=your-org-name \
+  writenotenow/memory-journal-mcp:latest \
+  python src/server.py
+```
+
+**Required Token Scopes:**
+- User projects: `repo`, `project`
+- Org projects: `repo`, `project`, `read:org` (minimum)
+- Full org features: Add `admin:org` for team info
+
+**Fallback Options:**
+- Uses GitHub CLI (`gh`) if `GITHUB_TOKEN` is not available
+- Uses `GITHUB_TOKEN` if `GITHUB_ORG_TOKEN` not set
+- Works without GitHub token (project features gracefully disabled)
+- Auto-detects whether owner is user or organization
+
 ### Security Features
 - **WAL mode** - Better concurrency and crash recovery
 - **Input validation** - SQL injection prevention
@@ -356,8 +469,8 @@ Mount `./data:/app/data` to persist your SQLite database:
 **Note:** ARM64 images don't include semantic search due to PyTorch Alpine incompatibility. All other features (FTS5 search, relationships, Git integration, visualization) work identically on both platforms.
 
 **Available Tags:**
-- `1.1.3` - Specific version (recommended for production)
-- `1.1` - Latest patch in 1.1.x series
+- `1.2.1` - Specific version (recommended for production)
+- `1.2` - Latest patch in 1.2.x series
 - `1` - Latest minor in 1.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security

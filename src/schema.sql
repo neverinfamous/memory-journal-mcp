@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     project_context TEXT, -- JSON: {repo, branch, files, thread_id}
     related_patterns TEXT, -- Comma-separated tags/patterns
     
+    -- GitHub Projects integration (Phase 1)
+    project_number INTEGER, -- GitHub Project number
+    project_item_id INTEGER, -- GitHub Project item ID
+    github_project_url TEXT, -- Full URL to GitHub Project
+    
     -- Extensible metadata (JSON for flexibility)
     metadata TEXT,
     
@@ -104,6 +109,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_journal_type ON memory_journal(entry_type)
 CREATE INDEX IF NOT EXISTS idx_memory_journal_personal ON memory_journal(is_personal);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_updated ON memory_journal(updated_at);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_deleted ON memory_journal(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_memory_journal_project_number ON memory_journal(project_number);
+CREATE INDEX IF NOT EXISTS idx_memory_journal_project_item_id ON memory_journal(project_item_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_source ON memory_journal_relationships(source_entry_id);
@@ -191,3 +198,15 @@ BEGIN
     -- This trigger serves as a placeholder for future automatic embedding generation
     SELECT 1; -- Valid SQL statement that does nothing
 END;
+
+-- GitHub Project Cache (Phase 2 - Issue #16)
+-- Cache GitHub API responses to reduce API calls and improve performance
+CREATE TABLE IF NOT EXISTS github_project_cache (
+    cache_key TEXT PRIMARY KEY,
+    cache_value TEXT NOT NULL,
+    cached_at INTEGER NOT NULL,
+    ttl_seconds INTEGER NOT NULL
+);
+
+-- Index for cache expiration cleanup
+CREATE INDEX IF NOT EXISTS idx_cache_expiry ON github_project_cache(cached_at, ttl_seconds);
