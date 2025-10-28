@@ -43,16 +43,16 @@ Working with AI on large projects? You're likely facing:
 Memory Journal bridges the gap between fragmented threads with **searchable project memory**:
 
 **🔍 For Developers:**
-- Automatic Git/GitHub context capture (commits, branches, issues, projects)
-- Build knowledge graphs linking specs → implementations → tests
+- Automatic Git/GitHub context capture (commits, branches, issues, PRs, projects)
+- Build knowledge graphs linking specs → implementations → tests → PRs
 - Intelligent search across your complete project timeline
-- Generate standups, retrospectives, and status reports instantly
+- Generate standups, retrospectives, PR summaries, and status reports instantly
 
 **📊 For Project Managers:**
-- Track milestones and velocity across team members
-- Unified GitHub Projects integration for comprehensive oversight
-- Cross-project analytics and pattern identification
-- Export-ready reports for stakeholder communication
+- Track milestones and velocity from issues through PRs across team members
+- Unified GitHub integration (Projects, Issues, PRs) for comprehensive oversight
+- Cross-project analytics, PR metrics, and pattern identification
+- Export-ready reports and PR timelines for stakeholder communication
 
 **🤖 For AI Conversations:**
 - AI queries your **complete development history** in any thread
@@ -146,14 +146,14 @@ All advanced project analytics now support org projects:
 - **Project Filtering** - Search and filter entries by project number
 - **Graceful Degradation** - Works perfectly without GitHub token (features degrade gracefully)
 
-### 🎉 **v1.2.0 Summary** (October 26, 2025)
-Building on the stable v1.1.3 foundation:
-- **16 MCP tools** (up from 15) - Added `get_cross_project_insights`
-- **10 workflow prompts** (up from 8) - Added `project-status-summary` and `project-milestone-tracker`
-- **5 MCP resources** (up from 4) - Added `memory://team/recent` for team collaboration
-- **Smart caching system** - GitHub API response caching with configurable TTLs
-- **Enhanced analytics** - Project breakdown support in `get_statistics`
-- **Backward compatible** - Seamless upgrade from v1.1.x with automatic schema migration
+### 🎉 **v2.0.0 - Full Capabilities** (October 28, 2025)
+- **16 MCP tools** - Complete development workflow from entry creation to export
+- **13 workflow prompts** - Including PR workflow prompts (`pr-summary`, `code-review-prep`, `pr-retrospective`)
+- **8 MCP resources** - Including issue/PR resources (issue entries, PR entries, PR timelines)
+- **GitHub Integration** - Projects, Issues, and Pull Requests with auto-linking
+- **Smart caching system** - GitHub API response caching (15min issues, 5min PRs, 1hr projects)
+- **Enhanced analytics** - Project breakdown, issue/PR tracking, cross-project insights
+- **Backward compatible** - Seamless upgrade with automatic schema migration
 
 ### 🔗 Knowledge Graph & Visual Mapping
 Build connections between your work and see how ideas evolve:
@@ -301,7 +301,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 - `export_entries` - JSON/Markdown export with filtering
 - `test_simple` - Connectivity testing
 
-### 🎯 8 Workflow Prompts - Automated Productivity
+### 🎯 13 Workflow Prompts - Automated Productivity
 
 - **`prepare-standup`** - Daily standup summaries from recent entries
 - **`prepare-retro`** - Sprint retrospectives with achievements and learnings
@@ -311,6 +311,11 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 - **`find-related`** - Discover connected entries via semantic similarity
 - **`get-context-bundle`** - Complete project context (Git + GitHub)
 - **`get-recent-entries`** - Formatted display of recent work
+- **`project-status-summary`** - Comprehensive GitHub Project status reports
+- **`project-milestone-tracker`** - Milestone progress with velocity tracking
+- **`pr-summary`** - Pull request journal activity summary with stats
+- **`code-review-prep`** - Code review preparation with full context
+- **`pr-retrospective`** - Post-merge PR analysis and learnings
 
 ### 🔍 Triple Search System - Find Anything, Any Way
 
@@ -336,11 +341,12 @@ Every entry can automatically include:
 - Repository name and path
 - Current branch
 - Latest commit (hash + message)
-- Recent GitHub issues (via `gh` CLI)
+- **GitHub Issues** - Auto-fetch recent open issues, link entries to issues
+- **GitHub Pull Requests** - Auto-detect current PR from branch, link entries to PRs
 - **GitHub Projects** - Automatic project detection and tracking (user & org)
 - **Organization Support** - Full support for org-level projects alongside user projects
 - **Project Analytics** - Cross-project insights, status summaries, milestone tracking (user & org)
-- **Smart API Caching** - 80%+ API call reduction (24hr owner type, 1hr projects, 15min items)
+- **Smart API Caching** - 80%+ API call reduction (15min issues, 5min PRs, 1hr projects, 24hr owner type)
 - **Auto Owner Detection** - Automatically determines if repo belongs to user or organization
 - Working directory
 - Timestamp for all context
@@ -453,13 +459,22 @@ memory://significant
 // Live relationship graph
 memory://graph/recent
 
-// Team-shared entries (v2.0.0)
+// Team-shared entries
 memory://team/recent
 
 // Project timeline (three formats supported)
 memory://projects/1/timeline                    // By project number
 memory://projects/memory-journal-mcp/timeline   // By project name
 memory://projects/neverinfamous/user/1/timeline // By owner/type/number
+
+// Issue journal entries
+memory://issues/123/entries                     // All entries for issue #123
+
+// PR journal entries
+memory://prs/456/entries                        // All entries for PR #456
+
+// PR activity timeline
+memory://prs/456/timeline                       // Combined PR events + journal
 ```
 
 ### Use Workflow Prompts
@@ -505,6 +520,9 @@ Use the memory-journal analyze-period prompt from 2025-10-01 to 2025-10-31
 - `find-related` - Discover related entries
 - `project-status-summary` - GitHub Project status
 - `project-milestone-tracker` - Milestone progress
+- `pr-summary` - Pull request journal activity summary
+- `code-review-prep` - Code review preparation with context
+- `pr-retrospective` - Post-merge PR analysis and learnings
 
 **How it works:** Cursor's AI recognizes these prompts and uses them to query your journal, format results, and provide insights automatically.
 
