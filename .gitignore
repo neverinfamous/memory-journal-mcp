@@ -134,6 +134,10 @@ Thumbs.db
 memory_journal.db
 memory_journal.db-*
 
+# Team collaboration database (Git-tracked for team sharing)
+# This file SHOULD be committed to Git
+!.memory-journal-team.db
+
 # Temporary build/deployment scripts
 *rebuild*.bat
 *fix-security*.bat

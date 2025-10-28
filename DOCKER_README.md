@@ -1,20 +1,20 @@
 # Memory Journal MCP Server
 
-Last Updated October 26, 2025 - Production/Stable v1.2.2
+Last Updated October 28, 2025 - Production/Stable v2.0.0
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v1.2.2-green)
+![Version](https://img.shields.io/badge/version-v2.0.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Type Safety](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
-**Production-ready developer journal with knowledge graphs, visual relationship mapping, intelligent search, and advanced GitHub Projects integration**
+**Project context management for AI-assisted development - Maintain continuity across fragmented AI threads with persistent knowledge graphs and intelligent context recall**
 
-🎉 **Now with V1.1** Build your personal knowledge graph with 16 tools, 10 workflow prompts, and advanced project analytics.
+🎯 **Solve the AI Context Problem:** Bridge the gap between disconnected AI sessions. Memory Journal provides persistent project memory, enabling AI to access your complete development history, past decisions, and work patterns across any thread or timeframe.
 
 **🚀 Multiple Deployment Options:**
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (~225MB) multi-platform support
@@ -24,6 +24,74 @@ Last Updated October 26, 2025 - Production/Stable v1.2.2
 **📚 Full Documentation:** [GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)
 
 **📰 [Read the v1.1.2 Release Article](https://adamic.tech/articles/2025-10-26-memory-journal-mcp-v1-2-x)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
+
+---
+
+## 🎯 Why Memory Journal?
+
+### **Solve the Fragmented AI Context Problem**
+
+Working with AI on large projects? You're likely facing:
+
+- **Thread Amnesia** - Each AI conversation starts fresh, no memory of previous work
+- **Lost Decisions** - Critical design choices scattered across disconnected threads
+- **Redundant Work** - AI proposes solutions you've already tried or rejected
+- **Manual Context Loading** - Tedious copying of project history into every new session
+
+### **Persistent Project Memory for AI-Assisted Development**
+
+Memory Journal bridges the gap between fragmented threads with **searchable project memory**:
+
+**🔍 For Developers:**
+- Automatic Git/GitHub context capture (commits, branches, issues, projects)
+- Build knowledge graphs linking specs → implementations → tests
+- Intelligent search across your complete project timeline
+- Generate standups, retrospectives, and status reports instantly
+
+**📊 For Project Managers:**
+- Track milestones and velocity across team members
+- Unified GitHub Projects integration for comprehensive oversight
+- Cross-project analytics and pattern identification
+- Export-ready reports for stakeholder communication
+
+**🤖 For AI Conversations:**
+- AI queries your **complete development history** in any thread
+- Semantic search finds conceptually related work automatically
+- Context bundles provide instant project state snapshots
+- Visual relationship maps show how work connects
+
+**Real Impact:** Instead of starting each AI conversation from scratch, every session has access to your entire project history - decisions, implementations, learnings, and context.
+
+---
+
+## ✨ What's New in v2.0.0 (Modular Architecture - October 28, 2025)
+
+### 🏗️ **Complete Internal Refactoring** - Production-Ready Modular Architecture
+Transformed from a monolithic 4093-line file into a well-structured, maintainable codebase:
+- **96% reduction** in main file size (4093 → 175 lines)
+- **30 focused modules** (~150-300 lines each)
+- **100% backward compatible** - Zero breaking changes
+- **No performance degradation** - All async operations maintained
+- **Enhanced maintainability** - 10x easier to navigate and modify
+
+### 📂 **New Architecture**
+```
+src/
+├── server.py (175 lines)          # Entry point
+├── database/                       # Database layer (3 modules)
+├── github/                         # GitHub integration (3 modules)
+├── handlers/                       # MCP handlers (20 modules)
+└── Core utilities (constants, exceptions, utils, vector_search)
+```
+
+### 🎯 **Benefits**
+- **Developers**: Much easier to contribute and debug
+- **Users**: Same features, more stable codebase
+- **Operations**: Easier to audit and optimize
+
+**Migration**: No action required! Simply upgrade and restart.
+
+**Learn More**: [REFACTORING_SUMMARY.md](https://github.com/neverinfamous/memory-journal-mcp/blob/main/REFACTORING_SUMMARY.md) | [Architecture Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Architecture)
 
 ---
 
@@ -82,7 +150,7 @@ All advanced project analytics now support org projects:
 Building on the stable v1.1.3 foundation:
 - **16 MCP tools** (up from 15) - Added `get_cross_project_insights`
 - **10 workflow prompts** (up from 8) - Added `project-status-summary` and `project-milestone-tracker`
-- **4 MCP resources** (up from 3) - Added `memory://projects/{number}/timeline`
+- **5 MCP resources** (up from 4) - Added `memory://team/recent` for team collaboration
 - **Smart caching system** - GitHub API response caching with configurable TTLs
 - **Enhanced analytics** - Project breakdown support in `get_statistics`
 - **Backward compatible** - Seamless upgrade from v1.1.x with automatic schema migration
@@ -143,7 +211,7 @@ Add this to your `~/.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "memory-journal": {
+    "memory-journal-mcp": {
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
@@ -359,6 +427,22 @@ export_entries({
 
 ### Access Resources
 
+**Listing MCP Resources:**
+
+To discover available resources, **always call `list_mcp_resources()` with NO parameters first**. MCP clients may add prefixes to server names (e.g., Cursor adds `user-`), so calling with a server parameter often fails:
+
+```javascript
+// ✅ CORRECT - Discovers all resources with actual server identifiers
+list_mcp_resources()
+
+// ❌ WRONG - May fail if client modified the server name
+list_mcp_resources({server: "memory-journal-mcp"})
+```
+
+After listing, use the exact server identifier from the output (e.g., `user-memory-journal-mcp` in Cursor) for `fetch_mcp_resource()` calls.
+
+**Available Resources:**
+
 ```javascript
 // Recent entries JSON
 memory://recent
@@ -368,7 +452,61 @@ memory://significant
 
 // Live relationship graph
 memory://graph/recent
+
+// Team-shared entries (v2.0.0)
+memory://team/recent
+
+// Project timeline (three formats supported)
+memory://projects/1/timeline                    // By project number
+memory://projects/memory-journal-mcp/timeline   // By project name
+memory://projects/neverinfamous/user/1/timeline // By owner/type/number
 ```
+
+### Use Workflow Prompts
+
+Prompts are AI-assisted workflow templates that help you get insights from your journal. Ask Cursor's AI to use them naturally:
+
+**In Cursor chat, ask:**
+```
+Show me my recent journal entries
+```
+```
+Show me recent team-shared entries
+```
+```
+Prepare my standup for today
+```
+```
+Generate a weekly digest
+```
+```
+Find entries related to refactoring and testing
+```
+
+**Or be specific about which prompt:**
+```
+Use the memory-journal prepare-standup prompt for today
+```
+```
+Use the memory-journal weekly-digest prompt
+```
+```
+Use the memory-journal analyze-period prompt from 2025-10-01 to 2025-10-31
+```
+
+**Available prompts:**
+- `get-context-bundle` - Current project context
+- `get-recent-entries` - Formatted recent entries
+- `prepare-standup` - Daily standup summary
+- `prepare-retro` - Sprint retrospective
+- `weekly-digest` - Week's activity breakdown
+- `analyze-period` - Deep period analysis
+- `goal-tracker` - Track goals and milestones
+- `find-related` - Discover related entries
+- `project-status-summary` - GitHub Project status
+- `project-milestone-tracker` - Milestone progress
+
+**How it works:** Cursor's AI recognizes these prompts and uses them to query your journal, format results, and provide insights automatically.
 
 ---
 
@@ -469,9 +607,9 @@ docker run --rm -i \
 **Note:** ARM64 images don't include semantic search due to PyTorch Alpine incompatibility. All other features (FTS5 search, relationships, Git integration, visualization) work identically on both platforms.
 
 **Available Tags:**
-- `1.2.1` - Specific version (recommended for production)
-- `1.2` - Latest patch in 1.2.x series
-- `1` - Latest minor in 1.x series
+- `2.0.0` - Specific version (recommended for production)
+- `2.0` - Latest patch in 2.0.x series
+- `2` - Latest minor in 2.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
 
@@ -499,7 +637,7 @@ Update your `~/.cursor/mcp.json` to use the local build:
 ```json
 {
   "mcpServers": {
-    "memory-journal": {
+    "memory-journal-mcp": {
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
