@@ -23,6 +23,8 @@ Last Updated October 28, 2025 - Production/Stable v2.0.0
 
 **📚 Documentation:** [Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki) • [v2.0.0 Release](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v2.0.0)
 
+**📰 [Read the v2.0.0 Release Article](https://adamic.tech/articles/2025-10-28-memory-journal-mcp-v2-0-0)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
+
 ---
 
 ## 🎯 What This Does
