@@ -46,16 +46,16 @@ When managing large projects with AI assistance, you face a critical challenge:
 Memory Journal acts as your project's **long-term memory**, bridging the gap between fragmented AI threads:
 
 **For Developers:**
-- 📝 **Automatic Context Capture** - Git commits, branches, GitHub issues, and project state captured with every entry
-- 🔗 **Knowledge Graph** - Link related work (specs → implementations → tests) to build a connected history
+- 📝 **Automatic Context Capture** - Git commits, branches, GitHub issues, PRs, and project state captured with every entry
+- 🔗 **Knowledge Graph** - Link related work (specs → implementations → tests → PRs) to build a connected history
 - 🔍 **Intelligent Search** - Find past decisions, solutions, and context across your entire project timeline
-- 📊 **Project Analytics** - Track progress, identify patterns, and generate reports for standups/retrospectives
+- 📊 **Project Analytics** - Track progress from issues through PRs, generate reports for standups/retrospectives/code reviews
 
 **For Project Managers:**
 - 👥 **Team Context Continuity** - Maintain shared project memory across team members and time
-- 📈 **Progress Tracking** - Monitor milestones, velocity, and cross-project insights
-- 🎯 **Status Reporting** - Generate comprehensive project summaries from accumulated work history
-- 🔄 **GitHub Projects Integration** - Connect journal entries with GitHub Projects for unified tracking
+- 📈 **Progress Tracking** - Monitor milestones, velocity, and cross-project insights from issues to PRs
+- 🎯 **Status Reporting** - Generate comprehensive project summaries with PR metrics and timelines
+- 🔄 **GitHub Integration** - Connect entries with Projects, Issues, and Pull Requests for unified tracking
 
 **For AI-Assisted Work:**
 - 💡 AI can query your **complete project history** in any conversation
@@ -186,14 +186,14 @@ Seamlessly connect your journal entries with GitHub Projects:
 - **Project Filtering** - Search and filter entries by project number
 - **Graceful Degradation** - Works perfectly without GitHub token (features degrade gracefully)
 
-### 🎉 **v1.2.0 - Capabilities**
-Building on the stable v1.1.3 foundation:
-- **16 MCP tools** (up from 15) - Added `get_cross_project_insights`
-- **10 workflow prompts** (up from 8) - Added `project-status-summary` and `project-milestone-tracker`
-- **4 MCP resources** (up from 3) - Added `memory://projects/{number}/timeline`
-- **Smart caching system** - GitHub API response caching with configurable TTLs
-- **Enhanced analytics** - Project breakdown support in `get_statistics`
-- **Backward compatible** - Seamless upgrade from v1.1.x with automatic schema migration
+### 🎉 **v2.0.0 - Full Capabilities**
+- **16 MCP tools** - Complete development workflow from entry creation to export
+- **13 workflow prompts** - Including PR workflow prompts (`pr-summary`, `code-review-prep`, `pr-retrospective`)
+- **8 MCP resources** - Including issue/PR resources (issue entries, PR entries, PR timelines)
+- **GitHub Integration** - Projects, Issues, and Pull Requests with auto-linking
+- **Smart caching system** - GitHub API response caching (15min issues, 5min PRs, 1hr projects)
+- **Enhanced analytics** - Project breakdown, issue/PR tracking, cross-project insights
+- **Backward compatible** - Seamless upgrade with automatic schema migration
 
 ### 🔗 **Entry Relationships & Knowledge Graphs**
 Build connections between your entries with typed relationships:
@@ -231,7 +231,7 @@ graph TD
 - `link_entries` - Create typed relationships between entries
 - Plus comprehensive CRUD, triple search, analytics, and export
 
-### 🎯 **Enhanced Workflow Prompts** (8 Total, +2 from v1.0)
+### 🎯 **Workflow Prompts** (13 Total in v2.0.0)
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
 - `prepare-retro` - Sprint retrospectives
@@ -240,16 +240,24 @@ graph TD
 - `goal-tracker` - Milestone and achievement tracking
 - `get-context-bundle` - Project context with Git/GitHub
 - `get-recent-entries` - Formatted recent entries
+- `project-status-summary` - GitHub Project status reports
+- `project-milestone-tracker` - Milestone progress tracking
+- `pr-summary` - Pull request journal activity summary
+- `code-review-prep` - Comprehensive PR review preparation
+- `pr-retrospective` - Completed PR analysis with learnings
 
-### 📡 **Resources** (5 Total in v2.0.0)
+### 📡 **Resources** (8 Total in v2.0.0)
 
 **MCP Server Identifier:** `user-memory-journal-mcp` (when using recommended config name; Cursor prefixes your config key with `user-`)
 
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
-- `memory://graph/recent` - Live Mermaid diagram of recent relationships (v1.1.0)
-- `memory://team/recent` - **NEW v2.0.0** - Recent team-shared entries
-- `memory://projects/{number}/timeline` - Project activity timeline (v1.2.0)
+- `memory://graph/recent` - Live Mermaid diagram of recent relationships
+- `memory://team/recent` - Recent team-shared entries
+- `memory://projects/{number}/timeline` - Project activity timeline
+- `memory://issues/{issue_number}/entries` - All entries linked to a specific issue
+- `memory://prs/{pr_number}/entries` - All entries linked to a specific pull request  
+- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
 
 ### 🗄️ **Database Improvements**
 - Automatic schema migrations (seamless v1.0 → v1.1 upgrades)
@@ -388,7 +396,7 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - `export_entries` - JSON/Markdown export
 - `test_simple` - Connectivity testing
 
-### 🎯 **10 Workflow Prompts** - Automated Productivity
+### 🎯 **13 Workflow Prompts** - Automated Productivity
 - **`prepare-standup`** - Daily standup summaries from recent entries
 - **`prepare-retro`** - Sprint retrospectives with achievements and learnings
 - **`weekly-digest`** - Day-by-day weekly summaries
@@ -397,8 +405,11 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - **`find-related`** - Discover connected entries via semantic similarity
 - **`get-context-bundle`** - Complete project context (Git + GitHub)
 - **`get-recent-entries`** - Formatted display of recent work
-- **`project-status-summary`** - **NEW** - Comprehensive GitHub Project status reports
-- **`project-milestone-tracker`** - **NEW** - Milestone progress with velocity tracking
+- **`project-status-summary`** - Comprehensive GitHub Project status reports
+- **`project-milestone-tracker`** - Milestone progress with velocity tracking
+- **`pr-summary`** - Pull request journal activity summary with stats
+- **`code-review-prep`** - Code review preparation with full context
+- **`pr-retrospective`** - Post-merge PR analysis and learnings
 
 ### 🔍 **Triple Search System** - Find Anything, Any Way
 1. **Full-text search** - SQLite FTS5 with result highlighting and rank ordering
@@ -429,12 +440,13 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - Repository name and path
 - Current branch
 - Latest commit (hash + message)
-- Recent GitHub issues (via `gh` CLI)
+- **GitHub Issues** - Auto-fetch recent open issues, link entries to issues
+- **GitHub Pull Requests** - Auto-detect current PR from branch, link entries to PRs
 - **GitHub Projects** - Automatic project detection and tracking (user & org)
 - **Organization Support** - Full support for org-level projects alongside user projects
 - **Project Analytics** - Cross-project insights, status summaries, milestone tracking (user & org)
-- **Smart API Caching** - 80%+ API call reduction (24hr owner type, 1hr projects, 15min items)
-- **Timeline Resources** - Combined journal + GitHub activity feeds for user & org projects
+- **Smart API Caching** - 80%+ API call reduction (15min issues, 5min PRs, 1hr projects, 24hr owner type)
+- **Timeline Resources** - Combined journal + GitHub activity feeds (projects, PRs)
 - **Auto Owner Detection** - Automatically determines if repo belongs to user or organization
 - Working directory
 - Timestamp for all context
