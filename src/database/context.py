@@ -56,15 +56,16 @@ class ProjectContextManager:
             if process.returncode == 0:
                 remote_url = stdout.strip()
                 
-                # Handle SSH URLs: git@github.com:owner/repo.git
+                # Handle SSH URLs: git@github.com:owner/repo.git (exact prefix check for security)
                 if remote_url.startswith('git@github.com:'):
                     parts = remote_url.replace('git@github.com:', '').replace('.git', '').split('/')
                     if len(parts) >= 2:
                         return parts[0]
                 
-                # Handle HTTPS URLs: https://github.com/owner/repo.git
-                elif 'github.com' in remote_url:
+                # Handle HTTPS URLs: https://github.com/owner/repo.git (proper URL validation for security)
+                else:
                     parsed = urlparse(remote_url)
+                    # Exact hostname match to prevent URL spoofing (security fix from v1.2.2)
                     if parsed.hostname == 'github.com' and parsed.path:
                         path_parts = parsed.path.strip('/').replace('.git', '').split('/')
                         if len(path_parts) >= 2:

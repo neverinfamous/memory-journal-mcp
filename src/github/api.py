@@ -850,15 +850,17 @@ def extract_repo_info_from_context(project_context: Optional[str]) -> tuple[Opti
         # Try to extract owner from git_remote if available
         # git_remote format: git@github.com:owner/repo.git or https://github.com/owner/repo.git
         git_remote = ctx.get('git_remote', '')
-        if git_remote and 'github.com' in git_remote:
+        if git_remote:
             import re
-            # Match SSH format: git@github.com:owner/repo
-            ssh_match = re.search(r'github\.com:([^/]+)/([^/\s]+?)(?:\.git)?$', git_remote)
+            # Match SSH format: git@github.com:owner/repo (exact prefix check for security)
+            # Regex anchored to prevent URL spoofing (security fix from v1.2.2)
+            ssh_match = re.search(r'^git@github\.com:([^/]+)/([^/\s]+?)(?:\.git)?$', git_remote)
             if ssh_match:
                 return ssh_match.group(1), ssh_match.group(2)
             
-            # Match HTTPS format: https://github.com/owner/repo
-            https_match = re.search(r'github\.com/([^/]+)/([^/\s]+?)(?:\.git)?$', git_remote)
+            # Match HTTPS format: https://github.com/owner/repo (proper URL validation for security)
+            # Regex anchored to prevent URL spoofing (security fix from v1.2.2)
+            https_match = re.search(r'^https://github\.com/([^/]+)/([^/\s]+?)(?:\.git)?$', git_remote)
             if https_match:
                 return https_match.group(1), https_match.group(2)
         
