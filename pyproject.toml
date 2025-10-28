@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "memory-journal-mcp"
-version = "1.2.2"
-description = "A Model Context Protocol server for personal journaling with context awareness, relationships, and visualization"
+version = "2.0.0"
+description = "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads"
 authors = [
     {name = "Chris LeRoux", email = "writenotenow@gmail.com"}
 ]
@@ -15,7 +15,7 @@ requires-python = ">=3.10.12"
 dependencies = [
     "mcp>=1.0.0",
 ]
-keywords = ["mcp", "journaling", "git", "context", "model-context-protocol", "developer-tools", "visualization", "relationships"]
+keywords = ["mcp", "context-management", "project-management", "ai-assistant", "knowledge-graph", "developer-tools", "git", "github-projects", "model-context-protocol", "persistent-memory", "thread-continuity"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers", 

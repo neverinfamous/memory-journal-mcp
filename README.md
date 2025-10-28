@@ -1,13 +1,13 @@
 # Memory Journal MCP Server
 
-Last Updated October 26, 2025 - Production/Stable v1.2.2
+Last Updated October 28, 2025 - Production/Stable v2.0.0
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v1.2.2-green)
+![Version](https://img.shields.io/badge/version-v2.0.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
@@ -15,9 +15,9 @@ Last Updated October 26, 2025 - Production/Stable v1.2.2
 [![CodeQL](https://img.shields.io/badge/CodeQL-Passing-brightgreen.svg)](https://github.com/neverinfamous/memory-journal-mcp/security/code-scanning)
 [![Type Safety](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
-*A production-ready developer journal with knowledge graphs, visual relationship mapping, and intelligent search*
+*Project context management for AI-assisted development - Bridge the gap between fragmented AI threads with persistent knowledge graphs and intelligent context recall*
 
-**🎉 Now Production/Stable!** Memory Journal has graduated from beta with powerful relationship mapping, 10x faster startup, and comprehensive documentation.
+**🎯 Solve the AI Context Problem:** When working with AI across multiple threads and sessions, context is lost. Memory Journal maintains a persistent, searchable record of your project work, decisions, and progress - making every AI conversation informed by your complete project history.
 
 **🚀 Quick Deploy:**
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - `pip install memory-journal-mcp`
@@ -27,6 +27,91 @@ Last Updated October 26, 2025 - Production/Stable v1.2.2
 **📚 Full Documentation:** [GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)
 
 **📰 [Read the v1.1.2 Release Article](https://adamic.tech/articles/2025-10-04-memory-journal-mcp-v1-1-2)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
+
+---
+
+## 🎯 Why Memory Journal?
+
+### **The Fragmented AI Context Problem**
+
+When managing large projects with AI assistance, you face a critical challenge:
+
+- **Thread Amnesia** - Each new AI conversation starts from zero, unaware of previous work
+- **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads  
+- **Repeated Work** - AI suggests solutions you've already tried or abandoned
+- **Context Overload** - Manually copying project history into every new conversation is tedious and incomplete
+
+### **The Solution: Persistent Project Memory**
+
+Memory Journal acts as your project's **long-term memory**, bridging the gap between fragmented AI threads:
+
+**For Developers:**
+- 📝 **Automatic Context Capture** - Git commits, branches, GitHub issues, PRs, and project state captured with every entry
+- 🔗 **Knowledge Graph** - Link related work (specs → implementations → tests → PRs) to build a connected history
+- 🔍 **Intelligent Search** - Find past decisions, solutions, and context across your entire project timeline
+- 📊 **Project Analytics** - Track progress from issues through PRs, generate reports for standups/retrospectives/code reviews
+
+**For Project Managers:**
+- 👥 **Team Context Continuity** - Maintain shared project memory across team members and time
+- 📈 **Progress Tracking** - Monitor milestones, velocity, and cross-project insights from issues to PRs
+- 🎯 **Status Reporting** - Generate comprehensive project summaries with PR metrics and timelines
+- 🔄 **GitHub Integration** - Connect entries with Projects, Issues, and Pull Requests for unified tracking
+
+**For AI-Assisted Work:**
+- 💡 AI can query your **complete project history** in any conversation
+- 🧠 **Semantic search** finds conceptually related work, even without exact keywords
+- 📖 **Context bundles** provide AI with comprehensive project state instantly
+- 🔗 **Relationship visualization** shows how different pieces of work connect
+
+### **Real-World Example**
+
+```
+Without Memory Journal:
+Thread 1: "Help me design the authentication system"
+Thread 2 (next day): "How should I implement user sessions?"  
+         AI: *suggests approach you already decided against*
+Thread 3 (next week): "What was our decision about JWT tokens?"
+         AI: *no memory of previous threads*
+
+With Memory Journal:
+Thread 1: Work captured → "Decided on JWT with refresh tokens"
+Thread 2: AI queries history → "I see you decided on JWT. Let's implement refresh token rotation..."
+Thread 3: AI finds related entries → "Based on your design from Oct 15, here's the implementation..."
+```
+
+---
+
+## ✨ What's New in v2.0.0 (Modular Architecture - October 28, 2025)
+
+### 🏗️ **Complete Internal Refactoring** - Production-Ready Modular Architecture
+Transformed from a monolithic 4093-line file into a well-structured, maintainable codebase:
+- **96% reduction** in main file size (4093 → 175 lines)
+- **30 focused modules** (~150-300 lines each for easy navigation)
+- **Clear separation of concerns** (database, GitHub, handlers, utilities)
+- **100% backward compatible** - Zero breaking changes, seamless upgrade
+- **No performance degradation** - All async operations maintained
+- **Enhanced maintainability** - 10x easier to navigate, modify, and test
+
+### 📂 **New Module Structure**
+```
+src/
+├── server.py (175 lines)          # Entry point
+├── database/                       # Database layer
+├── github/                         # GitHub integration
+├── handlers/                       # MCP tool/prompt handlers
+├── constants.py, utils.py, exceptions.py
+└── vector_search.py
+```
+
+### 🎯 **Key Benefits**
+- **For Developers**: Much easier to contribute, test, and debug
+- **For Users**: Same great features, more stable and maintainable
+- **For Operations**: Easier to audit, monitor, and optimize
+- **Future-Ready**: Modular structure enables rapid feature development
+
+**Migration**: No action required! Simply upgrade and restart. All tools, prompts, and resources work identically.
+
+**Learn More**: See [REFACTORING_SUMMARY.md](REFACTORING_SUMMARY.md) and [Architecture Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Architecture)
 
 ---
 
@@ -101,14 +186,14 @@ Seamlessly connect your journal entries with GitHub Projects:
 - **Project Filtering** - Search and filter entries by project number
 - **Graceful Degradation** - Works perfectly without GitHub token (features degrade gracefully)
 
-### 🎉 **v1.2.0 - Capabilities**
-Building on the stable v1.1.3 foundation:
-- **16 MCP tools** (up from 15) - Added `get_cross_project_insights`
-- **10 workflow prompts** (up from 8) - Added `project-status-summary` and `project-milestone-tracker`
-- **4 MCP resources** (up from 3) - Added `memory://projects/{number}/timeline`
-- **Smart caching system** - GitHub API response caching with configurable TTLs
-- **Enhanced analytics** - Project breakdown support in `get_statistics`
-- **Backward compatible** - Seamless upgrade from v1.1.x with automatic schema migration
+### 🎉 **v2.0.0 - Full Capabilities**
+- **16 MCP tools** - Complete development workflow from entry creation to export
+- **13 workflow prompts** - Including PR workflow prompts (`pr-summary`, `code-review-prep`, `pr-retrospective`)
+- **8 MCP resources** - Including issue/PR resources (issue entries, PR entries, PR timelines)
+- **GitHub Integration** - Projects, Issues, and Pull Requests with auto-linking
+- **Smart caching system** - GitHub API response caching (15min issues, 5min PRs, 1hr projects)
+- **Enhanced analytics** - Project breakdown, issue/PR tracking, cross-project insights
+- **Backward compatible** - Seamless upgrade with automatic schema migration
 
 ### 🔗 **Entry Relationships & Knowledge Graphs**
 Build connections between your entries with typed relationships:
@@ -146,7 +231,7 @@ graph TD
 - `link_entries` - Create typed relationships between entries
 - Plus comprehensive CRUD, triple search, analytics, and export
 
-### 🎯 **Enhanced Workflow Prompts** (8 Total, +2 from v1.0)
+### 🎯 **Workflow Prompts** (13 Total in v2.0.0)
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
 - `prepare-retro` - Sprint retrospectives
@@ -155,11 +240,24 @@ graph TD
 - `goal-tracker` - Milestone and achievement tracking
 - `get-context-bundle` - Project context with Git/GitHub
 - `get-recent-entries` - Formatted recent entries
+- `project-status-summary` - GitHub Project status reports
+- `project-milestone-tracker` - Milestone progress tracking
+- `pr-summary` - Pull request journal activity summary
+- `code-review-prep` - Comprehensive PR review preparation
+- `pr-retrospective` - Completed PR analysis with learnings
 
-### 📡 **New Resources** (3 Total, +1 from v1.0)
-- `memory://graph/recent` - **NEW** Live Mermaid diagram of recent relationships
+### 📡 **Resources** (8 Total in v2.0.0)
+
+**MCP Server Identifier:** `user-memory-journal-mcp` (when using recommended config name; Cursor prefixes your config key with `user-`)
+
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
+- `memory://graph/recent` - Live Mermaid diagram of recent relationships
+- `memory://team/recent` - Recent team-shared entries
+- `memory://projects/{number}/timeline` - Project activity timeline
+- `memory://issues/{issue_number}/entries` - All entries linked to a specific issue
+- `memory://prs/{pr_number}/entries` - All entries linked to a specific pull request  
+- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
 
 ### 🗄️ **Database Improvements**
 - Automatic schema migrations (seamless v1.0 → v1.1 upgrades)
@@ -184,7 +282,7 @@ pip install memory-journal-mcp
 ```json
 {
   "mcpServers": {
-    "memory-journal": {
+    "memory-journal-mcp": {
       "command": "memory-journal-mcp"
     }
   }
@@ -214,7 +312,7 @@ mkdir data
 ```json
 {
   "mcpServers": {
-    "memory-journal": {
+    "memory-journal-mcp": {
       "command": "docker",
       "args": [
         "run", "--rm", "-i", 
@@ -298,7 +396,7 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - `export_entries` - JSON/Markdown export
 - `test_simple` - Connectivity testing
 
-### 🎯 **10 Workflow Prompts** - Automated Productivity
+### 🎯 **13 Workflow Prompts** - Automated Productivity
 - **`prepare-standup`** - Daily standup summaries from recent entries
 - **`prepare-retro`** - Sprint retrospectives with achievements and learnings
 - **`weekly-digest`** - Day-by-day weekly summaries
@@ -307,8 +405,11 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - **`find-related`** - Discover connected entries via semantic similarity
 - **`get-context-bundle`** - Complete project context (Git + GitHub)
 - **`get-recent-entries`** - Formatted display of recent work
-- **`project-status-summary`** - **NEW** - Comprehensive GitHub Project status reports
-- **`project-milestone-tracker`** - **NEW** - Milestone progress with velocity tracking
+- **`project-status-summary`** - Comprehensive GitHub Project status reports
+- **`project-milestone-tracker`** - Milestone progress with velocity tracking
+- **`pr-summary`** - Pull request journal activity summary with stats
+- **`code-review-prep`** - Code review preparation with full context
+- **`pr-retrospective`** - Post-merge PR analysis and learnings
 
 ### 🔍 **Triple Search System** - Find Anything, Any Way
 1. **Full-text search** - SQLite FTS5 with result highlighting and rank ordering
@@ -339,12 +440,13 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 - Repository name and path
 - Current branch
 - Latest commit (hash + message)
-- Recent GitHub issues (via `gh` CLI)
+- **GitHub Issues** - Auto-fetch recent open issues, link entries to issues
+- **GitHub Pull Requests** - Auto-detect current PR from branch, link entries to PRs
 - **GitHub Projects** - Automatic project detection and tracking (user & org)
 - **Organization Support** - Full support for org-level projects alongside user projects
 - **Project Analytics** - Cross-project insights, status summaries, milestone tracking (user & org)
-- **Smart API Caching** - 80%+ API call reduction (24hr owner type, 1hr projects, 15min items)
-- **Timeline Resources** - Combined journal + GitHub activity feeds for user & org projects
+- **Smart API Caching** - 80%+ API call reduction (15min issues, 5min PRs, 1hr projects, 24hr owner type)
+- **Timeline Resources** - Combined journal + GitHub activity feeds (projects, PRs)
 - **Auto Owner Detection** - Automatically determines if repo belongs to user or organization
 - Working directory
 - Timestamp for all context
@@ -486,9 +588,21 @@ visualize_relationships({
   limit: 20
 })
 
-// Access live graph resource
+// Listing resources - IMPORTANT: Call with NO parameters first
+list_mcp_resources()  // ✅ Returns actual server identifier (e.g., user-memory-journal-mcp)
+
+// Then fetch using exact identifier from list output
+fetch_mcp_resource({
+  server: "user-memory-journal-mcp",  // Use exact name from list_mcp_resources()
+  uri: "memory://graph/recent"
+})
+
+// Available resource URIs:
 memory://graph/recent  // Most recent 20 entries with relationships
+memory://team/recent   // Recent team-shared entries (v2.0.0)
 ```
+
+**Note:** Always call `list_mcp_resources()` without parameters first. MCP clients like Cursor may prefix your config name (e.g., `memory-journal-mcp` becomes `user-memory-journal-mcp`).
 
 ### Advanced Project Features
 
@@ -512,21 +626,27 @@ get_statistics({
 
 // Project status summary (prompt)
 project-status-summary({
-  project_number: 1,
+  project_name: "memory-journal-mcp",  // optional - filter by repo name
   time_period: "sprint",  // week, sprint, month
   include_items: true
 })
-// Returns: Project overview, journal activity, GitHub items status, key insights
+// Returns: Project overview, journal activity, key insights
 
 // Milestone tracking (prompt)
 project-milestone-tracker({
-  project_number: 1,
-  milestone_name: "v1.2.0"  // optional filter
+  project_name: "R2-Manager-Worker",  // optional - filter by repo name
+  milestone_name: "v1.2.0"  // optional - filter by milestone name
 })
 // Returns: Milestone progress, velocity chart, journal activity summary
 
-// Access project timeline resource
-memory://projects/1/timeline
+// Access project timeline resource (three formats supported)
+memory://projects/1/timeline                    // By project number
+memory://projects/memory-journal-mcp/timeline   // By project name (uses current name from GitHub context)
+memory://projects/neverinfamous/user/1/timeline // By owner/type/number
+
+// Note: Project names in timeline URIs are looked up from the most recent GitHub context.
+// Old journal entries may contain outdated project names in their stored context, but the
+// resource lookup always uses the current project name from GitHub.
 // Returns: Chronological feed of last 30 days (journal + GitHub events)
 ```
 
@@ -551,19 +671,18 @@ create_entry({
 
 // Org project status summary
 project-status-summary({
-  project_number: 5,
-  owner: "my-company",
-  owner_type: "org",
-  time_period: "sprint",
-  include_items: true
+  project_name: "internal-api",  // optional - filter by repo name
+  owner: "my-company",  // optional - auto-detected from git context
+  owner_type: "org",  // optional - auto-detected
+  time_period: "sprint"
 })
-// Returns: Org project overview, team activity, GitHub items, insights
+// Returns: Org project overview, team activity, key insights
 
 // Org milestone tracking
 project-milestone-tracker({
-  project_number: 5,
-  owner: "my-company",
-  owner_type: "org"
+  project_name: "internal-api",  // optional - filter by repo name
+  owner: "my-company",  // optional - auto-detected from git context
+  owner_type: "org"  // optional - auto-detected
 })
 // Returns: Org milestone progress, team velocity, activity summary
 
@@ -582,6 +701,57 @@ get_cross_project_insights({
 })
 // Returns: Insights across BOTH user and org projects
 ```
+
+### Using Workflow Prompts
+
+Prompts are AI-assisted workflow templates that help you get insights from your journal. Simply ask Cursor's AI naturally:
+
+**Natural Language Requests:**
+```
+Show me my recent journal entries
+Show me recent team-shared entries
+Prepare my standup for today
+Generate a weekly digest
+Find entries related to refactoring and testing
+Give me a sprint retrospective
+Track my progress on the modular architecture goal
+```
+
+**Explicit Prompt Usage:**
+```
+Use the memory-journal prepare-standup prompt for today
+Use the memory-journal weekly-digest prompt
+Use the memory-journal analyze-period prompt from 2025-10-01 to 2025-10-31
+Use the memory-journal goal-tracker prompt with goal "refactoring" and milestone "v2.0.0"
+Use the memory-journal find-related prompt with query "performance optimization"
+Use the memory-journal project-status-summary prompt for project "memory-journal-mcp"
+```
+
+**Available Prompts (10 Total):**
+
+**Analysis & Reporting:**
+- `get-context-bundle` - Current project context (Git + GitHub)
+- `get-recent-entries` - Formatted display of recent entries
+- `analyze-period` - Deep analysis with pattern insights
+- `prepare-standup` - Daily standup summaries
+- `prepare-retro` - Sprint retrospectives
+
+**Discovery & Tracking:**
+- `weekly-digest` - Day-by-day weekly activity
+- `goal-tracker` - Milestone and achievement tracking
+- `find-related` - Discover semantically related entries
+
+**GitHub Projects (v1.2.0+):**
+- `project-status-summary` - Comprehensive project reports
+- `project-milestone-tracker` - Milestone progress with velocity
+
+**How Prompts Work:**
+1. Cursor's AI discovers the 10 available prompts from the MCP server
+2. When you ask for insights, Cursor recognizes relevant prompts
+3. The AI uses the prompt templates to query your journal
+4. Results are automatically formatted and presented
+
+**Note:** Prompts are internal AI workflow templates, not user-invokable commands. They work best when you ask Cursor's AI naturally about your journal entries.
 
 ---
 

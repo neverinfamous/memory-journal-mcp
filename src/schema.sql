@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     content TEXT NOT NULL,
     timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     is_personal INTEGER NOT NULL DEFAULT 1,
+    share_with_team INTEGER NOT NULL DEFAULT 0,  -- 0=private, 1=shared with team
     
     -- Context bundle information (key V1 pattern)
     project_context TEXT, -- JSON: {repo, branch, files, thread_id}
@@ -18,6 +19,15 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     project_number INTEGER, -- GitHub Project number
     project_item_id INTEGER, -- GitHub Project item ID
     github_project_url TEXT, -- Full URL to GitHub Project
+    
+    -- GitHub Issues integration
+    issue_number INTEGER, -- GitHub issue number
+    issue_url TEXT, -- Full URL to GitHub issue
+    
+    -- GitHub Pull Requests integration
+    pr_number INTEGER, -- Pull request number
+    pr_url TEXT, -- Full URL to PR
+    pr_status TEXT, -- 'draft', 'open', 'merged', 'closed'
     
     -- Extensible metadata (JSON for flexibility)
     metadata TEXT,
@@ -111,6 +121,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_journal_updated ON memory_journal(updated_
 CREATE INDEX IF NOT EXISTS idx_memory_journal_deleted ON memory_journal(deleted_at);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_project_number ON memory_journal(project_number);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_project_item_id ON memory_journal(project_item_id);
+CREATE INDEX IF NOT EXISTS idx_memory_journal_issue_number ON memory_journal(issue_number);
+CREATE INDEX IF NOT EXISTS idx_memory_journal_pr_number ON memory_journal(pr_number);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_source ON memory_journal_relationships(source_entry_id);

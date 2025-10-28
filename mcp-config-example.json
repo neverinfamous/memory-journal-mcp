@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "memory-journal": {
+    "memory-journal-mcp": {
       "command": "docker",
       "args": [
         "run", 

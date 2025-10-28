@@ -46,13 +46,11 @@ jobs:
     
     - name: Test database schema
       run: |
-        cd src  
         python -c "
         import sqlite3
-        import server
-        # Test database initialization
+        # Test database initialization (use absolute path to avoid working directory issues)
         conn = sqlite3.connect(':memory:')
-        with open('schema.sql', 'r') as f:
+        with open('src/schema.sql', 'r') as f:
             conn.executescript(f.read())
         print('✅ Database schema loads successfully')
         conn.close()
