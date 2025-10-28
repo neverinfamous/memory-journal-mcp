@@ -20,58 +20,35 @@ permissions:
   attestations: write    # For generating attestations
 
 jobs:
+  # Quick smoke test before Docker build
+  # Full test matrix runs in ci.yml
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10.12', '3.11', '3.12', '3.13', '3.14']
-
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.13
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.13'
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        # Install optional dependencies for full testing
-        pip install sentence-transformers faiss-cpu || echo "Optional ML dependencies failed, continuing..."
     
-    - name: Lint with flake8
+    - name: Quick smoke tests
       run: |
-        echo "🔍 Installing and running flake8 linting..."
-        pip install flake8
-        echo "📁 Checking src/ directory contents:"
-        ls -la src/
-        
-        echo "🚨 Checking for critical errors (syntax, undefined names):"
-        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        
-        echo "📊 Running full flake8 analysis:"
-        flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        
-        echo "✅ Flake8 linting completed"
-    
-    - name: Test server import
-      run: |
-        cd src
-        python -c "import server; print('✅ Server imports successfully')"
-    
-    - name: Test database schema
-      run: |
-        cd src  
+        # Test server import
+        cd src && python -c "import server; print('✅ Server imports')"
+        cd ..
+        # Test database schema
         python -c "
         import sqlite3
-        import server
-        # Test database initialization
         conn = sqlite3.connect(':memory:')
-        with open('schema.sql', 'r') as f:
+        with open('src/schema.sql', 'r') as f:
             conn.executescript(f.read())
-        print('✅ Database schema loads successfully')
+        print('✅ Database schema valid')
         conn.close()
         "
 
@@ -175,7 +152,23 @@ jobs:
           echo "ℹ️ Consider running scout scan locally for large images"
         fi
 
-    # Only push if security scan passes
+    # Test local image before pushing
+    - name: Test Docker image functionality
+      run: |
+        echo "Testing local image: local-scan:${{ matrix.variant.name }}"
+        docker run --rm local-scan:${{ matrix.variant.name }} python -c "
+        import sys
+        sys.path.append('src')
+        try:
+            import server
+            print('✅ ${{ matrix.variant.name }} image: Server imports successfully')
+        except ImportError as e:
+            print(f'❌ Import failed: {e}')
+            sys.exit(1)
+        "
+        echo "✅ Docker image tests passed"
+    
+    # Only push if all tests and security scans pass
     - name: Build and push Docker image
       if: success()
       id: build
@@ -201,27 +194,6 @@ jobs:
         echo "⚠️ Initial push failed - retrying in 30 seconds..."
         sleep 30
         echo "🔄 Retry attempt starting..."
-
-    - name: Test Docker image functionality
-      if: github.event_name != 'pull_request'
-      run: |
-        # Extract the first tag from the metadata output
-        FIRST_TAG=$(echo '${{ steps.meta.outputs.tags }}' | head -n1)
-        echo "Testing image: $FIRST_TAG"
-        
-        # Test that the image starts and server imports work
-        docker run --rm $FIRST_TAG python -c "
-        import sys
-        sys.path.append('src')
-        try:
-            import server
-            print('✅ ${{ matrix.variant.name }} image: Server imports successfully')
-        except ImportError as e:
-            print(f'❌ Import failed: {e}')
-            sys.exit(1)
-        "
-        
-        echo "✅ ${{ matrix.variant.name }} image tests passed"
 
     # Attestations are handled automatically by Docker build with:
     # attestations: true, provenance: true, and sbom: true (lines 189-191)
