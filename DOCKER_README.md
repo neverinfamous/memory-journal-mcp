@@ -23,7 +23,7 @@ Last Updated November 26, 2025 - Production/Stable v2.1.0
 
 **📚 Documentation:** [Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki) • [v2.1.0 Release](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v2.1.0)
 
-**📰 [Read the v2.0.0 Release Article](https://adamic.tech/articles/2025-10-28-memory-journal-mcp-v2-0-0)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
+**📰 [Read the v2.1.0 Release Article](https://adamic.tech/articles/memory-journal-mcp-server)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
 
 ---
 
@@ -146,7 +146,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 Entry management • Full-text/semantic/date search • Knowledge graphs • Analytics • Export  
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 13 Workflow Prompts
+### 🎯 14 Workflow Prompts
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -212,7 +212,7 @@ memory://prs/456/timeline        // PR + journal timeline
 | **ARM64** (Apple Silicon) | 207MB | Core: journaling, FTS5 search, Git context, relationship graphs, knowledge graph visualization (semantic search unavailable) | ~2-3 seconds |
 
 **Production-Ready Image:**
-- **Python 3.13.x on Alpine Linux** - Latest Python with minimal attack surface (225MB avg vs 500MB+ for Ubuntu)
+- **Python 3.14 on Alpine Linux** - Latest Python with minimal attack surface (225MB avg vs 500MB+ for Ubuntu)
 - **Multi-Platform Support** - AMD64 with full ML, ARM64 with core features
 - **ML Capabilities (AMD64)** - PyTorch + sentence-transformers + FAISS
 - **Graceful Degradation (ARM64)** - Core features work without ML dependencies
