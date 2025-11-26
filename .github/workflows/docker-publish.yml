@@ -183,7 +183,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         # Enable attestations for supply chain security
-        attestations: true
+        # (provenance and sbom provide SLSA attestations)
         provenance: true
         sbom: true
     
