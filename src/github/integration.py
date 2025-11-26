@@ -5,16 +5,13 @@ Core GitHub Projects integration, URL parsing, and owner detection.
 
 import os
 import subprocess
-import sys
 from urllib.parse import urlparse
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, TYPE_CHECKING
 
 from constants import (
     GITHUB_API_BASE, GITHUB_API_TIMEOUT,
     CACHE_TTL_OWNER_TYPE, CACHE_TTL_PROJECT, CACHE_TTL_ITEMS, CACHE_TTL_MILESTONE
 )
-from exceptions import GitHubError, GitHubAuthError, GitHubAPIError
-from utils import normalize_owner_type
 
 if TYPE_CHECKING:
     from database.base import MemoryJournalDB
@@ -41,7 +38,7 @@ class GitHubProjectsIntegration:
         # API manager (will be set by server.py)
         self.api_manager = None  # type: ignore
         
-    def _get_headers(self, use_org_token: bool = False) -> Dict[str, str]:
+    def get_headers(self, use_org_token: bool = False) -> Dict[str, str]:
         """
         Get GitHub API headers.
         
@@ -61,7 +58,7 @@ class GitHubProjectsIntegration:
             headers['Authorization'] = f'token {token}'
         return headers
     
-    def _extract_repo_owner_from_remote(self, repo_path: str) -> Optional[str]:
+    def extract_repo_owner_from_remote(self, repo_path: str) -> Optional[str]:
         """
         Extract repository owner from Git remote URL.
         
@@ -74,6 +71,7 @@ class GitHubProjectsIntegration:
         Returns:
             Repository owner name or None if not found/invalid
         """
+        process: subprocess.Popen[str] | None = None
         try:
             # Use Popen to avoid stdin inheritance issues with MCP stdio
             process = subprocess.Popen(
@@ -84,7 +82,7 @@ class GitHubProjectsIntegration:
                 cwd=repo_path,
                 text=True
             )
-            stdout, stderr = process.communicate(timeout=2)
+            stdout, _stderr = process.communicate(timeout=2)
             if process.returncode == 0:
                 remote_url = stdout.strip()
                 
@@ -121,8 +119,9 @@ class GitHubProjectsIntegration:
                     pass
         
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate()
+            if process is not None:
+                process.kill()
+                process.communicate()
         except Exception:
             pass
         
@@ -158,7 +157,7 @@ class GitHubProjectsIntegration:
             url = f"{self.api_base}/users/{owner}"
             response = requests.get(
                 url,
-                headers=self._get_headers(),
+                headers=self.get_headers(),
                 timeout=self.api_timeout
             )
             

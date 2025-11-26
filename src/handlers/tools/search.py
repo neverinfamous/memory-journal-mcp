@@ -53,6 +53,7 @@ async def handle_search_entries(arguments: Dict[str, Any]) -> List[types.TextCon
     issue_number = arguments.get("issue_number")
     pr_number = arguments.get("pr_number")
     pr_status = arguments.get("pr_status")
+    workflow_run_id = arguments.get("workflow_run_id")
 
     if query:
         # Use the utility function from utils.py
@@ -87,6 +88,10 @@ async def handle_search_entries(arguments: Dict[str, Any]) -> List[types.TextCon
         if pr_status is not None:
             sql += " AND m.pr_status = ?"
             params.append(pr_status)
+        
+        if workflow_run_id is not None:
+            sql += " AND m.workflow_run_id = ?"
+            params.append(workflow_run_id)
     else:
         sql = """
             SELECT id, entry_type, content, timestamp, is_personal, project_number,
@@ -94,7 +99,7 @@ async def handle_search_entries(arguments: Dict[str, Any]) -> List[types.TextCon
             FROM memory_journal
             WHERE deleted_at IS NULL
         """
-        params = []
+        params: list[Any] = []
         
         if is_personal is not None:
             sql += " AND is_personal = ?"
@@ -115,6 +120,10 @@ async def handle_search_entries(arguments: Dict[str, Any]) -> List[types.TextCon
         if pr_status is not None:
             sql += " AND pr_status = ?"
             params.append(pr_status)
+        
+        if workflow_run_id is not None:
+            sql += " AND workflow_run_id = ?"
+            params.append(workflow_run_id)
 
     sql += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
@@ -183,7 +192,7 @@ async def handle_semantic_search(arguments: Dict[str, Any]) -> List[types.TextCo
         )]
     
     # Trigger lazy initialization on first use (await since it's now async)
-    await vector_search._ensure_initialized()
+    await vector_search.ensure_initialized()
     
     if not vector_search.initialized:
         return [types.TextContent(
@@ -202,8 +211,8 @@ async def handle_semantic_search(arguments: Dict[str, Any]) -> List[types.TextCo
             )]
 
         # Fetch entry details from database
-        def get_semantic_entry_details():
-            entry_ids = [result[0] for result in search_results]
+        def get_semantic_entry_details() -> Dict[int, Dict[str, Any]]:
+            entry_ids: list[Any] = [result[0] for result in search_results]
             with sqlite3.connect(DB_PATH) as conn:
                 placeholders = ','.join(['?'] * len(entry_ids))
                 sql = f"""
@@ -216,7 +225,7 @@ async def handle_semantic_search(arguments: Dict[str, Any]) -> List[types.TextCo
                     entry_ids.append(is_personal)
 
                 cursor = conn.execute(sql, entry_ids)
-                entries = {}
+                entries: Dict[int, Dict[str, Any]] = {}
                 for row in cursor.fetchall():
                     entries[row[0]] = {
                         'id': row[0],
@@ -263,6 +272,9 @@ async def handle_search_by_date_range(arguments: Dict[str, Any]) -> List[types.T
     if db is None:
         raise RuntimeError("Search handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     start_date = arguments.get("start_date")
     end_date = arguments.get("end_date")
     is_personal = arguments.get("is_personal")
@@ -271,12 +283,13 @@ async def handle_search_by_date_range(arguments: Dict[str, Any]) -> List[types.T
     project_number = arguments.get("project_number")
     issue_number = arguments.get("issue_number")
     pr_number = arguments.get("pr_number")
+    workflow_run_id = arguments.get("workflow_run_id")
 
     if not start_date or not end_date:
         return [types.TextContent(type="text", text="❌ Both start_date and end_date are required (YYYY-MM-DD)")]
 
     def search_entries():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             sql = """
                 SELECT DISTINCT m.id, m.entry_type, m.content, m.timestamp, m.is_personal, m.project_number
                 FROM memory_journal m
@@ -305,6 +318,10 @@ async def handle_search_by_date_range(arguments: Dict[str, Any]) -> List[types.T
             if pr_number is not None:
                 sql += " AND m.pr_number = ?"
                 params.append(pr_number)
+            
+            if workflow_run_id is not None:
+                sql += " AND m.workflow_run_id = ?"
+                params.append(workflow_run_id)
 
             if tags:
                 sql += """ AND m.id IN (

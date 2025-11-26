@@ -34,14 +34,17 @@ def initialize_analysis_prompts(db_instance: MemoryJournalDB,
 
 async def handle_get_context_bundle(arguments: Dict[str, str]) -> types.GetPromptResult:
     """Handle get-context-bundle prompt for project context."""
-    if db is None:
+    if db is None or project_context_manager is None:
         raise RuntimeError("Analysis prompts not initialized.")
+    
+    # Capture for use in nested functions
+    _pcm = project_context_manager
     
     include_git = arguments.get("include_git", "true").lower() == "true"
 
     if include_git:
         # Get full context with Git info
-        context = await project_context_manager.get_project_context()
+        context = await _pcm.get_project_context()
     else:
         # Get basic context without Git operations
         context = {
@@ -74,14 +77,17 @@ async def handle_get_recent_entries(arguments: Dict[str, str]) -> types.GetPromp
     if db is None:
         raise RuntimeError("Analysis prompts not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     count = int(arguments.get("count", "5"))
     personal_only = arguments.get("personal_only", "false").lower() == "true"
 
     # Get recent entries using existing database functionality
-    def get_entries_sync():
-        with db.get_connection() as conn:
+    def get_entries_sync() -> list[Dict[str, Any]]:
+        with _db.get_connection() as conn:
             sql = "SELECT id, entry_type, content, timestamp, is_personal, project_context FROM memory_journal"
-            params = []
+            params: list[Any] = []
 
             if personal_only:
                 sql += " WHERE is_personal = ?"
@@ -91,7 +97,7 @@ async def handle_get_recent_entries(arguments: Dict[str, str]) -> types.GetPromp
             params.append(count)
 
             cursor = conn.execute(sql, params)
-            entries = []
+            entries: list[Dict[str, Any]] = []
             for row in cursor.fetchall():
                 entry = {
                     'id': row[0],
@@ -114,7 +120,7 @@ async def handle_get_recent_entries(arguments: Dict[str, str]) -> types.GetPromp
         entries_text += " (personal only)"
     entries_text += ":\n\n"
 
-    for i, entry in enumerate(entries, 1):
+    for _i, entry in enumerate(entries, 1):
         entries_text += f"**Entry #{entry['id']}** ({entry['entry_type']}) - {entry['timestamp']}\n"
         entries_text += f"Personal: {entry['is_personal']}\n"
         entries_text += f"Content: {entry['content'][:200]}"
@@ -147,12 +153,15 @@ async def handle_analyze_period(arguments: Dict[str, str]) -> types.GetPromptRes
     if db is None:
         raise RuntimeError("Analysis prompts not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     start_date = arguments.get("start_date")
     end_date = arguments.get("end_date")
-    focus_area = arguments.get("focus_area", "all")
+    _focus_area = arguments.get("focus_area", "all")  # Reserved for future filtering
 
     def get_period_data():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             cursor = conn.execute("""
                 SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
                 FROM memory_journal m
@@ -206,7 +215,7 @@ async def handle_analyze_period(arguments: Dict[str, str]) -> types.GetPromptRes
         analysis += f"- **Significant Entries**: {len(significant)}\n\n"
         
         # Entry types breakdown
-        type_counts = {}
+        type_counts: Dict[str, int] = {}
         for e in entries:
             type_counts[e['entry_type']] = type_counts.get(e['entry_type'], 0) + 1
         
@@ -224,7 +233,7 @@ async def handle_analyze_period(arguments: Dict[str, str]) -> types.GetPromptRes
             analysis += "\n"
         
         # Top tags
-        all_tags = {}
+        all_tags: Dict[str, int] = {}
         for e in entries:
             for tag in e['tags']:
                 all_tags[tag] = all_tags.get(tag, 0) + 1
@@ -256,10 +265,13 @@ async def handle_prepare_standup(arguments: Dict[str, str]) -> types.GetPromptRe
     if db is None:
         raise RuntimeError("Analysis prompts not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     days_back = int(arguments.get("days_back", "1"))
     
     def get_standup_data():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             cursor = conn.execute("""
                 SELECT m.id, m.entry_type, m.content, m.timestamp
                 FROM memory_journal m
@@ -282,9 +294,9 @@ async def handle_prepare_standup(arguments: Dict[str, str]) -> types.GetPromptRe
         standup += "No technical entries logged in the specified period.\n\n"
     else:
         # Group by achievements, blockers, and plans
-        achievements = []
-        blockers = []
-        others = []
+        achievements: list[Dict[str, Any]] = []
+        blockers: list[Dict[str, Any]] = []
+        others: list[Dict[str, Any]] = []
         
         for entry in entries:
             content_lower = entry['content'].lower()
@@ -335,11 +347,14 @@ async def handle_prepare_retro(arguments: Dict[str, str]) -> types.GetPromptResu
     if db is None:
         raise RuntimeError("Analysis prompts not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     sprint_start = arguments.get("sprint_start")
     sprint_end = arguments.get("sprint_end")
 
     def get_retro_data():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             cursor = conn.execute("""
                 SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
                 FROM memory_journal m
@@ -376,7 +391,7 @@ async def handle_prepare_retro(arguments: Dict[str, str]) -> types.GetPromptResu
         retro += "No entries found for this sprint period.\n"
     else:
         # What went well
-        went_well = [e for e in entries if e['entry_type'] in ['technical_achievement', 'milestone'] or e['id'] in significant]
+        went_well: list[Dict[str, Any]] = [e for e in entries if e['entry_type'] in ['technical_achievement', 'milestone'] or e['id'] in significant]
         if went_well:
             retro += "## ✅ What Went Well\n"
             for entry in went_well:
@@ -386,7 +401,7 @@ async def handle_prepare_retro(arguments: Dict[str, str]) -> types.GetPromptResu
             retro += "\n"
         
         # What could be improved (looking for entries with problem indicators)
-        improvements = []
+        improvements: list[Dict[str, Any]] = []
         for entry in entries:
             content_lower = entry['content'].lower()
             if any(word in content_lower for word in ['struggled', 'difficult', 'challenge', 'problem', 'issue', 'blocked']):

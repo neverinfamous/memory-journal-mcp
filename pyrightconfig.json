@@ -10,7 +10,7 @@
   ],
   "pythonVersion": "3.10",
   "pythonPlatform": "Windows",
-  "typeCheckingMode": "basic",
+  "typeCheckingMode": "strict",
   "executionEnvironments": [
     {
       "root": "src",
@@ -20,12 +20,10 @@
       ]
     }
   ],
-  "reportMissingTypeStubs": false,
-  "reportMissingImports": false,
-  "reportOptionalMemberAccess": false,
-  "reportGeneralTypeIssues": false,
-  "reportUnknownMemberType": false,
-  "reportUnknownVariableType": false,
-  "reportUnknownArgumentType": false
+  "reportMissingTypeStubs": true,
+  "reportUnknownVariableType": true,
+  "reportUnknownMemberType": true,
+  "reportUnknownArgumentType": true,
+  "reportUnknownParameterType": true,
+  "reportUnknownLambdaType": true
 }
-

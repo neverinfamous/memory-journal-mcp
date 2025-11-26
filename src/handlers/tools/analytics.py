@@ -29,18 +29,21 @@ async def handle_get_statistics(arguments: Dict[str, Any]) -> List[types.TextCon
     if db is None:
         raise RuntimeError("Analytics handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     start_date = arguments.get("start_date")
     end_date = arguments.get("end_date")
     group_by = arguments.get("group_by", "week")
     project_breakdown = arguments.get("project_breakdown", False)
 
-    def calculate_stats():
-        with db.get_connection() as conn:
-            stats = {}
+    def calculate_stats() -> Dict[str, Any]:
+        with _db.get_connection() as conn:
+            stats: Dict[str, Any] = {}
 
             # Base WHERE clause
             where = "WHERE deleted_at IS NULL"
-            params = []
+            params: list[Any] = []
             
             if start_date:
                 where += " AND DATE(timestamp) >= DATE(?)"
@@ -181,16 +184,19 @@ async def handle_get_cross_project_insights(arguments: Dict[str, Any]) -> List[t
     if db is None:
         raise RuntimeError("Analytics handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     # Phase 2 - Issue #16: Cross-project insights
     start_date = arguments.get("start_date")
     end_date = arguments.get("end_date")
     min_entries = arguments.get("min_entries", 3)
 
-    def analyze_projects():
-        with db.get_connection() as conn:
+    def analyze_projects() -> dict[str, Any]:
+        with _db.get_connection() as conn:
             # Base WHERE clause
             where = "WHERE deleted_at IS NULL AND project_number IS NOT NULL"
-            params = []
+            params: list[Any] = []
             
             if start_date:
                 where += " AND DATE(timestamp) >= DATE(?)"

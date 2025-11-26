@@ -3,7 +3,7 @@ Memory Journal MCP Server - MCP Tools Registry
 Tool definitions and schemas for all available MCP tools.
 """
 
-from typing import List
+from typing import Any, Dict, List
 from mcp.types import Tool
 
 
@@ -12,7 +12,7 @@ def list_tools() -> List[Tool]:
     return [
         Tool(
             name="create_entry",
-            description="Create a new journal entry with context and tags (v2.0.0: team collaboration, GitHub Issues & PRs support)",
+            description="Create a new journal entry with context and tags (v2.1.0: GitHub Actions support)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -32,14 +32,17 @@ def list_tools() -> List[Tool]:
                     "issue_url": {"type": "string", "description": "GitHub Issue URL (optional)"},
                     "pr_number": {"type": "integer", "description": "GitHub Pull Request number (optional, auto-detected from current branch)"},
                     "pr_url": {"type": "string", "description": "GitHub Pull Request URL (optional)"},
-                    "pr_status": {"type": "string", "enum": ["draft", "open", "merged", "closed"], "description": "PR status (optional)"}
+                    "pr_status": {"type": "string", "enum": ["draft", "open", "merged", "closed"], "description": "PR status (optional)"},
+                    "workflow_run_id": {"type": "integer", "description": "GitHub Actions workflow run ID (optional)"},
+                    "workflow_name": {"type": "string", "description": "GitHub Actions workflow name (optional)"},
+                    "workflow_status": {"type": "string", "enum": ["queued", "in_progress", "completed"], "description": "Workflow run status (optional)"}
                 },
                 "required": ["content"]
             }
         ),
         Tool(
             name="search_entries",
-            description="Search journal entries with optional filters for GitHub Projects, Issues, and PRs",
+            description="Search journal entries with optional filters for GitHub Projects, Issues, PRs, and Actions",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -49,7 +52,8 @@ def list_tools() -> List[Tool]:
                     "project_number": {"type": "integer", "description": "Filter by GitHub Project number (optional)"},
                     "issue_number": {"type": "integer", "description": "Filter by GitHub Issue number (optional)"},
                     "pr_number": {"type": "integer", "description": "Filter by GitHub PR number (optional)"},
-                    "pr_status": {"type": "string", "enum": ["draft", "open", "merged", "closed"], "description": "Filter by PR status (optional)"}
+                    "pr_status": {"type": "string", "enum": ["draft", "open", "merged", "closed"], "description": "Filter by PR status (optional)"},
+                    "workflow_run_id": {"type": "integer", "description": "Filter by GitHub Actions workflow run ID (optional)"}
                 }
             }
         ),
@@ -169,7 +173,7 @@ def list_tools() -> List[Tool]:
         ),
         Tool(
             name="search_by_date_range",
-            description="Search journal entries within a date range with optional filters for GitHub Projects, Issues, and PRs",
+            description="Search journal entries within a date range with optional filters for GitHub Projects, Issues, PRs, and Actions",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -180,7 +184,8 @@ def list_tools() -> List[Tool]:
                     "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"},
                     "project_number": {"type": "integer", "description": "Filter by GitHub Project number (optional)"},
                     "issue_number": {"type": "integer", "description": "Filter by GitHub Issue number (optional)"},
-                    "pr_number": {"type": "integer", "description": "Filter by GitHub PR number (optional)"}
+                    "pr_number": {"type": "integer", "description": "Filter by GitHub PR number (optional)"},
+                    "workflow_run_id": {"type": "integer", "description": "Filter by GitHub Actions workflow run ID (optional)"}
                 },
                 "required": ["start_date", "end_date"]
             }
@@ -266,12 +271,11 @@ def list_tools() -> List[Tool]:
     ]
 
 
-async def call_tool(name: str, arguments: dict):
+async def call_tool(name: str, arguments: Dict[str, Any]):
     """
     Main dispatcher for tool calls.
     Routes tool calls to the appropriate handler based on tool name.
     """
-    from typing import Any, Dict
     import mcp.types as types
     
     # Import handler modules

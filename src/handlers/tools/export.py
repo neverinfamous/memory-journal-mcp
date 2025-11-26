@@ -29,21 +29,24 @@ async def handle_export_entries(arguments: Dict[str, Any]) -> List[types.TextCon
     if db is None:
         raise RuntimeError("Export handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     format_type = arguments.get("format", "json")
     start_date = arguments.get("start_date")
     end_date = arguments.get("end_date")
     tags = arguments.get("tags", [])
     entry_types = arguments.get("entry_types", [])
 
-    def get_entries_for_export():
-        with db.get_connection() as conn:
+    def get_entries_for_export() -> list[dict[str, Any]]:
+        with _db.get_connection() as conn:
             sql = """
                 SELECT DISTINCT m.id, m.entry_type, m.content, m.timestamp, 
                        m.is_personal, m.project_context, m.related_patterns
                 FROM memory_journal m
                 WHERE m.deleted_at IS NULL
             """
-            params = []
+            params: list[Any] = []
 
             if start_date:
                 sql += " AND DATE(m.timestamp) >= DATE(?)"
@@ -67,7 +70,7 @@ async def handle_export_entries(arguments: Dict[str, Any]) -> List[types.TextCon
             sql += " ORDER BY m.timestamp"
 
             cursor = conn.execute(sql, params)
-            entries = []
+            entries: list[dict[str, Any]] = []
             
             for row in cursor.fetchall():
                 entry = dict(row)

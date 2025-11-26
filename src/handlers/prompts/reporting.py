@@ -7,7 +7,6 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from mcp.server import Server
 from mcp.types import GetPromptResult, PromptMessage, TextContent
 from concurrent.futures import ThreadPoolExecutor
 
@@ -43,10 +42,15 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
     time_period = arguments.get("time_period", "week")
     include_items = arguments.get("include_items", "true")
     owner = arguments.get("owner")
-    owner_type = arguments.get("owner_type")
+    _owner_type = arguments.get("owner_type")  # Reserved for future use
     if db is None or project_context_manager is None or github_projects is None or thread_pool is None:
         raise RuntimeError("Reporting prompt handlers not initialized.")
 
+    # Capture for use in nested functions
+    _db = db
+    _pcm = project_context_manager
+    _github_projects = github_projects
+    
     include_items_bool = include_items.lower() == "true"
 
     # Calculate date range based on time period
@@ -61,10 +65,10 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
     start_str = start_date.strftime('%Y-%m-%d')
     end_str = end_date.strftime('%Y-%m-%d')
 
-    def get_project_data():
+    def get_project_data() -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
         """Get journal entries and statistics for the project."""
         import json
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Get all entries in the date range
             cursor = conn.execute("""
                 SELECT id, entry_type, content, timestamp, project_context
@@ -73,10 +77,10 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
                   AND DATE(timestamp) >= DATE(?) AND DATE(timestamp) <= DATE(?)
                 ORDER BY timestamp DESC
             """, (start_str, end_str))
-            all_entries = [dict(row) for row in cursor.fetchall()]
+            all_entries: list[Dict[str, Any]] = [dict(row) for row in cursor.fetchall()]
             
             # Filter by project name if specified
-            entries = []
+            entries: list[Dict[str, Any]] = []
             for entry in all_entries:
                 if project_name and entry.get('project_context'):
                     try:
@@ -99,7 +103,7 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
                 """)
                 all_stat_entries = [dict(row) for row in cursor.fetchall()]
                 
-                stat_entries = []
+                stat_entries: list[Dict[str, Any]] = []
                 for entry in all_stat_entries:
                     if entry.get('project_context'):
                         try:
@@ -110,9 +114,9 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
                             pass
                 
                 total = len(stat_entries)
-                active_days = len(set(e['timestamp'][:10] for e in stat_entries))
-                first_entry = min((e['timestamp'] for e in stat_entries), default=None)
-                last_entry = max((e['timestamp'] for e in stat_entries), default=None)
+                active_days = len(set(str(e['timestamp'])[:10] for e in stat_entries))
+                first_entry = min((str(e['timestamp']) for e in stat_entries), default=None)
+                last_entry = max((str(e['timestamp']) for e in stat_entries), default=None)
             else:
                 cursor = conn.execute("""
                     SELECT COUNT(*) as total,
@@ -141,15 +145,15 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
     entries, stats = await loop.run_in_executor(thread_pool, get_project_data)
 
     # Get project details and items from GitHub (Phase 3: use owner params if provided)
-    project_context = await project_context_manager.get_project_context()
+    project_context = await _pcm.get_project_context()
     owner_resolved = owner
     repo = project_name  # Use project_name if provided
     
     # Auto-detect owner and repo from context if not provided
     if not owner_resolved and 'repo_path' in project_context:
-        owner_resolved = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+        owner_resolved = _github_projects.extract_repo_owner_from_remote(project_context['repo_path'])
         if owner_resolved:
-            owner_type_resolved = github_projects.detect_owner_type(owner_resolved)
+            _owner_type_resolved = _github_projects.detect_owner_type(owner_resolved)  # Reserved for future use
     
     if not repo and 'repo_name' in project_context:
         repo = project_context['repo_name']
@@ -157,7 +161,7 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
     # Note: GitHub Project board items are not included in this report when using project_name
     # This prompt now focuses on journal entries and repository context
     project_details = None
-    project_items = []
+    project_items: List[Dict[str, Any]] = []
 
     # Format output
     project_label = f"Project: {project_name}" if project_name else "All Projects"
@@ -192,12 +196,13 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
             summary += f"- **#{entry['id']}** ({entry['entry_type']}) - {entry['timestamp'][:10]}\n"
             summary += f"  {preview}\n\n"
 
+    # Group project items by status (initialize early to avoid unbound variable)
+    by_status: Dict[str, List[Dict[str, Any]]] = {}
+    
     # Project items status
     if include_items_bool and project_items:
         summary += f"## Project Items ({len(project_items)} total)\n"
         
-        # Group by status
-        by_status: Dict[str, List[Dict[str, Any]]] = {}
         for item in project_items:
             status = item.get('status', 'unknown')
             if status not in by_status:
@@ -213,7 +218,8 @@ async def handle_project_status_summary(arguments: Dict[str, str]) -> GetPromptR
     # Key insights
     summary += f"\n## Key Insights\n"
     if len(entries) > 0:
-        avg_per_day = len(entries) / max(stats.get('active_days', 1), 1)
+        active_days = stats.get('active_days') or 1
+        avg_per_day = len(entries) / max(active_days, 1)
         summary += f"- Average entries per active day: {avg_per_day:.1f}\n"
     
     if include_items_bool and project_items:
@@ -242,14 +248,19 @@ async def handle_project_milestone_tracker(arguments: Dict[str, str]) -> GetProm
     project_name = arguments.get("project_name")
     milestone_name = arguments.get("milestone_name")
     owner = arguments.get("owner")
-    owner_type = arguments.get("owner_type")
+    _owner_type = arguments.get("owner_type")  # Reserved for future use
     if db is None or project_context_manager is None or github_projects is None or thread_pool is None:
         raise RuntimeError("Reporting prompt handlers not initialized.")
 
-    def get_milestone_data():
+    # Capture for use in nested functions
+    _db = db
+    _pcm = project_context_manager
+    _github_projects = github_projects
+    
+    def get_milestone_data() -> tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
         """Get journal entries and velocity data for the project."""
         import json
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Build query to get entries, optionally filtering by project_name
             sql = """
                 SELECT id, entry_type, content, timestamp, project_context,
@@ -257,14 +268,14 @@ async def handle_project_milestone_tracker(arguments: Dict[str, str]) -> GetProm
                 FROM memory_journal
                 WHERE deleted_at IS NULL
             """
-            params = []
+            # Note: params reserved for future SQL filtering, currently filtering in Python
             
             # If project_name provided, we'll filter in Python since project_context is JSON
             cursor = conn.execute(sql + " ORDER BY timestamp DESC")
-            all_entries = [dict(row) for row in cursor.fetchall()]
+            all_entries: list[Dict[str, Any]] = [dict(row) for row in cursor.fetchall()]
             
             # Filter by project name if specified
-            entries = []
+            entries: list[Dict[str, Any]] = []
             for entry in all_entries:
                 if project_name and entry.get('project_context'):
                     try:
@@ -278,9 +289,9 @@ async def handle_project_milestone_tracker(arguments: Dict[str, str]) -> GetProm
                     entries.append(entry)
 
             # Calculate velocity from filtered entries
-            velocity_map = {}
+            velocity_map: Dict[str, int] = {}
             for entry in entries:
-                week = entry['week']
+                week = str(entry['week'])
                 velocity_map[week] = velocity_map.get(week, 0) + 1
             
             velocity = [{'week': week, 'count': count} 
@@ -292,20 +303,22 @@ async def handle_project_milestone_tracker(arguments: Dict[str, str]) -> GetProm
     entries, velocity = await loop.run_in_executor(thread_pool, get_milestone_data)
 
     # Get GitHub milestones (Phase 3: use owner params if provided)
-    project_context = await project_context_manager.get_project_context()
+    project_context = await _pcm.get_project_context()
     owner_resolved = owner
     repo = project_name  # Use project_name if provided
     
     # Auto-detect owner and repo from context if not provided
     if not owner_resolved and 'repo_path' in project_context:
-        owner_resolved = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+        owner_resolved = _github_projects.extract_repo_owner_from_remote(project_context['repo_path'])
     
     if not repo and 'repo_name' in project_context:
         repo = project_context['repo_name']
 
     milestones: List[Dict[str, Any]] = []
-    if owner_resolved and repo and github_projects.api_manager:
-        milestones = github_projects.api_manager.get_repo_milestones(owner_resolved, repo)
+    if owner_resolved and repo and _github_projects.api_manager:
+        api_manager = _github_projects.api_manager
+        if hasattr(api_manager, 'get_repo_milestones'):
+            milestones = api_manager.get_repo_milestones(owner_resolved, repo)
         if milestone_name:
             milestones = [m for m in milestones if milestone_name.lower() in m.get('title', '').lower()]
 

@@ -7,49 +7,50 @@ import asyncio
 import sqlite3
 import sys
 import pickle
-from typing import List, Tuple, Optional
+from typing import Any, List, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from constants import VECTOR_SEARCH_MODEL, VECTOR_SEARCH_DIMENSIONS, DEFAULT_SIMILARITY_THRESHOLD
 from exceptions import (
-    VectorSearchError, VectorSearchNotAvailableError,
+    VectorSearchError,
     VectorSearchNotInitializedError, EmbeddingGenerationError
 )
 
 # Import numpy only when needed for vector operations
+HAS_NUMPY = False
+np: Any = None
 try:
-    import numpy as np
-    HAS_NUMPY = True
+    import numpy as np  # type: ignore[no-redef]
+    HAS_NUMPY = True  # pyright: ignore[reportConstantRedefinition]
 except ImportError:
-    HAS_NUMPY = False
-    np = None  # type: ignore
+    pass
 
 # Vector search availability check (defer actual imports for faster startup)
 VECTOR_SEARCH_AVAILABLE = False
 try:
     import importlib.util
     if importlib.util.find_spec("sentence_transformers") and importlib.util.find_spec("faiss"):
-        VECTOR_SEARCH_AVAILABLE = True
+        VECTOR_SEARCH_AVAILABLE = True  # pyright: ignore[reportConstantRedefinition]
         print("[INFO] Vector search capabilities available (will load on first use)", file=sys.stderr)
 except Exception:
     print("Vector search dependencies not found. Install with: pip install sentence-transformers faiss-cpu", file=sys.stderr)
     print("Continuing without semantic search capabilities...", file=sys.stderr)
 
 # Lazy imports for vector search (loaded on first use)
-SentenceTransformer = None
-faiss = None
+SentenceTransformer: Any = None
+faiss: Any = None
 
 # Try importing at module level if available
 if VECTOR_SEARCH_AVAILABLE:
     try:
-        from sentence_transformers import SentenceTransformer as ST
-        import faiss as faiss_module
+        from sentence_transformers import SentenceTransformer as ST  # type: ignore[import-not-found]
+        import faiss as faiss_module  # type: ignore[import-not-found]
         SentenceTransformer = ST
         faiss = faiss_module
         print("[INFO] Vector search dependencies pre-loaded at startup", file=sys.stderr)
     except Exception as e:
         print(f"[WARNING] Could not pre-load vector search dependencies: {e}", file=sys.stderr)
-        VECTOR_SEARCH_AVAILABLE = False
+        VECTOR_SEARCH_AVAILABLE = False  # pyright: ignore[reportConstantRedefinition]
 
 
 # Thread pool for ML operations (will be set by server.py)
@@ -75,16 +76,16 @@ class VectorSearchManager:
         """
         self.db_path = db_path
         self.model_name = model_name
-        self.model = None
-        self.faiss_index = None
-        self.entry_id_map = {}  # Maps FAISS index positions to entry IDs
+        self.model: Any = None
+        self.faiss_index: Any = None
+        self.entry_id_map: dict[int, int] = {}  # Maps FAISS index positions to entry IDs
         self.initialized = False
         self._initialization_lock = asyncio.Lock()
         self._initialization_task = None
 
         # Don't initialize immediately - do it lazily on first use for faster startup
 
-    async def _ensure_initialized(self):
+    async def ensure_initialized(self):
         """Lazy initialization - only initialize on first use (async to avoid blocking)."""
         # If already initialized, return immediately
         if self.initialized:
@@ -153,12 +154,12 @@ class VectorSearchManager:
                     ORDER BY entry_id
                 """, (self.model_name,))
 
-                vectors = []
-                entry_ids = []
+                vectors: list[Any] = []
+                entry_ids: list[int] = []
 
                 for entry_id, embedding_blob in cursor.fetchall():
                     # Deserialize the embedding vector
-                    embedding = pickle.loads(embedding_blob)
+                    embedding: Any = pickle.loads(embedding_blob)
                     vectors.append(embedding)
                     entry_ids.append(entry_id)
 
@@ -192,17 +193,20 @@ class VectorSearchManager:
             VectorSearchNotInitializedError: If vector search not initialized
             EmbeddingGenerationError: If embedding generation fails
         """
-        await self._ensure_initialized()
+        await self.ensure_initialized()
         
-        if not self.initialized:
+        if not self.initialized or self.model is None:
             raise VectorSearchNotInitializedError()
 
+        # Capture for type narrowing
+        model = self.model
+        
         try:
             # Run in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             embedding = await loop.run_in_executor(
                 _thread_pool,
-                lambda: self.model.encode([text], convert_to_tensor=False)[0]
+                lambda: model.encode([text], convert_to_tensor=False)[0]
             )
 
             if not HAS_NUMPY:
@@ -222,11 +226,14 @@ class VectorSearchManager:
         Returns:
             True if successful, False otherwise
         """
-        await self._ensure_initialized()
+        await self.ensure_initialized()
         
-        if not self.initialized:
+        if not self.initialized or self.faiss_index is None:
             return False
 
+        # Capture for type narrowing
+        faiss_idx = self.faiss_index
+        
         try:
             # Generate embedding
             embedding = await self.generate_embedding(content)
@@ -248,10 +255,10 @@ class VectorSearchManager:
             await loop.run_in_executor(_thread_pool, store_embedding)
 
             # Add to FAISS index
-            self.faiss_index.add(embedding_norm.reshape(1, -1))  # type: ignore[call-arg]
+            faiss_idx.add(embedding_norm.reshape(1, -1))  # type: ignore[call-arg]
 
             # Update entry ID mapping
-            new_index = self.faiss_index.ntotal - 1
+            new_index = faiss_idx.ntotal - 1
             self.entry_id_map[new_index] = entry_id
 
             return True
@@ -277,11 +284,14 @@ class VectorSearchManager:
         Returns:
             List of (entry_id, similarity_score) tuples, sorted by score descending
         """
-        await self._ensure_initialized()
+        await self.ensure_initialized()
         
-        if not self.initialized or self.faiss_index.ntotal == 0:
+        if not self.initialized or self.faiss_index is None or self.faiss_index.ntotal == 0:
             return []
 
+        # Capture for type narrowing
+        faiss_idx = self.faiss_index
+        
         try:
             # Generate query embedding
             query_embedding = await self.generate_embedding(query)
@@ -291,17 +301,17 @@ class VectorSearchManager:
             faiss.normalize_L2(query_norm.reshape(1, -1))  # type: ignore[call-arg]
 
             # Search FAISS index
-            scores, indices = self.faiss_index.search(
+            scores, indices = faiss_idx.search(
                 query_norm.reshape(1, -1),
-                min(limit * 2, self.faiss_index.ntotal)
+                min(limit * 2, faiss_idx.ntotal)
             )  # type: ignore[call-arg]
 
             # Convert to entry IDs and filter by threshold
-            results = []
+            results: list[tuple[int, float]] = []
             for score, idx in zip(scores[0], indices[0]):
                 if idx != -1 and score >= similarity_threshold:  # -1 means no more results
                     entry_id = self.entry_id_map.get(idx)
-                    if entry_id:
+                    if entry_id is not None:
                         results.append((entry_id, float(score)))
 
             # Sort by similarity score (descending) and limit results

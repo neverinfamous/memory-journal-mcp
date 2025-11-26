@@ -1,6 +1,6 @@
 # Docker Deployment Setup Guide
 
-*Last Updated: October 9, 2025 - Production/Stable v1.1.3*
+*Last Updated: November 26, 2025 - Production/Stable v2.1.0*
 
 ## 🚀 Automated Docker Deployment
 
@@ -9,7 +9,7 @@ This repository is configured for **automatic Docker image deployment** to Docke
 ## 📋 Current Status
 
 ### ✅ Production-Ready Deployment
-- **Version**: v1.1.3 (Production/Stable)
+- **Version**: v2.1.0 (Production/Stable)
 - **Base Image**: `python:3.13-alpine` (Alpine Linux 3.22)
 - **Docker Hub**: `writenotenow/memory-journal-mcp`
 - **Image Size**: ~225MB (Alpine-based with full ML capabilities)
@@ -69,9 +69,8 @@ Before the Docker deployment workflow can run, you need to add these secrets to 
 ### Tags Generated on Each Push
 When you push to `main` branch, the workflow automatically creates:
 - `latest` - Always points to most recent main branch build
-- `v1.1.3` - Current version from pyproject.toml
-- `master-YYYYMMDD-HHMMSS-sha` - Timestamped build (e.g., `master-20251008-212041-294c0e5`)
-- `sha256-<git-hash>` - Git commit SHA pinned tag (e.g., `sha256-294c0e5c94dee...`)
+- `v2.1.0` - Current version from pyproject.toml (automatically extracted)
+- `sha-XXXXXXX` - Git commit SHA pinned tag (short format)
 
 ## 🔄 Deployment Triggers
 
@@ -83,14 +82,13 @@ When you push to `main` branch, the workflow automatically creates:
 ### Manual Deployment
 ```bash
 # Create and push a release tag
-git tag v1.1.3
-git push origin v1.1.3
+git tag v2.1.0
+git push origin v2.1.0
 
 # This will trigger deployment with tags:
-# - v1.1.3
+# - v2.1.0
 # - latest
-# - master-YYYYMMDD-HHMMSS-sha
-# - sha256-<hash>
+# - sha-XXXXXXX
 ```
 
 ## 🛡️ Security Features
@@ -214,11 +212,11 @@ docker run --rm -i \
 #### Test Specific Version
 ```bash
 # Test by version tag
-docker pull writenotenow/memory-journal-mcp:v1.1.3
-docker run --rm writenotenow/memory-journal-mcp:v1.1.3 python -c "print('v1.1.3 works!')"
+docker pull writenotenow/memory-journal-mcp:v2.1.0
+docker run --rm writenotenow/memory-journal-mcp:v2.1.0 python -c "print('v2.1.0 works!')"
 
 # Test by commit SHA
-docker pull writenotenow/memory-journal-mcp:sha256-294c0e5c94dee...
+docker pull writenotenow/memory-journal-mcp:sha-XXXXXXX
 ```
 
 ## 🚨 Troubleshooting
@@ -341,7 +339,7 @@ If Docker Scout or Trivy detects critical vulnerabilities:
 ## 🏆 Current Build Status
 
 ✅ **Production/Stable** - All systems operational
-- Latest successful build: October 8, 2025
+- Latest version: v2.1.0
 - Docker Scout: ✅ No critical/high vulnerabilities
 - Multi-platform: ✅ AMD64 + ARM64 support
 - Security packages: ✅ All at latest versions

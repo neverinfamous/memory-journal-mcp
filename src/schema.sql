@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS memory_journal (
     pr_url TEXT, -- Full URL to PR
     pr_status TEXT, -- 'draft', 'open', 'merged', 'closed'
     
+    -- GitHub Actions integration
+    workflow_run_id INTEGER, -- GitHub Actions workflow run ID
+    workflow_name TEXT, -- Workflow name for quick reference
+    workflow_status TEXT, -- 'queued', 'in_progress', 'completed'
+    
     -- Extensible metadata (JSON for flexibility)
     metadata TEXT,
     
@@ -123,6 +128,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_journal_project_number ON memory_journal(p
 CREATE INDEX IF NOT EXISTS idx_memory_journal_project_item_id ON memory_journal(project_item_id);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_issue_number ON memory_journal(issue_number);
 CREATE INDEX IF NOT EXISTS idx_memory_journal_pr_number ON memory_journal(pr_number);
+CREATE INDEX IF NOT EXISTS idx_memory_journal_workflow_run_id ON memory_journal(workflow_run_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_source ON memory_journal_relationships(source_entry_id);

@@ -11,7 +11,7 @@ from datetime import datetime
 
 from constants import TEAM_DB_PATH, DB_PRAGMA_SETTINGS
 from exceptions import (
-    DatabaseError, DatabaseConnectionError, DatabaseIntegrityError
+    DatabaseError, DatabaseConnectionError
 )
 
 
@@ -169,7 +169,7 @@ class TeamDatabaseManager:
         
         return json.dumps(metadata)
 
-    def _update_team_entry(self, conn, team_entry_id: int, entry: Dict[str, Any]) -> bool:
+    def _update_team_entry(self, conn: sqlite3.Connection, team_entry_id: int, entry: Dict[str, Any]) -> bool:
         """Update an existing team entry."""
         try:
             conn.execute("""
@@ -205,7 +205,7 @@ class TeamDatabaseManager:
             print(f"[ERROR] Failed to update team entry: {e}", file=sys.stderr)
             return False
 
-    def _copy_tags(self, conn, entry_id: int, tags: List[str]):
+    def _copy_tags(self, conn: sqlite3.Connection, entry_id: int, tags: List[str]) -> None:
         """Copy tags to team database."""
         for tag_name in tags:
             # Ensure tag exists
@@ -227,7 +227,7 @@ class TeamDatabaseManager:
                 (entry_id, tag_id)
             )
 
-    def _copy_significance(self, conn, entry_id: int, entry: Dict[str, Any]):
+    def _copy_significance(self, conn: sqlite3.Connection, entry_id: int, entry: Dict[str, Any]) -> None:
         """Copy significance to team database."""
         conn.execute("""
             INSERT INTO significant_entries (entry_id, significance_type, timestamp)
@@ -266,7 +266,7 @@ class TeamDatabaseManager:
                     FROM memory_journal mj
                     WHERE mj.deleted_at IS NULL
                 """
-                params = []
+                params: list[Any] = []
                 
                 # Add tag filter
                 if tags:
@@ -296,7 +296,7 @@ class TeamDatabaseManager:
                 params.append(limit)
                 
                 cursor = conn.execute(query, params)
-                entries = []
+                entries: list[dict[str, Any]] = []
                 
                 for row in cursor.fetchall():
                     entry = dict(row)

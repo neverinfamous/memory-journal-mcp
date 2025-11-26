@@ -4,15 +4,18 @@ Git and GitHub context gathering functionality.
 """
 
 import subprocess
-import json
 import os
 import asyncio
+import concurrent.futures
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
-from constants import GIT_TIMEOUT, ASYNC_GIT_TIMEOUT, THREAD_POOL_MAX_WORKERS
+from constants import GIT_TIMEOUT, THREAD_POOL_MAX_WORKERS
+
+if TYPE_CHECKING:
+    from github.integration import GitHubProjectsIntegration
 
 # Thread pool for context gathering
 thread_pool = ThreadPoolExecutor(max_workers=THREAD_POOL_MAX_WORKERS)
@@ -21,17 +24,16 @@ thread_pool = ThreadPoolExecutor(max_workers=THREAD_POOL_MAX_WORKERS)
 class ProjectContextManager:
     """Manages project context gathering including Git and GitHub information."""
     
-    def __init__(self, github_projects_integration=None):
+    def __init__(self, github_projects_integration: Optional['GitHubProjectsIntegration'] = None):
         """
         Initialize the project context manager.
         
         Args:
             github_projects_integration: Optional GitHubProjectsIntegration instance
         """
-        from github.integration import GitHubProjectsIntegration
-        self.github_projects: Optional[GitHubProjectsIntegration] = github_projects_integration
+        self.github_projects: Optional['GitHubProjectsIntegration'] = github_projects_integration
     
-    def _extract_repo_owner_from_remote(self, repo_path: str) -> Optional[str]:
+    def extract_repo_owner_from_remote(self, repo_path: str) -> Optional[str]:
         """
         Extract repository owner from Git remote URL.
         
@@ -41,6 +43,7 @@ class ProjectContextManager:
         Returns:
             Repository owner name or None if not found
         """
+        process: subprocess.Popen[str] | None = None
         try:
             # Use Popen to avoid stdin conflicts
             process = subprocess.Popen(
@@ -51,7 +54,7 @@ class ProjectContextManager:
                 text=True
             )
             
-            stdout, stderr = process.communicate(timeout=GIT_TIMEOUT)
+            stdout, _stderr = process.communicate(timeout=GIT_TIMEOUT)
             
             if process.returncode == 0:
                 remote_url = stdout.strip()
@@ -74,8 +77,9 @@ class ProjectContextManager:
             return None
         
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate()
+            if process is not None:
+                process.kill()
+                process.communicate()
             return None
         except Exception:
             return None
@@ -94,6 +98,7 @@ class ProjectContextManager:
         if start_path is None:
             start_path = os.getcwd()
         
+        process: subprocess.Popen[str] | None = None
         try:
             # Use Popen with explicit pipe configuration to avoid stdio conflicts
             process = subprocess.Popen(
@@ -104,13 +109,14 @@ class ProjectContextManager:
                 text=True
             )
             
-            stdout, stderr = process.communicate(timeout=0.5)
+            stdout, _stderr = process.communicate(timeout=0.5)
             
             if process.returncode == 0:
                 return stdout.strip()
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate()  # Clean up
+            if process is not None:
+                process.kill()
+                process.communicate()  # Clean up
         except Exception:
             pass
         
@@ -155,7 +161,7 @@ class ProjectContextManager:
                 stdin=subprocess.DEVNULL,
                 text=True
             )
-            stdout, stderr = process.communicate(timeout=GIT_TIMEOUT)
+            stdout, _stderr = process.communicate(timeout=GIT_TIMEOUT)
             
             if process.returncode == 0:
                 repo_path = stdout.strip()
@@ -174,7 +180,7 @@ class ProjectContextManager:
                         stdin=subprocess.DEVNULL,
                         text=True
                     )
-                    stdout, stderr = process.communicate(timeout=GIT_TIMEOUT)
+                    stdout, _stderr = process.communicate(timeout=GIT_TIMEOUT)
                     if process.returncode == 0:
                         context['branch'] = stdout.strip()
                 except subprocess.TimeoutExpired:
@@ -193,7 +199,7 @@ class ProjectContextManager:
                         stdin=subprocess.DEVNULL,
                         text=True
                     )
-                    stdout, stderr = process.communicate(timeout=GIT_TIMEOUT)
+                    stdout, _stderr = process.communicate(timeout=GIT_TIMEOUT)
                     if process.returncode == 0 and stdout:
                         parts = stdout.split('|')
                         if len(parts) >= 5:
@@ -220,7 +226,7 @@ class ProjectContextManager:
                         stdin=subprocess.DEVNULL,
                         text=True
                     )
-                    stdout, stderr = process.communicate(timeout=GIT_TIMEOUT)
+                    stdout, _stderr = process.communicate(timeout=GIT_TIMEOUT)
                     if process.returncode == 0:
                         status_lines = stdout.strip().split('\n') if stdout.strip() else []
                         context['git_status'] = f"{len(status_lines)} files changed" if status_lines else "clean"
@@ -233,15 +239,12 @@ class ProjectContextManager:
                 
                 # Get GitHub Projects context if available
                 # Note: This makes API calls - we'll skip if it takes too long
-                if self.github_projects:
+                if self.github_projects is not None:
+                    github_projects = self.github_projects  # Local reference for closures
                     try:
-                        # Use a thread with timeout to avoid blocking
-                        import concurrent.futures
-                        import threading
-                        
-                        def get_github_context():
+                        def get_github_context() -> Optional[Dict[str, Any]]:
                             try:
-                                return self.github_projects.get_projects_context(repo_path)
+                                return github_projects.get_projects_context(repo_path)
                             except Exception:
                                 return None
                         
@@ -259,15 +262,13 @@ class ProjectContextManager:
                     
                     # Get GitHub Issues and PRs context
                     try:
-                        owner = self._extract_repo_owner_from_remote(repo_path)
-                        if owner and repo_name and self.github_projects is not None:
+                        owner = self.extract_repo_owner_from_remote(repo_path)
+                        if owner and repo_name:
                             # Fetch issues with 3 second timeout
-                            def get_issues_context():
+                            def get_issues_context() -> Optional[list[Dict[str, Any]]]:
                                 try:
                                     from github.api import get_repo_issues
-                                    # Type assertion: we checked self.github_projects is not None above
-                                    assert self.github_projects is not None
-                                    return get_repo_issues(self.github_projects, owner, repo_name, state='open', limit=10)
+                                    return get_repo_issues(github_projects, owner, repo_name, state='open', limit=10)
                                 except Exception:
                                     return None
                             
@@ -281,15 +282,13 @@ class ProjectContextManager:
                                     context['github_issues_error'] = 'Timed out (3s limit)'
                             
                             # Fetch PRs and current PR with 3 second timeout
-                            def get_prs_context():
+                            def get_prs_context() -> Optional[Dict[str, Any]]:
                                 try:
                                     from github.api import get_repo_pull_requests, get_pr_from_branch
-                                    # Type assertion: we checked self.github_projects is not None above
-                                    assert self.github_projects is not None
-                                    prs = get_repo_pull_requests(self.github_projects, owner, repo_name, state='open', limit=5)
+                                    prs = get_repo_pull_requests(github_projects, owner, repo_name, state='open', limit=5)
                                     current_pr = None
                                     if context.get('branch'):
-                                        current_pr = get_pr_from_branch(self.github_projects, owner, repo_name, context['branch'])
+                                        current_pr = get_pr_from_branch(github_projects, owner, repo_name, context['branch'])
                                     return {'prs': prs, 'current_pr': current_pr}
                                 except Exception:
                                     return None
@@ -304,9 +303,36 @@ class ProjectContextManager:
                                             context['current_pr'] = prs_data['current_pr']
                                 except concurrent.futures.TimeoutError:
                                     context['github_prs_error'] = 'Timed out (3s limit)'
+                            
+                            # Fetch GitHub Actions workflow runs with 3 second timeout
+                            def get_workflow_runs_context() -> Optional[Dict[str, Any]]:
+                                try:
+                                    from github.api import get_repo_workflow_runs, compute_ci_status
+                                    # Get workflow runs for current branch
+                                    branch = context.get('branch')
+                                    runs = get_repo_workflow_runs(
+                                        github_projects, owner, repo_name,
+                                        branch=branch, limit=5
+                                    )
+                                    ci_status = compute_ci_status(runs)
+                                    return {'runs': runs, 'ci_status': ci_status}
+                                except Exception:
+                                    return None
+                            
+                            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                                future = executor.submit(get_workflow_runs_context)
+                                try:
+                                    workflow_data = future.result(timeout=3.0)
+                                    if workflow_data:
+                                        context['github_workflow_runs'] = workflow_data.get('runs', [])
+                                        context['ci_status'] = workflow_data.get('ci_status', 'unknown')
+                                except concurrent.futures.TimeoutError:
+                                    context['github_workflow_runs_error'] = 'Timed out (3s limit)'
+                                    context['ci_status'] = 'unknown'
                     except Exception as e:
                         context['github_issues_error'] = str(e)
                         context['github_prs_error'] = str(e)
+                        context['github_workflow_runs_error'] = str(e)
             else:
                 context['git_error'] = 'Not a Git repository'
                 

@@ -28,6 +28,9 @@ async def handle_link_entries(arguments: Dict[str, Any]) -> List[types.TextConte
     if db is None:
         raise RuntimeError("Relationship handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     from_entry_id = arguments.get("from_entry_id")
     to_entry_id = arguments.get("to_entry_id")
     relationship_type = arguments.get("relationship_type", "references")
@@ -40,7 +43,7 @@ async def handle_link_entries(arguments: Dict[str, Any]) -> List[types.TextConte
         return [types.TextContent(type="text", text="❌ Cannot link an entry to itself")]
 
     def create_relationship():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Verify both entries exist
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM memory_journal WHERE id IN (?, ?) AND deleted_at IS NULL",
@@ -89,13 +92,16 @@ async def handle_visualize_relationships(arguments: Dict[str, Any]) -> List[type
     if db is None:
         raise RuntimeError("Relationship handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     entry_id = arguments.get("entry_id")
     tags = arguments.get("tags", [])
     depth = arguments.get("depth", 2)
     limit = arguments.get("limit", 20)
 
     def generate_graph():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Build the query to get entries and their relationships
             entries_query = """
                 SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal

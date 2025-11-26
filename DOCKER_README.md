@@ -1,11 +1,11 @@
 # Memory Journal MCP Server
 
-Last Updated October 28, 2025 - Production/Stable v2.0.0
+Last Updated November 26, 2025 - Production/Stable v2.1.0
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v2.0.0-green)
+![Version](https://img.shields.io/badge/version-v2.1.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
@@ -21,7 +21,7 @@ Last Updated October 28, 2025 - Production/Stable v2.0.0
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - Simple `pip install` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)** - Discoverable by MCP clients
 
-**📚 Documentation:** [Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki) • [v2.0.0 Release](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v2.0.0)
+**📚 Documentation:** [Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki) • [v2.1.0 Release](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v2.1.0)
 
 **📰 [Read the v2.0.0 Release Article](https://adamic.tech/articles/2025-10-28-memory-journal-mcp-v2-0-0)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
 
@@ -39,14 +39,15 @@ Last Updated October 28, 2025 - Production/Stable v2.0.0
 
 ---
 
-## ✨ v2.0.0 Highlights (October 28, 2025)
+## ✨ v2.1.0 Highlights (November 26, 2025)
 
-### **16 MCP Tools • 13 Workflow Prompts • 8 Resources**
-- **16 MCP tools** - Complete development workflow from entry creation to export
-- **13 workflow prompts** - Including PR workflow prompts (`pr-summary`, `code-review-prep`, `pr-retrospective`)
-- **8 MCP resources** - Including issue/PR resources (issue entries, PR entries, PR timelines)
-- **GitHub Integration** - Projects, Issues, and Pull Requests with auto-linking
-- **Smart caching system** - GitHub API response caching (15min issues, 5min PRs, 1hr projects)
+### **16 MCP Tools • 14 Workflow Prompts • 13 Resources**
+- **GitHub Actions Integration** - 5 new resources, CI/CD narrative graphs, failure analysis
+- **Actions Visual Graph** - `memory://graph/actions` for CI/CD visualization
+- **Failure Digest Prompt** - `actions-failure-digest` with root cause analysis
+- **GitHub Issues & PRs** - Auto-detection, linking, 3 PR workflow prompts
+- **True Pyright Strict** - 700+ type issues fixed, zero exclusions
+- **Smart caching system** - GitHub API response caching (15min issues, 5min PRs/workflows, 1hr projects)
 - **Enhanced analytics** - Project breakdown, issue/PR tracking, cross-project insights
 - **Backward compatible** - Seamless upgrade with automatic schema migration
 - **10x faster startup** - Lazy ML loading (14s → 2-3s)
@@ -231,8 +232,8 @@ memory://prs/456/timeline        // PR + journal timeline
 **Note:** ARM64 images don't include semantic search due to PyTorch Alpine incompatibility. All other features (FTS5 search, relationships, Git integration, visualization) work identically on both platforms.
 
 **Available Tags:**
-- `2.0.0` - Specific version (recommended for production)
-- `2.0` - Latest patch in 2.0.x series
+- `2.1.0` - Specific version (recommended for production)
+- `2.1` - Latest patch in 2.1.x series
 - `2` - Latest minor in 2.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security

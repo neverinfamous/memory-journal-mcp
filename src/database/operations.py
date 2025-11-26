@@ -9,7 +9,7 @@ from typing import List
 from exceptions import DatabaseError
 
 
-def auto_create_tags(conn, tag_names: List[str]) -> List[int]:
+def auto_create_tags(conn: sqlite3.Connection, tag_names: List[str]) -> List[int]:
     """
     Auto-create tags if they don't exist, return tag IDs. Thread-safe with INSERT OR IGNORE.
     
@@ -20,7 +20,7 @@ def auto_create_tags(conn, tag_names: List[str]) -> List[int]:
     Returns:
         List of tag IDs
     """
-    tag_ids = []
+    tag_ids: list[int] = []
 
     try:
         for tag_name in tag_names:

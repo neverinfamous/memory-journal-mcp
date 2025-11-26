@@ -7,7 +7,7 @@ import asyncio
 import json
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from concurrent.futures import ThreadPoolExecutor
 
 import mcp.types as types
@@ -47,36 +47,46 @@ def initialize_entry_handlers(db_instance: MemoryJournalDB,
 
 async def handle_create_entry(arguments: Dict[str, Any]) -> List[types.TextContent]:
     """Handle creating a new journal entry with context and tags."""
-    if db is None:
+    if db is None or project_context_manager is None:
         raise RuntimeError("Entry handlers not initialized.")
+    
+    # Capture for use in nested functions
+    _db = db
+    _pcm = project_context_manager
+    _team_db = team_db
     
     content = arguments["content"]
     is_personal = arguments.get("is_personal", True)
     entry_type = arguments.get("entry_type", "personal_reflection")
-    tags = arguments.get("tags", [])
+    tags: list[str] = arguments.get("tags", [])
     significance_type: Optional[str] = arguments.get("significance_type")
     auto_context = arguments.get("auto_context", True)
     share_with_team = arguments.get("share_with_team", False)  # v2.0.0 Team Collaboration
     
     # GitHub Projects parameters (Phase 1 - Issue #15, Phase 3 - Issue #17)
-    project_number = arguments.get("project_number")
-    project_item_id = arguments.get("project_item_id")
-    github_project_url = arguments.get("github_project_url")
-    project_owner = arguments.get("project_owner")  # Phase 3
-    project_owner_type = arguments.get("project_owner_type")  # Phase 3
+    project_number: int | None = arguments.get("project_number")
+    project_item_id: int | None = arguments.get("project_item_id")
+    github_project_url: str | None = arguments.get("github_project_url")
+    project_owner: str | None = arguments.get("project_owner")  # Phase 3
+    project_owner_type: str | None = arguments.get("project_owner_type")  # Phase 3
     
     # GitHub Issues parameters
-    issue_number = arguments.get("issue_number")
-    issue_url = arguments.get("issue_url")
+    issue_number: int | None = arguments.get("issue_number")
+    issue_url: str | None = arguments.get("issue_url")
     
     # GitHub Pull Requests parameters
-    pr_number = arguments.get("pr_number")
-    pr_url = arguments.get("pr_url")
-    pr_status = arguments.get("pr_status")
+    pr_number: int | None = arguments.get("pr_number")
+    pr_url: str | None = arguments.get("pr_url")
+    pr_status: str | None = arguments.get("pr_status")
+    
+    # GitHub Actions parameters
+    workflow_run_id: int | None = arguments.get("workflow_run_id")
+    workflow_name: str | None = arguments.get("workflow_name")
+    workflow_status: str | None = arguments.get("workflow_status")
 
     # Validate input for security
     try:
-        db._validate_input(content, entry_type, tags, significance_type)
+        db.validate_input(content, entry_type, tags, significance_type)
     except ValueError as e:
         return [types.TextContent(
             type="text",
@@ -86,27 +96,43 @@ async def handle_create_entry(arguments: Dict[str, Any]) -> List[types.TextConte
     project_context = None
     context_data = None
     if auto_context:
-        context_data = await project_context_manager.get_project_context()
+        context_data = await _pcm.get_project_context()
         project_context = json.dumps(context_data)
         
         # Auto-populate project info from context if not explicitly set (Phase 3: org support)
         if not project_number and context_data and 'github_projects' in context_data:
-            github_projects_data = context_data['github_projects']
-            # Phase 3: Handle new structure with user_projects and org_projects
-            if isinstance(github_projects_data, dict):
+            # Extract GitHub projects data (typed for pyright using cast)
+            raw_gh_projects: Any = context_data['github_projects']
+            if isinstance(raw_gh_projects, dict):
+                github_projects_data = cast(Dict[str, Any], raw_gh_projects)
+                # Phase 3: Handle new structure with user_projects and org_projects
                 # Try org_projects first (prioritize for org repos)
-                projects_list = None
+                projects_list: list[Dict[str, Any]] = []
+                detected_owner_type: str | None = None
+                
+                # Helper to safely extract projects list from untyped data
+                def extract_projects_list(raw_list: Any) -> list[Dict[str, Any]]:
+                    if not isinstance(raw_list, list):
+                        return []
+                    result: list[Dict[str, Any]] = []
+                    typed_list = cast(List[Any], raw_list)
+                    for raw_item in typed_list:
+                        if isinstance(raw_item, dict):
+                            result.append(cast(Dict[str, Any], raw_item))
+                    return result
+                
                 if 'org_projects' in github_projects_data and github_projects_data['org_projects']:
-                    projects_list = github_projects_data['org_projects']
-                    if not project_owner_type:
-                        project_owner_type = 'org'
+                    projects_list = extract_projects_list(github_projects_data['org_projects'])
+                    detected_owner_type = 'org'
                 elif 'user_projects' in github_projects_data and github_projects_data['user_projects']:
-                    projects_list = github_projects_data['user_projects']
-                    if not project_owner_type:
-                        project_owner_type = 'user'
+                    projects_list = extract_projects_list(github_projects_data['user_projects'])
+                    detected_owner_type = 'user'
                 # Backward compatibility: old Phase 1 structure
                 elif 'github_projects' in github_projects_data:
-                    projects_list = github_projects_data['github_projects']
+                    projects_list = extract_projects_list(github_projects_data['github_projects'])
+                
+                if detected_owner_type and not project_owner_type:
+                    project_owner_type = detected_owner_type
                 
                 if projects_list and len(projects_list) > 0:
                     # Use the first (most recent) project
@@ -160,20 +186,22 @@ async def handle_create_entry(arguments: Dict[str, Any]) -> List[types.TextConte
     if tags:
         # Run tag creation in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
-        tag_ids = await loop.run_in_executor(thread_pool, db.auto_create_tags, tags)
+        tag_ids = await loop.run_in_executor(thread_pool, _db.auto_create_tags, tags)
 
     # Run database operations in thread pool to avoid blocking event loop
     def create_entry_in_db():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             cursor = conn.execute("""
                 INSERT INTO memory_journal (
                     entry_type, content, is_personal, share_with_team, project_context, related_patterns,
                     project_number, project_item_id, github_project_url,
-                    issue_number, issue_url, pr_number, pr_url, pr_status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    issue_number, issue_url, pr_number, pr_url, pr_status,
+                    workflow_run_id, workflow_name, workflow_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (entry_type, content, is_personal, 1 if share_with_team else 0, project_context, ','.join(tags),
                   project_number, project_item_id, github_project_url,
-                  issue_number, issue_url, pr_number, pr_url, pr_status))
+                  issue_number, issue_url, pr_number, pr_url, pr_status,
+                  workflow_run_id, workflow_name, workflow_status))
 
             entry_id = cursor.lastrowid
             if entry_id is None:
@@ -212,10 +240,10 @@ async def handle_create_entry(arguments: Dict[str, Any]) -> List[types.TextConte
     
     # Copy to team database if sharing is enabled (v2.0.0 Team Collaboration)
     shared_status = ""
-    if share_with_team and team_db:
+    if share_with_team and _team_db is not None:
         def copy_to_team_db():
             # Fetch the full entry data to copy
-            with db.get_connection() as conn:
+            with _db.get_connection() as conn:
                 cursor = conn.execute("""
                     SELECT * FROM memory_journal WHERE id = ?
                 """, (result_entry_id,))
@@ -224,7 +252,8 @@ async def handle_create_entry(arguments: Dict[str, Any]) -> List[types.TextConte
                     entry_dict = dict(entry_row)
                     entry_dict['tags'] = tags
                     entry_dict['significance_type'] = significance_type
-                    return team_db.copy_entry_to_team(entry_dict)
+                    assert _team_db is not None
+                    return _team_db.copy_entry_to_team(entry_dict)
             return False
         
         try:
@@ -239,7 +268,7 @@ async def handle_create_entry(arguments: Dict[str, Any]) -> List[types.TextConte
             shared_status = f"\n⚠️ Warning: Team sharing failed: {str(e)}"
 
     # Build result message with all linkage info
-    linkage_info = []
+    linkage_info: list[str] = []
     if project_number:
         linkage_info.append(f"Project #{project_number}")
     if issue_number:
@@ -249,6 +278,13 @@ async def handle_create_entry(arguments: Dict[str, Any]) -> List[types.TextConte
         if pr_status:
             pr_info += f" ({pr_status})"
         linkage_info.append(pr_info)
+    if workflow_run_id:
+        workflow_info = f"Workflow Run #{workflow_run_id}"
+        if workflow_name:
+            workflow_info += f" ({workflow_name})"
+        if workflow_status:
+            workflow_info += f" [{workflow_status}]"
+        linkage_info.append(workflow_info)
     
     result = [types.TextContent(
         type="text",
@@ -267,6 +303,9 @@ async def handle_create_entry_minimal(arguments: Dict[str, Any]) -> List[types.T
     if db is None:
         raise RuntimeError("Entry handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     content = arguments["content"]
     
     # GitHub Projects parameters (Phase 1 - Issue #15)
@@ -276,7 +315,7 @@ async def handle_create_entry_minimal(arguments: Dict[str, Any]) -> List[types.T
 
     # Just a simple database insert without any context or tag operations
     def minimal_db_insert():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             cursor = conn.execute("""
                 INSERT INTO memory_journal (
                     entry_type, content, is_personal,
@@ -304,11 +343,14 @@ async def handle_get_recent_entries(arguments: Dict[str, Any]) -> List[types.Tex
     if db is None:
         raise RuntimeError("Entry handlers not initialized.")
     
+    # Capture for type narrowing
+    _db = db
+    
     limit = arguments.get("limit", 5)
     is_personal = arguments.get("is_personal")
 
     sql = "SELECT id, entry_type, content, timestamp, is_personal, project_context FROM memory_journal"
-    params = []
+    params: list[Any] = []
 
     if is_personal is not None:
         sql += " WHERE is_personal = ?"
@@ -317,7 +359,7 @@ async def handle_get_recent_entries(arguments: Dict[str, Any]) -> List[types.Tex
     sql += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
 
-    with db.get_connection() as conn:
+    with _db.get_connection() as conn:
         cursor = conn.execute(sql, params)
         entries = [dict(row) for row in cursor.fetchall()]
 
@@ -346,6 +388,9 @@ async def handle_get_entry_by_id(arguments: Dict[str, Any]) -> List[types.TextCo
     if db is None:
         raise RuntimeError("Entry handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     entry_id = arguments.get("entry_id")
     include_relationships = arguments.get("include_relationships", True)
 
@@ -353,12 +398,13 @@ async def handle_get_entry_by_id(arguments: Dict[str, Any]) -> List[types.TextCo
         return [types.TextContent(type="text", text="❌ Entry ID is required")]
 
     def get_entry_details():
-        with db.get_connection() as conn:
-            # Get main entry (including GitHub Projects, Issues, and PRs columns)
+        with _db.get_connection() as conn:
+            # Get main entry (including GitHub Projects, Issues, PRs, and Actions columns)
             cursor = conn.execute("""
                 SELECT id, entry_type, content, timestamp, is_personal, project_context, related_patterns,
                        project_number, project_item_id, github_project_url,
-                       issue_number, issue_url, pr_number, pr_url, pr_status
+                       issue_number, issue_url, pr_number, pr_url, pr_status,
+                       workflow_run_id, workflow_name, workflow_status
                 FROM memory_journal
                 WHERE id = ? AND deleted_at IS NULL
             """, (entry_id,))
@@ -428,7 +474,7 @@ async def handle_get_entry_by_id(arguments: Dict[str, Any]) -> List[types.TextCo
         output += f"**Significance:** {entry['significance']['significance_type']} (rating: {entry['significance']['significance_rating']})\n\n"
 
     # Show GitHub linkage
-    github_links = []
+    github_links: list[str] = []
     if entry.get('project_number'):
         github_links.append(f"Project #{entry['project_number']}")
     if entry.get('issue_number'):
@@ -443,6 +489,13 @@ async def handle_get_entry_by_id(arguments: Dict[str, Any]) -> List[types.TextCo
         if entry.get('pr_url'):
             pr_link += f" - {entry['pr_url']}"
         github_links.append(pr_link)
+    if entry.get('workflow_run_id'):
+        workflow_link = f"Workflow Run #{entry['workflow_run_id']}"
+        if entry.get('workflow_name'):
+            workflow_link += f" ({entry['workflow_name']})"
+        if entry.get('workflow_status'):
+            workflow_link += f" [{entry['workflow_status']}]"
+        github_links.append(workflow_link)
     
     if github_links:
         output += f"**GitHub Links:** {', '.join(github_links)}\n\n"
@@ -470,6 +523,9 @@ async def handle_update_entry(arguments: Dict[str, Any]) -> List[types.TextConte
     if db is None:
         raise RuntimeError("Entry handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     entry_id = arguments.get("entry_id")
     content = arguments.get("content")
     entry_type = arguments.get("entry_type")
@@ -480,15 +536,15 @@ async def handle_update_entry(arguments: Dict[str, Any]) -> List[types.TextConte
         return [types.TextContent(type="text", text="❌ Entry ID is required")]
 
     def update_entry_in_db():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Check if entry exists
             cursor = conn.execute("SELECT id FROM memory_journal WHERE id = ?", (entry_id,))
             if not cursor.fetchone():
                 return None
 
             # Build dynamic update query
-            updates = []
-            params = []
+            updates: list[str] = []
+            params: list[Any] = []
             
             if content is not None:
                 updates.append("content = ?")
@@ -565,6 +621,9 @@ async def handle_delete_entry(arguments: Dict[str, Any]) -> List[types.TextConte
     if db is None:
         raise RuntimeError("Entry handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     entry_id = arguments.get("entry_id")
     permanent = arguments.get("permanent", False)
 
@@ -572,7 +631,7 @@ async def handle_delete_entry(arguments: Dict[str, Any]) -> List[types.TextConte
         return [types.TextContent(type="text", text="❌ Entry ID is required")]
 
     def delete_entry_in_db():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Check if entry exists
             cursor = conn.execute("SELECT id FROM memory_journal WHERE id = ?", (entry_id,))
             if not cursor.fetchone():

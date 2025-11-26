@@ -5,7 +5,86 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2025-11-26
+
+### Added - Actions Visual Graph Resource
+- **New Resource: `memory://graph/actions`** - CI/CD narrative visualization
+  - Generates Mermaid diagrams showing workflow runs, failures, investigation entries, and deployments
+  - **Narrative flow**: `Commit → Workflow Run → Failure → Investigation Entry → Fix Commit → Success → Deployment`
+  - **Node types**: Commits (hexagon), PRs (stadium), Workflow runs (rectangle), Failed jobs (parallelogram), Journal entries, Deployments
+  - **Query parameters**: `?branch=X&workflow=Y&limit=15` for filtering
+  - Identifies "fix patterns" - when failed workflows are followed by successful ones
+  - Links journal entries to workflow run investigations
+  - Color-coded styling: green (success), red (failure), yellow (pending), blue (entries)
+
+### Fixed - Pyright Strict Type Compliance
+- **700+ type issues fixed** - Complete Pyright strict mode compliance achieved
+- **All exclusions removed** from `pyrightconfig.json`:
+  - Removed `reportMissingTypeStubs` exclusion
+  - Removed `reportUnknownVariableType` exclusion
+  - Removed `reportUnknownMemberType` exclusion
+  - Removed `reportUnknownArgumentType` exclusion
+  - Removed `reportUnknownParameterType` exclusion
+  - Removed `reportUnknownLambdaType` exclusion
+- **Type safety badge now accurate** - `[![Type Safety](https://img.shields.io/badge/Pyright-Strict-blue.svg)]` reflects true strict compliance
+- All `Any` types replaced with proper TypedDicts and explicit annotations
+- Improved code maintainability and IDE support through complete type coverage
+
+### Added - GitHub Actions Failure Summarizer Prompt
+- **New Prompt: `actions-failure-digest`** - Comprehensive GitHub Actions failure analysis
+  - Generates digest of recent CI/CD failures with root cause analysis
+  - **Failing Jobs Summary** - Lists failed workflows, jobs, and specific failed steps
+  - **Linked Journal Entries** - Finds entries connected to affected commits/PRs
+  - **Recent Code/PR Changes** - Context from current branch and associated PRs
+  - **Previous Similar Failures** - Semantic search for recurring patterns
+  - **Possible Root Causes** - AI-assisted analysis of failure patterns
+  - **Next Steps** - Actionable recommendations for resolution
+  - Optional filters: `branch`, `workflow_name`, `pr_number`, `days_back`, `limit`
+  - Leverages existing semantic search, clustering, and relationship enumeration
+- **New API Helper Function**: `get_workflow_run_jobs()` - Fetch job-level details for workflow runs
+- **New API Helper Function**: `get_failed_workflow_runs()` - Convenience function for fetching recent failures
+
+### Added - GitHub Actions Resources
+- **4 New MCP Resources for CI/CD Visibility** - Expose GitHub Actions as first-class resources
+  - `memory://actions/recent` - Recent workflow runs with filtering (JSON)
+    - Query params: `?branch=X&workflow=Y&commit=SHA&pr=N&limit=10`
+    - Returns: CI status, run list, related journal entries
+  - `memory://actions/workflows/{workflow_name}/timeline` - Workflow-specific timeline (Markdown)
+    - Blends: workflow runs, journal entries, PR events
+  - `memory://actions/branches/{branch}/timeline` - Branch CI timeline (Markdown)
+    - Blends: workflow runs, journal entries, PR lifecycle events
+  - `memory://actions/commits/{sha}/timeline` - Commit-specific timeline (Markdown)
+    - Blends: workflow runs for commit, related journal entries
+- **New API Helper Functions** (in `src/github/api.py`):
+  - `get_workflow_runs_by_name()` - Filter runs by workflow name (case-insensitive)
+  - `get_unique_workflow_names()` - Extract unique workflow names from recent runs
+- **Enhanced Resource URI Parsing** - Support for query parameters and new action patterns
+
+### Added - GitHub Actions Integration (Phase 1)
+- **GitHub Actions Workflow Runs Support** - Foundation layer for CI/CD integration
+  - Link journal entries to workflow runs via `workflow_run_id`, `workflow_name`, `workflow_status` parameters
+  - Automatic CI status detection in context bundle (`passing`, `failing`, `pending`, `unknown`)
+  - Search and filter entries by workflow run ID
+  - Database migration adds `workflow_run_id`, `workflow_name`, `workflow_status` columns with index
+- **Enhanced Context Capture** - Project context now includes:
+  - Up to 5 recent workflow runs for current branch
+  - Overall CI status computed from latest workflow runs
+  - Automatic caching (5 min TTL) for workflow run data
+- **New API Functions** (in `src/github/api.py`):
+  - `get_repo_workflow_runs()` - Fetch workflow runs with caching, branch/status filters
+  - `get_workflow_run_details()` - Get detailed workflow run information
+  - `get_workflow_runs_for_commit()` - Find runs for a specific commit SHA
+  - `get_workflow_runs_for_pr()` - Find runs associated with a PR
+  - `compute_ci_status()` - Compute overall CI status from workflow runs
+  - All functions include `gh` CLI fallbacks
+- **Enhanced Search Capabilities**
+  - `search_entries` tool: New filter for `workflow_run_id`
+  - `search_by_date_range` tool: New filter for `workflow_run_id`
+  - Find all journal entries related to specific workflow runs
+- **Enhanced Entry Display**
+  - `get_entry_by_id` now shows linked workflow runs with name and status
+  - Entry creation confirms workflow linkage (e.g., "Linked to: Workflow Run #12345 (CI Tests) [completed]")
+- **New TypedDict Model**: `GitHubWorkflowRunDict` for type-safe workflow run data
 
 ### Added - GitHub Issues & Pull Requests Integration
 - **GitHub Issues Support** - Complete integration with GitHub Issues
@@ -286,7 +365,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQLite FTS5 full-text search
 - Optional FAISS semantic search
 
-[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.1...v2.1.0
+[2.0.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.2...v2.0.0
 [1.2.2]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.0...v1.2.1

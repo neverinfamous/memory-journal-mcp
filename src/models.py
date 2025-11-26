@@ -4,7 +4,6 @@ Type definitions and data structures used throughout the application.
 """
 
 from typing import Dict, List, Any, Optional, TypedDict
-from datetime import datetime
 
 
 class EntryDict(TypedDict, total=False):
@@ -24,6 +23,9 @@ class EntryDict(TypedDict, total=False):
     pr_number: Optional[int]
     pr_url: Optional[str]
     pr_status: Optional[str]
+    workflow_run_id: Optional[int]
+    workflow_name: Optional[str]
+    workflow_status: Optional[str]
     deleted_at: Optional[str]
     tags: List[str]
     significance: Optional[Dict[str, Any]]
@@ -48,6 +50,9 @@ class ContextData(TypedDict, total=False):
     current_pr: Optional[Dict[str, Any]]
     github_pull_requests: List[Dict[str, Any]]
     github_prs_error: str
+    github_workflow_runs: List[Dict[str, Any]]
+    github_workflow_runs_error: str
+    ci_status: str  # 'passing', 'failing', 'pending', 'unknown'
     cwd: str
     timestamp: str
 
@@ -138,6 +143,28 @@ class GitHubMilestoneDict(TypedDict, total=False):
     url: str
 
 
+class GitHubWorkflowRunDict(TypedDict, total=False):
+    """GitHub Actions workflow run information."""
+    id: int
+    name: str
+    head_branch: str
+    head_sha: str
+    status: str  # 'queued', 'in_progress', 'completed'
+    conclusion: Optional[str]  # 'success', 'failure', 'cancelled', 'skipped', 'timed_out', 'action_required', None
+    event: str  # 'push', 'pull_request', 'workflow_dispatch', 'schedule', etc.
+    workflow_id: int
+    run_number: int
+    run_attempt: int
+    created_at: str
+    updated_at: str
+    url: str
+    html_url: str
+    jobs_url: str
+    logs_url: str
+    actor: Optional[str]
+    triggering_actor: Optional[str]
+
+
 class TimelineEventDict(TypedDict, total=False):
     """Timeline event for project activity."""
     type: str  # 'journal_entry' or 'project_item'
@@ -214,6 +241,102 @@ class CacheEntryDict(TypedDict):
     cache_value: str
     cached_at: int
     ttl_seconds: int
+
+
+# =============================================================================
+# Actions Graph Types (memory://graph/actions)
+# =============================================================================
+
+# Literal type for node types in the Actions graph
+ActionsGraphNodeType = str  # 'commit', 'workflow_run', 'failed_job', 'journal_entry', 'deployment', 'pr'
+
+
+class ActionsGraphCommitNode(TypedDict, total=False):
+    """Commit node in the Actions graph."""
+    node_type: str  # Always 'commit'
+    sha: str
+    short_sha: str
+    message: Optional[str]
+    author: Optional[str]
+    timestamp: str
+    branch: Optional[str]
+
+
+class ActionsGraphWorkflowRunNode(TypedDict, total=False):
+    """Workflow run node in the Actions graph."""
+    node_type: str  # Always 'workflow_run'
+    run_id: int
+    name: str
+    status: str  # 'queued', 'in_progress', 'completed'
+    conclusion: Optional[str]  # 'success', 'failure', 'cancelled', etc.
+    head_sha: str
+    head_branch: Optional[str]
+    event: str  # 'push', 'pull_request', etc.
+    timestamp: str
+    html_url: Optional[str]
+
+
+class ActionsGraphJobNode(TypedDict, total=False):
+    """Failed job node in the Actions graph."""
+    node_type: str  # Always 'failed_job'
+    job_id: int
+    name: str
+    conclusion: str  # 'failure', 'timed_out', etc.
+    run_id: int
+    html_url: Optional[str]
+    failed_step: Optional[str]
+
+
+class ActionsGraphEntryNode(TypedDict, total=False):
+    """Journal entry node in the Actions graph (linked to workflow runs/failures)."""
+    node_type: str  # Always 'journal_entry'
+    entry_id: int
+    entry_type: str
+    content_preview: str
+    timestamp: str
+    workflow_run_id: Optional[int]
+
+
+class ActionsGraphDeploymentNode(TypedDict, total=False):
+    """Deployment node in the Actions graph."""
+    node_type: str  # Always 'deployment'
+    run_id: int
+    workflow_name: str
+    environment: Optional[str]
+    status: str
+    timestamp: str
+    head_sha: str
+    html_url: Optional[str]
+
+
+class ActionsGraphPRNode(TypedDict, total=False):
+    """Pull Request node in the Actions graph."""
+    node_type: str  # Always 'pr'
+    pr_number: int
+    title: str
+    state: str  # 'open', 'closed', 'merged'
+    author: Optional[str]
+    head_branch: str
+    url: Optional[str]
+
+
+class ActionsGraphEdge(TypedDict):
+    """Edge connecting nodes in the Actions graph."""
+    from_node: str  # Node ID
+    to_node: str  # Node ID
+    edge_type: str  # 'triggers', 'contains', 'investigates', 'fixes', 'deploys'
+    label: Optional[str]
+
+
+class ActionsGraphData(TypedDict, total=False):
+    """Complete Actions graph data structure."""
+    commits: List[ActionsGraphCommitNode]
+    workflow_runs: List[ActionsGraphWorkflowRunNode]
+    failed_jobs: List[ActionsGraphJobNode]
+    journal_entries: List[ActionsGraphEntryNode]
+    deployments: List[ActionsGraphDeploymentNode]
+    pull_requests: List[ActionsGraphPRNode]
+    edges: List[ActionsGraphEdge]
 
 
 # Type aliases for common patterns

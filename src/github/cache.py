@@ -8,7 +8,7 @@ import sys
 import time
 from typing import Optional, Any, TYPE_CHECKING
 
-from exceptions import DatabaseError
+from exceptions import DatabaseError as _DatabaseError  # pyright: ignore[reportUnusedImport]
 
 if TYPE_CHECKING:
     from database.base import MemoryJournalDB

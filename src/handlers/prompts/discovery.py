@@ -5,7 +5,6 @@ Handlers for finding related entries, weekly digests, and goal tracking.
 
 import asyncio
 import json
-import sys
 from typing import Any, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
 
@@ -36,6 +35,9 @@ async def handle_find_related(arguments: Dict[str, str]) -> types.GetPromptResul
     if db is None:
         raise RuntimeError("Discovery prompts not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     entry_id_str = arguments.get("entry_id")
     similarity_threshold = float(arguments.get("similarity_threshold", "0.3"))
 
@@ -63,8 +65,8 @@ async def handle_find_related(arguments: Dict[str, str]) -> types.GetPromptResul
             ]
         )
 
-    def get_entry_and_tags():
-        with db.get_connection() as conn:
+    def get_entry_and_tags() -> tuple[Dict[str, Any] | None, list[str], list[Dict[str, Any]]]:
+        with _db.get_connection() as conn:
             # Get the entry
             cursor = conn.execute("""
                 SELECT id, content, entry_type
@@ -119,7 +121,10 @@ async def handle_find_related(arguments: Dict[str, str]) -> types.GetPromptResul
             ]
         )
 
-    entry, tags, tag_related = result
+    # Unpack with type narrowing - entry is guaranteed non-None after the check above
+    entry: Dict[str, Any] = result[0]
+    tags = result[1]
+    tag_related = result[2]
 
     output = f"# 🔗 Related Entries for Entry #{entry_id}\n\n"
     output += f"**Original Entry**: {entry['content'][:150]}...\n"
@@ -134,11 +139,11 @@ async def handle_find_related(arguments: Dict[str, str]) -> types.GetPromptResul
         try:
             semantic_results = await vector_search.semantic_search(entry['content'], limit=10, similarity_threshold=similarity_threshold)
             if semantic_results:
-                def get_semantic_entries():
+                def get_semantic_entries() -> list[tuple[Dict[str, Any], float]]:
                     entry_ids = [r[0] for r in semantic_results if r[0] != entry_id]
                     if not entry_ids:
                         return []
-                    with db.get_connection() as conn:
+                    with _db.get_connection() as conn:
                         placeholders = ','.join(['?'] * len(entry_ids))
                         cursor = conn.execute(f"""
                             SELECT id, content, entry_type
@@ -186,6 +191,9 @@ async def handle_weekly_digest(arguments: Dict[str, str]) -> types.GetPromptResu
     if db is None:
         raise RuntimeError("Discovery prompts not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     from datetime import datetime, timedelta
     
     week_offset = int(arguments.get("week_offset", "0"))
@@ -208,7 +216,7 @@ async def handle_weekly_digest(arguments: Dict[str, str]) -> types.GetPromptResu
     end_str = target_week_end.strftime('%Y-%m-%d')
     
     def get_week_entries():
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             cursor = conn.execute("""
                 SELECT m.id, m.entry_type, m.content, m.timestamp, m.is_personal
                 FROM memory_journal m
@@ -237,9 +245,9 @@ async def handle_weekly_digest(arguments: Dict[str, str]) -> types.GetPromptResu
         digest += f"**Summary**: {len(entries)} total entries ({len(project)} project, {len(personal)} personal)\n\n"
         
         # Group by day
-        by_day = {}
+        by_day: Dict[str, list[Dict[str, Any]]] = {}
         for entry in entries:
-            day = entry['timestamp'][:10]
+            day: str = entry['timestamp'][:10]
             if day not in by_day:
                 by_day[day] = []
             by_day[day].append(entry)
@@ -269,11 +277,14 @@ async def handle_goal_tracker(arguments: Dict[str, str]) -> types.GetPromptResul
     if db is None:
         raise RuntimeError("Discovery prompts not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    
     project_name = arguments.get("project_name")
     goal_type = arguments.get("goal_type")
 
-    def get_goals():
-        with db.get_connection() as conn:
+    def get_goals() -> list[Dict[str, Any]]:
+        with _db.get_connection() as conn:
             sql = """
                 SELECT m.id, m.entry_type, m.content, m.timestamp, m.project_context,
                        se.significance_type, se.significance_rating
@@ -282,7 +293,7 @@ async def handle_goal_tracker(arguments: Dict[str, str]) -> types.GetPromptResul
                 WHERE m.deleted_at IS NULL
                 AND (se.significance_type IS NOT NULL OR m.entry_type = 'milestone')
             """
-            params = []
+            params: list[Any] = []
             
             if goal_type:
                 sql += " AND se.significance_type = ?"
@@ -291,7 +302,7 @@ async def handle_goal_tracker(arguments: Dict[str, str]) -> types.GetPromptResul
             sql += " ORDER BY m.timestamp DESC"
             
             cursor = conn.execute(sql, params)
-            goals = []
+            goals: list[Dict[str, Any]] = []
             
             for row in cursor.fetchall():
                 goal = dict(row)
@@ -323,9 +334,9 @@ async def handle_goal_tracker(arguments: Dict[str, str]) -> types.GetPromptResul
         tracker += "No goals or milestones found matching the criteria.\n"
     else:
         # Group by month
-        by_month = {}
+        by_month: Dict[str, list[Dict[str, Any]]] = {}
         for goal in goals:
-            month = goal['timestamp'][:7]  # YYYY-MM
+            month: str = goal['timestamp'][:7]  # YYYY-MM
             if month not in by_month:
                 by_month[month] = []
             by_month[month].append(goal)

@@ -3,7 +3,6 @@ Memory Journal MCP Server - GitHub GraphQL API Module
 GraphQL queries for GitHub Projects v2 API.
 """
 
-import sys
 from typing import Dict, Any, List, Optional
 
 # GraphQL query for user projects
@@ -69,7 +68,7 @@ def execute_graphql_query(
         import requests  # type: ignore[import-not-found]
         
         url = "https://api.github.com/graphql"
-        headers = integration._get_headers()
+        headers = integration.get_headers()
         
         response = requests.post(
             url,
@@ -115,10 +114,10 @@ def get_user_projects_v2(
     if not data or 'user' not in data or not data['user']:
         return []
     
-    projects = data['user'].get('projectsV2', {}).get('nodes', [])
+    projects: List[Dict[str, Any]] = data['user'].get('projectsV2', {}).get('nodes', [])
     
     # Convert to our standard format
-    result = []
+    result: List[Dict[str, Any]] = []
     for proj in projects:
         result.append({
             'number': proj.get('number'),
@@ -161,10 +160,10 @@ def get_org_projects_v2(
     if not data or 'organization' not in data or not data['organization']:
         return []
     
-    projects = data['organization'].get('projectsV2', {}).get('nodes', [])
+    projects: List[Dict[str, Any]] = data['organization'].get('projectsV2', {}).get('nodes', [])
     
     # Convert to our standard format
-    result = []
+    result: List[Dict[str, Any]] = []
     for proj in projects:
         result.append({
             'number': proj.get('number'),

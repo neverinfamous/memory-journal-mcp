@@ -47,6 +47,7 @@ CACHE_TTL_ITEMS = 900  # 15 minutes for project items
 CACHE_TTL_MILESTONE = 3600  # 1 hour for milestones
 CACHE_TTL_ISSUES = 900  # 15 minutes for GitHub issues
 CACHE_TTL_PULL_REQUESTS = 900  # 15 minutes for GitHub pull requests
+CACHE_TTL_WORKFLOW_RUNS = 300  # 5 minutes for GitHub Actions workflow runs (CI status changes frequently)
 
 # Vector search configuration
 VECTOR_SEARCH_MODEL = 'all-MiniLM-L6-v2'
@@ -65,6 +66,28 @@ RELATIONSHIP_SYMBOLS = {
 # Mermaid diagram styling
 MERMAID_STYLE_PERSONAL = '#E3F2FD'  # Blue for personal entries
 MERMAID_STYLE_PROJECT = '#FFF3E0'  # Orange for project entries
+
+# Actions Graph Mermaid styling (memory://graph/actions)
+MERMAID_ACTIONS_STYLE_COMMIT = '#E8F5E9'  # Light green for commits
+MERMAID_ACTIONS_STYLE_RUN_SUCCESS = '#C8E6C9'  # Green for successful workflow runs
+MERMAID_ACTIONS_STYLE_RUN_FAILURE = '#FFCDD2'  # Red for failed workflow runs
+MERMAID_ACTIONS_STYLE_RUN_PENDING = '#FFF9C4'  # Yellow for pending/in-progress runs
+MERMAID_ACTIONS_STYLE_JOB_FAILURE = '#EF9A9A'  # Darker red for failed jobs
+MERMAID_ACTIONS_STYLE_ENTRY = '#BBDEFB'  # Light blue for journal entries
+MERMAID_ACTIONS_STYLE_DEPLOYMENT = '#B2DFDB'  # Teal for deployments
+MERMAID_ACTIONS_STYLE_PR = '#E1BEE7'  # Light purple for pull requests
+
+# Actions Graph edge types
+ACTIONS_EDGE_TRIGGERS = '-->'  # Commit triggers workflow
+ACTIONS_EDGE_CONTAINS = '---'  # Workflow contains jobs
+ACTIONS_EDGE_INVESTIGATES = '-.->'  # Entry investigates failure
+ACTIONS_EDGE_FIXES = '==>'  # Fix commit resolves failure
+ACTIONS_EDGE_DEPLOYS = '-->'  # Success leads to deployment
+ACTIONS_EDGE_PR_TRIGGERS = '-->'  # PR triggers workflow
+
+# Actions Graph defaults
+ACTIONS_GRAPH_DEFAULT_LIMIT = 15  # Default number of workflow runs to include
+ACTIONS_GRAPH_MAX_JOBS_PER_RUN = 5  # Max failed jobs to show per run
 
 # Server metadata
 SERVER_NAME = "memory-journal-mcp"

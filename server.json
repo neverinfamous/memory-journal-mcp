@@ -3,11 +3,11 @@
   "name": "io.github.neverinfamous/memory-journal-mcp",
   "title": "Memory Journal MCP",
   "description": "Project context management for AI-assisted development - Persistent memory and knowledge graphs across fragmented AI threads",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "docker.io/writenotenow/memory-journal-mcp:v2.0.0",
+      "identifier": "docker.io/writenotenow/memory-journal-mcp:v2.1.0",
       "transport": {
         "type": "stdio"
       }

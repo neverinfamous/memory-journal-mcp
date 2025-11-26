@@ -83,7 +83,7 @@ class MemoryJournalDB:
         except sqlite3.Error as e:
             raise DatabaseConnectionError(f"Failed to initialize database: {e}")
 
-    def _run_migrations(self, conn):
+    def _run_migrations(self, conn: sqlite3.Connection) -> None:
         """Run database migrations for schema updates."""
         try:
             # Check if memory_journal table exists first
@@ -179,6 +179,19 @@ class MemoryJournalDB:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_journal_share_with_team ON memory_journal(share_with_team)")
                 conn.commit()
                 print("Migration completed: share_with_team column added", file=sys.stderr)
+            
+            # Migration: Add GitHub Actions columns (v2.1.0 - GitHub Actions Integration)
+            cursor = conn.execute("PRAGMA table_info(memory_journal)")
+            columns = {row[1] for row in cursor.fetchall()}
+            
+            if 'workflow_run_id' not in columns:
+                print("Running migration: Adding GitHub Actions columns to memory_journal table", file=sys.stderr)
+                conn.execute("ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER")
+                conn.execute("ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT")
+                conn.execute("ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_memory_journal_workflow_run_id ON memory_journal(workflow_run_id)")
+                conn.commit()
+                print("Migration completed: GitHub Actions columns added", file=sys.stderr)
         except sqlite3.Error as e:
             raise DatabaseMigrationError(f"Migration failed: {e}")
 
@@ -222,7 +235,7 @@ class MemoryJournalDB:
         except sqlite3.Error as e:
             raise DatabaseConnectionError(f"Failed to establish database connection: {e}")
 
-    def _validate_input(self, content: str, entry_type: str, tags: list, significance_type: Optional[str] = None):
+    def validate_input(self, content: str, entry_type: str, tags: list[str], significance_type: Optional[str] = None) -> None:
         """
         Validate input parameters for security.
         
@@ -268,7 +281,7 @@ class MemoryJournalDB:
         Returns:
             List of tag IDs corresponding to the tag names
         """
-        tag_ids = []
+        tag_ids: list[int] = []
 
         with self.get_connection() as conn:
             for tag_name in tag_names:

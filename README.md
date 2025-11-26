@@ -1,13 +1,13 @@
 # Memory Journal MCP Server
 
-Last Updated October 28, 2025 - Production/Stable v2.0.0
+Last Updated November 26, 2025 - Production/Stable v2.1.0
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v2.0.0-green)
+![Version](https://img.shields.io/badge/version-v2.1.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
@@ -81,25 +81,31 @@ Thread 3: AI finds related entries → "Based on your design from Oct 15, here's
 
 ---
 
-## ✨ What's New in v2.0.0 (October 28, 2025)
+## ✨ What's New in v2.1.0 (November 26, 2025)
 
-### 🎉 **Complete GitHub Issues & Pull Requests Integration**
+### 🎉 **Complete GitHub Actions Integration**
+- **GitHub Actions Resources** - 5 new MCP resources for CI/CD visibility
+- **Actions Visual Graph** - `memory://graph/actions` - CI/CD narrative with Mermaid diagrams
+- **Failure Digest Prompt** - `actions-failure-digest` - Comprehensive failure analysis with root cause identification
+- **Workflow Run Linking** - Link journal entries to specific workflow runs
+
+### 🔍 **GitHub Issues & Pull Requests Integration**
 - **GitHub Issues** - Auto-fetch, link entries, detect from branch names
 - **GitHub Pull Requests** - Auto-detect current PR, track lifecycle, link entries
-- **3 New PR Workflow Prompts** - `pr-summary`, `code-review-prep`, `pr-retrospective`
+- **3 PR Workflow Prompts** - `pr-summary`, `code-review-prep`, `pr-retrospective`
 - **3 New Resources** - Issue/PR entries, PR timelines
 
-### 🏗️ **Production-Ready Modular Architecture**
-- **96% smaller main file** (4093 → 175 lines), 30 focused modules
-- **100% backward compatible** - Zero breaking changes
-- **Enhanced maintainability** - 10x easier to contribute and debug
+### ✅ **True Pyright Strict Type Compliance**
+- **700+ type issues fixed** - Complete strict mode compliance
+- **All exclusions removed** - Zero compromises on type safety
+- **Better IDE support** - Enhanced autocomplete and error detection
 
 ### **Current Capabilities**
 - **16 MCP tools** - Complete development workflow
-- **13 workflow prompts** - Standups, retrospectives, PR workflows
-- **8 MCP resources** - Recent entries, graphs, project/issue/PR timelines
-- **GitHub Integration** - Projects, Issues, Pull Requests with auto-linking
-- **Smart caching** - 80%+ API reduction (15min issues, 5min PRs, 1hr projects)
+- **14 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis
+- **13 MCP resources** - Recent entries, graphs, project/issue/PR timelines, GitHub Actions
+- **GitHub Integration** - Projects, Issues, Pull Requests, Actions with auto-linking
+- **Smart caching** - 80%+ API reduction (15min issues, 5min PRs/workflows, 1hr projects)
 - **Knowledge graphs** - 5 relationship types, Mermaid visualization
 - **10x faster startup** - Lazy ML loading (14s → 2-3s)
 
@@ -107,7 +113,7 @@ Thread 3: AI finds related entries → "Based on your design from Oct 15, here's
 
 ---
 
-## 🎯 **Workflow Prompts** (13 Total)
+## 🎯 **Workflow Prompts** (14 Total)
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
 - `prepare-retro` - Sprint retrospectives
@@ -121,8 +127,9 @@ Thread 3: AI finds related entries → "Based on your design from Oct 15, here's
 - `pr-summary` - Pull request journal activity summary
 - `code-review-prep` - Comprehensive PR review preparation
 - `pr-retrospective` - Completed PR analysis with learnings
+- `actions-failure-digest` - **NEW** CI/CD failure analysis with root cause identification
 
-### 📡 **Resources** (8 Total in v2.0.0)
+### 📡 **Resources** (13 Total)
 
 **MCP Server Identifier:** `user-memory-journal-mcp` (when using recommended config name; Cursor prefixes your config key with `user-`)
 
@@ -134,6 +141,13 @@ Thread 3: AI finds related entries → "Based on your design from Oct 15, here's
 - `memory://issues/{issue_number}/entries` - All entries linked to a specific issue
 - `memory://prs/{pr_number}/entries` - All entries linked to a specific pull request  
 - `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
+
+**GitHub Actions Resources:**
+- `memory://graph/actions` - CI/CD narrative graph: commits → runs → failures → entries → fixes → deployments
+- `memory://actions/recent` - Recent workflow runs with CI status (supports `?branch=X&workflow=Y&commit=SHA&pr=N&limit=10`)
+- `memory://actions/workflows/{name}/timeline` - Workflow-specific timeline blending runs, journals, PRs
+- `memory://actions/branches/{branch}/timeline` - Branch CI timeline with PR lifecycle
+- `memory://actions/commits/{sha}/timeline` - Commit-specific CI timeline
 
 ### 🗄️ **Database Improvements**
 - Automatic schema migrations (seamless v1.0 → v1.1 upgrades)
@@ -252,7 +266,7 @@ After installation, Cursor will use this Docker-based configuration. If you pref
 Entry CRUD • Triple search (FTS5/semantic/date) • Knowledge graphs • Analytics • Export  
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **13 Workflow Prompts**
+### 🎯 **14 Workflow Prompts**
 Standups • Retrospectives • Weekly digests • PR workflows • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -389,7 +403,7 @@ Ask Cursor's AI naturally:
 "Find entries related to refactoring"
 ```
 
-**[See all 13 prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)** | **[Complete examples →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
+**[See all 14 prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)** | **[Complete examples →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
 ---
 

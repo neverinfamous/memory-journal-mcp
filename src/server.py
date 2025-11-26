@@ -10,7 +10,7 @@ import asyncio
 import sys
 import os
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from typing import Any, Dict, Optional
 
 # Change to the project root directory (parent of src/)
 # This ensures Git operations work correctly regardless of where MCP server starts
@@ -46,7 +46,8 @@ from handlers.prompts import (
     analysis as prompts_analysis,
     discovery as prompts_discovery,
     reporting as prompts_reporting,
-    pr_workflows as prompts_pr_workflows
+    pr_workflows as prompts_pr_workflows,
+    actions_workflows as prompts_actions_workflows
 )
 
 # Initialize the MCP server
@@ -108,7 +109,8 @@ def initialize_components():
     prompts_discovery.initialize_discovery_prompts(db, vector_search, thread_pool)
     prompts_reporting.initialize_reporting_prompts(db, project_context_manager, github_projects, thread_pool)
     prompts_pr_workflows.initialize_pr_prompts(db, project_context_manager, github_projects, thread_pool)
-    print("[INFO] MCP prompt handlers initialized (including PR workflows - Phase 3)", file=sys.stderr)
+    prompts_actions_workflows.initialize_actions_prompts(db, project_context_manager, github_projects, vector_search, thread_pool)
+    print("[INFO] MCP prompt handlers initialized (including PR workflows and Actions digest)", file=sys.stderr)
     
     print("[SUCCESS] Memory Journal MCP Server ready!", file=sys.stderr)
 
@@ -121,7 +123,7 @@ async def handle_list_resources():
 
 
 @server.read_resource()
-async def handle_read_resource(uri):
+async def handle_read_resource(uri: Any) -> str:
     """Read a specific resource."""
     return await resources.read_resource(uri)
 
@@ -133,7 +135,7 @@ async def handle_list_tools():
 
 
 @server.call_tool()
-async def handle_call_tool(name: str, arguments: dict):
+async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> Any:
     """Handle tool calls."""
     return await tools_registry.call_tool(name, arguments)
 
@@ -145,9 +147,9 @@ async def handle_list_prompts():
 
 
 @server.get_prompt()
-async def handle_get_prompt(name: str, arguments: dict):
+async def handle_get_prompt(name: str, arguments: dict[str, str] | None):
     """Get a specific prompt."""
-    return await prompts_registry.get_prompt(name, arguments)
+    return await prompts_registry.get_prompt(name, arguments or {})
 
 
 async def main():
@@ -162,7 +164,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="memory-journal",
-                server_version="2.0.0",  # Bumped version for refactored architecture
+                server_version="2.1.0",  # Added GitHub Actions, Issues/PRs, Pyright strict
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

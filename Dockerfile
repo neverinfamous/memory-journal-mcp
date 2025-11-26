@@ -75,6 +75,6 @@ CMD ["python", "src/server.py"]
 # Labels for Docker Hub
 LABEL maintainer="Memory Journal MCP"
 LABEL description="A Model Context Protocol server for personal journaling with relationships and visualization"
-LABEL version="2.0.0"
+LABEL version="2.1.0"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

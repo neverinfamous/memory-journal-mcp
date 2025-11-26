@@ -5,9 +5,7 @@ Phase 3: GitHub Issues & PRs Integration
 """
 
 import asyncio
-import json
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from mcp.types import GetPromptResult, PromptMessage, TextContent
@@ -49,6 +47,11 @@ async def handle_pr_summary(arguments: Dict[str, str]) -> GetPromptResult:
     if db is None or project_context_manager is None or github_projects is None or thread_pool is None:
         raise RuntimeError("PR prompt handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    _pcm = project_context_manager
+    _github_projects = github_projects
+    
     pr_number_str = arguments.get("pr_number")
     include_commits = arguments.get("include_commits", "false").lower() == "true"
     
@@ -72,7 +75,7 @@ async def handle_pr_summary(arguments: Dict[str, str]) -> GetPromptResult:
     
     def get_pr_journal_data():
         """Get journal entries for this PR."""
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Get all entries for this PR
             cursor = conn.execute("""
                 SELECT id, entry_type, content, timestamp, pr_status, 
@@ -109,13 +112,13 @@ async def handle_pr_summary(arguments: Dict[str, str]) -> GetPromptResult:
     
     # If not found, get from current context
     if not owner or not repo:
-        project_context = await project_context_manager.get_project_context()
+        project_context = await _pcm.get_project_context()
         if 'repo_path' in project_context:
-            owner = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+            owner = _github_projects.extract_repo_owner_from_remote(project_context['repo_path'])
             repo = project_context.get('repo_name')
     
     # Fetch PR details from GitHub
-    if owner and repo and github_projects.github_token:
+    if owner and repo and _github_projects.github_token:
         from github.api import get_pr_details
         try:
             pr_details = get_pr_details(github_projects, owner, repo, pr_number)
@@ -176,9 +179,10 @@ async def handle_pr_summary(arguments: Dict[str, str]) -> GetPromptResult:
         summary += f"**Date Range:** {first_date} to {last_date}  \n"
         
         # Collect all tags
-        all_tags = set()
+        all_tags: set[str] = set()
         for entry in entries:
-            all_tags.update(entry.get('tags', []))
+            tags_list: List[str] = entry.get('tags', [])
+            all_tags.update(tags_list)
         
         if all_tags:
             summary += f"**Key Tags:** {', '.join(sorted(all_tags))}  \n"
@@ -246,6 +250,11 @@ async def handle_code_review_prep(arguments: Dict[str, str]) -> GetPromptResult:
     if db is None or project_context_manager is None or github_projects is None or thread_pool is None:
         raise RuntimeError("PR prompt handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    _pcm = project_context_manager
+    _github_projects = github_projects
+    
     pr_number_str = arguments.get("pr_number")
     author_filter = arguments.get("author")
     
@@ -267,9 +276,9 @@ async def handle_code_review_prep(arguments: Dict[str, str]) -> GetPromptResult:
             )]
         )
     
-    def get_pr_context_data():
+    def get_pr_context_data() -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[int]]:
         """Get journal entries for PR and linked issues."""
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Get PR entries
             cursor = conn.execute("""
                 SELECT id, entry_type, content, timestamp, issue_number, project_context
@@ -289,13 +298,14 @@ async def handle_code_review_prep(arguments: Dict[str, str]) -> GetPromptResult:
                 entry['tags'] = [row[0] for row in cursor.fetchall()]
             
             # Collect linked issues from entries
-            linked_issues_from_entries = set()
+            linked_issues_from_entries: set[int] = set()
             for entry in pr_entries:
-                if entry.get('issue_number'):
-                    linked_issues_from_entries.add(entry['issue_number'])
+                issue_num: int | None = entry.get('issue_number')
+                if issue_num is not None:
+                    linked_issues_from_entries.add(issue_num)
             
             # Get issue entries if any issues are linked
-            issue_entries = []
+            issue_entries: List[Dict[str, Any]] = []
             if linked_issues_from_entries:
                 placeholders = ','.join('?' * len(linked_issues_from_entries))
                 cursor = conn.execute(f"""
@@ -332,13 +342,13 @@ async def handle_code_review_prep(arguments: Dict[str, str]) -> GetPromptResult:
     
     # If not found, get from current context
     if not owner or not repo:
-        project_context = await project_context_manager.get_project_context()
+        project_context = await _pcm.get_project_context()
         if 'repo_path' in project_context:
-            owner = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+            owner = _github_projects.extract_repo_owner_from_remote(project_context['repo_path'])
             repo = project_context.get('repo_name')
     
     # Fetch PR details from GitHub
-    if owner and repo and github_projects.github_token:
+    if owner and repo and _github_projects.github_token:
         from github.api import get_pr_details
         try:
             pr_details = get_pr_details(github_projects, owner, repo, pr_number)
@@ -434,7 +444,7 @@ async def handle_code_review_prep(arguments: Dict[str, str]) -> GetPromptResult:
     prep += "## Review Questions\n\n"
     
     # Auto-generate questions based on context
-    questions = []
+    questions: List[str] = []
     
     if pr_details and pr_details.get('draft'):
         questions.append("Why is this PR still in draft status?")
@@ -481,6 +491,11 @@ async def handle_pr_retrospective(arguments: Dict[str, str]) -> GetPromptResult:
     if db is None or project_context_manager is None or github_projects is None or thread_pool is None:
         raise RuntimeError("PR prompt handlers not initialized.")
     
+    # Capture for use in nested functions
+    _db = db
+    _pcm = project_context_manager
+    _github_projects = github_projects
+    
     pr_number_str = arguments.get("pr_number")
     include_metrics = arguments.get("include_metrics", "true").lower() == "true"
     
@@ -504,7 +519,7 @@ async def handle_pr_retrospective(arguments: Dict[str, str]) -> GetPromptResult:
     
     def get_pr_retro_data():
         """Get journal entries for retrospective analysis."""
-        with db.get_connection() as conn:
+        with _db.get_connection() as conn:
             # Get all entries for this PR
             cursor = conn.execute("""
                 SELECT id, entry_type, content, timestamp, pr_status, project_context
@@ -540,13 +555,13 @@ async def handle_pr_retrospective(arguments: Dict[str, str]) -> GetPromptResult:
     
     # If not found, get from current context
     if not owner or not repo:
-        project_context = await project_context_manager.get_project_context()
+        project_context = await _pcm.get_project_context()
         if 'repo_path' in project_context:
-            owner = github_projects._extract_repo_owner_from_remote(project_context['repo_path'])
+            owner = _github_projects.extract_repo_owner_from_remote(project_context['repo_path'])
             repo = project_context.get('repo_name')
     
     # Fetch PR details from GitHub
-    if owner and repo and github_projects.github_token:
+    if owner and repo and _github_projects.github_token:
         from github.api import get_pr_details
         try:
             pr_details = get_pr_details(github_projects, owner, repo, pr_number)
@@ -638,7 +653,7 @@ async def handle_pr_retrospective(arguments: Dict[str, str]) -> GetPromptResult:
     # What went well
     retro += "## What Went Well ✅\n\n"
     
-    positive_indicators = []
+    positive_indicators: List[str] = []
     if pr_details and pr_details.get('merged'):
         positive_indicators.append("PR was successfully merged")
     
@@ -665,7 +680,7 @@ async def handle_pr_retrospective(arguments: Dict[str, str]) -> GetPromptResult:
     
     # Look for problem/blocker entries
     challenge_keywords = ['bug', 'issue', 'problem', 'blocker', 'challenge', 'difficult', 'stuck']
-    challenge_entries = []
+    challenge_entries: List[Dict[str, Any]] = []
     for entry in entries:
         content_lower = entry.get('content', '').lower()
         if any(keyword in content_lower for keyword in challenge_keywords):
@@ -688,7 +703,7 @@ async def handle_pr_retrospective(arguments: Dict[str, str]) -> GetPromptResult:
     
     # Look for learning/insight entries
     learning_keywords = ['learned', 'discovered', 'insight', 'realized', 'understanding', 'found that']
-    learning_entries = []
+    learning_entries: List[Dict[str, Any]] = []
     for entry in entries:
         content_lower = entry.get('content', '').lower()
         if any(keyword in content_lower for keyword in learning_keywords):
@@ -708,9 +723,10 @@ async def handle_pr_retrospective(arguments: Dict[str, str]) -> GetPromptResult:
     
     # Tag analysis
     if entries:
-        all_tags = []
+        all_tags: List[str] = []
         for entry in entries:
-            all_tags.extend(entry.get('tags', []))
+            entry_tags: List[str] = entry.get('tags', [])
+            all_tags.extend(entry_tags)
         
         if all_tags:
             from collections import Counter

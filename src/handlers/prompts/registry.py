@@ -9,7 +9,7 @@ from mcp.types import Prompt, PromptArgument
 import mcp.types as types
 
 # Import handler modules
-from handlers.prompts import analysis, discovery, reporting, pr_workflows
+from handlers.prompts import analysis, discovery, reporting, pr_workflows, actions_workflows
 
 
 def list_prompts() -> List[Prompt]:
@@ -237,6 +237,37 @@ def list_prompts() -> List[Prompt]:
                     required=False
                 )
             ]
+        ),
+        Prompt(
+            name="actions-failure-digest",
+            description="Comprehensive digest of GitHub Actions failures with root cause analysis and recommendations",
+            arguments=[
+                PromptArgument(
+                    name="branch",
+                    description="Filter failures to specific branch",
+                    required=False
+                ),
+                PromptArgument(
+                    name="workflow_name",
+                    description="Filter by workflow name",
+                    required=False
+                ),
+                PromptArgument(
+                    name="pr_number",
+                    description="Filter by associated PR number",
+                    required=False
+                ),
+                PromptArgument(
+                    name="days_back",
+                    description="How far back to look (default: 7)",
+                    required=False
+                ),
+                PromptArgument(
+                    name="limit",
+                    description="Maximum failures to analyze (default: 5)",
+                    required=False
+                )
+            ]
         )
     ]
 
@@ -288,6 +319,10 @@ async def get_prompt(name: str, arguments: Optional[Dict[str, str]] = None) -> t
         return await pr_workflows.handle_code_review_prep(arguments)
     elif name == "pr-retrospective":
         return await pr_workflows.handle_pr_retrospective(arguments)
+    
+    # GitHub Actions Workflow prompts
+    elif name == "actions-failure-digest":
+        return await actions_workflows.handle_actions_failure_digest(arguments)
     
     else:
         raise ValueError(f"Unknown prompt: {name}")

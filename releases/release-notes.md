@@ -1,343 +1,214 @@
-# Memory Journal MCP v2.0.0 - Modular Architecture & Team Collaboration
+# Memory Journal MCP v2.1.0 - GitHub Actions & Complete Type Safety
 
-*Released: October 28, 2025*
+*Released: November 26, 2025*
 
 ## 🎉 Major Release Highlights
 
-Memory Journal v2.0.0 brings two major improvements:
+Memory Journal v2.1.0 brings comprehensive GitHub Actions integration and true Pyright strict compliance:
 
-1. **🏗️ Complete Internal Refactoring** - Modular architecture for better maintainability
-2. **👥 Git-Based Team Collaboration** - Share entries with your team while maintaining privacy
+1. **🔧 Complete GitHub Actions Integration** - CI/CD visibility with 5 new resources
+2. **🔗 GitHub Issues & Pull Requests** - Auto-detection and linking
+3. **✅ True Pyright Strict Compliance** - 700+ type issues fixed, zero exclusions
+4. **📊 Actions Visual Graph** - CI/CD narrative visualization with Mermaid diagrams
 
 **What this means for you:**
-- ✅ **Same great features** - All 16 tools, 10 prompts work identically, plus 1 new resource
-- ✅ **No breaking changes** - Simply upgrade and restart, no configuration changes needed
-- ✅ **Better stability** - Cleaner code means fewer bugs and easier maintenance
-- ✅ **Team sharing** - Collaborate on project context via Git
-- ✅ **Future-ready** - Modular structure enables faster feature development
+- ✅ **CI status in context** - AI sees your build status in every conversation
+- ✅ **Workflow debugging** - Failure analysis with `actions-failure-digest` prompt
+- ✅ **Better IDE support** - Complete type coverage means better autocomplete
+- ✅ **Issue/PR auto-linking** - Entries automatically linked from branch names
+- ✅ **No breaking changes** - Simply upgrade and restart
 
 ---
 
-## 👥 NEW: Git-Based Team Collaboration
+## 🔧 GitHub Actions Integration
 
-### Overview
+### CI Status in Context Bundle
 
-Share journal entries with your team via Git while maintaining complete privacy for personal entries.
+Memory Journal now automatically captures GitHub Actions workflow status:
 
-**Key Features:**
-- **Two-database architecture** - Personal DB (local) + Team DB (Git-tracked)
-- **Privacy-first** - All entries private by default, explicit opt-in for sharing
-- **Git synchronization** - Team database tracked in repository for version control
-- **Automatic search integration** - Team entries appear in search results with indicator (👥)
-- **New resource** - `memory://team/recent` for quick access to shared entries
+```json
+{
+  "ci_status": "passing",
+  "github_workflow_runs": [
+    {
+      "id": 12345678,
+      "name": "CI Tests",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ]
+}
+```
 
-### How It Works
+**CI Status Values:**
+- `passing` - All recent workflow runs succeeded
+- `failing` - At least one recent workflow run failed
+- `pending` - Workflow runs are in progress or queued
+- `unknown` - No recent workflow runs found
+
+### Linking Entries to Workflow Runs
 
 ```javascript
-// Create a shared entry
 create_entry({
-  content: "Architecture Decision: Using microservices for payment system",
-  entry_type: "technical_decision",
-  tags: ["architecture", "payments"],
-  share_with_team: true  // ← Share with team
+  content: "Fixed flaky test - mocked external API calls",
+  entry_type: "bug_fix",
+  tags: ["ci", "testing"],
+  workflow_run_id: 12345678,
+  workflow_name: "CI Tests",
+  workflow_status: "completed"
 })
-
-// Output:
-// ✅ Created journal entry #42
-// 🔗 Entry shared with team (copied to .memory-journal-team.db)
 ```
 
-**Git Workflow:**
-1. Create entries with `share_with_team: true`
-2. Commit `.memory-journal-team.db` to Git
-3. Team members pull and automatically see shared entries in search
+### 5 New GitHub Actions Resources
 
-### What's Shared vs Private
+1. **`memory://graph/actions`** - CI/CD narrative graph visualization
+   - Shows: Commits → Workflow Runs → Failures → Entries → Fixes → Deployments
+   - Query params: `?branch=X&workflow=Y&limit=15`
 
-**Shared (with explicit consent):**
-- ✅ Entry content, type, tags
-- ✅ Timestamp and project associations
-- ✅ Significance markers and relationships
+2. **`memory://actions/recent`** - Recent workflow runs (JSON)
+   - Query params: `?branch=X&workflow=Y&commit=SHA&pr=N&limit=10`
 
-**Always Private:**
-- ❌ Entries without `share_with_team: true`
-- ❌ Personal reflections (unless explicitly shared)
-- ❌ Personal database metadata
+3. **`memory://actions/workflows/{name}/timeline`** - Workflow-specific timeline
+   - Blends: workflow runs, journal entries, PR events
 
-### Technical Details
+4. **`memory://actions/branches/{branch}/timeline`** - Branch CI timeline
+   - Blends: workflow runs, journal entries, PR lifecycle events
 
-- **New module**: `src/database/team_db.py` - TeamDatabaseManager class
-- **New database**: `.memory-journal-team.db` (Git-tracked)
-- **Schema update**: Added `share_with_team` column with automatic migration
-- **Enhanced search**: All search tools query both databases
-- **New resource**: `memory://team/recent` - Recent team-shared entries
+5. **`memory://actions/commits/{sha}/timeline`** - Commit-specific timeline
+   - Blends: workflow runs for commit, related journal entries
 
-**Documentation:** See [Team Collaboration Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration) for complete guide.
+### Actions Failure Digest Prompt
 
----
-
-## 🏗️ Complete Internal Refactoring
-
-Memory Journal v2.0.0 represents a major architectural milestone - a complete refactoring from a monolithic codebase into a clean, modular architecture while maintaining 100% backward compatibility.
-
----
-
-## 📊 By The Numbers
-
-### Before (v1.x)
-- **1 monolithic file** - `server.py` with 4,093 lines
-- All logic intertwined (MCP, database, GitHub, search)
-- Difficult to navigate and maintain
-- Hard to test individual components
-
-### After (v2.0.0)
-- **30 focused modules** - Average ~150-300 lines each
-- **96% reduction** in main file size (4,093 → 175 lines)
-- Clear separation of concerns
-- Independent, testable components
-
----
-
-## 🎯 What Changed
-
-### New Module Structure
+New prompt for comprehensive CI/CD failure analysis:
 
 ```
-src/ (31 Python files, ~4,800 total lines)
-├── server.py (175 lines)           # Entry point & MCP dispatchers
-├── constants.py                     # Configuration constants
-├── utils.py                         # Utility functions
-├── exceptions.py                    # Custom exception classes
-├── vector_search.py                 # ML/FAISS integration
-│
-├── database/                        # Database layer (4 modules)
-│   ├── base.py                     # MemoryJournalDB class
-│   ├── operations.py               # Helper operations
-│   ├── context.py                  # Git/GitHub context gathering
-│   └── team_db.py                  # TeamDatabaseManager (NEW v2.0.0)
-│
-├── github/                          # GitHub integration (3 modules)
-│   ├── integration.py              # Main integration class
-│   ├── cache.py                    # API response caching
-│   └── api.py                      # API operations
-│
-└── handlers/                        # MCP handlers (20 modules)
-    ├── resources.py                # Resource handlers
-    ├── tools/                      # Tool handlers (6 modules)
-    │   ├── registry.py             # Tool dispatcher
-    │   ├── entries.py              # Entry CRUD operations
-    │   ├── search.py               # Search operations
-    │   ├── analytics.py            # Statistics & insights
-    │   ├── relationships.py        # Relationship operations
-    │   └── export.py               # Export functionality
-    └── prompts/                    # Prompt handlers (4 modules)
-        ├── registry.py             # Prompt dispatcher
-        ├── analysis.py             # Analysis prompts
-        ├── discovery.py            # Discovery prompts
-        └── reporting.py            # Reporting prompts
+/actions-failure-digest days_back:7 limit:5
 ```
 
-### Key Design Patterns
-
-**1. Dispatcher Pattern**
-- `server.py` defines MCP protocol decorators
-- Registries route calls to specialized handlers
-- Clean separation between protocol and business logic
-
-**2. Dependency Injection**
-- Components receive dependencies explicitly
-- Easy to test with mocks
-- Clear dependency graph
-
-**3. Module-Level State**
-- Handlers store injected dependencies
-- No global variables in main server
-- Controlled initialization lifecycle
+**Output includes:**
+- Failing jobs summary with failed steps
+- Linked journal entries
+- Recent code/PR changes
+- Previous similar failures (semantic search)
+- Possible root causes
+- Actionable next steps
 
 ---
 
-## ✨ Benefits
+## 🔗 GitHub Issues & Pull Requests Integration
 
-### For Developers
-- **10x easier to navigate** - Find what you need in seconds
-- **Faster debugging** - Isolated modules are easier to trace
-- **Safer changes** - Modifications have clear boundaries
-- **Better testing** - Each module can be unit tested independently
+### Auto-Detection
 
-### For Users
-- **Same experience** - All features work identically
-- **More stable** - Cleaner code means fewer bugs
-- **Faster fixes** - Easier to identify and resolve issues
-- **Future features** - Faster development of new capabilities
+Issue and PR numbers are automatically detected from branch names:
+- `issue-123`, `issue/123`, `fix/issue-456`
+- `#123` (shorthand)
+- `/123-` or `/123/` patterns
 
-### For Operations
-- **Easier auditing** - Clear module boundaries for security review
-- **Better monitoring** - Can instrument individual components
-- **Simpler optimization** - Identify performance bottlenecks quickly
-- **Enhanced maintainability** - Reduced technical debt
+### Manual Linking
 
----
+```javascript
+create_entry({
+  content: "Fixed authentication bug",
+  entry_type: "bug_fix",
+  issue_number: 123,
+  pr_number: 456
+})
+```
 
-## 🔬 Technical Details
+### 3 PR Workflow Prompts
 
-### Performance
-- ✅ **No degradation** - All async operations preserved
-- ✅ **Same startup time** - 2-3 seconds maintained
-- ✅ **Same operation speed** - No overhead from modularization
-- ✅ **Memory footprint** - Unchanged (~100-200MB depending on ML)
+1. **`pr-summary`** - Journal activity summary for a PR
+2. **`code-review-prep`** - Comprehensive PR review preparation
+3. **`pr-retrospective`** - Completed PR analysis with learnings
 
-### Compatibility
-- ✅ **API unchanged** - All tool signatures identical
-- ✅ **Database schema** - No changes required
-- ✅ **Environment variables** - Same configuration
-- ✅ **Resources** - All URIs unchanged
-- ✅ **Prompts** - All workflows work identically
+### 3 New Resources
 
-### Code Quality
-- **Type hints** - Enhanced throughout
-- **Error handling** - Centralized exception classes
-- **Constants** - All magic values extracted
-- **Utilities** - Common functions deduplicated
-- **Documentation** - Self-documenting structure
+1. **`memory://issues/{issue_number}/entries`** - All entries linked to an issue
+2. **`memory://prs/{pr_number}/entries`** - All entries linked to a PR
+3. **`memory://prs/{pr_number}/timeline`** - Combined PR + journal timeline
 
 ---
 
-## 📦 Installation & Upgrade
+## ✅ True Pyright Strict Compliance
+
+### What Changed
+
+- **700+ type issues fixed** - Complete strict mode compliance
+- **All exclusions removed** from `pyrightconfig.json`:
+  - Removed `reportMissingTypeStubs` exclusion
+  - Removed `reportUnknownVariableType` exclusion
+  - Removed `reportUnknownMemberType` exclusion
+  - Removed `reportUnknownArgumentType` exclusion
+  - Removed `reportUnknownParameterType` exclusion
+  - Removed `reportUnknownLambdaType` exclusion
+- **All `Any` types replaced** with proper TypedDicts and explicit annotations
+
+### Benefits
+
+- **Type safety badge now accurate** - `Pyright-Strict` reflects true compliance
+- **Better IDE support** - Enhanced autocomplete and error detection
+- **Improved maintainability** - Complete type coverage catches bugs early
+
+---
+
+## 📦 Updated Statistics
+
+| Metric | v2.0.0 | v2.1.0 |
+|--------|--------|--------|
+| MCP Tools | 16 | 16 |
+| Workflow Prompts | 11 | 14 (+3 PR + Actions) |
+| MCP Resources | 8 | 13 (+5 Actions) |
+| Pyright Issues | 700+ exclusions | 0 |
+
+---
+
+## 🔧 Database Changes
+
+New columns added (automatic migration):
+- `workflow_run_id` - GitHub Actions workflow run ID
+- `workflow_name` - Workflow name for quick reference
+- `workflow_status` - Workflow status (queued/in_progress/completed)
+
+New index:
+- `idx_memory_journal_workflow_run_id`
+
+---
+
+## 📚 Documentation Updates
+
+- Updated all wiki pages with v2.1.0 references
+- Added comprehensive GitHub Actions documentation
+- Updated prompts guide with `actions-failure-digest`
+- Updated visualization guide with `memory://graph/actions`
+
+---
+
+## ⬆️ Upgrade Instructions
 
 ### PyPI
+
 ```bash
 pip install --upgrade memory-journal-mcp
 ```
 
 ### Docker
+
 ```bash
-docker pull writenotenow/memory-journal-mcp:2.0.0
-# Or use 'latest' tag
 docker pull writenotenow/memory-journal-mcp:latest
 ```
 
-### Upgrade Process
-1. **Upgrade package** (pip or Docker pull)
-2. **Restart MCP client** (Cursor, Claude Desktop, etc.)
-3. **Done!** - No configuration changes needed
+**No configuration changes required!** Database migrations run automatically on startup.
 
 ---
 
-## 🎯 Migration Guide
+## 🔗 Links
 
-**Good news: No migration needed!**
-
-The refactoring is 100% backward compatible:
-- ✅ All tools work identically
-- ✅ All prompts work identically
-- ✅ All resources work identically
-- ✅ Database schema unchanged
-- ✅ No configuration changes
-
-Simply upgrade and restart your MCP client!
-
----
-
-## 📝 What's Included
-
-This release maintains all features from v1.2.x:
-
-### 🛠️ 16 MCP Tools
-- **Entry Management**: create, update, delete, get by ID
-- **Search**: FTS5, semantic, date range, recent, tags
-- **Relationships**: link entries, visualize graphs
-- **Analytics**: statistics, cross-project insights
-- **Export**: JSON and Markdown formats
-
-### 🎯 10 Workflow Prompts
-- Daily standups, sprint retrospectives
-- Weekly digests, period analysis
-- Goal tracking, context bundles
-- Project status summaries (org support)
-- Milestone tracking
-
-### 🔗 Entry Relationships
-- 5 relationship types (references, implements, clarifies, evolves_from, response_to)
-- Visual Mermaid diagrams
-- Knowledge graph building
-
-### 📊 GitHub Projects Integration
-- Organization-level project support
-- Automatic user vs org detection
-- Entry-project linking
-- Cross-project analytics
-- Smart API caching (80%+ reduction)
-
-### 🔍 Triple Search System
-- Full-text search (SQLite FTS5)
-- Date range search with filters
-- Semantic search (FAISS vectors)
-
-### 🔄 Git & GitHub Integration
-- Automatic context capture
-- Repository detection
-- Branch and commit info
-- Issue tracking
-
----
-
-## 📚 Documentation
-
-### Updated for v2.0.0
-- **[Architecture Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Architecture)** - Complete module documentation
-- **[REFACTORING_SUMMARY.md](https://github.com/neverinfamous/memory-journal-mcp/blob/main/REFACTORING_SUMMARY.md)** - Detailed refactoring analysis
-- **[Performance Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Performance)** - Performance analysis
-
-### Existing Documentation
-- **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
-- **[Tools Reference](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)** - All 16 tools
-- **[Prompts Guide](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)** - All 10 prompts
-- **[Examples](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)** - Usage patterns
-
-### Resources
-- **GitHub**: https://github.com/neverinfamous/memory-journal-mcp
-- **PyPI**: https://pypi.org/project/memory-journal-mcp/
-- **Docker Hub**: https://hub.docker.com/r/writenotenow/memory-journal-mcp
-- **MCP Registry**: https://registry.modelcontextprotocol.io/
-
----
-
-## 🔮 What's Next
-
-v2.0.0 establishes a solid foundation for future development:
-
-### Near Term (v2.1.x)
-- Enhanced visualization options
-- Import/export improvements
-- Additional integration capabilities
-
-### Medium Term (v2.2.x+)
-- Unit test suite for all modules
-- Integration test framework
-- Performance benchmarking suite
-- Plugin system for custom handlers
-
-### Long Term (v3.0)
-- Multiple database backends (PostgreSQL, MySQL)
-- Distributed caching (Redis)
-- GraphQL support for GitHub
-- Web UI (optional)
-
----
-
-## 🙏 Acknowledgments
-
-This refactoring was completed with extensive testing and careful attention to backward compatibility. Special thanks to the community for feedback and bug reports that helped shape this release.
-
----
-
-## 📎 Links
-
-- **Compare Changes**: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.2...v2.0.0
+- **Compare Changes**: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.1...v2.1.0
 - **Full Changelog**: [CHANGELOG.md](../CHANGELOG.md)
-- **Security Policy**: [SECURITY.md](../SECURITY.md)
-- **Contributing**: [CONTRIBUTING.md](../CONTRIBUTING.md)
+- **Wiki**: https://github.com/neverinfamous/memory-journal-mcp/wiki
+- **Docker Hub**: https://hub.docker.com/r/writenotenow/memory-journal-mcp
+- **PyPI**: https://pypi.org/project/memory-journal-mcp/
 
 ---
 
-**Questions?** Open an issue on [GitHub](https://github.com/neverinfamous/memory-journal-mcp/issues)!
+**Built by developers, for developers.** 🚀

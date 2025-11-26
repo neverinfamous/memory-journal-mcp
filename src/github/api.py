@@ -64,7 +64,7 @@ def get_projects(
         return []
 
 
-def _get_projects_via_gh_cli(
+def _get_projects_via_gh_cli(  # pyright: ignore[reportUnusedFunction]
     integration: 'GitHubProjectsIntegration',
     owner: str,
     owner_type: str = 'user'
@@ -109,7 +109,7 @@ def get_project_items(
         url = f"{integration.api_base}/users/{username}/projects/{project_number}/items"
         response = requests.get(
             url,
-            headers=integration._get_headers(),
+            headers=integration.get_headers(),
             params={'per_page': limit},
             timeout=integration.api_timeout
         )
@@ -164,8 +164,6 @@ def get_projects_context(
     repo_path: str
 ) -> Dict[str, Any]:
     """Get GitHub Projects context for the current repository (Phase 3: user + org support)."""
-    import sys
-    
     context: Dict[str, Any] = {
         'github_projects': {
             'user_projects': [],
@@ -181,7 +179,7 @@ def get_projects_context(
         return context
     
     # Extract repo owner from Git remote
-    owner = integration._extract_repo_owner_from_remote(repo_path)
+    owner = integration.extract_repo_owner_from_remote(repo_path)
     if not owner:
         return context
     
@@ -200,16 +198,16 @@ def get_projects_context(
             context['github_projects']['org_projects'] = org_projects
     
     # Get active items from first project (prioritize org projects for org repos)
-    all_projects = []
+    all_projects: List[Dict[str, Any]] = []
     if owner_type == 'org' and context['github_projects']['org_projects']:
         all_projects = context['github_projects']['org_projects']
     elif context['github_projects']['user_projects']:
         all_projects = context['github_projects']['user_projects']
     
     if len(all_projects) > 0:
-        first_project = all_projects[0]
-        project_number = first_project.get('number')
-        project_owner = first_project.get('owner', owner)
+        first_project: Dict[str, Any] = all_projects[0]
+        project_number: int | None = first_project.get('number')
+        project_owner: str = first_project.get('owner', owner)
         if project_number:
             items = get_project_items(integration, project_owner, project_number, limit=5)
             context['active_items'] = items
@@ -245,7 +243,7 @@ def get_project_details(
         url = f"{integration.api_base}{endpoint}"
         response = requests.get(
             url,
-            headers=integration._get_headers(use_org_token=use_org_token),
+            headers=integration.get_headers(use_org_token=use_org_token),
             timeout=integration.api_timeout
         )
         
@@ -290,7 +288,7 @@ def get_repo_milestones(
         url = f"{integration.api_base}/repos/{owner}/{repo}/milestones"
         response = requests.get(
             url,
-            headers=integration._get_headers(),
+            headers=integration.get_headers(),
             params={'state': 'all', 'per_page': 100},
             timeout=integration.api_timeout
         )
@@ -372,7 +370,7 @@ def get_project_timeline(
     owner_type: str = 'user'
 ) -> List[Dict[str, Any]]:
     """Generate timeline of project activity combining items and updates (Phase 3: org support)."""
-    timeline = []
+    timeline: List[Dict[str, Any]] = []
     
     # Get project items
     items = get_project_items_with_fields(integration, owner, project_number, limit=100, owner_type=owner_type)
@@ -443,7 +441,7 @@ def get_repo_issues(
         url = f"{integration.api_base}/repos/{owner}/{repo}/issues"
         response = requests.get(
             url,
-            headers=integration._get_headers(),
+            headers=integration.get_headers(),
             params={
                 'state': state,
                 'per_page': limit,
@@ -456,7 +454,7 @@ def get_repo_issues(
         if response.status_code == 200:
             issues_data = response.json()
             # Filter out pull requests (GitHub API includes PRs in issues endpoint)
-            issues = []
+            issues: List[Dict[str, Any]] = []
             for issue in issues_data:
                 if 'pull_request' not in issue:  # Not a PR
                     issues.append({
@@ -552,7 +550,7 @@ def get_issue_details(
         url = f"{integration.api_base}/repos/{owner}/{repo}/issues/{issue_number}"
         response = requests.get(
             url,
-            headers=integration._get_headers(),
+            headers=integration.get_headers(),
             timeout=integration.api_timeout
         )
         
@@ -621,7 +619,7 @@ def get_repo_pull_requests(
         url = f"{integration.api_base}/repos/{owner}/{repo}/pulls"
         response = requests.get(
             url,
-            headers=integration._get_headers(),
+            headers=integration.get_headers(),
             params={
                 'state': state,
                 'per_page': limit,
@@ -633,7 +631,7 @@ def get_repo_pull_requests(
         
         if response.status_code == 200:
             prs_data = response.json()
-            prs = []
+            prs: List[Dict[str, Any]] = []
             for pr in prs_data:
                 # Parse linked issues from body
                 linked_issues = _parse_linked_issues(pr.get('body', ''))
@@ -739,7 +737,7 @@ def get_pr_details(
         url = f"{integration.api_base}/repos/{owner}/{repo}/pulls/{pr_number}"
         response = requests.get(
             url,
-            headers=integration._get_headers(),
+            headers=integration.get_headers(),
             timeout=integration.api_timeout
         )
         
@@ -867,3 +865,639 @@ def extract_repo_info_from_context(project_context: Optional[str]) -> tuple[Opti
         return None, repo_name
     except Exception:
         return None, None
+
+
+# =============================================================================
+# GitHub Actions Workflow Runs API
+# =============================================================================
+
+def get_repo_workflow_runs(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    branch: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Get GitHub Actions workflow runs for a repository with caching.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner (username or org)
+        repo: Repository name
+        branch: Filter by branch name (optional)
+        status: Filter by status ('queued', 'in_progress', 'completed') (optional)
+        limit: Maximum number of workflow runs to return
+        
+    Returns:
+        List of workflow run dictionaries
+    """
+    from constants import CACHE_TTL_WORKFLOW_RUNS
+    
+    # Build cache key including optional filters
+    cache_key = f"workflow_runs:{owner}:{repo}:{branch or 'all'}:{status or 'all'}:{limit}"
+    cached = get_cache(integration.db_connection, cache_key)
+    if cached:
+        return cached
+    
+    if not integration.github_token:
+        # Try gh CLI fallback
+        return _get_workflow_runs_via_gh_cli(integration, owner, repo, branch, status, limit)
+    
+    try:
+        import requests  # type: ignore[import-not-found]
+        url = f"{integration.api_base}/repos/{owner}/{repo}/actions/runs"
+        params: Dict[str, Any] = {
+            'per_page': limit,
+        }
+        if branch:
+            params['branch'] = branch
+        if status:
+            params['status'] = status
+        
+        response = requests.get(
+            url,
+            headers=integration.get_headers(),
+            params=params,
+            timeout=integration.api_timeout
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            runs_data = data.get('workflow_runs', [])
+            runs: List[Dict[str, Any]] = []
+            for run in runs_data:
+                runs.append({
+                    'id': run.get('id'),
+                    'name': run.get('name'),
+                    'head_branch': run.get('head_branch'),
+                    'head_sha': run.get('head_sha'),
+                    'status': run.get('status'),  # 'queued', 'in_progress', 'completed'
+                    'conclusion': run.get('conclusion'),  # 'success', 'failure', 'cancelled', etc.
+                    'event': run.get('event'),  # 'push', 'pull_request', 'workflow_dispatch', etc.
+                    'workflow_id': run.get('workflow_id'),
+                    'run_number': run.get('run_number'),
+                    'run_attempt': run.get('run_attempt'),
+                    'created_at': run.get('created_at'),
+                    'updated_at': run.get('updated_at'),
+                    'url': run.get('url'),
+                    'html_url': run.get('html_url'),
+                    'jobs_url': run.get('jobs_url'),
+                    'logs_url': run.get('logs_url'),
+                    'actor': run.get('actor', {}).get('login') if run.get('actor') else None,
+                    'triggering_actor': run.get('triggering_actor', {}).get('login') if run.get('triggering_actor') else None
+                })
+            
+            set_cache(integration.db_connection, cache_key, runs, CACHE_TTL_WORKFLOW_RUNS)
+            return runs
+    except ImportError:
+        return _get_workflow_runs_via_gh_cli(integration, owner, repo, branch, status, limit)
+    except Exception as e:
+        print(f"[ERROR] Error fetching GitHub workflow runs: {e}", file=sys.stderr)
+    
+    return []
+
+
+def _get_workflow_runs_via_gh_cli(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    branch: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """Fallback: Get workflow runs using gh CLI."""
+    try:
+        args = ['gh', 'run', 'list', '--repo', f"{owner}/{repo}", '--limit', str(limit)]
+        if branch:
+            args.extend(['--branch', branch])
+        if status:
+            args.extend(['--status', status])
+        
+        # Request JSON output with specific fields
+        args.extend(['--json', 'databaseId,name,headBranch,headSha,status,conclusion,event,workflowDatabaseId,number,attempt,createdAt,updatedAt,url'])
+        
+        result = subprocess.run(
+            args,
+            capture_output=True, text=True,
+            timeout=integration.api_timeout, shell=False
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            runs_data = json.loads(result.stdout.strip())
+            return [{
+                'id': run.get('databaseId'),
+                'name': run.get('name'),
+                'head_branch': run.get('headBranch'),
+                'head_sha': run.get('headSha'),
+                'status': run.get('status', '').lower() if run.get('status') else None,
+                'conclusion': run.get('conclusion', '').lower() if run.get('conclusion') else None,
+                'event': run.get('event'),
+                'workflow_id': run.get('workflowDatabaseId'),
+                'run_number': run.get('number'),
+                'run_attempt': run.get('attempt'),
+                'created_at': run.get('createdAt'),
+                'updated_at': run.get('updatedAt'),
+                'url': run.get('url'),
+                'html_url': run.get('url'),  # gh CLI uses 'url' for html_url
+                'jobs_url': None,
+                'logs_url': None,
+                'actor': None,
+                'triggering_actor': None
+            } for run in runs_data]
+    except Exception as e:
+        print(f"[ERROR] gh CLI fallback failed for workflow runs: {e}", file=sys.stderr)
+    return []
+
+
+def get_workflow_run_details(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    run_id: int
+) -> Optional[Dict[str, Any]]:
+    """
+    Get detailed information about a specific GitHub Actions workflow run.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner
+        repo: Repository name
+        run_id: Workflow run ID
+        
+    Returns:
+        Workflow run dictionary with full details or None
+    """
+    from constants import CACHE_TTL_WORKFLOW_RUNS
+    
+    cache_key = f"workflow_run_details:{owner}:{repo}:{run_id}"
+    cached = get_cache(integration.db_connection, cache_key)
+    if cached:
+        return cached
+    
+    if not integration.github_token:
+        return None
+    
+    try:
+        import requests  # type: ignore[import-not-found]
+        url = f"{integration.api_base}/repos/{owner}/{repo}/actions/runs/{run_id}"
+        response = requests.get(
+            url,
+            headers=integration.get_headers(),
+            timeout=integration.api_timeout
+        )
+        
+        if response.status_code == 200:
+            run = response.json()
+            result = {
+                'id': run.get('id'),
+                'name': run.get('name'),
+                'head_branch': run.get('head_branch'),
+                'head_sha': run.get('head_sha'),
+                'status': run.get('status'),
+                'conclusion': run.get('conclusion'),
+                'event': run.get('event'),
+                'workflow_id': run.get('workflow_id'),
+                'run_number': run.get('run_number'),
+                'run_attempt': run.get('run_attempt'),
+                'created_at': run.get('created_at'),
+                'updated_at': run.get('updated_at'),
+                'url': run.get('url'),
+                'html_url': run.get('html_url'),
+                'jobs_url': run.get('jobs_url'),
+                'logs_url': run.get('logs_url'),
+                'actor': run.get('actor', {}).get('login') if run.get('actor') else None,
+                'triggering_actor': run.get('triggering_actor', {}).get('login') if run.get('triggering_actor') else None
+            }
+            set_cache(integration.db_connection, cache_key, result, CACHE_TTL_WORKFLOW_RUNS)
+            return result
+    except Exception as e:
+        print(f"[ERROR] Error fetching workflow run details: {e}", file=sys.stderr)
+    
+    return None
+
+
+def get_workflow_runs_for_commit(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    sha: str,
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Get workflow runs associated with a specific commit SHA.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner
+        repo: Repository name
+        sha: Commit SHA (full or short)
+        limit: Maximum number of runs to return
+        
+    Returns:
+        List of workflow run dictionaries for that commit
+    """
+    from constants import CACHE_TTL_WORKFLOW_RUNS
+    
+    cache_key = f"workflow_runs_commit:{owner}:{repo}:{sha}:{limit}"
+    cached = get_cache(integration.db_connection, cache_key)
+    if cached:
+        return cached
+    
+    if not integration.github_token:
+        return []
+    
+    try:
+        import requests  # type: ignore[import-not-found]
+        url = f"{integration.api_base}/repos/{owner}/{repo}/actions/runs"
+        response = requests.get(
+            url,
+            headers=integration.get_headers(),
+            params={
+                'head_sha': sha,
+                'per_page': limit
+            },
+            timeout=integration.api_timeout
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            runs_data = data.get('workflow_runs', [])
+            runs: List[Dict[str, Any]] = []
+            for run in runs_data:
+                runs.append({
+                    'id': run.get('id'),
+                    'name': run.get('name'),
+                    'head_branch': run.get('head_branch'),
+                    'head_sha': run.get('head_sha'),
+                    'status': run.get('status'),
+                    'conclusion': run.get('conclusion'),
+                    'event': run.get('event'),
+                    'workflow_id': run.get('workflow_id'),
+                    'run_number': run.get('run_number'),
+                    'run_attempt': run.get('run_attempt'),
+                    'created_at': run.get('created_at'),
+                    'updated_at': run.get('updated_at'),
+                    'url': run.get('url'),
+                    'html_url': run.get('html_url'),
+                    'jobs_url': run.get('jobs_url'),
+                    'logs_url': run.get('logs_url'),
+                    'actor': run.get('actor', {}).get('login') if run.get('actor') else None,
+                    'triggering_actor': run.get('triggering_actor', {}).get('login') if run.get('triggering_actor') else None
+                })
+            
+            set_cache(integration.db_connection, cache_key, runs, CACHE_TTL_WORKFLOW_RUNS)
+            return runs
+    except Exception as e:
+        print(f"[ERROR] Error fetching workflow runs for commit: {e}", file=sys.stderr)
+    
+    return []
+
+
+def get_workflow_runs_for_pr(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    pr_number: int,
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Get workflow runs associated with a specific Pull Request.
+    This fetches runs triggered by the PR's head branch with event='pull_request'.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner
+        repo: Repository name
+        pr_number: Pull Request number
+        limit: Maximum number of runs to return
+        
+    Returns:
+        List of workflow run dictionaries for that PR
+    """
+    from constants import CACHE_TTL_WORKFLOW_RUNS
+    
+    cache_key = f"workflow_runs_pr:{owner}:{repo}:{pr_number}:{limit}"
+    cached = get_cache(integration.db_connection, cache_key)
+    if cached:
+        return cached
+    
+    # First, get the PR to find its head branch
+    pr_details = get_pr_details(integration, owner, repo, pr_number)
+    if not pr_details:
+        return []
+    
+    head_branch = pr_details.get('head_branch')
+    if not head_branch:
+        return []
+    
+    # Get workflow runs for that branch, filtering for pull_request events
+    all_runs = get_repo_workflow_runs(integration, owner, repo, branch=head_branch, limit=limit * 2)
+    
+    # Filter for runs associated with pull requests
+    pr_runs = [
+        run for run in all_runs
+        if run.get('event') == 'pull_request'
+    ][:limit]
+    
+    # Cache the filtered results
+    if pr_runs:
+        set_cache(integration.db_connection, cache_key, pr_runs, CACHE_TTL_WORKFLOW_RUNS)
+    
+    return pr_runs
+
+
+def compute_ci_status(workflow_runs: List[Dict[str, Any]]) -> str:
+    """
+    Compute overall CI status from a list of workflow runs.
+    
+    Args:
+        workflow_runs: List of workflow run dictionaries
+        
+    Returns:
+        CI status string: 'passing', 'failing', 'pending', or 'unknown'
+    """
+    if not workflow_runs:
+        return 'unknown'
+    
+    # Check the most recent run for each unique workflow
+    latest_runs: Dict[int, Dict[str, Any]] = {}
+    for run in workflow_runs:
+        workflow_id = run.get('workflow_id')
+        if workflow_id is not None:
+            if workflow_id not in latest_runs:
+                latest_runs[workflow_id] = run
+            else:
+                # Keep the more recent one (workflow_runs should already be sorted)
+                existing = latest_runs[workflow_id]
+                if run.get('run_number', 0) > existing.get('run_number', 0):
+                    latest_runs[workflow_id] = run
+    
+    if not latest_runs:
+        return 'unknown'
+    
+    # Analyze the latest runs
+    has_failure = False
+    has_pending = False
+    has_success = False
+    
+    for run in latest_runs.values():
+        status = run.get('status', '').lower()
+        conclusion = run.get('conclusion', '').lower() if run.get('conclusion') else None
+        
+        if status in ('queued', 'in_progress', 'waiting', 'pending'):
+            has_pending = True
+        elif status == 'completed':
+            if conclusion == 'success':
+                has_success = True
+            elif conclusion in ('failure', 'timed_out', 'action_required'):
+                has_failure = True
+            # 'cancelled', 'skipped', 'neutral' are not counted as failure
+    
+    # Determine overall status (priority: failing > pending > passing > unknown)
+    if has_failure:
+        return 'failing'
+    elif has_pending:
+        return 'pending'
+    elif has_success:
+        return 'passing'
+    else:
+        return 'unknown'
+
+
+def get_workflow_runs_by_name(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    workflow_name: str,
+    branch: Optional[str] = None,
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Get workflow runs filtered by workflow name.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner
+        repo: Repository name
+        workflow_name: Workflow name to filter by (case-insensitive)
+        branch: Optional branch filter
+        limit: Maximum number of runs to return
+        
+    Returns:
+        List of workflow run dictionaries matching the workflow name
+    """
+    # Fetch more runs than limit since we're filtering post-fetch
+    all_runs = get_repo_workflow_runs(integration, owner, repo, branch=branch, limit=limit * 3)
+    
+    # Filter by workflow name (case-insensitive)
+    workflow_name_lower = workflow_name.lower()
+    filtered_runs = [
+        run for run in all_runs
+        if run.get('name', '').lower() == workflow_name_lower
+    ][:limit]
+    
+    return filtered_runs
+
+
+def get_unique_workflow_names(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    limit: int = 50
+) -> List[str]:
+    """
+    Get unique workflow names from recent workflow runs.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner
+        repo: Repository name
+        limit: Maximum number of runs to scan
+        
+    Returns:
+        List of unique workflow names
+    """
+    runs = get_repo_workflow_runs(integration, owner, repo, limit=limit)
+    
+    # Extract unique workflow names
+    workflow_names: set[str] = set()
+    for run in runs:
+        name = run.get('name')
+        if name:
+            workflow_names.add(name)
+    
+    return sorted(list(workflow_names))
+
+
+def get_workflow_run_jobs(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    run_id: int
+) -> List[Dict[str, Any]]:
+    """
+    Get jobs for a specific GitHub Actions workflow run.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner
+        repo: Repository name
+        run_id: Workflow run ID
+        
+    Returns:
+        List of job dictionaries with name, status, conclusion, steps, etc.
+    """
+    from constants import CACHE_TTL_WORKFLOW_RUNS
+    
+    cache_key = f"workflow_run_jobs:{owner}:{repo}:{run_id}"
+    cached = get_cache(integration.db_connection, cache_key)
+    if cached:
+        return cached
+    
+    if not integration.github_token:
+        return _get_workflow_run_jobs_via_gh_cli(integration, owner, repo, run_id)
+    
+    try:
+        import requests  # type: ignore[import-not-found]
+        url = f"{integration.api_base}/repos/{owner}/{repo}/actions/runs/{run_id}/jobs"
+        response = requests.get(
+            url,
+            headers=integration.get_headers(),
+            timeout=integration.api_timeout
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            jobs_data = data.get('jobs', [])
+            jobs: List[Dict[str, Any]] = []
+            for job in jobs_data:
+                # Extract step details
+                steps: List[Dict[str, Any]] = []
+                for step in job.get('steps', []):
+                    steps.append({
+                        'name': step.get('name'),
+                        'status': step.get('status'),
+                        'conclusion': step.get('conclusion'),
+                        'number': step.get('number'),
+                        'started_at': step.get('started_at'),
+                        'completed_at': step.get('completed_at')
+                    })
+                
+                jobs.append({
+                    'id': job.get('id'),
+                    'name': job.get('name'),
+                    'status': job.get('status'),  # 'queued', 'in_progress', 'completed'
+                    'conclusion': job.get('conclusion'),  # 'success', 'failure', 'cancelled', etc.
+                    'started_at': job.get('started_at'),
+                    'completed_at': job.get('completed_at'),
+                    'html_url': job.get('html_url'),
+                    'run_id': job.get('run_id'),
+                    'runner_name': job.get('runner_name'),
+                    'steps': steps
+                })
+            
+            set_cache(integration.db_connection, cache_key, jobs, CACHE_TTL_WORKFLOW_RUNS)
+            return jobs
+    except ImportError:
+        return _get_workflow_run_jobs_via_gh_cli(integration, owner, repo, run_id)
+    except Exception as e:
+        print(f"[ERROR] Error fetching workflow run jobs: {e}", file=sys.stderr)
+    
+    return []
+
+
+def _get_workflow_run_jobs_via_gh_cli(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    run_id: int
+) -> List[Dict[str, Any]]:
+    """Fallback: Get workflow run jobs using gh CLI."""
+    try:
+        result = subprocess.run(
+            ['gh', 'run', 'view', str(run_id), '--repo', f"{owner}/{repo}", '--json', 
+             'jobs'],
+            capture_output=True, text=True,
+            timeout=integration.api_timeout, shell=False
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout.strip())
+            jobs_data = data.get('jobs', [])
+            jobs: List[Dict[str, Any]] = []
+            for job in jobs_data:
+                # Extract step details
+                steps: List[Dict[str, Any]] = []
+                for step in job.get('steps', []):
+                    steps.append({
+                        'name': step.get('name'),
+                        'status': step.get('status', '').lower() if step.get('status') else None,
+                        'conclusion': step.get('conclusion', '').lower() if step.get('conclusion') else None,
+                        'number': step.get('number'),
+                        'started_at': step.get('startedAt'),
+                        'completed_at': step.get('completedAt')
+                    })
+                
+                jobs.append({
+                    'id': job.get('databaseId'),
+                    'name': job.get('name'),
+                    'status': job.get('status', '').lower() if job.get('status') else None,
+                    'conclusion': job.get('conclusion', '').lower() if job.get('conclusion') else None,
+                    'started_at': job.get('startedAt'),
+                    'completed_at': job.get('completedAt'),
+                    'html_url': job.get('url'),
+                    'run_id': run_id,
+                    'runner_name': None,
+                    'steps': steps
+                })
+            return jobs
+    except Exception as e:
+        print(f"[ERROR] gh CLI fallback failed for workflow run jobs: {e}", file=sys.stderr)
+    return []
+
+
+def get_failed_workflow_runs(
+    integration: 'GitHubProjectsIntegration',
+    owner: str,
+    repo: str,
+    branch: Optional[str] = None,
+    workflow_name: Optional[str] = None,
+    limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Get recent failed workflow runs with optional filtering.
+    
+    Args:
+        integration: GitHubProjectsIntegration instance
+        owner: Repository owner
+        repo: Repository name
+        branch: Optional branch filter
+        workflow_name: Optional workflow name filter
+        limit: Maximum number of failed runs to return
+        
+    Returns:
+        List of failed workflow run dictionaries
+    """
+    # Fetch more runs than limit since we're filtering for failures
+    all_runs = get_repo_workflow_runs(
+        integration, owner, repo, 
+        branch=branch, 
+        status='completed',
+        limit=limit * 5  # Fetch more to find enough failures
+    )
+    
+    # Filter for failed runs
+    failed_runs: List[Dict[str, Any]] = []
+    for run in all_runs:
+        conclusion = run.get('conclusion', '').lower() if run.get('conclusion') else ''
+        if conclusion in ('failure', 'timed_out'):
+            # Apply workflow name filter if specified
+            if workflow_name:
+                run_name = run.get('name', '').lower()
+                if workflow_name.lower() != run_name:
+                    continue
+            failed_runs.append(run)
+            if len(failed_runs) >= limit:
+                break
+    
+    return failed_runs
