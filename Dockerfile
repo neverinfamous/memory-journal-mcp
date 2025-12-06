@@ -33,8 +33,11 @@ COPY requirements.txt .
 # Reference: https://peps.python.org/pep-0706/
 RUN pip install --no-cache-dir --upgrade pip>=25.0 setuptools>=78.1.1
 
-# Install core dependencies first
-RUN pip install --no-cache-dir mcp aiohttp aiohttp-cors numpy
+# Install core dependencies first (mcp>=1.23.0 for DNS rebinding protection CVE-2025-66416)
+RUN pip install --no-cache-dir "mcp>=1.23.0" aiohttp aiohttp-cors numpy
+
+# Install urllib3 with security fixes (CVE-2025-66418) before ML dependencies
+RUN pip install --no-cache-dir "urllib3>=2.6.0"
 
 # Install ML dependencies with Alpine-compatible approach
 RUN pip install --no-cache-dir \
