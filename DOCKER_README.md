@@ -16,14 +16,12 @@ Last Updated December 6, 2025 - Production/Stable v2.1.0
 
 🎯 **Solve the AI Context Problem:** Bridge the gap between disconnected AI sessions. Memory Journal provides persistent project memory, enabling AI to access your complete development history, past decisions, and work patterns across any thread or timeframe.
 
+**[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
+
 **🚀 Multiple Deployment Options:**
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (~225MB) multi-platform support
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - Simple `pip install` for local deployment
-- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)** - Discoverable by MCP clients
-
-**📚 Documentation:** [Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki) • [v2.1.0 Release](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v2.1.0)
-
-**📰 [Read the v2.1.0 Release Article](https://adamic.tech/articles/memory-journal-mcp-server)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
+- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)** - 
 
 ---
 

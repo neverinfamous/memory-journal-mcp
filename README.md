@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated Dcember 6, 2025 - Production/Stable v2.1.0
+Last Updated December 6, 2025 - Production/Stable v2.1.0
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -19,14 +19,12 @@ Last Updated Dcember 6, 2025 - Production/Stable v2.1.0
 
 **🎯 Solve the AI Context Problem:** When working with AI across multiple threads and sessions, context is lost. Memory Journal maintains a persistent, searchable record of your project work, decisions, and progress - making every AI conversation informed by your complete project history.
 
+**[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
+
 **🚀 Quick Deploy:**
 - **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - `pip install memory-journal-mcp`
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (225MB) with full semantic search
-- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)** - Discoverable by MCP clients
-
-**📚 Full Documentation:** [GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)
-
-**📰 [Read the v2.1.0 Release Article](https://adamic.tech/articles/memory-journal-mcp-server)** - Learn about knowledge graphs, performance optimizations, and relationship mapping
+- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)** - 
 
 ---
 
@@ -109,7 +107,7 @@ Thread 3: AI finds related entries → "Based on your design from Oct 15, here's
 - **Knowledge graphs** - 5 relationship types, Mermaid visualization
 - **10x faster startup** - Lazy ML loading (14s → 2-3s)
 
-**[Complete CHANGELOG →](CHANGELOG.md)** | **[Architecture Details →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Architecture)**
+**[Architecture Details →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Architecture)**
 
 ---
 
