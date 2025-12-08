@@ -1,13 +1,13 @@
 # Memory Journal MCP Server
 
-Last Updated December 6, 2025 - Production/Stable v2.1.0
+Last Updated December 8, 2025 - Production/Stable v2.2.0
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v2.1.0-green)
+![Version](https://img.shields.io/badge/version-v2.2.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
@@ -76,6 +76,30 @@ Thread 1: Work captured → "Decided on JWT with refresh tokens"
 Thread 2: AI queries history → "I see you decided on JWT. Let's implement refresh token rotation..."
 Thread 3: AI finds related entries → "Based on your design from Oct 15, here's the implementation..."
 ```
+
+---
+
+## ✨ What's New in v2.2.0 (December 8, 2025)
+
+### 🎛️ **Tool Filtering for Token Efficiency**
+- **Reduce token usage by up to 69%** - Disable unused tools to save context window space
+- **7 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `test`
+- **Flexible syntax** - `-group` to disable, `-tool` for specific tools, `+tool` to re-enable
+- **MCP client compatibility** - Stay under tool limits (e.g., Windsurf's 100-tool limit)
+- **Zero breaking changes** - All 16 tools enabled by default
+
+### 🎨 **Dark Mode Improvements**
+- **Actions Visual Graph** - Improved color scheme for dark mode readability
+- **Better contrast** - Medium-saturated fills with dark text and defined borders
+
+### 📊 **Token Savings by Configuration**
+| Configuration | Tools | Token Reduction |
+|---------------|-------|-----------------|
+| Production (`-test`) | 14 | ~12% |
+| Read-only (`-admin`) | 14 | ~15% |
+| Lightweight (`-search,-analytics,-relationships,-export,-admin,-test`) | 5 | **~69%** |
+
+**[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
 ---
 
@@ -282,6 +306,60 @@ export DEFAULT_ORG="your-org-name"            # Optional: default org
 ```
 **Scopes:** `repo`, `project`, `read:org` (org only) • **Fallback:** Uses `gh` CLI if tokens not set  
 **[Full configuration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation#configuration)**
+
+### 🎛️ **Tool Filtering (Optional)**
+
+Control which tools are exposed to your MCP client using the `MEMORY_JOURNAL_MCP_TOOL_FILTER` environment variable:
+
+```bash
+export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-test"
+```
+
+**Filter Syntax:**
+- `-group` - Disable all tools in a group (e.g., `-analytics`)
+- `-tool` - Disable a specific tool (e.g., `-delete_entry`)
+- `+tool` - Re-enable after group disable (e.g., `-admin,+update_entry`)
+
+**Available Groups:**
+- `core` (5 tools) - Essential CRUD operations
+- `search` (2 tools) - Advanced search capabilities
+- `analytics` (2 tools) - Statistics and insights
+- `relationships` (2 tools) - Link and visualize entries
+- `export` (1 tool) - Export functionality
+- `admin` (2 tools) - Update and delete operations
+- `test` (2 tools) - Testing and minimal entry creation
+
+**Common Configurations:**
+
+```bash
+# Lightweight (core only, ~5 tools)
+MEMORY_JOURNAL_MCP_TOOL_FILTER="-search,-analytics,-relationships,-export,-admin,-test"
+
+# Read-only mode (disable modifications)
+MEMORY_JOURNAL_MCP_TOOL_FILTER="-admin"
+
+# Production use (disable test tools)
+MEMORY_JOURNAL_MCP_TOOL_FILTER="-test"
+```
+
+**MCP Config Example:**
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "memory-journal-mcp",
+      "env": {
+        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "-test,-admin",
+        "GITHUB_TOKEN": "your_token"
+      }
+    }
+  }
+}
+```
+
+Useful for MCP clients with tool limits (e.g., Windsurf's 100-tool limit).  
+**[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
 ---
 

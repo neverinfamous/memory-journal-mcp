@@ -1,11 +1,11 @@
 # Memory Journal MCP Server
 
-Last Updated December 6, 2025 - Production/Stable v2.1.0
+Last Updated December 8, 2025 - Production/Stable v2.2.0
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v2.1.0-green)
+![Version](https://img.shields.io/badge/version-v2.2.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
@@ -37,7 +37,13 @@ Last Updated December 6, 2025 - Production/Stable v2.1.0
 
 ---
 
-## ✨ v2.1.0 Highlights (November 26, 2025)
+## ✨ v2.2.0 Highlights (December 8, 2025)
+
+### **🎛️ Tool Filtering - Save Up to 69% Token Usage**
+- **Reduce context window consumption** - Disable unused tools via `MEMORY_JOURNAL_MCP_TOOL_FILTER`
+- **7 tool groups** - `core` (5), `search` (2), `analytics` (2), `relationships` (2), `export` (1), `admin` (2), `test` (2)
+- **Stay under client limits** - Essential for Windsurf (100-tool limit) and other constrained clients
+- **Dark mode improvements** - Better contrast in Actions Visual Graph
 
 ### **16 MCP Tools • 14 Workflow Prompts • 13 Resources**
 - **GitHub Actions Integration** - 5 new resources, CI/CD narrative graphs, failure analysis
@@ -46,8 +52,6 @@ Last Updated December 6, 2025 - Production/Stable v2.1.0
 - **GitHub Issues & PRs** - Auto-detection, linking, 3 PR workflow prompts
 - **True Pyright Strict** - 700+ type issues fixed, zero exclusions
 - **Smart caching system** - GitHub API response caching (15min issues, 5min PRs/workflows, 1hr projects)
-- **Enhanced analytics** - Project breakdown, issue/PR tracking, cross-project insights
-- **Backward compatible** - Seamless upgrade with automatic schema migration
 - **10x faster startup** - Lazy ML loading (14s → 2-3s)
 - **Knowledge graphs** - 5 relationship types, Mermaid diagram visualization
 
@@ -191,6 +195,9 @@ memory://prs/456/timeline        // PR + journal timeline
 -e GITHUB_ORG_TOKEN=your_org_token  # For org projects
 -e DEFAULT_ORG=your-org-name
 
+# Tool filtering (optional - control which tools are exposed)
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="-test,-admin"
+
 # Other options
 -e DEBUG=true                       # Enable debug logging
 -e DB_PATH=/app/data/custom.db      # Custom database location
@@ -199,6 +206,35 @@ memory://prs/456/timeline        // PR + journal timeline
 **Token Scopes:** `repo`, `project`, `read:org` (org projects only)  
 **Fallback:** Uses GitHub CLI (`gh`) if tokens not set, works without tokens (features gracefully disabled)  
 **[Full configuration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation#configuration)**
+
+### Tool Filtering
+
+Control which tools are exposed using `MEMORY_JOURNAL_MCP_TOOL_FILTER`:
+
+```bash
+docker run -i --rm \
+  -e MEMORY_JOURNAL_MCP_TOOL_FILTER="-test,-analytics" \
+  -v ./data:/app/data \
+  writenotenow/memory-journal-mcp:latest \
+  python src/server.py
+```
+
+**Common configurations:**
+
+```bash
+# Production mode (disable test tools)
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="-test"
+
+# Read-only mode (disable modifications)
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="-admin"
+
+# Lightweight (core only)
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="-search,-analytics,-relationships,-export,-admin,-test"
+```
+
+**Available tool groups:** `core` (5), `search` (2), `analytics` (2), `relationships` (2), `export` (1), `admin` (2), `test` (2)
+
+**[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
 ---
 
@@ -230,8 +266,8 @@ memory://prs/456/timeline        // PR + journal timeline
 **Note:** ARM64 images don't include semantic search due to PyTorch Alpine incompatibility. All other features (FTS5 search, relationships, Git integration, visualization) work identically on both platforms.
 
 **Available Tags:**
-- `2.1.0` - Specific version (recommended for production)
-- `2.1` - Latest patch in 2.1.x series
+- `2.2.0` - Specific version (recommended for production)
+- `2.2` - Latest patch in 2.2.x series
 - `2` - Latest minor in 2.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security

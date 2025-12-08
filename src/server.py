@@ -30,6 +30,7 @@ from database.base import MemoryJournalDB
 from database.context import ProjectContextManager
 from vector_search import VectorSearchManager, VECTOR_SEARCH_AVAILABLE
 from github.integration import GitHubProjectsIntegration
+from tool_filtering import filter_tools, is_tool_enabled
 
 # Import MCP handlers (they will register themselves with the server)
 import handlers.resources as resources
@@ -131,12 +132,19 @@ async def handle_read_resource(uri: Any) -> str:
 @server.list_tools()
 async def handle_list_tools():
     """List available tools."""
-    return tools_registry.list_tools()
+    tools = tools_registry.list_tools()
+    return filter_tools(tools)
 
 
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> Any:
     """Handle tool calls."""
+    if not is_tool_enabled(name):
+        import mcp.types as types
+        return [types.TextContent(
+            type="text",
+            text=f"Tool '{name}' is disabled by filtering configuration"
+        )]
     return await tools_registry.call_tool(name, arguments)
 
 
@@ -164,7 +172,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="memory-journal",
-                server_version="2.1.0",  # Added GitHub Actions, Issues/PRs, Pyright strict
+                server_version="2.2.0",  # Tool filtering, token efficiency, dark mode improvements
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

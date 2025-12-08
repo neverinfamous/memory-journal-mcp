@@ -23,7 +23,7 @@ from constants import (
     MERMAID_ACTIONS_STYLE_RUN_FAILURE, MERMAID_ACTIONS_STYLE_RUN_PENDING,
     MERMAID_ACTIONS_STYLE_JOB_FAILURE, MERMAID_ACTIONS_STYLE_ENTRY,
     MERMAID_ACTIONS_STYLE_DEPLOYMENT, MERMAID_ACTIONS_STYLE_PR,
-    ACTIONS_GRAPH_MAX_JOBS_PER_RUN, CONTENT_PREVIEW_TITLE
+    ACTIONS_GRAPH_MAX_JOBS_PER_RUN, ACTIONS_GRAPH_DEFAULT_LIMIT, CONTENT_PREVIEW_TITLE
 )
 import sys
 
@@ -426,53 +426,59 @@ async def _generate_actions_graph(
     
     mermaid += "\n"
     
-    # Add styling
-    mermaid += "    %% Styling\n"
+    # Add styling using classDef for compact output (dark mode optimized)
+    mermaid += "    %% Style classes\n"
+    mermaid += f"    classDef commit fill:{MERMAID_ACTIONS_STYLE_COMMIT},color:#000,stroke:#2E7D32\n"
+    mermaid += f"    classDef success fill:{MERMAID_ACTIONS_STYLE_RUN_SUCCESS},color:#000,stroke:#2E7D32\n"
+    mermaid += f"    classDef failure fill:{MERMAID_ACTIONS_STYLE_RUN_FAILURE},color:#000,stroke:#B71C1C\n"
+    mermaid += f"    classDef pending fill:{MERMAID_ACTIONS_STYLE_RUN_PENDING},color:#000,stroke:#F57F17\n"
+    mermaid += f"    classDef jobfail fill:{MERMAID_ACTIONS_STYLE_JOB_FAILURE},color:#000,stroke:#B71C1C\n"
+    mermaid += f"    classDef entry fill:{MERMAID_ACTIONS_STYLE_ENTRY},color:#000,stroke:#1565C0\n"
+    mermaid += f"    classDef deploy fill:{MERMAID_ACTIONS_STYLE_DEPLOYMENT},color:#000,stroke:#00695C\n"
+    mermaid += f"    classDef pr fill:{MERMAID_ACTIONS_STYLE_PR},color:#000,stroke:#7B1FA2\n"
     
-    # Style commits
-    for short_sha in commits_map.keys():
-        mermaid += f"    style C_{short_sha} fill:{MERMAID_ACTIONS_STYLE_COMMIT}\n"
+    # Apply classes to nodes (compact: class node1,node2,node3 className)
+    commit_nodes = ','.join([f"C_{sha}" for sha in commits_map.keys()])
+    if commit_nodes:
+        mermaid += f"    class {commit_nodes} commit\n"
     
-    # Style PRs
-    for pr_number in prs_map.keys():
-        mermaid += f"    style PR_{pr_number} fill:{MERMAID_ACTIONS_STYLE_PR}\n"
+    pr_nodes = ','.join([f"PR_{pr}" for pr in prs_map.keys()])
+    if pr_nodes:
+        mermaid += f"    class {pr_nodes} pr\n"
     
-    # Style workflow runs based on conclusion
-    for run_id, run in runs_map.items():
-        run_conclusion = run.get('conclusion', '')
-        if run_conclusion == 'success':
-            style_color = MERMAID_ACTIONS_STYLE_RUN_SUCCESS
-        elif run_conclusion == 'failure':
-            style_color = MERMAID_ACTIONS_STYLE_RUN_FAILURE
-        else:
-            style_color = MERMAID_ACTIONS_STYLE_RUN_PENDING
-        mermaid += f"    style WR_{run_id} fill:{style_color}\n"
+    # Group workflow runs by conclusion
+    success_runs = [f"WR_{rid}" for rid, r in runs_map.items() if r.get('conclusion') == 'success']
+    failure_runs = [f"WR_{rid}" for rid, r in runs_map.items() if r.get('conclusion') == 'failure']
+    pending_runs = [f"WR_{rid}" for rid, r in runs_map.items() if r.get('conclusion') not in ('success', 'failure')]
     
-    # Style failed jobs
-    for job in failed_jobs_list:
-        mermaid += f"    style J_{job['job_id']} fill:{MERMAID_ACTIONS_STYLE_JOB_FAILURE}\n"
+    if success_runs:
+        mermaid += f"    class {','.join(success_runs)} success\n"
+    if failure_runs:
+        mermaid += f"    class {','.join(failure_runs)} failure\n"
+    if pending_runs:
+        mermaid += f"    class {','.join(pending_runs)} pending\n"
     
-    # Style journal entries
-    for entry in journal_entries:
-        mermaid += f"    style E_{entry['id']} fill:{MERMAID_ACTIONS_STYLE_ENTRY}\n"
+    job_nodes = ','.join([f"J_{job['job_id']}" for job in failed_jobs_list])
+    if job_nodes:
+        mermaid += f"    class {job_nodes} jobfail\n"
     
-    # Style deployments
-    for deploy in deployments_list:
-        mermaid += f"    style D_{deploy['run_id']} fill:{MERMAID_ACTIONS_STYLE_DEPLOYMENT}\n"
+    entry_nodes = ','.join([f"E_{e['id']}" for e in journal_entries])
+    if entry_nodes:
+        mermaid += f"    class {entry_nodes} entry\n"
+    
+    deploy_nodes = ','.join([f"D_{d['run_id']}" for d in deployments_list])
+    if deploy_nodes:
+        mermaid += f"    class {deploy_nodes} deploy\n"
     
     mermaid += "```\n\n"
     
-    # Add legend
-    mermaid += "**Legend:**\n"
-    mermaid += "- `{{sha}}` Commits (hexagon) | `([text])` PRs/Deployments (stadium) | `[text]` Workflow runs\n"
-    mermaid += "- `[/text/]` Failed jobs | `-->` triggers | `-.->` investigates | `==>` fixes\n"
-    mermaid += "- 📝 Journal entries linked to workflow runs | 🚀 Successful deployments\n"
-    mermaid += f"\n**Repository:** {owner}/{repo}"
+    # Compact footer: repo info and legend on one line
+    mermaid += f"**{owner}/{repo}** | {len(runs_map)} runs"
     if branch_filter:
-        mermaid += f" | **Branch:** {branch_filter}"
+        mermaid += f" | branch: {branch_filter}"
     if workflow_filter:
-        mermaid += f" | **Workflow:** {workflow_filter}"
-    mermaid += f" | **Runs:** {len(runs_map)}"
+        mermaid += f" | workflow: {workflow_filter}"
+    mermaid += " | `{{}}` commit `[]` run `([])` PR"
     
     return mermaid
 
@@ -748,7 +754,7 @@ async def read_resource(uri: AnyUrl) -> str:
             # Extract filter parameters
             branch_filter: Optional[str] = parsed.get('branch')
             workflow_filter: Optional[str] = parsed.get('workflow')
-            limit: int = parsed.get('limit', 15)
+            limit: int = parsed.get('limit', ACTIONS_GRAPH_DEFAULT_LIMIT)
             
             return await _generate_actions_graph(
                 _db, _github_projects, _pcm, _thread_pool,

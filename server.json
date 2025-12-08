@@ -2,12 +2,13 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.neverinfamous/memory-journal-mcp",
   "title": "Memory Journal MCP",
-  "description": "Project context management for AI-assisted development - Persistent memory and knowledge graphs across fragmented AI threads",
-  "version": "2.1.0",
+  "description": "MCP server– Project memory system with GitHub-aware context, knowledge graphs, and CI/PR timelines",
+  "version": "2.2.0",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "docker.io/writenotenow/memory-journal-mcp:v2.1.0",
+      "identifier": "docker.io/writenotenow/memory-journal-mcp:v2.2.0",
+      "version": "2.2.0",
       "transport": {
         "type": "stdio"
       }

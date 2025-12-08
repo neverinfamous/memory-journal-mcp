@@ -138,6 +138,10 @@ memory_journal.db-*
 # This file SHOULD be committed to Git
 !.memory-journal-team.db
 
+# SQLite WAL (Write-Ahead Log) files - temporary, should NOT be committed
+*.db-shm
+*.db-wal
+
 # Temporary build/deployment scripts
 *rebuild*.bat
 *fix-security*.bat

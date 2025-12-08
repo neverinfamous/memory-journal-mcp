@@ -68,14 +68,15 @@ MERMAID_STYLE_PERSONAL = '#E3F2FD'  # Blue for personal entries
 MERMAID_STYLE_PROJECT = '#FFF3E0'  # Orange for project entries
 
 # Actions Graph Mermaid styling (memory://graph/actions)
-MERMAID_ACTIONS_STYLE_COMMIT = '#E8F5E9'  # Light green for commits
-MERMAID_ACTIONS_STYLE_RUN_SUCCESS = '#C8E6C9'  # Green for successful workflow runs
-MERMAID_ACTIONS_STYLE_RUN_FAILURE = '#FFCDD2'  # Red for failed workflow runs
-MERMAID_ACTIONS_STYLE_RUN_PENDING = '#FFF9C4'  # Yellow for pending/in-progress runs
-MERMAID_ACTIONS_STYLE_JOB_FAILURE = '#EF9A9A'  # Darker red for failed jobs
-MERMAID_ACTIONS_STYLE_ENTRY = '#BBDEFB'  # Light blue for journal entries
-MERMAID_ACTIONS_STYLE_DEPLOYMENT = '#B2DFDB'  # Teal for deployments
-MERMAID_ACTIONS_STYLE_PR = '#E1BEE7'  # Light purple for pull requests
+# Dark mode optimized: medium-saturated colors that work in both light and dark modes
+MERMAID_ACTIONS_STYLE_COMMIT = '#4CAF50'  # Medium green for commits (good contrast)
+MERMAID_ACTIONS_STYLE_RUN_SUCCESS = '#66BB6A'  # Lighter green for successful runs
+MERMAID_ACTIONS_STYLE_RUN_FAILURE = '#EF5350'  # Medium red for failed runs
+MERMAID_ACTIONS_STYLE_RUN_PENDING = '#FFCA28'  # Amber for pending runs
+MERMAID_ACTIONS_STYLE_JOB_FAILURE = '#E53935'  # Darker red for failed jobs
+MERMAID_ACTIONS_STYLE_ENTRY = '#42A5F5'  # Medium blue for journal entries
+MERMAID_ACTIONS_STYLE_DEPLOYMENT = '#26A69A'  # Teal for deployments
+MERMAID_ACTIONS_STYLE_PR = '#AB47BC'  # Medium purple for pull requests
 
 # Actions Graph edge types
 ACTIONS_EDGE_TRIGGERS = '-->'  # Commit triggers workflow
@@ -91,7 +92,7 @@ ACTIONS_GRAPH_MAX_JOBS_PER_RUN = 5  # Max failed jobs to show per run
 
 # Server metadata
 SERVER_NAME = "memory-journal-mcp"
-SERVER_VERSION = "2.0.0"
+SERVER_VERSION = "2.2.0"
 
 # Date/time formats
 DATE_FORMAT_ISO = '%Y-%m-%d'
