@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated December 8, 2025 - Production/Stable v2.2.0
+Last Updated December 8, 2025 - v2.2.0
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)

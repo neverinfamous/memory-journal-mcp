@@ -40,11 +40,15 @@ jobs:
         if: github.event_name == 'release'
         run: |
           PYPROJECT_VERSION=$(grep -Po '(?<=^version = ")[^"]*' pyproject.toml)
-          RELEASE_VERSION="${GITHUB_REF#refs/tags/v}"
+          # Extract version from tag, handling both 'v2.2.0' and '2.2.0' formats
+          RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
+          RELEASE_VERSION="${RELEASE_VERSION#v}"
           echo "PyProject version: $PYPROJECT_VERSION"
           echo "Release version: $RELEASE_VERSION"
           if [ "$PYPROJECT_VERSION" != "$RELEASE_VERSION" ]; then
             echo "Error: Version mismatch!"
+            echo "Expected: $PYPROJECT_VERSION"
+            echo "Got: $RELEASE_VERSION"
             exit 1
           fi
 
