@@ -324,6 +324,4 @@ Update your `~/.cursor/mcp.json` to use the local build:
 
 MIT License - See [LICENSE](https://github.com/neverinfamous/memory-journal-mcp/blob/main/LICENSE)
 
----
 
-**Built by developers, for developers.** PRs welcome! 🚀
