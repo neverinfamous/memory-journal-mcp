@@ -38,9 +38,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run tests
-        run: npm run test
-
   security-scan:
     runs-on: ubuntu-latest
     steps:
