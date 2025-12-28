@@ -1,11 +1,14 @@
 name: Build and Push Docker Images
 
 on:
+  # Only run after lint-and-test completes successfully
+  workflow_run:
+    workflows: ["Lint and Test"]
+    types: [completed]
+    branches: [main]
+  # Also run on version tags (for releases)
   push:
-    branches: [ main ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
 
 env:
   REGISTRY: docker.io
@@ -22,6 +25,8 @@ permissions:
 jobs:
   # Build each platform on native architecture (avoids QEMU emulation issues)
   build-platform:
+    # Only run if lint-and-test succeeded OR if this is a tag push
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
     strategy:
       fail-fast: false
       matrix:
@@ -260,7 +265,7 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
         repository: ${{ env.IMAGE_NAME }}
         readme-filepath: ./DOCKER_README.md
-        short-description: "Memory Journal MCP Server - Project context management for AI-assisted development"
+        short-description: "MCP server for Git-aware project memory, capturing code context, GitHub issues, PRs, and Actions."
 
     - name: Deployment Summary
       if: github.ref == 'refs/heads/main'
