@@ -1,0 +1,8 @@
+# Trivy Ignore File
+# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+
+# CVE-2025-64756: glob command injection in npm CLI
+# This is in the Node.js base image's npm installation (/usr/local/lib/node_modules/npm)
+# We don't use glob CLI directly and cannot patch base image npm
+# Will be fixed when Node.js releases updated base images
+CVE-2025-64756
