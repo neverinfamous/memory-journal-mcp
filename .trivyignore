@@ -1,8 +1,18 @@
 # Trivy Ignore File
 # See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
 
-# CVE-2025-64756: glob command injection in npm CLI
+# CVE-2025-64756: glob command injection in npm CLI (HIGH)
 # This is in the Node.js base image's npm installation (/usr/local/lib/node_modules/npm)
 # We don't use glob CLI directly and cannot patch base image npm
 # Will be fixed when Node.js releases updated base images
 CVE-2025-64756
+
+# CVE-2025-5889: brace-expansion ReDoS (LOW)
+# Bundled in protobufjs/cli/node_modules - can't override with npm
+# LOW severity, attack complexity is high, exploitation is difficult
+CVE-2025-5889
+
+# CVE-2025-54798: tmp symlink vulnerability (LOW)
+# Bundled in protobufjs/cli/node_modules - can't override with npm
+# LOW severity, only affects tmp file creation in CLI context
+CVE-2025-54798
