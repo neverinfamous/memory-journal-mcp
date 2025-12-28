@@ -62,5 +62,8 @@
         "globals": "^16.5.0",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.50.0"
+    },
+    "overrides": {
+        "axios": "^1.13.2"
     }
 }
