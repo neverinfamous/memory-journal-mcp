@@ -33,18 +33,9 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: security-test:latest
-        format: 'table'
-        exit-code: '1'
-        ignore-unfixed: true
-        severity: 'CRITICAL,HIGH,MEDIUM'
-
+    # Run SARIF scan first (non-blocking) to always generate the file
     - name: Run Trivy scanner for SARIF output
       uses: aquasecurity/trivy-action@master
-      continue-on-error: true
       with:
         image-ref: security-test:latest
         format: 'sarif'
@@ -57,6 +48,16 @@ jobs:
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
+
+    # Run table scan (blocking) after SARIF is uploaded
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: security-test:latest
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        severity: 'CRITICAL,HIGH,MEDIUM'
 
     - name: Create security issue if vulnerabilities found
       if: failure()
