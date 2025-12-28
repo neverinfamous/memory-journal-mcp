@@ -172,7 +172,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="memory-journal",
-                server_version="2.2.0",  # Tool filtering, token efficiency, dark mode improvements
+                server_version="3.0.0",  # Final Python version - TypeScript rewrite now primary
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

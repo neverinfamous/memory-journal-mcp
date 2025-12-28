@@ -1,0 +1,78 @@
+name: Publish to NPM
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (must match VERSION file or package.json)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/memory-journal-mcp
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Read version
+        id: version
+        run: |
+          if [ -f "VERSION" ]; then
+            VERSION=$(head -1 VERSION | tr -d '[:space:]')
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Verify version matches release tag
+        if: github.event_name == 'release'
+        run: |
+          RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
+          RELEASE_VERSION="${RELEASE_VERSION#v}"
+          PKG_VERSION="${{ steps.version.outputs.version }}"
+          echo "Package version: $PKG_VERSION"
+          echo "Release version: $RELEASE_VERSION"
+          if [ "$PKG_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "Error: Version mismatch!"
+            echo "Expected: $PKG_VERSION"
+            echo "Got: $RELEASE_VERSION"
+            exit 1
+          fi
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Publish to NPM
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify publication
+        run: |
+          sleep 10
+          npm view memory-journal-mcp version

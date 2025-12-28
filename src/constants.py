@@ -92,7 +92,7 @@ ACTIONS_GRAPH_MAX_JOBS_PER_RUN = 5  # Max failed jobs to show per run
 
 # Server metadata
 SERVER_NAME = "memory-journal-mcp"
-SERVER_VERSION = "2.2.0"
+SERVER_VERSION = "3.0.0"  # Final Python version - TypeScript rewrite is now primary
 
 # Date/time formats
 DATE_FORMAT_ISO = '%Y-%m-%d'

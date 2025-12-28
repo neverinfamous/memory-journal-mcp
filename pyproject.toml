@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "memory-journal-mcp"
-version = "2.2.0"
+version = "3.0.0"
 description = "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads"
 authors = [
     {name = "Chris LeRoux", email = "support@adamic.tech"}

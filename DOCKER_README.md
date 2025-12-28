@@ -1,16 +1,16 @@
 # Memory Journal MCP Server
 
-Last Updated December 8, 2025 - v2.2.0
+Last Updated December 28, 2025 - v3.0.0
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v2.2.0-green)
+![Version](https://img.shields.io/badge/version-v3.0.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
-[![PyPI](https://img.shields.io/pypi/v/memory-journal-mcp)](https://pypi.org/project/memory-journal-mcp/)
+[![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
-[![Type Safety](https://img.shields.io/badge/Pyright-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
 **Project context management for AI-assisted development - Maintain continuity across fragmented AI threads with persistent knowledge graphs and intelligent context recall**
 
@@ -19,9 +19,9 @@ Last Updated December 8, 2025 - v2.2.0
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
 **🚀 Multiple Deployment Options:**
-- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based (~225MB) multi-platform support
-- **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - Simple `pip install` for local deployment
-- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)** - 
+- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Node.js Alpine-based multi-platform support
+- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
+- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
 
 ---
 
@@ -34,26 +34,30 @@ Last Updated December 8, 2025 - v2.2.0
 - 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs  
 - 🔍 **Triple search** (full-text, semantic, date range)
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
+- 🗄️ **Backup & restore** your journal data with one command
 
 ---
 
-## ✨ v2.2.0 Highlights (December 8, 2025)
+## ✨ v3.0.0 Highlights (December 28, 2025)
 
-### **🎛️ Tool Filtering - Save Up to 69% Token Usage**
-- **Reduce context window consumption** - Disable unused tools via `MEMORY_JOURNAL_MCP_TOOL_FILTER`
-- **7 tool groups** - `core` (5), `search` (2), `analytics` (2), `relationships` (2), `export` (1), `admin` (2), `test` (2)
-- **Stay under client limits** - Essential for Windsurf (100-tool limit) and other constrained clients
-- **Dark mode improvements** - Better contrast in Actions Visual Graph
+### **🚀 Complete TypeScript Rewrite**
+- **Pure JS Stack** - No native compilation required (`sql.js` + `vectra` + `@xenova/transformers`)
+- **Cross-Platform** - Works on AMD64 and ARM64 without architecture-specific builds
+- **Strict Type Safety** - 100% TypeScript strict mode compliance
+- **MCP 2025-11-25 Compliance** - Full spec with behavioral annotations
 
-### **16 MCP Tools • 14 Workflow Prompts • 13 Resources**
-- **GitHub Actions Integration** - 5 new resources, CI/CD narrative graphs, failure analysis
-- **Actions Visual Graph** - `memory://graph/actions` for CI/CD visualization
-- **Failure Digest Prompt** - `actions-failure-digest` with root cause analysis
-- **GitHub Issues & PRs** - Auto-detection, linking, 3 PR workflow prompts
-- **True Pyright Strict** - 700+ type issues fixed, zero exclusions
-- **Smart caching system** - GitHub API response caching (15min issues, 5min PRs/workflows, 1hr projects)
-- **10x faster startup** - Lazy ML loading (14s → 2-3s)
+### **🗄️ New: Backup & Restore Tools**
+- `backup_journal` - Create timestamped database backups
+- `list_backups` - List all available backup files
+- `restore_backup` - Restore from any backup (with auto-backup before restore)
+
+### **📊 New: Server Health Resource**
+- `memory://health` - Database stats, backup info, vector index status, tool filter config
+
+### **27 MCP Tools • 14 Workflow Prompts • 14 Resources**
+- **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 5 relationship types, Mermaid diagram visualization
+- **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
 
 ---
 
@@ -83,8 +87,7 @@ Add this to your `~/.cursor/mcp.json`:
       "args": [
         "run", "--rm", "-i",
         "-v", "./data:/app/data",
-        "writenotenow/memory-journal-mcp:latest",
-        "python", "src/server.py"
+        "writenotenow/memory-journal-mcp:latest"
       ]
     }
   }
@@ -95,6 +98,42 @@ Add this to your `~/.cursor/mcp.json`:
 
 Restart Cursor or your MCP client and start journaling!
 
+### GitHub Integration (Optional)
+
+To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add environment variables:
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "./data:/app/data",
+        "-e", "GITHUB_TOKEN",
+        "-e", "GITHUB_REPO_PATH=/app/repo",
+        "-v", "/path/to/your/repo:/app/repo:ro",
+        "writenotenow/memory-journal-mcp:latest"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "ghp_your_token_here"
+      }
+    }
+  }
+}
+```
+
+| Environment Variable | Description |
+|---------------------|-------------|
+| `GITHUB_TOKEN` | GitHub personal access token for API access |
+| `GITHUB_REPO_PATH` | Path to git repo inside container (mount your repo) |
+
+**Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
+
+### Cursor Known Issues
+
+**Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `list_mcp_resources()` without specifying a server parameter. Using `server="memory-journal-mcp"` may return nothing (Cursor bug).
+
 ---
 
 ## ⚡ **Install to Cursor IDE**
@@ -103,16 +142,16 @@ Restart Cursor or your MCP client and start journaling!
 
 Click the button below to install directly into Cursor:
 
-[![Install to Cursor](https://img.shields.io/badge/Install%20to%20Cursor-Click%20Here-blue?style=for-the-badge)](cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbCI6eyJhcmdzIjpbInJ1biIsIi0tcm0iLCItaSIsIi12IiwiLi9kYXRhOi9hcHAvZGF0YSIsIndyaXRlbm90ZW5vdy9tZW1vcnktam91cm5hbC1tY3A6bGF0ZXN0IiwicHl0aG9uIiwic3JjL3NlcnZlci5weSJdLCJjb21tYW5kIjoiZG9ja2VyIn19)
+[![Install to Cursor](https://img.shields.io/badge/Install%20to%20Cursor-Click%20Here-blue?style=for-the-badge)](cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbC1tY3AiOnsiYXJncyI6WyJydW4iLCItLXJtIiwiLWkiLCItdiIsIi4vZGF0YTovYXBwL2RhdGEiLCJ3cml0ZW5vdGVub3cvbWVtb3J5LWpvdXJuYWwtbWNwOmxhdGVzdCJdLCJjb21tYW5kIjoiZG9ja2VyIn19)
 
 Or copy this deep link:
 ```
-cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbCI6eyJhcmdzIjpbInJ1biIsIi0tcm0iLCItaSIsIi12IiwiLi9kYXRhOi9hcHAvZGF0YSIsIndyaXRlbm90ZW5vdy9tZW1vcnktam91cm5hbC1tY3A6bGF0ZXN0IiwicHl0aG9uIiwic3JjL3NlcnZlci5weSJdLCJjb21tYW5kIjoiZG9ja2VyIn19
+cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbC1tY3AiOnsiYXJncyI6WyJydW4iLCItLXJtIiwiLWkiLCItdiIsIi4vZGF0YTovYXBwL2RhdGEiLCJ3cml0ZW5vdGVub3cvbWVtb3J5LWpvdXJuYWwtbWNwOmxhdGVzdCJdLCJjb21tYW5kIjoiZG9ja2VyIn19
 ```
 
 ### **Prerequisites**
 - ✅ Docker installed and running
-- ✅ ~500MB disk space available
+- ✅ ~300MB disk space available
 
 **📖 [See Full Installation Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation)**
 
@@ -139,22 +178,33 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 - ✅ **SBOM Available** - Complete software bill of materials
 - ✅ **Supply Chain Attestations** - Verifiable build integrity
 - ✅ **Non-root Execution** - Minimal attack surface
+- ✅ **No Native Dependencies** - Pure JS stack reduces attack surface
 
 ---
 
 ## ⚡ Core Features
 
-### 🛠️ 16 MCP Tools
-Entry management • Full-text/semantic/date search • Knowledge graphs • Analytics • Export  
+### 🛠️ 27 MCP Tools (8 Groups)
+| Group | Tools | Description |
+|-------|-------|-------------|
+| `core` | 6 | Entry CRUD, tags, test |
+| `search` | 4 | Text search, date range, semantic, vector stats |
+| `analytics` | 2 | Statistics, cross-project insights |
+| `relationships` | 2 | Link entries, visualize graphs |
+| `export` | 1 | JSON/Markdown export |
+| `admin` | 4 | Update, delete, vector index management |
+| `github` | 5 | Issues, PRs, context integration |
+| `backup` | 3 | **NEW** Backup, list, restore |
+
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
 ### 🎯 14 Workflow Prompts
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 🔄 Git & GitHub Auto-Context
-Every entry captures: repo, branch, commit, issues, PRs, projects (user & org)  
-**[Git integration details →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
+### 📡 14 Resources
+Including new `memory://health` for server diagnostics  
+**[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
@@ -167,18 +217,25 @@ create_entry({
   tags: ["performance"]
 })
 
+// Create a backup before major changes
+backup_journal({ name: "pre_refactor" })
+
+// Check server health
+// Fetch memory://health resource
+
 // Search entries
 search_entries({ query: "performance" })
 
 // Access MCP resources
 memory://recent                  // Recent entries
+memory://health                  // Server diagnostics
 memory://projects/1/timeline     // Project timeline
-memory://prs/456/timeline        // PR + journal timeline
 ```
 
 **Ask Cursor AI naturally:**
 - "Show me my recent journal entries"
-- "Prepare my standup for today"
+- "Create a backup of my journal"
+- "Check the server health status"
 - "Find entries related to performance"
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
@@ -196,15 +253,13 @@ memory://prs/456/timeline        // PR + journal timeline
 -e DEFAULT_ORG=your-org-name
 
 # Tool filtering (optional - control which tools are exposed)
--e MEMORY_JOURNAL_MCP_TOOL_FILTER="-test,-admin"
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="-github"
 
-# Other options
--e DEBUG=true                       # Enable debug logging
--e DB_PATH=/app/data/custom.db      # Custom database location
+# Database location
+-e DB_PATH=/app/data/custom.db
 ```
 
 **Token Scopes:** `repo`, `project`, `read:org` (org projects only)  
-**Fallback:** Uses GitHub CLI (`gh`) if tokens not set, works without tokens (features gracefully disabled)  
 **[Full configuration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation#configuration)**
 
 ### Tool Filtering
@@ -213,26 +268,25 @@ Control which tools are exposed using `MEMORY_JOURNAL_MCP_TOOL_FILTER`:
 
 ```bash
 docker run -i --rm \
-  -e MEMORY_JOURNAL_MCP_TOOL_FILTER="-test,-analytics" \
+  -e MEMORY_JOURNAL_MCP_TOOL_FILTER="-github,-analytics" \
   -v ./data:/app/data \
-  writenotenow/memory-journal-mcp:latest \
-  python src/server.py
+  writenotenow/memory-journal-mcp:latest
 ```
 
 **Common configurations:**
 
 ```bash
-# Production mode (disable test tools)
--e MEMORY_JOURNAL_MCP_TOOL_FILTER="-test"
+# Starter mode (core + search only)
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="starter"
 
 # Read-only mode (disable modifications)
--e MEMORY_JOURNAL_MCP_TOOL_FILTER="-admin"
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="readonly"
 
-# Lightweight (core only)
--e MEMORY_JOURNAL_MCP_TOOL_FILTER="-search,-analytics,-relationships,-export,-admin,-test"
+# Full mode (all tools, default)
+-e MEMORY_JOURNAL_MCP_TOOL_FILTER="full"
 ```
 
-**Available tool groups:** `core` (5), `search` (2), `analytics` (2), `relationships` (2), `export` (1), `admin` (2), `test` (2)
+**Available tool groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
@@ -240,35 +294,31 @@ docker run -i --rm \
 
 ## 📦 Image Details
 
-| Platform | Size | Features | Startup Time |
-|----------|------|----------|--------------|
-| **AMD64** (x86_64) | 231MB | Complete: journaling, FTS5, semantic search, Git context, PyTorch ML, relationship graphs, knowledge graph visualization | ~2-3 seconds |
-| **ARM64** (Apple Silicon) | 207MB | Core: journaling, FTS5 search, Git context, relationship graphs, knowledge graph visualization (semantic search unavailable) | ~2-3 seconds |
+| Platform | Features | 
+|----------|----------|
+| **AMD64** (x86_64) | Complete: all tools, semantic search, Git context |
+| **ARM64** (Apple Silicon) | Complete: all tools, semantic search, Git context |
 
-**Production-Ready Image:**
-- **Python 3.14 on Alpine Linux** - Latest Python with minimal attack surface (225MB avg vs 500MB+ for Ubuntu)
-- **Multi-Platform Support** - AMD64 with full ML, ARM64 with core features
-- **ML Capabilities (AMD64)** - PyTorch + sentence-transformers + FAISS
-- **Graceful Degradation (ARM64)** - Core features work without ML dependencies
-- **10x Faster Startup** - Lazy loading reduces init from 14s → 2-3s
+**TypeScript v3.0 Image Benefits:**
+- **Node.js 22 on Alpine Linux** - Minimal footprint (~150MB compressed)
+- **Pure JS Stack** - No native compilation, identical features on all platforms
+- **sql.js** - SQLite in pure JavaScript
+- **vectra** - Vector similarity search without native dependencies
+- **@xenova/transformers** - ML embeddings in JavaScript
+- **Instant Startup** - Lazy loading of ML models
 - **Production/Stable** - Comprehensive error handling and automatic migrations
-- **Zero Race Conditions** - Thread-safe tag creation and single-connection transactions
-- **Latest Python Features** - PEP 779 (free-threaded), PEP 649 (deferred annotations), enhanced performance
 
 **Automated Deployment:**
-- ⚡ **Always Fresh** - Images built within 5-10 minutes of commits
+- ⚡ **Always Fresh** - Images built within minutes of commits
 - 🔒 **Security Scanned** - Automatic vulnerability scanning
 - 🌍 **Multi-Platform** - Intel (amd64) and Apple Silicon (arm64)
 - ✅ **Quality Tested** - Automated testing before deployment
 - 📋 **SBOM Available** - Complete software bill of materials
-- 🔐 **Build Provenance** - Cryptographic proof of build process
-
-**Note:** ARM64 images don't include semantic search due to PyTorch Alpine incompatibility. All other features (FTS5 search, relationships, Git integration, visualization) work identically on both platforms.
 
 **Available Tags:**
-- `2.2.0` - Specific version (recommended for production)
-- `2.2` - Latest patch in 2.2.x series
-- `2` - Latest minor in 2.x series
+- `3.0.0` - Specific version (recommended for production)
+- `3.0` - Latest patch in 3.0.x series
+- `3` - Latest minor in 3.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
 
@@ -301,8 +351,7 @@ Update your `~/.cursor/mcp.json` to use the local build:
       "args": [
         "run", "--rm", "-i",
         "-v", "./data:/app/data",
-        "memory-journal-mcp-local",
-        "python", "src/server.py"
+        "memory-journal-mcp-local"
       ]
     }
   }
@@ -314,8 +363,7 @@ Update your `~/.cursor/mcp.json` to use the local build:
 ## 📚 Documentation & Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
-- **[Practical Examples Gists](https://gist.github.com/neverinfamous/ffedec3bdb5da08376a381733b80c1a7)** - 7 curated use cases
-- **[PyPI Package](https://pypi.org/project/memory-journal-mcp/)** - Python distribution
+- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution
 - **[Issues](https://github.com/neverinfamous/memory-journal-mcp/issues)** - Bug reports & feature requests
 
 ---
@@ -324,4 +372,6 @@ Update your `~/.cursor/mcp.json` to use the local build:
 
 MIT License - See [LICENSE](https://github.com/neverinfamous/memory-journal-mcp/blob/main/LICENSE)
 
+---
 
+*Migrating from v2.x?* Your existing database is fully compatible. The TypeScript version uses the same schema and data format.

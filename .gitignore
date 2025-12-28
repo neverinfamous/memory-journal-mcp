@@ -159,3 +159,4 @@ setup-desktop-commander-auth.sh
 mcp-publisher.exe
 auth.json
 github_auth.json
+node_modules
