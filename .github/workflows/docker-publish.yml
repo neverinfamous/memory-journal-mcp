@@ -48,7 +48,7 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -112,7 +112,7 @@ jobs:
 
     - name: Upload digest
       if: github.event_name != 'pull_request'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
         path: /tmp/digests/*
@@ -130,7 +130,7 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -198,10 +198,10 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Download digests
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v7
       with:
         path: /tmp/digests
         pattern: digests-*
