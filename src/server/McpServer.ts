@@ -22,6 +22,7 @@ import {
 import { getTools, callTool } from '../handlers/tools/index.js';
 import { getResources, readResource } from '../handlers/resources/index.js';
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js';
+import { generateInstructions } from '../constants/ServerInstructions.js';
 
 export interface ServerOptions {
     transport: 'stdio' | 'http';
@@ -67,11 +68,36 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     }
 
-    // Create MCP server
-    const server = new McpServer({
-        name: 'memory-journal-mcp',
-        version: '3.0.0-alpha.1',
-    });
+    // Get resources and prompts for instruction generation
+    const resources = getResources();
+    const prompts = getPrompts();
+
+    // Generate dynamic instructions based on enabled tools, resources, and prompts
+    const instructions = generateInstructions(
+        filterConfig?.enabledTools ?? new Set(getTools(db, null, vectorManager, github).map(t => (t as { name: string }).name)),
+        resources.map(r => {
+            const res = r as { uri: string; name: string; description?: string };
+            return { uri: res.uri, name: res.name, description: res.description };
+        }),
+        prompts.map(p => {
+            const prompt = p as { name: string; description?: string };
+            return { name: prompt.name, description: prompt.description };
+        })
+    );
+
+    // Create MCP server with capabilities and instructions
+    const server = new McpServer(
+        {
+            name: 'memory-journal-mcp',
+            version: '3.0.0-alpha.1',
+        },
+        {
+            capabilities: {
+                logging: {}
+            },
+            instructions
+        }
+    );
 
     // Get filtered tools and register them dynamically
     const tools = getTools(db, filterConfig, vectorManager, github);
@@ -121,8 +147,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         );
     }
 
-    // Register resources
-    const resources = getResources();
+    // Register resources (reusing resources from instruction generation)
     for (const resource of resources) {
         const resDef = resource as { uri: string; name: string; description?: string; mimeType?: string };
 
@@ -169,8 +194,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     }
 
-    // Register prompts
-    const prompts = getPrompts();
+    // Register prompts (reusing prompts from instruction generation)
     for (const prompt of prompts) {
         const promptDef = prompt as {
             name: string;
