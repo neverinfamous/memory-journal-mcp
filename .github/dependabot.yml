@@ -1,10 +1,11 @@
 # Dependabot configuration for Memory Journal MCP Server
-# Manages 72+ dependencies including ML libraries and NVIDIA CUDA packages
+# v3.0.0+ is a TypeScript/Node.js project (npm dependencies)
+# The Python codebase is deprecated and archived in archive/python-v2
 
 version: 2
 updates:
-  # Python dependencies (pip)
-  - package-ecosystem: "pip"
+  # NPM dependencies (TypeScript/Node.js - v3.0.0+)
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -16,61 +17,45 @@ updates:
       - "neverinfamous"
     labels:
       - "dependencies"
-      - "python"
-    # Group ML/AI related packages to reduce PR noise
+      - "npm"
     groups:
-      ml-packages:
-        patterns:
-          - "torch*"
-          - "nvidia-*"
-          - "transformers*"
-          - "sentence-transformers*"
-          - "huggingface-*"
-          - "scikit-learn*"
-          - "scipy*"
-          - "numpy*"
-          - "faiss-*"
-          - "pillow*"
-          - "tokenizers*"
-          - "safetensors*"
-        update-types:
-          - "minor"
-          - "patch"
       mcp-core:
         patterns:
-          - "mcp*"
-          - "pydantic*"
-          - "httpx*"
-          - "starlette*"
-          - "uvicorn*"
+          - "@modelcontextprotocol/*"
+          - "zod*"
         update-types:
           - "minor"
           - "patch"
-      utilities:
+      ml-packages:
         patterns:
-          - "tqdm*"
-          - "click*"
-          - "pyyaml*"
-          - "requests*"
-          - "urllib3*"
-          - "certifi*"
-          - "charset-normalizer*"
-          - "idna*"
-          - "filelock*"
-          - "packaging*"
-          - "attrs*"
+          - "@xenova/*"
+          - "vectra*"
         update-types:
+          - "minor"
           - "patch"
-    # Ignore specific packages that might cause compatibility issues
-    ignore:
-      # NVIDIA CUDA packages - only update for security fixes
-      - dependency-name: "nvidia-*"
-        update-types: ["version-update:semver-minor"]
-      # PyTorch - be conservative with updates
-      - dependency-name: "torch"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "triton"
-        update-types: ["version-update:semver-major"]
+      database:
+        patterns:
+          - "sql.js*"
+          - "better-sqlite3*"
+        update-types:
+          - "minor"
+          - "patch"
+      build-tools:
+        patterns:
+          - "typescript*"
+          - "tsup*"
+          - "@types/*"
+        update-types:
+          - "minor"
+          - "patch"
+      linting:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "typescript-eslint*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -94,7 +79,7 @@ updates:
           - "minor"
           - "patch"
 
-  # Docker dependencies (if using Docker Compose)
+  # Docker dependencies
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
