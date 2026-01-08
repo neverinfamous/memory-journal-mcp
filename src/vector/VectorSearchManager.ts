@@ -184,8 +184,8 @@ export class VectorSearchManager {
             // Generate query embedding
             const queryEmbedding = await this.generateEmbedding(query);
 
-            // Search vectra index
-            const results = await this.index.queryItems(queryEmbedding, limit * 2);
+            // Search vectra index (vectra 0.11.1+ requires query string for BM25 hybrid search)
+            const results = await this.index.queryItems(queryEmbedding, query, limit * 2);
 
             // Filter by threshold and map to our format
             const filteredResults: SemanticSearchResult[] = results
