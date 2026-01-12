@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated January 8, 2026 - v3.0.0
+Last Updated January 11, 2026 - v3.0.0
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -54,8 +54,9 @@ Last Updated January 8, 2026 - v3.0.0
 ### **📊 New: Server Health Resource**
 - `memory://health` - Database stats, backup info, vector index status, tool filter config
 
-### **27 MCP Tools • 14 Workflow Prompts • 14 Resources**
+### **29 MCP Tools • 14 Workflow Prompts • 16 Resources**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
+- **GitHub Kanban** - View and manage GitHub Project boards directly
 - **Knowledge graphs** - 5 relationship types, Mermaid diagram visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
 
@@ -184,7 +185,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 
 ## ⚡ Core Features
 
-### 🛠️ 27 MCP Tools (8 Groups)
+### 🛠️ 29 MCP Tools (8 Groups)
 | Group | Tools | Description |
 |-------|-------|-------------|
 | `core` | 6 | Entry CRUD, tags, test |
@@ -193,8 +194,8 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 | `relationships` | 2 | Link entries, visualize graphs |
 | `export` | 1 | JSON/Markdown export |
 | `admin` | 4 | Update, delete, vector index management |
-| `github` | 5 | Issues, PRs, context integration |
-| `backup` | 3 | **NEW** Backup, list, restore |
+| `github` | 7 | Issues, PRs, context, **Kanban board** |
+| `backup` | 3 | Backup, list, restore |
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -202,8 +203,8 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 14 Resources
-Including new `memory://health` for server diagnostics  
+### 📡 16 Resources
+Including `memory://health` for diagnostics and `memory://kanban/{n}` for Kanban boards  
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
@@ -226,9 +227,16 @@ backup_journal({ name: "pre_refactor" })
 // Search entries
 search_entries({ query: "performance" })
 
+// View Kanban board
+get_kanban_board({ project_number: 5 })
+
+// Move item on Kanban
+move_kanban_item({ project_number: 5, item_id: "PVTI_...", target_status: "Done" })
+
 // Access MCP resources
 memory://recent                  // Recent entries
 memory://health                  // Server diagnostics
+memory://kanban/5                // Kanban board view
 memory://projects/1/timeline     // Project timeline
 ```
 

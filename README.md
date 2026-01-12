@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated January 8, 2026 - v3.0.0
+Last Updated January 11, 2026 - v3.0.0
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -415,7 +415,7 @@ visualize_relationships({
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (27)      │  │ Resources (14)  │  │ Prompts (14)│  │
+│  │ Tools (29)      │  │ Resources (16)  │  │ Prompts (14)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
