@@ -1,18 +1,41 @@
 # Trivy Ignore File
 # See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
 
-# CVE-2025-64756: glob command injection in npm CLI (HIGH)
-# This is in the Node.js base image's npm installation (/usr/local/lib/node_modules/npm)
-# We don't use glob CLI directly and cannot patch base image npm
-# Will be fixed when Node.js releases updated base images
+# ============================================================================
+# Alpine Base Image - No upstream fix available
+# ============================================================================
+
+# CVE-2026-22184: zlib vulnerability (CRITICAL)
+# No fix version released by Alpine yet - `apk upgrade` has nothing to update to
+CVE-2026-22184
+
+# CVE-2025-14524, CVE-2025-14819, CVE-2025-14017: curl vulnerabilities (MEDIUM)
+# Fix version 8.18.0-r0 not yet in stable Alpine repos
+CVE-2025-14524
+CVE-2025-14819
+CVE-2025-14017
+
+# ============================================================================
+# Node.js Bundled npm - in /usr/local/lib/node_modules/npm/
+# Cannot fix without Node.js releasing updated base images
+# ============================================================================
+
+# CVE-2025-64756: glob command injection (HIGH)
 CVE-2025-64756
 
+# CVE-2025-64118: tar vulnerability (MEDIUM)
+CVE-2025-64118
+
+# ============================================================================
+# protobufjs Bundled CLI - in /app/node_modules/protobufjs/cli/node_modules/
+# Cannot override with npm overrides as they're bundled in vendor
+# ============================================================================
+
+# CVE-2019-10790: taffydb (HIGH) - 6+ year old unmaintained dependency
+CVE-2019-10790
+
 # CVE-2025-5889: brace-expansion ReDoS (LOW)
-# Bundled in protobufjs/cli/node_modules - can't override with npm
-# LOW severity, attack complexity is high, exploitation is difficult
 CVE-2025-5889
 
 # CVE-2025-54798: tmp symlink vulnerability (LOW)
-# Bundled in protobufjs/cli/node_modules - can't override with npm
-# LOW severity, only affects tmp file creation in CLI context
 CVE-2025-54798

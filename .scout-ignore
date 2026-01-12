@@ -1,0 +1,31 @@
+# Docker Scout CVE Ignore File
+# See: https://docs.docker.com/scout/explore/cve-ignorelist/
+#
+# These CVEs are in upstream dependencies we cannot patch:
+# - Alpine base image packages (no fix available)
+# - Node.js bundled npm packages
+# - protobufjs transitive dependencies (bundled in /cli/)
+
+# Alpine zlib - Critical severity, but NO FIX VERSION RELEASED by Alpine yet
+# We run `apk upgrade --no-cache` but there's nothing to upgrade to
+CVE-2026-22184
+
+# Alpine curl - Medium severity, fix version 8.18.0-r0
+# Should be auto-fixed by `apk upgrade --no-cache` when Alpine releases it
+CVE-2025-14524
+CVE-2025-14819
+CVE-2025-14017
+
+# Node.js bundled npm - glob in /usr/local/lib/node_modules/npm/
+# Cannot be fixed without Node.js releasing updated base images
+CVE-2025-64756
+
+# Node.js bundled npm - tar in /usr/local/lib/node_modules/npm/
+# Cannot be fixed without Node.js releasing updated base images
+CVE-2025-64118
+
+# protobufjs bundled CLI dependencies - cannot be overridden via npm
+# These are in /app/node_modules/protobufjs/cli/node_modules/
+CVE-2019-10790
+CVE-2025-54798
+CVE-2025-5889
