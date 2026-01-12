@@ -9,33 +9,11 @@
 # No fix version released by Alpine yet - `apk upgrade` has nothing to update to
 CVE-2026-22184
 
-# CVE-2025-14524, CVE-2025-14819, CVE-2025-14017: curl vulnerabilities (MEDIUM)
-# Fix version 8.18.0-r0 not yet in stable Alpine repos
-CVE-2025-14524
-CVE-2025-14819
-CVE-2025-14017
-
-# ============================================================================
-# Node.js Bundled npm - in /usr/local/lib/node_modules/npm/
-# Cannot fix without Node.js releasing updated base images
-# ============================================================================
-
-# CVE-2025-64756: glob command injection (HIGH)
-CVE-2025-64756
-
-# CVE-2025-64118: tar vulnerability (MEDIUM)
-CVE-2025-64118
-
 # ============================================================================
 # protobufjs Bundled CLI - in /app/node_modules/protobufjs/cli/node_modules/
-# Cannot override with npm overrides as they're bundled in vendor
+# taffydb is 6+ years unmaintained with no fix available
 # ============================================================================
 
-# CVE-2019-10790: taffydb (HIGH) - 6+ year old unmaintained dependency
+# CVE-2019-10790: taffydb prototype pollution (HIGH)
+# No fix version exists - package is abandoned
 CVE-2019-10790
-
-# CVE-2025-5889: brace-expansion ReDoS (LOW)
-CVE-2025-5889
-
-# CVE-2025-54798: tmp symlink vulnerability (LOW)
-CVE-2025-54798
