@@ -36,6 +36,24 @@ Last Updated January 11, 2026 - v3.0.0
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 🗄️ **Backup & restore** your journal data with one command
 
+```mermaid
+flowchart LR
+    subgraph Problem["❌ Without Memory Journal"]
+        direction TB
+        A1["Session 1<br/>Context Lost"] --> A2["Session 2<br/>Start Over"]
+    end
+    
+    subgraph Solution["✅ With Memory Journal"]
+        direction TB
+        B1["Session 1"] --> MJ[("📚 Memory<br/>Journal")]
+        B2["Session 2"] --> MJ
+        MJ --> |"Recall"| B1
+        MJ --> |"Search"| B2
+    end
+    
+    Problem -.->|"Solve with"| Solution
+```
+
 ---
 
 ## ✨ v3.0.0 Highlights (December 28, 2025)

@@ -24,6 +24,30 @@ Last Updated January 11, 2026 - v3.0.0
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp`
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based with full semantic search
 
+### 💡 How It Works
+
+```mermaid
+flowchart LR
+    subgraph Problem["❌ Without Memory Journal"]
+        direction TB
+        A1["Session 1<br/>Context Lost"] --> A2["Session 2<br/>Start Over"] --> A3["Session 3<br/>Repeat Work"]
+    end
+    
+    subgraph Solution["✅ With Memory Journal"]
+        direction TB
+        B1["Session 1"] --> MJ[("📚 Memory<br/>Journal")]
+        B2["Session 2"] --> MJ
+        B3["Session 3"] --> MJ
+        MJ --> |"Recall"| B1
+        MJ --> |"Search"| B2
+        MJ --> |"Context"| B3
+    end
+    
+    Problem -.->|"Solve with"| Solution
+```
+
+> **AI sessions become cumulative, not repetitive.** Every insight, decision, and breakthrough is captured and instantly retrievable.
+
 ---
 
 ## ✨ What's New in v3.0.0 (December 28, 2025)
@@ -410,6 +434,38 @@ visualize_relationships({
 ---
 
 ## 🏗️ Architecture
+
+### Data Flow
+
+```mermaid
+flowchart TB
+    AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
+    
+    subgraph MCP["Memory Journal MCP Server"]
+        Tools["🛠️ 29 Tools"]
+        Resources["📡 16 Resources"]
+        Prompts["💬 14 Prompts"]
+    end
+    
+    subgraph Storage["Persistence Layer"]
+        SQLite[("💾 SQLite<br/>Entries, Tags, Relationships")]
+        Vector[("🔍 Vector Index<br/>Semantic Embeddings")]
+        Backups["📦 Backups"]
+    end
+    
+    subgraph External["External Integrations"]
+        GitHub["🐙 GitHub API<br/>Issues, PRs, Actions"]
+        Kanban["📋 Projects v2<br/>Kanban Boards"]
+    end
+    
+    AI <-->|"MCP Protocol"| MCP
+    Tools --> Storage
+    Tools --> External
+    Resources --> Storage
+    Resources --> External
+```
+
+### Stack
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
