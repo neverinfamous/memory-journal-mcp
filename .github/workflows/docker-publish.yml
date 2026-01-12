@@ -154,7 +154,7 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     needs: build-platform
-    if: github.event_name != 'pull_request'
+    if: always() && needs.build-platform.result == 'success' && github.event_name != 'pull_request'
     permissions:
       contents: read
       security-events: write
@@ -221,7 +221,7 @@ jobs:
   merge-and-push:
     runs-on: ubuntu-latest
     needs: [build-platform, security-scan]
-    if: github.event_name != 'pull_request'
+    if: always() && needs.build-platform.result == 'success' && needs.security-scan.result == 'success' && github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
