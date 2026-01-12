@@ -186,8 +186,8 @@ jobs:
         
         # Define CVEs to ignore (upstream issues with NO fix available)
         # CVE-2026-22184: Alpine zlib - no fix version released yet
-        # CVE-2019-10790: protobufjs taffydb - unmaintained/abandoned package
-        IGNORE_CVES="CVE-2026-22184|CVE-2019-10790"
+        # CVE-2025-60876: Alpine busybox wget - patch not in release yet
+        IGNORE_CVES="CVE-2026-22184|CVE-2025-60876"
         
         echo "⏱️ Running Docker Scout scan (max 8 minutes)..."
         if timeout 480 docker scout cves local-scan:latest > scout_output.txt 2>&1; then

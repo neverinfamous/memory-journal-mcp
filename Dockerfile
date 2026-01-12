@@ -21,11 +21,9 @@ COPY package*.json .npmrc ./
 # The .npmrc has legacy-peer-deps=true to handle zod peer conflicts
 RUN npm ci
 
-# Clean protobufjs bundled cli dependencies and apply overrides
-# This ensures our brace-expansion and tmp overrides take effect
-RUN rm -rf node_modules/protobufjs/cli/node_modules/brace-expansion \
-           node_modules/protobufjs/cli/node_modules/tmp && \
-    npm dedupe
+# Remove protobufjs CLI entirely - not needed at runtime
+# Eliminates CVE-2019-10790 (taffydb), CVE-2025-54798 (tmp), CVE-2025-5889 (brace-expansion)
+RUN rm -rf node_modules/protobufjs/cli
 
 # Copy source code
 COPY tsconfig.json ./
@@ -78,6 +76,6 @@ CMD ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="3.1.4"
+LABEL version="3.1.5"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

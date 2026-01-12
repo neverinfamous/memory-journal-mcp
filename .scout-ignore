@@ -4,9 +4,9 @@
 # Only include CVEs with NO upstream fix available
 
 # Alpine zlib - Critical severity, but NO FIX VERSION RELEASED by Alpine yet
-# We run `apk upgrade --no-cache` but there's nothing to upgrade to
+# zlib 1.3.1.3 contains the fix but Alpine hasn't packaged it
 CVE-2026-22184
 
-# protobufjs bundled taffydb - 6+ year old unmaintained package
-# No fix version exists - package is abandoned
-CVE-2019-10790
+# Alpine busybox - wget CRLF injection (MEDIUM)
+# Patch submitted to busybox upstream but not in a release yet
+CVE-2025-60876

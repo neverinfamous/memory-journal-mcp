@@ -6,14 +6,9 @@
 # ============================================================================
 
 # CVE-2026-22184: zlib vulnerability (CRITICAL)
-# No fix version released by Alpine yet - `apk upgrade` has nothing to update to
+# No fix version released by Alpine yet - zlib 1.3.1.3 not packaged
 CVE-2026-22184
 
-# ============================================================================
-# protobufjs Bundled CLI - in /app/node_modules/protobufjs/cli/node_modules/
-# taffydb is 6+ years unmaintained with no fix available
-# ============================================================================
-
-# CVE-2019-10790: taffydb prototype pollution (HIGH)
-# No fix version exists - package is abandoned
-CVE-2019-10790
+# CVE-2025-60876: busybox wget CRLF injection (MEDIUM)
+# Patch submitted to busybox upstream but not in a release yet
+CVE-2025-60876
