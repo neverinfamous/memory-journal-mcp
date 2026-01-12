@@ -4,8 +4,8 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
+# Install build dependencies and upgrade packages for security
+RUN apk add --no-cache python3 make g++ && apk upgrade --no-cache
 
 # Copy package files first for better layer caching
 COPY package*.json ./
@@ -59,6 +59,6 @@ CMD ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="3.1.0"
+LABEL version="3.1.1"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

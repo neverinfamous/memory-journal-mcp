@@ -3,12 +3,12 @@
   "name": "io.github.neverinfamous/memory-journal-mcp",
   "title": "Memory Journal MCP",
   "description": "MCP server– Project memory system with GitHub-aware context, knowledge graphs, and CI/PR timelines",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "docker.io/writenotenow/memory-journal-mcp:v3.1.0",
-      "version": "3.1.0",
+      "identifier": "docker.io/writenotenow/memory-journal-mcp:v3.1.1",
+      "version": "3.1.1",
       "transport": {
         "type": "stdio"
       }

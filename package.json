@@ -1,6 +1,6 @@
 {
     "name": "memory-journal-mcp",
-    "version": "3.1.0",
+    "version": "3.1.1",
     "description": "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads",
     "type": "module",
     "main": "dist/index.js",
@@ -67,6 +67,7 @@
     "overrides": {
         "axios": "^1.13.2",
         "brace-expansion": "^2.0.2",
+        "glob": "^11.1.0",
         "tmp": "^0.2.4"
     }
 }
