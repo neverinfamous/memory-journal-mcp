@@ -41,9 +41,11 @@ WORKDIR /app
 
 # Install runtime dependencies with security fixes
 # Use Alpine edge for curl with CVE fixes
+# Upgrade npm globally to fix CVE-2025-64756 (glob) and CVE-2025-64118 (tar)
 RUN apk add --no-cache git ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl && \
-    apk upgrade --no-cache
+    apk upgrade --no-cache && \
+    npm install -g npm@latest
 
 # Copy built artifacts and production dependencies
 COPY --from=builder /app/dist ./dist
@@ -76,6 +78,6 @@ CMD ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="3.1.3"
+LABEL version="3.1.4"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

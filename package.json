@@ -1,6 +1,6 @@
 {
     "name": "memory-journal-mcp",
-    "version": "3.1.3",
+    "version": "3.1.4",
     "description": "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads",
     "type": "module",
     "main": "dist/index.js",
