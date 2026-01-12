@@ -23,10 +23,41 @@ permissions:
   attestations: write
 
 jobs:
+  # Gate check: For tag pushes, run lint/typecheck/build first
+  preflight-check:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
   # Build each platform on native architecture (avoids QEMU emulation issues)
   build-platform:
-    # Only run if lint-and-test succeeded OR if this is a tag push
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
+    # For workflow_run: only run if lint-and-test succeeded
+    # For tag push: only run after preflight-check succeeds
+    needs: [preflight-check]
+    if: |
+      always() && 
+      (github.event.workflow_run.conclusion == 'success' || 
+       (github.event_name == 'push' && needs.preflight-check.result == 'success'))
     strategy:
       fail-fast: false
       matrix:
