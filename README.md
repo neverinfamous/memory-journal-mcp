@@ -309,7 +309,7 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 |---------------|---------------|-------|
 | Starter | `starter` | ~10 |
 | Essential | `essential` | ~6 |
-| Full (default) | `full` | 27 |
+| Full (default) | `full` | 29 |
 | Read-only | `readonly` | ~20 |
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
