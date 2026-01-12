@@ -1,11 +1,11 @@
 # Memory Journal MCP Server
 
-Last Updated January 11, 2026 - v3.0.0
+Last Updated January 11, 2026 - v3.1.0
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v3.0.0-green)
+![Version](https://img.shields.io/badge/version-v3.1.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
@@ -326,7 +326,7 @@ docker run -i --rm \
 | **ARM64** (Apple Silicon) | Complete: all tools, semantic search, Git context |
 
 **TypeScript v3.0 Image Benefits:**
-- **Node.js 22 on Alpine Linux** - Minimal footprint (~150MB compressed)
+- **Node.js 24 on Alpine Linux** - Minimal footprint (~150MB compressed)
 - **Pure JS Stack** - No native compilation, identical features on all platforms
 - **sql.js** - SQLite in pure JavaScript
 - **vectra** - Vector similarity search without native dependencies
@@ -342,7 +342,7 @@ docker run -i --rm \
 - 📋 **SBOM Available** - Complete software bill of materials
 
 **Available Tags:**
-- `3.0.0` - Specific version (recommended for production)
+- `3.1.0` - Specific version (recommended for production)
 - `3.0` - Latest patch in 3.0.x series
 - `3` - Latest minor in 3.x series
 - `latest` - Always the newest version
