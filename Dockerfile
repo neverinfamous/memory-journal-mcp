@@ -5,13 +5,27 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
-RUN apk add --no-cache python3 make g++ && apk upgrade --no-cache
+# Use Alpine edge for latest security patches (curl CVE-2025-14524, etc.)
+RUN apk add --no-cache python3 make g++ && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl && \
+    apk upgrade --no-cache
+
+# Upgrade npm globally to get fixed versions of bundled packages
+# Fixes CVE-2025-64756 (glob) and CVE-2025-64118 (tar)
+RUN npm install -g npm@latest
 
 # Copy package files first for better layer caching
-COPY package*.json ./
+COPY package*.json .npmrc ./
 
 # Install all dependencies (including devDependencies for build)
+# The .npmrc has legacy-peer-deps=true to handle zod peer conflicts
 RUN npm ci
+
+# Clean protobufjs bundled cli dependencies and apply overrides
+# This ensures our brace-expansion and tmp overrides take effect
+RUN rm -rf node_modules/protobufjs/cli/node_modules/brace-expansion \
+           node_modules/protobufjs/cli/node_modules/tmp && \
+    npm dedupe
 
 # Copy source code
 COPY tsconfig.json ./
@@ -25,8 +39,13 @@ FROM node:24-alpine
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apk add --no-cache git ca-certificates && apk upgrade --no-cache
+# Install runtime dependencies with security fixes
+# Use Alpine edge for curl with CVE fixes
+# Upgrade npm globally to fix CVE-2025-64756 (glob) and CVE-2025-64118 (tar)
+RUN apk add --no-cache git ca-certificates && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl && \
+    apk upgrade --no-cache && \
+    npm install -g npm@latest
 
 # Copy built artifacts and production dependencies
 COPY --from=builder /app/dist ./dist
@@ -59,6 +78,6 @@ CMD ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="3.1.2"
+LABEL version="3.1.3"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

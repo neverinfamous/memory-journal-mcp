@@ -184,9 +184,10 @@ jobs:
         docker images local-scan:latest
         echo "🔍 Running Docker Scout security scan for local-scan:latest"
         
-        # Define CVEs to ignore (upstream issues we cannot fix)
-        # These are in Alpine base, Node.js bundled npm, or protobufjs bundled cli
-        IGNORE_CVES="CVE-2026-22184|CVE-2025-64756|CVE-2019-10790|CVE-2025-64118|CVE-2025-14524|CVE-2025-14819|CVE-2025-14017|CVE-2025-54798|CVE-2025-5889"
+        # Define CVEs to ignore (upstream issues with NO fix available)
+        # CVE-2026-22184: Alpine zlib - no fix version released yet
+        # CVE-2019-10790: protobufjs taffydb - unmaintained/abandoned package
+        IGNORE_CVES="CVE-2026-22184|CVE-2019-10790"
         
         echo "⏱️ Running Docker Scout scan (max 8 minutes)..."
         if timeout 480 docker scout cves local-scan:latest > scout_output.txt 2>&1; then
