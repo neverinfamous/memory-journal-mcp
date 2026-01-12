@@ -30,33 +30,107 @@ export interface PromptDefinition {
  */
 const BASE_INSTRUCTIONS = `# memory-journal-mcp Usage Instructions
 
-## Server Identity
+## How to Access This Server
 
-- **Server Name**: This server is identified as \`user-memory-journal-mcp\` in MCP client configurations.
-- **Tool Invocation**: When calling tools via MCP, they are prefixed with the server name (e.g., \`user-memory-journal-mcp-create_entry\`, \`user-memory-journal-mcp-search_entries\`).
-- **Resources**: 
-  - Resources use the \`memory://\` URI scheme (e.g., \`memory://recent\`, \`memory://statistics\`).
-  - When listing or fetching resources, use server name \`user-memory-journal-mcp\` (e.g., \`list_mcp_resources(server: "user-memory-journal-mcp")\`).
+### Calling Tools
+Use \`CallMcpTool\` with server name \`user-memory-journal-mcp\`:
+\`\`\`
+CallMcpTool(server: "user-memory-journal-mcp", toolName: "create_entry", arguments: {...})
+\`\`\`
 
-## Core Concepts
+### Listing Resources
+Use \`ListMcpResources\` with server name:
+\`\`\`
+ListMcpResources(server: "user-memory-journal-mcp")
+\`\`\`
+Do NOT try to browse filesystem paths for MCP tool/resource definitions - use the MCP protocol directly.
 
-Memory Journal MCP provides persistent project context management for AI-assisted development:
-- **Entries**: Timestamped journal entries with content, tags, and metadata
-- **Relationships**: Link entries together (evolves_from, references, implements, clarifies, response_to)
-- **Vector Search**: Semantic search using AI embeddings (Xenova/all-MiniLM-L6-v2)
-- **GitHub Integration**: Track issues, PRs, and project context
+### Fetching Resources
+Use \`FetchMcpResource\` with server name and \`memory://\` URI:
+\`\`\`
+FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://recent")
+FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://kanban/1")
+\`\`\`
 
-## GitHub Tools
+## Quick Health Check
+Fetch \`memory://health\` to verify server status, database stats, and tool availability.
 
-GitHub tools auto-detect repository from the configured GITHUB_REPO_PATH environment variable.
-- If owner/repo are detected, they appear in \`detectedOwner\`/\`detectedRepo\` in responses
-- If not detected (null), specify \`owner\` and \`repo\` parameters explicitly
-- Leave owner/repo parameters empty to use auto-detection
+## Tool Parameter Reference
+
+### Entry Operations
+| Tool | Required Parameters | Optional Parameters |
+|------|---------------------|---------------------|
+| \`create_entry\` | \`content\` (string) | \`entry_type\`, \`tags\` (array), \`is_personal\` (bool) |
+| \`create_entry_minimal\` | \`content\` (string) | none |
+| \`get_entry_by_id\` | \`entry_id\` (number) | none |
+| \`get_recent_entries\` | none | \`limit\` (default 10), \`is_personal\` (bool) |
+| \`update_entry\` | \`entry_id\` (number) | \`content\`, \`tags\`, \`entry_type\`, \`is_personal\` |
+| \`delete_entry\` | \`entry_id\` (number) | \`permanent\` (bool, default false) |
+| \`list_tags\` | none | none |
+
+### Search Tools
+| Tool | Required Parameters | Optional Parameters |
+|------|---------------------|---------------------|
+| \`search_entries\` | \`query\` (string) | \`limit\`, \`entry_type\`, \`tags\` |
+| \`search_by_date_range\` | \`start_date\`, \`end_date\` (YYYY-MM-DD) | \`tags\`, \`entry_type\` |
+| \`semantic_search\` | \`query\` (string) | \`limit\` (default 10) |
+| \`get_vector_index_stats\` | none | none |
+
+### Relationship Tools
+| Tool | Required Parameters | Notes |
+|------|---------------------|-------|
+| \`link_entries\` | \`from_entry_id\`, \`to_entry_id\` (numbers), \`relationship_type\` | Types: \`evolves_from\`, \`references\`, \`implements\`, \`clarifies\`, \`response_to\` |
+| \`visualize_relationships\` | \`entry_id\` (number) | Optional \`depth\` (default 2). Returns Mermaid diagram. |
+
+### GitHub Tools
+| Tool | Required Parameters | Notes |
+|------|---------------------|-------|
+| \`get_github_context\` | none | Returns repo info, open issues/PRs |
+| \`get_github_issues\` | none | Optional \`state\` (open/closed/all), \`limit\` |
+| \`get_github_prs\` | none | Optional \`state\`, \`limit\` |
+| \`get_github_issue\` | \`issue_number\` (number) | Fetches single issue details |
+| \`get_github_pr\` | \`pr_number\` (number) | Fetches single PR details |
+
+GitHub tools auto-detect owner/repo from GITHUB_REPO_PATH. If \`detectedOwner\`/\`detectedRepo\` are null in response, specify \`owner\` and \`repo\` parameters explicitly.
+
+### Kanban Tools (GitHub Projects v2)
+| Tool | Required Parameters | Notes |
+|------|---------------------|-------|
+| \`get_kanban_board\` | \`project_number\` (number) | Returns columns with items grouped by Status |
+| \`move_kanban_item\` | \`project_number\`, \`item_id\` (string), \`target_status\` (string) | \`item_id\` is the GraphQL node ID from board items |
+
+**Finding the right project**: User may have multiple projects. Use \`get_kanban_board\` with different project numbers (1, 2, 3...) to find the correct one by checking \`projectTitle\`.
+
+**Default Status columns** (typical GitHub Projects v2):
+- \`Backlog\` - Items not yet started
+- \`Ready\` - Ready to be picked up
+- \`In progress\` - Actively being worked on
+- \`In review\` - In review
+- \`Done\` - Completed
+
+Note: Status columns are dynamic per project. The \`statusOptions\` in the response shows available statuses for that specific project.
+
+Kanban resources:
+- \`memory://kanban/{project_number}\` - JSON board data
+- \`memory://kanban/{project_number}/diagram\` - Mermaid visualization
+
+### Admin Tools
+| Tool | Required Parameters | Notes |
+|------|---------------------|-------|
+| \`backup_journal\` | none | Optional \`backup_name\` |
+| \`list_backups\` | none | Returns available backup files |
+| \`restore_backup\` | \`backup_filename\`, \`confirm: true\` | Creates auto-backup before restore |
+| \`add_to_vector_index\` | \`entry_id\` (single number) | Indexes one entry for semantic search |
+| \`rebuild_vector_index\` | none | Re-indexes all entries |
+
+### Export Tools
+| Tool | Required Parameters | Notes |
+|------|---------------------|-------|
+| \`export_entries\` | none | Optional \`format\` (json/markdown), \`limit\`, \`tags\` |
 
 ## Entry Types
-
-Supported entry types for categorization:
-- \`personal_reflection\` - Personal thoughts and notes (default)
+Valid values for \`entry_type\` parameter:
+- \`personal_reflection\` (default) - Personal thoughts and notes
 - \`technical_note\` - Technical documentation
 - \`bug_fix\` - Bug fixes and resolutions
 - \`progress_update\` - Project progress updates
@@ -64,11 +138,16 @@ Supported entry types for categorization:
 - \`deployment\` - Deployment records
 - \`technical_achievement\` - Milestones and breakthroughs
 
-## Backup & Restore
-
-- Use \`backup_journal\` to create timestamped backups before major changes
-- Use \`list_backups\` to see available backup files
-- Use \`restore_backup\` with \`confirm: true\` to restore (creates auto-backup first)
+## Key Resources
+| URI | Description |
+|-----|-------------|
+| \`memory://health\` | Server health, DB stats, tool filter status |
+| \`memory://statistics\` | Entry counts by type and period |
+| \`memory://recent\` | 10 most recent entries |
+| \`memory://tags\` | All tags with usage counts |
+| \`memory://significant\` | Entries marked as milestones/breakthroughs |
+| \`memory://graph/recent\` | Mermaid diagram of recent relationships |
+| \`memory://kanban/{n}\` | Kanban board for project number n |
 `;
 
 /**

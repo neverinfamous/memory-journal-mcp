@@ -1042,12 +1042,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     };
                 }
 
-                const board = await github.getProjectKanban(owner, input.project_number);
+                const repo = repoInfo.repo ?? undefined;
+                const board = await github.getProjectKanban(owner, input.project_number, repo);
                 if (!board) {
                     return {
                         error: `Project #${String(input.project_number)} not found or Status field not configured`,
                         owner,
-                        hint: 'Ensure the project exists and has a "Status" single-select field.',
+                        repo,
+                        hint: 'Ensure the project exists and has a "Status" single-select field. Projects can be at user, repository, or organization level.',
                     };
                 }
 
@@ -1055,6 +1057,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     ...board,
                     owner,
                     detectedOwner,
+                    detectedRepo: repo,
                 };
             },
         },
@@ -1095,7 +1098,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 }
 
                 // First, get the board to find projectId, statusFieldId, and target statusOptionId
-                const board = await github.getProjectKanban(owner, input.project_number);
+                const repo = repoInfo.repo ?? undefined;
+                const board = await github.getProjectKanban(owner, input.project_number, repo);
                 if (!board) {
                     return {
                         error: `Project #${String(input.project_number)} not found`,

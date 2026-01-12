@@ -553,6 +553,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                 const repoInfo = await context.github.getRepoInfo();
                 const owner = repoInfo.owner;
+                const repo = repoInfo.repo ?? undefined;
 
                 if (!owner) {
                     return {
@@ -561,12 +562,13 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     };
                 }
 
-                const board = await context.github.getProjectKanban(owner, projectNumber);
+                const board = await context.github.getProjectKanban(owner, projectNumber, repo);
                 if (!board) {
                     return {
                         error: `Project #${String(projectNumber)} not found or Status field not configured`,
                         projectNumber,
                         owner,
+                        hint: 'Projects can be at user, repository, or organization level.',
                     };
                 }
 
@@ -601,6 +603,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                 const repoInfo = await context.github.getRepoInfo();
                 const owner = repoInfo.owner;
+                const repo = repoInfo.repo ?? undefined;
 
                 if (!owner) {
                     return {
@@ -610,7 +613,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     };
                 }
 
-                const board = await context.github.getProjectKanban(owner, projectNumber);
+                const board = await context.github.getProjectKanban(owner, projectNumber, repo);
                 if (!board) {
                     return {
                         format: 'mermaid',

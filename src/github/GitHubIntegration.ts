@@ -423,242 +423,312 @@ export class GitHubIntegration {
     /**
      * Get a Kanban board view of a GitHub Project v2
      * Fetches project items grouped by Status field
+     * 
+     * Searches in order: user projects, then repository projects, then organization projects
      */
     async getProjectKanban(
         owner: string,
-        projectNumber: number
+        projectNumber: number,
+        repo?: string
     ): Promise<KanbanBoard | null> {
         if (!this.graphqlWithAuth) {
             logger.debug('GraphQL not available - no token', { module: 'GitHub' });
             return null;
         }
 
-        try {
-            // First, get the project and its Status field
-            const projectQuery = `
-                query($owner: String!, $number: Int!) {
-                    user(login: $owner) {
-                        projectV2(number: $number) {
+        // Common fragment for project data
+        const projectFragment = `
+            fragment ProjectData on ProjectV2 {
+                id
+                title
+                fields(first: 20) {
+                    nodes {
+                        ... on ProjectV2SingleSelectField {
                             id
-                            title
-                            fields(first: 20) {
-                                nodes {
-                                    ... on ProjectV2SingleSelectField {
-                                        id
-                                        name
-                                        options {
-                                            id
-                                            name
-                                            color
-                                        }
-                                    }
-                                }
+                            name
+                            options {
+                                id
+                                name
+                                color
                             }
-                            items(first: 100) {
-                                nodes {
-                                    id
-                                    type
-                                    createdAt
-                                    updatedAt
-                                    fieldValues(first: 10) {
-                                        nodes {
-                                            ... on ProjectV2ItemFieldSingleSelectValue {
-                                                name
-                                                field {
-                                                    ... on ProjectV2SingleSelectField {
-                                                        name
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    content {
-                                        ... on Issue {
-                                            number
-                                            title
-                                            url
-                                            labels(first: 5) {
-                                                nodes { name }
-                                            }
-                                            assignees(first: 5) {
-                                                nodes { login }
-                                            }
-                                        }
-                                        ... on PullRequest {
-                                            number
-                                            title
-                                            url
-                                            labels(first: 5) {
-                                                nodes { name }
-                                            }
-                                            assignees(first: 5) {
-                                                nodes { login }
-                                            }
-                                        }
-                                        ... on DraftIssue {
-                                            title
+                        }
+                    }
+                }
+                items(first: 100) {
+                    nodes {
+                        id
+                        type
+                        createdAt
+                        updatedAt
+                        fieldValues(first: 10) {
+                            nodes {
+                                ... on ProjectV2ItemFieldSingleSelectValue {
+                                    name
+                                    field {
+                                        ... on ProjectV2SingleSelectField {
+                                            name
                                         }
                                     }
                                 }
                             }
                         }
+                        content {
+                            ... on Issue {
+                                number
+                                title
+                                url
+                                labels(first: 5) {
+                                    nodes { name }
+                                }
+                                assignees(first: 5) {
+                                    nodes { login }
+                                }
+                            }
+                            ... on PullRequest {
+                                number
+                                title
+                                url
+                                labels(first: 5) {
+                                    nodes { name }
+                                }
+                                assignees(first: 5) {
+                                    nodes { login }
+                                }
+                            }
+                            ... on DraftIssue {
+                                title
+                            }
+                        }
                     }
                 }
-            `;
-
-            interface GraphQLResponse {
-                user: {
-                    projectV2: {
-                        id: string;
-                        title: string;
-                        fields: {
-                            nodes: {
-                                id?: string;
-                                name?: string;
-                                options?: {
-                                    id: string;
-                                    name: string;
-                                    color?: string;
-                                }[];
-                            }[];
-                        };
-                        items: {
-                            nodes: {
-                                id: string;
-                                type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE';
-                                createdAt: string;
-                                updatedAt: string;
-                                fieldValues: {
-                                    nodes: {
-                                        name?: string;
-                                        field?: { name?: string };
-                                    }[];
-                                };
-                                content: {
-                                    number?: number;
-                                    title?: string;
-                                    url?: string;
-                                    labels?: { nodes: { name: string }[] };
-                                    assignees?: { nodes: { login: string }[] };
-                                } | null;
-                            }[];
-                        };
-                    } | null;
-                } | null;
             }
+        `;
 
-            const response = await this.graphqlWithAuth<GraphQLResponse>(projectQuery, {
+        // Try user-level project first
+        const userQuery = `
+            ${projectFragment}
+            query($owner: String!, $number: Int!) {
+                user(login: $owner) {
+                    projectV2(number: $number) {
+                        ...ProjectData
+                    }
+                }
+            }
+        `;
+
+        // Repository-level project query
+        const repoQuery = `
+            ${projectFragment}
+            query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                    projectV2(number: $number) {
+                        ...ProjectData
+                    }
+                }
+            }
+        `;
+
+        // Organization-level project query  
+        const orgQuery = `
+            ${projectFragment}
+            query($owner: String!, $number: Int!) {
+                organization(login: $owner) {
+                    projectV2(number: $number) {
+                        ...ProjectData
+                    }
+                }
+            }
+        `;
+
+        interface ProjectV2Data {
+            id: string;
+            title: string;
+            fields: {
+                nodes: {
+                    id?: string;
+                    name?: string;
+                    options?: {
+                        id: string;
+                        name: string;
+                        color?: string;
+                    }[];
+                }[];
+            };
+            items: {
+                nodes: {
+                    id: string;
+                    type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE';
+                    createdAt: string;
+                    updatedAt: string;
+                    fieldValues: {
+                        nodes: {
+                            name?: string;
+                            field?: { name?: string };
+                        }[];
+                    };
+                    content: {
+                        number?: number;
+                        title?: string;
+                        url?: string;
+                        labels?: { nodes: { name: string }[] };
+                        assignees?: { nodes: { login: string }[] };
+                    } | null;
+                }[];
+            };
+        }
+
+        interface UserResponse { user: { projectV2: ProjectV2Data | null } | null }
+        interface RepoResponse { repository: { projectV2: ProjectV2Data | null } | null }
+        interface OrgResponse { organization: { projectV2: ProjectV2Data | null } | null }
+
+        let project: ProjectV2Data | null = null;
+        let source = '';
+
+        // Try user-level project first
+        try {
+            const response = await this.graphqlWithAuth<UserResponse>(userQuery, {
                 owner,
                 number: projectNumber,
             });
-
-            const project = response.user?.projectV2;
-            if (!project) {
-                logger.warning('Project not found', { module: 'GitHub', entityId: projectNumber });
-                return null;
+            if (response.user?.projectV2) {
+                project = response.user.projectV2;
+                source = 'user';
             }
+        } catch {
+            logger.debug('User project not found, trying repository...', { module: 'GitHub' });
+        }
 
-            // Find the Status field
-            const statusField = project.fields.nodes.find(
-                (f) => f.name === 'Status' && f.options !== undefined && f.options.length > 0
-            );
-
-            if (!statusField?.id || !statusField.options) {
-                logger.warning('Status field not found in project', { module: 'GitHub', entityId: projectNumber });
-                return null;
-            }
-
-            const statusOptions: ProjectV2StatusOption[] = statusField.options.map((opt) => ({
-                id: opt.id,
-                name: opt.name,
-                color: opt.color,
-            }));
-
-            // Group items by status
-            const columnMap = new Map<string, ProjectV2Item[]>();
-
-            // Initialize columns for all status options
-            for (const opt of statusOptions) {
-                columnMap.set(opt.name, []);
-            }
-            // Add a column for items without status
-            columnMap.set('No Status', []);
-
-            for (const item of project.items.nodes) {
-                // Find the Status field value
-                const statusValue = item.fieldValues.nodes.find(
-                    (fv) => fv.field?.name === 'Status'
-                );
-                const status = statusValue?.name ?? 'No Status';
-
-                const content = item.content;
-                const projectItem: ProjectV2Item = {
-                    id: item.id,
-                    title: content?.title ?? 'Draft Issue',
-                    url: content?.url ?? '',
-                    type: item.type,
-                    status,
-                    number: content?.number,
-                    labels: content?.labels?.nodes.map((l) => l.name) ?? [],
-                    assignees: content?.assignees?.nodes.map((a) => a.login) ?? [],
-                    createdAt: item.createdAt,
-                    updatedAt: item.updatedAt,
-                };
-
-                const column = columnMap.get(status);
-                if (column) {
-                    column.push(projectItem);
-                } else {
-                    columnMap.get('No Status')?.push(projectItem);
+        // Try repository-level project if user project not found
+        if (!project && repo) {
+            try {
+                const response = await this.graphqlWithAuth<RepoResponse>(repoQuery, {
+                    owner,
+                    repo,
+                    number: projectNumber,
+                });
+                if (response.repository?.projectV2) {
+                    project = response.repository.projectV2;
+                    source = 'repository';
                 }
+            } catch {
+                logger.debug('Repository project not found, trying organization...', { module: 'GitHub' });
             }
+        }
 
-            // Build columns array
-            const columns: KanbanColumn[] = [];
-            for (const opt of statusOptions) {
-                const items = columnMap.get(opt.name) ?? [];
-                columns.push({
-                    status: opt.name,
-                    statusOptionId: opt.id,
-                    items,
+        // Try organization-level project as last resort
+        if (!project) {
+            try {
+                const response = await this.graphqlWithAuth<OrgResponse>(orgQuery, {
+                    owner,
+                    number: projectNumber,
                 });
+                if (response.organization?.projectV2) {
+                    project = response.organization.projectV2;
+                    source = 'organization';
+                }
+            } catch {
+                logger.debug('Organization project not found', { module: 'GitHub' });
             }
+        }
 
-            // Add "No Status" column if it has items
-            const noStatusItems = columnMap.get('No Status') ?? [];
-            if (noStatusItems.length > 0) {
-                columns.push({
-                    status: 'No Status',
-                    statusOptionId: '',
-                    items: noStatusItems,
-                });
-            }
-
-            const totalItems = project.items.nodes.length;
-
-            logger.info('Fetched Kanban board', {
-                module: 'GitHub',
-                entityId: projectNumber,
-                context: { columns: columns.length, items: totalItems },
-            });
-
-            return {
-                projectId: project.id,
-                projectNumber,
-                projectTitle: project.title,
-                statusFieldId: statusField.id,
-                statusOptions,
-                columns,
-                totalItems,
-            };
-        } catch (error) {
-            logger.error('Failed to get Kanban board', {
-                module: 'GitHub',
-                entityId: projectNumber,
-                error: error instanceof Error ? error.message : String(error),
-            });
+        if (!project) {
+            logger.warning('Project not found', { module: 'GitHub', entityId: projectNumber });
             return null;
         }
+
+        // Find the Status field
+        const statusField = project.fields.nodes.find(
+            (f) => f.name === 'Status' && f.options !== undefined && f.options.length > 0
+        );
+
+        if (!statusField?.id || !statusField.options) {
+            logger.warning('Status field not found in project', { module: 'GitHub', entityId: projectNumber });
+            return null;
+        }
+
+        const statusOptions: ProjectV2StatusOption[] = statusField.options.map((opt) => ({
+            id: opt.id,
+            name: opt.name,
+            color: opt.color,
+        }));
+
+        // Group items by status
+        const columnMap = new Map<string, ProjectV2Item[]>();
+
+        // Initialize columns for all status options
+        for (const opt of statusOptions) {
+            columnMap.set(opt.name, []);
+        }
+        // Add a column for items without status
+        columnMap.set('No Status', []);
+
+        for (const item of project.items.nodes) {
+            // Find the Status field value
+            const statusValue = item.fieldValues.nodes.find(
+                (fv) => fv.field?.name === 'Status'
+            );
+            const status = statusValue?.name ?? 'No Status';
+
+            const content = item.content;
+            const projectItem: ProjectV2Item = {
+                id: item.id,
+                title: content?.title ?? 'Draft Issue',
+                url: content?.url ?? '',
+                type: item.type,
+                status,
+                number: content?.number,
+                labels: content?.labels?.nodes.map((l) => l.name) ?? [],
+                assignees: content?.assignees?.nodes.map((a) => a.login) ?? [],
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+            };
+
+            const column = columnMap.get(status);
+            if (column) {
+                column.push(projectItem);
+            } else {
+                columnMap.get('No Status')?.push(projectItem);
+            }
+        }
+
+        // Build columns array
+        const columns: KanbanColumn[] = [];
+        for (const opt of statusOptions) {
+            const items = columnMap.get(opt.name) ?? [];
+            columns.push({
+                status: opt.name,
+                statusOptionId: opt.id,
+                items,
+            });
+        }
+
+        // Add "No Status" column if it has items
+        const noStatusItems = columnMap.get('No Status') ?? [];
+        if (noStatusItems.length > 0) {
+            columns.push({
+                status: 'No Status',
+                statusOptionId: '',
+                items: noStatusItems,
+            });
+        }
+
+        const totalItems = project.items.nodes.length;
+
+        logger.info('Fetched Kanban board', {
+            module: 'GitHub',
+            entityId: projectNumber,
+            context: { columns: columns.length, items: totalItems, source },
+        });
+
+        return {
+            projectId: project.id,
+            projectNumber,
+            projectTitle: project.title,
+            statusFieldId: statusField.id,
+            statusOptions,
+            columns,
+            totalItems,
+        };
     }
 
     /**
