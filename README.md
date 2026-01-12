@@ -14,9 +14,7 @@ Last Updated January 11, 2026 - v3.1.5
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
-*Project context management for AI-assisted development - Bridge the gap between fragmented AI threads with persistent knowledge graphs and intelligent context recall*
-
-**🎯 Solve the AI Context Problem:** When working with AI across multiple threads and sessions, context is lost. Memory Journal maintains a persistent, searchable record of your project work, decisions, and progress - making every AI conversation informed by your complete project history.
+🎯 **Solve the AI Context Problem:** Bridge the gap between disconnected AI sessions with persistent project memory - every AI conversation can access your complete development history, past decisions, and work patterns across any thread or timeframe.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -24,29 +22,32 @@ Last Updated January 11, 2026 - v3.1.5
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp`
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based with full semantic search
 
-### 💡 How It Works
+## 🎯 What This Does
+
+### Key Benefits
+- 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, PRs, projects)
+- 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs  
+- 🔍 **Triple search** (full-text, semantic, date range)
+- 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
+- 🗄️ **Backup & restore** your journal data with one command
 
 ```mermaid
 flowchart LR
     subgraph Problem["❌ Without Memory Journal"]
         direction TB
-        A1["Session 1<br/>Context Lost"] --> A2["Session 2<br/>Start Over"] --> A3["Session 3<br/>Repeat Work"]
+        A1["Session 1<br/>Context Lost"] --> A2["Session 2<br/>Start Over"]
     end
     
     subgraph Solution["✅ With Memory Journal"]
         direction TB
         B1["Session 1"] --> MJ[("📚 Memory<br/>Journal")]
         B2["Session 2"] --> MJ
-        B3["Session 3"] --> MJ
         MJ --> |"Recall"| B1
         MJ --> |"Search"| B2
-        MJ --> |"Context"| B3
     end
     
     Problem -.->|"Solve with"| Solution
 ```
-
-> **AI sessions become cumulative, not repetitive.** Every insight, decision, and breakthrough is captured and instantly retrievable.
 
 ---
 
@@ -72,52 +73,9 @@ Never lose your journal data again:
 | `list_backups` | List all available backup files |
 | `restore_backup` | Restore from any backup (with auto-backup before restore) |
 
-```javascript
-// Create a backup before major changes
-backup_journal({ name: "before_migration" })
-// → { success: true, filename: "before_migration.db", sizeBytes: 524288 }
-
-// List available backups
-list_backups()
-// → { backups: [...], total: 3, backupsDirectory: "~/.memory-journal/backups" }
-
-// Restore from backup (requires confirmation)
-restore_backup({ filename: "before_migration.db", confirm: true })
-// → { success: true, previousEntryCount: 50, newEntryCount: 42 }
-```
-
 ### 📊 **New: Server Health Resource**
 
 Get comprehensive server diagnostics via `memory://health`:
-
-```json
-{
-  "database": {
-    "path": "~/.memory-journal/memory_journal.db",
-    "sizeBytes": 524288,
-    "entryCount": 150,
-    "deletedEntryCount": 5,
-    "relationshipCount": 42,
-    "tagCount": 28
-  },
-  "backups": {
-    "directory": "~/.memory-journal/backups",
-    "count": 3,
-    "lastBackup": { "filename": "...", "createdAt": "...", "sizeBytes": 524288 }
-  },
-  "vectorIndex": {
-    "available": true,
-    "indexedEntries": 150,
-    "modelName": "all-MiniLM-L6-v2"
-  },
-  "toolFilter": {
-    "active": false,
-    "enabledCount": 27,
-    "totalCount": 27
-  },
-  "timestamp": "2025-12-28T05:47:00Z"
-}
-```
 
 ### 📈 **Current Capabilities**
 
@@ -355,81 +313,6 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 | Read-only | `readonly` | ~20 |
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
-
----
-
-## 📖 Usage Examples
-
-### Create an Entry with GitHub Context
-
-```javascript
-create_entry({
-  content: "Completed Phase 1 of GitHub Projects integration!",
-  entry_type: "technical_achievement",
-  tags: ["github-projects", "milestone"],
-  project_number: 1,
-  significance_type: "technical_breakthrough"
-})
-```
-
-### Create and Manage Backups
-
-```javascript
-// Before major refactoring
-backup_journal({ name: "pre_refactor" })
-
-// Check available backups
-list_backups()
-
-// Restore if needed (creates auto-backup first)
-restore_backup({ filename: "pre_refactor.db", confirm: true })
-```
-
-### Check Server Health
-
-```javascript
-// Fetch the health resource
-// Returns: database stats, backup info, vector index status, tool filter config
-```
-
-### View and Manage Kanban Board
-
-```javascript
-// View Kanban board with items grouped by Status
-get_kanban_board({ project_number: 5 })
-// → { columns: [{ status: "Todo", items: [...] }, { status: "In Progress", items: [...] }], ... }
-
-// Move an item to a different column
-move_kanban_item({
-  project_number: 5,
-  item_id: "PVTI_...",
-  target_status: "Done"
-})
-// → { success: true, message: 'Item moved to "Done"' }
-```
-
-### Search and Analyze
-
-```javascript
-// Full-text search
-search_entries({ query: "performance optimization", limit: 5 })
-
-// Semantic search for concepts
-semantic_search({ query: "startup time improvements", limit: 3 })
-
-// Get analytics
-get_statistics({ group_by: "week" })
-```
-
-### Generate Visual Maps
-
-```javascript
-// Visualize entry relationships
-visualize_relationships({
-  entry_id: 55,
-  depth: 2
-})
-```
 
 ---
 

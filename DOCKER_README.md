@@ -12,46 +12,41 @@ Last Updated January 11, 2026 - v3.1.5
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
-**Project context management for AI-assisted development - Maintain continuity across fragmented AI threads with persistent knowledge graphs and intelligent context recall**
-
-🎯 **Solve the AI Context Problem:** Bridge the gap between disconnected AI sessions. Memory Journal provides persistent project memory, enabling AI to access your complete development history, past decisions, and work patterns across any thread or timeframe.
+🎯 **Solve the AI Context Problem:** Bridge the gap between disconnected AI sessions with persistent project memory - every AI conversation can access your complete development history, past decisions, and work patterns across any thread or timeframe.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
-**🚀 Multiple Deployment Options:**
-- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Node.js Alpine-based multi-platform support
-- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
-- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
-
----
-
 ## 🎯 What This Does
-
-**Solve the AI Context Problem:** When working with AI across multiple threads, context is lost. Memory Journal provides persistent project memory - every AI conversation can access your complete development history, past decisions, and work patterns.
 
 ### Key Benefits
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, PRs, projects)
-- 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs  
+- � **Build knowledge graphs** linking specs → implementations → tests → PRs  
 - 🔍 **Triple search** (full-text, semantic, date range)
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 🗄️ **Backup & restore** your journal data with one command
 
-```mermaid
-flowchart LR
-    subgraph Problem["❌ Without Memory Journal"]
-        direction TB
-        A1["Session 1<br/>Context Lost"] --> A2["Session 2<br/>Start Over"]
-    end
-    
-    subgraph Solution["✅ With Memory Journal"]
-        direction TB
-        B1["Session 1"] --> MJ[("📚 Memory<br/>Journal")]
-        B2["Session 2"] --> MJ
-        MJ --> |"Recall"| B1
-        MJ --> |"Search"| B2
-    end
-    
-    Problem -.->|"Solve with"| Solution
+### Deployment Options
+- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Node.js Alpine-based multi-platform support
+- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
+- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
+
+```
++----------------------------------+----------------------------------+
+|         WITHOUT                  |      WITH MEMORY JOURNAL         |
++----------------------------------+----------------------------------+
+|                                  |                                  |
+|  +----------------+              |  +----------------+              |
+|  |   Session 1    |              |  |   Session 1    |--+           |
+|  |   Context: Y   |              |  |   Context: Y   |  |           |
+|  +----------------+              |  +----------------+  v           |
+|         |                        |                   +------+       |
+|         v (context lost)         |                   | [DB] |       |
+|  +----------------+              |  +----------------+      |       |
+|  |   Session 2    |              |  |   Session 2    |<-----+       |
+|  |   Context: X   |              |  |   Context: Y   |              |
+|  +----------------+              |  +----------------+              |
+|                                  |                                  |
++----------------------------------+----------------------------------+
 ```
 
 ---
@@ -226,37 +221,6 @@ Including `memory://health` for diagnostics and `memory://kanban/{n}` for Kanban
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
-
-## 📖 Quick Examples
-
-```javascript
-// Create entry with auto-context
-create_entry({
-  content: "Implemented lazy ML loading",
-  tags: ["performance"]
-})
-
-// Create a backup before major changes
-backup_journal({ name: "pre_refactor" })
-
-// Check server health
-// Fetch memory://health resource
-
-// Search entries
-search_entries({ query: "performance" })
-
-// View Kanban board
-get_kanban_board({ project_number: 5 })
-
-// Move item on Kanban
-move_kanban_item({ project_number: 5, item_id: "PVTI_...", target_status: "Done" })
-
-// Access MCP resources
-memory://recent                  // Recent entries
-memory://health                  // Server diagnostics
-memory://kanban/5                // Kanban board view
-memory://projects/1/timeline     // Project timeline
-```
 
 **Ask Cursor AI naturally:**
 - "Show me my recent journal entries"
