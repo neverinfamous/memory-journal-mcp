@@ -53,7 +53,7 @@
         "commander": "^14.0.2",
         "simple-git": "^3.28.0",
         "sql.js": "^1.12.0",
-        "vectra": "^0.11.1",
+        "vectra": "^0.12.2",
         "zod": "^4.3.5"
     },
     "devDependencies": {
