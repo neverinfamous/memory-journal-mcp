@@ -327,6 +327,57 @@ export interface ProjectContext {
 }
 
 // ============================================================================
+// GitHub Projects v2 Kanban Types
+// ============================================================================
+
+/**
+ * Status option for single-select field in Projects v2
+ */
+export interface ProjectV2StatusOption {
+    id: string;
+    name: string;
+    color?: string;
+}
+
+/**
+ * Project item in a Kanban board
+ */
+export interface ProjectV2Item {
+    id: string;
+    title: string;
+    url: string;
+    type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE';
+    status: string | null;
+    number?: number;
+    labels?: string[];
+    assignees?: string[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+/**
+ * Kanban column (grouped by Status)
+ */
+export interface KanbanColumn {
+    status: string;
+    statusOptionId: string;
+    items: ProjectV2Item[];
+}
+
+/**
+ * Full Kanban board response
+ */
+export interface KanbanBoard {
+    projectId: string;
+    projectNumber: number;
+    projectTitle: string;
+    statusFieldId: string;
+    statusOptions: ProjectV2StatusOption[];
+    columns: KanbanColumn[];
+    totalItems: number;
+}
+
+// ============================================================================
 // Configuration Types
 // ============================================================================
 

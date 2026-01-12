@@ -222,7 +222,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         },
         {
             name: 'get-context-bundle',
-            description: 'Project context with Git/GitHub',
+            description: 'Project context with Git/GitHub and Kanban board information',
             arguments: [],
             handler: (_args: Record<string, string>, db: SqliteAdapter) => {
                 const recent = db.getRecentEntries(10);
@@ -233,7 +233,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
                         role: 'user',
                         content: {
                             type: 'text',
-                            text: `Project context bundle:\n\nRecent Entries: ${JSON.stringify(recent.slice(0, 5), null, 2)}\n\nStatistics: ${JSON.stringify(stats, null, 2)}\n\nUse this context to understand the project state.`,
+                            text: `Project context bundle:\n\nRecent Entries: ${JSON.stringify(recent.slice(0, 5), null, 2)}\n\nStatistics: ${JSON.stringify(stats, null, 2)}\n\n**Kanban Integration**: For GitHub Projects v2 Kanban boards, use:\n- \`get_kanban_board\` tool to view project items by Status column\n- \`move_kanban_item\` tool to move items between columns\n- \`memory://kanban/{project_number}\` resource for board data\n- \`memory://kanban/{project_number}/diagram\` resource for Mermaid visualization\n\nUse this context to understand the project state.`,
                         },
                     }],
                 };

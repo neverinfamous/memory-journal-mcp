@@ -1007,6 +1007,139 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 };
             },
         },
+        // Kanban tools (GitHub Projects v2)
+        {
+            name: 'get_kanban_board',
+            title: 'Get Kanban Board',
+            description: 'View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.',
+            group: 'github',
+            inputSchema: z.object({
+                project_number: z.number().describe('GitHub Project number (from the project URL)'),
+                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect from git'),
+            }),
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z.object({
+                    project_number: z.number(),
+                    owner: z.string().optional(),
+                }).parse(params);
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' };
+                }
+
+                // Get owner from input or from current repo
+                const repoInfo = await github.getRepoInfo();
+                const detectedOwner = repoInfo.owner;
+                const owner = input.owner ?? detectedOwner ?? undefined;
+
+                if (!owner) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository owner. DO NOT GUESS. You MUST ask the user to provide the GitHub owner.',
+                        requiresUserInput: true,
+                        detectedOwner,
+                        instruction: 'Ask the user: "What GitHub username or organization owns this project?"'
+                    };
+                }
+
+                const board = await github.getProjectKanban(owner, input.project_number);
+                if (!board) {
+                    return {
+                        error: `Project #${String(input.project_number)} not found or Status field not configured`,
+                        owner,
+                        hint: 'Ensure the project exists and has a "Status" single-select field.',
+                    };
+                }
+
+                return {
+                    ...board,
+                    owner,
+                    detectedOwner,
+                };
+            },
+        },
+        {
+            name: 'move_kanban_item',
+            title: 'Move Kanban Item',
+            description: 'Move a project item to a different Status column. Use get_kanban_board first to get the item_id and available status names.',
+            group: 'github',
+            inputSchema: z.object({
+                project_number: z.number().describe('GitHub Project number'),
+                item_id: z.string().describe('Project item node ID (from get_kanban_board)'),
+                target_status: z.string().describe('Target status name (e.g., "Done", "In Progress")'),
+                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+            }),
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z.object({
+                    project_number: z.number(),
+                    item_id: z.string(),
+                    target_status: z.string(),
+                    owner: z.string().optional(),
+                }).parse(params);
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' };
+                }
+
+                // Get owner from input or from current repo
+                const repoInfo = await github.getRepoInfo();
+                const detectedOwner = repoInfo.owner;
+                const owner = input.owner ?? detectedOwner ?? undefined;
+
+                if (!owner) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository owner. DO NOT GUESS.',
+                        requiresUserInput: true,
+                    };
+                }
+
+                // First, get the board to find projectId, statusFieldId, and target statusOptionId
+                const board = await github.getProjectKanban(owner, input.project_number);
+                if (!board) {
+                    return {
+                        error: `Project #${String(input.project_number)} not found`,
+                    };
+                }
+
+                // Find the target status option
+                const targetOption = board.statusOptions.find(
+                    (opt) => opt.name.toLowerCase() === input.target_status.toLowerCase()
+                );
+
+                if (!targetOption) {
+                    return {
+                        error: `Status "${input.target_status}" not found in project`,
+                        availableStatuses: board.statusOptions.map((opt) => opt.name),
+                        hint: 'Use one of the available status names listed above.',
+                    };
+                }
+
+                // Move the item
+                const result = await github.moveProjectItem(
+                    board.projectId,
+                    input.item_id,
+                    board.statusFieldId,
+                    targetOption.id
+                );
+
+                if (!result.success) {
+                    return {
+                        success: false,
+                        error: result.error,
+                        targetStatus: input.target_status,
+                    };
+                }
+
+                return {
+                    success: true,
+                    itemId: input.item_id,
+                    newStatus: input.target_status,
+                    projectNumber: input.project_number,
+                    message: `Item moved to "${input.target_status}"`,
+                };
+            },
+        },
         // Backup tools
         {
             name: 'backup_journal',

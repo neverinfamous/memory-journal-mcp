@@ -97,10 +97,10 @@ Get comprehensive server diagnostics via `memory://health`:
 
 ### 📈 **Current Capabilities**
 
-- **27 MCP tools** - Complete development workflow + backup/restore
+- **29 MCP tools** - Complete development workflow + backup/restore + Kanban
 - **14 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis
-- **14 MCP resources** - Including new `memory://health` diagnostics
-- **GitHub Integration** - Projects, Issues, Pull Requests, Actions with auto-linking
+- **16 MCP resources** - Including Kanban board views and Mermaid diagrams
+- **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 5 relationship types, Mermaid visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
@@ -230,7 +230,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 ## 📋 Core Capabilities
 
-### 🛠️ **27 MCP Tools** (8 Groups)
+### 🛠️ **29 MCP Tools** (8 Groups)
 
 | Group | Tools | Description |
 |-------|-------|-------------|
@@ -240,8 +240,8 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 | `relationships` | 2 | Link entries, visualize graphs |
 | `export` | 1 | JSON/Markdown export |
 | `admin` | 4 | Update, delete, rebuild/add to vector index |
-| `github` | 5 | Issues, PRs, context integration |
-| `backup` | 3 | **NEW** Backup, list, restore |
+| `github` | 7 | Issues, PRs, context, **Kanban board** |
+| `backup` | 3 | Backup, list, restore |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -253,7 +253,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 - `weekly-digest` - Day-by-day weekly summaries
 - `analyze-period` - Deep period analysis with insights
 - `goal-tracker` - Milestone and achievement tracking
-- `get-context-bundle` - Project context with Git/GitHub
+- `get-context-bundle` - Project context with Git/GitHub/Kanban
 - `pr-summary` - Pull request journal activity summary
 - `code-review-prep` - Comprehensive PR review preparation
 - `pr-retrospective` - Completed PR analysis with learnings
@@ -261,13 +261,13 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **14 Resources**
+### 📡 **16 Resources**
 
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
 - `memory://graph/recent` - Live Mermaid diagram of recent relationships
 - `memory://team/recent` - Recent team-shared entries
-- `memory://health` - **NEW** Server health & diagnostics
+- `memory://health` - Server health & diagnostics
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
 - `memory://prs/{pr_number}/entries` - Entries linked to PR
@@ -276,6 +276,8 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 - `memory://actions/recent` - Recent workflow runs
 - `memory://tags` - All tags with usage counts
 - `memory://statistics` - Journal statistics
+- `memory://kanban/{project_number}` - **NEW** GitHub Project Kanban board
+- `memory://kanban/{project_number}/diagram` - **NEW** Kanban Mermaid visualization
 
 ---
 
@@ -364,6 +366,22 @@ restore_backup({ filename: "pre_refactor.db", confirm: true })
 ```javascript
 // Fetch the health resource
 // Returns: database stats, backup info, vector index status, tool filter config
+```
+
+### View and Manage Kanban Board
+
+```javascript
+// View Kanban board with items grouped by Status
+get_kanban_board({ project_number: 5 })
+// → { columns: [{ status: "Todo", items: [...] }, { status: "In Progress", items: [...] }], ... }
+
+// Move an item to a different column
+move_kanban_item({
+  project_number: 5,
+  item_id: "PVTI_...",
+  target_status: "Done"
+})
+// → { success: true, message: 'Item moved to "Done"' }
 ```
 
 ### Search and Analyze

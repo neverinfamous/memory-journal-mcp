@@ -106,7 +106,7 @@ function execQuery(db: SqliteAdapter, sql: string, params: unknown[] = []): Reco
  */
 function getTotalToolCount(): number {
     // Import dynamically to avoid circular dependency
-    return 27; // 24 original + 3 backup tools
+    return 29; // 24 original + 3 backup + 2 kanban tools
 }
 
 /**
@@ -522,6 +522,142 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     vectorIndex,
                     toolFilter,
                     timestamp: new Date().toISOString(),
+                };
+            },
+        },
+        // Kanban board resources (GitHub Projects v2)
+        {
+            uri: 'memory://kanban/{project_number}',
+            name: 'Kanban Board',
+            title: 'GitHub Project Kanban Board',
+            description: 'View a GitHub Project v2 as a Kanban board with items grouped by Status',
+            mimeType: 'application/json',
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.6,
+            },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/kanban\/(\d+)/.exec(uri);
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null;
+
+                if (projectNumber === null) {
+                    return { error: 'Invalid project number' };
+                }
+
+                if (!context.github) {
+                    return {
+                        error: 'GitHub integration not available',
+                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    };
+                }
+
+                const repoInfo = await context.github.getRepoInfo();
+                const owner = repoInfo.owner;
+
+                if (!owner) {
+                    return {
+                        error: 'Could not detect repository owner',
+                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                    };
+                }
+
+                const board = await context.github.getProjectKanban(owner, projectNumber);
+                if (!board) {
+                    return {
+                        error: `Project #${String(projectNumber)} not found or Status field not configured`,
+                        projectNumber,
+                        owner,
+                    };
+                }
+
+                return board;
+            },
+        },
+        {
+            uri: 'memory://kanban/{project_number}/diagram',
+            name: 'Kanban Diagram',
+            title: 'Kanban Board Mermaid Diagram',
+            description: 'Mermaid diagram visualization of a GitHub Project Kanban board',
+            mimeType: 'text/plain',
+            annotations: {
+                audience: ['user', 'assistant'],
+                priority: 0.5,
+            },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/kanban\/(\d+)\/diagram/.exec(uri);
+                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null;
+
+                if (projectNumber === null) {
+                    return { error: 'Invalid project number' };
+                }
+
+                if (!context.github) {
+                    return {
+                        format: 'mermaid',
+                        diagram: 'graph LR\n  NoGitHub[GitHub integration not available]',
+                        message: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    };
+                }
+
+                const repoInfo = await context.github.getRepoInfo();
+                const owner = repoInfo.owner;
+
+                if (!owner) {
+                    return {
+                        format: 'mermaid',
+                        diagram: 'graph LR\n  NoOwner[Repository owner not detected]',
+                        message: 'Set GITHUB_REPO_PATH to your git repository.',
+                    };
+                }
+
+                const board = await context.github.getProjectKanban(owner, projectNumber);
+                if (!board) {
+                    return {
+                        format: 'mermaid',
+                        diagram: `graph LR\n  NotFound[Project #${String(projectNumber)} not found]`,
+                        message: 'Ensure the project exists and has a Status field.',
+                    };
+                }
+
+                // Build Mermaid diagram with subgraphs for each column
+                const lines: string[] = ['graph LR'];
+
+                // Add style definitions
+                lines.push('  classDef issue fill:#28a745,color:#fff');
+                lines.push('  classDef pr fill:#6f42c1,color:#fff');
+                lines.push('  classDef draft fill:#6c757d,color:#fff');
+
+                for (const column of board.columns) {
+                    const safeStatus = column.status.replace(/["\s]/g, '_');
+                    lines.push(`  subgraph ${safeStatus}["${column.status} (${String(column.items.length)})"]`);
+
+                    for (const item of column.items) {
+                        const safeId = item.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8);
+                        const label = item.title.slice(0, 25).replace(/["[\]]/g, "'");
+                        const typeIcon = item.type === 'ISSUE' ? '🔵' : item.type === 'PULL_REQUEST' ? '🟣' : '⚪';
+                        const numberStr = item.number !== undefined && item.number !== 0 ? `#${String(item.number)}` : '';
+                        lines.push(`    I${safeId}["${typeIcon} ${numberStr} ${label}..."]`);
+
+                        // Add class based on type
+                        const typeClass = item.type === 'ISSUE' ? 'issue' : item.type === 'PULL_REQUEST' ? 'pr' : 'draft';
+                        lines.push(`    class I${safeId} ${typeClass}`);
+                    }
+
+                    lines.push('  end');
+                }
+
+                return {
+                    format: 'mermaid',
+                    diagram: lines.join('\n'),
+                    projectNumber,
+                    projectTitle: board.projectTitle,
+                    columnCount: board.columns.length,
+                    totalItems: board.totalItems,
+                    legend: {
+                        '🔵': 'Issue',
+                        '🟣': 'Pull Request',
+                        '⚪': 'Draft Issue',
+                    },
                 };
             },
         },
