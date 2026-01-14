@@ -4,6 +4,19 @@ on:
   schedule:
     # Run weekly on Sundays at 2 AM UTC
     - cron: '0 2 * * 0'
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.trivyignore'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
 
 permissions:
@@ -35,7 +48,7 @@ jobs:
 
     # Run SARIF scan first (non-blocking) to always generate the file
     - name: Run Trivy scanner for SARIF output
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.29.1
       with:
         image-ref: security-test:latest
         format: 'sarif'
@@ -54,7 +67,7 @@ jobs:
 
     # Run table scan (blocking) after SARIF is uploaded
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.29.1
       with:
         image-ref: security-test:latest
         format: 'table'

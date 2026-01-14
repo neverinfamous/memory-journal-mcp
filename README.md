@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated January 12, 2026 - v3.1.5
+Last Updated January 14, 2026 - v3.1.5
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
