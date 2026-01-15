@@ -128,6 +128,74 @@ const DeleteEntrySchema = z.object({
 });
 
 // ============================================================================
+// Zod Schemas for Output Validation (MCP 2025-11-25 outputSchema)
+// ============================================================================
+
+/**
+ * Schema for a journal entry in output responses.
+ * Uses camelCase to match actual database output format.
+ */
+const EntryOutputSchema = z.object({
+    id: z.number(),
+    content: z.string(),
+    entryType: z.string(),
+    isPersonal: z.boolean(),
+    timestamp: z.string(),
+    tags: z.array(z.string()).optional(),
+    significanceType: z.string().nullable().optional(),
+    autoContext: z.string().nullable().optional(),
+    deletedAt: z.string().nullable().optional(),
+    projectNumber: z.number().nullable().optional(),
+    issueNumber: z.number().nullable().optional(),
+    prNumber: z.number().nullable().optional(),
+    workflowRunId: z.number().nullable().optional(),
+});
+
+/**
+ * Schema for list of entries with count.
+ * Used by get_recent_entries, search_entries, search_by_date_range.
+ */
+const EntriesListOutputSchema = z.object({
+    entries: z.array(EntryOutputSchema),
+    count: z.number(),
+});
+
+/**
+ * Schema for a relationship between entries.
+ */
+const RelationshipOutputSchema = z.object({
+    id: z.number(),
+    fromEntryId: z.number(),
+    toEntryId: z.number(),
+    relationshipType: z.string(),
+    description: z.string().nullable().optional(),
+    createdAt: z.string(),
+});
+
+/**
+ * Schema for get_entry_by_id output (entry with optional relationships).
+ * Handles both success (entry found) and error (entry not found) cases.
+ */
+const EntryByIdOutputSchema = z.object({
+    entry: EntryOutputSchema.optional(),
+    relationships: z.array(RelationshipOutputSchema).optional(),
+    error: z.string().optional(),
+});
+
+/**
+ * Schema for get_statistics output.
+ * Matches SqliteAdapter.getStatistics() return type.
+ */
+const StatisticsOutputSchema = z.object({
+    totalEntries: z.number(),
+    entriesByType: z.record(z.string(), z.number()),
+    entriesByPeriod: z.array(z.object({
+        period: z.string(),
+        count: z.number(),
+    })),
+});
+
+// ============================================================================
 // Tool Definitions with MCP 2025-11-25 Annotations
 // ============================================================================
 
@@ -146,6 +214,7 @@ export function getTools(db: SqliteAdapter, filterConfig: ToolFilterConfig | nul
                 name: t.name,
                 description: t.description,
                 inputSchema: t.inputSchema,
+                outputSchema: t.outputSchema,  // MCP 2025-11-25
                 annotations: t.annotations,
             }));
     }
@@ -154,6 +223,7 @@ export function getTools(db: SqliteAdapter, filterConfig: ToolFilterConfig | nul
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema,
+        outputSchema: t.outputSchema,  // MCP 2025-11-25
         annotations: t.annotations,
     }));
 }
@@ -221,6 +291,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Get a specific journal entry by ID with full details',
             group: 'core',
             inputSchema: GetEntryByIdSchema,
+            outputSchema: EntryByIdOutputSchema,  // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params);
@@ -241,6 +312,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Get recent journal entries',
             group: 'core',
             inputSchema: GetRecentEntriesSchema,
+            outputSchema: EntriesListOutputSchema,  // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const { limit, is_personal } = GetRecentEntriesSchema.parse(params);
@@ -280,6 +352,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Search journal entries with optional filters for GitHub Projects, Issues, PRs, and Actions',
             group: 'search',
             inputSchema: SearchEntriesSchema,
+            outputSchema: EntriesListOutputSchema,  // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const input = SearchEntriesSchema.parse(params);
@@ -303,6 +376,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Search journal entries within a date range with optional filters',
             group: 'search',
             inputSchema: SearchByDateRangeSchema,
+            outputSchema: EntriesListOutputSchema,  // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const input = SearchByDateRangeSchema.parse(params);
@@ -369,6 +443,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Get journal statistics and analytics (Phase 2: includes project breakdown)',
             group: 'analytics',
             inputSchema: GetStatisticsSchema,
+            outputSchema: StatisticsOutputSchema,  // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const { group_by } = GetStatisticsSchema.parse(params);

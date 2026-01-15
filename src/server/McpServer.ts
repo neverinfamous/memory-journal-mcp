@@ -116,6 +116,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             name: string;
             description?: string;
             inputSchema?: z.ZodType;
+            outputSchema?: z.ZodType;  // MCP 2025-11-25
             annotations?: Record<string, unknown>;
         };
 
@@ -128,16 +129,35 @@ export async function createServer(options: ServerOptions): Promise<void> {
             toolOptions['inputSchema'] = toolDef.inputSchema;
         }
 
+        // MCP 2025-11-25: Pass outputSchema for structured responses
+        if (toolDef.outputSchema) {
+            toolOptions['outputSchema'] = toolDef.outputSchema;
+        }
+
         if (toolDef.annotations) {
             toolOptions['annotations'] = toolDef.annotations;
         }
 
+        // Capture whether this tool has outputSchema for response handling
+        const hasOutputSchema = Boolean(toolDef.outputSchema);
+
         server.registerTool(
             toolDef.name,
-            toolOptions as { description?: string; inputSchema?: z.ZodType },
+            toolOptions as { description?: string; inputSchema?: z.ZodType; outputSchema?: z.ZodType },
             async (args: unknown) => {
                 try {
                     const result = await callTool(toolDef.name, args as Record<string, unknown>, db, vectorManager, github);
+
+                    // MCP 2025-11-25: If tool has outputSchema, return structuredContent
+                    // Note: content defaults to [] per spec, but TypeScript requires explicit value
+                    if (hasOutputSchema) {
+                        return {
+                            content: [],  // Empty for type satisfaction; SDK defaults this
+                            structuredContent: result as Record<string, unknown>,
+                        };
+                    }
+
+                    // Otherwise, return text content
                     return {
                         content: [{
                             type: 'text' as const,
