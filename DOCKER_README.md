@@ -143,6 +143,8 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 
 - **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Have the agent manually read `memory://briefing` at session start for optimal context.
 
+- **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible via tool calls.
+
 - **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context." The briefing includes behavioral guidance and the 6 template resource URIs.
 
 ---
