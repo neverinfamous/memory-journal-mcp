@@ -21,6 +21,16 @@ export interface ResourceContext {
 }
 
 /**
+ * Resource handler result with optional annotations for MCP 2025-11-25
+ */
+export interface ResourceResult {
+    data: unknown;
+    annotations?: {
+        lastModified?: string;  // ISO 8601 timestamp
+    };
+}
+
+/**
  * Internal resource definition with db handler
  */
 interface InternalResourceDef {
@@ -32,6 +42,7 @@ interface InternalResourceDef {
     annotations?: {
         audience?: ('user' | 'assistant')[];
         priority?: number;
+        lastModified?: string;  // ISO 8601 timestamp - can be static or dynamic
     };
     handler: (uri: string, context: ResourceContext) => unknown;
 }
@@ -51,22 +62,38 @@ export function getResources(): object[] {
 }
 
 /**
- * Read a resource by URI
+ * Check if a result is a ResourceResult with annotations
  */
-export function readResource(
+function isResourceResult(result: unknown): result is ResourceResult {
+    return (
+        result !== null &&
+        typeof result === 'object' &&
+        'data' in result &&
+        (result as Record<string, unknown>)['data'] !== undefined
+    );
+}
+
+/**
+ * Read a resource by URI - returns data and optional annotations
+ */
+export async function readResource(
     uri: string,
     db: SqliteAdapter,
     vectorManager?: VectorSearchManager,
     filterConfig?: ToolFilterConfig | null,
     github?: GitHubIntegration | null
-): Promise<unknown> {
+): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     const resources = getAllResourceDefinitions();
     const context: ResourceContext = { db, vectorManager, filterConfig, github };
 
     // Check for exact match first
     const exactMatch = resources.find(r => r.uri === uri);
     if (exactMatch) {
-        return Promise.resolve(exactMatch.handler(uri, context));
+        const result = await Promise.resolve(exactMatch.handler(uri, context));
+        if (isResourceResult(result)) {
+            return { data: result.data, annotations: result.annotations };
+        }
+        return { data: result };
     }
 
     // Check for template matches
@@ -75,7 +102,11 @@ export function readResource(
             const pattern = resource.uri.replace(/\{[^}]+\}/g, '([^/]+)');
             const regex = new RegExp(`^${pattern}$`);
             if (regex.test(uri)) {
-                return Promise.resolve(resource.handler(uri, context));
+                const result = await Promise.resolve(resource.handler(uri, context));
+                if (isResourceResult(result)) {
+                    return { data: result.data, annotations: result.annotations };
+                }
+                return { data: result };
             }
         }
     }
@@ -195,26 +226,32 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                 const stats = context.db.getStatistics('week');
                 const totalEntries = stats.totalEntries ?? 0;
 
+                // Determine lastModified from most recent entry or current time
+                const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString();
+
                 return {
-                    version: '3.1.6',
-                    serverTime: new Date().toISOString(),
-                    journal: {
-                        totalEntries,
-                        latestEntries,
+                    data: {
+                        version: '3.1.6',
+                        serverTime: new Date().toISOString(),
+                        journal: {
+                            totalEntries,
+                            latestEntries,
+                        },
+                        github,
+                        behaviors: {
+                            create: 'implementations, decisions, bug-fixes, milestones',
+                            search: 'before decisions, referencing prior work',
+                            link: 'implementation→spec, bugfix→issue',
+                        },
+                        more: {
+                            fullHealth: 'memory://health',
+                            allRecent: 'memory://recent',
+                            githubStatus: 'memory://github/status',
+                            contextBundle: 'get-context-bundle prompt',
+                        },
                     },
-                    github,
-                    behaviors: {
-                        create: 'implementations, decisions, bug-fixes, milestones',
-                        search: 'before decisions, referencing prior work',
-                        link: 'implementation→spec, bugfix→issue',
-                    },
-                    more: {
-                        fullHealth: 'memory://health',
-                        allRecent: 'memory://recent',
-                        githubStatus: 'memory://github/status',
-                        contextBundle: 'get-context-bundle prompt',
-                    },
-                };
+                    annotations: { lastModified },
+                } satisfies ResourceResult;
             },
         },
         {
@@ -227,9 +264,13 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                 audience: ['assistant'],
                 priority: 0.8,
             },
-            handler: (_uri: string, context: ResourceContext) => {
+            handler: (_uri: string, context: ResourceContext): ResourceResult => {
                 const entries = context.db.getRecentEntries(10);
-                return { entries, count: entries.length };
+                const lastModified = entries[0]?.timestamp ?? new Date().toISOString();
+                return {
+                    data: { entries, count: entries.length },
+                    annotations: { lastModified },
+                };
             },
         },
         {
@@ -593,7 +634,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                 audience: ['assistant'],
                 priority: 0.9,
             },
-            handler: async (_uri: string, context: ResourceContext) => {
+            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const dbHealth = context.db.getHealthStatus();
 
                 // Get vector index status if available
@@ -620,11 +661,16 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     filterString: context.filterConfig?.raw ?? null,
                 };
 
+                const lastModified = new Date().toISOString();
+
                 return {
-                    ...dbHealth,
-                    vectorIndex,
-                    toolFilter,
-                    timestamp: new Date().toISOString(),
+                    data: {
+                        ...dbHealth,
+                        vectorIndex,
+                        toolFilter,
+                        timestamp: lastModified,
+                    },
+                    annotations: { lastModified },
                 };
             },
         },
@@ -639,11 +685,16 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                 audience: ['assistant'],
                 priority: 0.7,
             },
-            handler: async (_uri: string, context: ResourceContext) => {
+            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+                const lastModified = new Date().toISOString();
+
                 if (!context.github) {
                     return {
-                        error: 'GitHub integration not available',
-                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                        data: {
+                            error: 'GitHub integration not available',
+                            hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                        },
+                        annotations: { lastModified },
                     };
                 }
 
@@ -653,9 +704,12 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                 if (!owner || !repo) {
                     return {
-                        error: 'Could not detect repository',
-                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
-                        branch: repoInfo.branch,
+                        data: {
+                            error: 'Could not detect repository',
+                            hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                            branch: repoInfo.branch,
+                        },
+                        annotations: { lastModified },
                     };
                 }
 
@@ -713,22 +767,25 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 return {
-                    repository: `${owner}/${repo}`,
-                    branch: repoInfo.branch,
-                    commit: commit?.slice(0, 7) ?? null,
-                    ci: {
-                        status: ciStatus,
-                        latestRun,
+                    data: {
+                        repository: `${owner}/${repo}`,
+                        branch: repoInfo.branch,
+                        commit: commit?.slice(0, 7) ?? null,
+                        ci: {
+                            status: ciStatus,
+                            latestRun,
+                        },
+                        issues: {
+                            openCount: issues.length,
+                            items: openIssues,
+                        },
+                        pullRequests: {
+                            openCount: prs.length,
+                            items: openPrs,
+                        },
+                        kanbanSummary,
                     },
-                    issues: {
-                        openCount: issues.length,
-                        items: openIssues,
-                    },
-                    pullRequests: {
-                        openCount: prs.length,
-                        items: openPrs,
-                    },
-                    kanbanSummary,
+                    annotations: { lastModified },
                 };
             },
         },

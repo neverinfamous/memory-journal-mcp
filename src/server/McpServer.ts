@@ -176,11 +176,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 { description: resDef.description ?? '', mimeType: resDef.mimeType ?? 'application/json' },
                 async (uri: URL, _variables: Variables) => {
                     const result = await readResource(uri.href, db, vectorManager, filterConfig, github);
+                    const dataStr = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
                     return {
                         contents: [{
                             uri: uri.href,
                             mimeType: resDef.mimeType ?? 'application/json',
-                            text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+                            text: dataStr,
+                            // Include MCP 2025-11-25 annotations if provided
+                            ...(result.annotations ? { annotations: result.annotations } : {}),
                         }],
                     };
                 }
@@ -192,11 +195,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 { description: resDef.description ?? '', mimeType: resDef.mimeType ?? 'application/json' },
                 async (uri: URL) => {
                     const result = await readResource(uri.href, db, vectorManager, filterConfig, github);
+                    const dataStr = typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2);
                     return {
                         contents: [{
                             uri: uri.href,
                             mimeType: resDef.mimeType ?? 'application/json',
-                            text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+                            text: dataStr,
+                            // Include MCP 2025-11-25 annotations if provided
+                            ...(result.annotations ? { annotations: result.annotations } : {}),
                         }],
                     };
                 }
