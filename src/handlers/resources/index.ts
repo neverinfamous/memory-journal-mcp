@@ -139,7 +139,7 @@ function execQuery(db: SqliteAdapter, sql: string, params: unknown[] = []): Reco
  */
 function getTotalToolCount(): number {
     // Import dynamically to avoid circular dependency
-    return 29; // 24 original + 3 backup + 2 kanban tools
+    return 31; // 6 core + 4 search + 2 analytics + 2 relationships + 1 export + 4 admin + 9 github + 3 backup
 }
 
 /**

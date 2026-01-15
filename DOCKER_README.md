@@ -50,28 +50,14 @@ Last Updated January 15, 2026 - v3.1.5
 +----------------------------------+----------------------------------+
 ```
 
----
+### 📈 **Current Capabilities**
 
-## ✨ v3.0.0 Highlights (December 28, 2025)
-
-### **🚀 Complete TypeScript Rewrite**
-- **Pure JS Stack** - No native compilation required (`sql.js` + `vectra` + `@xenova/transformers`)
-- **Cross-Platform** - Works on AMD64 and ARM64 without architecture-specific builds
-- **Strict Type Safety** - 100% TypeScript strict mode compliance
-- **MCP 2025-11-25 Compliance** - Full spec with behavioral annotations
-
-### **🗄️ New: Backup & Restore Tools**
-- `backup_journal` - Create timestamped database backups
-- `list_backups` - List all available backup files
-- `restore_backup` - Restore from any backup (with auto-backup before restore)
-
-### **📊 New: Server Health Resource**
-- `memory://health` - Database stats, backup info, vector index status, tool filter config
-
-### **31 MCP Tools • 15 Workflow Prompts • 17 Resources** (11 static + 6 template)
+- **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
+- **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
+- **17 MCP resources** - 11 static + 6 template (require parameters)
+- **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
-- **GitHub Kanban** - View and manage GitHub Project boards directly
-- **Knowledge graphs** - 5 relationship types, Mermaid diagram visualization
+- **Knowledge graphs** - 5 relationship types, Mermaid visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
 
 ---
@@ -148,11 +134,15 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 ### Client-Specific Notes
 
 **Cursor IDE:**
+
 - **Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `ListMcpResources()` without specifying a server parameter, or with `server: "user-memory-journal-mcp"` (Cursor prefixes server names with `user-`).
 
 **Google AntiGravity IDE:**
+
 - **ServerInstructions not injected**: AntiGravity does not currently call `getServerInstructions()` or inject the server's behavioral guidance into the AI context. The AI agent will have access to tools but won't automatically know about Dynamic Context Management patterns.
+
 - **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Have the agent manually read `memory://briefing` at session start for optimal context.
+
 - **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context." The briefing includes behavioral guidance and the 6 template resource URIs.
 
 ---
@@ -327,7 +317,7 @@ docker run -i --rm \
 | **AMD64** (x86_64) | Complete: all tools, semantic search, Git context |
 | **ARM64** (Apple Silicon) | Complete: all tools, semantic search, Git context |
 
-**TypeScript v3.0 Image Benefits:**
+**TypeScript Image Benefits:**
 - **Node.js 24 on Alpine Linux** - Minimal footprint (~150MB compressed)
 - **Pure JS Stack** - No native compilation, identical features on all platforms
 - **sql.js** - SQLite in pure JavaScript

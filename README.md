@@ -50,34 +50,6 @@ flowchart LR
     Problem -.->|"Solve with"| Solution
 ```
 
----
-
-## ✨ What's New in v3.0.0 (December 28, 2025)
-
-### 🚀 **Complete TypeScript Rewrite**
-
-Memory Journal v3.0 is a ground-up rewrite in TypeScript, delivering:
-
-- **Pure JS Stack** - No native compilation required (`sql.js` + `vectra` + `@xenova/transformers`)
-- **Cross-Platform Portability** - Works on Windows, macOS, Linux without binary dependencies
-- **Strict Type Safety** - Zero TypeScript errors, 100% strict mode compliance
-- **Faster Startup** - Lazy ML loading with instant cold starts
-- **MCP 2025-11-25 Compliance** - Full spec compliance with behavioral annotations
-
-### 🗄️ **New: Backup & Restore Tools**
-
-Never lose your journal data again:
-
-| Tool | Description |
-|------|-------------|
-| `backup_journal` | Create timestamped database backups |
-| `list_backups` | List all available backup files |
-| `restore_backup` | Restore from any backup (with auto-backup before restore) |
-
-### 📊 **New: Server Health Resource**
-
-Get comprehensive server diagnostics via `memory://health`:
-
 ### 📈 **Current Capabilities**
 
 - **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
@@ -209,11 +181,15 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 ### Client-Specific Notes
 
 **Cursor IDE:**
+
 - **Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `ListMcpResources()` without specifying a server parameter, or with `server: "user-memory-journal-mcp"` (Cursor prefixes server names with `user-`).
 
 **Google AntiGravity IDE:**
+
 - **ServerInstructions not injected**: AntiGravity does not currently call `getServerInstructions()` or inject the server's behavioral guidance into the AI context. The AI agent will have access to tools but won't automatically know about Dynamic Context Management patterns.
+
 - **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Have the agent manually read `memory://briefing` at session start for optimal context.
+
 - **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context." The briefing includes behavioral guidance and the 6 template resource URIs.
 
 ---

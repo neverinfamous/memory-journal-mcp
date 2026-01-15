@@ -18,7 +18,7 @@ export type { ToolFilterConfig } from '../types/index.js';
 /**
  * Tool group definitions mapping group names to tool names
  * 
- * All 24 tools are categorized here for filtering support.
+ * All 31 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -58,6 +58,10 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'get_github_issue',
         'get_github_pr',
         'get_github_context',
+        'get_kanban_board',
+        'move_kanban_item',
+        'create_github_issue_with_entry',
+        'close_github_issue_with_entry',
     ],
     backup: [
         'backup_journal',
