@@ -1,11 +1,11 @@
 # Memory Journal MCP Server
 
-Last Updated January 15, 2026 - v3.1.6
+Last Updated January 15, 2026 - v3.1.7
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v3.1.6-green)
+![Version](https://img.shields.io/badge/version-v3.1.7-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
@@ -68,7 +68,7 @@ Last Updated January 15, 2026 - v3.1.6
 ### **📊 New: Server Health Resource**
 - `memory://health` - Database stats, backup info, vector index status, tool filter config
 
-### **29 MCP Tools • 14 Workflow Prompts • 17 Resources**
+### **29 MCP Tools • 15 Workflow Prompts • 17 Resources**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **GitHub Kanban** - View and manage GitHub Project boards directly
 - **Knowledge graphs** - 5 relationship types, Mermaid diagram visualization
@@ -213,7 +213,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 14 Workflow Prompts
+### 🎯 15 Workflow Prompts
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -307,7 +307,7 @@ docker run -i --rm \
 - 📋 **SBOM Available** - Complete software bill of materials
 
 **Available Tags:**
-- `3.1.6` - Specific version (recommended for production)
+- `3.1.7` - Specific version (recommended for production)
 - `3.0` - Latest patch in 3.0.x series
 - `3` - Latest minor in 3.x series
 - `latest` - Always the newest version

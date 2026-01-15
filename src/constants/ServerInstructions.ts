@@ -51,6 +51,11 @@ export type InstructionLevel = 'essential' | 'standard' | 'full';
  */
 const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 
+## Session Start
+1. Read \`memory://briefing\` for project context
+2. **Show the \`userMessage\` to the user** (it contains a formatted summary of project context)
+3. Proceed with the user's request
+
 ## Behaviors
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context

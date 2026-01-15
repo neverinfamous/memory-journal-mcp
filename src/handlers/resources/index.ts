@@ -229,9 +229,17 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                 // Determine lastModified from most recent entry or current time
                 const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString();
 
+                // Build acknowledgment message for user
+                const repoName = github?.repo ?? 'local';
+                const branchName = github?.branch ?? 'unknown';
+                const ciStatus = github?.ci ?? 'unknown';
+                const latestPreview = latestEntries[0]
+                    ? `#${latestEntries[0].id} (${latestEntries[0].type}): ${latestEntries[0].preview}`
+                    : 'No entries yet';
+
                 return {
                     data: {
-                        version: '3.1.6',
+                        version: '3.1.7',
                         serverTime: new Date().toISOString(),
                         journal: {
                             totalEntries,
@@ -249,6 +257,17 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                             githubStatus: 'memory://github/status',
                             contextBundle: 'get-context-bundle prompt',
                         },
+                        // IMPORTANT: Agent should relay this message to the user
+                        userMessage: `📋 **Session Context Loaded**
+| Context | Value |
+|---------|-------|
+| **Project** | ${repoName} |
+| **Branch** | ${branchName} |
+| **CI Status** | ${ciStatus} |
+| **Journal** | ${totalEntries} entries |
+| **Latest** | ${latestPreview} |
+
+I have project memory access and will create entries for significant work.`,
                     },
                     annotations: { lastModified },
                 } satisfies ResourceResult;

@@ -432,5 +432,48 @@ ${entrySummaries.map(e => `- #${String(e.id)} (${e.type}) ${e.preview}`).join('\
                 };
             },
         },
+        {
+            name: 'confirm-briefing',
+            description: 'Acknowledge session context received from memory://briefing to inform the user',
+            arguments: [],
+            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+                // Get the same data that memory://briefing would provide
+                const recent = db.getRecentEntries(3);
+                const stats = db.getStatistics('week');
+                const totalEntries = stats.totalEntries ?? 0;
+
+                // Build entry summary
+                const entrySummary = recent.length > 0
+                    ? recent.map(e => `  - #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 40)}...`).join('\n')
+                    : '  - No entries yet';
+
+                return {
+                    messages: [{
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `Generate a briefing acknowledgment for the user with this context:
+
+**Session Context Received:**
+- **Journal**: ${String(totalEntries)} total entries
+- **Latest Entries**:
+${entrySummary}
+
+**My Behaviors:**
+- Create entries for: implementations, decisions, bug fixes, milestones
+- Search before: major decisions, referencing prior work
+- Link entries: implementation→spec, bugfix→issue
+
+**For More Context:**
+- Full entries: \`memory://recent\` or \`get_entry_by_id(ID)\`
+- GitHub status: \`memory://github/status\`
+- Full health: \`memory://health\`
+
+Please confirm this context to the user in a concise, friendly format. Use a table if helpful.`,
+                        },
+                    }],
+                };
+            },
+        },
     ];
 }

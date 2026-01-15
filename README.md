@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated January 15, 2026 - v3.1.6
+Last Updated January 15, 2026 - v3.1.7
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -8,7 +8,7 @@ Last Updated January 15, 2026 - v3.1.6
 [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v3.1.6-green)
+![Version](https://img.shields.io/badge/version-v3.1.7-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
@@ -81,7 +81,7 @@ Get comprehensive server diagnostics via `memory://health`:
 ### 📈 **Current Capabilities**
 
 - **29 MCP tools** - Complete development workflow + backup/restore + Kanban
-- **14 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis
+- **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
 - **17 MCP resources** - Including session briefing, Kanban board views, and Mermaid diagrams
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
@@ -229,7 +229,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **14 Workflow Prompts**
+### 🎯 **15 Workflow Prompts**
 
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
@@ -242,6 +242,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 - `code-review-prep` - Comprehensive PR review preparation
 - `pr-retrospective` - Completed PR analysis with learnings
 - `actions-failure-digest` - CI/CD failure analysis
+- `confirm-briefing` - **NEW** Acknowledge session context to user
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -330,7 +331,7 @@ flowchart TB
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 29 Tools"]
         Resources["📡 17 Resources"]
-        Prompts["💬 14 Prompts"]
+        Prompts["💬 15 Prompts"]
     end
     
     subgraph Storage["Persistence Layer"]
@@ -357,7 +358,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (29)      │  │ Resources (17)  │  │ Prompts (14)│  │
+│  │ Tools (29)      │  │ Resources (17)  │  │ Prompts (15)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
