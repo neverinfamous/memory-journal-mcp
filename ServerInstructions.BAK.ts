@@ -3,8 +3,6 @@
  *
  * These instructions are automatically sent to MCP clients during initialization,
  * providing guidance for AI agents on tool usage.
- * 
- * v3.1.6: Optimized for token efficiency with tiered instruction levels.
  */
 
 import type { ToolGroup } from '../types/index.js';
@@ -28,65 +26,10 @@ export interface PromptDefinition {
 }
 
 /**
- * Latest entry snapshot for initial briefing
+ * Base instructions that are always included
  */
-export interface LatestEntrySnapshot {
-    id: number;
-    timestamp: string;
-    entryType: string;
-    content: string;
-}
+const BASE_INSTRUCTIONS = `# memory-journal-mcp Usage Instructions
 
-/**
- * Instruction detail level for token efficiency
- * - essential: ~200 tokens - Core behaviors only (for token-constrained clients)
- * - standard: ~400 tokens - + GitHub patterns (default)
- * - full: ~600 tokens - + tool/resource listings
- */
-export type InstructionLevel = 'essential' | 'standard' | 'full';
-
-/**
- * Essential behavioral guidance (~200 tokens)
- * Core patterns every AI agent should follow.
- */
-const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
-
-## Session Start
-1. Read \`memory://briefing\` for project context
-2. **Show the \`userMessage\` to the user** (it contains a formatted summary of project context)
-3. Proceed with the user's request
-
-## Behaviors
-- **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
-- **Search before**: major decisions, referencing prior work, understanding project context
-- **Link entries**: implementation→spec, bugfix→issue, followup→prior work
-
-## Quick Access
-| Purpose | Action |
-|---------|--------|
-| Session context | \`memory://briefing\` |
-| Recent entries | \`memory://recent\` |
-| Health/time | \`memory://health\` |
-| Semantic search | \`semantic_search(query)\` |
-| Full context | \`get-context-bundle\` prompt |
-`;
-
-/**
- * GitHub integration patterns (~150 additional tokens)
- */
-const GITHUB_INSTRUCTIONS = `
-## GitHub Integration
-- Include \`issue_number\`/\`pr_number\` in \`create_entry\` to auto-link
-- After closing issue/merging PR → create summary entry with learnings
-- CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
-- Kanban: \`get_kanban_board(project_number)\` → \`move_kanban_item\` → document completion
-- GitHub tools auto-detect owner/repo from git context; specify explicitly if null
-`;
-
-/**
- * Server access instructions - critical for AI agents to call tools correctly
- */
-const SERVER_ACCESS_INSTRUCTIONS = `
 ## How to Access This Server
 
 ### Calling Tools
@@ -111,12 +54,7 @@ FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://kanban/1")
 
 ## Quick Health Check
 Fetch \`memory://health\` to verify server status, database stats, and tool availability.
-`;
 
-/**
- * Tool parameter reference - essential for correct tool invocation
- */
-const TOOL_PARAMETER_REFERENCE = `
 ## Tool Parameter Reference
 
 ### Entry Operations
@@ -141,7 +79,7 @@ const TOOL_PARAMETER_REFERENCE = `
 ### Relationship Tools
 | Tool | Required Parameters | Notes |
 |------|---------------------|-------|
-| \`link_entries\` | \`from_entry_id\`, \`to_entry_id\` (numbers) | Types: \`evolves_from\`, \`references\`, \`implements\`, \`clarifies\`, \`response_to\` |
+| \`link_entries\` | \`from_entry_id\`, \`to_entry_id\` (numbers), \`relationship_type\` | Types: \`evolves_from\`, \`references\`, \`implements\`, \`clarifies\`, \`response_to\` |
 | \`visualize_relationships\` | \`entry_id\` (number) | Optional \`depth\` (default 2). Returns Mermaid diagram. |
 
 ### GitHub Tools
@@ -204,7 +142,6 @@ Valid values for \`entry_type\` parameter:
 | URI | Description |
 |-----|-------------|
 | \`memory://health\` | Server health, DB stats, tool filter status |
-| \`memory://briefing\` | Session context with userMessage to show user |
 | \`memory://statistics\` | Entry counts by type and period |
 | \`memory://recent\` | 10 most recent entries |
 | \`memory://tags\` | All tags with usage counts |
@@ -214,56 +151,46 @@ Valid values for \`entry_type\` parameter:
 `;
 
 /**
- * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
- * 
- * @param enabledTools - Set of enabled tool names
- * @param resources - Available resource definitions
- * @param prompts - Available prompt definitions
- * @param latestEntry - Optional latest entry for context snapshot
- * @param level - Instruction detail level (default: 'standard')
+ * Generate dynamic instructions based on enabled tools, resources, and prompts
  */
 export function generateInstructions(
     enabledTools: Set<string>,
-    _resources: ResourceDefinition[],
-    prompts: PromptDefinition[],
-    latestEntry?: LatestEntrySnapshot,
-    level: InstructionLevel = 'standard'
+    resources: ResourceDefinition[],
+    prompts: PromptDefinition[]
 ): string {
-    let instructions = ESSENTIAL_INSTRUCTIONS;
+    let instructions = BASE_INSTRUCTIONS;
 
-    // Add latest entry snapshot for immediate context (compact format)
-    if (latestEntry) {
-        const preview = latestEntry.content.slice(0, 120);
-        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`;
+    // Add active tools section
+    const activeGroups = getActiveToolGroups(enabledTools);
+    if (activeGroups.length > 0) {
+        instructions += '\n## Active Tools\n\n';
+        instructions += `This server instance has ${enabledTools.size} tools enabled across ${activeGroups.length} groups:\n\n`;
+        
+        for (const { group, tools } of activeGroups) {
+            instructions += `### ${group} (${tools.length} tools)\n`;
+            instructions += tools.map(t => `- \`${t}\``).join('\n');
+            instructions += '\n\n';
+        }
     }
 
-    // Standard and full levels include GitHub patterns
-    if (level === 'standard' || level === 'full') {
-        instructions += GITHUB_INSTRUCTIONS;
+    // Add resources section
+    if (resources.length > 0) {
+        instructions += `## Active Resources (${resources.length})\n\n`;
+        instructions += 'Read-only resources for journal data and metadata:\n\n';
+        for (const resource of resources) {
+            instructions += `- \`${resource.uri}\` - ${resource.description ?? resource.name}\n`;
+        }
+        instructions += '\n';
     }
 
-    // Full level includes server access instructions and tool parameter reference
-    if (level === 'full') {
-        instructions += SERVER_ACCESS_INSTRUCTIONS;
-        instructions += TOOL_PARAMETER_REFERENCE;
-
-        // Add active tools summary
-        const activeGroups = getActiveToolGroups(enabledTools);
-        if (activeGroups.length > 0) {
-            instructions += `\n## Active Tools (${String(enabledTools.size)})\n`;
-            for (const { group, tools } of activeGroups) {
-                instructions += `**${group}**: ${tools.map(t => `\`${t}\``).join(', ')}\n`;
-            }
+    // Add prompts section
+    if (prompts.length > 0) {
+        instructions += `## Active Prompts (${prompts.length})\n\n`;
+        instructions += 'Pre-built templates and guided workflows:\n\n';
+        for (const prompt of prompts) {
+            instructions += `- \`${prompt.name}\` - ${prompt.description ?? ''}\n`;
         }
-
-        // Add prompts section  
-        if (prompts.length > 0) {
-            instructions += `\n## Prompts (${String(prompts.length)})\n`;
-            instructions += 'Pre-built templates and guided workflows:\n';
-            for (const prompt of prompts) {
-                instructions += `- \`${prompt.name}\` - ${prompt.description ?? ''}\n`;
-            }
-        }
+        instructions += '\n';
     }
 
     return instructions;
@@ -274,14 +201,14 @@ export function generateInstructions(
  */
 function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; tools: string[] }[] {
     const activeGroups: { group: ToolGroup; tools: string[] }[] = [];
-
+    
     for (const [group, allTools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
         const enabledInGroup = allTools.filter(tool => enabledTools.has(tool));
         if (enabledInGroup.length > 0) {
             activeGroups.push({ group, tools: enabledInGroup });
         }
     }
-
+    
     return activeGroups;
 }
 
@@ -289,4 +216,4 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * Static instructions for backward compatibility
  * @deprecated Use generateInstructions() instead for dynamic content
  */
-export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS;
+export const SERVER_INSTRUCTIONS = BASE_INSTRUCTIONS;
