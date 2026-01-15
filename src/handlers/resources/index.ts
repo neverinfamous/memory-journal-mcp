@@ -114,6 +114,109 @@ function getTotalToolCount(): number {
  */
 function getAllResourceDefinitions(): InternalResourceDef[] {
     return [
+        // Session initialization resource - highest priority, designed for token efficiency
+        {
+            uri: 'memory://briefing',
+            name: 'Initial Briefing',
+            title: 'Session Initialization Context',
+            description: 'Compact context for AI session start: behaviors, latest entries, GitHub status (~300 tokens)',
+            mimeType: 'application/json',
+            annotations: {
+                audience: ['assistant'],
+                priority: 1.0,  // Highest priority - should be read first
+            },
+            handler: async (_uri: string, context: ResourceContext) => {
+                // Get latest 3 entries (compact)
+                const recentEntries = context.db.getRecentEntries(3);
+                const latestEntries = recentEntries.map((e) => ({
+                    id: e.id,
+                    timestamp: e.timestamp,
+                    type: e.entryType,
+                    preview: e.content.slice(0, 80) + (e.content.length > 80 ? '...' : ''),
+                }));
+
+                // Get compact GitHub status if available
+                let github: {
+                    repo: string | null;
+                    branch: string | null;
+                    ci: 'passing' | 'failing' | 'pending' | 'unknown';
+                    openIssues: number;
+                    openPRs: number;
+                } | null = null;
+
+                if (context.github) {
+                    try {
+                        const repoInfo = await context.github.getRepoInfo();
+                        const owner = repoInfo.owner;
+                        const repo = repoInfo.repo;
+
+                        if (owner && repo) {
+                            // Get CI status
+                            let ciStatus: 'passing' | 'failing' | 'pending' | 'unknown' = 'unknown';
+                            try {
+                                const runs = await context.github.getWorkflowRuns(owner, repo, 3);
+                                if (runs.length > 0) {
+                                    const hasFailure = runs.some(r => r.conclusion === 'failure');
+                                    const hasPending = runs.some(r => r.status !== 'completed');
+                                    if (hasPending) ciStatus = 'pending';
+                                    else if (hasFailure) ciStatus = 'failing';
+                                    else ciStatus = 'passing';
+                                }
+                            } catch {
+                                // CI status unavailable
+                            }
+
+                            // Get issue/PR counts
+                            let openIssues = 0;
+                            let openPRs = 0;
+                            try {
+                                const issues = await context.github.getIssues(owner, repo, 'open', 1);
+                                openIssues = issues.length > 0 ? issues.length : 0;
+                                const prs = await context.github.getPullRequests(owner, repo, 'open', 1);
+                                openPRs = prs.length > 0 ? prs.length : 0;
+                            } catch {
+                                // Counts unavailable
+                            }
+
+                            github = {
+                                repo: `${owner}/${repo}`,
+                                branch: repoInfo.branch ?? null,
+                                ci: ciStatus,
+                                openIssues,
+                                openPRs,
+                            };
+                        }
+                    } catch {
+                        // GitHub unavailable
+                    }
+                }
+
+                // Get entry count for context
+                const stats = context.db.getStatistics('week');
+                const totalEntries = stats.totalEntries ?? 0;
+
+                return {
+                    version: '3.1.6',
+                    serverTime: new Date().toISOString(),
+                    journal: {
+                        totalEntries,
+                        latestEntries,
+                    },
+                    github,
+                    behaviors: {
+                        create: 'implementations, decisions, bug-fixes, milestones',
+                        search: 'before decisions, referencing prior work',
+                        link: 'implementation→spec, bugfix→issue',
+                    },
+                    more: {
+                        fullHealth: 'memory://health',
+                        allRecent: 'memory://recent',
+                        githubStatus: 'memory://github/status',
+                        contextBundle: 'get-context-bundle prompt',
+                    },
+                };
+            },
+        },
         {
             uri: 'memory://recent',
             name: 'Recent Entries',
@@ -522,6 +625,110 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     vectorIndex,
                     toolFilter,
                     timestamp: new Date().toISOString(),
+                };
+            },
+        },
+        // GitHub status resource - compact overview with progressive disclosure
+        {
+            uri: 'memory://github/status',
+            name: 'GitHub Status',
+            title: 'GitHub Repository Status',
+            description: 'Compact GitHub status: repository, branch, CI, issues, PRs, Kanban summary',
+            mimeType: 'application/json',
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.7,
+            },
+            handler: async (_uri: string, context: ResourceContext) => {
+                if (!context.github) {
+                    return {
+                        error: 'GitHub integration not available',
+                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    };
+                }
+
+                const repoInfo = await context.github.getRepoInfo();
+                const owner = repoInfo.owner;
+                const repo = repoInfo.repo;
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'Could not detect repository',
+                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                        branch: repoInfo.branch,
+                    };
+                }
+
+                // Get current commit
+                let commit: string | null = null;
+                try {
+                    const repoContext = await context.github.getRepoContext();
+                    commit = repoContext.commit;
+                } catch {
+                    // Ignore
+                }
+
+                // Get open issues (limited for token efficiency)
+                const issues = await context.github.getIssues(owner, repo, 'open', 5);
+                const openIssues = issues.map(i => ({ number: i.number, title: i.title.slice(0, 50) }));
+
+                // Get open PRs (limited for token efficiency)
+                const prs = await context.github.getPullRequests(owner, repo, 'open', 5);
+                const openPrs = prs.map(pr => ({ number: pr.number, title: pr.title.slice(0, 50), state: pr.state }));
+
+                // Get CI status from workflow runs
+                const workflowRuns = await context.github.getWorkflowRuns(owner, repo, 5);
+                let ciStatus: 'passing' | 'failing' | 'pending' | 'unknown' = 'unknown';
+                let latestRun: { name: string; conclusion: string | null; headSha: string } | null = null;
+
+                if (workflowRuns.length > 0) {
+                    const latest = workflowRuns[0];
+                    latestRun = {
+                        name: latest?.name ?? 'Unknown',
+                        conclusion: latest?.conclusion ?? null,
+                        headSha: latest?.headSha?.slice(0, 7) ?? '',
+                    };
+                    // Compute CI status from recent runs
+                    const hasFailure = workflowRuns.some(r => r.conclusion === 'failure');
+                    const hasPending = workflowRuns.some(r => r.status !== 'completed');
+                    const hasSuccess = workflowRuns.some(r => r.conclusion === 'success');
+
+                    if (hasPending) ciStatus = 'pending';
+                    else if (hasFailure) ciStatus = 'failing';
+                    else if (hasSuccess) ciStatus = 'passing';
+                }
+
+                // Get Kanban summary if project 1 exists (common default)
+                let kanbanSummary: Record<string, number> | null = null;
+                try {
+                    const kanban = await context.github.getProjectKanban(owner, 1, repo);
+                    if (kanban) {
+                        kanbanSummary = {};
+                        for (const col of kanban.columns) {
+                            kanbanSummary[col.status] = col.items.length;
+                        }
+                    }
+                } catch {
+                    // Kanban not available
+                }
+
+                return {
+                    repository: `${owner}/${repo}`,
+                    branch: repoInfo.branch,
+                    commit: commit?.slice(0, 7) ?? null,
+                    ci: {
+                        status: ciStatus,
+                        latestRun,
+                    },
+                    issues: {
+                        openCount: issues.length,
+                        items: openIssues,
+                    },
+                    pullRequests: {
+                        openCount: prs.length,
+                        items: openPrs,
+                    },
+                    kanbanSummary,
                 };
             },
         },

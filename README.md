@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated January 14, 2026 - v3.1.5
+Last Updated January 15, 2026 - v3.1.6
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -8,7 +8,7 @@ Last Updated January 14, 2026 - v3.1.5
 [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v3.1.5-green)
+![Version](https://img.shields.io/badge/version-v3.1.6-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
@@ -25,6 +25,7 @@ Last Updated January 14, 2026 - v3.1.5
 ## 🎯 What This Does
 
 ### Key Benefits
+- 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, PRs, projects)
 - 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs  
 - 🔍 **Triple search** (full-text, semantic, date range)
@@ -81,7 +82,7 @@ Get comprehensive server diagnostics via `memory://health`:
 
 - **29 MCP tools** - Complete development workflow + backup/restore + Kanban
 - **14 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis
-- **16 MCP resources** - Including Kanban board views and Mermaid diagrams
+- **17 MCP resources** - Including session briefing, Kanban board views, and Mermaid diagrams
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 5 relationship types, Mermaid visualization
@@ -111,8 +112,9 @@ Memory Journal acts as your project's **long-term memory**, bridging the gap bet
 - 📊 **Project Analytics** - Track progress from issues through PRs, generate reports for standups/retrospectives
 
 **For AI-Assisted Work:**
+- 🧠 **Dynamic Context Management** - Built-in guidance teaches AI agents when to query your project history and when to create entries
 - 💡 AI can query your **complete project history** in any conversation
-- 🧠 **Semantic search** finds conceptually related work, even without exact keywords
+- 🔍 **Semantic search** finds conceptually related work, even without exact keywords
 - 📖 **Context bundles** provide AI with comprehensive project state instantly
 - 🔗 **Relationship visualization** shows how different pieces of work connect
 
@@ -243,8 +245,9 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **16 Resources**
+### 📡 **17 Resources**
 
+- `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
 - `memory://graph/recent` - Live Mermaid diagram of recent relationships
@@ -326,7 +329,7 @@ flowchart TB
     
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 29 Tools"]
-        Resources["📡 16 Resources"]
+        Resources["📡 17 Resources"]
         Prompts["💬 14 Prompts"]
     end
     
@@ -354,7 +357,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (29)      │  │ Resources (16)  │  │ Prompts (14)│  │
+│  │ Tools (29)      │  │ Resources (17)  │  │ Prompts (14)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤

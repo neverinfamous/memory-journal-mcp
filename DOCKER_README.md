@@ -19,8 +19,9 @@ Last Updated January 14, 2026 - v3.1.5
 ## 🎯 What This Does
 
 ### Key Benefits
+- 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, PRs, projects)
-- � **Build knowledge graphs** linking specs → implementations → tests → PRs  
+- 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs  
 - 🔍 **Triple search** (full-text, semantic, date range)
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 🗄️ **Backup & restore** your journal data with one command

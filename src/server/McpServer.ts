@@ -72,7 +72,16 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const resources = getResources();
     const prompts = getPrompts();
 
-    // Generate dynamic instructions based on enabled tools, resources, and prompts
+    // Fetch latest entry for initial briefing context
+    const recentEntries = db.getRecentEntries(1);
+    const latestEntry = recentEntries[0] ? {
+        id: recentEntries[0].id,
+        timestamp: recentEntries[0].timestamp,
+        entryType: recentEntries[0].entryType,
+        content: recentEntries[0].content,
+    } : undefined;
+
+    // Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
     const instructions = generateInstructions(
         filterConfig?.enabledTools ?? new Set(getTools(db, null, vectorManager, github).map(t => (t as { name: string }).name)),
         resources.map(r => {
@@ -82,7 +91,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         prompts.map(p => {
             const prompt = p as { name: string; description?: string };
             return { name: prompt.name, description: prompt.description };
-        })
+        }),
+        latestEntry
     );
 
     // Create MCP server with capabilities and instructions
