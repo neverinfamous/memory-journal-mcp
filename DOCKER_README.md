@@ -68,7 +68,7 @@ Last Updated January 15, 2026 - v3.1.7
 ### **📊 New: Server Health Resource**
 - `memory://health` - Database stats, backup info, vector index status, tool filter config
 
-### **29 MCP Tools • 15 Workflow Prompts • 17 Resources**
+### **29 MCP Tools • 15 Workflow Prompts • 17 Resources** (11 static + 6 template)
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **GitHub Kanban** - View and manage GitHub Project boards directly
 - **Knowledge graphs** - 5 relationship types, Mermaid diagram visualization
@@ -152,7 +152,7 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 
 **Google AntiGravity IDE:**
 - **ServerInstructions not injected**: AntiGravity does not currently call `getServerInstructions()` or inject the server's behavioral guidance into the AI context. The AI agent will have access to tools but won't automatically know about Dynamic Context Management patterns.
-- **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Manually read `memory://briefing` at session start for optimal context.
+- **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Have the agent manually read `memory://briefing` at session start for optimal context.
 - **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context."
 
 ---
@@ -223,8 +223,8 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 17 Resources
-Including `memory://briefing` for session initialization, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards  
+### 📡 17 Resources (11 Static + 6 Template)
+Including `memory://briefing` for session initialization, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards. Template resources require parameters and are accessed directly by URI.  
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---

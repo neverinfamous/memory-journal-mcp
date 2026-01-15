@@ -82,7 +82,7 @@ Get comprehensive server diagnostics via `memory://health`:
 
 - **29 MCP tools** - Complete development workflow + backup/restore + Kanban
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
-- **17 MCP resources** - Including session briefing, Kanban board views, and Mermaid diagrams
+- **17 MCP resources** - 11 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 5 relationship types, Mermaid visualization
@@ -213,7 +213,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 **Google AntiGravity IDE:**
 - **ServerInstructions not injected**: AntiGravity does not currently call `getServerInstructions()` or inject the server's behavioral guidance into the AI context. The AI agent will have access to tools but won't automatically know about Dynamic Context Management patterns.
-- **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Manually read `memory://briefing` at session start for optimal context.
+- **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Have the agent manually read `memory://briefing` at session start for optimal context.
 - **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context."
 
 ---
@@ -252,24 +252,28 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **17 Resources**
+### 📡 **17 Resources** (11 Static + 6 Template)
 
+**Static Resources** (appear in resource lists):
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
 - `memory://graph/recent` - Live Mermaid diagram of recent relationships
 - `memory://team/recent` - Recent team-shared entries
 - `memory://health` - Server health & diagnostics
-- `memory://projects/{number}/timeline` - Project activity timeline
-- `memory://issues/{issue_number}/entries` - Entries linked to issue
-- `memory://prs/{pr_number}/entries` - Entries linked to PR
-- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
 - `memory://graph/actions` - CI/CD narrative graph
 - `memory://actions/recent` - Recent workflow runs
 - `memory://tags` - All tags with usage counts
 - `memory://statistics` - Journal statistics
-- `memory://kanban/{project_number}` - **NEW** GitHub Project Kanban board
-- `memory://kanban/{project_number}/diagram` - **NEW** Kanban Mermaid visualization
+- `memory://github/status` - GitHub repository status overview
+
+**Template Resources** (require parameters, fetch directly by URI):
+- `memory://projects/{number}/timeline` - Project activity timeline
+- `memory://issues/{issue_number}/entries` - Entries linked to issue
+- `memory://prs/{pr_number}/entries` - Entries linked to PR
+- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
+- `memory://kanban/{project_number}` - GitHub Project Kanban board
+- `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
 
 ---
 
