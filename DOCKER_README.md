@@ -145,9 +145,15 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 
-### Cursor Known Issues
+### Client-Specific Notes
 
-**Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `list_mcp_resources()` without specifying a server parameter. Using `server="memory-journal-mcp"` may return nothing (Cursor bug).
+**Cursor IDE:**
+- **Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `list_mcp_resources()` without specifying a server parameter. Using `server="memory-journal-mcp"` may return nothing (Cursor bug).
+
+**Google AntiGravity IDE:**
+- **ServerInstructions not injected**: AntiGravity does not currently call `getServerInstructions()` or inject the server's behavioral guidance into the AI context. The AI agent will have access to tools but won't automatically know about Dynamic Context Management patterns.
+- **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Manually read `memory://briefing` at session start for optimal context.
+- **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context."
 
 ---
 
