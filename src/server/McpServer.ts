@@ -148,11 +148,15 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 try {
                     const result = await callTool(toolDef.name, args as Record<string, unknown>, db, vectorManager, github);
 
-                    // MCP 2025-11-25: If tool has outputSchema, return structuredContent
-                    // Note: content defaults to [] per spec, but TypeScript requires explicit value
+                    // MCP 2025-11-25: If tool has outputSchema, return both:
+                    // - structuredContent: validated JSON for clients that support it
+                    // - content: formatted text fallback for clients that don't (e.g., AntiGravity)
                     if (hasOutputSchema) {
                         return {
-                            content: [],  // Empty for type satisfaction; SDK defaults this
+                            content: [{
+                                type: 'text' as const,
+                                text: JSON.stringify(result, null, 2),
+                            }],
                             structuredContent: result as Record<string, unknown>,
                         };
                     }
