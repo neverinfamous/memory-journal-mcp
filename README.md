@@ -289,6 +289,42 @@ export DEFAULT_ORG="your-org-name"            # Optional: default org
 
 **Scopes:** `repo`, `project`, `read:org` (org only)
 
+### GitHub Management Capabilities
+
+Memory Journal provides a **hybrid approach** to GitHub management:
+
+| Capability Source | Purpose |
+|-------------------|---------|
+| **MCP Server** | Specialized features: Kanban visualization, journal linking, project timelines |
+| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases |
+
+**MCP Server Tools (Read + Kanban):**
+- `get_github_issues` / `get_github_issue` - Query issues
+- `get_github_prs` / `get_github_pr` - Query pull requests
+- `get_github_context` - Full repository context
+- `get_kanban_board` / `move_kanban_item` - **Kanban management**
+
+**Agent Operations (via gh CLI):**
+```bash
+# Issues
+gh issue create --title "Bug fix" --body "Description"
+gh issue close 42
+
+# Pull Requests  
+gh pr create --fill
+gh pr merge 123
+
+# Projects
+gh project item-add 5 --owner neverinfamous --url "issue-url"
+
+# Releases
+gh release create v1.0.0 --generate-notes
+```
+
+> **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, timeline resources, context linking). Standard GitHub operations are already excellently handled by `gh` CLI, which agents can invoke directly.
+
+**[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
+
 ### Tool Filtering (Optional)
 
 Control which tools are exposed using `MEMORY_JOURNAL_MCP_TOOL_FILTER`:
