@@ -43,6 +43,8 @@ interface InternalResourceDef {
         audience?: ('user' | 'assistant')[];
         priority?: number;
         lastModified?: string;  // ISO 8601 timestamp - can be static or dynamic
+        autoRead?: boolean;     // Hint: clients should auto-fetch this resource at session start
+        sessionInit?: boolean;  // Hint: this resource provides session initialization context
     };
     handler: (uri: string, context: ResourceContext) => unknown;
 }
@@ -145,16 +147,19 @@ function getTotalToolCount(): number {
  */
 function getAllResourceDefinitions(): InternalResourceDef[] {
     return [
-        // Session initialization resource - highest priority, designed for token efficiency
+        // Session initialization resource - highest priority, auto-subscribe hint for session start
         {
             uri: 'memory://briefing',
             name: 'Initial Briefing',
             title: 'Session Initialization Context',
-            description: 'Compact context for AI session start: behaviors, latest entries, GitHub status (~300 tokens)',
+            description: 'AUTO-READ AT SESSION START: Project context for AI agents (~300 tokens). Contains userMessage to show user.',
             mimeType: 'application/json',
             annotations: {
                 audience: ['assistant'],
                 priority: 1.0,  // Highest priority - should be read first
+                // Custom hints for clients that support auto-subscribe behavior
+                autoRead: true,  // Hint: automatically fetch this resource at session start
+                sessionInit: true,  // Hint: this resource is specifically for session initialization
             },
             handler: async (_uri: string, context: ResourceContext) => {
                 // Get latest 3 entries (compact)
@@ -239,7 +244,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        version: '3.1.7',
+                        version: '3.1.5',
                         serverTime: new Date().toISOString(),
                         journal: {
                             totalEntries,
