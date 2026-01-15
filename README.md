@@ -80,7 +80,7 @@ Get comprehensive server diagnostics via `memory://health`:
 
 ### 📈 **Current Capabilities**
 
-- **29 MCP tools** - Complete development workflow + backup/restore + Kanban
+- **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
 - **17 MCP resources** - 11 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
@@ -220,7 +220,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 ## 📋 Core Capabilities
 
-### 🛠️ **29 MCP Tools** (8 Groups)
+### 🛠️ **31 MCP Tools** (8 Groups)
 
 | Group | Tools | Description |
 |-------|-------|-------------|
@@ -230,7 +230,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 | `relationships` | 2 | Link entries, visualize graphs |
 | `export` | 1 | JSON/Markdown export |
 | `admin` | 4 | Update, delete, rebuild/add to vector index |
-| `github` | 7 | Issues, PRs, context, **Kanban board** |
+| `github` | 9 | Issues, PRs, context, Kanban, **issue lifecycle** |
 | `backup` | 3 | Backup, list, restore |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**

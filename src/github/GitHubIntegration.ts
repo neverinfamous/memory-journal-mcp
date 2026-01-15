@@ -259,6 +259,106 @@ export class GitHubIntegration {
     }
 
     /**
+     * Create a new GitHub issue
+     */
+    async createIssue(
+        owner: string,
+        repo: string,
+        title: string,
+        body?: string,
+        labels?: string[],
+        assignees?: string[]
+    ): Promise<{ number: number; url: string; title: string } | null> {
+        if (!this.octokit) {
+            logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' });
+            return null;
+        }
+
+        try {
+            const response = await this.octokit.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels,
+                assignees,
+            });
+
+            logger.info('Created GitHub issue', {
+                module: 'GitHub',
+                entityId: response.data.number,
+                context: { title, owner, repo },
+            });
+
+            return {
+                number: response.data.number,
+                url: response.data.html_url,
+                title: response.data.title,
+            };
+        } catch (error) {
+            logger.error('Failed to create issue', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { title, owner, repo },
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Close a GitHub issue with optional comment
+     */
+    async closeIssue(
+        owner: string,
+        repo: string,
+        issueNumber: number,
+        comment?: string
+    ): Promise<{ success: boolean; url: string } | null> {
+        if (!this.octokit) {
+            logger.error('Cannot close issue: GitHub API not available', { module: 'GitHub' });
+            return null;
+        }
+
+        try {
+            // Add comment if provided
+            if (comment) {
+                await this.octokit.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: issueNumber,
+                    body: comment,
+                });
+            }
+
+            // Close the issue
+            const response = await this.octokit.issues.update({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                state: 'closed',
+            });
+
+            logger.info('Closed GitHub issue', {
+                module: 'GitHub',
+                entityId: issueNumber,
+                context: { owner, repo, hadComment: !!comment },
+            });
+
+            return {
+                success: true,
+                url: response.data.html_url,
+            };
+        } catch (error) {
+            logger.error('Failed to close issue', {
+                module: 'GitHub',
+                entityId: issueNumber,
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+        }
+    }
+
+    /**
      * Get repository pull requests
      */
     async getPullRequests(

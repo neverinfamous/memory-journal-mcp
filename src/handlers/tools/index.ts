@@ -1144,6 +1144,193 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 };
             },
         },
+        {
+            name: 'create_github_issue_with_entry',
+            title: 'Create GitHub Issue with Journal Entry',
+            description: 'Create a GitHub issue AND automatically create a linked journal entry documenting the issue creation.',
+            group: 'github',
+            inputSchema: z.object({
+                title: z.string().min(1).describe('Issue title'),
+                body: z.string().optional().describe('Issue body/description'),
+                labels: z.array(z.string()).optional().describe('Labels to apply'),
+                assignees: z.array(z.string()).optional().describe('Users to assign'),
+                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+                entry_content: z.string().optional().describe('Custom journal content (defaults to auto-generated summary)'),
+                tags: z.array(z.string()).optional().describe('Journal entry tags'),
+            }),
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z.object({
+                    title: z.string().min(1),
+                    body: z.string().optional(),
+                    labels: z.array(z.string()).optional(),
+                    assignees: z.array(z.string()).optional(),
+                    owner: z.string().optional(),
+                    repo: z.string().optional(),
+                    entry_content: z.string().optional(),
+                    tags: z.array(z.string()).optional(),
+                }).parse(params);
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' };
+                }
+
+                // Get owner/repo from input or from current repo
+                const repoInfo = await github.getRepoInfo();
+                const owner = input.owner ?? repoInfo.owner ?? undefined;
+                const repo = input.repo ?? repoInfo.repo ?? undefined;
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
+                        requiresUserInput: true,
+                        detected: { owner, repo },
+                    };
+                }
+
+                // Create the GitHub issue
+                const issue = await github.createIssue(
+                    owner,
+                    repo,
+                    input.title,
+                    input.body,
+                    input.labels,
+                    input.assignees
+                );
+
+                if (!issue) {
+                    return { error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.' };
+                }
+
+                // Create linked journal entry
+                const entryContent = input.entry_content ??
+                    `Created GitHub issue #${String(issue.number)}: ${issue.title}\n\n` +
+                    `URL: ${issue.url}\n` +
+                    (input.body ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}` : '');
+
+                const entry = db.createEntry({
+                    content: entryContent,
+                    entryType: 'planning' as EntryType,
+                    tags: input.tags ?? ['github', 'issue-created'],
+                    isPersonal: false,
+                    significanceType: null,
+                    issueNumber: issue.number,
+                    issueUrl: issue.url,
+                });
+
+                return {
+                    success: true,
+                    issue: {
+                        number: issue.number,
+                        title: issue.title,
+                        url: issue.url,
+                    },
+                    journalEntry: {
+                        id: entry.id,
+                        linkedToIssue: issue.number,
+                    },
+                    message: `Created issue #${String(issue.number)} and journal entry #${String(entry.id)}`,
+                };
+            },
+        },
+        {
+            name: 'close_github_issue_with_entry',
+            title: 'Close GitHub Issue with Resolution Entry',
+            description: 'Close a GitHub issue AND create a journal entry documenting the resolution.',
+            group: 'github',
+            inputSchema: z.object({
+                issue_number: z.number().describe('Issue number to close'),
+                resolution_notes: z.string().optional().describe('Notes about how the issue was resolved'),
+                comment: z.string().optional().describe('Comment to add to the issue before closing'),
+                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+                tags: z.array(z.string()).optional().describe('Journal entry tags'),
+            }),
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z.object({
+                    issue_number: z.number(),
+                    resolution_notes: z.string().optional(),
+                    comment: z.string().optional(),
+                    owner: z.string().optional(),
+                    repo: z.string().optional(),
+                    tags: z.array(z.string()).optional(),
+                }).parse(params);
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' };
+                }
+
+                // Get owner/repo from input or from current repo
+                const repoInfo = await github.getRepoInfo();
+                const owner = input.owner ?? repoInfo.owner ?? undefined;
+                const repo = input.repo ?? repoInfo.repo ?? undefined;
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
+                        requiresUserInput: true,
+                        detected: { owner, repo },
+                    };
+                }
+
+                // Get issue details before closing
+                const issueDetails = await github.getIssue(owner, repo, input.issue_number);
+                if (!issueDetails) {
+                    return { error: `Issue #${String(input.issue_number)} not found` };
+                }
+
+                if (issueDetails.state === 'CLOSED') {
+                    return { error: `Issue #${String(input.issue_number)} is already closed` };
+                }
+
+                // Close the issue
+                const result = await github.closeIssue(
+                    owner,
+                    repo,
+                    input.issue_number,
+                    input.comment
+                );
+
+                if (!result) {
+                    return { error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.' };
+                }
+
+                // Create resolution journal entry
+                const entryContent =
+                    `Closed GitHub issue #${String(input.issue_number)}: ${issueDetails.title}\n\n` +
+                    `URL: ${issueDetails.url}\n` +
+                    (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '');
+
+                const entry = db.createEntry({
+                    content: entryContent,
+                    entryType: 'bug_fix' as EntryType,
+                    tags: input.tags ?? ['github', 'issue-closed', 'resolution'],
+                    isPersonal: false,
+                    significanceType: 'blocker_resolved' as SignificanceType,
+                    issueNumber: input.issue_number,
+                    issueUrl: issueDetails.url,
+                });
+
+                return {
+                    success: true,
+                    issue: {
+                        number: input.issue_number,
+                        title: issueDetails.title,
+                        url: result.url,
+                        previousState: 'OPEN',
+                        newState: 'CLOSED',
+                    },
+                    journalEntry: {
+                        id: entry.id,
+                        linkedToIssue: input.issue_number,
+                        significanceType: 'blocker_resolved',
+                    },
+                    message: `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}`,
+                };
+            },
+        },
         // Backup tools
         {
             name: 'backup_journal',

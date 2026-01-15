@@ -68,7 +68,7 @@ Last Updated January 15, 2026 - v3.1.5
 ### **📊 New: Server Health Resource**
 - `memory://health` - Database stats, backup info, vector index status, tool filter config
 
-### **29 MCP Tools • 15 Workflow Prompts • 17 Resources** (11 static + 6 template)
+### **31 MCP Tools • 15 Workflow Prompts • 17 Resources** (11 static + 6 template)
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **GitHub Kanban** - View and manage GitHub Project boards directly
 - **Knowledge graphs** - 5 relationship types, Mermaid diagram visualization
@@ -205,7 +205,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 
 ## ⚡ Core Features
 
-### 🛠️ 29 MCP Tools (8 Groups)
+### 🛠️ 31 MCP Tools (8 Groups)
 | Group | Tools | Description |
 |-------|-------|-------------|
 | `core` | 6 | Entry CRUD, tags, test |
@@ -214,7 +214,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 | `relationships` | 2 | Link entries, visualize graphs |
 | `export` | 1 | JSON/Markdown export |
 | `admin` | 4 | Update, delete, vector index management |
-| `github` | 7 | Issues, PRs, context, **Kanban board** |
+| `github` | 9 | Issues, PRs, context, Kanban, **issue lifecycle** |
 | `backup` | 3 | Backup, list, restore |
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
