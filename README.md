@@ -214,8 +214,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 **Google AntiGravity IDE:**
 - **ServerInstructions not injected**: AntiGravity does not currently call `getServerInstructions()` or inject the server's behavioral guidance into the AI context. The AI agent will have access to tools but won't automatically know about Dynamic Context Management patterns.
 - **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Have the agent manually read `memory://briefing` at session start for optimal context.
-- **Template resources not discoverable**: The 6 template resources (e.g., `memory://kanban/{project_number}`, `memory://issues/{issue_number}/entries`) aren't listed automatically. For full capabilities, refer the agent to this README or the [Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki).
-- **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context."
+- **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context." The briefing includes behavioral guidance and the 6 template resource URIs.
 
 ---
 

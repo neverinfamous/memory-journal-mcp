@@ -256,6 +256,14 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                             search: 'before decisions, referencing prior work',
                             link: 'implementation→spec, bugfix→issue',
                         },
+                        templateResources: [
+                            'memory://projects/{number}/timeline',
+                            'memory://issues/{issue_number}/entries',
+                            'memory://prs/{pr_number}/entries',
+                            'memory://prs/{pr_number}/timeline',
+                            'memory://kanban/{project_number}',
+                            'memory://kanban/{project_number}/diagram',
+                        ],
                         more: {
                             fullHealth: 'memory://health',
                             allRecent: 'memory://recent',
