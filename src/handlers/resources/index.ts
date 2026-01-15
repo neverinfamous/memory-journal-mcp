@@ -9,6 +9,8 @@ import type { VectorSearchManager } from '../../vector/VectorSearchManager.js';
 import type { ToolFilterConfig } from '../../filtering/ToolFilter.js';
 import type { Tag } from '../../types/index.js';
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js';
+import { generateInstructions, type InstructionLevel } from '../../constants/ServerInstructions.js';
+import { getPrompts } from '../prompts/index.js';
 
 /**
  * Resource context for handlers that need extended access
@@ -281,9 +283,64 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 | **Latest** | ${latestPreview} |
 
 I have project memory access and will create entries for significant work.`,
+                        // Note for clients that don't auto-inject ServerInstructions
+                        clientNote: 'If prompts unavailable or Dynamic Context Management behaviors missing, read memory://instructions for full guidance.',
                     },
                     annotations: { lastModified },
                 } satisfies ResourceResult;
+            },
+        },
+        // Server instructions resource - for clients that don't auto-inject ServerInstructions
+        {
+            uri: 'memory://instructions',
+            name: 'Server Instructions',
+            title: 'Full Server Behavioral Guidance',
+            description: 'Full server instructions for AI agents. Append ?level=essential|standard|full to control detail level.',
+            mimeType: 'text/markdown',
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.95,  // High priority, but below briefing
+            },
+            handler: (uri: string, context: ResourceContext): ResourceResult => {
+                // Parse level from query string (default: standard)
+                let level: InstructionLevel = 'standard';
+                try {
+                    const url = new URL(uri, 'memory://host');
+                    const levelParam = url.searchParams.get('level');
+                    if (levelParam === 'essential' || levelParam === 'standard' || levelParam === 'full') {
+                        level = levelParam;
+                    }
+                } catch {
+                    // Invalid URL, use default level
+                }
+
+                // Get enabled tools from filter config or all tools
+                const enabledTools = context.filterConfig?.enabledTools ?? new Set<string>();
+
+                // Get prompts for instruction generation
+                const prompts = getPrompts().map(p => {
+                    const prompt = p as { name: string; description?: string };
+                    return { name: prompt.name, description: prompt.description };
+                });
+
+                // Get resources for instruction generation (simplified)
+                const resources = getResources().map(r => {
+                    const res = r as { uri: string; name: string; description?: string };
+                    return { uri: res.uri, name: res.name, description: res.description };
+                });
+
+                // Generate instructions at requested level
+                const instructions = generateInstructions(
+                    enabledTools.size > 0 ? enabledTools : new Set(['create_entry', 'search_entries', 'get_recent_entries']),
+                    resources,
+                    prompts,
+                    undefined,  // No latest entry needed for instructions
+                    level
+                );
+
+                return {
+                    data: instructions,
+                };
             },
         },
         {

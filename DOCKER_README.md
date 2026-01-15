@@ -54,7 +54,7 @@ Last Updated January 15, 2026 - v3.1.5
 
 - **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
-- **17 MCP resources** - 11 static + 6 template (require parameters)
+- **18 MCP resources** - 12 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 5 relationship types, Mermaid visualization
@@ -139,13 +139,11 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 
 **Google AntiGravity IDE:**
 
-- **ServerInstructions not injected**: AntiGravity does not currently call `getServerInstructions()` or inject the server's behavioral guidance into the AI context. The AI agent will have access to tools but won't automatically know about Dynamic Context Management patterns.
+- **Session start**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp."
 
-- **Resource hints not honored**: The `memory://briefing` resource includes `autoRead` and `sessionInit` hints, but AntiGravity does not currently honor these. Have the agent manually read `memory://briefing` at session start for optimal context.
+- **Full guidance**: If behaviors missing, read `memory://instructions` for complete Dynamic Context Management patterns.
 
-- **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible via tool calls.
-
-- **Workaround**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp for project context." The briefing includes behavioral guidance and the 6 template resource URIs.
+- **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
 
 ---
 
@@ -215,7 +213,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 17 Resources (11 Static + 6 Template)
+### 📡 18 Resources (12 Static + 6 Template)
 Including `memory://briefing` for session initialization, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards. Template resources require parameters and are accessed directly by URI.  
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
