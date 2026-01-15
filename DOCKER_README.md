@@ -268,11 +268,12 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 | **MCP Server** | Specialized features: Kanban visualization, journal linking, project timelines |
 | **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases |
 
-**MCP Server Tools (Read + Kanban):**
+**MCP Server Tools (Read + Kanban + Issue Lifecycle):**
 - `get_github_issues` / `get_github_issue` - Query issues
 - `get_github_prs` / `get_github_pr` - Query pull requests
 - `get_github_context` - Full repository context
 - `get_kanban_board` / `move_kanban_item` - **Kanban management**
+- `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
 
 **Agent Operations (via gh CLI):**
 ```bash

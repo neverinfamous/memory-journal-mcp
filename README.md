@@ -298,11 +298,12 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 | **MCP Server** | Specialized features: Kanban visualization, journal linking, project timelines |
 | **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases |
 
-**MCP Server Tools (Read + Kanban):**
+**MCP Server Tools (Read + Kanban + Issue Lifecycle):**
 - `get_github_issues` / `get_github_issue` - Query issues
 - `get_github_prs` / `get_github_pr` - Query pull requests
 - `get_github_context` - Full repository context
 - `get_kanban_board` / `move_kanban_item` - **Kanban management**
+- `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
 
 **Agent Operations (via gh CLI):**
 ```bash
@@ -359,7 +360,7 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 |---------------|---------------|-------|
 | Starter | `starter` | ~10 |
 | Essential | `essential` | ~6 |
-| Full (default) | `full` | 29 |
+| Full (default) | `full` | 31 |
 | Read-only | `readonly` | ~20 |
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
@@ -375,7 +376,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
     
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 29 Tools"]
+        Tools["🛠️ 31 Tools"]
         Resources["📡 17 Resources"]
         Prompts["💬 15 Prompts"]
     end
@@ -404,7 +405,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (29)      │  │ Resources (17)  │  │ Prompts (15)│  │
+│  │ Tools (31)      │  │ Resources (17)  │  │ Prompts (15)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
