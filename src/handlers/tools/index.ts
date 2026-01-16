@@ -1829,18 +1829,16 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     })
                     .parse(params)
 
-                // Capture progress context before any async operations to avoid closure issues
-                const progressCtx = progress
-
                 // Phase 1: Notify that we're starting
-                await sendProgress(progressCtx, 1, 3, 'Preparing restore...')
+                await sendProgress(progress, 1, 3, 'Preparing restore...')
 
                 // Phase 2: Restoring database (restoreFromFile creates backup internally)
-                await sendProgress(progressCtx, 2, 3, 'Restoring database from backup...')
+                await sendProgress(progress, 2, 3, 'Restoring database from backup...')
                 const result = await db.restoreFromFile(input.filename)
 
-                // Phase 3: Complete
-                await sendProgress(progressCtx, 3, 3, 'Restore complete')
+                // Note: We skip the phase 3 notification because db.restoreFromFile()
+                // reinitializes the database connection, which can corrupt the progress
+                // context. The result message below indicates completion.
 
                 return {
                     success: true,
