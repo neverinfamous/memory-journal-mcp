@@ -12,7 +12,7 @@ Last Updated January 16, 2026 - v3.1.5
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 
-🎯 **Solve the AI Context Problem:** Bridge the gap between disconnected AI sessions with persistent project memory - every AI conversation can access your complete development history, past decisions, and work patterns across any thread or timeframe.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, and knowledge graphs — into every conversation.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -31,23 +31,42 @@ Last Updated January 16, 2026 - v3.1.5
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
 
-```
-+----------------------------------+----------------------------------+
-|         WITHOUT                  |      WITH MEMORY JOURNAL         |
-+----------------------------------+----------------------------------+
-|                                  |                                  |
-|  +----------------+              |  +----------------+              |
-|  |   Session 1    |              |  |   Session 1    |--+           |
-|  |   Context: Y   |              |  |   Context: Y   |  |           |
-|  +----------------+              |  +----------------+  v           |
-|         |                        |                   +------+       |
-|         v (context lost)         |                   | [DB] |       |
-|  +----------------+              |  +----------------+      |       |
-|  |   Session 2    |              |  |   Session 2    |<-----+       |
-|  |   Context: X   |              |  |   Context: Y   |              |
-|  +----------------+              |  +----------------+              |
-|                                  |                                  |
-+----------------------------------+----------------------------------+
+```mermaid
+flowchart TB
+    subgraph Session["🤖 AI Session Start"]
+        Briefing["📋 Read Briefing<br/>(memory://briefing)"]
+    end
+    
+    subgraph Core["📝 Journal Operations"]
+        Create["Create Entry"]
+        Retrieve["Retrieve & Search"]
+        Link["Link Entries"]
+    end
+    
+    subgraph Search["🔍 Triple Search"]
+        FTS["Full-Text (FTS5)"]
+        Semantic["Semantic (Vector)"]
+        DateRange["Date Range"]
+    end
+    
+    subgraph GitHub["🐙 GitHub Integration"]
+        Issues["Issues & Milestones"]
+        PRs["Pull Requests"]
+        Actions["GitHub Actions"]
+        Kanban["Kanban Boards"]
+    end
+    
+    subgraph Outputs["📊 Outputs"]
+        Reports["Standups & Retrospectives"]
+        Graphs["Knowledge Graphs"]
+        Timeline["Project Timelines"]
+    end
+    
+    Session --> Core
+    Core --> Search
+    Core <--> GitHub
+    Search --> Outputs
+    GitHub --> Outputs
 ```
 
 ### 📈 **Current Capabilities**
