@@ -282,6 +282,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     workflowName: input.workflow_name,
                     workflowStatus: input.workflow_status,
                 });
+
+                // Auto-index to vector store for semantic search (fire-and-forget)
+                if (vectorManager) {
+                    vectorManager.addEntry(entry.id, entry.content).catch(() => {
+                        // Non-critical failure, entry already saved to DB
+                    });
+                }
+
                 return Promise.resolve({ success: true, entry });
             },
         },
@@ -330,6 +338,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 const { content } = CreateEntryMinimalSchema.parse(params);
                 const entry = db.createEntry({ content });
+
+                // Auto-index to vector store for semantic search (fire-and-forget)
+                if (vectorManager) {
+                    vectorManager.addEntry(entry.id, entry.content).catch(() => {
+                        // Non-critical failure, entry already saved to DB
+                    });
+                }
+
                 return Promise.resolve({ success: true, entry });
             },
         },
@@ -793,6 +809,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 if (!entry) {
                     return Promise.resolve({ error: `Entry ${input.entry_id} not found` });
                 }
+
+                // Re-index if content changed
+                if (input.content && vectorManager) {
+                    vectorManager.addEntry(entry.id, entry.content).catch(() => {
+                        // Non-critical failure, entry already updated in DB
+                    });
+                }
+
                 return Promise.resolve({ success: true, entry });
             },
         },

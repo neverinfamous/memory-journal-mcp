@@ -251,6 +251,11 @@ export class VectorSearchManager {
             if (success) indexed++;
         }
 
+        // Force index to refresh by re-listing items
+        // This ensures the internal query structures are updated and ready for search
+        // The 100ms delay was insufficient because it didn't refresh the internal state
+        await this.index.listItems();
+
         logger.info(`Rebuilt vector index with ${String(indexed)} entries`, { module: 'VectorSearch' });
         return indexed;
     }

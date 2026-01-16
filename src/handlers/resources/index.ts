@@ -78,6 +78,34 @@ function isResourceResult(result: unknown): result is ResourceResult {
 }
 
 /**
+ * Extract base URI without query parameters for matching
+ */
+function getBaseUri(uri: string): string {
+    // Handle memory:// URIs specially since URL parser treats the path as host
+    if (uri.startsWith('memory://')) {
+        const withoutScheme = uri.slice('memory://'.length);
+        const queryIndex = withoutScheme.indexOf('?');
+        const hashIndex = withoutScheme.indexOf('#');
+
+        // Find first delimiter (query or hash)
+        let endIndex = withoutScheme.length;
+        if (queryIndex !== -1 && queryIndex < endIndex) endIndex = queryIndex;
+        if (hashIndex !== -1 && hashIndex < endIndex) endIndex = hashIndex;
+
+        return 'memory://' + withoutScheme.slice(0, endIndex);
+    }
+
+    // Fallback for other URI schemes
+    try {
+        const url = new URL(uri);
+        return `${url.protocol}//${url.host}${url.pathname}`;
+    } catch {
+        // Invalid URL, return original
+        return uri;
+    }
+}
+
+/**
  * Read a resource by URI - returns data and optional annotations
  */
 export async function readResource(
@@ -90,9 +118,13 @@ export async function readResource(
     const resources = getAllResourceDefinitions();
     const context: ResourceContext = { db, vectorManager, filterConfig, github };
 
-    // Check for exact match first
-    const exactMatch = resources.find(r => r.uri === uri);
+    // Strip query parameters for matching, but pass full URI to handler
+    const baseUri = getBaseUri(uri);
+
+    // Check for exact match first (using base URI without query params)
+    const exactMatch = resources.find(r => r.uri === baseUri);
     if (exactMatch) {
+        // Pass full URI (with query params) to handler so it can parse them
         const result = await Promise.resolve(exactMatch.handler(uri, context));
         if (isResourceResult(result)) {
             return { data: result.data, annotations: result.annotations };
@@ -100,12 +132,12 @@ export async function readResource(
         return { data: result };
     }
 
-    // Check for template matches
+    // Check for template matches (also use base URI)
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
             const pattern = resource.uri.replace(/\{[^}]+\}/g, '([^/]+)');
             const regex = new RegExp(`^${pattern}$`);
-            if (regex.test(uri)) {
+            if (regex.test(baseUri)) {
                 const result = await Promise.resolve(resource.handler(uri, context));
                 if (isResourceResult(result)) {
                     return { data: result.data, annotations: result.annotations };
@@ -142,6 +174,33 @@ function execQuery(db: SqliteAdapter, sql: string, params: unknown[] = []): Reco
 function getTotalToolCount(): number {
     // Import dynamically to avoid circular dependency
     return 31; // 6 core + 4 search + 2 analytics + 2 relationships + 1 export + 4 admin + 9 github + 3 backup
+}
+
+/**
+ * Transform snake_case SQL row to camelCase entry object
+ * Ensures consistency with SqliteAdapter.getRecentEntries() output
+ */
+function transformEntryRow(row: Record<string, unknown>): Record<string, unknown> {
+    return {
+        id: row['id'],
+        entryType: row['entry_type'],
+        content: row['content'],
+        timestamp: row['timestamp'],
+        isPersonal: row['is_personal'] === 1 || row['is_personal'] === true,
+        significanceType: row['significance_type'] ?? null,
+        autoContext: row['auto_context'] ?? null,
+        deletedAt: row['deleted_at'] ?? null,
+        projectNumber: row['project_number'] ?? null,
+        projectOwner: row['project_owner'] ?? null,
+        issueNumber: row['issue_number'] ?? null,
+        issueUrl: row['issue_url'] ?? null,
+        prNumber: row['pr_number'] ?? null,
+        prUrl: row['pr_url'] ?? null,
+        prStatus: row['pr_status'] ?? null,
+        workflowRunId: row['workflow_run_id'] ?? null,
+        workflowName: row['workflow_name'] ?? null,
+        workflowStatus: row['workflow_status'] ?? null,
+    };
 }
 
 /**
@@ -189,16 +248,21 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                         const repo = repoInfo.repo;
 
                         if (owner && repo) {
-                            // Get CI status
+                            // Get CI status (based on latest run only)
                             let ciStatus: 'passing' | 'failing' | 'pending' | 'unknown' = 'unknown';
                             try {
-                                const runs = await context.github.getWorkflowRuns(owner, repo, 3);
+                                const runs = await context.github.getWorkflowRuns(owner, repo, 1);
                                 if (runs.length > 0) {
-                                    const hasFailure = runs.some(r => r.conclusion === 'failure');
-                                    const hasPending = runs.some(r => r.status !== 'completed');
-                                    if (hasPending) ciStatus = 'pending';
-                                    else if (hasFailure) ciStatus = 'failing';
-                                    else ciStatus = 'passing';
+                                    const latestRun = runs[0];
+                                    if (!latestRun) {
+                                        ciStatus = 'unknown';
+                                    } else if (latestRun.status !== 'completed') {
+                                        ciStatus = 'pending';
+                                    } else if (latestRun.conclusion === 'failure') {
+                                        ciStatus = 'failing';
+                                    } else if (latestRun.conclusion === 'success') {
+                                        ciStatus = 'passing';
+                                    }
                                 }
                             } catch {
                                 // CI status unavailable
@@ -305,10 +369,15 @@ I have project memory access and will create entries for significant work.`,
                 // Parse level from query string (default: standard)
                 let level: InstructionLevel = 'standard';
                 try {
-                    const url = new URL(uri, 'memory://host');
-                    const levelParam = url.searchParams.get('level');
-                    if (levelParam === 'essential' || levelParam === 'standard' || levelParam === 'full') {
-                        level = levelParam;
+                    // Parse query params from memory:// URI
+                    const queryIndex = uri.indexOf('?');
+                    if (queryIndex !== -1) {
+                        const queryString = uri.slice(queryIndex + 1);
+                        const params = new URLSearchParams(queryString);
+                        const levelParam = params.get('level');
+                        if (levelParam === 'essential' || levelParam === 'standard' || levelParam === 'full') {
+                            level = levelParam;
+                        }
                     }
                 } catch {
                     // Invalid URL, use default level
@@ -380,7 +449,8 @@ I have project memory access and will create entries for significant work.`,
                     ORDER BY timestamp DESC
                     LIMIT 20
                 `);
-                return { entries: rows, count: rows.length };
+                const entries = rows.map(transformEntryRow);
+                return { entries, count: entries.length };
             },
         },
         {
@@ -494,13 +564,14 @@ I have project memory access and will create entries for significant work.`,
                     return { error: 'Invalid project number' };
                 }
 
-                const entries = execQuery(context.db, `
+                const rows = execQuery(context.db, `
                     SELECT * FROM memory_journal 
                     WHERE project_number = ? 
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 50
                 `, [projectNumber]);
+                const entries = rows.map(transformEntryRow);
                 return { projectNumber, entries, count: entries.length };
             },
         },
@@ -522,12 +593,13 @@ I have project memory access and will create entries for significant work.`,
                     return { error: 'Invalid issue number' };
                 }
 
-                const entries = execQuery(context.db, `
+                const rows = execQuery(context.db, `
                     SELECT * FROM memory_journal 
                     WHERE issue_number = ? 
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                 `, [issueNumber]);
+                const entries = rows.map(transformEntryRow);
                 return { issueNumber, entries, count: entries.length };
             },
         },
@@ -549,12 +621,13 @@ I have project memory access and will create entries for significant work.`,
                     return { error: 'Invalid PR number' };
                 }
 
-                const entries = execQuery(context.db, `
+                const rows = execQuery(context.db, `
                     SELECT * FROM memory_journal 
                     WHERE pr_number = ? 
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                 `, [prNumber]);
+                const entries = rows.map(transformEntryRow);
                 return { prNumber, entries, count: entries.length };
             },
         },
@@ -576,12 +649,13 @@ I have project memory access and will create entries for significant work.`,
                     return { error: 'Invalid PR number' };
                 }
 
-                const entries = execQuery(context.db, `
+                const rows = execQuery(context.db, `
                     SELECT * FROM memory_journal 
                     WHERE pr_number = ? 
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                 `, [prNumber]);
+                const entries = rows.map(transformEntryRow);
                 return { prNumber, entries, count: entries.length };
             },
         },
@@ -674,13 +748,14 @@ I have project memory access and will create entries for significant work.`,
                 priority: 0.5,
             },
             handler: (_uri: string, context: ResourceContext) => {
-                const entries = execQuery(context.db, `
+                const rows = execQuery(context.db, `
                     SELECT * FROM memory_journal 
                     WHERE workflow_run_id IS NOT NULL 
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 10
                 `);
+                const entries = rows.map(transformEntryRow);
                 return { entries, count: entries.length };
             },
         },
@@ -820,25 +895,29 @@ I have project memory access and will create entries for significant work.`,
                 const openPrs = prs.map(pr => ({ number: pr.number, title: pr.title.slice(0, 50), state: pr.state }));
 
                 // Get CI status from workflow runs
+                // Get CI status from latest workflow run (matches briefing logic)
                 const workflowRuns = await context.github.getWorkflowRuns(owner, repo, 5);
                 let ciStatus: 'passing' | 'failing' | 'pending' | 'unknown' = 'unknown';
                 let latestRun: { name: string; conclusion: string | null; headSha: string } | null = null;
 
                 if (workflowRuns.length > 0) {
+                    // Find the latest completed run for accurate CI status
+                    const latestCompleted = workflowRuns.find(r => r.status === 'completed');
                     const latest = workflowRuns[0];
+
                     latestRun = {
                         name: latest?.name ?? 'Unknown',
                         conclusion: latest?.conclusion ?? null,
                         headSha: latest?.headSha?.slice(0, 7) ?? '',
                     };
-                    // Compute CI status from recent runs
-                    const hasFailure = workflowRuns.some(r => r.conclusion === 'failure');
-                    const hasPending = workflowRuns.some(r => r.status !== 'completed');
-                    const hasSuccess = workflowRuns.some(r => r.conclusion === 'success');
 
-                    if (hasPending) ciStatus = 'pending';
-                    else if (hasFailure) ciStatus = 'failing';
-                    else if (hasSuccess) ciStatus = 'passing';
+                    // CI status based on latest completed run (consistent with briefing)
+                    if (latestCompleted) {
+                        if (latestCompleted.conclusion === 'failure') ciStatus = 'failing';
+                        else if (latestCompleted.conclusion === 'success') ciStatus = 'passing';
+                    } else if (workflowRuns.some(r => r.status !== 'completed')) {
+                        ciStatus = 'pending';
+                    }
                 }
 
                 // Get Kanban summary if project 1 exists (common default)
