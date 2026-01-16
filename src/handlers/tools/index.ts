@@ -1284,6 +1284,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 labels: z.array(z.string()).optional().describe('Labels to apply'),
                 assignees: z.array(z.string()).optional().describe('Users to assign'),
                 project_number: z.number().optional().describe('GitHub Project number to add this issue to'),
+                initial_status: z.string().optional().describe('Initial status column (e.g., "Backlog", "Ready"). Requires project_number.'),
                 owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
                 repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
                 entry_content: z.string().optional().describe('Custom journal content (defaults to auto-generated summary)'),
@@ -1297,6 +1298,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     labels: z.array(z.string()).optional(),
                     assignees: z.array(z.string()).optional(),
                     project_number: z.number().optional(),
+                    initial_status: z.string().optional(),
                     owner: z.string().optional(),
                     repo: z.string().optional(),
                     entry_content: z.string().optional(),
@@ -1345,10 +1347,40 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         if (board) {
                             const added = await github.addProjectItem(board.projectId, issue.nodeId);
                             if (added.success) {
+                                // Set initial status if provided
+                                let statusResult: { status: string; set: boolean; error?: string } | undefined = undefined;
+                                const initialStatus = input.initial_status;
+                                if (initialStatus && added.itemId) {
+                                    // Find the status option (case-insensitive)
+                                    const statusOption = board.statusOptions.find(
+                                        opt => opt.name.toLowerCase() === initialStatus.toLowerCase()
+                                    );
+                                    if (statusOption) {
+                                        const moveResult = await github.moveProjectItem(
+                                            board.projectId,
+                                            added.itemId,
+                                            board.statusFieldId,
+                                            statusOption.id
+                                        );
+                                        if (moveResult.success) {
+                                            statusResult = { status: statusOption.name, set: true };
+                                        } else {
+                                            statusResult = { status: initialStatus, set: false, error: moveResult.error };
+                                        }
+                                    } else {
+                                        statusResult = {
+                                            status: initialStatus,
+                                            set: false,
+                                            error: `Status "${initialStatus}" not found. Available: ${board.statusOptions.map(o => o.name).join(', ')}`,
+                                        };
+                                    }
+                                }
+
                                 projectResult = {
                                     projectNumber: projectNumber,
                                     added: true,
-                                    message: `Added to project #${projectNumber}`
+                                    message: `Added to project #${projectNumber}` + (statusResult?.set ? ` (${statusResult.status})` : ''),
+                                    initialStatus: statusResult,
                                 };
                             } else {
                                 projectResult = {
