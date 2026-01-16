@@ -1,0 +1,84 @@
+{
+    // ═══════════════════════════════════════════════════════════════════════
+    // ESLint Configuration
+    // ═══════════════════════════════════════════════════════════════════════
+    "eslint.enable": true,
+    "eslint.useFlatConfig": true,
+    "eslint.validate": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact",
+        "json",
+        "jsonc",
+        "markdown"
+    ],
+    // Run ESLint on save (provides feedback to agent)
+    "eslint.run": "onSave",
+    // Show severity inline
+    "eslint.rules.customizations": [
+        { "rule": "*", "severity": "warn" }
+    ],
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Prettier Configuration
+    // ═══════════════════════════════════════════════════════════════════════
+    "editor.defaultFormatter": "prettier.prettier-vscode",
+    "editor.formatOnSave": true,
+    "[typescript]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+    "[javascript]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+    "[json]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+    "[markdown]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+    "[yaml]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+    "[html]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+    "[css]": {
+        "editor.defaultFormatter": "prettier.prettier-vscode"
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Error Lens Configuration
+    // ═══════════════════════════════════════════════════════════════════════
+    "errorLens.enabled": true,
+    "errorLens.enabledDiagnosticLevels": ["error", "warning", "info"],
+    "errorLens.messageEnabled": true,
+    "errorLens.statusBarMessageEnabled": true,
+    "errorLens.gutterIconsEnabled": true,
+    // Delay to avoid flicker during active typing
+    "errorLens.delay": 500,
+    // Exclude noisy hints if needed
+    "errorLens.excludeBySource": [],
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // TypeScript Configuration (Built-in)
+    // ═══════════════════════════════════════════════════════════════════════
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "typescript.suggest.autoImports": true,
+    "typescript.tsdk": "node_modules/typescript/lib",
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Editor Behavior
+    // ═══════════════════════════════════════════════════════════════════════
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit",
+        "source.organizeImports": "never"
+    },
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true
+}

@@ -120,7 +120,7 @@ dmypy.json
 *.sqlite3
 
 # IDE files
-.vscode/
+# .vscode/settings.json is tracked for shared team settings
 .idea/
 *.swp
 *.swo
@@ -159,4 +159,21 @@ setup-desktop-commander-auth.sh
 mcp-publisher.exe
 auth.json
 github_auth.json
-node_modules
+
+# Data directory (runtime databases)
+data/
+
+# Vector index files (created by vectra)
+*.vectra/
+index/
+
+# Package manager debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
