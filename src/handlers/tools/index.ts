@@ -15,6 +15,7 @@ import type {
 } from '../../types/index.js'
 import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
+import { sendProgress, type ProgressContext } from '../../utils/progress-utils.js'
 
 export interface ToolHandlerConfig {
     defaultProjectNumber?: number
@@ -28,6 +29,7 @@ export interface ToolContext {
     vectorManager?: VectorSearchManager
     github?: GitHubIntegration
     config?: ToolHandlerConfig
+    progress?: ProgressContext
 }
 
 // ============================================================================
@@ -266,9 +268,10 @@ export async function callTool(
     db: SqliteAdapter,
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig,
+    progress?: ProgressContext
 ): Promise<unknown> {
-    const context: ToolContext = { db, vectorManager, github, config }
+    const context: ToolContext = { db, vectorManager, github, config, progress }
     const tools = getAllToolDefinitions(context)
     const tool = tools.find((t) => t.name === name)
 
@@ -283,7 +286,7 @@ export async function callTool(
  * Get all tool definitions
  */
 function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager, github } = context
+    const { db, vectorManager, github, progress } = context
     return [
         // Core tools
         {
@@ -709,8 +712,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         WITH RECURSIVE connected_entries(id, distance) AS (
                             SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
                             UNION
-                            SELECT DISTINCT 
-                                CASE 
+                            SELECT DISTINCT
+                                CASE
                                     WHEN r.from_entry_id = ce.id THEN r.to_entry_id
                                     ELSE r.from_entry_id
                                 END,
@@ -874,10 +877,23 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             group: 'export',
             inputSchema: ExportEntriesSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 const input = ExportEntriesSchema.parse(params)
                 const limit = input.limit ?? 100
+
+                // Send initial progress
+                await sendProgress(progress, 0, 2, 'Fetching entries...')
+
                 const entries = db.getRecentEntries(limit)
+
+                // Send processing progress
+                await sendProgress(
+                    progress,
+                    1,
+                    2,
+                    `Processing ${String(entries.length)} entries...`
+                )
+
                 if (input.format === 'markdown') {
                     const md = entries
                         .map(
@@ -885,9 +901,13 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                                 `## ${e.timestamp}\n\n**Type:** ${e.entryType}\n\n${e.content}\n\n---`
                         )
                         .join('\n\n')
-                    return Promise.resolve({ format: 'markdown', content: md })
+
+                    await sendProgress(progress, 2, 2, 'Export complete')
+                    return { format: 'markdown', content: md }
                 }
-                return Promise.resolve({ format: 'json', entries })
+
+                await sendProgress(progress, 2, 2, 'Export complete')
+                return { format: 'json', entries }
             },
         },
         // Admin tools
@@ -958,7 +978,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 if (!vectorManager) {
                     return { error: 'Vector search not available' }
                 }
-                const indexed = await vectorManager.rebuildIndex(db)
+                const indexed = await vectorManager.rebuildIndex(db, progress)
                 return { success: true, entriesIndexed: indexed }
             },
         },
@@ -1809,7 +1829,16 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     })
                     .parse(params)
 
+                // Phase 1: Creating safety backup
+                await sendProgress(progress, 1, 3, 'Creating safety backup...')
+
+                // Phase 2: Restoring database (the restoreFromFile creates its own backup internally)
+                await sendProgress(progress, 2, 3, 'Restoring database...')
                 const result = await db.restoreFromFile(input.filename)
+
+                // Phase 3: Complete
+                await sendProgress(progress, 3, 3, 'Restore complete')
+
                 return {
                     success: true,
                     message: `Database restored from ${input.filename}`,

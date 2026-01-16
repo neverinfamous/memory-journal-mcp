@@ -159,15 +159,25 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 inputSchema?: z.ZodType
                 outputSchema?: z.ZodType
             },
-            async (args: unknown) => {
+            async (args, extra) => {
                 try {
+                    // Build progress context for progress notifications
+                    // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
+                    const extraMeta = extra as { _meta?: { progressToken?: string | number } }
+                    const progressToken = extraMeta?._meta?.progressToken
+                    const progressContext =
+                        progressToken !== undefined
+                            ? { server: server.server, progressToken }
+                            : undefined
+
                     const result = await callTool(
                         toolDef.name,
                         args as Record<string, unknown>,
                         db,
                         vectorManager,
                         github,
-                        { defaultProjectNumber }
+                        { defaultProjectNumber },
+                        progressContext
                     )
 
                     // MCP 2025-11-25: If tool has outputSchema, return both:

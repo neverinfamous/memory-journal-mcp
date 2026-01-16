@@ -12,6 +12,7 @@ import * as fs from 'node:fs'
 import { logger } from '../utils/logger.js'
 import type { SqliteAdapter } from '../database/SqliteAdapter.js'
 import type { JournalEntry } from '../types/index.js'
+import { sendProgress, type ProgressContext } from '../utils/progress-utils.js'
 
 /** Default model for embeddings (same as Python version) */
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2'
@@ -225,8 +226,10 @@ export class VectorSearchManager {
 
     /**
      * Rebuild index from database entries
+     * @param db - Database adapter
+     * @param progress - Optional progress context for notifications
      */
-    async rebuildIndex(db: SqliteAdapter): Promise<number> {
+    async rebuildIndex(db: SqliteAdapter, progress?: ProgressContext): Promise<number> {
         if (!this.initialized) {
             await this.initialize()
         }
@@ -239,6 +242,10 @@ export class VectorSearchManager {
 
         // Get all entries
         const entries = db.getRecentEntries(10000) // Get up to 10k entries
+        const total = entries.length
+
+        // Send initial progress
+        await sendProgress(progress, 0, total, 'Starting vector index rebuild...')
 
         let indexed = 0
         for (const entry of entries) {
@@ -251,12 +258,25 @@ export class VectorSearchManager {
 
             const success = await this.addEntry(entry.id, entry.content)
             if (success) indexed++
+
+            // Report progress every 10 entries to avoid flooding
+            if (indexed % 10 === 0 || indexed === total) {
+                await sendProgress(
+                    progress,
+                    indexed,
+                    total,
+                    `Indexed ${String(indexed)} of ${String(total)} entries`
+                )
+            }
         }
 
         // Force index to refresh by re-listing items
         // This ensures the internal query structures are updated and ready for search
         // The 100ms delay was insufficient because it didn't refresh the internal state
         await this.index.listItems()
+
+        // Final progress
+        await sendProgress(progress, indexed, total, 'Vector index rebuild complete')
 
         logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
             module: 'VectorSearch',
