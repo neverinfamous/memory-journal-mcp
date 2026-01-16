@@ -262,6 +262,7 @@ export class VectorSearchManager {
 
     /**
      * Get index statistics
+     * Uses getIndexStats() which explicitly loads from disk for authoritative stats.
      */
     async getStats(): Promise<{ itemCount: number; modelName: string; dimensions: number }> {
         if (!this.index) {
@@ -269,9 +270,11 @@ export class VectorSearchManager {
         }
 
         try {
-            const items = await this.index.listItems();
+            // Use getIndexStats() which loads from disk for accurate count
+            // This fixes inconsistency where listItems() could return stale in-memory data
+            const stats = await this.index.getIndexStats();
             return {
-                itemCount: items.length,
+                itemCount: stats.items,
                 modelName: this.modelName,
                 dimensions: EMBEDDING_DIMENSIONS
             };
