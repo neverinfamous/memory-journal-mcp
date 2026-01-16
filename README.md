@@ -19,15 +19,17 @@ Last Updated January 16, 2026 - v4.0.0
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
 **🚀 Quick Deploy:**
+
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - `npm install -g memory-journal-mcp`
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Alpine-based with full semantic search
 
 ## 🎯 What This Does
 
 ### Key Benefits
+
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, PRs, projects)
-- 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs  
+- 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs
 - 🔍 **Triple search** (full-text, semantic, date range)
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 🗄️ **Backup & restore** your journal data with one command
@@ -37,32 +39,32 @@ flowchart TB
     subgraph Session["🤖 AI Session Start"]
         Briefing["📋 Read Briefing<br/>(memory://briefing)"]
     end
-    
+
     subgraph Core["📝 Journal Operations"]
         Create["Create Entry"]
         Retrieve["Retrieve & Search"]
         Link["Link Entries"]
     end
-    
+
     subgraph Search["🔍 Triple Search"]
         FTS["Full-Text (FTS5)"]
         Semantic["Semantic (Vector)"]
         DateRange["Date Range"]
     end
-    
+
     subgraph GitHub["🐙 GitHub Integration"]
         Issues["Issues & Milestones"]
         PRs["Pull Requests"]
         Actions["GitHub Actions"]
         Kanban["Kanban Boards"]
     end
-    
+
     subgraph Outputs["📊 Outputs"]
         Reports["Standups & Retrospectives"]
         Graphs["Knowledge Graphs"]
         Timeline["Project Timelines"]
     end
-    
+
     Session --> Core
     Core --> Search
     Core <--> GitHub
@@ -89,7 +91,7 @@ flowchart TB
 When managing large projects with AI assistance, you face a critical challenge:
 
 - **Thread Amnesia** - Each new AI conversation starts from zero, unaware of previous work
-- **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads  
+- **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads
 - **Repeated Work** - AI suggests solutions you've already tried or abandoned
 - **Context Overload** - Manually copying project history into every new conversation
 
@@ -98,12 +100,14 @@ When managing large projects with AI assistance, you face a critical challenge:
 Memory Journal acts as your project's **long-term memory**, bridging the gap between fragmented AI threads:
 
 **For Developers:**
+
 - 📝 **Automatic Context Capture** - Git commits, branches, GitHub issues, PRs, and project state captured with every entry
 - 🔗 **Knowledge Graph** - Link related work (specs → implementations → tests → PRs) to build a connected history
 - 🔍 **Intelligent Search** - Find past decisions, solutions, and context across your entire project timeline
 - 📊 **Project Analytics** - Track progress from issues through PRs, generate reports for standups/retrospectives
 
 **For AI-Assisted Work:**
+
 - 🧠 **Dynamic Context Management** - Built-in guidance teaches AI agents when to query your project history and when to create entries
 - 💡 AI can query your **complete project history** in any conversation
 - 🔍 **Semantic search** finds conceptually related work, even without exact keywords
@@ -165,10 +169,7 @@ npm run build
   "mcpServers": {
     "memory-journal-mcp": {
       "command": "node",
-      "args": [
-        "dist/cli.js",
-        "--default-project", "1"
-      ]
+      "args": ["dist/cli.js", "--default-project", "1"]
     }
   }
 }
@@ -194,10 +195,10 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 }
 ```
 
-| Environment Variable | Description |
-|---------------------|-------------|
-| `GITHUB_TOKEN` | GitHub personal access token for API access |
-| `GITHUB_REPO_PATH` | Path to the git repository for auto-detecting owner/repo |
+| Environment Variable     | Description                                                            |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `GITHUB_TOKEN`           | GitHub personal access token for API access                            |
+| `GITHUB_REPO_PATH`       | Path to the git repository for auto-detecting owner/repo               |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
@@ -222,16 +223,16 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 ### 🛠️ **31 MCP Tools** (8 Groups)
 
-| Group | Tools | Description |
-|-------|-------|-------------|
-| `core` | 6 | Entry CRUD, tags, test |
-| `search` | 4 | Text search, date range, semantic, vector stats |
-| `analytics` | 2 | Statistics, cross-project insights |
-| `relationships` | 2 | Link entries, visualize graphs |
-| `export` | 1 | JSON/Markdown export |
-| `admin` | 4 | Update, delete, rebuild/add to vector index |
-| `github` | 9 | Issues, PRs, context, Kanban, **issue lifecycle** |
-| `backup` | 3 | Backup, list, restore |
+| Group           | Tools | Description                                       |
+| --------------- | ----- | ------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                            |
+| `search`        | 4     | Text search, date range, semantic, vector stats   |
+| `analytics`     | 2     | Statistics, cross-project insights                |
+| `relationships` | 2     | Link entries, visualize graphs                    |
+| `export`        | 1     | JSON/Markdown export                              |
+| `admin`         | 4     | Update, delete, rebuild/add to vector index       |
+| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle** |
+| `backup`        | 3     | Backup, list, restore                             |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -255,6 +256,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 ### 📡 **17 Resources** (11 Static + 6 Template)
 
 **Static Resources** (appear in resource lists):
+
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
 - `memory://instructions` - **Behavioral guidance**: complete server instructions (supports `?level=essential|standard|full`)
 - `memory://recent` - 10 most recent entries
@@ -269,6 +271,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 - `memory://github/status` - GitHub repository status overview
 
 **Template Resources** (require parameters, fetch directly by URI):
+
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
 - `memory://prs/{pr_number}/entries` - Entries linked to PR
@@ -294,12 +297,13 @@ export DEFAULT_ORG="your-org-name"            # Optional: default org
 
 Memory Journal provides a **hybrid approach** to GitHub management:
 
-| Capability Source | Purpose |
-|-------------------|---------|
-| **MCP Server** | Specialized features: Kanban visualization, journal linking, project timelines |
-| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases |
+| Capability Source  | Purpose                                                                        |
+| ------------------ | ------------------------------------------------------------------------------ |
+| **MCP Server**     | Specialized features: Kanban visualization, journal linking, project timelines |
+| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases  |
 
 **MCP Server Tools (Read + Kanban + Issue Lifecycle):**
+
 - `get_github_issues` / `get_github_issue` - Query issues
 - `get_github_prs` / `get_github_pr` - Query pull requests
 - `get_github_context` - Full repository context
@@ -307,12 +311,13 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
 
 **Agent Operations (via gh CLI):**
+
 ```bash
 # Issues
 gh issue create --title "Bug fix" --body "Description"
 gh issue close 42
 
-# Pull Requests  
+# Pull Requests
 gh pr create --fill
 gh pr merge 123
 
@@ -336,6 +341,7 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 ```
 
 **Filter Syntax:**
+
 - `-group` - Disable all tools in a group
 - `-tool` - Disable a specific tool
 - `+tool` - Re-enable after group disable
@@ -357,12 +363,12 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 }
 ```
 
-| Configuration | Filter String | Tools |
-|---------------|---------------|-------|
-| Starter | `starter` | ~10 |
-| Essential | `essential` | ~6 |
-| Full (default) | `full` | 31 |
-| Read-only | `readonly` | ~20 |
+| Configuration  | Filter String | Tools |
+| -------------- | ------------- | ----- |
+| Starter        | `starter`     | ~10   |
+| Essential      | `essential`   | ~6    |
+| Full (default) | `full`        | 31    |
+| Read-only      | `readonly`    | ~20   |
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
@@ -375,24 +381,24 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 ```mermaid
 flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
-    
+
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 31 Tools"]
         Resources["📡 17 Resources"]
         Prompts["💬 15 Prompts"]
     end
-    
+
     subgraph Storage["Persistence Layer"]
         SQLite[("💾 SQLite<br/>Entries, Tags, Relationships")]
         Vector[("🔍 Vector Index<br/>Semantic Embeddings")]
         Backups["📦 Backups"]
     end
-    
+
     subgraph External["External Integrations"]
         GitHub["🐙 GitHub API<br/>Issues, PRs, Actions"]
         Kanban["📋 Projects v2<br/>Kanban Boards"]
     end
-    
+
     AI <-->|"MCP Protocol"| MCP
     Tools --> Storage
     Tools --> External
@@ -428,6 +434,7 @@ flowchart TB
 ## 🔧 Technical Highlights
 
 ### Performance & Portability
+
 - **TypeScript + Pure JS Stack** - No native compilation, works everywhere
 - **sql.js** - SQLite in pure JavaScript with disk sync
 - **vectra** - Vector similarity search without native dependencies
@@ -435,12 +442,14 @@ flowchart TB
 - **Lazy loading** - ML models load on first use, not startup
 
 ### Security
+
 - **Local-first** - All data stored locally, no external API calls (except optional GitHub)
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-11-25 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
 
 ### Data & Privacy
+
 - **Single SQLite file** - You own your data
 - **Portable** - Move your `.db` file anywhere
 - **Soft delete** - Entries can be recovered
@@ -467,4 +476,4 @@ Built by developers, for developers. PRs welcome! See [CONTRIBUTING.md](CONTRIBU
 
 ---
 
-*Migrating from v2.x?* Your existing database is fully compatible. The TypeScript version uses the same schema and data format.
+_Migrating from v2.x?_ Your existing database is fully compatible. The TypeScript version uses the same schema and data format.

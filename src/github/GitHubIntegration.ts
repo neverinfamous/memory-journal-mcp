@@ -1,14 +1,14 @@
 /**
  * Memory Journal MCP Server - GitHub Integration
- * 
+ *
  * GitHub API integration using @octokit/rest for API access,
  * @octokit/graphql for Projects v2, and simple-git for local repository operations.
  */
 
-import { Octokit } from '@octokit/rest';
-import { graphql } from '@octokit/graphql';
-import * as simpleGitImport from 'simple-git';
-import { logger } from '../utils/logger.js';
+import { Octokit } from '@octokit/rest'
+import { graphql } from '@octokit/graphql'
+import * as simpleGitImport from 'simple-git'
+import { logger } from '../utils/logger.js'
 import type {
     GitHubIssue,
     GitHubPullRequest,
@@ -18,91 +18,93 @@ import type {
     KanbanColumn,
     ProjectV2Item,
     ProjectV2StatusOption,
-} from '../types/index.js';
+} from '../types/index.js'
 
 // Handle simpleGit ESM/CJS interop
-type SimpleGitType = typeof simpleGitImport.simpleGit;
-const simpleGit: SimpleGitType = simpleGitImport.simpleGit;
+type SimpleGitType = typeof simpleGitImport.simpleGit
+const simpleGit: SimpleGitType = simpleGitImport.simpleGit
 
 /**
  * Local repository information
  */
 export interface RepoInfo {
-    owner: string | null;
-    repo: string | null;
-    branch: string | null;
-    remoteUrl: string | null;
+    owner: string | null
+    repo: string | null
+    branch: string | null
+    remoteUrl: string | null
 }
 
 /**
  * GitHub issue details (extended)
  */
 export interface IssueDetails extends GitHubIssue {
-    body: string | null;
-    labels: string[];
-    assignees: string[];
-    createdAt: string;
-    updatedAt: string;
-    closedAt: string | null;
-    commentsCount: number;
+    body: string | null
+    labels: string[]
+    assignees: string[]
+    createdAt: string
+    updatedAt: string
+    closedAt: string | null
+    commentsCount: number
 }
 
 /**
  * GitHub PR details (extended)
  */
 export interface PullRequestDetails extends GitHubPullRequest {
-    body: string | null;
-    draft: boolean;
-    headBranch: string;
-    baseBranch: string;
-    author: string;
-    createdAt: string;
-    updatedAt: string;
-    mergedAt: string | null;
-    closedAt: string | null;
-    additions: number;
-    deletions: number;
-    changedFiles: number;
+    body: string | null
+    draft: boolean
+    headBranch: string
+    baseBranch: string
+    author: string
+    createdAt: string
+    updatedAt: string
+    mergedAt: string | null
+    closedAt: string | null
+    additions: number
+    deletions: number
+    changedFiles: number
 }
 
 /**
  * GitHubIntegration - Handles GitHub API and local git operations
  */
 export class GitHubIntegration {
-    private octokit: Octokit | null = null;
-    private graphqlWithAuth: typeof graphql | null = null;
-    private git: simpleGitImport.SimpleGit;
-    private readonly token: string | undefined;
+    private octokit: Octokit | null = null
+    private graphqlWithAuth: typeof graphql | null = null
+    private git: simpleGitImport.SimpleGit
+    private readonly token: string | undefined
 
     constructor(workingDir = '.') {
-        this.token = process.env['GITHUB_TOKEN'];
+        this.token = process.env['GITHUB_TOKEN']
 
         // Use GITHUB_REPO_PATH env var if set, otherwise fall back to workingDir
-        const envRepoPath = process.env['GITHUB_REPO_PATH'];
-        const effectiveDir = envRepoPath || workingDir;
+        const envRepoPath = process.env['GITHUB_REPO_PATH']
+        const effectiveDir = envRepoPath || workingDir
 
         // Resolve and log the actual working directory
-        const resolvedDir = effectiveDir === '.' ? process.cwd() : effectiveDir;
+        const resolvedDir = effectiveDir === '.' ? process.cwd() : effectiveDir
         logger.info('GitHub integration using directory', {
             module: 'GitHub',
             workingDir,
             envRepoPath: envRepoPath ?? 'not set',
             effectiveDir,
             resolvedDir,
-            cwd: process.cwd()
-        });
+            cwd: process.cwd(),
+        })
 
-        this.git = simpleGit(effectiveDir);
+        this.git = simpleGit(effectiveDir)
 
         // Initialize Octokit and GraphQL if token is available
         if (this.token) {
-            this.octokit = new Octokit({ auth: this.token });
+            this.octokit = new Octokit({ auth: this.token })
             this.graphqlWithAuth = graphql.defaults({
                 headers: { authorization: `token ${this.token}` },
-            });
-            logger.info('GitHub integration initialized with token', { module: 'GitHub' });
+            })
+            logger.info('GitHub integration initialized with token', { module: 'GitHub' })
         } else {
-            logger.info('GitHub integration initialized without token (limited functionality)', { module: 'GitHub' });
+            logger.info('GitHub integration initialized without token (limited functionality)', {
+                module: 'GitHub',
+            })
         }
     }
 
@@ -110,7 +112,7 @@ export class GitHubIntegration {
      * Check if GitHub API is available (token present)
      */
     isApiAvailable(): boolean {
-        return this.octokit !== null;
+        return this.octokit !== null
     }
 
     /**
@@ -119,57 +121,60 @@ export class GitHubIntegration {
     async getRepoInfo(): Promise<RepoInfo> {
         try {
             // Get current branch
-            const branchResult = await this.git.branch();
-            const branch = branchResult.current || null;
+            const branchResult = await this.git.branch()
+            const branch = branchResult.current || null
 
             // Get remote URL
-            const remotes = await this.git.getRemotes(true);
-            const origin = remotes.find(r => r.name === 'origin');
-            const remoteUrl = origin?.refs?.fetch || null;
+            const remotes = await this.git.getRemotes(true)
+            const origin = remotes.find((r) => r.name === 'origin')
+            const remoteUrl = origin?.refs?.fetch || null
 
             // Parse owner/repo from remote URL
-            const { owner, repo } = this.parseRemoteUrl(remoteUrl);
+            const { owner, repo } = this.parseRemoteUrl(remoteUrl)
 
-            return { owner, repo, branch, remoteUrl };
+            return { owner, repo, branch, remoteUrl }
         } catch (error) {
             logger.debug('Failed to get repo info (may not be a git repo)', {
                 module: 'GitHub',
-                error: error instanceof Error ? error.message : String(error)
-            });
-            return { owner: null, repo: null, branch: null, remoteUrl: null };
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return { owner: null, repo: null, branch: null, remoteUrl: null }
         }
     }
 
     /**
      * Parse owner and repo from GitHub remote URL
      */
-    private parseRemoteUrl(remoteUrl: string | null): { owner: string | null; repo: string | null } {
-        if (!remoteUrl) return { owner: null, repo: null };
+    private parseRemoteUrl(remoteUrl: string | null): {
+        owner: string | null
+        repo: string | null
+    } {
+        if (!remoteUrl) return { owner: null, repo: null }
 
         // Handle SSH format: git@github.com:owner/repo.git
         if (remoteUrl.startsWith('git@github.com:')) {
-            const pathPart = remoteUrl.replace('git@github.com:', '').replace('.git', '');
-            const parts = pathPart.split('/');
+            const pathPart = remoteUrl.replace('git@github.com:', '').replace('.git', '')
+            const parts = pathPart.split('/')
             if (parts.length >= 2) {
-                return { owner: parts[0] ?? null, repo: parts[1] ?? null };
+                return { owner: parts[0] ?? null, repo: parts[1] ?? null }
             }
         }
 
         // Handle HTTPS format: https://github.com/owner/repo.git
         try {
-            const url = new URL(remoteUrl);
+            const url = new URL(remoteUrl)
             if (url.hostname === 'github.com') {
-                const path = url.pathname.replace('.git', '').replace(/^\//, '');
-                const parts = path.split('/');
+                const path = url.pathname.replace('.git', '').replace(/^\//, '')
+                const parts = path.split('/')
                 if (parts.length >= 2) {
-                    return { owner: parts[0] ?? null, repo: parts[1] ?? null };
+                    return { owner: parts[0] ?? null, repo: parts[1] ?? null }
                 }
             }
         } catch {
             // Not a valid URL
         }
 
-        return { owner: null, repo: null };
+        return { owner: null, repo: null }
     }
 
     /**
@@ -182,7 +187,7 @@ export class GitHubIntegration {
         limit = 20
     ): Promise<GitHubIssue[]> {
         if (!this.octokit) {
-            return [];
+            return []
         }
 
         try {
@@ -193,23 +198,23 @@ export class GitHubIntegration {
                 per_page: limit,
                 sort: 'updated',
                 direction: 'desc',
-            });
+            })
 
             // Filter out pull requests (GitHub API includes PRs in issues)
             return response.data
-                .filter(issue => !issue.pull_request)
-                .map(issue => ({
+                .filter((issue) => !issue.pull_request)
+                .map((issue) => ({
                     number: issue.number,
                     title: issue.title,
                     url: issue.html_url,
                     state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
-                }));
+                }))
         } catch (error) {
             logger.error('Failed to get issues', {
                 module: 'GitHub',
-                error: error instanceof Error ? error.message : String(error)
-            });
-            return [];
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
         }
     }
 
@@ -218,7 +223,7 @@ export class GitHubIntegration {
      */
     async getIssue(owner: string, repo: string, issueNumber: number): Promise<IssueDetails | null> {
         if (!this.octokit) {
-            return null;
+            return null
         }
 
         try {
@@ -226,13 +231,13 @@ export class GitHubIntegration {
                 owner,
                 repo,
                 issue_number: issueNumber,
-            });
+            })
 
-            const issue = response.data;
+            const issue = response.data
 
             // Verify it's not a PR
             if (issue.pull_request) {
-                return null;
+                return null
             }
 
             return {
@@ -241,20 +246,20 @@ export class GitHubIntegration {
                 url: issue.html_url,
                 state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
                 body: issue.body ?? null,
-                labels: issue.labels.map(l => (typeof l === 'string' ? l : l.name ?? '')),
-                assignees: issue.assignees?.map(a => a.login) ?? [],
+                labels: issue.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))),
+                assignees: issue.assignees?.map((a) => a.login) ?? [],
                 createdAt: issue.created_at,
                 updatedAt: issue.updated_at,
                 closedAt: issue.closed_at,
                 commentsCount: issue.comments,
-            };
+            }
         } catch (error) {
             logger.error('Failed to get issue details', {
                 module: 'GitHub',
                 entityId: issueNumber,
-                error: error instanceof Error ? error.message : String(error)
-            });
-            return null;
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return null
         }
     }
 
@@ -270,8 +275,8 @@ export class GitHubIntegration {
         assignees?: string[]
     ): Promise<{ number: number; url: string; title: string; nodeId: string } | null> {
         if (!this.octokit) {
-            logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' });
-            return null;
+            logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' })
+            return null
         }
 
         try {
@@ -282,27 +287,27 @@ export class GitHubIntegration {
                 body,
                 labels,
                 assignees,
-            });
+            })
 
             logger.info('Created GitHub issue', {
                 module: 'GitHub',
                 entityId: response.data.number,
                 context: { title, owner, repo },
-            });
+            })
 
             return {
                 number: response.data.number,
                 url: response.data.html_url,
                 title: response.data.title,
                 nodeId: response.data.node_id,
-            };
+            }
         } catch (error) {
             logger.error('Failed to create issue', {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
                 context: { title, owner, repo },
-            });
-            return null;
+            })
+            return null
         }
     }
 
@@ -316,8 +321,8 @@ export class GitHubIntegration {
         comment?: string
     ): Promise<{ success: boolean; url: string } | null> {
         if (!this.octokit) {
-            logger.error('Cannot close issue: GitHub API not available', { module: 'GitHub' });
-            return null;
+            logger.error('Cannot close issue: GitHub API not available', { module: 'GitHub' })
+            return null
         }
 
         try {
@@ -328,7 +333,7 @@ export class GitHubIntegration {
                     repo,
                     issue_number: issueNumber,
                     body: comment,
-                });
+                })
             }
 
             // Close the issue
@@ -337,25 +342,25 @@ export class GitHubIntegration {
                 repo,
                 issue_number: issueNumber,
                 state: 'closed',
-            });
+            })
 
             logger.info('Closed GitHub issue', {
                 module: 'GitHub',
                 entityId: issueNumber,
                 context: { owner, repo, hadComment: !!comment },
-            });
+            })
 
             return {
                 success: true,
                 url: response.data.html_url,
-            };
+            }
         } catch (error) {
             logger.error('Failed to close issue', {
                 module: 'GitHub',
                 entityId: issueNumber,
                 error: error instanceof Error ? error.message : String(error),
-            });
-            return null;
+            })
+            return null
         }
     }
 
@@ -369,7 +374,7 @@ export class GitHubIntegration {
         limit = 20
     ): Promise<GitHubPullRequest[]> {
         if (!this.octokit) {
-            return [];
+            return []
         }
 
         try {
@@ -380,29 +385,33 @@ export class GitHubIntegration {
                 per_page: limit,
                 sort: 'updated',
                 direction: 'desc',
-            });
+            })
 
-            return response.data.map(pr => ({
+            return response.data.map((pr) => ({
                 number: pr.number,
                 title: pr.title,
                 url: pr.html_url,
-                state: pr.merged_at ? 'MERGED' : (pr.state === 'open' ? 'OPEN' : 'CLOSED'),
-            }));
+                state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',
+            }))
         } catch (error) {
             logger.error('Failed to get pull requests', {
                 module: 'GitHub',
-                error: error instanceof Error ? error.message : String(error)
-            });
-            return [];
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
         }
     }
 
     /**
      * Get PR details
      */
-    async getPullRequest(owner: string, repo: string, prNumber: number): Promise<PullRequestDetails | null> {
+    async getPullRequest(
+        owner: string,
+        repo: string,
+        prNumber: number
+    ): Promise<PullRequestDetails | null> {
         if (!this.octokit) {
-            return null;
+            return null
         }
 
         try {
@@ -410,15 +419,15 @@ export class GitHubIntegration {
                 owner,
                 repo,
                 pull_number: prNumber,
-            });
+            })
 
-            const pr = response.data;
+            const pr = response.data
 
             return {
                 number: pr.number,
                 title: pr.title,
                 url: pr.html_url,
-                state: pr.merged_at ? 'MERGED' : (pr.state === 'open' ? 'OPEN' : 'CLOSED'),
+                state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',
                 body: pr.body,
                 draft: pr.draft ?? false,
                 headBranch: pr.head.ref,
@@ -431,28 +440,24 @@ export class GitHubIntegration {
                 additions: pr.additions,
                 deletions: pr.deletions,
                 changedFiles: pr.changed_files,
-            };
+            }
         } catch (error) {
             logger.error('Failed to get PR details', {
                 module: 'GitHub',
                 entityId: prNumber,
-                error: error instanceof Error ? error.message : String(error)
-            });
-            return null;
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return null
         }
     }
 
     /**
      * Get workflow runs from GitHub Actions
      */
-    async getWorkflowRuns(
-        owner: string,
-        repo: string,
-        limit = 10
-    ): Promise<GitHubWorkflowRun[]> {
+    async getWorkflowRuns(owner: string, repo: string, limit = 10): Promise<GitHubWorkflowRun[]> {
         if (!this.octokit) {
-            logger.debug('GitHub API not available - no token', { module: 'GitHub' });
-            return [];
+            logger.debug('GitHub API not available - no token', { module: 'GitHub' })
+            return []
         }
 
         try {
@@ -460,25 +465,30 @@ export class GitHubIntegration {
                 owner,
                 repo,
                 per_page: limit,
-            });
+            })
 
-            return response.data.workflow_runs.map(run => ({
+            return response.data.workflow_runs.map((run) => ({
                 id: run.id,
                 name: run.name ?? 'Unknown Workflow',
                 status: run.status as 'queued' | 'in_progress' | 'completed',
-                conclusion: run.conclusion as 'success' | 'failure' | 'cancelled' | 'skipped' | null,
+                conclusion: run.conclusion as
+                    | 'success'
+                    | 'failure'
+                    | 'cancelled'
+                    | 'skipped'
+                    | null,
                 url: run.html_url,
                 headBranch: run.head_branch ?? '',
                 headSha: run.head_sha,
                 createdAt: run.created_at,
                 updatedAt: run.updated_at,
-            }));
+            }))
         } catch (error) {
             logger.error('Failed to get workflow runs', {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
-            });
-            return [];
+            })
+            return []
         }
     }
 
@@ -486,7 +496,7 @@ export class GitHubIntegration {
      * Get full repository context (issues, PRs, branch info)
      */
     async getRepoContext(): Promise<ProjectContext> {
-        const repoInfo = await this.getRepoInfo();
+        const repoInfo = await this.getRepoInfo()
 
         const context: ProjectContext = {
             repoName: repoInfo.repo,
@@ -497,24 +507,29 @@ export class GitHubIntegration {
             issues: [],
             pullRequests: [],
             workflowRuns: [],
-        };
+        }
 
         // Get current commit
         try {
-            const log = await this.git.log({ maxCount: 1 });
-            context.commit = log.latest?.hash ?? null;
+            const log = await this.git.log({ maxCount: 1 })
+            context.commit = log.latest?.hash ?? null
         } catch {
             // Ignore error
         }
 
         // Get issues, PRs, and workflow runs if we have owner/repo
         if (repoInfo.owner && repoInfo.repo) {
-            context.issues = await this.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10);
-            context.pullRequests = await this.getPullRequests(repoInfo.owner, repoInfo.repo, 'open', 10);
-            context.workflowRuns = await this.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10);
+            context.issues = await this.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10)
+            context.pullRequests = await this.getPullRequests(
+                repoInfo.owner,
+                repoInfo.repo,
+                'open',
+                10
+            )
+            context.workflowRuns = await this.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10)
         }
 
-        return context;
+        return context
     }
 
     // ==========================================================================
@@ -524,7 +539,7 @@ export class GitHubIntegration {
     /**
      * Get a Kanban board view of a GitHub Project v2
      * Fetches project items grouped by Status field
-     * 
+     *
      * Searches in order: user projects, then repository projects, then organization projects
      */
     async getProjectKanban(
@@ -533,8 +548,8 @@ export class GitHubIntegration {
         repo?: string
     ): Promise<KanbanBoard | null> {
         if (!this.graphqlWithAuth) {
-            logger.debug('GraphQL not available - no token', { module: 'GitHub' });
-            return null;
+            logger.debug('GraphQL not available - no token', { module: 'GitHub' })
+            return null
         }
 
         // Common fragment for project data
@@ -603,7 +618,7 @@ export class GitHubIntegration {
                     }
                 }
             }
-        `;
+        `
 
         // Try user-level project first
         const userQuery = `
@@ -615,7 +630,7 @@ export class GitHubIntegration {
                     }
                 }
             }
-        `;
+        `
 
         // Repository-level project query
         const repoQuery = `
@@ -627,9 +642,9 @@ export class GitHubIntegration {
                     }
                 }
             }
-        `;
+        `
 
-        // Organization-level project query  
+        // Organization-level project query
         const orgQuery = `
             ${projectFragment}
             query($owner: String!, $number: Int!) {
@@ -639,64 +654,70 @@ export class GitHubIntegration {
                     }
                 }
             }
-        `;
+        `
 
         interface ProjectV2Data {
-            id: string;
-            title: string;
+            id: string
+            title: string
             fields: {
                 nodes: {
-                    id?: string;
-                    name?: string;
+                    id?: string
+                    name?: string
                     options?: {
-                        id: string;
-                        name: string;
-                        color?: string;
-                    }[];
-                }[];
-            };
+                        id: string
+                        name: string
+                        color?: string
+                    }[]
+                }[]
+            }
             items: {
                 nodes: {
-                    id: string;
-                    type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE';
-                    createdAt: string;
-                    updatedAt: string;
+                    id: string
+                    type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE'
+                    createdAt: string
+                    updatedAt: string
                     fieldValues: {
                         nodes: {
-                            name?: string;
-                            field?: { name?: string };
-                        }[];
-                    };
+                            name?: string
+                            field?: { name?: string }
+                        }[]
+                    }
                     content: {
-                        number?: number;
-                        title?: string;
-                        url?: string;
-                        labels?: { nodes: { name: string }[] };
-                        assignees?: { nodes: { login: string }[] };
-                    } | null;
-                }[];
-            };
+                        number?: number
+                        title?: string
+                        url?: string
+                        labels?: { nodes: { name: string }[] }
+                        assignees?: { nodes: { login: string }[] }
+                    } | null
+                }[]
+            }
         }
 
-        interface UserResponse { user: { projectV2: ProjectV2Data | null } | null }
-        interface RepoResponse { repository: { projectV2: ProjectV2Data | null } | null }
-        interface OrgResponse { organization: { projectV2: ProjectV2Data | null } | null }
+        interface UserResponse {
+            user: { projectV2: ProjectV2Data | null } | null
+        }
+        interface RepoResponse {
+            repository: { projectV2: ProjectV2Data | null } | null
+        }
+        interface OrgResponse {
+            organization: { projectV2: ProjectV2Data | null } | null
+        }
 
-        let project: ProjectV2Data | null = null;
-        let source = '';
+        let project: ProjectV2Data | null = null
+        let source = ''
 
         // Try user-level project first
         try {
             const response = await this.graphqlWithAuth<UserResponse>(userQuery, {
                 owner,
                 number: projectNumber,
-            });
+            })
             if (response.user?.projectV2) {
-                project = response.user.projectV2;
-                source = 'user';
+                project = response.user.projectV2
+                source = 'user'
             }
         } catch {
-            logger.debug('User project not found, trying repository...', { module: 'GitHub' });
+            logger.debug('User project not found, trying repository...', { module: 'GitHub' })
         }
 
         // Try repository-level project if user project not found
@@ -706,13 +727,15 @@ export class GitHubIntegration {
                     owner,
                     repo,
                     number: projectNumber,
-                });
+                })
                 if (response.repository?.projectV2) {
-                    project = response.repository.projectV2;
-                    source = 'repository';
+                    project = response.repository.projectV2
+                    source = 'repository'
                 }
             } catch {
-                logger.debug('Repository project not found, trying organization...', { module: 'GitHub' });
+                logger.debug('Repository project not found, trying organization...', {
+                    module: 'GitHub',
+                })
             }
         }
 
@@ -722,55 +745,56 @@ export class GitHubIntegration {
                 const response = await this.graphqlWithAuth<OrgResponse>(orgQuery, {
                     owner,
                     number: projectNumber,
-                });
+                })
                 if (response.organization?.projectV2) {
-                    project = response.organization.projectV2;
-                    source = 'organization';
+                    project = response.organization.projectV2
+                    source = 'organization'
                 }
             } catch {
-                logger.debug('Organization project not found', { module: 'GitHub' });
+                logger.debug('Organization project not found', { module: 'GitHub' })
             }
         }
 
         if (!project) {
-            logger.warning('Project not found', { module: 'GitHub', entityId: projectNumber });
-            return null;
+            logger.warning('Project not found', { module: 'GitHub', entityId: projectNumber })
+            return null
         }
 
         // Find the Status field
         const statusField = project.fields.nodes.find(
             (f) => f.name === 'Status' && f.options !== undefined && f.options.length > 0
-        );
+        )
 
         if (!statusField?.id || !statusField.options) {
-            logger.warning('Status field not found in project', { module: 'GitHub', entityId: projectNumber });
-            return null;
+            logger.warning('Status field not found in project', {
+                module: 'GitHub',
+                entityId: projectNumber,
+            })
+            return null
         }
 
         const statusOptions: ProjectV2StatusOption[] = statusField.options.map((opt) => ({
             id: opt.id,
             name: opt.name,
             color: opt.color,
-        }));
+        }))
 
         // Group items by status
-        const columnMap = new Map<string, ProjectV2Item[]>();
+        const columnMap = new Map<string, ProjectV2Item[]>()
 
         // Initialize columns for all status options
         for (const opt of statusOptions) {
-            columnMap.set(opt.name, []);
+            columnMap.set(opt.name, [])
         }
         // Add a column for items without status
-        columnMap.set('No Status', []);
+        columnMap.set('No Status', [])
 
         for (const item of project.items.nodes) {
             // Find the Status field value
-            const statusValue = item.fieldValues.nodes.find(
-                (fv) => fv.field?.name === 'Status'
-            );
-            const status = statusValue?.name ?? 'No Status';
+            const statusValue = item.fieldValues.nodes.find((fv) => fv.field?.name === 'Status')
+            const status = statusValue?.name ?? 'No Status'
 
-            const content = item.content;
+            const content = item.content
             const projectItem: ProjectV2Item = {
                 id: item.id,
                 title: content?.title ?? 'Draft Issue',
@@ -782,44 +806,44 @@ export class GitHubIntegration {
                 assignees: content?.assignees?.nodes.map((a) => a.login) ?? [],
                 createdAt: item.createdAt,
                 updatedAt: item.updatedAt,
-            };
+            }
 
-            const column = columnMap.get(status);
+            const column = columnMap.get(status)
             if (column) {
-                column.push(projectItem);
+                column.push(projectItem)
             } else {
-                columnMap.get('No Status')?.push(projectItem);
+                columnMap.get('No Status')?.push(projectItem)
             }
         }
 
         // Build columns array
-        const columns: KanbanColumn[] = [];
+        const columns: KanbanColumn[] = []
         for (const opt of statusOptions) {
-            const items = columnMap.get(opt.name) ?? [];
+            const items = columnMap.get(opt.name) ?? []
             columns.push({
                 status: opt.name,
                 statusOptionId: opt.id,
                 items,
-            });
+            })
         }
 
         // Add "No Status" column if it has items
-        const noStatusItems = columnMap.get('No Status') ?? [];
+        const noStatusItems = columnMap.get('No Status') ?? []
         if (noStatusItems.length > 0) {
             columns.push({
                 status: 'No Status',
                 statusOptionId: '',
                 items: noStatusItems,
-            });
+            })
         }
 
-        const totalItems = project.items.nodes.length;
+        const totalItems = project.items.nodes.length
 
         logger.info('Fetched Kanban board', {
             module: 'GitHub',
             entityId: projectNumber,
             context: { columns: columns.length, items: totalItems, source },
-        });
+        })
 
         return {
             projectId: project.id,
@@ -829,7 +853,7 @@ export class GitHubIntegration {
             statusOptions,
             columns,
             totalItems,
-        };
+        }
     }
 
     /**
@@ -842,7 +866,7 @@ export class GitHubIntegration {
         statusOptionId: string
     ): Promise<{ success: boolean; error?: string }> {
         if (!this.graphqlWithAuth) {
-            return { success: false, error: 'GraphQL not available - no token' };
+            return { success: false, error: 'GraphQL not available - no token' }
         }
 
         try {
@@ -861,30 +885,30 @@ export class GitHubIntegration {
                         }
                     }
                 }
-            `;
+            `
 
             await this.graphqlWithAuth(mutation, {
                 projectId,
                 itemId,
                 fieldId: statusFieldId,
                 optionId: statusOptionId,
-            });
+            })
 
             logger.info('Moved project item', {
                 module: 'GitHub',
                 entityId: itemId,
                 context: { targetStatus: statusOptionId },
-            });
+            })
 
-            return { success: true };
+            return { success: true }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = error instanceof Error ? error.message : String(error)
             logger.error('Failed to move project item', {
                 module: 'GitHub',
                 entityId: itemId,
                 error: errorMessage,
-            });
-            return { success: false, error: errorMessage };
+            })
+            return { success: false, error: errorMessage }
         }
     }
 
@@ -896,7 +920,7 @@ export class GitHubIntegration {
         contentId: string
     ): Promise<{ success: boolean; itemId?: string; error?: string }> {
         if (!this.graphqlWithAuth) {
-            return { success: false, error: 'GraphQL not available - no token' };
+            return { success: false, error: 'GraphQL not available - no token' }
         }
 
         try {
@@ -908,30 +932,31 @@ export class GitHubIntegration {
                         }
                     }
                 }
-            `;
+            `
 
-            const response = await this.graphqlWithAuth<{ addProjectV2ItemById: { item: { id: string } } }>(mutation, {
+            const response = await this.graphqlWithAuth<{
+                addProjectV2ItemById: { item: { id: string } }
+            }>(mutation, {
                 projectId,
                 contentId,
-            });
+            })
 
-            const itemId = response.addProjectV2ItemById?.item?.id;
+            const itemId = response.addProjectV2ItemById?.item?.id
 
             logger.info('Added item to project', {
                 module: 'GitHub',
                 context: { projectId, contentId, itemId },
-            });
+            })
 
-            return { success: true, itemId };
+            return { success: true, itemId }
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = error instanceof Error ? error.message : String(error)
             logger.error('Failed to add item to project', {
                 module: 'GitHub',
                 context: { projectId, contentId },
                 error: errorMessage,
-            });
-            return { success: false, error: errorMessage };
+            })
+            return { success: false, error: errorMessage }
         }
     }
 }
-

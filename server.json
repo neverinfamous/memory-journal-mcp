@@ -1,42 +1,42 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.neverinfamous/memory-journal-mcp",
-  "title": "Memory Journal MCP",
-  "description": "MCP server– Project memory system with GitHub-aware context, knowledge graphs, and CI/PR timelines",
-  "version": "4.0.0",
-  "packages": [
-    {
-      "registryType": "oci",
-      "identifier": "docker.io/writenotenow/memory-journal-mcp:v4.0.0",
-      "version": "4.0.0",
-      "transport": {
-        "type": "stdio"
-      }
-    }
-  ],
-  "keywords": [
-    "mcp",
-    "model-context-protocol",
-    "context-management",
-    "project-management",
-    "ai-assistant",
-    "knowledge-graph",
-    "developer-tools",
-    "git",
-    "github-projects",
-    "persistent-memory",
-    "thread-continuity",
-    "semantic-search"
-  ],
-  "author": {
-    "name": "Chris LeRoux",
-    "email": "writenotenow@gmail.com"
-  },
-  "homepage": "https://github.com/neverinfamous/memory-journal-mcp",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/neverinfamous/memory-journal-mcp.git",
-    "source": "github"
-  },
-  "license": "MIT"
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "name": "io.github.neverinfamous/memory-journal-mcp",
+    "title": "Memory Journal MCP",
+    "description": "MCP server– Project memory system with GitHub-aware context, knowledge graphs, and CI/PR timelines",
+    "version": "4.0.0",
+    "packages": [
+        {
+            "registryType": "oci",
+            "identifier": "docker.io/writenotenow/memory-journal-mcp:v4.0.0",
+            "version": "4.0.0",
+            "transport": {
+                "type": "stdio"
+            }
+        }
+    ],
+    "keywords": [
+        "mcp",
+        "model-context-protocol",
+        "context-management",
+        "project-management",
+        "ai-assistant",
+        "knowledge-graph",
+        "developer-tools",
+        "git",
+        "github-projects",
+        "persistent-memory",
+        "thread-continuity",
+        "semantic-search"
+    ],
+    "author": {
+        "name": "Chris LeRoux",
+        "email": "writenotenow@gmail.com"
+    },
+    "homepage": "https://github.com/neverinfamous/memory-journal-mcp",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/neverinfamous/memory-journal-mcp.git",
+        "source": "github"
+    },
+    "license": "MIT"
 }

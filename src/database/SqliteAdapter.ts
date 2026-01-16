@@ -1,14 +1,14 @@
 /**
  * Memory Journal MCP Server - SQLite Database Adapter
- * 
+ *
  * Manages SQLite database with FTS5 full-text search using sql.js.
  * Note: sql.js is pure JavaScript, no native compilation required.
  */
 
-import initSqlJs, { type Database } from 'sql.js';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { logger } from '../utils/logger.js';
+import initSqlJs, { type Database } from 'sql.js'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { logger } from '../utils/logger.js'
 import type {
     JournalEntry,
     Tag,
@@ -16,7 +16,7 @@ import type {
     EntryType,
     SignificanceType,
     RelationshipType,
-} from '../types/index.js';
+} from '../types/index.js'
 
 // Schema SQL for initialization
 const SCHEMA_SQL = `
@@ -92,89 +92,89 @@ CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entry_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id);
-`;
+`
 
 /**
  * Input for creating a new entry
  */
 export interface CreateEntryInput {
-    content: string;
-    entryType?: EntryType;
-    tags?: string[];
-    isPersonal?: boolean;
-    significanceType?: SignificanceType;
-    autoContext?: string;
-    projectNumber?: number;
-    projectOwner?: string;
-    issueNumber?: number;
-    issueUrl?: string;
-    prNumber?: number;
-    prUrl?: string;
-    prStatus?: 'draft' | 'open' | 'merged' | 'closed';
-    workflowRunId?: number;
-    workflowName?: string;
-    workflowStatus?: 'queued' | 'in_progress' | 'completed';
+    content: string
+    entryType?: EntryType
+    tags?: string[]
+    isPersonal?: boolean
+    significanceType?: SignificanceType
+    autoContext?: string
+    projectNumber?: number
+    projectOwner?: string
+    issueNumber?: number
+    issueUrl?: string
+    prNumber?: number
+    prUrl?: string
+    prStatus?: 'draft' | 'open' | 'merged' | 'closed'
+    workflowRunId?: number
+    workflowName?: string
+    workflowStatus?: 'queued' | 'in_progress' | 'completed'
 }
 
 /**
  * SQLite Database Adapter for Memory Journal using sql.js
  */
 export class SqliteAdapter {
-    private db: Database | null = null;
-    private readonly dbPath: string;
-    private initialized = false;
+    private db: Database | null = null
+    private readonly dbPath: string
+    private initialized = false
 
     constructor(dbPath: string) {
-        this.dbPath = dbPath;
+        this.dbPath = dbPath
     }
 
     /**
      * Initialize the database (must be called before using)
      */
     async initialize(): Promise<void> {
-        if (this.initialized) return;
+        if (this.initialized) return
 
-        const SQL = await initSqlJs();
+        const SQL = await initSqlJs()
 
         // Try to load existing database
-        let dbBuffer: Buffer | null = null;
+        let dbBuffer: Buffer | null = null
         if (fs.existsSync(this.dbPath)) {
             try {
-                dbBuffer = fs.readFileSync(this.dbPath);
+                dbBuffer = fs.readFileSync(this.dbPath)
             } catch {
                 // File doesn't exist or can't be read, create new
             }
         }
 
         if (dbBuffer) {
-            this.db = new SQL.Database(dbBuffer);
+            this.db = new SQL.Database(dbBuffer)
         } else {
-            this.db = new SQL.Database();
+            this.db = new SQL.Database()
             // Ensure directory exists
-            const dir = path.dirname(this.dbPath);
+            const dir = path.dirname(this.dbPath)
             if (dir && !fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
+                fs.mkdirSync(dir, { recursive: true })
             }
         }
 
         // Initialize schema
-        this.db.run(SCHEMA_SQL);
-        this.initialized = true;
+        this.db.run(SCHEMA_SQL)
+        this.initialized = true
 
-        logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath });
+        logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath })
 
         // Save after initialization
-        this.save();
+        this.save()
     }
 
     /**
      * Save database to disk
      */
     private save(): void {
-        if (!this.db) return;
-        const data = this.db.export();
-        const buffer = Buffer.from(data);
-        fs.writeFileSync(this.dbPath, buffer);
+        if (!this.db) return
+        const data = this.db.export()
+        const buffer = Buffer.from(data)
+        fs.writeFileSync(this.dbPath, buffer)
     }
 
     /**
@@ -182,11 +182,11 @@ export class SqliteAdapter {
      */
     close(): void {
         if (this.db) {
-            this.save();
-            this.db.close();
-            this.db = null;
+            this.save()
+            this.db.close()
+            this.db = null
         }
-        logger.info('Database closed', { module: 'SqliteAdapter' });
+        logger.info('Database closed', { module: 'SqliteAdapter' })
     }
 
     /**
@@ -194,9 +194,9 @@ export class SqliteAdapter {
      */
     private ensureDb(): Database {
         if (!this.db) {
-            throw new Error('Database not initialized. Call initialize() first.');
+            throw new Error('Database not initialized. Call initialize() first.')
         }
-        return this.db;
+        return this.db
     }
 
     // =========================================================================
@@ -207,7 +207,7 @@ export class SqliteAdapter {
      * Create a new journal entry
      */
     createEntry(input: CreateEntryInput): JournalEntry {
-        const db = this.ensureDb();
+        const db = this.ensureDb()
         const {
             content,
             entryType = 'personal_reflection',
@@ -225,98 +225,100 @@ export class SqliteAdapter {
             workflowRunId,
             workflowName,
             workflowStatus,
-        } = input;
+        } = input
 
-        db.run(`
+        db.run(
+            `
             INSERT INTO memory_journal (
                 entry_type, content, is_personal, significance_type, auto_context,
                 project_number, project_owner, issue_number, issue_url,
                 pr_number, pr_url, pr_status, workflow_run_id, workflow_name, workflow_status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-            entryType,
-            content,
-            isPersonal ? 1 : 0,
-            significanceType,
-            autoContext,
-            projectNumber ?? null,
-            projectOwner ?? null,
-            issueNumber ?? null,
-            issueUrl ?? null,
-            prNumber ?? null,
-            prUrl ?? null,
-            prStatus ?? null,
-            workflowRunId ?? null,
-            workflowName ?? null,
-            workflowStatus ?? null,
-        ]);
+        `,
+            [
+                entryType,
+                content,
+                isPersonal ? 1 : 0,
+                significanceType,
+                autoContext,
+                projectNumber ?? null,
+                projectOwner ?? null,
+                issueNumber ?? null,
+                issueUrl ?? null,
+                prNumber ?? null,
+                prUrl ?? null,
+                prStatus ?? null,
+                workflowRunId ?? null,
+                workflowName ?? null,
+                workflowStatus ?? null,
+            ]
+        )
 
         // Get the inserted ID
-        const result = db.exec('SELECT last_insert_rowid() as id');
-        const entryId = result[0]?.values[0]?.[0] as number;
+        const result = db.exec('SELECT last_insert_rowid() as id')
+        const entryId = result[0]?.values[0]?.[0] as number
 
         // Create tags and link them
         if (tags.length > 0) {
-            this.linkTagsToEntry(entryId, tags);
+            this.linkTagsToEntry(entryId, tags)
         }
 
-        this.save();
+        this.save()
 
         logger.info('Entry created', {
             module: 'SqliteAdapter',
             operation: 'createEntry',
-            entityId: entryId
-        });
+            entityId: entryId,
+        })
 
-        const entry = this.getEntryById(entryId);
+        const entry = this.getEntryById(entryId)
         if (!entry) {
-            throw new Error(`Failed to retrieve created entry with ID ${entryId}`);
+            throw new Error(`Failed to retrieve created entry with ID ${entryId}`)
         }
-        return entry;
+        return entry
     }
 
     /**
      * Get entry by ID
      */
     getEntryById(id: number): JournalEntry | null {
-        const db = this.ensureDb();
-        const result = db.exec(
-            `SELECT * FROM memory_journal WHERE id = ? AND deleted_at IS NULL`,
-            [id]
-        );
+        const db = this.ensureDb()
+        const result = db.exec(`SELECT * FROM memory_journal WHERE id = ? AND deleted_at IS NULL`, [
+            id,
+        ])
 
-        if (result.length === 0 || result[0]?.values.length === 0) return null;
+        if (result.length === 0 || result[0]?.values.length === 0) return null
 
-        const columns = result[0]?.columns ?? [];
-        const values = result[0]?.values[0] ?? [];
-        const row = this.rowToObject(columns, values);
+        const columns = result[0]?.columns ?? []
+        const values = result[0]?.values[0] ?? []
+        const row = this.rowToObject(columns, values)
 
-        return this.rowToEntry(row);
+        return this.rowToEntry(row)
     }
 
     /**
      * Get recent entries
      */
     getRecentEntries(limit = 10, isPersonal?: boolean): JournalEntry[] {
-        const db = this.ensureDb();
-        let sql = `SELECT * FROM memory_journal WHERE deleted_at IS NULL`;
-        const params: unknown[] = [];
+        const db = this.ensureDb()
+        let sql = `SELECT * FROM memory_journal WHERE deleted_at IS NULL`
+        const params: unknown[] = []
 
         if (isPersonal !== undefined) {
-            sql += ` AND is_personal = ?`;
-            params.push(isPersonal ? 1 : 0);
+            sql += ` AND is_personal = ?`
+            params.push(isPersonal ? 1 : 0)
         }
 
-        sql += ` ORDER BY timestamp DESC LIMIT ?`;
-        params.push(limit);
+        sql += ` ORDER BY timestamp DESC LIMIT ?`
+        params.push(limit)
 
-        const result = db.exec(sql, params);
-        if (result.length === 0) return [];
+        const result = db.exec(sql, params)
+        if (result.length === 0) return []
 
-        const columns = result[0]?.columns ?? [];
-        return (result[0]?.values ?? []).map(values =>
+        const columns = result[0]?.columns ?? []
+        return (result[0]?.values ?? []).map((values) =>
             this.rowToEntry(this.rowToObject(columns, values))
-        );
+        )
     }
 
     /**
@@ -325,71 +327,68 @@ export class SqliteAdapter {
     updateEntry(
         id: number,
         updates: {
-            content?: string;
-            entryType?: EntryType;
-            tags?: string[];
-            isPersonal?: boolean;
+            content?: string
+            entryType?: EntryType
+            tags?: string[]
+            isPersonal?: boolean
         }
     ): JournalEntry | null {
-        const db = this.ensureDb();
-        const entry = this.getEntryById(id);
-        if (!entry) return null;
+        const db = this.ensureDb()
+        const entry = this.getEntryById(id)
+        if (!entry) return null
 
-        const setClause: string[] = [];
-        const params: unknown[] = [];
+        const setClause: string[] = []
+        const params: unknown[] = []
 
         if (updates.content !== undefined) {
-            setClause.push('content = ?');
-            params.push(updates.content);
+            setClause.push('content = ?')
+            params.push(updates.content)
         }
         if (updates.entryType !== undefined) {
-            setClause.push('entry_type = ?');
-            params.push(updates.entryType);
+            setClause.push('entry_type = ?')
+            params.push(updates.entryType)
         }
         if (updates.isPersonal !== undefined) {
-            setClause.push('is_personal = ?');
-            params.push(updates.isPersonal ? 1 : 0);
+            setClause.push('is_personal = ?')
+            params.push(updates.isPersonal ? 1 : 0)
         }
 
         if (setClause.length > 0) {
-            params.push(id);
-            db.run(`UPDATE memory_journal SET ${setClause.join(', ')} WHERE id = ?`, params);
+            params.push(id)
+            db.run(`UPDATE memory_journal SET ${setClause.join(', ')} WHERE id = ?`, params)
         }
 
         // Update tags if provided
         if (updates.tags !== undefined) {
-            db.run('DELETE FROM entry_tags WHERE entry_id = ?', [id]);
-            this.linkTagsToEntry(id, updates.tags);
+            db.run('DELETE FROM entry_tags WHERE entry_id = ?', [id])
+            this.linkTagsToEntry(id, updates.tags)
         }
 
-        this.save();
+        this.save()
 
         logger.info('Entry updated', {
             module: 'SqliteAdapter',
             operation: 'updateEntry',
-            entityId: id
-        });
+            entityId: id,
+        })
 
-        return this.getEntryById(id);
+        return this.getEntryById(id)
     }
 
     /**
      * Soft delete an entry
      */
     deleteEntry(id: number, permanent = false): boolean {
-        const db = this.ensureDb();
+        const db = this.ensureDb()
 
         if (permanent) {
-            db.run('DELETE FROM memory_journal WHERE id = ?', [id]);
+            db.run('DELETE FROM memory_journal WHERE id = ?', [id])
         } else {
-            db.run(
-                `UPDATE memory_journal SET deleted_at = datetime('now') WHERE id = ?`,
-                [id]
-            );
+            db.run(`UPDATE memory_journal SET deleted_at = datetime('now') WHERE id = ?`, [id])
         }
 
-        this.save();
-        return true;
+        this.save()
+        return true
     }
 
     // =========================================================================
@@ -402,49 +401,49 @@ export class SqliteAdapter {
     searchEntries(
         query: string,
         options: {
-            limit?: number;
-            isPersonal?: boolean;
-            projectNumber?: number;
-            issueNumber?: number;
-            prNumber?: number;
+            limit?: number
+            isPersonal?: boolean
+            projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
         } = {}
     ): JournalEntry[] {
-        const db = this.ensureDb();
-        const { limit = 10, isPersonal, projectNumber, issueNumber, prNumber } = options;
+        const db = this.ensureDb()
+        const { limit = 10, isPersonal, projectNumber, issueNumber, prNumber } = options
 
         let sql = `
             SELECT * FROM memory_journal 
             WHERE deleted_at IS NULL AND content LIKE ?
-        `;
-        const params: unknown[] = [`%${query}%`];
+        `
+        const params: unknown[] = [`%${query}%`]
 
         if (isPersonal !== undefined) {
-            sql += ` AND is_personal = ?`;
-            params.push(isPersonal ? 1 : 0);
+            sql += ` AND is_personal = ?`
+            params.push(isPersonal ? 1 : 0)
         }
         if (projectNumber !== undefined) {
-            sql += ` AND project_number = ?`;
-            params.push(projectNumber);
+            sql += ` AND project_number = ?`
+            params.push(projectNumber)
         }
         if (issueNumber !== undefined) {
-            sql += ` AND issue_number = ?`;
-            params.push(issueNumber);
+            sql += ` AND issue_number = ?`
+            params.push(issueNumber)
         }
         if (prNumber !== undefined) {
-            sql += ` AND pr_number = ?`;
-            params.push(prNumber);
+            sql += ` AND pr_number = ?`
+            params.push(prNumber)
         }
 
-        sql += ` ORDER BY timestamp DESC LIMIT ?`;
-        params.push(limit);
+        sql += ` ORDER BY timestamp DESC LIMIT ?`
+        params.push(limit)
 
-        const result = db.exec(sql, params);
-        if (result.length === 0) return [];
+        const result = db.exec(sql, params)
+        if (result.length === 0) return []
 
-        const columns = result[0]?.columns ?? [];
-        return (result[0]?.values ?? []).map(values =>
+        const columns = result[0]?.columns ?? []
+        return (result[0]?.values ?? []).map((values) =>
             this.rowToEntry(this.rowToObject(columns, values))
-        );
+        )
     }
 
     /**
@@ -454,14 +453,14 @@ export class SqliteAdapter {
         startDate: string,
         endDate: string,
         options: {
-            entryType?: EntryType;
-            tags?: string[];
-            isPersonal?: boolean;
-            projectNumber?: number;
+            entryType?: EntryType
+            tags?: string[]
+            isPersonal?: boolean
+            projectNumber?: number
         } = {}
     ): JournalEntry[] {
-        const db = this.ensureDb();
-        const { entryType, tags, isPersonal, projectNumber } = options;
+        const db = this.ensureDb()
+        const { entryType, tags, isPersonal, projectNumber } = options
 
         let sql = `
             SELECT DISTINCT m.* FROM memory_journal m
@@ -469,36 +468,36 @@ export class SqliteAdapter {
             LEFT JOIN tags t ON et.tag_id = t.id
             WHERE m.deleted_at IS NULL
             AND m.timestamp >= ? AND m.timestamp <= ?
-        `;
-        const params: unknown[] = [startDate, endDate + ' 23:59:59'];
+        `
+        const params: unknown[] = [startDate, endDate + ' 23:59:59']
 
         if (entryType) {
-            sql += ` AND m.entry_type = ?`;
-            params.push(entryType);
+            sql += ` AND m.entry_type = ?`
+            params.push(entryType)
         }
         if (isPersonal !== undefined) {
-            sql += ` AND m.is_personal = ?`;
-            params.push(isPersonal ? 1 : 0);
+            sql += ` AND m.is_personal = ?`
+            params.push(isPersonal ? 1 : 0)
         }
         if (projectNumber !== undefined) {
-            sql += ` AND m.project_number = ?`;
-            params.push(projectNumber);
+            sql += ` AND m.project_number = ?`
+            params.push(projectNumber)
         }
         if (tags && tags.length > 0) {
-            const placeholders = tags.map(() => '?').join(',');
-            sql += ` AND t.name IN (${placeholders})`;
-            params.push(...tags);
+            const placeholders = tags.map(() => '?').join(',')
+            sql += ` AND t.name IN (${placeholders})`
+            params.push(...tags)
         }
 
-        sql += ` ORDER BY m.timestamp DESC`;
+        sql += ` ORDER BY m.timestamp DESC`
 
-        const result = db.exec(sql, params);
-        if (result.length === 0) return [];
+        const result = db.exec(sql, params)
+        if (result.length === 0) return []
 
-        const columns = result[0]?.columns ?? [];
-        return (result[0]?.values ?? []).map(values =>
+        const columns = result[0]?.columns ?? []
+        return (result[0]?.values ?? []).map((values) =>
             this.rowToEntry(this.rowToObject(columns, values))
-        );
+        )
     }
 
     // =========================================================================
@@ -509,21 +508,24 @@ export class SqliteAdapter {
      * Get or create tags and link to entry
      */
     private linkTagsToEntry(entryId: number, tagNames: string[]): void {
-        const db = this.ensureDb();
+        const db = this.ensureDb()
 
         for (const tagName of tagNames) {
             // Insert or ignore tag
-            db.run('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)', [tagName]);
+            db.run('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)', [tagName])
 
             // Get tag ID
-            const result = db.exec('SELECT id FROM tags WHERE name = ?', [tagName]);
-            const tagId = result[0]?.values[0]?.[0] as number | undefined;
+            const result = db.exec('SELECT id FROM tags WHERE name = ?', [tagName])
+            const tagId = result[0]?.values[0]?.[0] as number | undefined
 
             if (tagId !== undefined) {
                 // Link tag to entry
-                db.run('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [entryId, tagId]);
+                db.run('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [
+                    entryId,
+                    tagId,
+                ])
                 // Increment usage
-                db.run('UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?', [tagId]);
+                db.run('UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?', [tagId])
             }
         }
     }
@@ -532,31 +534,34 @@ export class SqliteAdapter {
      * Get tags for an entry
      */
     getTagsForEntry(entryId: number): string[] {
-        const db = this.ensureDb();
-        const result = db.exec(`
+        const db = this.ensureDb()
+        const result = db.exec(
+            `
             SELECT t.name FROM tags t
             JOIN entry_tags et ON t.id = et.tag_id
             WHERE et.entry_id = ?
-        `, [entryId]);
+        `,
+            [entryId]
+        )
 
-        if (result.length === 0) return [];
-        return (result[0]?.values ?? []).map((v: unknown[]) => v[0] as string);
+        if (result.length === 0) return []
+        return (result[0]?.values ?? []).map((v: unknown[]) => v[0] as string)
     }
 
     /**
      * List all tags
      */
     listTags(): Tag[] {
-        const db = this.ensureDb();
-        const result = db.exec('SELECT * FROM tags ORDER BY usage_count DESC');
+        const db = this.ensureDb()
+        const result = db.exec('SELECT * FROM tags ORDER BY usage_count DESC')
 
-        if (result.length === 0) return [];
+        if (result.length === 0) return []
 
-        return (result[0]?.values ?? []).map(v => ({
+        return (result[0]?.values ?? []).map((v) => ({
             id: v[0] as number,
             name: v[1] as string,
             usageCount: v[2] as number,
-        }));
+        }))
     }
 
     // =========================================================================
@@ -572,17 +577,20 @@ export class SqliteAdapter {
         relationshipType: RelationshipType,
         description?: string
     ): Relationship {
-        const db = this.ensureDb();
+        const db = this.ensureDb()
 
-        db.run(`
+        db.run(
+            `
             INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type, description)
             VALUES (?, ?, ?, ?)
-        `, [fromEntryId, toEntryId, relationshipType, description ?? null]);
+        `,
+            [fromEntryId, toEntryId, relationshipType, description ?? null]
+        )
 
-        const result = db.exec('SELECT last_insert_rowid() as id');
-        const id = result[0]?.values[0]?.[0] as number;
+        const result = db.exec('SELECT last_insert_rowid() as id')
+        const id = result[0]?.values[0]?.[0] as number
 
-        this.save();
+        this.save()
 
         return {
             id,
@@ -591,24 +599,27 @@ export class SqliteAdapter {
             relationshipType,
             description: description ?? null,
             createdAt: new Date().toISOString(),
-        };
+        }
     }
 
     /**
      * Get relationships for an entry
      */
     getRelationships(entryId: number): Relationship[] {
-        const db = this.ensureDb();
-        const result = db.exec(`
+        const db = this.ensureDb()
+        const result = db.exec(
+            `
             SELECT * FROM relationships
             WHERE from_entry_id = ? OR to_entry_id = ?
-        `, [entryId, entryId]);
+        `,
+            [entryId, entryId]
+        )
 
-        if (result.length === 0) return [];
+        if (result.length === 0) return []
 
-        const columns = result[0]?.columns ?? [];
+        const columns = result[0]?.columns ?? []
         return (result[0]?.values ?? []).map((values: unknown[]) => {
-            const row = this.rowToObject(columns, values);
+            const row = this.rowToObject(columns, values)
             return {
                 id: row['id'] as number,
                 fromEntryId: row['from_entry_id'] as number,
@@ -616,8 +627,8 @@ export class SqliteAdapter {
                 relationshipType: row['relationship_type'] as RelationshipType,
                 description: row['description'] as string | null,
                 createdAt: row['created_at'] as string,
-            };
-        });
+            }
+        })
     }
 
     // =========================================================================
@@ -628,17 +639,17 @@ export class SqliteAdapter {
      * Get entry statistics
      */
     getStatistics(groupBy: 'day' | 'week' | 'month' = 'week'): {
-        totalEntries: number;
-        entriesByType: Record<string, number>;
-        entriesByPeriod: { period: string; count: number }[];
+        totalEntries: number
+        entriesByType: Record<string, number>
+        entriesByPeriod: { period: string; count: number }[]
     } {
-        const db = this.ensureDb();
+        const db = this.ensureDb()
 
         // Total entries
         const totalResult = db.exec(`
             SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL
-        `);
-        const totalEntries = (totalResult[0]?.values[0]?.[0] as number) ?? 0;
+        `)
+        const totalEntries = (totalResult[0]?.values[0]?.[0] as number) ?? 0
 
         // By type
         const byTypeResult = db.exec(`
@@ -646,23 +657,23 @@ export class SqliteAdapter {
             FROM memory_journal 
             WHERE deleted_at IS NULL 
             GROUP BY entry_type
-        `);
-        const entriesByType: Record<string, number> = {};
-        for (const row of (byTypeResult[0]?.values ?? [])) {
-            entriesByType[row[0] as string] = row[1] as number;
+        `)
+        const entriesByType: Record<string, number> = {}
+        for (const row of byTypeResult[0]?.values ?? []) {
+            entriesByType[row[0] as string] = row[1] as number
         }
 
         // By period
-        let dateFormat: string;
+        let dateFormat: string
         switch (groupBy) {
             case 'day':
-                dateFormat = '%Y-%m-%d';
-                break;
+                dateFormat = '%Y-%m-%d'
+                break
             case 'month':
-                dateFormat = '%Y-%m';
-                break;
+                dateFormat = '%Y-%m'
+                break
             default:
-                dateFormat = '%Y-W%W';
+                dateFormat = '%Y-W%W'
         }
 
         const byPeriodResult = db.exec(`
@@ -672,18 +683,18 @@ export class SqliteAdapter {
             GROUP BY period
             ORDER BY period DESC
             LIMIT 52
-        `);
+        `)
 
         const entriesByPeriod = (byPeriodResult[0]?.values ?? []).map((v: unknown[]) => ({
             period: v[0] as string,
             count: v[1] as number,
-        }));
+        }))
 
         return {
             totalEntries,
             entriesByType,
             entriesByPeriod,
-        };
+        }
     }
 
     // =========================================================================
@@ -694,7 +705,7 @@ export class SqliteAdapter {
      * Get the backups directory path (relative to database location)
      */
     getBackupsDir(): string {
-        return path.join(path.dirname(this.dbPath), 'backups');
+        return path.join(path.dirname(this.dbPath), 'backups')
     }
 
     /**
@@ -703,40 +714,40 @@ export class SqliteAdapter {
      * @returns Backup file info
      */
     exportToFile(backupName?: string): { filename: string; path: string; sizeBytes: number } {
-        const db = this.ensureDb();
-        const backupsDir = this.getBackupsDir();
+        const db = this.ensureDb()
+        const backupsDir = this.getBackupsDir()
 
         // Ensure backups directory exists
         if (!fs.existsSync(backupsDir)) {
-            fs.mkdirSync(backupsDir, { recursive: true });
+            fs.mkdirSync(backupsDir, { recursive: true })
         }
 
         // Generate filename with timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
         const sanitizedName = backupName
             ? backupName.replace(/[/\\:*?"<>|]/g, '_').slice(0, 50)
-            : `backup_${timestamp}`;
-        const filename = `${sanitizedName}.db`;
-        const backupPath = path.join(backupsDir, filename);
+            : `backup_${timestamp}`
+        const filename = `${sanitizedName}.db`
+        const backupPath = path.join(backupsDir, filename)
 
         // Export database
-        const data = db.export();
-        const buffer = Buffer.from(data);
-        fs.writeFileSync(backupPath, buffer);
+        const data = db.export()
+        const buffer = Buffer.from(data)
+        fs.writeFileSync(backupPath, buffer)
 
-        const stats = fs.statSync(backupPath);
+        const stats = fs.statSync(backupPath)
 
         logger.info('Backup created', {
             module: 'SqliteAdapter',
             operation: 'exportToFile',
-            context: { backupPath, sizeBytes: stats.size }
-        });
+            context: { backupPath, sizeBytes: stats.size },
+        })
 
         return {
             filename,
             path: backupPath,
             sizeBytes: stats.size,
-        };
+        }
     }
 
     /**
@@ -744,28 +755,29 @@ export class SqliteAdapter {
      * @returns Array of backup file information
      */
     listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[] {
-        const backupsDir = this.getBackupsDir();
+        const backupsDir = this.getBackupsDir()
 
         if (!fs.existsSync(backupsDir)) {
-            return [];
+            return []
         }
 
-        const files = fs.readdirSync(backupsDir);
-        const backups: { filename: string; path: string; sizeBytes: number; createdAt: string }[] = [];
+        const files = fs.readdirSync(backupsDir)
+        const backups: { filename: string; path: string; sizeBytes: number; createdAt: string }[] =
+            []
 
         for (const filename of files) {
-            if (!filename.endsWith('.db')) continue;
+            if (!filename.endsWith('.db')) continue
 
-            const filePath = path.join(backupsDir, filename);
+            const filePath = path.join(backupsDir, filename)
             try {
-                const stats = fs.statSync(filePath);
+                const stats = fs.statSync(filePath)
                 if (stats.isFile()) {
                     backups.push({
                         filename,
                         path: filePath,
                         sizeBytes: stats.size,
                         createdAt: stats.birthtime.toISOString(),
-                    });
+                    })
                 }
             } catch {
                 // Skip files that can't be read
@@ -773,9 +785,9 @@ export class SqliteAdapter {
         }
 
         // Sort by creation time, newest first
-        backups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        backups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-        return backups;
+        return backups
     }
 
     /**
@@ -784,61 +796,65 @@ export class SqliteAdapter {
      * @returns Statistics about the restore operation
      */
     async restoreFromFile(filename: string): Promise<{
-        restoredFrom: string;
-        previousEntryCount: number;
+        restoredFrom: string
+        previousEntryCount: number
         newEntryCount: number
     }> {
         // Validate filename (prevent path traversal)
         if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-            throw new Error('Invalid backup filename: path separators not allowed');
+            throw new Error('Invalid backup filename: path separators not allowed')
         }
 
-        const backupsDir = this.getBackupsDir();
-        const backupPath = path.join(backupsDir, filename);
+        const backupsDir = this.getBackupsDir()
+        const backupPath = path.join(backupsDir, filename)
 
         if (!fs.existsSync(backupPath)) {
-            throw new Error(`Backup file not found: ${filename}`);
+            throw new Error(`Backup file not found: ${filename}`)
         }
 
         // Get current entry count for comparison
-        const db = this.ensureDb();
-        const currentCountResult = db.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL');
-        const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0;
+        const db = this.ensureDb()
+        const currentCountResult = db.exec(
+            'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
+        )
+        const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         // Create auto-backup before restore
-        this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`);
+        this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
 
         // Close current database
-        this.db?.close();
-        this.db = null;
-        this.initialized = false;
+        this.db?.close()
+        this.db = null
+        this.initialized = false
 
         // Read backup file
-        const backupBuffer = fs.readFileSync(backupPath);
+        const backupBuffer = fs.readFileSync(backupPath)
 
         // Initialize new database from backup
-        const SQL = await import('sql.js').then(m => m.default());
-        this.db = new SQL.Database(backupBuffer);
-        this.initialized = true;
+        const SQL = await import('sql.js').then((m) => m.default())
+        this.db = new SQL.Database(backupBuffer)
+        this.initialized = true
 
         // Get new entry count
-        const newCountResult = this.db.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL');
-        const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0;
+        const newCountResult = this.db.exec(
+            'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
+        )
+        const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         // Save to main database path
-        this.save();
+        this.save()
 
         logger.info('Database restored from backup', {
             module: 'SqliteAdapter',
             operation: 'restoreFromFile',
-            context: { backupPath, previousEntryCount, newEntryCount }
-        });
+            context: { backupPath, previousEntryCount, newEntryCount },
+        })
 
         return {
             restoredFrom: filename,
             previousEntryCount,
             newEntryCount,
-        };
+        }
     }
 
     // =========================================================================
@@ -850,44 +866,46 @@ export class SqliteAdapter {
      */
     getHealthStatus(): {
         database: {
-            path: string;
-            sizeBytes: number;
-            entryCount: number;
-            deletedEntryCount: number;
-            relationshipCount: number;
-            tagCount: number;
-        };
+            path: string
+            sizeBytes: number
+            entryCount: number
+            deletedEntryCount: number
+            relationshipCount: number
+            tagCount: number
+        }
         backups: {
-            directory: string;
-            count: number;
-            lastBackup: { filename: string; createdAt: string; sizeBytes: number } | null;
-        };
+            directory: string
+            count: number
+            lastBackup: { filename: string; createdAt: string; sizeBytes: number } | null
+        }
     } {
-        const db = this.ensureDb();
+        const db = this.ensureDb()
 
         // Get file size
-        let sizeBytes = 0;
+        let sizeBytes = 0
         try {
-            const stats = fs.statSync(this.dbPath);
-            sizeBytes = stats.size;
+            const stats = fs.statSync(this.dbPath)
+            sizeBytes = stats.size
         } catch {
             // File may not exist on disk yet
         }
 
         // Entry counts
-        const entryResult = db.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL');
-        const deletedResult = db.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NOT NULL');
-        const relResult = db.exec('SELECT COUNT(*) FROM relationships');
-        const tagResult = db.exec('SELECT COUNT(*) FROM tags');
+        const entryResult = db.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
+        const deletedResult = db.exec(
+            'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NOT NULL'
+        )
+        const relResult = db.exec('SELECT COUNT(*) FROM relationships')
+        const tagResult = db.exec('SELECT COUNT(*) FROM tags')
 
-        const entryCount = (entryResult[0]?.values[0]?.[0] as number) ?? 0;
-        const deletedEntryCount = (deletedResult[0]?.values[0]?.[0] as number) ?? 0;
-        const relationshipCount = (relResult[0]?.values[0]?.[0] as number) ?? 0;
-        const tagCount = (tagResult[0]?.values[0]?.[0] as number) ?? 0;
+        const entryCount = (entryResult[0]?.values[0]?.[0] as number) ?? 0
+        const deletedEntryCount = (deletedResult[0]?.values[0]?.[0] as number) ?? 0
+        const relationshipCount = (relResult[0]?.values[0]?.[0] as number) ?? 0
+        const tagCount = (tagResult[0]?.values[0]?.[0] as number) ?? 0
 
         // Backup info
-        const backups = this.listBackups();
-        const lastBackup = backups[0] ?? null;
+        const backups = this.listBackups()
+        const lastBackup = backups[0] ?? null
 
         return {
             database: {
@@ -901,13 +919,15 @@ export class SqliteAdapter {
             backups: {
                 directory: this.getBackupsDir(),
                 count: backups.length,
-                lastBackup: lastBackup ? {
-                    filename: lastBackup.filename,
-                    createdAt: lastBackup.createdAt,
-                    sizeBytes: lastBackup.sizeBytes,
-                } : null,
+                lastBackup: lastBackup
+                    ? {
+                          filename: lastBackup.filename,
+                          createdAt: lastBackup.createdAt,
+                          sizeBytes: lastBackup.sizeBytes,
+                      }
+                    : null,
             },
-        };
+        }
     }
 
     // =========================================================================
@@ -918,18 +938,18 @@ export class SqliteAdapter {
      * Convert columns and values to object
      */
     private rowToObject(columns: string[], values: unknown[]): Record<string, unknown> {
-        const obj: Record<string, unknown> = {};
+        const obj: Record<string, unknown> = {}
         columns.forEach((col, i) => {
-            obj[col] = values[i];
-        });
-        return obj;
+            obj[col] = values[i]
+        })
+        return obj
     }
 
     /**
      * Convert database row to JournalEntry
      */
     private rowToEntry(row: Record<string, unknown>): JournalEntry {
-        const id = row['id'] as number;
+        const id = row['id'] as number
         return {
             id,
             entryType: row['entry_type'] as EntryType,
@@ -940,13 +960,13 @@ export class SqliteAdapter {
             autoContext: row['auto_context'] as string | null,
             deletedAt: row['deleted_at'] as string | null,
             tags: this.getTagsForEntry(id),
-        };
+        }
     }
 
     /**
      * Get raw database for advanced operations
      */
     getRawDb(): Database {
-        return this.ensureDb();
+        return this.ensureDb()
     }
 }

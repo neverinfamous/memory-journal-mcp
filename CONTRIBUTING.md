@@ -13,6 +13,7 @@ Thank you for your interest in contributing to the Memory Journal MCP Server! Th
 ## 🛠️ Development Setup
 
 ### Option 1: Docker Development (Recommended)
+
 ```bash
 # Clone your fork
 git clone https://github.com/YOUR_USERNAME/memory-journal-mcp.git
@@ -27,6 +28,7 @@ docker run --rm memory-journal-dev python -c "print('✅ MCP Server ready!')"
 ```
 
 ### Option 2: Local Development
+
 ```bash
 # Clone your fork
 git clone https://github.com/YOUR_USERNAME/memory-journal-mcp.git
@@ -47,26 +49,30 @@ python src/server.py
 We especially welcome contributions in these areas:
 
 ### 🎯 High Priority
+
 - **New entry types** that make sense for developer workflows
 - **Better Git/GitHub integrations** (more context, better performance)
 - **Performance improvements** (faster search, reduced memory usage)
 - **Bug fixes** and stability improvements
 
-### 🔍 Medium Priority  
+### 🔍 Medium Priority
+
 - **Enhanced semantic search** features and models
 - **Import/export utilities** for data portability
 - **Additional relationship types** between entries
 - **Documentation improvements** and examples
 
 ### 💡 Future Features
+
 - **Graph visualization** of entry relationships
-- **Weekly/monthly auto-summaries** 
+- **Weekly/monthly auto-summaries**
 - **Team collaboration** features
 - **IDE integrations** beyond MCP
 
 ## 🧪 Testing Your Changes
 
 ### Manual Testing
+
 ```bash
 # Test basic functionality
 python -c "
@@ -89,12 +95,13 @@ print('✅ Server imports successfully')
 ```
 
 ### Docker Testing
-```bash
+
+````bash
 # Test alpine build
 docker build -f Dockerfile.alpine -t test-alpine .
 docker run --rm test-alpine python -c "print('Alpine build works!')"
 
-# Test full build  
+# Test full build
 docker build -f Dockerfile -t test-full .
 docker run --rm test-full python -c "print('Full build works!')"
 ```## 📝 Coding Standards
@@ -184,7 +191,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 # Quick rebuild and test cycle
 docker build -f Dockerfile.alpine -t dev-test . && \
 docker run --rm -v ./data:/app/data dev-test python src/server.py
-```
+````
 
 ## 🤝 Community
 
@@ -202,6 +209,7 @@ docker run --rm -v ./data:/app/data dev-test python src/server.py
 ## 🏆 Recognition
 
 Contributors are recognized in:
+
 - **Release notes** - Major contributions highlighted
 - **README** - Contributor acknowledgments
 - **Git history** - Your commits are permanent record

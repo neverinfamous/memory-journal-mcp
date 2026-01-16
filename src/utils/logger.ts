@@ -1,17 +1,17 @@
 /**
  * Memory Journal MCP Server - Logger
- * 
+ *
  * Centralized logging to stderr only (stdout reserved for MCP protocol).
  * Follows RFC 5424 severity levels.
  */
 
-type LogLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical';
+type LogLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical'
 
 interface LogContext {
-    module?: string;
-    operation?: string;
-    entityId?: string | number;
-    [key: string]: unknown;
+    module?: string
+    operation?: string
+    entityId?: string | number
+    [key: string]: unknown
 }
 
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -21,78 +21,78 @@ const LOG_LEVELS: Record<LogLevel, number> = {
     warning: 4,
     error: 3,
     critical: 2,
-};
+}
 
 class Logger {
-    private minLevel: number;
+    private minLevel: number
 
     constructor(level: LogLevel = 'info') {
-        this.minLevel = LOG_LEVELS[level];
+        this.minLevel = LOG_LEVELS[level]
     }
 
     private shouldLog(level: LogLevel): boolean {
-        return LOG_LEVELS[level] <= this.minLevel;
+        return LOG_LEVELS[level] <= this.minLevel
     }
 
     private formatMessage(level: LogLevel, message: string, context?: LogContext): string {
-        const timestamp = new Date().toISOString();
-        const levelUpper = level.toUpperCase().padEnd(8);
-        const module = context?.module ? `[${context.module}]` : '';
-        const operation = context?.operation ? `[${context.operation}]` : '';
+        const timestamp = new Date().toISOString()
+        const levelUpper = level.toUpperCase().padEnd(8)
+        const module = context?.module ? `[${context.module}]` : ''
+        const operation = context?.operation ? `[${context.operation}]` : ''
 
-        let formatted = `[${timestamp}] [${levelUpper}] ${module}${operation} ${message}`;
+        let formatted = `[${timestamp}] [${levelUpper}] ${module}${operation} ${message}`
 
         // Add context as JSON if there are additional fields
-        const extras = { ...context };
-        delete extras.module;
-        delete extras.operation;
+        const extras = { ...context }
+        delete extras.module
+        delete extras.operation
 
         if (Object.keys(extras).length > 0) {
-            formatted += ` ${JSON.stringify(extras)}`;
+            formatted += ` ${JSON.stringify(extras)}`
         }
 
-        return formatted;
+        return formatted
     }
 
     private log(level: LogLevel, message: string, context?: LogContext): void {
-        if (!this.shouldLog(level)) return;
+        if (!this.shouldLog(level)) return
 
-        const formatted = this.formatMessage(level, message, context);
+        const formatted = this.formatMessage(level, message, context)
 
         // Always write to stderr (stdout is reserved for MCP protocol)
-        console.error(formatted);
+        console.error(formatted)
     }
 
     debug(message: string, context?: LogContext): void {
-        this.log('debug', message, context);
+        this.log('debug', message, context)
     }
 
     info(message: string, context?: LogContext): void {
-        this.log('info', message, context);
+        this.log('info', message, context)
     }
 
     notice(message: string, context?: LogContext): void {
-        this.log('notice', message, context);
+        this.log('notice', message, context)
     }
 
     warning(message: string, context?: LogContext): void {
-        this.log('warning', message, context);
+        this.log('warning', message, context)
     }
 
     error(message: string, context?: LogContext): void {
-        this.log('error', message, context);
+        this.log('error', message, context)
     }
 
     critical(message: string, context?: LogContext): void {
-        this.log('critical', message, context);
+        this.log('critical', message, context)
     }
 
     setLevel(level: LogLevel): void {
-        this.minLevel = LOG_LEVELS[level];
+        this.minLevel = LOG_LEVELS[level]
     }
 }
 
 // Get log level from environment
-const envLevel = (process.env['LOG_LEVEL'] ?? 'info') as LogLevel;
+const envLevel = (process.env['LOG_LEVEL'] ?? 'info') as LogLevel
 
-export const logger = new Logger(envLevel);
+export const logger = new Logger(envLevel)

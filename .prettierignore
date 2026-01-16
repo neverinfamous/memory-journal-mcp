@@ -1,0 +1,21 @@
+# Build output
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Package manager files
+package-lock.json
+pnpm-lock.yaml
+
+# Logs
+*.log
+
+# Generated
+*.min.js
+*.min.css
+
+# Database files
+*.db
+*.sqlite

@@ -1,6 +1,6 @@
 # Memory Journal MCP v2.1.0 - GitHub Actions & Complete Type Safety
 
-*Released: November 26, 2025*
+_Released: November 26, 2025_
 
 ## 🎉 Major Release Highlights
 
@@ -12,6 +12,7 @@ Memory Journal v2.1.0 brings comprehensive GitHub Actions integration and true P
 4. **📊 Actions Visual Graph** - CI/CD narrative visualization with Mermaid diagrams
 
 **What this means for you:**
+
 - ✅ **CI status in context** - AI sees your build status in every conversation
 - ✅ **Workflow debugging** - Failure analysis with `actions-failure-digest` prompt
 - ✅ **Better IDE support** - Complete type coverage means better autocomplete
@@ -41,6 +42,7 @@ Memory Journal now automatically captures GitHub Actions workflow status:
 ```
 
 **CI Status Values:**
+
 - `passing` - All recent workflow runs succeeded
 - `failing` - At least one recent workflow run failed
 - `pending` - Workflow runs are in progress or queued
@@ -50,12 +52,12 @@ Memory Journal now automatically captures GitHub Actions workflow status:
 
 ```javascript
 create_entry({
-  content: "Fixed flaky test - mocked external API calls",
-  entry_type: "bug_fix",
-  tags: ["ci", "testing"],
+  content: 'Fixed flaky test - mocked external API calls',
+  entry_type: 'bug_fix',
+  tags: ['ci', 'testing'],
   workflow_run_id: 12345678,
-  workflow_name: "CI Tests",
-  workflow_status: "completed"
+  workflow_name: 'CI Tests',
+  workflow_status: 'completed',
 })
 ```
 
@@ -86,6 +88,7 @@ New prompt for comprehensive CI/CD failure analysis:
 ```
 
 **Output includes:**
+
 - Failing jobs summary with failed steps
 - Linked journal entries
 - Recent code/PR changes
@@ -100,6 +103,7 @@ New prompt for comprehensive CI/CD failure analysis:
 ### Auto-Detection
 
 Issue and PR numbers are automatically detected from branch names:
+
 - `issue-123`, `issue/123`, `fix/issue-456`
 - `#123` (shorthand)
 - `/123-` or `/123/` patterns
@@ -108,10 +112,10 @@ Issue and PR numbers are automatically detected from branch names:
 
 ```javascript
 create_entry({
-  content: "Fixed authentication bug",
-  entry_type: "bug_fix",
+  content: 'Fixed authentication bug',
+  entry_type: 'bug_fix',
   issue_number: 123,
-  pr_number: 456
+  pr_number: 456,
 })
 ```
 
@@ -153,23 +157,25 @@ create_entry({
 
 ## 📦 Updated Statistics
 
-| Metric | v2.0.0 | v2.1.0 |
-|--------|--------|--------|
-| MCP Tools | 16 | 16 |
-| Workflow Prompts | 11 | 14 (+3 PR + Actions) |
-| MCP Resources | 8 | 13 (+5 Actions) |
-| Pyright Issues | 700+ exclusions | 0 |
+| Metric           | v2.0.0          | v2.1.0               |
+| ---------------- | --------------- | -------------------- |
+| MCP Tools        | 16              | 16                   |
+| Workflow Prompts | 11              | 14 (+3 PR + Actions) |
+| MCP Resources    | 8               | 13 (+5 Actions)      |
+| Pyright Issues   | 700+ exclusions | 0                    |
 
 ---
 
 ## 🔧 Database Changes
 
 New columns added (automatic migration):
+
 - `workflow_run_id` - GitHub Actions workflow run ID
 - `workflow_name` - Workflow name for quick reference
 - `workflow_status` - Workflow status (queued/in_progress/completed)
 
 New index:
+
 - `idx_memory_journal_workflow_run_id`
 
 ---

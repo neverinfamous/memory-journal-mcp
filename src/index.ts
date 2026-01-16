@@ -1,11 +1,11 @@
 /**
  * memory-journal-mcp - Public API
- * 
+ *
  * Exports the main components for programmatic use.
  */
 
 // Server
-export { createServer, SqliteAdapter } from './server/McpServer.js';
+export { createServer, SqliteAdapter } from './server/McpServer.js'
 
 // Types
 export type {
@@ -31,9 +31,9 @@ export type {
     GitHubWorkflowRun,
     ProjectContext,
     ServerConfig,
-} from './types/index.js';
+} from './types/index.js'
 
-export { DEFAULT_CONFIG } from './types/index.js';
+export { DEFAULT_CONFIG } from './types/index.js'
 
 // Filtering
 export {
@@ -47,7 +47,7 @@ export {
     getToolFilterFromEnv,
     calculateTokenSavings,
     getFilterSummary,
-} from './filtering/ToolFilter.js';
+} from './filtering/ToolFilter.js'
 
 // Logger
-export { logger } from './utils/logger.js';
+export { logger } from './utils/logger.js'

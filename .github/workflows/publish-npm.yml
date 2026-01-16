@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (must match VERSION file or package.json)"
+        description: 'Version to publish (must match VERSION file or package.json)'
         required: false
-        default: ""
+        default: ''
 
 permissions:
   contents: read
@@ -19,7 +19,7 @@ jobs:
     environment:
       name: npm
       url: https://www.npmjs.com/package/memory-journal-mcp
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6

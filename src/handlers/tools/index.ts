@@ -1,28 +1,33 @@
 /**
  * Memory Journal MCP Server - Tool Handlers
- * 
+ *
  * Exports all MCP tools with annotations following MCP 2025-11-25 spec.
  */
 
-import { z } from 'zod';
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js';
-import type { ToolFilterConfig } from '../../filtering/ToolFilter.js';
-import type { ToolDefinition, EntryType, SignificanceType, RelationshipType } from '../../types/index.js';
-import type { VectorSearchManager } from '../../vector/VectorSearchManager.js';
-import type { GitHubIntegration } from '../../github/GitHubIntegration.js';
+import { z } from 'zod'
+import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
+import type {
+    ToolDefinition,
+    EntryType,
+    SignificanceType,
+    RelationshipType,
+} from '../../types/index.js'
+import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
+import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
 
 export interface ToolHandlerConfig {
-    defaultProjectNumber?: number;
+    defaultProjectNumber?: number
 }
 
 /**
  * Tool execution context
  */
 export interface ToolContext {
-    db: SqliteAdapter;
-    vectorManager?: VectorSearchManager;
-    github?: GitHubIntegration;
-    config?: ToolHandlerConfig;
+    db: SqliteAdapter
+    vectorManager?: VectorSearchManager
+    github?: GitHubIntegration
+    config?: ToolHandlerConfig
 }
 
 // ============================================================================
@@ -47,25 +52,25 @@ const CreateEntrySchema = z.object({
     workflow_name: z.string().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
     share_with_team: z.boolean().optional().default(false),
-});
+})
 
 const GetEntryByIdSchema = z.object({
     entry_id: z.number(),
     include_relationships: z.boolean().optional().default(true),
-});
+})
 
 const GetRecentEntriesSchema = z.object({
     limit: z.number().optional().default(5),
     is_personal: z.boolean().optional(),
-});
+})
 
 const CreateEntryMinimalSchema = z.object({
     content: z.string().min(1).max(50000),
-});
+})
 
 const TestSimpleSchema = z.object({
     message: z.string().optional().default('Hello'),
-});
+})
 
 const SearchEntriesSchema = z.object({
     query: z.string().optional(),
@@ -76,7 +81,7 @@ const SearchEntriesSchema = z.object({
     pr_number: z.number().optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
     workflow_run_id: z.number().optional(),
-});
+})
 
 const SearchByDateRangeSchema = z.object({
     start_date: z.string(),
@@ -88,28 +93,31 @@ const SearchByDateRangeSchema = z.object({
     issue_number: z.number().optional(),
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
-});
+})
 
 const SemanticSearchSchema = z.object({
     query: z.string(),
     limit: z.number().optional().default(10),
     similarity_threshold: z.number().optional().default(0.3),
     is_personal: z.boolean().optional(),
-});
+})
 
 const GetStatisticsSchema = z.object({
     group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
     project_breakdown: z.boolean().optional().default(false),
-});
+})
 
 const LinkEntriesSchema = z.object({
     from_entry_id: z.number(),
     to_entry_id: z.number(),
-    relationship_type: z.enum(['evolves_from', 'references', 'implements', 'clarifies', 'response_to']).optional().default('references'),
+    relationship_type: z
+        .enum(['evolves_from', 'references', 'implements', 'clarifies', 'response_to'])
+        .optional()
+        .default('references'),
     description: z.string().optional(),
-});
+})
 
 const ExportEntriesSchema = z.object({
     format: z.enum(['json', 'markdown']).optional().default('json'),
@@ -118,7 +126,7 @@ const ExportEntriesSchema = z.object({
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
     limit: z.number().optional().default(100).describe('Maximum entries to export (default: 100)'),
-});
+})
 
 const UpdateEntrySchema = z.object({
     entry_id: z.number(),
@@ -126,12 +134,12 @@ const UpdateEntrySchema = z.object({
     entry_type: z.string().optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),
-});
+})
 
 const DeleteEntrySchema = z.object({
     entry_id: z.number(),
     permanent: z.boolean().optional().default(false),
-});
+})
 
 // ============================================================================
 // Zod Schemas for Output Validation (MCP 2025-11-25 outputSchema)
@@ -161,7 +169,7 @@ const EntryOutputSchema = z.object({
     workflowRunId: z.number().nullable().optional(),
     workflowName: z.string().nullable().optional(),
     workflowStatus: z.string().nullable().optional(),
-});
+})
 
 /**
  * Schema for list of entries with count.
@@ -170,7 +178,7 @@ const EntryOutputSchema = z.object({
 const EntriesListOutputSchema = z.object({
     entries: z.array(EntryOutputSchema),
     count: z.number(),
-});
+})
 
 /**
  * Schema for a relationship between entries.
@@ -182,7 +190,7 @@ const RelationshipOutputSchema = z.object({
     relationshipType: z.string(),
     description: z.string().nullable().optional(),
     createdAt: z.string(),
-});
+})
 
 /**
  * Schema for get_entry_by_id output (entry with optional relationships).
@@ -192,7 +200,7 @@ const EntryByIdOutputSchema = z.object({
     entry: EntryOutputSchema.optional(),
     relationships: z.array(RelationshipOutputSchema).optional(),
     error: z.string().optional(),
-});
+})
 
 /**
  * Schema for get_statistics output.
@@ -202,11 +210,13 @@ const StatisticsOutputSchema = z.object({
     groupBy: z.string(),
     totalEntries: z.number(),
     entriesByType: z.record(z.string(), z.number()),
-    entriesByPeriod: z.array(z.object({
-        period: z.string(),
-        count: z.number(),
-    })),
-});
+    entriesByPeriod: z.array(
+        z.object({
+            period: z.string(),
+            count: z.number(),
+        })
+    ),
+})
 
 // ============================================================================
 // Tool Definitions with MCP 2025-11-25 Annotations
@@ -222,29 +232,29 @@ export function getTools(
     github?: GitHubIntegration,
     config?: ToolHandlerConfig
 ): object[] {
-    const context: ToolContext = { db, vectorManager, github, config };
-    const allTools = getAllToolDefinitions(context);
+    const context: ToolContext = { db, vectorManager, github, config }
+    const allTools = getAllToolDefinitions(context)
 
     // Filter if config provided
     if (filterConfig) {
         return allTools
-            .filter(t => filterConfig.enabledTools.has(t.name))
-            .map(t => ({
+            .filter((t) => filterConfig.enabledTools.has(t.name))
+            .map((t) => ({
                 name: t.name,
                 description: t.description,
                 inputSchema: t.inputSchema,
-                outputSchema: t.outputSchema,  // MCP 2025-11-25
+                outputSchema: t.outputSchema, // MCP 2025-11-25
                 annotations: t.annotations,
-            }));
+            }))
     }
 
-    return allTools.map(t => ({
+    return allTools.map((t) => ({
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema,
-        outputSchema: t.outputSchema,  // MCP 2025-11-25
+        outputSchema: t.outputSchema, // MCP 2025-11-25
         annotations: t.annotations,
-    }));
+    }))
 }
 
 /**
@@ -258,39 +268,40 @@ export async function callTool(
     github?: GitHubIntegration,
     config?: ToolHandlerConfig
 ): Promise<unknown> {
-    const context: ToolContext = { db, vectorManager, github, config };
-    const tools = getAllToolDefinitions(context);
-    const tool = tools.find(t => t.name === name);
+    const context: ToolContext = { db, vectorManager, github, config }
+    const tools = getAllToolDefinitions(context)
+    const tool = tools.find((t) => t.name === name)
 
     if (!tool) {
-        throw new Error(`Unknown tool: ${name}`);
+        throw new Error(`Unknown tool: ${name}`)
     }
 
-    return tool.handler(args);
+    return tool.handler(args)
 }
 
 /**
  * Get all tool definitions
  */
 function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager, github } = context;
+    const { db, vectorManager, github } = context
     return [
         // Core tools
         {
             name: 'create_entry',
             title: 'Create Journal Entry',
-            description: 'Create a new journal entry with context and tags (v2.1.0: GitHub Actions support)',
+            description:
+                'Create a new journal entry with context and tags (v2.1.0: GitHub Actions support)',
             group: 'core',
             inputSchema: CreateEntrySchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
-                const input = CreateEntrySchema.parse(params);
+                const input = CreateEntrySchema.parse(params)
                 const entry = db.createEntry({
                     content: input.content,
                     entryType: input.entry_type as EntryType,
                     tags: input.tags,
                     isPersonal: input.is_personal,
-                    significanceType: input.significance_type as SignificanceType ?? null,
+                    significanceType: (input.significance_type as SignificanceType) ?? null,
                     projectNumber: input.project_number,
                     projectOwner: input.project_owner,
                     issueNumber: input.issue_number,
@@ -301,16 +312,16 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     workflowRunId: input.workflow_run_id,
                     workflowName: input.workflow_name,
                     workflowStatus: input.workflow_status,
-                });
+                })
 
                 // Auto-index to vector store for semantic search (fire-and-forget)
                 if (vectorManager) {
                     vectorManager.addEntry(entry.id, entry.content).catch(() => {
                         // Non-critical failure, entry already saved to DB
-                    });
+                    })
                 }
 
-                return Promise.resolve({ success: true, entry });
+                return Promise.resolve({ success: true, entry })
             },
         },
         {
@@ -319,19 +330,19 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Get a specific journal entry by ID with full details',
             group: 'core',
             inputSchema: GetEntryByIdSchema,
-            outputSchema: EntryByIdOutputSchema,  // MCP 2025-11-25: structured output
+            outputSchema: EntryByIdOutputSchema, // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params);
-                const entry = db.getEntryById(entry_id);
+                const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params)
+                const entry = db.getEntryById(entry_id)
                 if (!entry) {
-                    return Promise.resolve({ error: `Entry ${entry_id} not found` });
+                    return Promise.resolve({ error: `Entry ${entry_id} not found` })
                 }
-                const result: Record<string, unknown> = { entry };
+                const result: Record<string, unknown> = { entry }
                 if (include_relationships) {
-                    result['relationships'] = db.getRelationships(entry_id);
+                    result['relationships'] = db.getRelationships(entry_id)
                 }
-                return Promise.resolve(result);
+                return Promise.resolve(result)
             },
         },
         {
@@ -340,12 +351,12 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Get recent journal entries',
             group: 'core',
             inputSchema: GetRecentEntriesSchema,
-            outputSchema: EntriesListOutputSchema,  // MCP 2025-11-25: structured output
+            outputSchema: EntriesListOutputSchema, // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const { limit, is_personal } = GetRecentEntriesSchema.parse(params);
-                const entries = db.getRecentEntries(limit, is_personal);
-                return Promise.resolve({ entries, count: entries.length });
+                const { limit, is_personal } = GetRecentEntriesSchema.parse(params)
+                const entries = db.getRecentEntries(limit, is_personal)
+                return Promise.resolve({ entries, count: entries.length })
             },
         },
         {
@@ -356,17 +367,17 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntryMinimalSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
-                const { content } = CreateEntryMinimalSchema.parse(params);
-                const entry = db.createEntry({ content });
+                const { content } = CreateEntryMinimalSchema.parse(params)
+                const entry = db.createEntry({ content })
 
                 // Auto-index to vector store for semantic search (fire-and-forget)
                 if (vectorManager) {
                     vectorManager.addEntry(entry.id, entry.content).catch(() => {
                         // Non-critical failure, entry already saved to DB
-                    });
+                    })
                 }
 
-                return Promise.resolve({ success: true, entry });
+                return Promise.resolve({ success: true, entry })
             },
         },
         {
@@ -377,31 +388,33 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: TestSimpleSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const { message } = TestSimpleSchema.parse(params);
-                return Promise.resolve({ message: `Test response: ${message}` });
+                const { message } = TestSimpleSchema.parse(params)
+                return Promise.resolve({ message: `Test response: ${message}` })
             },
         },
         // Search tools
         {
             name: 'search_entries',
             title: 'Search Entries',
-            description: 'Search journal entries with optional filters for GitHub Projects, Issues, PRs, and Actions',
+            description:
+                'Search journal entries with optional filters for GitHub Projects, Issues, PRs, and Actions',
             group: 'search',
             inputSchema: SearchEntriesSchema,
-            outputSchema: EntriesListOutputSchema,  // MCP 2025-11-25: structured output
+            outputSchema: EntriesListOutputSchema, // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const input = SearchEntriesSchema.parse(params);
+                const input = SearchEntriesSchema.parse(params)
                 // If no query and no filters, validation error usage of getRecentEntries
                 // But we want to allow filtering without text query
-                const hasFilters = input.project_number !== undefined ||
+                const hasFilters =
+                    input.project_number !== undefined ||
                     input.issue_number !== undefined ||
                     input.pr_number !== undefined ||
-                    input.is_personal !== undefined;
+                    input.is_personal !== undefined
 
                 if (!input.query && !hasFilters) {
-                    const entries = db.getRecentEntries(input.limit, input.is_personal);
-                    return Promise.resolve({ entries, count: entries.length });
+                    const entries = db.getRecentEntries(input.limit, input.is_personal)
+                    return Promise.resolve({ entries, count: entries.length })
                 }
 
                 const entries = db.searchEntries(input.query || '', {
@@ -410,8 +423,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     projectNumber: input.project_number,
                     issueNumber: input.issue_number,
                     prNumber: input.pr_number,
-                });
-                return Promise.resolve({ entries, count: entries.length });
+                })
+                return Promise.resolve({ entries, count: entries.length })
             },
         },
         {
@@ -420,17 +433,17 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Search journal entries within a date range with optional filters',
             group: 'search',
             inputSchema: SearchByDateRangeSchema,
-            outputSchema: EntriesListOutputSchema,  // MCP 2025-11-25: structured output
+            outputSchema: EntriesListOutputSchema, // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const input = SearchByDateRangeSchema.parse(params);
+                const input = SearchByDateRangeSchema.parse(params)
                 const entries = db.searchByDateRange(input.start_date, input.end_date, {
                     entryType: input.entry_type as EntryType | undefined,
                     tags: input.tags,
                     isPersonal: input.is_personal,
                     projectNumber: input.project_number,
-                });
-                return Promise.resolve({ entries, count: entries.length });
+                })
+                return Promise.resolve({ entries, count: entries.length })
             },
         },
         {
@@ -441,7 +454,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: SemanticSearchSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (params: unknown) => {
-                const input = SemanticSearchSchema.parse(params);
+                const input = SemanticSearchSchema.parse(params)
 
                 // Check if vector search is available
                 if (!vectorManager) {
@@ -449,8 +462,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         error: 'Semantic search not initialized. Vector search manager is not available.',
                         query: input.query,
                         entries: [],
-                        count: 0
-                    };
+                        count: 0,
+                    }
                 }
 
                 // Perform semantic search
@@ -458,41 +471,46 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     input.query,
                     input.limit ?? 10,
                     input.similarity_threshold ?? 0.3
-                );
+                )
 
                 // Fetch full entries for matching IDs
                 const entries = results
-                    .map(r => {
-                        const entry = db.getEntryById(r.entryId);
-                        if (!entry) return null;
+                    .map((r) => {
+                        const entry = db.getEntryById(r.entryId)
+                        if (!entry) return null
                         return {
                             ...entry,
-                            similarity: Math.round(r.score * 100) / 100
-                        };
+                            similarity: Math.round(r.score * 100) / 100,
+                        }
                     })
-                    .filter((e): e is NonNullable<typeof e> => e !== null);
+                    .filter((e): e is NonNullable<typeof e> => e !== null)
 
                 return {
                     query: input.query,
                     entries,
                     count: entries.length,
-                    ...(results.length === 0 ? { hint: 'No entries in vector index. Use rebuild_vector_index to index existing entries.' } : {})
-                };
+                    ...(results.length === 0
+                        ? {
+                              hint: 'No entries in vector index. Use rebuild_vector_index to index existing entries.',
+                          }
+                        : {}),
+                }
             },
         },
         // Analytics tools
         {
             name: 'get_statistics',
             title: 'Get Statistics',
-            description: 'Get journal statistics and analytics (Phase 2: includes project breakdown)',
+            description:
+                'Get journal statistics and analytics (Phase 2: includes project breakdown)',
             group: 'analytics',
             inputSchema: GetStatisticsSchema,
-            outputSchema: StatisticsOutputSchema,  // MCP 2025-11-25: structured output
+            outputSchema: StatisticsOutputSchema, // MCP 2025-11-25: structured output
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const { group_by } = GetStatisticsSchema.parse(params);
-                const stats = db.getStatistics(group_by);
-                return Promise.resolve({ ...stats, groupBy: group_by });
+                const { group_by } = GetStatisticsSchema.parse(params)
+                const stats = db.getStatistics(group_by)
+                return Promise.resolve({ ...stats, groupBy: group_by })
             },
         },
         {
@@ -503,33 +521,40 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
                 end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-                min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+                min_entries: z
+                    .number()
+                    .optional()
+                    .default(3)
+                    .describe('Minimum entries to include project'),
             }),
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const input = z.object({
-                    start_date: z.string().optional(),
-                    end_date: z.string().optional(),
-                    min_entries: z.number().optional().default(3),
-                }).parse(params);
+                const input = z
+                    .object({
+                        start_date: z.string().optional(),
+                        end_date: z.string().optional(),
+                        min_entries: z.number().optional().default(3),
+                    })
+                    .parse(params)
 
-                const rawDb = db.getRawDb();
+                const rawDb = db.getRawDb()
 
                 // Build WHERE clause
-                let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL';
-                const sqlParams: unknown[] = [];
+                let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
+                const sqlParams: unknown[] = []
 
                 if (input.start_date) {
-                    where += " AND DATE(timestamp) >= DATE(?)";
-                    sqlParams.push(input.start_date);
+                    where += ' AND DATE(timestamp) >= DATE(?)'
+                    sqlParams.push(input.start_date)
                 }
                 if (input.end_date) {
-                    where += " AND DATE(timestamp) <= DATE(?)";
-                    sqlParams.push(input.end_date);
+                    where += ' AND DATE(timestamp) <= DATE(?)'
+                    sqlParams.push(input.end_date)
                 }
 
                 // Get active projects with stats
-                const projectsResult = rawDb.exec(`
+                const projectsResult = rawDb.exec(
+                    `
                     SELECT project_number, COUNT(*) as entry_count,
                            MIN(DATE(timestamp)) as first_entry,
                            MAX(DATE(timestamp)) as last_entry,
@@ -538,27 +563,32 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     GROUP BY project_number
                     HAVING entry_count >= ?
                     ORDER BY entry_count DESC
-                `, [...sqlParams, input.min_entries]);
+                `,
+                    [...sqlParams, input.min_entries]
+                )
 
                 if (!projectsResult[0] || projectsResult[0].values.length === 0) {
                     return Promise.resolve({
                         message: `No projects found with at least ${String(input.min_entries)} entries`,
                         projects: [],
-                    });
+                    })
                 }
 
-                const columns = projectsResult[0].columns;
-                const projects = projectsResult[0].values.map(row => {
-                    const obj: Record<string, unknown> = {};
-                    columns.forEach((col, i) => { obj[col] = row[i]; });
-                    return obj;
-                });
+                const columns = projectsResult[0].columns
+                const projects = projectsResult[0].values.map((row) => {
+                    const obj: Record<string, unknown> = {}
+                    columns.forEach((col, i) => {
+                        obj[col] = row[i]
+                    })
+                    return obj
+                })
 
                 // Get top tags per project
-                const projectTags: Record<number, { name: string; count: number }[]> = {};
+                const projectTags: Record<number, { name: string; count: number }[]> = {}
                 for (const proj of projects) {
-                    const projNum = proj['project_number'] as number;
-                    const tagsResult = rawDb.exec(`
+                    const projNum = proj['project_number'] as number
+                    const tagsResult = rawDb.exec(
+                        `
                         SELECT t.name, COUNT(*) as count
                         FROM tags t
                         JOIN entry_tags et ON t.id = et.tag_id
@@ -567,47 +597,56 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         GROUP BY t.name
                         ORDER BY count DESC
                         LIMIT 5
-                    `, [projNum]);
+                    `,
+                        [projNum]
+                    )
                     if (tagsResult[0]) {
-                        projectTags[projNum] = tagsResult[0].values.map(row => ({
+                        projectTags[projNum] = tagsResult[0].values.map((row) => ({
                             name: row[0] as string,
                             count: row[1] as number,
-                        }));
+                        }))
                     }
                 }
 
                 // Find inactive projects (last entry > 7 days ago)
-                const cutoffDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-                const inactiveResult = rawDb.exec(`
+                const cutoffDate = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+                const inactiveResult = rawDb.exec(
+                    `
                     SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
                     FROM memory_journal
                     WHERE deleted_at IS NULL AND project_number IS NOT NULL
                     GROUP BY project_number
                     HAVING last_entry_date < ?
-                `, [cutoffDate]);
+                `,
+                    [cutoffDate]
+                )
 
-                const inactiveProjects = inactiveResult[0]?.values.map(row => ({
-                    project_number: row[0] as number,
-                    last_entry_date: row[1] as string,
-                })) ?? [];
+                const inactiveProjects =
+                    inactiveResult[0]?.values.map((row) => ({
+                        project_number: row[0] as number,
+                        last_entry_date: row[1] as string,
+                    })) ?? []
 
                 // Calculate time distribution
-                const totalEntries = projects.reduce((sum, p) => sum + (p['entry_count'] as number), 0);
-                const distribution = projects.slice(0, 5).map(p => ({
+                const totalEntries = projects.reduce(
+                    (sum, p) => sum + (p['entry_count'] as number),
+                    0
+                )
+                const distribution = projects.slice(0, 5).map((p) => ({
                     project_number: p['project_number'],
                     percentage: (((p['entry_count'] as number) / totalEntries) * 100).toFixed(1),
-                }));
+                }))
 
                 return Promise.resolve({
                     project_count: projects.length,
                     total_entries: totalEntries,
-                    projects: projects.map(p => ({
+                    projects: projects.map((p) => ({
                         ...p,
                         top_tags: projectTags[p['project_number'] as number] ?? [],
                     })),
                     inactive_projects: inactiveProjects,
                     time_distribution: distribution,
-                });
+                })
             },
         },
         // Relationship tools
@@ -619,14 +658,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: LinkEntriesSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
-                const input = LinkEntriesSchema.parse(params);
+                const input = LinkEntriesSchema.parse(params)
                 const relationship = db.linkEntries(
                     input.from_entry_id,
                     input.to_entry_id,
                     input.relationship_type as RelationshipType,
                     input.description
-                );
-                return Promise.resolve({ success: true, relationship });
+                )
+                return Promise.resolve({ success: true, relationship })
             },
         },
         {
@@ -635,26 +674,38 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Generate a Mermaid diagram visualization of entry relationships',
             group: 'relationships',
             inputSchema: z.object({
-                entry_id: z.number().optional().describe('Specific entry ID to visualize (shows connected entries)'),
+                entry_id: z
+                    .number()
+                    .optional()
+                    .describe('Specific entry ID to visualize (shows connected entries)'),
                 tags: z.array(z.string()).optional().describe('Filter entries by tags'),
-                depth: z.number().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
+                depth: z
+                    .number()
+                    .min(1)
+                    .max(3)
+                    .optional()
+                    .default(2)
+                    .describe('Relationship traversal depth'),
                 limit: z.number().optional().default(20).describe('Maximum entries to include'),
             }),
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const input = z.object({
-                    entry_id: z.number().optional(),
-                    tags: z.array(z.string()).optional(),
-                    depth: z.number().optional().default(2),
-                    limit: z.number().optional().default(20),
-                }).parse(params);
+                const input = z
+                    .object({
+                        entry_id: z.number().optional(),
+                        tags: z.array(z.string()).optional(),
+                        depth: z.number().optional().default(2),
+                        limit: z.number().optional().default(20),
+                    })
+                    .parse(params)
 
-                const rawDb = db.getRawDb();
-                let entriesResult;
+                const rawDb = db.getRawDb()
+                let entriesResult
 
                 if (input.entry_id !== undefined) {
                     // Use recursive CTE to get connected entries up to depth
-                    entriesResult = rawDb.exec(`
+                    entriesResult = rawDb.exec(
+                        `
                         WITH RECURSIVE connected_entries(id, distance) AS (
                             SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
                             UNION
@@ -673,11 +724,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         JOIN connected_entries ce ON mj.id = ce.id
                         WHERE mj.deleted_at IS NULL
                         LIMIT ?
-                    `, [input.entry_id, input.depth, input.limit]);
+                    `,
+                        [input.entry_id, input.depth, input.limit]
+                    )
                 } else if (input.tags && input.tags.length > 0) {
                     // Filter by tags
-                    const placeholders = input.tags.map(() => '?').join(',');
-                    entriesResult = rawDb.exec(`
+                    const placeholders = input.tags.map(() => '?').join(',')
+                    entriesResult = rawDb.exec(
+                        `
                         SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                         FROM memory_journal mj
                         WHERE mj.deleted_at IS NULL
@@ -687,10 +741,13 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                               WHERE t.name IN (${placeholders})
                           )
                         LIMIT ?
-                    `, [...input.tags, input.limit]);
+                    `,
+                        [...input.tags, input.limit]
+                    )
                 } else {
                     // Get recent entries with relationships
-                    entriesResult = rawDb.exec(`
+                    entriesResult = rawDb.exec(
+                        `
                         SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                         FROM memory_journal mj
                         WHERE mj.deleted_at IS NULL
@@ -701,84 +758,94 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                           )
                         ORDER BY mj.id DESC
                         LIMIT ?
-                    `, [input.limit]);
+                    `,
+                        [input.limit]
+                    )
                 }
 
                 if (!entriesResult[0] || entriesResult[0].values.length === 0) {
                     return Promise.resolve({
                         message: 'No entries found with relationships matching your criteria',
                         mermaid: null,
-                    });
+                    })
                 }
 
                 // Build entries map
-                const entries: Record<number, { id: number; entry_type: string; content: string; is_personal: boolean }> = {};
-                const cols = entriesResult[0].columns;
+                const entries: Record<
+                    number,
+                    { id: number; entry_type: string; content: string; is_personal: boolean }
+                > = {}
+                const cols = entriesResult[0].columns
                 for (const row of entriesResult[0].values) {
-                    const id = row[cols.indexOf('id')] as number;
+                    const id = row[cols.indexOf('id')] as number
                     entries[id] = {
                         id,
                         entry_type: row[cols.indexOf('entry_type')] as string,
                         content: row[cols.indexOf('content')] as string,
                         is_personal: Boolean(row[cols.indexOf('is_personal')]),
-                    };
+                    }
                 }
 
-                const entryIds = Object.keys(entries).map(Number);
-                const placeholders = entryIds.map(() => '?').join(',');
+                const entryIds = Object.keys(entries).map(Number)
+                const placeholders = entryIds.map(() => '?').join(',')
 
                 // Get relationships between these entries
-                const relsResult = rawDb.exec(`
+                const relsResult = rawDb.exec(
+                    `
                     SELECT from_entry_id, to_entry_id, relationship_type
                     FROM relationships
                     WHERE from_entry_id IN (${placeholders})
                       AND to_entry_id IN (${placeholders})
-                `, [...entryIds, ...entryIds]);
+                `,
+                    [...entryIds, ...entryIds]
+                )
 
-                const relationships = relsResult[0]?.values ?? [];
+                const relationships = relsResult[0]?.values ?? []
 
                 // Generate Mermaid diagram
-                let mermaid = '```mermaid\\ngraph TD\\n';
+                let mermaid = '```mermaid\\ngraph TD\\n'
 
                 // Add nodes
                 for (const [idStr, entry] of Object.entries(entries)) {
-                    let contentPreview = entry.content.slice(0, 40).replace(/\\n/g, ' ');
-                    if (entry.content.length > 40) contentPreview += '...';
+                    let contentPreview = entry.content.slice(0, 40).replace(/\\n/g, ' ')
+                    if (entry.content.length > 40) contentPreview += '...'
                     // Escape for Mermaid
-                    contentPreview = contentPreview.replace(/"/g, "'").replace(/\\[/g, '(').replace(/\\]/g, ')');
-                    const entryTypeShort = entry.entry_type.slice(0, 20);
-                    mermaid += `    E${idStr}["#${idStr}: ${contentPreview}<br/>${entryTypeShort}"]\\n`;
+                    contentPreview = contentPreview
+                        .replace(/"/g, "'")
+                        .replace(/\\[/g, '(').replace(/\\]/g, ')')
+                    const entryTypeShort = entry.entry_type.slice(0, 20)
+                    mermaid += `    E${idStr}["#${idStr}: ${contentPreview}<br/>${entryTypeShort}"]\\n`
                 }
 
-                mermaid += '\\n';
+                mermaid += '\\n'
 
                 // Add relationships with arrows
                 const relSymbols: Record<string, string> = {
-                    'references': '-->',
-                    'implements': '==>',
-                    'clarifies': '-.->',
-                    'evolves_from': '-->',
-                    'response_to': '<-->',
-                };
+                    references: '-->',
+                    implements: '==>',
+                    clarifies: '-.->',
+                    evolves_from: '-->',
+                    response_to: '<-->',
+                }
 
                 for (const rel of relationships) {
-                    const fromId = rel[0] as number;
-                    const toId = rel[1] as number;
-                    const relType = rel[2] as string;
-                    const arrow = relSymbols[relType] ?? '-->';
-                    mermaid += `    E${String(fromId)} ${arrow}|${relType}| E${String(toId)}\\n`;
+                    const fromId = rel[0] as number
+                    const toId = rel[1] as number
+                    const relType = rel[2] as string
+                    const arrow = relSymbols[relType] ?? '-->'
+                    mermaid += `    E${String(fromId)} ${arrow}|${relType}| E${String(toId)}\\n`
                 }
 
                 // Add styling
-                mermaid += '\\n';
+                mermaid += '\\n'
                 for (const [idStr, entry] of Object.entries(entries)) {
                     if (entry.is_personal) {
-                        mermaid += `    style E${idStr} fill:#E3F2FD\\n`;
+                        mermaid += `    style E${idStr} fill:#E3F2FD\\n`
                     } else {
-                        mermaid += `    style E${idStr} fill:#FFF3E0\\n`;
+                        mermaid += `    style E${idStr} fill:#FFF3E0\\n`
                     }
                 }
-                mermaid += '```';
+                mermaid += '```'
 
                 return Promise.resolve({
                     entry_count: Object.keys(entries).length,
@@ -796,7 +863,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                             '<-->': 'response_to',
                         },
                     },
-                });
+                })
             },
         },
         // Export tools
@@ -808,16 +875,19 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: ExportEntriesSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
-                const input = ExportEntriesSchema.parse(params);
-                const limit = input.limit ?? 100;
-                const entries = db.getRecentEntries(limit);
+                const input = ExportEntriesSchema.parse(params)
+                const limit = input.limit ?? 100
+                const entries = db.getRecentEntries(limit)
                 if (input.format === 'markdown') {
-                    const md = entries.map(e =>
-                        `## ${e.timestamp}\n\n**Type:** ${e.entryType}\n\n${e.content}\n\n---`
-                    ).join('\n\n');
-                    return Promise.resolve({ format: 'markdown', content: md });
+                    const md = entries
+                        .map(
+                            (e) =>
+                                `## ${e.timestamp}\n\n**Type:** ${e.entryType}\n\n${e.content}\n\n---`
+                        )
+                        .join('\n\n')
+                    return Promise.resolve({ format: 'markdown', content: md })
                 }
-                return Promise.resolve({ format: 'json', entries });
+                return Promise.resolve({ format: 'json', entries })
             },
         },
         // Admin tools
@@ -829,25 +899,25 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: UpdateEntrySchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
-                const input = UpdateEntrySchema.parse(params);
+                const input = UpdateEntrySchema.parse(params)
                 const entry = db.updateEntry(input.entry_id, {
                     content: input.content,
                     entryType: input.entry_type as EntryType | undefined,
                     isPersonal: input.is_personal,
                     tags: input.tags,
-                });
+                })
                 if (!entry) {
-                    return Promise.resolve({ error: `Entry ${input.entry_id} not found` });
+                    return Promise.resolve({ error: `Entry ${input.entry_id} not found` })
                 }
 
                 // Re-index if content changed
                 if (input.content && vectorManager) {
                     vectorManager.addEntry(entry.id, entry.content).catch(() => {
                         // Non-critical failure, entry already updated in DB
-                    });
+                    })
                 }
 
-                return Promise.resolve({ success: true, entry });
+                return Promise.resolve({ success: true, entry })
             },
         },
         {
@@ -858,9 +928,9 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: DeleteEntrySchema,
             annotations: { readOnlyHint: false, destructiveHint: true },
             handler: (params: unknown) => {
-                const { entry_id, permanent } = DeleteEntrySchema.parse(params);
-                const success = db.deleteEntry(entry_id, permanent);
-                return Promise.resolve({ success, entryId: entry_id, permanent });
+                const { entry_id, permanent } = DeleteEntrySchema.parse(params)
+                const success = db.deleteEntry(entry_id, permanent)
+                return Promise.resolve({ success, entryId: entry_id, permanent })
             },
         },
         // Utility tools
@@ -872,8 +942,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({}),
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (_params: unknown) => {
-                const tags = db.listTags();
-                return Promise.resolve({ tags, count: tags.length });
+                const tags = db.listTags()
+                return Promise.resolve({ tags, count: tags.length })
             },
         },
         // Vector index management tools
@@ -886,10 +956,10 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: async (_params: unknown) => {
                 if (!vectorManager) {
-                    return { error: 'Vector search not available' };
+                    return { error: 'Vector search not available' }
                 }
-                const indexed = await vectorManager.rebuildIndex(db);
-                return { success: true, entriesIndexed: indexed };
+                const indexed = await vectorManager.rebuildIndex(db)
+                return { success: true, entriesIndexed: indexed }
             },
         },
         {
@@ -900,16 +970,16 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({ entry_id: z.number() }),
             annotations: { readOnlyHint: false, idempotentHint: true },
             handler: async (params: unknown) => {
-                const { entry_id } = z.object({ entry_id: z.number() }).parse(params);
+                const { entry_id } = z.object({ entry_id: z.number() }).parse(params)
                 if (!vectorManager) {
-                    return { error: 'Vector search not available' };
+                    return { error: 'Vector search not available' }
                 }
-                const entry = db.getEntryById(entry_id);
+                const entry = db.getEntryById(entry_id)
                 if (!entry) {
-                    return { error: `Entry ${String(entry_id)} not found` };
+                    return { error: `Entry ${String(entry_id)} not found` }
                 }
-                const success = await vectorManager.addEntry(entry_id, entry.content);
-                return { success, entryId: entry_id };
+                const success = await vectorManager.addEntry(entry_id, entry.content)
+                return { success, entryId: entry_id }
             },
         },
         {
@@ -921,44 +991,57 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (_params: unknown) => {
                 if (!vectorManager) {
-                    return { available: false, error: 'Vector search not available' };
+                    return { available: false, error: 'Vector search not available' }
                 }
-                const stats = await vectorManager.getStats();
-                return { available: true, ...stats };
+                const stats = await vectorManager.getStats()
+                return { available: true, ...stats }
             },
         },
         // GitHub integration tools
         {
             name: 'get_github_issues',
             title: 'Get GitHub Issues',
-            description: 'List issues from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
+            description:
+                'List issues from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
-                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'),
-                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Repository owner - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
+                    ),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
+                    ),
                 state: z.enum(['open', 'closed', 'all']).optional().default('open'),
                 limit: z.number().optional().default(20),
             }),
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    owner: z.string().optional(),
-                    repo: z.string().optional(),
-                    state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                    limit: z.number().optional().default(20),
-                }).parse(params);
+                const input = z
+                    .object({
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                        state: z.enum(['open', 'closed', 'all']).optional().default('open'),
+                        limit: z.number().optional().default(20),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
                 // Get owner/repo from input or from current repo
-                const repoInfo = await github.getRepoInfo();
-                const detectedOwner = repoInfo.owner;
-                const detectedRepo = repoInfo.repo;
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const detectedRepo = repoInfo.repo
 
-                const owner = input.owner ?? detectedOwner ?? undefined;
-                const repo = input.repo ?? detectedRepo ?? undefined;
+                const owner = input.owner ?? detectedOwner ?? undefined
+                const repo = input.repo ?? detectedRepo ?? undefined
 
                 if (!owner || !repo) {
                     return {
@@ -966,44 +1049,58 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         requiresUserInput: true,
                         detectedOwner,
                         detectedRepo,
-                        instruction: 'Ask the user: "What GitHub repository would you like to query? Please provide the owner and repo name (e.g., owner/repo)."'
-                    };
+                        instruction:
+                            'Ask the user: "What GitHub repository would you like to query? Please provide the owner and repo name (e.g., owner/repo)."',
+                    }
                 }
 
-                const issues = await github.getIssues(owner, repo, input.state, input.limit);
-                return { owner, repo, detectedOwner, detectedRepo, issues, count: issues.length };
+                const issues = await github.getIssues(owner, repo, input.state, input.limit)
+                return { owner, repo, detectedOwner, detectedRepo, issues, count: issues.length }
             },
         },
         {
             name: 'get_github_prs',
             title: 'Get GitHub Pull Requests',
-            description: 'List pull requests from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
+            description:
+                'List pull requests from a GitHub repository. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
-                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'),
-                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Repository owner - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
+                    ),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
+                    ),
                 state: z.enum(['open', 'closed', 'all']).optional().default('open'),
                 limit: z.number().optional().default(20),
             }),
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    owner: z.string().optional(),
-                    repo: z.string().optional(),
-                    state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                    limit: z.number().optional().default(20),
-                }).parse(params);
+                const input = z
+                    .object({
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                        state: z.enum(['open', 'closed', 'all']).optional().default('open'),
+                        limit: z.number().optional().default(20),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
-                const repoInfo = await github.getRepoInfo();
-                const detectedOwner = repoInfo.owner;
-                const detectedRepo = repoInfo.repo;
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const detectedRepo = repoInfo.repo
 
-                const owner = input.owner ?? detectedOwner ?? undefined;
-                const repo = input.repo ?? detectedRepo ?? undefined;
+                const owner = input.owner ?? detectedOwner ?? undefined
+                const repo = input.repo ?? detectedRepo ?? undefined
 
                 if (!owner || !repo) {
                     return {
@@ -1011,18 +1108,32 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         requiresUserInput: true,
                         detectedOwner,
                         detectedRepo,
-                        instruction: 'Ask the user: "What GitHub repository would you like to query? Please provide the owner and repo name (e.g., owner/repo)."'
-                    };
+                        instruction:
+                            'Ask the user: "What GitHub repository would you like to query? Please provide the owner and repo name (e.g., owner/repo)."',
+                    }
                 }
 
-                const pullRequests = await github.getPullRequests(owner, repo, input.state, input.limit);
-                return { owner, repo, detectedOwner, detectedRepo, pullRequests, count: pullRequests.length };
+                const pullRequests = await github.getPullRequests(
+                    owner,
+                    repo,
+                    input.state,
+                    input.limit
+                )
+                return {
+                    owner,
+                    repo,
+                    detectedOwner,
+                    detectedRepo,
+                    pullRequests,
+                    count: pullRequests.length,
+                }
             },
         },
         {
             name: 'get_github_issue',
             title: 'Get GitHub Issue Details',
-            description: 'Get detailed information about a specific GitHub issue. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
+            description:
+                'Get detailed information about a specific GitHub issue. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
                 issue_number: z.number(),
@@ -1031,22 +1142,24 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             }),
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    issue_number: z.number(),
-                    owner: z.string().optional(),
-                    repo: z.string().optional(),
-                }).parse(params);
+                const input = z
+                    .object({
+                        issue_number: z.number(),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
-                const repoInfo = await github.getRepoInfo();
-                const detectedOwner = repoInfo.owner;
-                const detectedRepo = repoInfo.repo;
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const detectedRepo = repoInfo.repo
 
-                const owner = input.owner ?? detectedOwner ?? undefined;
-                const repo = input.repo ?? detectedRepo ?? undefined;
+                const owner = input.owner ?? detectedOwner ?? undefined
+                const repo = input.repo ?? detectedRepo ?? undefined
 
                 if (!owner || !repo) {
                     return {
@@ -1054,21 +1167,29 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         requiresUserInput: true,
                         detectedOwner,
                         detectedRepo,
-                        instruction: 'Ask the user: "What GitHub repository is this issue from? Please provide the owner and repo name (e.g., owner/repo)."'
-                    };
+                        instruction:
+                            'Ask the user: "What GitHub repository is this issue from? Please provide the owner and repo name (e.g., owner/repo)."',
+                    }
                 }
 
-                const issue = await github.getIssue(owner, repo, input.issue_number);
+                const issue = await github.getIssue(owner, repo, input.issue_number)
                 if (!issue) {
-                    return { error: `Issue #${String(input.issue_number)} not found`, owner, repo, detectedOwner, detectedRepo };
+                    return {
+                        error: `Issue #${String(input.issue_number)} not found`,
+                        owner,
+                        repo,
+                        detectedOwner,
+                        detectedRepo,
+                    }
                 }
-                return { issue, owner, repo, detectedOwner, detectedRepo };
+                return { issue, owner, repo, detectedOwner, detectedRepo }
             },
         },
         {
             name: 'get_github_pr',
             title: 'Get GitHub PR Details',
-            description: 'Get detailed information about a specific GitHub pull request. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
+            description:
+                'Get detailed information about a specific GitHub pull request. IMPORTANT: Do NOT guess owner/repo values - leave them empty to auto-detect from the current git repository.',
             group: 'github',
             inputSchema: z.object({
                 pr_number: z.number(),
@@ -1077,22 +1198,24 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             }),
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    pr_number: z.number(),
-                    owner: z.string().optional(),
-                    repo: z.string().optional(),
-                }).parse(params);
+                const input = z
+                    .object({
+                        pr_number: z.number(),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
-                const repoInfo = await github.getRepoInfo();
-                const detectedOwner = repoInfo.owner;
-                const detectedRepo = repoInfo.repo;
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const detectedRepo = repoInfo.repo
 
-                const owner = input.owner ?? detectedOwner ?? undefined;
-                const repo = input.repo ?? detectedRepo ?? undefined;
+                const owner = input.owner ?? detectedOwner ?? undefined
+                const repo = input.repo ?? detectedRepo ?? undefined
 
                 if (!owner || !repo) {
                     return {
@@ -1100,30 +1223,38 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         requiresUserInput: true,
                         detectedOwner,
                         detectedRepo,
-                        instruction: 'Ask the user: "What GitHub repository is this PR from? Please provide the owner and repo name (e.g., owner/repo)."'
-                    };
+                        instruction:
+                            'Ask the user: "What GitHub repository is this PR from? Please provide the owner and repo name (e.g., owner/repo)."',
+                    }
                 }
 
-                const pullRequest = await github.getPullRequest(owner, repo, input.pr_number);
+                const pullRequest = await github.getPullRequest(owner, repo, input.pr_number)
                 if (!pullRequest) {
-                    return { error: `PR #${String(input.pr_number)} not found`, owner, repo, detectedOwner, detectedRepo };
+                    return {
+                        error: `PR #${String(input.pr_number)} not found`,
+                        owner,
+                        repo,
+                        detectedOwner,
+                        detectedRepo,
+                    }
                 }
-                return { pullRequest, owner, repo, detectedOwner, detectedRepo };
+                return { pullRequest, owner, repo, detectedOwner, detectedRepo }
             },
         },
         {
             name: 'get_github_context',
             title: 'Get GitHub Repository Context',
-            description: 'Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).',
+            description:
+                'Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).',
             group: 'github',
             inputSchema: z.object({}),
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (_params: unknown) => {
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
-                const context = await github.getRepoContext();
+                const context = await github.getRepoContext()
                 return {
                     repoName: context.repoName,
                     branch: context.branch,
@@ -1133,53 +1264,60 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     pullRequests: context.pullRequests,
                     issueCount: context.issues.length,
                     prCount: context.pullRequests.length,
-                };
+                }
             },
         },
         // Kanban tools (GitHub Projects v2)
         {
             name: 'get_kanban_board',
             title: 'Get Kanban Board',
-            description: 'View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.',
+            description:
+                'View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.',
             group: 'github',
             inputSchema: z.object({
                 project_number: z.number().describe('GitHub Project number (from the project URL)'),
-                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect from git'),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe('Repository owner - LEAVE EMPTY to auto-detect from git'),
             }),
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    project_number: z.number(),
-                    owner: z.string().optional(),
-                }).parse(params);
+                const input = z
+                    .object({
+                        project_number: z.number(),
+                        owner: z.string().optional(),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
                 // Get owner from input or from current repo
-                const repoInfo = await github.getRepoInfo();
-                const detectedOwner = repoInfo.owner;
-                const owner = input.owner ?? detectedOwner ?? undefined;
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const owner = input.owner ?? detectedOwner ?? undefined
 
                 if (!owner) {
                     return {
                         error: 'STOP: Could not auto-detect repository owner. DO NOT GUESS. You MUST ask the user to provide the GitHub owner.',
                         requiresUserInput: true,
                         detectedOwner,
-                        instruction: 'Ask the user: "What GitHub username or organization owns this project?"'
-                    };
+                        instruction:
+                            'Ask the user: "What GitHub username or organization owns this project?"',
+                    }
                 }
 
-                const repo = repoInfo.repo ?? undefined;
-                const board = await github.getProjectKanban(owner, input.project_number, repo);
+                const repo = repoInfo.repo ?? undefined
+                const board = await github.getProjectKanban(owner, input.project_number, repo)
                 if (!board) {
                     return {
                         error: `Project #${String(input.project_number)} not found or Status field not configured`,
                         owner,
                         repo,
                         hint: 'Ensure the project exists and has a "Status" single-select field. Projects can be at user, repository, or organization level.',
-                    };
+                    }
                 }
 
                 return {
@@ -1187,65 +1325,73 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     owner,
                     detectedOwner,
                     detectedRepo: repo,
-                };
+                }
             },
         },
         {
             name: 'move_kanban_item',
             title: 'Move Kanban Item',
-            description: 'Move a project item to a different Status column. Use get_kanban_board first to get the item_id and exact status names. Status matching is case-insensitive.',
+            description:
+                'Move a project item to a different Status column. Use get_kanban_board first to get the item_id and exact status names. Status matching is case-insensitive.',
             group: 'github',
             inputSchema: z.object({
                 project_number: z.number().describe('GitHub Project number'),
                 item_id: z.string().describe('Project item node ID (from get_kanban_board)'),
-                target_status: z.string().describe('Target status name (e.g., "Done", "In Progress")'),
-                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+                target_status: z
+                    .string()
+                    .describe('Target status name (e.g., "Done", "In Progress")'),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe('Repository owner - LEAVE EMPTY to auto-detect'),
             }),
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    project_number: z.number(),
-                    item_id: z.string(),
-                    target_status: z.string(),
-                    owner: z.string().optional(),
-                }).parse(params);
+                const input = z
+                    .object({
+                        project_number: z.number(),
+                        item_id: z.string(),
+                        target_status: z.string(),
+                        owner: z.string().optional(),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
                 // Get owner from input or from current repo
-                const repoInfo = await github.getRepoInfo();
-                const detectedOwner = repoInfo.owner;
-                const owner = input.owner ?? detectedOwner ?? undefined;
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const owner = input.owner ?? detectedOwner ?? undefined
 
                 if (!owner) {
                     return {
                         error: 'STOP: Could not auto-detect repository owner. DO NOT GUESS.',
                         requiresUserInput: true,
-                    };
+                    }
                 }
 
                 // First, get the board to find projectId, statusFieldId, and target statusOptionId
-                const repo = repoInfo.repo ?? undefined;
-                const board = await github.getProjectKanban(owner, input.project_number, repo);
+                const repo = repoInfo.repo ?? undefined
+                const board = await github.getProjectKanban(owner, input.project_number, repo)
                 if (!board) {
                     return {
                         error: `Project #${String(input.project_number)} not found`,
-                    };
+                    }
                 }
 
                 // Find the target status option
                 const targetOption = board.statusOptions.find(
                     (opt) => opt.name.toLowerCase() === input.target_status.toLowerCase()
-                );
+                )
 
                 if (!targetOption) {
                     return {
                         error: `Status "${input.target_status}" not found in project`,
                         availableStatuses: board.statusOptions.map((opt) => opt.name),
                         hint: 'Use one of the available status names listed above.',
-                    };
+                    }
                 }
 
                 // Move the item
@@ -1254,14 +1400,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     input.item_id,
                     board.statusFieldId,
                     targetOption.id
-                );
+                )
 
                 if (!result.success) {
                     return {
                         success: false,
                         error: result.error,
                         targetStatus: input.target_status,
-                    };
+                    }
                 }
 
                 return {
@@ -1270,56 +1416,76 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     newStatus: input.target_status,
                     projectNumber: input.project_number,
                     message: `Item moved to "${input.target_status}"`,
-                };
+                }
             },
         },
         {
             name: 'create_github_issue_with_entry',
             title: 'Create GitHub Issue with Journal Entry',
-            description: 'Create a GitHub issue AND automatically create a linked journal entry documenting the issue creation.',
+            description:
+                'Create a GitHub issue AND automatically create a linked journal entry documenting the issue creation.',
             group: 'github',
             inputSchema: z.object({
                 title: z.string().min(1).describe('Issue title'),
                 body: z.string().optional().describe('Issue body/description'),
                 labels: z.array(z.string()).optional().describe('Labels to apply'),
                 assignees: z.array(z.string()).optional().describe('Users to assign'),
-                project_number: z.number().optional().describe('GitHub Project number to add this issue to'),
-                initial_status: z.string().optional().describe('Initial status column (e.g., "Backlog", "Ready"). Requires project_number.'),
-                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
-                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
-                entry_content: z.string().optional().describe('Custom journal content (defaults to auto-generated summary)'),
+                project_number: z
+                    .number()
+                    .optional()
+                    .describe('GitHub Project number to add this issue to'),
+                initial_status: z
+                    .string()
+                    .optional()
+                    .describe(
+                        'Initial status column (e.g., "Backlog", "Ready"). Requires project_number.'
+                    ),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe('Repository owner - LEAVE EMPTY to auto-detect'),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe('Repository name - LEAVE EMPTY to auto-detect'),
+                entry_content: z
+                    .string()
+                    .optional()
+                    .describe('Custom journal content (defaults to auto-generated summary)'),
                 tags: z.array(z.string()).optional().describe('Journal entry tags'),
             }),
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    title: z.string().min(1),
-                    body: z.string().optional(),
-                    labels: z.array(z.string()).optional(),
-                    assignees: z.array(z.string()).optional(),
-                    project_number: z.number().optional(),
-                    initial_status: z.string().optional(),
-                    owner: z.string().optional(),
-                    repo: z.string().optional(),
-                    entry_content: z.string().optional(),
-                    tags: z.array(z.string()).optional(),
-                }).parse(params);
+                const input = z
+                    .object({
+                        title: z.string().min(1),
+                        body: z.string().optional(),
+                        labels: z.array(z.string()).optional(),
+                        assignees: z.array(z.string()).optional(),
+                        project_number: z.number().optional(),
+                        initial_status: z.string().optional(),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                        entry_content: z.string().optional(),
+                        tags: z.array(z.string()).optional(),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
                 // Get owner/repo from input or from current repo
-                const repoInfo = await github.getRepoInfo();
-                const owner = input.owner ?? repoInfo.owner ?? undefined;
-                const repo = input.repo ?? repoInfo.repo ?? undefined;
+                const repoInfo = await github.getRepoInfo()
+                const owner = input.owner ?? repoInfo.owner ?? undefined
+                const repo = input.repo ?? repoInfo.repo ?? undefined
 
                 if (!owner || !repo) {
                     return {
                         error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
                         requiresUserInput: true,
                         detected: { owner, repo },
-                    };
+                    }
                 }
 
                 // Create the GitHub issue
@@ -1330,87 +1496,101 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     input.body,
                     input.labels,
                     input.assignees
-                );
+                )
 
                 if (!issue) {
-                    return { error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.' };
+                    return {
+                        error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
+                    }
                 }
 
-                const projectNumber = input.project_number ?? context.config?.defaultProjectNumber;
+                const projectNumber = input.project_number ?? context.config?.defaultProjectNumber
 
                 // Add to project if requested or default configured
-                let projectResult = undefined;
+                let projectResult = undefined
                 if (projectNumber !== undefined && issue.nodeId) {
                     try {
                         // Get project ID (needed for mutation)
-                        const board = await github.getProjectKanban(owner, projectNumber, repo);
+                        const board = await github.getProjectKanban(owner, projectNumber, repo)
                         if (board) {
-                            const added = await github.addProjectItem(board.projectId, issue.nodeId);
+                            const added = await github.addProjectItem(board.projectId, issue.nodeId)
                             if (added.success) {
                                 // Set initial status if provided
-                                let statusResult: { status: string; set: boolean; error?: string } | undefined = undefined;
-                                const initialStatus = input.initial_status;
+                                let statusResult:
+                                    | { status: string; set: boolean; error?: string }
+                                    | undefined = undefined
+                                const initialStatus = input.initial_status
                                 if (initialStatus && added.itemId) {
                                     // Find the status option (case-insensitive)
                                     const statusOption = board.statusOptions.find(
-                                        opt => opt.name.toLowerCase() === initialStatus.toLowerCase()
-                                    );
+                                        (opt) =>
+                                            opt.name.toLowerCase() === initialStatus.toLowerCase()
+                                    )
                                     if (statusOption) {
                                         const moveResult = await github.moveProjectItem(
                                             board.projectId,
                                             added.itemId,
                                             board.statusFieldId,
                                             statusOption.id
-                                        );
+                                        )
                                         if (moveResult.success) {
-                                            statusResult = { status: statusOption.name, set: true };
+                                            statusResult = { status: statusOption.name, set: true }
                                         } else {
-                                            statusResult = { status: initialStatus, set: false, error: moveResult.error };
+                                            statusResult = {
+                                                status: initialStatus,
+                                                set: false,
+                                                error: moveResult.error,
+                                            }
                                         }
                                     } else {
                                         statusResult = {
                                             status: initialStatus,
                                             set: false,
-                                            error: `Status "${initialStatus}" not found. Available: ${board.statusOptions.map(o => o.name).join(', ')}`,
-                                        };
+                                            error: `Status "${initialStatus}" not found. Available: ${board.statusOptions.map((o) => o.name).join(', ')}`,
+                                        }
                                     }
                                 }
 
                                 projectResult = {
                                     projectNumber: projectNumber,
                                     added: true,
-                                    message: `Added to project #${projectNumber}` + (statusResult?.set ? ` (${statusResult.status})` : ''),
+                                    message:
+                                        `Added to project #${projectNumber}` +
+                                        (statusResult?.set ? ` (${statusResult.status})` : ''),
                                     initialStatus: statusResult,
-                                };
+                                }
                             } else {
                                 projectResult = {
                                     projectNumber: projectNumber,
                                     added: false,
-                                    error: added.error
-                                };
+                                    error: added.error,
+                                }
                             }
                         } else {
                             projectResult = {
                                 projectNumber: projectNumber,
                                 added: false,
-                                error: `Project #${projectNumber} not found`
-                            };
+                                error: `Project #${projectNumber} not found`,
+                            }
                         }
                     } catch (error) {
                         projectResult = {
                             projectNumber: projectNumber,
                             added: false,
-                            error: error instanceof Error ? error.message : String(error)
-                        };
+                            error: error instanceof Error ? error.message : String(error),
+                        }
                     }
                 }
 
                 // Create linked journal entry
-                const entryContent = input.entry_content ??
+                const entryContent =
+                    input.entry_content ??
                     `Created GitHub issue #${String(issue.number)}: ${issue.title}\n\n` +
-                    `URL: ${issue.url}\n` +
-                    (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
-                    (input.body ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}` : '');
+                        `URL: ${issue.url}\n` +
+                        (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
+                        (input.body
+                            ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
+                            : '')
 
                 const entry = db.createEntry({
                     content: entryContent,
@@ -1421,7 +1601,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     issueNumber: issue.number,
                     issueUrl: issue.url,
                     projectNumber: projectNumber,
-                });
+                })
 
                 return {
                     success: true,
@@ -1435,61 +1615,77 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         id: entry.id,
                         linkedToIssue: issue.number,
                     },
-                    message: `Created issue #${String(issue.number)}` +
+                    message:
+                        `Created issue #${String(issue.number)}` +
                         (projectResult?.added ? ` (added to Project #${projectNumber})` : '') +
                         ` and journal entry #${String(entry.id)}`,
-                };
+                }
             },
         },
         {
             name: 'close_github_issue_with_entry',
             title: 'Close GitHub Issue with Resolution Entry',
-            description: 'Close a GitHub issue AND create a journal entry documenting the resolution.',
+            description:
+                'Close a GitHub issue AND create a journal entry documenting the resolution.',
             group: 'github',
             inputSchema: z.object({
                 issue_number: z.number().describe('Issue number to close'),
-                resolution_notes: z.string().optional().describe('Notes about how the issue was resolved'),
-                comment: z.string().optional().describe('Comment to add to the issue before closing'),
-                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
-                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+                resolution_notes: z
+                    .string()
+                    .optional()
+                    .describe('Notes about how the issue was resolved'),
+                comment: z
+                    .string()
+                    .optional()
+                    .describe('Comment to add to the issue before closing'),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe('Repository owner - LEAVE EMPTY to auto-detect'),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe('Repository name - LEAVE EMPTY to auto-detect'),
                 tags: z.array(z.string()).optional().describe('Journal entry tags'),
             }),
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    issue_number: z.number(),
-                    resolution_notes: z.string().optional(),
-                    comment: z.string().optional(),
-                    owner: z.string().optional(),
-                    repo: z.string().optional(),
-                    tags: z.array(z.string()).optional(),
-                }).parse(params);
+                const input = z
+                    .object({
+                        issue_number: z.number(),
+                        resolution_notes: z.string().optional(),
+                        comment: z.string().optional(),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                        tags: z.array(z.string()).optional(),
+                    })
+                    .parse(params)
 
                 if (!github) {
-                    return { error: 'GitHub integration not available' };
+                    return { error: 'GitHub integration not available' }
                 }
 
                 // Get owner/repo from input or from current repo
-                const repoInfo = await github.getRepoInfo();
-                const owner = input.owner ?? repoInfo.owner ?? undefined;
-                const repo = input.repo ?? repoInfo.repo ?? undefined;
+                const repoInfo = await github.getRepoInfo()
+                const owner = input.owner ?? repoInfo.owner ?? undefined
+                const repo = input.repo ?? repoInfo.repo ?? undefined
 
                 if (!owner || !repo) {
                     return {
                         error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
                         requiresUserInput: true,
                         detected: { owner, repo },
-                    };
+                    }
                 }
 
                 // Get issue details before closing
-                const issueDetails = await github.getIssue(owner, repo, input.issue_number);
+                const issueDetails = await github.getIssue(owner, repo, input.issue_number)
                 if (!issueDetails) {
-                    return { error: `Issue #${String(input.issue_number)} not found` };
+                    return { error: `Issue #${String(input.issue_number)} not found` }
                 }
 
                 if (issueDetails.state === 'CLOSED') {
-                    return { error: `Issue #${String(input.issue_number)} is already closed` };
+                    return { error: `Issue #${String(input.issue_number)} is already closed` }
                 }
 
                 // Close the issue
@@ -1498,17 +1694,19 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     repo,
                     input.issue_number,
                     input.comment
-                );
+                )
 
                 if (!result) {
-                    return { error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.' };
+                    return {
+                        error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.',
+                    }
                 }
 
                 // Create resolution journal entry
                 const entryContent =
                     `Closed GitHub issue #${String(input.issue_number)}: ${issueDetails.title}\n\n` +
                     `URL: ${issueDetails.url}\n` +
-                    (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '');
+                    (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
 
                 const entry = db.createEntry({
                     content: entryContent,
@@ -1518,7 +1716,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     significanceType: 'blocker_resolved' as SignificanceType,
                     issueNumber: input.issue_number,
                     issueUrl: issueDetails.url,
-                });
+                })
 
                 return {
                     success: true,
@@ -1535,31 +1733,37 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         significanceType: 'blocker_resolved',
                     },
                     message: `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}`,
-                };
+                }
             },
         },
         // Backup tools
         {
             name: 'backup_journal',
             title: 'Backup Journal Database',
-            description: 'Create a timestamped backup of the journal database. Backups are stored in the backups/ directory.',
+            description:
+                'Create a timestamped backup of the journal database. Backups are stored in the backups/ directory.',
             group: 'backup',
             inputSchema: z.object({
-                name: z.string().optional().describe('Custom backup name (optional, defaults to timestamp)'),
+                name: z
+                    .string()
+                    .optional()
+                    .describe('Custom backup name (optional, defaults to timestamp)'),
             }),
             annotations: { readOnlyHint: false, idempotentHint: true },
             handler: (params: unknown) => {
-                const input = z.object({
-                    name: z.string().optional(),
-                }).parse(params);
-                const result = db.exportToFile(input.name);
+                const input = z
+                    .object({
+                        name: z.string().optional(),
+                    })
+                    .parse(params)
+                const result = db.exportToFile(input.name)
                 return Promise.resolve({
                     success: true,
                     message: `Backup created successfully`,
                     filename: result.filename,
                     path: result.path,
                     sizeBytes: result.sizeBytes,
-                });
+                })
             },
         },
         {
@@ -1570,34 +1774,42 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({}),
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (_params: unknown) => {
-                const backups = db.listBackups();
+                const backups = db.listBackups()
                 return Promise.resolve({
                     backups,
                     total: backups.length,
                     backupsDirectory: db.getBackupsDir(),
-                    hint: backups.length === 0
-                        ? 'No backups found. Use backup_journal to create one.'
-                        : undefined,
-                });
+                    hint:
+                        backups.length === 0
+                            ? 'No backups found. Use backup_journal to create one.'
+                            : undefined,
+                })
             },
         },
         {
             name: 'restore_backup',
             title: 'Restore Journal from Backup',
-            description: 'Restore the journal database from a backup file. WARNING: This replaces all current data. An automatic backup is created before restore.',
+            description:
+                'Restore the journal database from a backup file. WARNING: This replaces all current data. An automatic backup is created before restore.',
             group: 'backup',
             inputSchema: z.object({
-                filename: z.string().describe('Backup filename to restore from (e.g., backup_2025-01-01.db)'),
-                confirm: z.literal(true).describe('Must be set to true to confirm the restore operation'),
+                filename: z
+                    .string()
+                    .describe('Backup filename to restore from (e.g., backup_2025-01-01.db)'),
+                confirm: z
+                    .literal(true)
+                    .describe('Must be set to true to confirm the restore operation'),
             }),
             annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
             handler: async (params: unknown) => {
-                const input = z.object({
-                    filename: z.string(),
-                    confirm: z.literal(true),
-                }).parse(params);
+                const input = z
+                    .object({
+                        filename: z.string(),
+                        confirm: z.literal(true),
+                    })
+                    .parse(params)
 
-                const result = await db.restoreFromFile(input.filename);
+                const result = await db.restoreFromFile(input.filename)
                 return {
                     success: true,
                     message: `Database restored from ${input.filename}`,
@@ -1605,8 +1817,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     previousEntryCount: result.previousEntryCount,
                     newEntryCount: result.newEntryCount,
                     warning: 'A pre-restore backup was automatically created.',
-                };
+                }
             },
         },
-    ];
+    ]
 }

@@ -5,91 +5,91 @@
 version: 2
 updates:
   # NPM dependencies (TypeScript/Node.js - v3.0.0+)
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/New_York"
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'America/New_York'
     open-pull-requests-limit: 10
     reviewers:
-      - "neverinfamous"
+      - 'neverinfamous'
     labels:
-      - "dependencies"
-      - "npm"
+      - 'dependencies'
+      - 'npm'
     groups:
       mcp-core:
         patterns:
-          - "@modelcontextprotocol/*"
-          - "zod*"
+          - '@modelcontextprotocol/*'
+          - 'zod*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
       ml-packages:
         patterns:
-          - "@xenova/*"
-          - "vectra*"
+          - '@xenova/*'
+          - 'vectra*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
       database:
         patterns:
-          - "sql.js*"
-          - "better-sqlite3*"
+          - 'sql.js*'
+          - 'better-sqlite3*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
       build-tools:
         patterns:
-          - "typescript*"
-          - "tsup*"
-          - "@types/*"
+          - 'typescript*'
+          - 'tsup*'
+          - '@types/*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
       linting:
         patterns:
-          - "eslint*"
-          - "@eslint/*"
-          - "typescript-eslint*"
+          - 'eslint*'
+          - '@eslint/*'
+          - 'typescript-eslint*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
 
   # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "10:00"
-      timezone: "America/New_York"
+      interval: 'weekly'
+      day: 'monday'
+      time: '10:00'
+      timezone: 'America/New_York'
     open-pull-requests-limit: 5
     reviewers:
-      - "neverinfamous"
+      - 'neverinfamous'
     labels:
-      - "dependencies"
-      - "github-actions"
+      - 'dependencies'
+      - 'github-actions'
     groups:
       actions:
         patterns:
-          - "actions/*"
+          - 'actions/*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
 
   # Docker dependencies
-  - package-ecosystem: "docker"
-    directory: "/"
+  - package-ecosystem: 'docker'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "09:00"
-      timezone: "America/New_York"
+      interval: 'weekly'
+      day: 'tuesday'
+      time: '09:00'
+      timezone: 'America/New_York'
     open-pull-requests-limit: 3
     reviewers:
-      - "neverinfamous"
+      - 'neverinfamous'
     labels:
-      - "dependencies"
-      - "docker"
+      - 'dependencies'
+      - 'docker'

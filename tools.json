@@ -1,300 +1,300 @@
 [
-  {
-    "name": "create_entry",
-    "description": "Create a new journal entry with optional context, tags, and significance classification",
-    "arguments": [
-      {
-        "name": "content",
-        "type": "string",
-        "desc": "The journal entry content (required)"
-      },
-      {
-        "name": "entry_type", 
-        "type": "string",
-        "desc": "Type of entry (personal_reflection, technical_achievement, milestone, etc.)"
-      },
-      {
-        "name": "is_personal",
-        "type": "boolean", 
-        "desc": "Whether this is a personal vs project entry"
-      },
-      {
-        "name": "tags",
-        "type": "array",
-        "desc": "Array of tags to associate with the entry"
-      },
-      {
-        "name": "significance_type",
-        "type": "string",
-        "desc": "Mark entry significance (technical_breakthrough, milestone, etc.)"
-      },
-      {
-        "name": "auto_context",
-        "type": "boolean",
-        "desc": "Automatically capture Git/GitHub context"
-      }
-    ]
-  },
-  {
-    "name": "update_entry",
-    "description": "Update an existing journal entry (content, type, tags, or personal flag)",
-    "arguments": [
-      {
-        "name": "entry_id",
-        "type": "number",
-        "desc": "ID of the entry to update (required)"
-      },
-      {
-        "name": "content",
-        "type": "string",
-        "desc": "New content for the entry"
-      },
-      {
-        "name": "entry_type",
-        "type": "string",
-        "desc": "Update entry type"
-      },
-      {
-        "name": "tags",
-        "type": "array",
-        "desc": "Replace tags with new list"
-      },
-      {
-        "name": "is_personal",
-        "type": "boolean",
-        "desc": "Update personal flag"
-      }
-    ]
-  },
-  {
-    "name": "delete_entry",
-    "description": "Delete a journal entry (soft delete by default, or permanent deletion)",
-    "arguments": [
-      {
-        "name": "entry_id",
-        "type": "number",
-        "desc": "ID of the entry to delete (required)"
-      },
-      {
-        "name": "permanent",
-        "type": "boolean",
-        "desc": "Permanently delete (true) or soft delete (false, default)"
-      }
-    ]
-  },
-  {
-    "name": "get_entry_by_id",
-    "description": "Get a specific journal entry by ID with full details including tags, significance, and relationships",
-    "arguments": [
-      {
-        "name": "entry_id",
-        "type": "number",
-        "desc": "ID of the entry to retrieve (required)"
-      },
-      {
-        "name": "include_relationships",
-        "type": "boolean",
-        "desc": "Include related entries (default: true)"
-      }
-    ]
-  },
-  {
-    "name": "search_entries",
-    "description": "Search journal entries using full-text search with highlighting",
-    "arguments": [
-      {
-        "name": "query",
-        "type": "string", 
-        "desc": "Search terms to find in entries"
-      },
-      {
-        "name": "limit",
-        "type": "number",
-        "desc": "Maximum number of results to return"
-      },
-      {
-        "name": "is_personal",
-        "type": "boolean",
-        "desc": "Filter by personal vs project entries"
-      }
-    ]
-  },
-  {
-    "name": "search_by_date_range",
-    "description": "Search journal entries within a specific date range with optional filters",
-    "arguments": [
-      {
-        "name": "start_date",
-        "type": "string",
-        "desc": "Start date in YYYY-MM-DD format (required)"
-      },
-      {
-        "name": "end_date",
-        "type": "string",
-        "desc": "End date in YYYY-MM-DD format (required)"
-      },
-      {
-        "name": "is_personal",
-        "type": "boolean",
-        "desc": "Filter by personal vs project entries"
-      },
-      {
-        "name": "entry_type",
-        "type": "string",
-        "desc": "Filter by specific entry type"
-      },
-      {
-        "name": "tags",
-        "type": "array",
-        "desc": "Filter by specific tags"
-      }
-    ]
-  },
-  {
-    "name": "semantic_search",
-    "description": "Vector similarity search using sentence transformers and FAISS (requires ML dependencies)",
-    "arguments": [
-      {
-        "name": "query",
-        "type": "string",
-        "desc": "Search query for semantic similarity matching (required)"
-      },
-      {
-        "name": "limit", 
-        "type": "number",
-        "desc": "Maximum number of results to return (default: 10)"
-      },
-      {
-        "name": "similarity_threshold",
-        "type": "number",
-        "desc": "Minimum similarity score 0.0-1.0 (default: 0.3)"
-      },
-      {
-        "name": "is_personal",
-        "type": "boolean",
-        "desc": "Filter by personal vs project entries"
-      }
-    ]
-  },
-  {
-    "name": "get_recent_entries",
-    "description": "Retrieve the most recent journal entries",
-    "arguments": [
-      {
-        "name": "limit",
-        "type": "number",
-        "desc": "Number of recent entries to retrieve (default: 5)"
-      },
-      {
-        "name": "is_personal", 
-        "type": "boolean",
-        "desc": "Filter by personal vs project entries"
-      }
-    ]
-  },
-  {
-    "name": "link_entries",
-    "description": "Create a typed relationship between two journal entries",
-    "arguments": [
-      {
-        "name": "from_entry_id",
-        "type": "number",
-        "desc": "Source entry ID (required)"
-      },
-      {
-        "name": "to_entry_id",
-        "type": "number",
-        "desc": "Target entry ID (required)"
-      },
-      {
-        "name": "relationship_type",
-        "type": "string",
-        "desc": "Type: evolves_from, references, implements, clarifies, response_to (default: references)"
-      },
-      {
-        "name": "description",
-        "type": "string",
-        "desc": "Optional description of the relationship"
-      }
-    ]
-  },
-  {
-    "name": "get_statistics",
-    "description": "Get journal statistics and analytics including entry counts, tags, and activity patterns",
-    "arguments": [
-      {
-        "name": "start_date",
-        "type": "string",
-        "desc": "Optional start date (YYYY-MM-DD)"
-      },
-      {
-        "name": "end_date",
-        "type": "string",
-        "desc": "Optional end date (YYYY-MM-DD)"
-      },
-      {
-        "name": "group_by",
-        "type": "string",
-        "desc": "Group by period: day, week, or month (default: week)"
-      }
-    ]
-  },
-  {
-    "name": "export_entries",
-    "description": "Export journal entries to JSON or Markdown format with optional filtering",
-    "arguments": [
-      {
-        "name": "format",
-        "type": "string",
-        "desc": "Export format: json or markdown (default: json)"
-      },
-      {
-        "name": "start_date",
-        "type": "string",
-        "desc": "Optional start date (YYYY-MM-DD)"
-      },
-      {
-        "name": "end_date",
-        "type": "string",
-        "desc": "Optional end date (YYYY-MM-DD)"
-      },
-      {
-        "name": "tags",
-        "type": "array",
-        "desc": "Filter by specific tags"
-      },
-      {
-        "name": "entry_types",
-        "type": "array",
-        "desc": "Filter by specific entry types"
-      }
-    ]
-  },
-  {
-    "name": "list_tags",
-    "description": "List all tags with usage statistics",
-    "arguments": []
-  },
-  {
-    "name": "test_simple",
-    "description": "Simple connectivity test for debugging",
-    "arguments": [
-      {
-        "name": "message",
-        "type": "string",
-        "desc": "Test message to echo back"
-      }
-    ]
-  },
-  {
-    "name": "create_entry_minimal",
-    "description": "Minimal entry creation for debugging purposes (no context or tags)",
-    "arguments": [
-      {
-        "name": "content",
-        "type": "string",
-        "desc": "The journal entry content (required)"
-      }
-    ]
-  }
+    {
+        "name": "create_entry",
+        "description": "Create a new journal entry with optional context, tags, and significance classification",
+        "arguments": [
+            {
+                "name": "content",
+                "type": "string",
+                "desc": "The journal entry content (required)"
+            },
+            {
+                "name": "entry_type",
+                "type": "string",
+                "desc": "Type of entry (personal_reflection, technical_achievement, milestone, etc.)"
+            },
+            {
+                "name": "is_personal",
+                "type": "boolean",
+                "desc": "Whether this is a personal vs project entry"
+            },
+            {
+                "name": "tags",
+                "type": "array",
+                "desc": "Array of tags to associate with the entry"
+            },
+            {
+                "name": "significance_type",
+                "type": "string",
+                "desc": "Mark entry significance (technical_breakthrough, milestone, etc.)"
+            },
+            {
+                "name": "auto_context",
+                "type": "boolean",
+                "desc": "Automatically capture Git/GitHub context"
+            }
+        ]
+    },
+    {
+        "name": "update_entry",
+        "description": "Update an existing journal entry (content, type, tags, or personal flag)",
+        "arguments": [
+            {
+                "name": "entry_id",
+                "type": "number",
+                "desc": "ID of the entry to update (required)"
+            },
+            {
+                "name": "content",
+                "type": "string",
+                "desc": "New content for the entry"
+            },
+            {
+                "name": "entry_type",
+                "type": "string",
+                "desc": "Update entry type"
+            },
+            {
+                "name": "tags",
+                "type": "array",
+                "desc": "Replace tags with new list"
+            },
+            {
+                "name": "is_personal",
+                "type": "boolean",
+                "desc": "Update personal flag"
+            }
+        ]
+    },
+    {
+        "name": "delete_entry",
+        "description": "Delete a journal entry (soft delete by default, or permanent deletion)",
+        "arguments": [
+            {
+                "name": "entry_id",
+                "type": "number",
+                "desc": "ID of the entry to delete (required)"
+            },
+            {
+                "name": "permanent",
+                "type": "boolean",
+                "desc": "Permanently delete (true) or soft delete (false, default)"
+            }
+        ]
+    },
+    {
+        "name": "get_entry_by_id",
+        "description": "Get a specific journal entry by ID with full details including tags, significance, and relationships",
+        "arguments": [
+            {
+                "name": "entry_id",
+                "type": "number",
+                "desc": "ID of the entry to retrieve (required)"
+            },
+            {
+                "name": "include_relationships",
+                "type": "boolean",
+                "desc": "Include related entries (default: true)"
+            }
+        ]
+    },
+    {
+        "name": "search_entries",
+        "description": "Search journal entries using full-text search with highlighting",
+        "arguments": [
+            {
+                "name": "query",
+                "type": "string",
+                "desc": "Search terms to find in entries"
+            },
+            {
+                "name": "limit",
+                "type": "number",
+                "desc": "Maximum number of results to return"
+            },
+            {
+                "name": "is_personal",
+                "type": "boolean",
+                "desc": "Filter by personal vs project entries"
+            }
+        ]
+    },
+    {
+        "name": "search_by_date_range",
+        "description": "Search journal entries within a specific date range with optional filters",
+        "arguments": [
+            {
+                "name": "start_date",
+                "type": "string",
+                "desc": "Start date in YYYY-MM-DD format (required)"
+            },
+            {
+                "name": "end_date",
+                "type": "string",
+                "desc": "End date in YYYY-MM-DD format (required)"
+            },
+            {
+                "name": "is_personal",
+                "type": "boolean",
+                "desc": "Filter by personal vs project entries"
+            },
+            {
+                "name": "entry_type",
+                "type": "string",
+                "desc": "Filter by specific entry type"
+            },
+            {
+                "name": "tags",
+                "type": "array",
+                "desc": "Filter by specific tags"
+            }
+        ]
+    },
+    {
+        "name": "semantic_search",
+        "description": "Vector similarity search using sentence transformers and FAISS (requires ML dependencies)",
+        "arguments": [
+            {
+                "name": "query",
+                "type": "string",
+                "desc": "Search query for semantic similarity matching (required)"
+            },
+            {
+                "name": "limit",
+                "type": "number",
+                "desc": "Maximum number of results to return (default: 10)"
+            },
+            {
+                "name": "similarity_threshold",
+                "type": "number",
+                "desc": "Minimum similarity score 0.0-1.0 (default: 0.3)"
+            },
+            {
+                "name": "is_personal",
+                "type": "boolean",
+                "desc": "Filter by personal vs project entries"
+            }
+        ]
+    },
+    {
+        "name": "get_recent_entries",
+        "description": "Retrieve the most recent journal entries",
+        "arguments": [
+            {
+                "name": "limit",
+                "type": "number",
+                "desc": "Number of recent entries to retrieve (default: 5)"
+            },
+            {
+                "name": "is_personal",
+                "type": "boolean",
+                "desc": "Filter by personal vs project entries"
+            }
+        ]
+    },
+    {
+        "name": "link_entries",
+        "description": "Create a typed relationship between two journal entries",
+        "arguments": [
+            {
+                "name": "from_entry_id",
+                "type": "number",
+                "desc": "Source entry ID (required)"
+            },
+            {
+                "name": "to_entry_id",
+                "type": "number",
+                "desc": "Target entry ID (required)"
+            },
+            {
+                "name": "relationship_type",
+                "type": "string",
+                "desc": "Type: evolves_from, references, implements, clarifies, response_to (default: references)"
+            },
+            {
+                "name": "description",
+                "type": "string",
+                "desc": "Optional description of the relationship"
+            }
+        ]
+    },
+    {
+        "name": "get_statistics",
+        "description": "Get journal statistics and analytics including entry counts, tags, and activity patterns",
+        "arguments": [
+            {
+                "name": "start_date",
+                "type": "string",
+                "desc": "Optional start date (YYYY-MM-DD)"
+            },
+            {
+                "name": "end_date",
+                "type": "string",
+                "desc": "Optional end date (YYYY-MM-DD)"
+            },
+            {
+                "name": "group_by",
+                "type": "string",
+                "desc": "Group by period: day, week, or month (default: week)"
+            }
+        ]
+    },
+    {
+        "name": "export_entries",
+        "description": "Export journal entries to JSON or Markdown format with optional filtering",
+        "arguments": [
+            {
+                "name": "format",
+                "type": "string",
+                "desc": "Export format: json or markdown (default: json)"
+            },
+            {
+                "name": "start_date",
+                "type": "string",
+                "desc": "Optional start date (YYYY-MM-DD)"
+            },
+            {
+                "name": "end_date",
+                "type": "string",
+                "desc": "Optional end date (YYYY-MM-DD)"
+            },
+            {
+                "name": "tags",
+                "type": "array",
+                "desc": "Filter by specific tags"
+            },
+            {
+                "name": "entry_types",
+                "type": "array",
+                "desc": "Filter by specific entry types"
+            }
+        ]
+    },
+    {
+        "name": "list_tags",
+        "description": "List all tags with usage statistics",
+        "arguments": []
+    },
+    {
+        "name": "test_simple",
+        "description": "Simple connectivity test for debugging",
+        "arguments": [
+            {
+                "name": "message",
+                "type": "string",
+                "desc": "Test message to echo back"
+            }
+        ]
+    },
+    {
+        "name": "create_entry_minimal",
+        "description": "Minimal entry creation for debugging purposes (no context or tags)",
+        "arguments": [
+            {
+                "name": "content",
+                "type": "string",
+                "desc": "The journal entry content (required)"
+            }
+        ]
+    }
 ]

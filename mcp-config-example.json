@@ -1,22 +1,22 @@
 {
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "-v",
-        "./data:/app/data",
-        "writenotenow/memory-journal-mcp:latest"
-      ],
-      "env": {
-        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "tool_group_name_here",
-        "GITHUB_TOKEN": "your_github_token_here",
-        "GITHUB_ORG_TOKEN": "your_org_token_here",
-        "DEFAULT_ORG": "your-org-name",
-        "DEFAULT_PROJECT_NUMBER": "1"
-      }
+    "mcpServers": {
+        "memory-journal-mcp": {
+            "command": "docker",
+            "args": [
+                "run",
+                "--rm",
+                "-i",
+                "-v",
+                "./data:/app/data",
+                "writenotenow/memory-journal-mcp:latest"
+            ],
+            "env": {
+                "MEMORY_JOURNAL_MCP_TOOL_FILTER": "tool_group_name_here",
+                "GITHUB_TOKEN": "your_github_token_here",
+                "GITHUB_ORG_TOKEN": "your_org_token_here",
+                "DEFAULT_ORG": "your-org-name",
+                "DEFAULT_PROJECT_NUMBER": "1"
+            }
+        }
     }
-  }
 }

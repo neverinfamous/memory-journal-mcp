@@ -3,32 +3,36 @@
  */
 
 declare module 'sql.js' {
-    export type SqlValue = Record<string, unknown>;
+    export type SqlValue = Record<string, unknown>
 
     export interface QueryExecResult {
-        columns: string[];
-        values: unknown[][];
+        columns: string[]
+        values: unknown[][]
     }
 
-    export type ParamsObject = Record<string, unknown>;
+    export type ParamsObject = Record<string, unknown>
 
-    export type BindParams = unknown[] | ParamsObject | null;
+    export type BindParams = unknown[] | ParamsObject | null
 
     export interface Database {
-        run(sql: string, params?: BindParams): void;
-        exec(sql: string, params?: BindParams): QueryExecResult[];
-        each(sql: string, params: BindParams, callback: (row: Record<string, unknown>) => void): void;
-        export(): Uint8Array;
-        close(): void;
+        run(sql: string, params?: BindParams): void
+        exec(sql: string, params?: BindParams): QueryExecResult[]
+        each(
+            sql: string,
+            params: BindParams,
+            callback: (row: Record<string, unknown>) => void
+        ): void
+        export(): Uint8Array
+        close(): void
     }
 
     export interface SqlJsStatic {
-        Database: new (data?: ArrayLike<number>) => Database;
+        Database: new (data?: ArrayLike<number>) => Database
     }
 
     export interface InitSqlJsOptions {
-        locateFile?: (filename: string) => string;
+        locateFile?: (filename: string) => string
     }
 
-    export default function initSqlJs(options?: InitSqlJsOptions): Promise<SqlJsStatic>;
+    export default function initSqlJs(options?: InitSqlJsOptions): Promise<SqlJsStatic>
 }

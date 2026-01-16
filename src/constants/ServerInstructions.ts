@@ -3,38 +3,38 @@
  *
  * These instructions are automatically sent to MCP clients during initialization,
  * providing guidance for AI agents on tool usage.
- * 
+ *
  * v3.1.6: Optimized for token efficiency with tiered instruction levels.
  */
 
-import type { ToolGroup } from '../types/index.js';
-import { TOOL_GROUPS } from '../filtering/ToolFilter.js';
+import type { ToolGroup } from '../types/index.js'
+import { TOOL_GROUPS } from '../filtering/ToolFilter.js'
 
 /**
  * Resource definition for instruction generation
  */
 export interface ResourceDefinition {
-    uri: string;
-    name: string;
-    description?: string;
+    uri: string
+    name: string
+    description?: string
 }
 
 /**
  * Prompt definition for instruction generation
  */
 export interface PromptDefinition {
-    name: string;
-    description?: string;
+    name: string
+    description?: string
 }
 
 /**
  * Latest entry snapshot for initial briefing
  */
 export interface LatestEntrySnapshot {
-    id: number;
-    timestamp: string;
-    entryType: string;
-    content: string;
+    id: number
+    timestamp: string
+    entryType: string
+    content: string
 }
 
 /**
@@ -43,7 +43,7 @@ export interface LatestEntrySnapshot {
  * - standard: ~400 tokens - + GitHub patterns (default)
  * - full: ~600 tokens - + tool/resource listings
  */
-export type InstructionLevel = 'essential' | 'standard' | 'full';
+export type InstructionLevel = 'essential' | 'standard' | 'full'
 
 /**
  * Essential behavioral guidance (~200 tokens)
@@ -69,7 +69,7 @@ const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 | Health/time | \`memory://health\` |
 | Semantic search | \`semantic_search(query)\` |
 | Full context | \`get-context-bundle\` prompt |
-`;
+`
 
 /**
  * GitHub integration patterns (~150 additional tokens)
@@ -81,7 +81,7 @@ const GITHUB_INSTRUCTIONS = `
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
 - Kanban: \`get_kanban_board(project_number)\` → \`move_kanban_item\` → document completion
 - GitHub tools auto-detect owner/repo from git context; specify explicitly if null
-`;
+`
 
 /**
  * Server access instructions - critical for AI agents to call tools correctly
@@ -111,7 +111,7 @@ FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://kanban/1")
 
 ## Quick Health Check
 Fetch \`memory://health\` to verify server status, database stats, and tool availability.
-`;
+`
 
 /**
  * Tool parameter reference - essential for correct tool invocation
@@ -211,11 +211,11 @@ Valid values for \`entry_type\` parameter:
 | \`memory://significant\` | Entries marked as milestones/breakthroughs |
 | \`memory://graph/recent\` | Mermaid diagram of recent relationships |
 | \`memory://kanban/{n}\` | Kanban board for project number n |
-`;
+`
 
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
- * 
+ *
  * @param enabledTools - Set of enabled tool names
  * @param resources - Available resource definitions
  * @param prompts - Available prompt definitions
@@ -229,64 +229,64 @@ export function generateInstructions(
     latestEntry?: LatestEntrySnapshot,
     level: InstructionLevel = 'standard'
 ): string {
-    let instructions = ESSENTIAL_INSTRUCTIONS;
+    let instructions = ESSENTIAL_INSTRUCTIONS
 
     // Add latest entry snapshot for immediate context (compact format)
     if (latestEntry) {
-        const preview = latestEntry.content.slice(0, 120);
-        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`;
+        const preview = latestEntry.content.slice(0, 120)
+        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
     }
 
     // Standard and full levels include GitHub patterns
     if (level === 'standard' || level === 'full') {
-        instructions += GITHUB_INSTRUCTIONS;
+        instructions += GITHUB_INSTRUCTIONS
     }
 
     // Full level includes server access instructions and tool parameter reference
     if (level === 'full') {
-        instructions += SERVER_ACCESS_INSTRUCTIONS;
-        instructions += TOOL_PARAMETER_REFERENCE;
+        instructions += SERVER_ACCESS_INSTRUCTIONS
+        instructions += TOOL_PARAMETER_REFERENCE
 
         // Add active tools summary
-        const activeGroups = getActiveToolGroups(enabledTools);
+        const activeGroups = getActiveToolGroups(enabledTools)
         if (activeGroups.length > 0) {
-            instructions += `\n## Active Tools (${String(enabledTools.size)})\n`;
+            instructions += `\n## Active Tools (${String(enabledTools.size)})\n`
             for (const { group, tools } of activeGroups) {
-                instructions += `**${group}**: ${tools.map(t => `\`${t}\``).join(', ')}\n`;
+                instructions += `**${group}**: ${tools.map((t) => `\`${t}\``).join(', ')}\n`
             }
         }
 
-        // Add prompts section  
+        // Add prompts section
         if (prompts.length > 0) {
-            instructions += `\n## Prompts (${String(prompts.length)})\n`;
-            instructions += 'Pre-built templates and guided workflows:\n';
+            instructions += `\n## Prompts (${String(prompts.length)})\n`
+            instructions += 'Pre-built templates and guided workflows:\n'
             for (const prompt of prompts) {
-                instructions += `- \`${prompt.name}\` - ${prompt.description ?? ''}\n`;
+                instructions += `- \`${prompt.name}\` - ${prompt.description ?? ''}\n`
             }
         }
     }
 
-    return instructions;
+    return instructions
 }
 
 /**
  * Get active tool groups with their enabled tools
  */
 function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; tools: string[] }[] {
-    const activeGroups: { group: ToolGroup; tools: string[] }[] = [];
+    const activeGroups: { group: ToolGroup; tools: string[] }[] = []
 
     for (const [group, allTools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
-        const enabledInGroup = allTools.filter(tool => enabledTools.has(tool));
+        const enabledInGroup = allTools.filter((tool) => enabledTools.has(tool))
         if (enabledInGroup.length > 0) {
-            activeGroups.push({ group, tools: enabledInGroup });
+            activeGroups.push({ group, tools: enabledInGroup })
         }
     }
 
-    return activeGroups;
+    return activeGroups
 }
 
 /**
  * Static instructions for backward compatibility
  * @deprecated Use generateInstructions() instead for dynamic content
  */
-export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS;
+export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS

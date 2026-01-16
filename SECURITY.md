@@ -5,11 +5,13 @@ The Memory Journal MCP server implements comprehensive security measures to prot
 ## 🛡️ **Database Security**
 
 ### **WAL Mode Enabled**
+
 - ✅ **Write-Ahead Logging (WAL)** enabled for better concurrency and crash recovery
 - ✅ **Atomic transactions** ensure data consistency
 - ✅ **Better performance** with concurrent read/write operations
 
 ### **Optimized PRAGMA Settings**
+
 ```sql
 PRAGMA foreign_keys = ON          -- Enforce referential integrity
 PRAGMA journal_mode = WAL         -- Enable WAL mode
@@ -21,6 +23,7 @@ PRAGMA busy_timeout = 30000       -- 30-second timeout for busy database
 ```
 
 ### **File Permissions**
+
 - ✅ **Database files**: `600` (read/write for owner only)
 - ✅ **Data directory**: `700` (full access for owner only)
 - ✅ **Automatic permission setting** on database creation
@@ -28,16 +31,20 @@ PRAGMA busy_timeout = 30000       -- 30-second timeout for busy database
 ## 🔐 **Input Validation**
 
 ### **Content Limits**
+
 - **Journal entries**: 50,000 characters maximum
 - **Tags**: 100 characters maximum
 - **Entry types**: 50 characters maximum
 - **Significance types**: 50 characters maximum
 
 ### **Character Filtering**
+
 Dangerous characters are blocked in tags:
+
 - `<` `>` `"` `'` `&` `\x00`
 
 ### **SQL Injection Prevention**
+
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** before database operations
 - ✅ **Warning system** for potentially dangerous content patterns
@@ -45,16 +52,19 @@ Dangerous characters are blocked in tags:
 ## 🐳 **Docker Security**
 
 ### **Non-Root User**
+
 - ✅ **Dedicated user**: `appuser` with minimal privileges
 - ✅ **No shell access**: `/bin/false` shell for security
 - ✅ **Restricted home directory**: `/app/user`
 
 ### **File System Security**
+
 - ✅ **Minimal base image**: `python:3.11-slim`
 - ✅ **Restricted data directory**: `700` permissions
 - ✅ **Volume mounting**: Data persists outside container
 
 ### **Container Isolation**
+
 - ✅ **Process isolation** from host system
 - ✅ **Network isolation** (no external network access needed)
 - ✅ **Resource limits** can be applied via Docker
@@ -62,11 +72,13 @@ Dangerous characters are blocked in tags:
 ## 🔍 **Data Privacy**
 
 ### **Local-First Architecture**
+
 - ✅ **No external services**: All processing happens locally
 - ✅ **No telemetry**: No data sent to external servers
 - ✅ **Full data ownership**: SQLite database stays on your machine
 
 ### **Context Bundle Security**
+
 - ✅ **Git context**: Only reads local repository information
 - ✅ **No sensitive data**: Doesn't access private keys or credentials
 - ✅ **Optional GitHub integration**: Only if explicitly configured
@@ -74,6 +86,7 @@ Dangerous characters are blocked in tags:
 ## 🚨 **Security Best Practices**
 
 ### **For Users**
+
 1. **Keep Docker updated**: Regularly update Docker and base images
 2. **Secure host system**: Ensure your host machine is secure
 3. **Regular backups**: Back up your `data/` directory
@@ -81,6 +94,7 @@ Dangerous characters are blocked in tags:
 5. **Limit access**: Don't expose the container to external networks
 
 ### **For Developers**
+
 1. **Regular updates**: Keep Python and dependencies updated
 2. **Security scanning**: Regularly scan Docker images for vulnerabilities
 3. **Code review**: All database operations use parameterized queries
@@ -89,6 +103,7 @@ Dangerous characters are blocked in tags:
 ## 🔧 **Security Configuration**
 
 ### **Environment Variables**
+
 ```bash
 # Database location (should be on secure volume)
 DB_PATH=/app/data/memory_journal.db
@@ -98,12 +113,14 @@ PYTHONPATH=/app
 ```
 
 ### **Volume Mounting Security**
+
 ```bash
 # Secure volume mounting
 docker run -v ./data:/app/data:rw,noexec,nosuid,nodev memory-journal-mcp
 ```
 
 ### **Resource Limits**
+
 ```bash
 # Apply resource limits
 docker run --memory=1g --cpus=1 memory-journal-mcp
@@ -141,6 +158,7 @@ If you discover a security vulnerability, please:
 ### **Recent Security Fixes**
 
 #### **CodeQL #110, #111: URL Substring Sanitization Vulnerability** (Fixed: October 26, 2025)
+
 - **Issue**: Incomplete URL substring sanitization in GitHub remote URL parsing
 - **Severity**: MEDIUM
 - **Affected Code**: `_extract_repo_owner_from_remote()` function in server.py
@@ -163,6 +181,7 @@ If you discover a security vulnerability, please:
 - **Reference**: [OWASP: SSRF](https://owasp.org/www-community/attacks/Server_Side_Request_Forgery) | [CWE-20](https://cwe.mitre.org/data/definitions/20.html)
 
 #### **CVE-2025-58050: PCRE2 Heap Buffer Overflow** (Fixed: October 26, 2025)
+
 - **Issue**: PCRE2 heap-buffer-overflow read in match_ref due to missing boundary restoration
 - **Severity**: CRITICAL
 - **Affected Package**: pcre2 <10.46-r0
@@ -170,7 +189,7 @@ If you discover a security vulnerability, please:
   - ✅ **Alpine Package**: Explicitly upgraded to pcre2=10.46-r0 in Dockerfile
   - ✅ **Early Installation**: Upgraded in first layer to ensure all subsequent packages use patched version
   - ✅ **Docker Base Image**: Using Python 3.14-alpine with latest security patches
-- **Technical Details**: 
+- **Technical Details**:
   - Vulnerability could allow heap buffer overflow attacks during regex pattern matching
   - Fixed version restores boundaries correctly in match_ref function
   - PCRE2 is a system dependency used by various tools including git and grep
@@ -179,6 +198,7 @@ If you discover a security vulnerability, please:
 - **Reference**: [CVE-2025-58050](https://avd.aquasec.com/nvd/cve-2025-58050)
 
 #### **CVE-2025-8869: pip Symbolic Link Vulnerability** (Fixed: October 20, 2025)
+
 - **Issue**: pip missing checks on symbolic link extraction in fallback tar implementation (when Python doesn't implement PEP 706)
 - **Severity**: MEDIUM
 - **Affected Package**: pip <25.0 (with Python versions without PEP 706 support)
@@ -188,7 +208,7 @@ If you discover a security vulnerability, please:
   - ✅ **Docker Base Image**: Using Python 3.14-alpine which fully implements PEP 706
   - ✅ **CI/CD Pipelines**: Updated to test against minimum Python 3.10.12
   - ✅ **pyproject.toml**: Enforced minimum Python version requirement
-- **Technical Details**: 
+- **Technical Details**:
   - PEP 706 provides secure tar extraction with symlink validation
   - When Python implements PEP 706, pip uses the secure implementation
   - Otherwise, pip falls back to its own implementation which had the vulnerability

@@ -19,14 +19,16 @@ Last Updated January 16, 2026 - v4.0.0
 ## 🎯 What This Does
 
 ### Key Benefits
+
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, PRs, projects)
-- 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs  
+- 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs
 - 🔍 **Triple search** (full-text, semantic, date range)
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 🗄️ **Backup & restore** your journal data with one command
 
 ### Deployment Options
+
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Node.js Alpine-based multi-platform support
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
@@ -111,8 +113,11 @@ Add this to your `~/.cursor/mcp.json`:
     "memory-journal-mcp": {
       "command": "docker",
       "args": [
-        "run", "--rm", "-i",
-        "-v", "./data:/app/data",
+        "run",
+        "--rm",
+        "-i",
+        "-v",
+        "./data:/app/data",
         "writenotenow/memory-journal-mcp:latest"
       ]
     }
@@ -134,11 +139,17 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
     "memory-journal-mcp": {
       "command": "docker",
       "args": [
-        "run", "--rm", "-i",
-        "-v", "./data:/app/data",
-        "-e", "GITHUB_TOKEN",
-        "-e", "GITHUB_REPO_PATH=/app/repo",
-        "-v", "/path/to/your/repo:/app/repo:ro",
+        "run",
+        "--rm",
+        "-i",
+        "-v",
+        "./data:/app/data",
+        "-e",
+        "GITHUB_TOKEN",
+        "-e",
+        "GITHUB_REPO_PATH=/app/repo",
+        "-v",
+        "/path/to/your/repo:/app/repo:ro",
         "writenotenow/memory-journal-mcp:latest"
       ],
       "env": {
@@ -149,10 +160,10 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 }
 ```
 
-| Environment Variable | Description |
-|---------------------|-------------|
-| `GITHUB_TOKEN` | GitHub personal access token for API access |
-| `GITHUB_REPO_PATH` | Path to git repo inside container (mount your repo) |
+| Environment Variable     | Description                                                            |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `GITHUB_TOKEN`           | GitHub personal access token for API access                            |
+| `GITHUB_REPO_PATH`       | Path to git repo inside container (mount your repo)                    |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
@@ -182,11 +193,13 @@ Click the button below to install directly into Cursor:
 [![Install to Cursor](https://img.shields.io/badge/Install%20to%20Cursor-Click%20Here-blue?style=for-the-badge)](cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbC1tY3AiOnsiYXJncyI6WyJydW4iLCItLXJtIiwiLWkiLCItdiIsIi4vZGF0YTovYXBwL2RhdGEiLCJ3cml0ZW5vdGVub3cvbWVtb3J5LWpvdXJuYWwtbWNwOmxhdGVzdCJdLCJjb21tYW5kIjoiZG9ja2VyIn19)
 
 Or copy this deep link:
+
 ```
 cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbC1tY3AiOnsiYXJncyI6WyJydW4iLCItLXJtIiwiLWkiLCItdiIsIi4vZGF0YTovYXBwL2RhdGEiLCJ3cml0ZW5vdGVub3cvbWVtb3J5LWpvdXJuYWwtbWNwOmxhdGVzdCJdLCJjb21tYW5kIjoiZG9ja2VyIn19
 ```
 
 ### **Prerequisites**
+
 - ✅ Docker installed and running
 - ✅ ~300MB disk space available
 
@@ -201,16 +214,19 @@ For enhanced security and reproducible builds, use SHA-pinned images:
 **Find SHA tags:** https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags
 
 **Option 1: Multi-arch manifest (recommended)**
+
 ```bash
 docker pull writenotenow/memory-journal-mcp:sha256-<manifest-digest>
 ```
 
 **Option 2: Direct digest (maximum security)**
+
 ```bash
 docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 ```
 
 **Security Features:**
+
 - ✅ **Build Provenance** - Cryptographic proof of build process
 - ✅ **SBOM Available** - Complete software bill of materials
 - ✅ **Supply Chain Attestations** - Verifiable build integrity
@@ -222,30 +238,34 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 ## ⚡ Core Features
 
 ### 🛠️ 31 MCP Tools (8 Groups)
-| Group | Tools | Description |
-|-------|-------|-------------|
-| `core` | 6 | Entry CRUD, tags, test |
-| `search` | 4 | Text search, date range, semantic, vector stats |
-| `analytics` | 2 | Statistics, cross-project insights |
-| `relationships` | 2 | Link entries, visualize graphs |
-| `export` | 1 | JSON/Markdown export |
-| `admin` | 4 | Update, delete, vector index management |
-| `github` | 9 | Issues, PRs, context, Kanban, **issue lifecycle** |
-| `backup` | 3 | Backup, list, restore |
+
+| Group           | Tools | Description                                       |
+| --------------- | ----- | ------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                            |
+| `search`        | 4     | Text search, date range, semantic, vector stats   |
+| `analytics`     | 2     | Statistics, cross-project insights                |
+| `relationships` | 2     | Link entries, visualize graphs                    |
+| `export`        | 1     | JSON/Markdown export                              |
+| `admin`         | 4     | Update, delete, vector index management           |
+| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle** |
+| `backup`        | 3     | Backup, list, restore                             |
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
 ### 🎯 15 Workflow Prompts
+
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 18 Resources (12 Static + 6 Template)
+
 Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards. Template resources require parameters and are accessed directly by URI.  
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
 
 **Ask Cursor AI naturally:**
+
 - "Show me my recent journal entries"
 - "Create a backup of my journal"
 - "Check the server health status"
@@ -279,12 +299,13 @@ Including `memory://briefing` for session initialization, `memory://instructions
 
 Memory Journal provides a **hybrid approach** to GitHub management:
 
-| Capability Source | Purpose |
-|-------------------|---------|
-| **MCP Server** | Specialized features: Kanban visualization, journal linking, project timelines |
-| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases |
+| Capability Source  | Purpose                                                                        |
+| ------------------ | ------------------------------------------------------------------------------ |
+| **MCP Server**     | Specialized features: Kanban visualization, journal linking, project timelines |
+| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases  |
 
 **MCP Server Tools (Read + Kanban + Issue Lifecycle):**
+
 - `get_github_issues` / `get_github_issue` - Query issues
 - `get_github_prs` / `get_github_pr` - Query pull requests
 - `get_github_context` - Full repository context
@@ -292,6 +313,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
 
 **Agent Operations (via gh CLI):**
+
 ```bash
 # Issues
 gh issue create --title "Bug fix" --body "Description"
@@ -338,12 +360,13 @@ docker run -i --rm \
 
 ## 📦 Image Details
 
-| Platform | Features | 
-|----------|----------|
-| **AMD64** (x86_64) | Complete: all tools, semantic search, Git context |
+| Platform                  | Features                                          |
+| ------------------------- | ------------------------------------------------- |
+| **AMD64** (x86_64)        | Complete: all tools, semantic search, Git context |
 | **ARM64** (Apple Silicon) | Complete: all tools, semantic search, Git context |
 
 **TypeScript Image Benefits:**
+
 - **Node.js 24 on Alpine Linux** - Minimal footprint (~150MB compressed)
 - **Pure JS Stack** - No native compilation, identical features on all platforms
 - **sql.js** - SQLite in pure JavaScript
@@ -353,6 +376,7 @@ docker run -i --rm \
 - **Production/Stable** - Comprehensive error handling and automatic migrations
 
 **Automated Deployment:**
+
 - ⚡ **Always Fresh** - Images built within minutes of commits
 - 🔒 **Security Scanned** - Automatic vulnerability scanning
 - 🌍 **Multi-Platform** - Intel (amd64) and Apple Silicon (arm64)
@@ -360,6 +384,7 @@ docker run -i --rm \
 - 📋 **SBOM Available** - Complete software bill of materials
 
 **Available Tags:**
+
 - `4.0.0` - Specific version (recommended for production)
 - `3.0` - Latest patch in 3.0.x series
 - `3` - Latest minor in 3.x series
@@ -392,11 +417,7 @@ Update your `~/.cursor/mcp.json` to use the local build:
   "mcpServers": {
     "memory-journal-mcp": {
       "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-v", "./data:/app/data",
-        "memory-journal-mcp-local"
-      ]
+      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-local"]
     }
   }
 }
@@ -418,4 +439,4 @@ MIT License - See [LICENSE](https://github.com/neverinfamous/memory-journal-mcp/
 
 ---
 
-*Migrating from v2.x?* Your existing database is fully compatible. The TypeScript version uses the same schema and data format.
+_Migrating from v2.x?_ Your existing database is fully compatible. The TypeScript version uses the same schema and data format.
