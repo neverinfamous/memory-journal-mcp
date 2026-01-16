@@ -310,7 +310,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        version: '3.1.5',
+                        version: '4.0.0',
                         serverTime: new Date().toISOString(),
                         journal: {
                             totalEntries,
