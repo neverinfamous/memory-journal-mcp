@@ -129,6 +129,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             inputSchema?: z.ZodType
             outputSchema?: z.ZodType // MCP 2025-11-25
             annotations?: Record<string, unknown>
+            icons?: { src: string; mimeType?: string; sizes?: string[] }[] // MCP 2025-11-25
         }
 
         // Build tool options matching MCP SDK expectations
@@ -147,6 +148,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         if (toolDef.annotations) {
             toolOptions['annotations'] = toolDef.annotations
+        }
+
+        // MCP 2025-11-25: Pass icons for visual representation
+        if (toolDef.icons) {
+            toolOptions['icons'] = toolDef.icons
         }
 
         // Capture whether this tool has outputSchema for response handling
@@ -229,6 +235,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             name: string
             description?: string
             mimeType?: string
+            icons?: { src: string; mimeType?: string; sizes?: string[] }[] // MCP 2025-11-25
         }
 
         // Check if this is a template URI (contains {variable} patterns)
@@ -246,6 +253,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 {
                     description: resDef.description ?? '',
                     mimeType: resDef.mimeType ?? 'application/json',
+                    ...(resDef.icons ? { icons: resDef.icons } : {}),
                 },
                 async (uri: URL, _variables: Variables) => {
                     const result = await readResource(
@@ -279,6 +287,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 {
                     description: resDef.description ?? '',
                     mimeType: resDef.mimeType ?? 'application/json',
+                    ...(resDef.icons ? { icons: resDef.icons } : {}),
                 },
                 async (uri: URL) => {
                     const result = await readResource(
@@ -314,6 +323,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             name: string
             description?: string
             arguments?: { name: string; description: string; required?: boolean }[]
+            icons?: { src: string; mimeType?: string; sizes?: string[] }[] // MCP 2025-11-25
         }
 
         // Build Zod schema from prompt.arguments definitions
@@ -332,6 +342,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             {
                 description: promptDef.description ?? '',
                 argsSchema: zodShape,
+                ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
                 const args = providedArgs as Record<string, string>

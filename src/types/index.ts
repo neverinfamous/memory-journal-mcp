@@ -96,6 +96,23 @@ export interface ResourceAnnotations {
     lastModified?: string
 }
 
+/**
+ * MCP Icon Definition (MCP Spec 2025-11-25)
+ *
+ * Icons can be added to servers, tools, resources, and prompts for
+ * visual representation in client interfaces.
+ */
+export interface McpIcon {
+    /** Icon source - URL or data URI */
+    src: string
+
+    /** MIME type (e.g., 'image/svg+xml', 'image/png') */
+    mimeType?: string
+
+    /** Size descriptors (e.g., ['48x48'], ['any']) */
+    sizes?: string[]
+}
+
 // ============================================================================
 // Tool, Resource, Prompt Definitions
 // ============================================================================

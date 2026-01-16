@@ -7,10 +7,23 @@
 import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
 import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
 import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
-import type { Tag } from '../../types/index.js'
+import type { Tag, McpIcon } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
 import { generateInstructions, type InstructionLevel } from '../../constants/ServerInstructions.js'
 import { getPrompts } from '../prompts/index.js'
+import {
+    ICON_BRIEFING,
+    ICON_CLOCK,
+    ICON_GRAPH,
+    ICON_HEALTH,
+    ICON_GITHUB,
+    ICON_STAR,
+    ICON_TAG,
+    ICON_TEAM,
+    ICON_ISSUE,
+    ICON_PR,
+    ICON_ANALYTICS,
+} from '../../constants/icons.js'
 
 /**
  * Resource context for handlers that need extended access
@@ -41,6 +54,7 @@ interface InternalResourceDef {
     title: string
     description: string
     mimeType: string
+    icons?: McpIcon[] // MCP 2025-11-25 icons
     annotations?: {
         audience?: ('user' | 'assistant')[]
         priority?: number
@@ -62,6 +76,7 @@ export function getResources(): object[] {
         description: r.description,
         mimeType: r.mimeType,
         annotations: r.annotations,
+        icons: r.icons, // MCP 2025-11-25 icons
     }))
 }
 
@@ -220,6 +235,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
             description:
                 'AUTO-READ AT SESSION START: Project context for AI agents (~300 tokens). Contains userMessage to show user.',
             mimeType: 'application/json',
+            icons: [ICON_BRIEFING],
             annotations: {
                 audience: ['assistant'],
                 priority: 1.0, // Highest priority - should be read first
@@ -378,6 +394,7 @@ I have project memory access and will create entries for significant work.`,
             description:
                 'Full server instructions for AI agents. Append ?level=essential|standard|full to control detail level.',
             mimeType: 'text/markdown',
+            icons: [ICON_BRIEFING],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.95, // High priority, but below briefing
@@ -441,6 +458,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Recent Journal Entries',
             description: '10 most recent journal entries',
             mimeType: 'application/json',
+            icons: [ICON_CLOCK],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.8,
@@ -460,6 +478,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Significant Milestones',
             description: 'Significant milestones and breakthroughs',
             mimeType: 'application/json',
+            icons: [ICON_STAR],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.7,
@@ -468,8 +487,8 @@ I have project memory access and will create entries for significant work.`,
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE significance_type IS NOT NULL 
+                    SELECT * FROM memory_journal
+                    WHERE significance_type IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 20
@@ -485,6 +504,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Live Mermaid Diagram',
             description: 'Live Mermaid diagram of recent relationships',
             mimeType: 'text/plain',
+            icons: [ICON_GRAPH],
             annotations: {
                 audience: ['user', 'assistant'],
                 priority: 0.5,
@@ -494,7 +514,7 @@ I have project memory access and will create entries for significant work.`,
                 const relationships = execQuery(
                     context.db,
                     `
-                    SELECT 
+                    SELECT
                         r.id, r.from_entry_id, r.to_entry_id, r.relationship_type, r.description,
                         e1.content as from_content,
                         e2.content as to_content
@@ -579,6 +599,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Recent Team-Shared Entries',
             description: 'Recent team-shared entries',
             mimeType: 'application/json',
+            icons: [ICON_TEAM],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.6,
@@ -609,8 +630,8 @@ I have project memory access and will create entries for significant work.`,
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE project_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE project_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 50
@@ -627,6 +648,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Entries Linked to Issue',
             description: 'All entries linked to a specific issue',
             mimeType: 'application/json',
+            icons: [ICON_ISSUE],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.6,
@@ -642,8 +664,8 @@ I have project memory access and will create entries for significant work.`,
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE issue_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE issue_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                 `,
@@ -659,6 +681,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Entries Linked to PR',
             description: 'All entries linked to a specific pull request',
             mimeType: 'application/json',
+            icons: [ICON_PR],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.6,
@@ -674,8 +697,8 @@ I have project memory access and will create entries for significant work.`,
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE pr_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                 `,
@@ -691,6 +714,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Combined PR and Journal Timeline',
             description: 'Combined PR + journal timeline',
             mimeType: 'application/json',
+            icons: [ICON_PR],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.5,
@@ -706,8 +730,8 @@ I have project memory access and will create entries for significant work.`,
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE pr_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                 `,
@@ -724,6 +748,7 @@ I have project memory access and will create entries for significant work.`,
             description:
                 'CI/CD narrative graph: commits → runs → failures → entries → fixes → deployments',
             mimeType: 'text/plain',
+            icons: [ICON_GITHUB],
             annotations: {
                 audience: ['user', 'assistant'],
                 priority: 0.5,
@@ -813,6 +838,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Recent Workflow Runs',
             description: 'Recent workflow runs with CI status',
             mimeType: 'application/json',
+            icons: [ICON_GITHUB],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.5,
@@ -852,8 +878,8 @@ I have project memory access and will create entries for significant work.`,
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE workflow_run_id IS NOT NULL 
+                    SELECT * FROM memory_journal
+                    WHERE workflow_run_id IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 10
@@ -869,6 +895,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Tag List',
             description: 'All available tags with usage counts',
             mimeType: 'application/json',
+            icons: [ICON_TAG],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.4,
@@ -884,6 +911,7 @@ I have project memory access and will create entries for significant work.`,
             title: 'Journal Statistics',
             description: 'Overall journal statistics',
             mimeType: 'application/json',
+            icons: [ICON_ANALYTICS],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.4,
@@ -899,6 +927,7 @@ I have project memory access and will create entries for significant work.`,
             description:
                 'Server health status including database, backups, vector index (real-time stats), and tool filter status',
             mimeType: 'application/json',
+            icons: [ICON_HEALTH],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.9,
@@ -955,6 +984,7 @@ I have project memory access and will create entries for significant work.`,
             description:
                 'Compact GitHub status: repository, branch, CI, issues, PRs, Kanban summary',
             mimeType: 'application/json',
+            icons: [ICON_GITHUB],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.7,

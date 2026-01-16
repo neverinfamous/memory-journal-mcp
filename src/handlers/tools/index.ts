@@ -16,6 +16,7 @@ import type {
 import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
 import { sendProgress, type ProgressContext } from '../../utils/progress-utils.js'
+import { getToolIcon } from '../../constants/icons.js'
 
 export interface ToolHandlerConfig {
     defaultProjectNumber?: number
@@ -247,6 +248,7 @@ export function getTools(
                 inputSchema: t.inputSchema,
                 outputSchema: t.outputSchema, // MCP 2025-11-25
                 annotations: t.annotations,
+                icons: getToolIcon(t.group), // MCP 2025-11-25 icons
             }))
     }
 
@@ -256,6 +258,7 @@ export function getTools(
         inputSchema: t.inputSchema,
         outputSchema: t.outputSchema, // MCP 2025-11-25
         annotations: t.annotations,
+        icons: getToolIcon(t.group), // MCP 2025-11-25 icons
     }))
 }
 

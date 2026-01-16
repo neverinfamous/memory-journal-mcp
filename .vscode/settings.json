@@ -16,9 +16,7 @@
     // Run ESLint on save (provides feedback to agent)
     "eslint.run": "onSave",
     // Show severity inline
-    "eslint.rules.customizations": [
-        { "rule": "*", "severity": "warn" }
-    ],
+    "eslint.rules.customizations": [{ "rule": "*", "severity": "warn" }],
 
     // ═══════════════════════════════════════════════════════════════════════
     // Prettier Configuration

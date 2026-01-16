@@ -5,6 +5,8 @@
  */
 
 import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { McpIcon } from '../../types/index.js'
+import { ICON_PROMPT } from '../../constants/icons.js'
 
 /**
  * Message format for MCP prompts
@@ -28,6 +30,7 @@ interface InternalPromptDef {
         description: string
         required?: boolean
     }[]
+    icons?: McpIcon[] // MCP 2025-11-25 icons
     handler: (args: Record<string, string>, db: SqliteAdapter) => { messages: PromptMessage[] }
 }
 
@@ -62,6 +65,7 @@ export function getPrompts(): object[] {
         name: p.name,
         description: p.description,
         arguments: p.arguments,
+        icons: p.icons, // MCP 2025-11-25 icons
     }))
 }
 
@@ -91,6 +95,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'find-related',
             description: 'Discover connected entries via semantic similarity',
+            icons: [ICON_PROMPT],
             arguments: [
                 {
                     name: 'query',
@@ -118,6 +123,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'prepare-standup',
             description: 'Daily standup summaries',
+            icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: SqliteAdapter) => {
                 const today = new Date().toISOString().split('T')[0] ?? ''
@@ -141,6 +147,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'prepare-retro',
             description: 'Sprint retrospectives',
+            icons: [ICON_PROMPT],
             arguments: [
                 {
                     name: 'days',
@@ -180,6 +187,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'weekly-digest',
             description: 'Day-by-day weekly summaries',
+            icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: SqliteAdapter) => {
                 const endDate = new Date().toISOString().split('T')[0] ?? ''
@@ -204,6 +212,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'analyze-period',
             description: 'Deep period analysis with insights',
+            icons: [ICON_PROMPT],
             arguments: [
                 { name: 'start_date', description: 'Start date (YYYY-MM-DD)', required: true },
                 { name: 'end_date', description: 'End date (YYYY-MM-DD)', required: true },
@@ -239,13 +248,14 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'goal-tracker',
             description: 'Milestone and achievement tracking',
+            icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: SqliteAdapter) => {
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE significance_type IS NOT NULL 
+                    SELECT * FROM memory_journal
+                    WHERE significance_type IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 20
@@ -268,6 +278,7 @@ function getAllPromptDefinitions(): InternalPromptDef[] {
         {
             name: 'get-context-bundle',
             description: 'Project context with recent entries, statistics, and GitHub status hints',
+            icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: SqliteAdapter) => {
                 const recent = db.getRecentEntries(5)
@@ -305,6 +316,7 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
         {
             name: 'get-recent-entries',
             description: 'Formatted recent entries',
+            icons: [ICON_PROMPT],
             arguments: [
                 { name: 'limit', description: 'Number of entries (default: 10)', required: false },
             ],
@@ -328,6 +340,7 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
         {
             name: 'project-status-summary',
             description: 'GitHub Project status reports',
+            icons: [ICON_PROMPT],
             arguments: [
                 { name: 'project_number', description: 'GitHub Project number', required: true },
             ],
@@ -336,8 +349,8 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE project_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE project_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 20
@@ -361,14 +374,15 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
         {
             name: 'pr-summary',
             description: 'Pull request journal activity summary',
+            icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: SqliteAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE pr_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp ASC
                 `,
@@ -391,14 +405,15 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
         {
             name: 'code-review-prep',
             description: 'Comprehensive PR review preparation',
+            icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: SqliteAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE pr_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp ASC
                 `,
@@ -421,14 +436,15 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
         {
             name: 'pr-retrospective',
             description: 'Completed PR analysis with learnings',
+            icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: SqliteAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE pr_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp ASC
                 `,
@@ -451,13 +467,14 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
         {
             name: 'actions-failure-digest',
             description: 'CI/CD failure analysis with root cause identification',
+            icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: SqliteAdapter) => {
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE workflow_run_id IS NOT NULL 
+                    SELECT * FROM memory_journal
+                    WHERE workflow_run_id IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
                     LIMIT 20
@@ -480,6 +497,7 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
         {
             name: 'project-milestone-tracker',
             description: 'Milestone progress tracking',
+            icons: [ICON_PROMPT],
             arguments: [
                 { name: 'project_number', description: 'GitHub Project number', required: true },
             ],
@@ -488,8 +506,8 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal 
-                    WHERE project_number = ? 
+                    SELECT * FROM memory_journal
+                    WHERE project_number = ?
                     AND significance_type IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -514,6 +532,7 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
             name: 'confirm-briefing',
             description:
                 'Acknowledge session context received from memory://briefing to inform the user',
+            icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: SqliteAdapter) => {
                 // Get the same data that memory://briefing would provide
