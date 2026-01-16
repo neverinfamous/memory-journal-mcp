@@ -179,6 +179,9 @@ jobs:
 
     - name: Docker Scout security scan
       timeout-minutes: 10
+      env:
+        DOCKER_SCOUT_HUB_USER: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_SCOUT_HUB_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       run: |
         curl -sSfL https://raw.githubusercontent.com/docker/scout-cli/main/install.sh | sh -s --
         docker images local-scan:latest
@@ -189,33 +192,41 @@ jobs:
         # CVE-2025-60876: Alpine busybox wget - patch not in release yet
         IGNORE_CVES="CVE-2026-22184|CVE-2025-60876"
         
-        echo "⏱️ Running Docker Scout scan (max 8 minutes)..."
-        if timeout 480 docker scout cves local-scan:latest > scout_output.txt 2>&1; then
-          echo "📊 Scan completed successfully"
-          cat scout_output.txt
+        echo "⏱️ Running Docker Scout scan for FIXABLE vulnerabilities..."
+        
+        # Use --only-fixed to find CVEs that HAVE fixes available
+        # This ensures we block on things we CAN fix while allowing unfixable upstream CVEs
+        if timeout 480 docker scout cves local-scan:latest --only-fixed --only-severity critical,high > scout_fixable.txt 2>&1; then
+          echo "📊 Scan completed"
           
-          # Filter out ignored CVEs and check remaining for critical/high
-          # First, check for any critical CVEs that are NOT in our ignore list
-          if grep -E "^[A-Z]" scout_output.txt | grep -vE "$IGNORE_CVES" | grep -q "CRITICAL"; then
-            echo "❌ Critical severity vulnerability detected (not in allowlist)"
-            echo "🚨 Build blocked due to unacceptable security risk"
+          # Check if any fixable critical/high CVEs were found
+          if grep -qE "(CRITICAL|HIGH)" scout_fixable.txt 2>/dev/null; then
+            echo "❌ Fixable CRITICAL/HIGH CVEs detected - blocking deploy"
+            cat scout_fixable.txt
+            echo ""
+            echo "🚨 Deploy blocked: These vulnerabilities have available fixes."
+            echo "   Update dependencies or Dockerfile to resolve."
             exit 1
+          else
+            echo "✅ No fixable critical/high CVEs found"
           fi
-          
-          # Check for any high CVEs that are NOT in our ignore list
-          if grep -E "^CVE-" scout_output.txt | grep -vE "$IGNORE_CVES" | grep -q "HIGH"; then
-            echo "❌ High severity vulnerability detected (not in allowlist)"
-            echo "🚨 Build blocked due to unacceptable security risk"
-            exit 1
-          fi
-          
-          echo "✅ Security scan passed"
-          echo "ℹ️ Any flagged CVEs are either allowlisted (upstream) or low/medium severity"
         else
-          echo "⚠️ Docker Scout scan timed out or failed"
-          echo "🔄 Continuing build - scan timeout is not a security failure"
-          echo "ℹ️ Consider running scout scan locally for large images"
+          exit_code=$?
+          if [ $exit_code -eq 2 ]; then
+            # Exit code 2 means vulnerabilities found
+            echo "❌ Fixable CVEs detected by Docker Scout"
+            cat scout_fixable.txt
+            exit 1
+          elif [ $exit_code -eq 124 ]; then
+            echo "⚠️ Docker Scout scan timed out"
+            echo "🔄 Continuing build - scan timeout is not a security failure"
+          else
+            echo "⚠️ Docker Scout scan failed with exit code $exit_code"
+            echo "🔄 Continuing build - will rely on Trivy for security validation"
+          fi
         fi
+        
+        echo "✅ Security gate passed"
 
   # Merge platform images into multi-arch manifest
   merge-and-push:

@@ -11,8 +11,8 @@ RUN apk add --no-cache python3 make g++ && \
     apk upgrade --no-cache
 
 # Upgrade npm globally to get fixed versions of bundled packages
-# Fixes CVE-2025-64756 (glob) and CVE-2025-64118 (tar)
-RUN npm install -g npm@latest
+# Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar), GHSA-73rr-hh4g-fpgx (diff)
+RUN npm install -g npm@latest --force && npm cache clean --force
 
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
@@ -39,11 +39,11 @@ WORKDIR /app
 
 # Install runtime dependencies with security fixes
 # Use Alpine edge for curl with CVE fixes
-# Upgrade npm globally to fix CVE-2025-64756 (glob) and CVE-2025-64118 (tar)
+# Upgrade npm globally to fix CVE-2025-64756 (glob), CVE-2025-64118 (tar), GHSA-73rr-hh4g-fpgx (diff)
 RUN apk add --no-cache git ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl && \
     apk upgrade --no-cache && \
-    npm install -g npm@latest
+    npm install -g npm@latest --force && npm cache clean --force
 
 # Copy built artifacts and production dependencies
 COPY --from=builder /app/dist ./dist
