@@ -1,88 +1,122 @@
-# Git and version control
-.git
+# =============================================================================
+# Memory Journal MCP - Docker Build Ignore File
+# =============================================================================
+# Files and directories excluded from Docker build context
+# Keep this in sync with .gitignore where applicable
+
+# -----------------------------------------------------------------------------
+# Dependencies (reinstalled in builder stage)
+# -----------------------------------------------------------------------------
+node_modules/
+
+# -----------------------------------------------------------------------------
+# Git and Version Control
+# -----------------------------------------------------------------------------
+.git/
 .gitignore
 .github/
 
-# GitHub-specific files
-CODE_OF_CONDUCT.md
-CONTRIBUTING.md
-.github/
-SECURITY.md
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
-venv/
-env/
-ENV/
-
-# IDE
+# -----------------------------------------------------------------------------
+# IDE and Editor Files
+# -----------------------------------------------------------------------------
 .vscode/
 .cursor/
+.idea/
 *.swp
 *.swo
 *~
 
-# OS
+# -----------------------------------------------------------------------------
+# OS Files
+# -----------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 
-# Documentation (keep README for Docker Hub description)
-docs/
-DOCKER.md
-DOCKER_PUBLISH.md
-memory_journal_v*.md
+# -----------------------------------------------------------------------------
+# Development Tooling (not needed in production)
+# -----------------------------------------------------------------------------
+.prettierrc
+.prettierignore
+eslint.config.js
 
-# Data directory (will be mounted as volume)
+# -----------------------------------------------------------------------------
+# Local Development Files
+# -----------------------------------------------------------------------------
+docker-compose.yml
+mcp-config-example.json
+tools.json
+server.json
+mcp-publisher.exe
+
+# -----------------------------------------------------------------------------
+# Security Scanning Configs (CI only)
+# -----------------------------------------------------------------------------
+.scout-ignore
+.trivyignore
+trivy-results.sarif
+
+# -----------------------------------------------------------------------------
+# Documentation (keep README.md for Docker Hub)
+# -----------------------------------------------------------------------------
+docs/
+releases/
+CHANGELOG.md
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+DOCKER_README.md
+SECURITY.md
+*.md
+!README.md
+
+# -----------------------------------------------------------------------------
+# Data Directory (mounted as volume at runtime)
+# -----------------------------------------------------------------------------
 data/
 
-# Temporary files
+# -----------------------------------------------------------------------------
+# Database Files (runtime only)
+# -----------------------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# -----------------------------------------------------------------------------
+# Temporary Files
+# -----------------------------------------------------------------------------
 temp/
 tmp/
 *.tmp
 *.temp
 
+# -----------------------------------------------------------------------------
 # Logs
+# -----------------------------------------------------------------------------
 *.log
 logs/
 
-# Database files (runtime only)
-*.db
-*.db-shm
-*.db-wal
-
-# Development files
-docker-compose.yml
-mcp-config-example.json
-tools.json
-
-# CI/CD files
-.github/workflows/
-dependabot.yml
-
-# Security files
-trivy-results.sarif
+# -----------------------------------------------------------------------------
+# Security and Secrets
+# -----------------------------------------------------------------------------
 *.pem
 *.key
 .env
 .env.*
+auth.json
+github_auth.json
+.mcpregistry_*
+
+# -----------------------------------------------------------------------------
+# Python Legacy (archived, not used in TypeScript version)
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+*.egg
