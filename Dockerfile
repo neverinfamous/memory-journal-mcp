@@ -11,8 +11,17 @@ RUN apk add --no-cache python3 make g++ && \
     apk upgrade --no-cache
 
 # Upgrade npm globally to get fixed versions of bundled packages
-# Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar), GHSA-73rr-hh4g-fpgx (diff)
+# Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
 RUN npm install -g npm@latest --force && npm cache clean --force
+
+# Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff@8.0.2 to 8.0.3
+# npm hasn't released a version with diff@8.0.3 yet, so we patch it directly
+RUN cd /usr/local/lib/node_modules/npm && \
+    npm pack diff@8.0.3 && \
+    rm -rf node_modules/diff && \
+    tar -xzf diff-8.0.3.tgz && \
+    mv package node_modules/diff && \
+    rm diff-8.0.3.tgz
 
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
@@ -39,11 +48,18 @@ WORKDIR /app
 
 # Install runtime dependencies with security fixes
 # Use Alpine edge for curl with CVE fixes
-# Upgrade npm globally to fix CVE-2025-64756 (glob), CVE-2025-64118 (tar), GHSA-73rr-hh4g-fpgx (diff)
 RUN apk add --no-cache git ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl && \
     apk upgrade --no-cache && \
     npm install -g npm@latest --force && npm cache clean --force
+
+# Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff@8.0.2 to 8.0.3
+RUN cd /usr/local/lib/node_modules/npm && \
+    npm pack diff@8.0.3 && \
+    rm -rf node_modules/diff && \
+    tar -xzf diff-8.0.3.tgz && \
+    mv package node_modules/diff && \
+    rm diff-8.0.3.tgz
 
 # Copy built artifacts and production dependencies
 COPY --from=builder /app/dist ./dist
