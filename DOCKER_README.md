@@ -31,43 +31,47 @@ Last Updated January 16, 2026 - v3.1.5
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
 
-```mermaid
-flowchart TB
-    subgraph Session["🤖 AI Session Start"]
-        Briefing["📋 Read Briefing<br/>(memory://briefing)"]
-    end
-    
-    subgraph Core["📝 Journal Operations"]
-        Create["Create Entry"]
-        Retrieve["Retrieve & Search"]
-        Link["Link Entries"]
-    end
-    
-    subgraph Search["🔍 Triple Search"]
-        FTS["Full-Text (FTS5)"]
-        Semantic["Semantic (Vector)"]
-        DateRange["Date Range"]
-    end
-    
-    subgraph GitHub["🐙 GitHub Integration"]
-        Issues["Issues & Milestones"]
-        PRs["Pull Requests"]
-        Actions["GitHub Actions"]
-        Kanban["Kanban Boards"]
-    end
-    
-    subgraph Outputs["📊 Outputs"]
-        Reports["Standups & Retrospectives"]
-        Graphs["Knowledge Graphs"]
-        Timeline["Project Timelines"]
-    end
-    
-    Session --> Core
-    Core --> Search
-    Core <--> GitHub
-    Search --> Outputs
-    GitHub --> Outputs
-```
++---------------------------+
+| 🤖 AI Session Start       |
+|---------------------------|
+|  📋 Read Briefing         |
+|  (memory://briefing)      |
++-------------+-------------+
+              |
+              v
++---------------------------+
+| 📝 Journal Operations     |
+|---------------------------|
+|  - Create Entry           |
+|  - Retrieve & Search      |
+|  - Link Entries           |
++------+------+------+------+
+       |      |      |
+       |      |      |
+       v      |      v
++--------------+   +---------------------------+
+| 🔍 Triple    |<->| 🐙 GitHub Integration    |
+|    Search    |   |---------------------------|
+|--------------|   |  - Issues & Milestones    |
+|  - Full-Text |   |  - Pull Requests          |
+|    (FTS5)    |   |  - GitHub Actions         |
+|  - Semantic  |   |  - Kanban Boards          |
+|    (Vector)  |   +-------------+-------------+
+|  - Date      |                 |
+|    Range     |                 |
++------+-------+                 |
+       |                         |
+       v                         v
+       +-----------+-------------+
+                   |
+                   v
+        +---------------------------+
+        | 📊 Outputs                |
+        |---------------------------|
+        |  - Standups & Retros      |
+        |  - Knowledge Graphs       |
+        |  - Project Timelines      |
+        +---------------------------+
 
 ### 📈 **Current Capabilities**
 
