@@ -117,6 +117,7 @@ const ExportEntriesSchema = z.object({
     end_date: z.string().optional(),
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
+    limit: z.number().optional().default(100).describe('Maximum entries to export (default: 100)'),
 });
 
 const UpdateEntrySchema = z.object({
@@ -151,9 +152,15 @@ const EntryOutputSchema = z.object({
     autoContext: z.string().nullable().optional(),
     deletedAt: z.string().nullable().optional(),
     projectNumber: z.number().nullable().optional(),
+    projectOwner: z.string().nullable().optional(),
     issueNumber: z.number().nullable().optional(),
+    issueUrl: z.string().nullable().optional(),
     prNumber: z.number().nullable().optional(),
+    prUrl: z.string().nullable().optional(),
+    prStatus: z.string().nullable().optional(),
     workflowRunId: z.number().nullable().optional(),
+    workflowName: z.string().nullable().optional(),
+    workflowStatus: z.string().nullable().optional(),
 });
 
 /**
@@ -192,6 +199,7 @@ const EntryByIdOutputSchema = z.object({
  * Matches SqliteAdapter.getStatistics() return type.
  */
 const StatisticsOutputSchema = z.object({
+    groupBy: z.string(),
     totalEntries: z.number(),
     entriesByType: z.record(z.string(), z.number()),
     entriesByPeriod: z.array(z.object({
@@ -483,7 +491,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const { group_by } = GetStatisticsSchema.parse(params);
-                return Promise.resolve(db.getStatistics(group_by));
+                const stats = db.getStatistics(group_by);
+                return Promise.resolve({ ...stats, groupBy: group_by });
             },
         },
         {
@@ -800,7 +809,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const input = ExportEntriesSchema.parse(params);
-                const entries = db.getRecentEntries(100);
+                const limit = input.limit ?? 100;
+                const entries = db.getRecentEntries(limit);
                 if (input.format === 'markdown') {
                     const md = entries.map(e =>
                         `## ${e.timestamp}\n\n**Type:** ${e.entryType}\n\n${e.content}\n\n---`
@@ -1104,7 +1114,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         {
             name: 'get_github_context',
             title: 'Get GitHub Repository Context',
-            description: 'Get current repository context including branch, issues, and PRs',
+            description: 'Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).',
             group: 'github',
             inputSchema: z.object({}),
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -1183,7 +1193,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         {
             name: 'move_kanban_item',
             title: 'Move Kanban Item',
-            description: 'Move a project item to a different Status column. Use get_kanban_board first to get the item_id and available status names.',
+            description: 'Move a project item to a different Status column. Use get_kanban_board first to get the item_id and exact status names. Status matching is case-insensitive.',
             group: 'github',
             inputSchema: z.object({
                 project_number: z.number().describe('GitHub Project number'),

@@ -819,7 +819,7 @@ I have project memory access and will create entries for significant work.`,
             uri: 'memory://health',
             name: 'Server Health',
             title: 'Server Health & Diagnostics',
-            description: 'Server health status including database, backups, vector index, and tool filter status',
+            description: 'Server health status including database, backups, vector index (real-time stats), and tool filter status',
             mimeType: 'application/json',
             annotations: {
                 audience: ['assistant'],
