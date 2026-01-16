@@ -1829,6 +1829,11 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     })
                     .parse(params)
 
+                // Capture progress context values BEFORE any async operations
+                // This prevents any possible reference corruption during db reinitialization
+                const progressServer = progress?.server
+                const progressTokenValue = progress?.progressToken
+
                 // Phase 1: Notify that we're starting
                 await sendProgress(progress, 1, 3, 'Preparing restore...')
 
@@ -1836,9 +1841,24 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 await sendProgress(progress, 2, 3, 'Restoring database from backup...')
                 const result = await db.restoreFromFile(input.filename)
 
-                // Note: We skip the phase 3 notification because db.restoreFromFile()
-                // reinitializes the database connection, which can corrupt the progress
-                // context. The result message below indicates completion.
+                // Phase 3: Complete - send directly using captured primitives
+                // The db.restoreFromFile() reinitializes the database which can corrupt
+                // the progress context, so we use our captured values
+                if (progressServer !== undefined && progressTokenValue !== undefined) {
+                    try {
+                        await progressServer.notification({
+                            method: 'notifications/progress' as const,
+                            params: {
+                                progressToken: progressTokenValue,
+                                progress: 3,
+                                total: 3,
+                                message: 'Restore complete',
+                            },
+                        })
+                    } catch {
+                        // Best-effort notification
+                    }
+                }
 
                 return {
                     success: true,
