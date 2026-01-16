@@ -236,6 +236,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 **Static Resources** (appear in resource lists):
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
+- `memory://instructions` - **Behavioral guidance**: complete server instructions (supports `?level=essential|standard|full`)
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
 - `memory://graph/recent` - Live Mermaid diagram of recent relationships

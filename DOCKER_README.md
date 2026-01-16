@@ -215,7 +215,7 @@ Standups • Retrospectives • Weekly digests • PR summaries • Code review 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 18 Resources (12 Static + 6 Template)
-Including `memory://briefing` for session initialization, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards. Template resources require parameters and are accessed directly by URI.  
+Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards. Template resources require parameters and are accessed directly by URI.  
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
