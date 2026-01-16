@@ -3,18 +3,19 @@
     "memory-journal-mcp": {
       "command": "docker",
       "args": [
-        "run", 
-        "--rm", 
+        "run",
+        "--rm",
         "-i",
-        "-v", "./data:/app/data",
-        "writenotenow/memory-journal-mcp:latest",
-        "python", "src/server.py"
+        "-v",
+        "./data:/app/data",
+        "writenotenow/memory-journal-mcp:latest"
       ],
       "env": {
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "-test",
         "GITHUB_TOKEN": "your_github_token_here",
         "GITHUB_ORG_TOKEN": "your_org_token_here",
-        "DEFAULT_ORG": "your-org-name"
+        "DEFAULT_ORG": "your-org-name",
+        "DEFAULT_PROJECT_NUMBER": "1"
       }
     }
   }

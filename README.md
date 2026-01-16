@@ -145,7 +145,10 @@ npm run build
   "mcpServers": {
     "memory-journal-mcp": {
       "command": "node",
-      "args": ["dist/cli.js"]
+      "args": [
+        "dist/cli.js",
+        "--default-project", "1"
+      ]
     }
   }
 }
@@ -175,6 +178,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 |---------------------|-------------|
 | `GITHUB_TOKEN` | GitHub personal access token for API access |
 | `GITHUB_REPO_PATH` | Path to the git repository for auto-detecting owner/repo |
+| `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
 
