@@ -1253,6 +1253,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 body: z.string().optional().describe('Issue body/description'),
                 labels: z.array(z.string()).optional().describe('Labels to apply'),
                 assignees: z.array(z.string()).optional().describe('Users to assign'),
+                project_number: z.number().optional().describe('GitHub Project number to add this issue to'),
                 owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
                 repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
                 entry_content: z.string().optional().describe('Custom journal content (defaults to auto-generated summary)'),
@@ -1265,6 +1266,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     body: z.string().optional(),
                     labels: z.array(z.string()).optional(),
                     assignees: z.array(z.string()).optional(),
+                    project_number: z.number().optional(),
                     owner: z.string().optional(),
                     repo: z.string().optional(),
                     entry_content: z.string().optional(),
@@ -1302,10 +1304,48 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     return { error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.' };
                 }
 
+                // Add to project if requested
+                let projectResult = undefined;
+                if (input.project_number !== undefined && issue.nodeId) {
+                    try {
+                        // Get project ID (needed for mutation)
+                        const board = await github.getProjectKanban(owner, input.project_number, repo);
+                        if (board) {
+                            const added = await github.addProjectItem(board.projectId, issue.nodeId);
+                            if (added.success) {
+                                projectResult = {
+                                    projectNumber: input.project_number,
+                                    added: true,
+                                    message: `Added to project #${input.project_number}`
+                                };
+                            } else {
+                                projectResult = {
+                                    projectNumber: input.project_number,
+                                    added: false,
+                                    error: added.error
+                                };
+                            }
+                        } else {
+                            projectResult = {
+                                projectNumber: input.project_number,
+                                added: false,
+                                error: `Project #${input.project_number} not found`
+                            };
+                        }
+                    } catch (error) {
+                        projectResult = {
+                            projectNumber: input.project_number,
+                            added: false,
+                            error: error instanceof Error ? error.message : String(error)
+                        };
+                    }
+                }
+
                 // Create linked journal entry
                 const entryContent = input.entry_content ??
                     `Created GitHub issue #${String(issue.number)}: ${issue.title}\n\n` +
                     `URL: ${issue.url}\n` +
+                    (input.project_number !== undefined ? `Project: #${input.project_number}\n` : '') +
                     (input.body ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}` : '');
 
                 const entry = db.createEntry({
@@ -1316,6 +1356,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     significanceType: null,
                     issueNumber: issue.number,
                     issueUrl: issue.url,
+                    projectNumber: input.project_number,
                 });
 
                 return {
@@ -1325,11 +1366,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         title: issue.title,
                         url: issue.url,
                     },
+                    project: projectResult,
                     journalEntry: {
                         id: entry.id,
                         linkedToIssue: issue.number,
                     },
-                    message: `Created issue #${String(issue.number)} and journal entry #${String(entry.id)}`,
+                    message: `Created issue #${String(issue.number)}` +
+                        (projectResult?.added ? ` (added to Project #${input.project_number})` : '') +
+                        ` and journal entry #${String(entry.id)}`,
                 };
             },
         },

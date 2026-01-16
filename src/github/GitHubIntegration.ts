@@ -268,7 +268,7 @@ export class GitHubIntegration {
         body?: string,
         labels?: string[],
         assignees?: string[]
-    ): Promise<{ number: number; url: string; title: string } | null> {
+    ): Promise<{ number: number; url: string; title: string; nodeId: string } | null> {
         if (!this.octokit) {
             logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' });
             return null;
@@ -294,6 +294,7 @@ export class GitHubIntegration {
                 number: response.data.number,
                 url: response.data.html_url,
                 title: response.data.title,
+                nodeId: response.data.node_id,
             };
         } catch (error) {
             logger.error('Failed to create issue', {
@@ -886,4 +887,51 @@ export class GitHubIntegration {
             return { success: false, error: errorMessage };
         }
     }
+
+    /**
+     * Add an item to a GitHub Project v2
+     */
+    async addProjectItem(
+        projectId: string,
+        contentId: string
+    ): Promise<{ success: boolean; itemId?: string; error?: string }> {
+        if (!this.graphqlWithAuth) {
+            return { success: false, error: 'GraphQL not available - no token' };
+        }
+
+        try {
+            const mutation = `
+                mutation($projectId: ID!, $contentId: ID!) {
+                    addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                        item {
+                            id
+                        }
+                    }
+                }
+            `;
+
+            const response = await this.graphqlWithAuth<{ addProjectV2ItemById: { item: { id: string } } }>(mutation, {
+                projectId,
+                contentId,
+            });
+
+            const itemId = response.addProjectV2ItemById?.item?.id;
+
+            logger.info('Added item to project', {
+                module: 'GitHub',
+                context: { projectId, contentId, itemId },
+            });
+
+            return { success: true, itemId };
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger.error('Failed to add item to project', {
+                module: 'GitHub',
+                context: { projectId, contentId },
+                error: errorMessage,
+            });
+            return { success: false, error: errorMessage };
+        }
+    }
 }
+

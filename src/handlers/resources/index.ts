@@ -747,7 +747,34 @@ I have project memory access and will create entries for significant work.`,
                 audience: ['assistant'],
                 priority: 0.5,
             },
-            handler: (_uri: string, context: ResourceContext) => {
+            handler: async (_uri: string, context: ResourceContext) => {
+                // If GitHub integration is available, synthesize entries from recent workflow runs
+                if (context.github) {
+                    try {
+                        const repoInfo = await context.github.getRepoInfo();
+                        if (repoInfo.owner && repoInfo.repo) {
+                            const runs = await context.github.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10);
+
+                            // Return virtual entries synthesized from workflow runs
+                            const entries = runs.map(run => ({
+                                id: -1 * run.id, // Virtual ID (negative to distinguish from DB)
+                                entryType: 'tool_output',
+                                content: `Workflow: ${run.name}\nStatus: ${run.status}\nConclusion: ${run.conclusion || 'pending'}\nBranch: ${run.headBranch}\nURL: ${run.url}`,
+                                timestamp: run.createdAt,
+                                isPersonal: false,
+                                significanceType: null,
+                                workflowRunId: run.id,
+                                workflowName: run.name,
+                                workflowStatus: run.conclusion || run.status,
+                            }));
+
+                            return { entries, count: entries.length, source: 'github_api' };
+                        }
+                    } catch {
+                        // Fallback to DB if GitHub fails
+                    }
+                }
+
                 const rows = execQuery(context.db, `
                     SELECT * FROM memory_journal 
                     WHERE workflow_run_id IS NOT NULL 
@@ -756,7 +783,7 @@ I have project memory access and will create entries for significant work.`,
                     LIMIT 10
                 `);
                 const entries = rows.map(transformEntryRow);
-                return { entries, count: entries.length };
+                return { entries, count: entries.length, source: 'database' };
             },
         },
         {
