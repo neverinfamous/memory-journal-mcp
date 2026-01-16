@@ -31,6 +31,7 @@ Last Updated January 16, 2026 - v4.0.0
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
 
+```
 +---------------------------+
 | 🤖 AI Session Start       |
 |---------------------------|
@@ -72,6 +73,7 @@ Last Updated January 16, 2026 - v4.0.0
         |  - Knowledge Graphs       |
         |  - Project Timelines      |
         +---------------------------+
+```
 
 ### 📈 **Current Capabilities**
 
