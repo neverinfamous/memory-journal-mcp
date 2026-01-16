@@ -403,6 +403,9 @@ export interface ServerConfig {
     /** Tool filter string */
     toolFilter?: string;
 
+    /** Default GitHub Project number for auto-assignment */
+    defaultProjectNumber?: number;
+
     /** Enable semantic search */
     enableSemanticSearch: boolean;
 

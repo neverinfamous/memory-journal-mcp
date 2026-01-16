@@ -16,12 +16,14 @@ program
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--db <path>', 'Database path', './memory_journal.db')
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
+    .option('--default-project <number>', 'Default GitHub Project number')
     .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
     .action(async (options: {
         transport: string;
         port: string;
         db: string;
         toolFilter?: string;
+        defaultProject: string;
         logLevel: string;
     }) => {
         // Set log level
@@ -39,6 +41,7 @@ program
                 port: parseInt(options.port, 10),
                 dbPath: options.db,
                 toolFilter: options.toolFilter,
+                defaultProjectNumber: options.defaultProject ? parseInt(options.defaultProject, 10) : (process.env['DEFAULT_PROJECT_NUMBER'] ? parseInt(process.env['DEFAULT_PROJECT_NUMBER'], 10) : undefined),
             });
         } catch (error) {
             logger.error('Failed to start server', {

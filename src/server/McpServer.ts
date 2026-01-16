@@ -29,13 +29,14 @@ export interface ServerOptions {
     port?: number;
     dbPath: string;
     toolFilter?: string;
+    defaultProjectNumber?: number;
 }
 
 /**
  * Create and start the MCP server
  */
 export async function createServer(options: ServerOptions): Promise<void> {
-    const { transport, dbPath, toolFilter } = options;
+    const { transport, dbPath, toolFilter, defaultProjectNumber } = options;
 
     // Initialize database (async for sql.js)
     const db = new SqliteAdapter(dbPath);
@@ -83,7 +84,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
     const instructions = generateInstructions(
-        filterConfig?.enabledTools ?? new Set(getTools(db, null, vectorManager, github).map(t => (t as { name: string }).name)),
+        filterConfig?.enabledTools ?? new Set(getTools(db, null, vectorManager, github, { defaultProjectNumber }).map(t => (t as { name: string }).name)),
         resources.map(r => {
             const res = r as { uri: string; name: string; description?: string };
             return { uri: res.uri, name: res.name, description: res.description };
@@ -110,7 +111,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     );
 
     // Get filtered tools and register them dynamically
-    const tools = getTools(db, filterConfig, vectorManager, github);
+    const tools = getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber });
     for (const tool of tools) {
         const toolDef = tool as {
             name: string;
@@ -146,7 +147,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             toolOptions as { description?: string; inputSchema?: z.ZodType; outputSchema?: z.ZodType },
             async (args: unknown) => {
                 try {
-                    const result = await callTool(toolDef.name, args as Record<string, unknown>, db, vectorManager, github);
+                    const result = await callTool(toolDef.name, args as Record<string, unknown>, db, vectorManager, github, { defaultProjectNumber });
 
                     // MCP 2025-11-25: If tool has outputSchema, return both:
                     // - structuredContent: validated JSON for clients that support it

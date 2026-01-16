@@ -11,6 +11,10 @@ import type { ToolDefinition, EntryType, SignificanceType, RelationshipType } fr
 import type { VectorSearchManager } from '../../vector/VectorSearchManager.js';
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js';
 
+export interface ToolHandlerConfig {
+    defaultProjectNumber?: number;
+}
+
 /**
  * Tool execution context
  */
@@ -18,6 +22,7 @@ export interface ToolContext {
     db: SqliteAdapter;
     vectorManager?: VectorSearchManager;
     github?: GitHubIntegration;
+    config?: ToolHandlerConfig;
 }
 
 // ============================================================================
@@ -202,8 +207,14 @@ const StatisticsOutputSchema = z.object({
 /**
  * Get all tool definitions
  */
-export function getTools(db: SqliteAdapter, filterConfig: ToolFilterConfig | null, vectorManager?: VectorSearchManager, github?: GitHubIntegration): object[] {
-    const context: ToolContext = { db, vectorManager, github };
+export function getTools(
+    db: SqliteAdapter,
+    filterConfig: ToolFilterConfig | null,
+    vectorManager?: VectorSearchManager,
+    github?: GitHubIntegration,
+    config?: ToolHandlerConfig
+): object[] {
+    const context: ToolContext = { db, vectorManager, github, config };
     const allTools = getAllToolDefinitions(context);
 
     // Filter if config provided
@@ -236,9 +247,10 @@ export async function callTool(
     args: Record<string, unknown>,
     db: SqliteAdapter,
     vectorManager?: VectorSearchManager,
-    github?: GitHubIntegration
+    github?: GitHubIntegration,
+    config?: ToolHandlerConfig
 ): Promise<unknown> {
-    const context: ToolContext = { db, vectorManager, github };
+    const context: ToolContext = { db, vectorManager, github, config };
     const tools = getAllToolDefinitions(context);
     const tool = tools.find(t => t.name === name);
 
@@ -372,11 +384,19 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const input = SearchEntriesSchema.parse(params);
-                if (!input.query) {
+                // If no query and no filters, validation error usage of getRecentEntries
+                // But we want to allow filtering without text query
+                const hasFilters = input.project_number !== undefined ||
+                    input.issue_number !== undefined ||
+                    input.pr_number !== undefined ||
+                    input.is_personal !== undefined;
+
+                if (!input.query && !hasFilters) {
                     const entries = db.getRecentEntries(input.limit, input.is_personal);
                     return Promise.resolve({ entries, count: entries.length });
                 }
-                const entries = db.searchEntries(input.query, {
+
+                const entries = db.searchEntries(input.query || '', {
                     limit: input.limit,
                     isPersonal: input.is_personal,
                     projectNumber: input.project_number,
@@ -1304,37 +1324,39 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     return { error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.' };
                 }
 
-                // Add to project if requested
+                const projectNumber = input.project_number ?? context.config?.defaultProjectNumber;
+
+                // Add to project if requested or default configured
                 let projectResult = undefined;
-                if (input.project_number !== undefined && issue.nodeId) {
+                if (projectNumber !== undefined && issue.nodeId) {
                     try {
                         // Get project ID (needed for mutation)
-                        const board = await github.getProjectKanban(owner, input.project_number, repo);
+                        const board = await github.getProjectKanban(owner, projectNumber, repo);
                         if (board) {
                             const added = await github.addProjectItem(board.projectId, issue.nodeId);
                             if (added.success) {
                                 projectResult = {
-                                    projectNumber: input.project_number,
+                                    projectNumber: projectNumber,
                                     added: true,
-                                    message: `Added to project #${input.project_number}`
+                                    message: `Added to project #${projectNumber}`
                                 };
                             } else {
                                 projectResult = {
-                                    projectNumber: input.project_number,
+                                    projectNumber: projectNumber,
                                     added: false,
                                     error: added.error
                                 };
                             }
                         } else {
                             projectResult = {
-                                projectNumber: input.project_number,
+                                projectNumber: projectNumber,
                                 added: false,
-                                error: `Project #${input.project_number} not found`
+                                error: `Project #${projectNumber} not found`
                             };
                         }
                     } catch (error) {
                         projectResult = {
-                            projectNumber: input.project_number,
+                            projectNumber: projectNumber,
                             added: false,
                             error: error instanceof Error ? error.message : String(error)
                         };
@@ -1345,7 +1367,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 const entryContent = input.entry_content ??
                     `Created GitHub issue #${String(issue.number)}: ${issue.title}\n\n` +
                     `URL: ${issue.url}\n` +
-                    (input.project_number !== undefined ? `Project: #${input.project_number}\n` : '') +
+                    (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
                     (input.body ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}` : '');
 
                 const entry = db.createEntry({
@@ -1356,7 +1378,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     significanceType: null,
                     issueNumber: issue.number,
                     issueUrl: issue.url,
-                    projectNumber: input.project_number,
+                    projectNumber: projectNumber,
                 });
 
                 return {
@@ -1372,7 +1394,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         linkedToIssue: issue.number,
                     },
                     message: `Created issue #${String(issue.number)}` +
-                        (projectResult?.added ? ` (added to Project #${input.project_number})` : '') +
+                        (projectResult?.added ? ` (added to Project #${projectNumber})` : '') +
                         ` and journal entry #${String(entry.id)}`,
                 };
             },
