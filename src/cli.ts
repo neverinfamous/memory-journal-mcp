@@ -17,6 +17,7 @@ program
     .option('--db <path>', 'Database path', './memory_journal.db')
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
+    .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
     .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
     .action(
         async (options: {
@@ -25,6 +26,7 @@ program
             db: string
             toolFilter?: string
             defaultProject: string
+            autoRebuildIndex?: boolean
             logLevel: string
         }) => {
             // Set log level
@@ -47,6 +49,8 @@ program
                         : process.env['DEFAULT_PROJECT_NUMBER']
                           ? parseInt(process.env['DEFAULT_PROJECT_NUMBER'], 10)
                           : undefined,
+                    autoRebuildIndex:
+                        options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

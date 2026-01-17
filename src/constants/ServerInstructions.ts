@@ -200,6 +200,9 @@ Valid values for \`entry_type\` parameter:
 - \`deployment\` - Deployment records
 - \`technical_achievement\` - Milestones and breakthroughs
 
+## Field Notes
+- **\`autoContext\`**: Reserved for future automatic context capture. Currently always \`null\`.
+
 ## Key Resources
 | URI | Description |
 |-----|-------------|

@@ -2071,6 +2071,17 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .string()
                     .optional()
                     .describe('Comment to add to the issue before closing'),
+                move_to_done: z
+                    .boolean()
+                    .optional()
+                    .default(false)
+                    .describe('Move the associated Kanban item to "Done" column'),
+                project_number: z
+                    .number()
+                    .optional()
+                    .describe(
+                        'GitHub Project number (required if move_to_done is true, or uses DEFAULT_PROJECT_NUMBER)'
+                    ),
                 owner: z
                     .string()
                     .optional()
@@ -2088,6 +2099,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         issue_number: z.number(),
                         resolution_notes: z.string().optional(),
                         comment: z.string().optional(),
+                        move_to_done: z.boolean().optional().default(false),
+                        project_number: z.number().optional(),
                         owner: z.string().optional(),
                         repo: z.string().optional(),
                         tags: z.array(z.string()).optional(),
@@ -2135,6 +2148,75 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     }
                 }
 
+                // Move Kanban item to "Done" if requested
+                let kanbanResult:
+                    | { moved: boolean; error?: string; projectNumber?: number }
+                    | undefined
+                if (input.move_to_done) {
+                    const projectNum = input.project_number ?? context.config?.defaultProjectNumber
+                    if (projectNum === undefined) {
+                        kanbanResult = {
+                            moved: false,
+                            error: 'project_number required when move_to_done is true',
+                        }
+                    } else {
+                        try {
+                            const board = await github.getProjectKanban(owner, projectNum, repo)
+                            if (!board) {
+                                kanbanResult = {
+                                    moved: false,
+                                    error: `Project #${projectNum} not found`,
+                                    projectNumber: projectNum,
+                                }
+                            } else {
+                                // Find the item by issue number
+                                const item = board.columns
+                                    .flatMap((c) => c.items)
+                                    .find(
+                                        (i) => i.type === 'ISSUE' && i.number === input.issue_number
+                                    )
+                                if (!item) {
+                                    kanbanResult = {
+                                        moved: false,
+                                        error: 'Issue not found on project board',
+                                        projectNumber: projectNum,
+                                    }
+                                } else {
+                                    const doneOption = board.statusOptions.find(
+                                        (opt) => opt.name.toLowerCase() === 'done'
+                                    )
+                                    if (!doneOption) {
+                                        kanbanResult = {
+                                            moved: false,
+                                            error: '"Done" status column not found on board',
+                                            projectNumber: projectNum,
+                                        }
+                                    } else {
+                                        const moveResult = await github.moveProjectItem(
+                                            board.projectId,
+                                            item.id,
+                                            board.statusFieldId,
+                                            doneOption.id
+                                        )
+                                        kanbanResult = {
+                                            moved: moveResult.success,
+                                            error: moveResult.error,
+                                            projectNumber: projectNum,
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            kanbanResult = {
+                                moved: false,
+                                error: err instanceof Error ? err.message : String(err),
+                                projectNumber:
+                                    input.project_number ?? context.config?.defaultProjectNumber,
+                            }
+                        }
+                    }
+                }
+
                 // Create resolution journal entry
                 const entryContent =
                     `Closed GitHub issue #${String(input.issue_number)}: ${issueDetails.title}\n\n` +
@@ -2165,7 +2247,10 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         linkedToIssue: input.issue_number,
                         significanceType: 'blocker_resolved',
                     },
-                    message: `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}`,
+                    kanban: kanbanResult,
+                    message:
+                        `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}` +
+                        (kanbanResult?.moved ? ' and moved to Done' : ''),
                 }
             },
         },

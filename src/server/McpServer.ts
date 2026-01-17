@@ -30,6 +30,7 @@ export interface ServerOptions {
     dbPath: string
     toolFilter?: string
     defaultProjectNumber?: number
+    autoRebuildIndex?: boolean
 }
 
 /**
@@ -46,6 +47,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
     // Initialize vector search manager (lazy loading - model loads on first use)
     const vectorManager = new VectorSearchManager(dbPath)
     logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
+
+    // Auto-rebuild vector index if enabled
+    if (options.autoRebuildIndex) {
+        logger.info('Auto-rebuilding vector index on startup...', { module: 'McpServer' })
+        await vectorManager.initialize()
+        const count = await vectorManager.rebuildIndex(db)
+        logger.info('Vector index rebuilt on startup', {
+            module: 'McpServer',
+            entriesIndexed: count,
+        })
+    }
 
     // Initialize GitHub integration
     const github = new GitHubIntegration()
