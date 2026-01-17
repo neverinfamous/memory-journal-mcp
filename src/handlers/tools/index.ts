@@ -265,6 +265,19 @@ const TagsListOutputSchema = z.object({
 })
 
 /**
+ * Schema for merge_tags output.
+ */
+const MergeTagsOutputSchema = z.object({
+    success: z.boolean(),
+    sourceTag: z.string(),
+    targetTag: z.string(),
+    entriesUpdated: z.number(),
+    sourceDeleted: z.boolean(),
+    message: z.string(),
+    error: z.string().optional(),
+})
+
+/**
  * Schema for get_vector_index_stats output.
  */
 const VectorStatsOutputSchema = z.object({
@@ -594,6 +607,17 @@ const RestoreResultOutputSchema = z.object({
     warning: z.string().optional(),
 })
 
+/**
+ * Schema for cleanup_backups output.
+ */
+const CleanupBackupsOutputSchema = z.object({
+    success: z.boolean(),
+    deleted: z.array(z.string()),
+    deletedCount: z.number(),
+    keptCount: z.number(),
+    message: z.string(),
+})
+
 // ============================================================================
 // Tool Definitions with MCP 2025-11-25 Annotations
 // ============================================================================
@@ -884,7 +908,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                           }
                         : includeHint && entries.length === 0
                           ? {
-                                hint: 'No entries matched your query above the similarity threshold.',
+                                hint: `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.3)}). Try lowering similarity_threshold (e.g., 0.2) for broader matches.`,
                             }
                           : {}),
                 }
@@ -1369,6 +1393,64 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 const rawTags = db.listTags()
                 const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                 return Promise.resolve({ tags, count: tags.length })
+            },
+        },
+        {
+            name: 'merge_tags',
+            title: 'Merge Tags',
+            description:
+                'Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.',
+            group: 'admin',
+            inputSchema: z.object({
+                source_tag: z.string().min(1).describe('Tag to merge from (will be deleted)'),
+                target_tag: z
+                    .string()
+                    .min(1)
+                    .describe('Tag to merge into (will be created if not exists)'),
+            }),
+            outputSchema: MergeTagsOutputSchema,
+            annotations: { readOnlyHint: false, idempotentHint: false },
+            handler: (params: unknown) => {
+                const { source_tag, target_tag } = z
+                    .object({
+                        source_tag: z.string().min(1),
+                        target_tag: z.string().min(1),
+                    })
+                    .parse(params)
+
+                if (source_tag === target_tag) {
+                    return Promise.resolve({
+                        success: false,
+                        sourceTag: source_tag,
+                        targetTag: target_tag,
+                        entriesUpdated: 0,
+                        sourceDeleted: false,
+                        message: 'Source and target tags cannot be the same',
+                        error: 'Source and target tags must be different',
+                    })
+                }
+
+                try {
+                    const result = db.mergeTags(source_tag, target_tag)
+                    return Promise.resolve({
+                        success: true,
+                        sourceTag: source_tag,
+                        targetTag: target_tag,
+                        entriesUpdated: result.entriesUpdated,
+                        sourceDeleted: result.sourceDeleted,
+                        message: `Merged "${source_tag}" into "${target_tag}". Updated ${String(result.entriesUpdated)} entries.`,
+                    })
+                } catch (error) {
+                    return Promise.resolve({
+                        success: false,
+                        sourceTag: source_tag,
+                        targetTag: target_tag,
+                        entriesUpdated: 0,
+                        sourceDeleted: false,
+                        message: 'Tag merge failed',
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                    })
+                }
             },
         },
         // Vector index management tools
@@ -2369,6 +2451,40 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     newEntryCount: result.newEntryCount,
                     warning: 'A pre-restore backup was automatically created.',
                 }
+            },
+        },
+        {
+            name: 'cleanup_backups',
+            title: 'Cleanup Old Backups',
+            description:
+                'Delete old backup files, keeping only the most recent N backups. Use list_backups to preview before cleanup.',
+            group: 'backup',
+            inputSchema: z.object({
+                keep_count: z
+                    .number()
+                    .min(1)
+                    .default(5)
+                    .describe('Number of most recent backups to keep (default: 5)'),
+            }),
+            outputSchema: CleanupBackupsOutputSchema,
+            annotations: { readOnlyHint: false, idempotentHint: false },
+            handler: (params: unknown) => {
+                const { keep_count } = z
+                    .object({ keep_count: z.number().min(1).default(5) })
+                    .parse(params)
+
+                const result = db.deleteOldBackups(keep_count)
+
+                return Promise.resolve({
+                    success: true,
+                    deleted: result.deleted,
+                    deletedCount: result.deleted.length,
+                    keptCount: result.kept,
+                    message:
+                        result.deleted.length > 0
+                            ? `Deleted ${String(result.deleted.length)} old backup(s), kept ${String(result.kept)}`
+                            : `No backups to delete. Currently have ${String(result.kept)} backup(s).`,
+                })
             },
         },
     ]

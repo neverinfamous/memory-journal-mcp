@@ -564,6 +564,83 @@ export class SqliteAdapter {
         }))
     }
 
+    /**
+     * Merge one tag into another (consolidate similar tags)
+     * @param sourceTag Tag to merge from (will be deleted)
+     * @param targetTag Tag to merge into (will be created if not exists)
+     * @returns Merge statistics
+     */
+    mergeTags(
+        sourceTag: string,
+        targetTag: string
+    ): { entriesUpdated: number; sourceDeleted: boolean } {
+        const db = this.ensureDb()
+
+        // Get source tag ID
+        const sourceResult = db.exec('SELECT id FROM tags WHERE name = ?', [sourceTag])
+        const sourceTagId = sourceResult[0]?.values[0]?.[0] as number | undefined
+
+        if (sourceTagId === undefined) {
+            throw new Error(`Source tag not found: ${sourceTag}`)
+        }
+
+        // Get or create target tag
+        db.run('INSERT OR IGNORE INTO tags (name, usage_count) VALUES (?, 0)', [targetTag])
+        const targetResult = db.exec('SELECT id FROM tags WHERE name = ?', [targetTag])
+        const targetTagId = targetResult[0]?.values[0]?.[0] as number | undefined
+
+        if (targetTagId === undefined) {
+            throw new Error(`Failed to get or create target tag: ${targetTag}`)
+        }
+
+        // Get entries linked to source tag
+        const entriesResult = db.exec('SELECT entry_id FROM entry_tags WHERE tag_id = ?', [
+            sourceTagId,
+        ])
+        const entryIds = entriesResult[0]?.values.map((v) => v[0] as number) ?? []
+
+        let entriesUpdated = 0
+
+        for (const entryId of entryIds) {
+            // Check if entry already has target tag
+            const existing = db.exec('SELECT 1 FROM entry_tags WHERE entry_id = ? AND tag_id = ?', [
+                entryId,
+                targetTagId,
+            ])
+
+            if (existing[0]?.values.length === 0 || !existing[0]) {
+                // Add target tag link
+                db.run('INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [
+                    entryId,
+                    targetTagId,
+                ])
+                entriesUpdated++
+            }
+        }
+
+        // Update target tag usage count
+        if (entriesUpdated > 0) {
+            db.run('UPDATE tags SET usage_count = usage_count + ? WHERE id = ?', [
+                entriesUpdated,
+                targetTagId,
+            ])
+        }
+
+        // Remove source tag links and delete source tag
+        db.run('DELETE FROM entry_tags WHERE tag_id = ?', [sourceTagId])
+        db.run('DELETE FROM tags WHERE id = ?', [sourceTagId])
+
+        this.save()
+
+        logger.info('Tags merged', {
+            module: 'SqliteAdapter',
+            operation: 'mergeTags',
+            context: { sourceTag, targetTag, entriesUpdated },
+        })
+
+        return { entriesUpdated, sourceDeleted: true }
+    }
+
     // =========================================================================
     // Relationship Operations
     // =========================================================================
@@ -788,6 +865,40 @@ export class SqliteAdapter {
         backups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
         return backups
+    }
+
+    /**
+     * Delete old backups, keeping only the most recent N
+     * @param keepCount Number of backups to keep (most recent)
+     * @returns Object with deleted filenames and kept count
+     */
+    deleteOldBackups(keepCount: number): { deleted: string[]; kept: number } {
+        const backups = this.listBackups() // Already sorted newest-first
+
+        if (keepCount < 1) {
+            throw new Error('keepCount must be at least 1')
+        }
+
+        const toKeep = backups.slice(0, keepCount)
+        const toDelete = backups.slice(keepCount)
+        const deleted: string[] = []
+
+        for (const backup of toDelete) {
+            try {
+                fs.unlinkSync(backup.path)
+                deleted.push(backup.filename)
+            } catch {
+                // Skip files that can't be deleted
+            }
+        }
+
+        logger.info('Old backups cleaned up', {
+            module: 'SqliteAdapter',
+            operation: 'deleteOldBackups',
+            context: { kept: toKeep.length, deleted: deleted.length },
+        })
+
+        return { deleted, kept: toKeep.length }
     }
 
     /**

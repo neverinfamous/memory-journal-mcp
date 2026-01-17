@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 31 tools are categorized here for filtering support.
+ * All 33 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -28,7 +28,13 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     analytics: ['get_statistics', 'get_cross_project_insights'],
     relationships: ['link_entries', 'visualize_relationships'],
     export: ['export_entries'],
-    admin: ['update_entry', 'delete_entry', 'rebuild_vector_index', 'add_to_vector_index'],
+    admin: [
+        'update_entry',
+        'delete_entry',
+        'rebuild_vector_index',
+        'add_to_vector_index',
+        'merge_tags',
+    ],
     github: [
         'get_github_issues',
         'get_github_prs',
@@ -40,7 +46,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'create_github_issue_with_entry',
         'close_github_issue_with_entry',
     ],
-    backup: ['backup_journal', 'list_backups', 'restore_backup'],
+    backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
 }
 
 /**
