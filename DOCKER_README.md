@@ -192,6 +192,25 @@ When GitHub tools cannot auto-detect repository information:
 
 - **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
 
+### HTTP/SSE Transport (Remote Access)
+
+For remote access, web-based clients, or HTTP-compatible MCP hosts:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v ./data:/app/data \
+  writenotenow/memory-journal-mcp:latest \
+  --transport http --port 3000
+```
+
+**Endpoints:**
+
+- `POST /mcp` — JSON-RPC requests (initialize, tools/call, resources/read, etc.)
+- `GET /mcp` — SSE stream for server-to-client notifications
+- `DELETE /mcp` — Session termination
+
+**Session Management:** Include `mcp-session-id` header (returned from initialization) in subsequent requests.
+
 ---
 
 ## ⚡ **Install to Cursor IDE**
