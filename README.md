@@ -174,6 +174,40 @@ npm run build
 }
 ```
 
+### Option 4: HTTP/SSE Transport (Remote Access)
+
+For remote access or web-based clients, run the server in HTTP mode:
+
+```bash
+memory-journal-mcp --transport http --port 3000
+```
+
+**Endpoints:**
+
+- `POST /mcp` — JSON-RPC requests (initialize, tools/call, etc.)
+- `GET /mcp` — SSE stream for server-to-client notifications
+- `DELETE /mcp` — Session termination
+
+**Session Management:** The server uses stateful sessions. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
+
+**Example with curl:**
+
+```bash
+# Initialize session
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+# Returns mcp-session-id header
+
+# List tools (with session)
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-session-id: YOUR_SESSION_ID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
+
 ### GitHub Integration Configuration
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect the repository from your git context. However, MCP clients may run the server from a different directory than your project.
