@@ -391,35 +391,17 @@ I have project memory access and will create entries for significant work.`,
             uri: 'memory://instructions',
             name: 'Server Instructions',
             title: 'Full Server Behavioral Guidance',
-            description:
-                'Full server instructions for AI agents. Append ?level=essential|standard|full to control detail level.',
+            description: 'Full server instructions for AI agents.',
             mimeType: 'text/markdown',
             icons: [ICON_BRIEFING],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.95, // High priority, but below briefing
             },
-            handler: (uri: string, context: ResourceContext): ResourceResult => {
-                // Parse level from query string (default: standard)
-                let level: InstructionLevel = 'standard'
-                try {
-                    // Parse query params from memory:// URI
-                    const queryIndex = uri.indexOf('?')
-                    if (queryIndex !== -1) {
-                        const queryString = uri.slice(queryIndex + 1)
-                        const params = new URLSearchParams(queryString)
-                        const levelParam = params.get('level')
-                        if (
-                            levelParam === 'essential' ||
-                            levelParam === 'standard' ||
-                            levelParam === 'full'
-                        ) {
-                            level = levelParam
-                        }
-                    }
-                } catch {
-                    // Invalid URL, use default level
-                }
+            handler: (_uri: string, context: ResourceContext): ResourceResult => {
+                // Note: Query parameters (e.g., ?level=essential) are not supported
+                // because the MCP SDK performs exact URI matching before calling handlers.
+                const level: InstructionLevel = 'standard'
 
                 // Get enabled tools from filter config or all tools
                 const enabledTools = context.filterConfig?.enabledTools ?? new Set<string>()

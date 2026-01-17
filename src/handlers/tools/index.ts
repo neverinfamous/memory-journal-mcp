@@ -1337,6 +1337,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 const { entry_id, permanent } = DeleteEntrySchema.parse(params)
                 const success = db.deleteEntry(entry_id, permanent)
+
+                // Remove from vector index (non-critical if fails)
+                if (success && vectorManager) {
+                    vectorManager.removeEntry(entry_id).catch(() => {
+                        // Non-critical failure, entry already deleted from DB
+                    })
+                }
+
                 return Promise.resolve({ success, entryId: entry_id, permanent })
             },
         },
