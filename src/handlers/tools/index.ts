@@ -862,15 +862,23 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     })
                     .filter((e): e is NonNullable<typeof e> => e !== null)
 
+                // Check index stats to provide accurate hint
+                const stats = await vectorManager.getStats()
+                const isIndexEmpty = stats.itemCount === 0
+
                 return {
                     query: input.query,
                     entries,
                     count: entries.length,
-                    ...(results.length === 0
+                    ...(isIndexEmpty
                         ? {
                               hint: 'No entries in vector index. Use rebuild_vector_index to index existing entries.',
                           }
-                        : {}),
+                        : entries.length === 0
+                          ? {
+                                hint: 'No entries matched your query above the similarity threshold.',
+                            }
+                          : {}),
                 }
             },
         },
@@ -1342,7 +1350,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             outputSchema: TagsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (_params: unknown) => {
-                const tags = db.listTags()
+                const rawTags = db.listTags()
+                const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                 return Promise.resolve({ tags, count: tags.length })
             },
         },

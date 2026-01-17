@@ -309,7 +309,7 @@ export class SqliteAdapter {
             params.push(isPersonal ? 1 : 0)
         }
 
-        sql += ` ORDER BY timestamp DESC LIMIT ?`
+        sql += ` ORDER BY timestamp DESC, id DESC LIMIT ?`
         params.push(limit)
 
         const result = db.exec(sql, params)
@@ -412,7 +412,7 @@ export class SqliteAdapter {
         const { limit = 10, isPersonal, projectNumber, issueNumber, prNumber } = options
 
         let sql = `
-            SELECT * FROM memory_journal 
+            SELECT * FROM memory_journal
             WHERE deleted_at IS NULL AND content LIKE ?
         `
         const params: unknown[] = [`%${query}%`]
@@ -653,9 +653,9 @@ export class SqliteAdapter {
 
         // By type
         const byTypeResult = db.exec(`
-            SELECT entry_type, COUNT(*) as count 
-            FROM memory_journal 
-            WHERE deleted_at IS NULL 
+            SELECT entry_type, COUNT(*) as count
+            FROM memory_journal
+            WHERE deleted_at IS NULL
             GROUP BY entry_type
         `)
         const entriesByType: Record<string, number> = {}
