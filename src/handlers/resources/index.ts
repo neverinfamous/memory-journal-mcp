@@ -687,7 +687,16 @@ I have project memory access and will create entries for significant work.`,
                     [prNumber]
                 )
                 const entries = rows.map(transformEntryRow)
-                return { prNumber, entries, count: entries.length }
+                return {
+                    prNumber,
+                    entries,
+                    count: entries.length,
+                    ...(entries.length === 0
+                        ? {
+                              hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
+                          }
+                        : {}),
+                }
             },
         },
         {
@@ -720,7 +729,16 @@ I have project memory access and will create entries for significant work.`,
                     [prNumber]
                 )
                 const entries = rows.map(transformEntryRow)
-                return { prNumber, entries, count: entries.length }
+                return {
+                    prNumber,
+                    entries,
+                    count: entries.length,
+                    ...(entries.length === 0
+                        ? {
+                              hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
+                          }
+                        : {}),
+                }
             },
         },
         {

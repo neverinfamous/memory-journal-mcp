@@ -240,8 +240,31 @@ export class VectorSearchManager {
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
 
-        // Get all entries
+        // Step 1: Get all entries from database
         const entries = db.getRecentEntries(10000) // Get up to 10k entries
+        const dbIds = new Set(entries.map((e) => String(e.id)))
+
+        // Step 2: Clean up orphaned entries from the index
+        // These are vector entries for database records that were permanently deleted
+        const indexItems = await this.index.listItems()
+        let orphansRemoved = 0
+        for (const item of indexItems) {
+            if (!dbIds.has(item.id)) {
+                try {
+                    await this.index.deleteItem(item.id)
+                    orphansRemoved++
+                } catch {
+                    // Ignore errors during cleanup
+                }
+            }
+        }
+        if (orphansRemoved > 0) {
+            logger.info(`Cleaned up ${String(orphansRemoved)} orphaned vector entries`, {
+                module: 'VectorSearch',
+            })
+        }
+
+        // Step 3: Re-index all current entries
         const total = entries.length
 
         // Send initial progress

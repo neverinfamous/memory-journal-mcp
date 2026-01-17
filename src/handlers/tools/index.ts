@@ -103,6 +103,11 @@ const SemanticSearchSchema = z.object({
     limit: z.number().optional().default(10),
     similarity_threshold: z.number().optional().default(0.3),
     is_personal: z.boolean().optional(),
+    hint_on_empty: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include hint when no results found (default: true)'),
 })
 
 const GetStatisticsSchema = z.object({
@@ -866,15 +871,18 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 const stats = await vectorManager.getStats()
                 const isIndexEmpty = stats.itemCount === 0
 
+                // hint_on_empty controls whether to show helpful hints (default: true)
+                const includeHint = input.hint_on_empty ?? true
+
                 return {
                     query: input.query,
                     entries,
                     count: entries.length,
-                    ...(isIndexEmpty
+                    ...(includeHint && isIndexEmpty
                         ? {
                               hint: 'No entries in vector index. Use rebuild_vector_index to index existing entries.',
                           }
-                        : entries.length === 0
+                        : includeHint && entries.length === 0
                           ? {
                                 hint: 'No entries matched your query above the similarity threshold.',
                             }

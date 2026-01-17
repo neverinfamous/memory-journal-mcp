@@ -168,6 +168,16 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 
+#### Fallback Behavior
+
+When GitHub tools cannot auto-detect repository information:
+
+1. **With `GITHUB_REPO_PATH` set**: Tools auto-detect `owner` and `repo` from your mounted repo's git remote
+2. **Without `GITHUB_REPO_PATH`**: Tools return `requiresUserInput: true` with instructions
+3. **With explicit parameters**: Always works - specify `owner` and `repo` directly
+
+**Note**: In Docker, mount your repo read-only (`-v /path/to/repo:/app/repo:ro`) for auto-detection.
+
 ### Client-Specific Notes
 
 **Cursor IDE:**
@@ -254,12 +264,12 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 
 ### 🎯 15 Workflow Prompts
 
-Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking  
+Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 18 Resources (12 Static + 6 Template)
 
-Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards. Template resources require parameters and are accessed directly by URI.  
+Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, and `memory://kanban/{n}` for Kanban boards. Template resources require parameters and are accessed directly by URI.
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
@@ -292,7 +302,7 @@ Including `memory://briefing` for session initialization, `memory://instructions
 -e DB_PATH=/app/data/custom.db
 ```
 
-**Token Scopes:** `repo`, `project`, `read:org` (org projects only)  
+**Token Scopes:** `repo`, `project`, `read:org` (org projects only)
 **[Full configuration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation#configuration)**
 
 ### GitHub Management Capabilities

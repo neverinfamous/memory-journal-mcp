@@ -203,6 +203,24 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
 
+#### Fallback Behavior
+
+When GitHub tools cannot auto-detect repository information:
+
+1. **With `GITHUB_REPO_PATH` set**: Tools auto-detect `owner` and `repo` from git remote URL
+2. **Without `GITHUB_REPO_PATH`**: Tools return structured response with `requiresUserInput: true` and instructions to provide `owner` and `repo` parameters
+3. **With explicit parameters**: Always preferred - specify `owner` and `repo` directly in tool calls
+
+**Example response when auto-detection fails:**
+
+```json
+{
+  "error": "Could not auto-detect repository",
+  "requiresUserInput": true,
+  "instruction": "Please provide owner and repo parameters"
+}
+```
+
 ### Client-Specific Notes
 
 **Cursor IDE:**
