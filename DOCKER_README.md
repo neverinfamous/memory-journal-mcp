@@ -78,7 +78,7 @@ Last Updated January 17, 2026
 
 ### 📈 **Current Capabilities**
 
-- **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
+- **33 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
 - **18 MCP resources** - 12 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
@@ -300,18 +300,18 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 
 ## ⚡ Core Features
 
-### 🛠️ 31 MCP Tools (8 Groups)
+### 🛠️ 33 MCP Tools (8 Groups)
 
-| Group           | Tools | Description                                       |
-| --------------- | ----- | ------------------------------------------------- |
-| `core`          | 6     | Entry CRUD, tags, test                            |
-| `search`        | 4     | Text search, date range, semantic, vector stats   |
-| `analytics`     | 2     | Statistics, cross-project insights                |
-| `relationships` | 2     | Link entries, visualize graphs                    |
-| `export`        | 1     | JSON/Markdown export                              |
-| `admin`         | 4     | Update, delete, vector index management           |
-| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle** |
-| `backup`        | 3     | Backup, list, restore                             |
+| Group           | Tools | Description                                         |
+| --------------- | ----- | --------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                              |
+| `search`        | 4     | Text search, date range, semantic, vector stats     |
+| `analytics`     | 2     | Statistics, cross-project insights                  |
+| `relationships` | 2     | Link entries, visualize graphs                      |
+| `export`        | 1     | JSON/Markdown export                                |
+| `admin`         | 5     | Update, delete, vector index management, merge tags |
+| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle**   |
+| `backup`        | 4     | Backup, list, restore, cleanup                      |
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 

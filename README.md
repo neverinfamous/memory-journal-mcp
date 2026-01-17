@@ -73,7 +73,7 @@ flowchart TB
 
 ### 📈 **Current Capabilities**
 
-- **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
+- **33 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
 - **18 MCP resources** - 12 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
@@ -286,18 +286,18 @@ When GitHub tools cannot auto-detect repository information:
 
 ## 📋 Core Capabilities
 
-### 🛠️ **31 MCP Tools** (8 Groups)
+### 🛠️ **33 MCP Tools** (8 Groups)
 
-| Group           | Tools | Description                                       |
-| --------------- | ----- | ------------------------------------------------- |
-| `core`          | 6     | Entry CRUD, tags, test                            |
-| `search`        | 4     | Text search, date range, semantic, vector stats   |
-| `analytics`     | 2     | Statistics, cross-project insights                |
-| `relationships` | 2     | Link entries, visualize graphs                    |
-| `export`        | 1     | JSON/Markdown export                              |
-| `admin`         | 4     | Update, delete, rebuild/add to vector index       |
-| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle** |
-| `backup`        | 3     | Backup, list, restore                             |
+| Group           | Tools | Description                                             |
+| --------------- | ----- | ------------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                                  |
+| `search`        | 4     | Text search, date range, semantic, vector stats         |
+| `analytics`     | 2     | Statistics, cross-project insights                      |
+| `relationships` | 2     | Link entries, visualize graphs                          |
+| `export`        | 1     | JSON/Markdown export                                    |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags |
+| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle**       |
+| `backup`        | 4     | Backup, list, restore, cleanup                          |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -432,7 +432,7 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 | -------------- | ------------- | ----- |
 | Starter        | `starter`     | ~10   |
 | Essential      | `essential`   | ~6    |
-| Full (default) | `full`        | 31    |
+| Full (default) | `full`        | 33    |
 | Read-only      | `readonly`    | ~20   |
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
@@ -448,7 +448,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 31 Tools"]
+        Tools["🛠️ 33 Tools"]
         Resources["📡 17 Resources"]
         Prompts["💬 15 Prompts"]
     end
@@ -477,7 +477,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (31)      │  │ Resources (17)  │  │ Prompts (15)│  │
+│  │ Tools (33)      │  │ Resources (17)  │  │ Prompts (15)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
