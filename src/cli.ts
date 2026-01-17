@@ -11,7 +11,7 @@ const program = new Command()
 program
     .name('memory-journal-mcp')
     .description('Project context management for AI-assisted development')
-    .version('4.0.0')
+    .version('4.1.0')
     .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--db <path>', 'Database path', './memory_journal.db')

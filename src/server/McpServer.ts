@@ -122,7 +122,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const server = new McpServer(
         {
             name: 'memory-journal-mcp',
-            version: '4.0.0',
+            version: '4.1.0',
         },
         {
             capabilities: {
