@@ -24,6 +24,7 @@ import {
     ICON_PR,
     ICON_ANALYTICS,
 } from '../../constants/icons.js'
+import pkg from '../../../package.json' with { type: 'json' }
 
 /**
  * Resource context for handlers that need extended access
@@ -192,7 +193,7 @@ function execQuery(
  */
 function getTotalToolCount(): number {
     // Import dynamically to avoid circular dependency
-    return 31 // 6 core + 4 search + 2 analytics + 2 relationships + 1 export + 4 admin + 9 github + 3 backup
+    return 33 // 6 core + 4 search + 2 analytics + 2 relationships + 1 export + 5 admin + 9 github + 4 backup
 }
 
 /**
@@ -341,7 +342,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        version: '4.1.0',
+                        version: pkg.version,
                         serverTime: new Date().toISOString(),
                         journal: {
                             totalEntries,

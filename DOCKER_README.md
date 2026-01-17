@@ -1,11 +1,10 @@
 # Memory Journal MCP Server
 
-Last Updated January 17, 2026 - v4.1.0
+Last Updated January 17, 2026
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v4.1.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
@@ -79,7 +78,7 @@ Last Updated January 17, 2026 - v4.1.0
 
 ### 📈 **Current Capabilities**
 
-- **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
+- **33 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
 - **18 MCP resources** - 12 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
@@ -193,6 +192,59 @@ When GitHub tools cannot auto-detect repository information:
 
 - **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
 
+### HTTP/SSE Transport (Remote Access)
+
+For remote access, web-based clients, or HTTP-compatible MCP hosts:
+
+**Stateful Mode (default):**
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v ./data:/app/data \
+  writenotenow/memory-journal-mcp:latest \
+  --transport http --port 3000
+```
+
+**Stateless Mode (serverless):**
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v ./data:/app/data \
+  writenotenow/memory-journal-mcp:latest \
+  --transport http --port 3000 --stateless
+```
+
+**Endpoints:**
+
+- `POST /mcp` — JSON-RPC requests (initialize, tools/call, resources/read, etc.)
+- `GET /mcp` — SSE stream for server-to-client notifications (stateful only)
+- `DELETE /mcp` — Session termination (stateful only)
+
+**Session Management:** In stateful mode, include the `mcp-session-id` header (returned from initialization) in subsequent requests.
+
+| Mode                      | Progress Notifications | SSE Streaming | Serverless |
+| ------------------------- | ---------------------- | ------------- | ---------- |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
+
+**Example with curl (stateful):**
+
+```bash
+# Initialize session
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+# Returns mcp-session-id header
+
+# List tools (with session)
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-session-id: YOUR_SESSION_ID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
+
 ---
 
 ## ⚡ **Install to Cursor IDE**
@@ -248,18 +300,18 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 
 ## ⚡ Core Features
 
-### 🛠️ 31 MCP Tools (8 Groups)
+### 🛠️ 33 MCP Tools (8 Groups)
 
-| Group           | Tools | Description                                       |
-| --------------- | ----- | ------------------------------------------------- |
-| `core`          | 6     | Entry CRUD, tags, test                            |
-| `search`        | 4     | Text search, date range, semantic, vector stats   |
-| `analytics`     | 2     | Statistics, cross-project insights                |
-| `relationships` | 2     | Link entries, visualize graphs                    |
-| `export`        | 1     | JSON/Markdown export                              |
-| `admin`         | 4     | Update, delete, vector index management           |
-| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle** |
-| `backup`        | 3     | Backup, list, restore                             |
+| Group           | Tools | Description                                         |
+| --------------- | ----- | --------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                              |
+| `search`        | 4     | Text search, date range, semantic, vector stats     |
+| `analytics`     | 2     | Statistics, cross-project insights                  |
+| `relationships` | 2     | Link entries, visualize graphs                      |
+| `export`        | 1     | JSON/Markdown export                                |
+| `admin`         | 5     | Update, delete, vector index management, merge tags |
+| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle**   |
+| `backup`        | 4     | Backup, list, restore, cleanup                      |
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 

@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-Last Updated January 17, 2026 - v4.1.0
+Last Updated January 17, 2026
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -8,7 +8,6 @@ Last Updated January 17, 2026 - v4.1.0
 [![npm](https://img.shields.io/npm/v/memory-journal-mcp)](https://www.npmjs.com/package/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-![Version](https://img.shields.io/badge/version-v4.1.0-green)
 ![Status](https://img.shields.io/badge/status-Production%2FStable-brightgreen)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
@@ -74,7 +73,7 @@ flowchart TB
 
 ### 📈 **Current Capabilities**
 
-- **31 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
+- **33 MCP tools** - Complete development workflow + backup/restore + Kanban + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
 - **18 MCP resources** - 12 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
@@ -175,6 +174,53 @@ npm run build
 }
 ```
 
+### Option 4: HTTP/SSE Transport (Remote Access)
+
+For remote access or web-based clients, run the server in HTTP mode:
+
+```bash
+memory-journal-mcp --transport http --port 3000
+```
+
+**Endpoints:**
+
+- `POST /mcp` — JSON-RPC requests (initialize, tools/call, etc.)
+- `GET /mcp` — SSE stream for server-to-client notifications
+- `DELETE /mcp` — Session termination
+
+**Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
+
+**Example with curl:**
+
+```bash
+# Initialize session
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+# Returns mcp-session-id header
+
+# List tools (with session)
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-session-id: YOUR_SESSION_ID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
+
+#### Stateless Mode (Serverless)
+
+For serverless deployments (Lambda, Workers, Vercel), use stateless mode:
+
+```bash
+memory-journal-mcp --transport http --port 3000 --stateless
+```
+
+| Mode                      | Progress Notifications | SSE Streaming | Serverless |
+| ------------------------- | ---------------------- | ------------- | ---------- |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
+
 ### GitHub Integration Configuration
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect the repository from your git context. However, MCP clients may run the server from a different directory than your project.
@@ -240,18 +286,18 @@ When GitHub tools cannot auto-detect repository information:
 
 ## 📋 Core Capabilities
 
-### 🛠️ **31 MCP Tools** (8 Groups)
+### 🛠️ **33 MCP Tools** (8 Groups)
 
-| Group           | Tools | Description                                       |
-| --------------- | ----- | ------------------------------------------------- |
-| `core`          | 6     | Entry CRUD, tags, test                            |
-| `search`        | 4     | Text search, date range, semantic, vector stats   |
-| `analytics`     | 2     | Statistics, cross-project insights                |
-| `relationships` | 2     | Link entries, visualize graphs                    |
-| `export`        | 1     | JSON/Markdown export                              |
-| `admin`         | 4     | Update, delete, rebuild/add to vector index       |
-| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle** |
-| `backup`        | 3     | Backup, list, restore                             |
+| Group           | Tools | Description                                             |
+| --------------- | ----- | ------------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                                  |
+| `search`        | 4     | Text search, date range, semantic, vector stats         |
+| `analytics`     | 2     | Statistics, cross-project insights                      |
+| `relationships` | 2     | Link entries, visualize graphs                          |
+| `export`        | 1     | JSON/Markdown export                                    |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags |
+| `github`        | 9     | Issues, PRs, context, Kanban, **issue lifecycle**       |
+| `backup`        | 4     | Backup, list, restore, cleanup                          |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -386,7 +432,7 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 | -------------- | ------------- | ----- |
 | Starter        | `starter`     | ~10   |
 | Essential      | `essential`   | ~6    |
-| Full (default) | `full`        | 31    |
+| Full (default) | `full`        | 33    |
 | Read-only      | `readonly`    | ~20   |
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
@@ -402,7 +448,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 31 Tools"]
+        Tools["🛠️ 33 Tools"]
         Resources["📡 17 Resources"]
         Prompts["💬 15 Prompts"]
     end
@@ -431,7 +477,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (31)      │  │ Resources (17)  │  │ Prompts (15)│  │
+│  │ Tools (33)      │  │ Resources (17)  │  │ Prompts (15)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤

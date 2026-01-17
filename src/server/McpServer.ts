@@ -7,6 +7,12 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
+import { randomUUID } from 'node:crypto'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import express from 'express'
+import type { Express, Request, Response } from 'express'
 import { z } from 'zod'
 
 import { SqliteAdapter } from '../database/SqliteAdapter.js'
@@ -23,6 +29,7 @@ import { getTools, callTool } from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
+import pkg from '../../package.json' with { type: 'json' }
 
 export interface ServerOptions {
     transport: 'stdio' | 'http'
@@ -31,6 +38,7 @@ export interface ServerOptions {
     toolFilter?: string
     defaultProjectNumber?: number
     autoRebuildIndex?: boolean
+    statelessHttp?: boolean
 }
 
 /**
@@ -122,7 +130,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const server = new McpServer(
         {
             name: 'memory-journal-mcp',
-            version: '4.1.0',
+            version: pkg.version,
         },
         {
             capabilities: {
@@ -376,17 +384,329 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const stdioTransport = new StdioServerTransport()
         await server.connect(stdioTransport)
         logger.info('MCP server started on stdio', { module: 'McpServer' })
-    } else {
-        // HTTP transport - TODO: implement SSE transport
-        throw new Error('HTTP transport not yet implemented')
-    }
 
-    // Handle shutdown
-    process.on('SIGINT', () => {
-        logger.info('Shutting down...', { module: 'McpServer' })
-        db.close()
-        process.exit(0)
-    })
+        // Handle shutdown for stdio
+        process.on('SIGINT', () => {
+            logger.info('Shutting down...', { module: 'McpServer' })
+            db.close()
+            process.exit(0)
+        })
+    } else {
+        // HTTP transport with SSE support
+        const port = options.port ?? 3000
+        const app: Express = express()
+
+        // Manual CORS middleware for browser-based clients (e.g., MCP Inspector)
+        app.use((req: Request, res: Response, next: () => void) => {
+            // Set CORS headers on all responses
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+            res.setHeader(
+                'Access-Control-Allow-Headers',
+                'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version'
+            )
+            res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
+
+            // Handle OPTIONS preflight requests
+            if (req.method === 'OPTIONS') {
+                res.status(204).end()
+                return
+            }
+
+            next()
+        })
+
+        // JSON body parser for MCP requests
+        app.use(express.json())
+
+        // Explicit OPTIONS handler for /mcp - MUST be before other /mcp routes
+        // Using app.all to intercept before Express 5's auto-OPTIONS
+        app.all('/mcp', (req: Request, res: Response, next: () => void) => {
+            // Set CORS headers on ALL responses
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+            res.setHeader(
+                'Access-Control-Allow-Headers',
+                'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version'
+            )
+            res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
+
+            // For OPTIONS, respond immediately with CORS headers
+            if (req.method === 'OPTIONS') {
+                res.status(204).end()
+                return
+            }
+
+            // For other methods, continue to next handler
+            next()
+        })
+
+        if (options.statelessHttp) {
+            // === STATELESS MODE ===
+            // Single transport, no session management - ideal for serverless deployments
+            const statelessTransport = new StreamableHTTPServerTransport({
+                sessionIdGenerator: undefined,
+                enableJsonResponse: true,
+            })
+
+            await server.connect(statelessTransport)
+            logger.info('Stateless transport connected', { module: 'McpServer' })
+
+            // POST /mcp - All requests go to the same transport (no session validation)
+            app.post('/mcp', (req: Request, res: Response): void => {
+                void statelessTransport.handleRequest(
+                    req as unknown as IncomingMessage,
+                    res as unknown as ServerResponse,
+                    req.body as unknown
+                )
+            })
+
+            // GET /mcp - SSE not available in stateless mode
+            app.get('/mcp', (_req: Request, res: Response): void => {
+                res.status(405).json({
+                    jsonrpc: '2.0',
+                    error: {
+                        code: -32000,
+                        message: 'SSE streaming not available in stateless mode',
+                    },
+                    id: null,
+                })
+            })
+
+            // DELETE /mcp - No-op in stateless mode (no sessions to terminate)
+            app.delete('/mcp', (_req: Request, res: Response): void => {
+                res.status(204).end()
+            })
+
+            // Start HTTP server
+            const httpServer = app.listen(port, () => {
+                logger.info('MCP server started on HTTP (stateless)', {
+                    module: 'McpServer',
+                    port,
+                    endpoint: `http://localhost:${port}/mcp`,
+                })
+            })
+
+            httpServer.on('close', () => {
+                logger.info('HTTP server closed', { module: 'McpServer' })
+            })
+
+            // Handle shutdown
+            process.on('SIGINT', () => {
+                logger.info('Shutting down HTTP server...', { module: 'McpServer' })
+                void (async () => {
+                    try {
+                        await statelessTransport.close()
+                    } catch (error) {
+                        logger.error('Error closing transport', {
+                            module: 'McpServer',
+                            error: error instanceof Error ? error.message : String(error),
+                        })
+                    }
+                    httpServer.close()
+                    db.close()
+                    logger.info('Shutdown complete', { module: 'McpServer' })
+                    process.exit(0)
+                })()
+            })
+
+            // Keep process alive
+            setInterval(
+                () => {
+                    // Heartbeat - keeps event loop active
+                },
+                1000 * 60 * 60
+            )
+        } else {
+            // === STATEFUL MODE ===
+            // Session-based transport with SSE support for notifications
+
+            // Session transport storage
+            const transports = new Map<string, StreamableHTTPServerTransport>()
+
+            // POST /mcp - Handle JSON-RPC requests
+            app.post('/mcp', (req: Request, res: Response): void => {
+                const sessionId = req.headers['mcp-session-id'] as string | undefined
+
+                void (async () => {
+                    try {
+                        let httpTransport: StreamableHTTPServerTransport | undefined
+
+                        if (sessionId && transports.has(sessionId)) {
+                            // Reuse existing transport
+                            httpTransport = transports.get(sessionId)
+                        } else if (sessionId === undefined && isInitializeRequest(req.body)) {
+                            // New initialization request - create transport
+                            const newTransport = new StreamableHTTPServerTransport({
+                                sessionIdGenerator: () => randomUUID(),
+                                onsessioninitialized: (sid: string) => {
+                                    logger.info('HTTP session initialized', {
+                                        module: 'McpServer',
+                                        sessionId: sid,
+                                    })
+                                    transports.set(sid, newTransport)
+                                },
+                            })
+
+                            // Clean up on transport close
+                            newTransport.onclose = () => {
+                                const sid = newTransport.sessionId
+                                if (sid !== undefined && transports.has(sid)) {
+                                    logger.info('HTTP transport closed', {
+                                        module: 'McpServer',
+                                        sessionId: sid,
+                                    })
+                                    transports.delete(sid)
+                                }
+                            }
+
+                            // Connect transport to server before handling request
+                            await server.connect(newTransport)
+                            await newTransport.handleRequest(
+                                req as unknown as IncomingMessage,
+                                res as unknown as ServerResponse,
+                                req.body as unknown
+                            )
+                            return
+                        } else {
+                            // Invalid request - no session ID or not initialization
+                            res.status(400).json({
+                                jsonrpc: '2.0',
+                                error: {
+                                    code: -32000,
+                                    message: 'Bad Request: No valid session ID provided',
+                                },
+                                id: null,
+                            })
+                            return
+                        }
+
+                        // Handle request with existing transport
+                        if (httpTransport !== undefined) {
+                            await httpTransport.handleRequest(
+                                req as unknown as IncomingMessage,
+                                res as unknown as ServerResponse,
+                                req.body as unknown
+                            )
+                        }
+                    } catch (error) {
+                        logger.error('Error handling MCP request', {
+                            module: 'McpServer',
+                            error: error instanceof Error ? error.message : String(error),
+                        })
+                        if (!res.headersSent) {
+                            res.status(500).json({
+                                jsonrpc: '2.0',
+                                error: { code: -32603, message: 'Internal server error' },
+                                id: null,
+                            })
+                        }
+                    }
+                })()
+            })
+
+            // GET /mcp - SSE stream for server-to-client notifications
+            app.get('/mcp', (req: Request, res: Response): void => {
+                const sessionId = req.headers['mcp-session-id'] as string | undefined
+
+                if (sessionId === undefined || !transports.has(sessionId)) {
+                    res.status(400).send('Invalid or missing session ID')
+                    return
+                }
+
+                const lastEventId = req.headers['last-event-id']
+                if (lastEventId !== undefined) {
+                    logger.debug('Client reconnecting with Last-Event-ID', {
+                        module: 'McpServer',
+                        sessionId,
+                        lastEventId,
+                    })
+                }
+
+                const httpTransport = transports.get(sessionId)
+                if (httpTransport !== undefined) {
+                    void httpTransport.handleRequest(
+                        req as unknown as IncomingMessage,
+                        res as unknown as ServerResponse
+                    )
+                }
+            })
+
+            // DELETE /mcp - Session termination
+            app.delete('/mcp', (req: Request, res: Response): void => {
+                const sessionId = req.headers['mcp-session-id'] as string | undefined
+
+                if (sessionId === undefined || !transports.has(sessionId)) {
+                    res.status(400).send('Invalid or missing session ID')
+                    return
+                }
+
+                logger.info('Session termination requested', {
+                    module: 'McpServer',
+                    sessionId,
+                })
+
+                const httpTransport = transports.get(sessionId)
+                if (httpTransport !== undefined) {
+                    void httpTransport.handleRequest(
+                        req as unknown as IncomingMessage,
+                        res as unknown as ServerResponse
+                    )
+                }
+            })
+
+            // Start HTTP server
+            const httpServer = app.listen(port, () => {
+                logger.info('MCP server started on HTTP (stateful)', {
+                    module: 'McpServer',
+                    port,
+                    endpoint: `http://localhost:${port}/mcp`,
+                })
+            })
+
+            // Keep process alive - httpServer keeps the event loop active
+            // but we also ensure it doesn't close prematurely
+            httpServer.on('close', () => {
+                logger.info('HTTP server closed', { module: 'McpServer' })
+            })
+
+            // Handle shutdown for HTTP - must be registered before blocking await
+            process.on('SIGINT', () => {
+                logger.info('Shutting down HTTP server...', { module: 'McpServer' })
+
+                void (async () => {
+                    // Close all active transports
+                    for (const [sessionId, httpTransport] of transports) {
+                        try {
+                            logger.debug('Closing transport', { module: 'McpServer', sessionId })
+                            await httpTransport.close()
+                        } catch (error) {
+                            logger.error('Error closing transport', {
+                                module: 'McpServer',
+                                sessionId,
+                                error: error instanceof Error ? error.message : String(error),
+                            })
+                        }
+                    }
+                    transports.clear()
+
+                    httpServer.close()
+                    db.close()
+                    logger.info('Shutdown complete', { module: 'McpServer' })
+                    process.exit(0)
+                })()
+            })
+
+            // Keep process alive with a heartbeat timer
+            // setInterval keeps the event loop active and prevents exit
+            setInterval(
+                () => {
+                    // Heartbeat - keeps event loop active
+                },
+                1000 * 60 * 60
+            ) // 1 hour interval (just needs to exist)
+        }
+    }
 }
 
 export { SqliteAdapter }
