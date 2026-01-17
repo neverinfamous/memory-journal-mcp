@@ -202,6 +202,7 @@ Valid values for \`entry_type\` parameter:
 
 ## Field Notes
 - **\`autoContext\`**: Reserved for future automatic context capture. Currently always \`null\`.
+- **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`.
 
 ## Key Resources
 | URI | Description |
