@@ -5,13 +5,14 @@
 import { Command } from 'commander'
 import { createServer } from './server/McpServer.js'
 import { logger } from './utils/logger.js'
+import pkg from '../package.json' with { type: 'json' }
 
 const program = new Command()
 
 program
     .name('memory-journal-mcp')
     .description('Project context management for AI-assisted development')
-    .version('4.1.0')
+    .version(pkg.version)
     .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--db <path>', 'Database path', './memory_journal.db')

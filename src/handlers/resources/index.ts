@@ -24,6 +24,7 @@ import {
     ICON_PR,
     ICON_ANALYTICS,
 } from '../../constants/icons.js'
+import pkg from '../../../package.json' with { type: 'json' }
 
 /**
  * Resource context for handlers that need extended access
@@ -341,7 +342,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        version: '4.1.0',
+                        version: pkg.version,
                         serverTime: new Date().toISOString(),
                         journal: {
                             totalEntries,

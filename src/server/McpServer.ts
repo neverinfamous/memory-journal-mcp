@@ -23,6 +23,7 @@ import { getTools, callTool } from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
+import pkg from '../../package.json' with { type: 'json' }
 
 export interface ServerOptions {
     transport: 'stdio' | 'http'
@@ -122,7 +123,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const server = new McpServer(
         {
             name: 'memory-journal-mcp',
-            version: '4.1.0',
+            version: pkg.version,
         },
         {
             capabilities: {
