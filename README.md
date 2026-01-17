@@ -188,7 +188,7 @@ memory-journal-mcp --transport http --port 3000
 - `GET /mcp` — SSE stream for server-to-client notifications
 - `DELETE /mcp` — Session termination
 
-**Session Management:** The server uses stateful sessions. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
+**Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
 **Example with curl:**
 
@@ -207,6 +207,19 @@ curl -X POST http://localhost:3000/mcp \
   -H "mcp-session-id: YOUR_SESSION_ID" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
+
+#### Stateless Mode (Serverless)
+
+For serverless deployments (Lambda, Workers, Vercel), use stateless mode:
+
+```bash
+memory-journal-mcp --transport http --port 3000 --stateless
+```
+
+| Mode                      | Progress Notifications | SSE Streaming | Serverless |
+| ------------------------- | ---------------------- | ------------- | ---------- |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
 
 ### GitHub Integration Configuration
 
