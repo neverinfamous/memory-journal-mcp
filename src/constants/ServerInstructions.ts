@@ -203,6 +203,7 @@ Valid values for \`entry_type\` parameter:
 ## Field Notes
 - **\`autoContext\`**: Reserved for future automatic context capture. Currently always \`null\`.
 - **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`.
+- **Semantic search indexing**: New entries aren't immediately indexed. Use \`add_to_vector_index(entry_id)\` for immediate searchability, or wait for server restart if \`AUTO_REBUILD_VECTOR_INDEX\` is enabled.
 
 ## Key Resources
 | URI | Description |
