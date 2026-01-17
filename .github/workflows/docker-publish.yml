@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -54,8 +56,8 @@ jobs:
   security-scan:
     needs: [preflight-check]
     if: |
-      always() && 
-      (github.event.workflow_run.conclusion == 'success' || 
+      always() &&
+      (github.event.workflow_run.conclusion == 'success' ||
        (github.event_name == 'push' && needs.preflight-check.result == 'success'))
     runs-on: ubuntu-latest
     permissions:
@@ -65,6 +67,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || github.event.workflow_run.head_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -102,7 +106,7 @@ jobs:
           # This ensures we block on things we CAN fix while allowing unfixable upstream CVEs
           if timeout 480 docker scout cves local-scan:latest --only-fixed --only-severity critical,high > scout_fixable.txt 2>&1; then
             echo "📊 Scan completed"
-            
+
             # Check if any fixable critical/high CVEs were found
             if grep -qE "(CRITICAL|HIGH)" scout_fixable.txt 2>/dev/null; then
               echo "❌ Fixable CRITICAL/HIGH CVEs detected - blocking deploy"
@@ -158,6 +162,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || github.event.workflow_run.head_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -243,6 +249,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || github.event.workflow_run.head_sha }}
 
       - name: Download digests
         uses: actions/download-artifact@v7
@@ -284,8 +292,8 @@ jobs:
             latest=false
           tags: |
             type=semver,pattern=v{{version}}
-            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' || github.event.workflow_run.head_branch == 'main' || startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.event.workflow_run.head_branch == 'main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.event_name == 'workflow_run' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' }}
             type=sha,prefix=sha-,format=short
 
       - name: Create and push manifest
