@@ -902,7 +902,13 @@ I have project memory access and will create entries for significant work.`,
             },
             handler: (_uri: string, context: ResourceContext) => {
                 const tags: Tag[] = context.db.listTags()
-                return { tags, count: tags.length }
+                // Map usageCount to count for consistency with list_tags tool
+                const mappedTags = tags.map((t) => ({
+                    id: t.id,
+                    name: t.name,
+                    count: t.usageCount,
+                }))
+                return { tags: mappedTags, count: mappedTags.length }
             },
         },
         {
@@ -938,7 +944,7 @@ I have project memory access and will create entries for significant work.`,
                 // Get vector index status if available
                 let vectorIndex: {
                     available: boolean
-                    indexedEntries: number
+                    itemCount: number
                     modelName: string | null
                 } | null = null
                 if (context.vectorManager) {
@@ -946,11 +952,11 @@ I have project memory access and will create entries for significant work.`,
                         const stats = await context.vectorManager.getStats()
                         vectorIndex = {
                             available: true,
-                            indexedEntries: stats.itemCount,
+                            itemCount: stats.itemCount,
                             modelName: stats.modelName,
                         }
                     } catch {
-                        vectorIndex = { available: false, indexedEntries: 0, modelName: null }
+                        vectorIndex = { available: false, itemCount: 0, modelName: null }
                     }
                 }
 

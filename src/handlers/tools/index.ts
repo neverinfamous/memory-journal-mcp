@@ -1854,7 +1854,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .string()
                     .optional()
                     .describe(
-                        'Initial status column (e.g., "Backlog", "Ready"). Requires project_number.'
+                        'Initial status column (e.g., "Backlog", "Ready"). Defaults to "Backlog" when adding to a project.'
                     ),
                 owner: z
                     .string()
@@ -1935,7 +1935,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                                 let statusResult:
                                     | { status: string; set: boolean; error?: string }
                                     | undefined = undefined
-                                const initialStatus = input.initial_status
+                                // Default to "Backlog" when adding to project without explicit status
+                                const initialStatus = input.initial_status ?? 'Backlog'
                                 if (initialStatus && added.itemId) {
                                     // Find the status option (case-insensitive)
                                     const statusOption = board.statusOptions.find(

@@ -492,7 +492,7 @@ export interface HealthStatus {
     /** Vector search index status */
     vectorIndex: {
         available: boolean
-        indexedEntries: number
+        itemCount: number
         modelName: string | null
     } | null
 
