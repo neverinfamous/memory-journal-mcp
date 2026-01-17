@@ -196,6 +196,8 @@ When GitHub tools cannot auto-detect repository information:
 
 For remote access, web-based clients, or HTTP-compatible MCP hosts:
 
+**Stateful Mode (default):**
+
 ```bash
 docker run --rm -p 3000:3000 \
   -v ./data:/app/data \
@@ -203,13 +205,45 @@ docker run --rm -p 3000:3000 \
   --transport http --port 3000
 ```
 
+**Stateless Mode (serverless):**
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v ./data:/app/data \
+  writenotenow/memory-journal-mcp:latest \
+  --transport http --port 3000 --stateless
+```
+
 **Endpoints:**
 
 - `POST /mcp` — JSON-RPC requests (initialize, tools/call, resources/read, etc.)
-- `GET /mcp` — SSE stream for server-to-client notifications
-- `DELETE /mcp` — Session termination
+- `GET /mcp` — SSE stream for server-to-client notifications (stateful only)
+- `DELETE /mcp` — Session termination (stateful only)
 
-**Session Management:** Include `mcp-session-id` header (returned from initialization) in subsequent requests.
+**Session Management:** In stateful mode, include the `mcp-session-id` header (returned from initialization) in subsequent requests.
+
+| Mode                      | Progress Notifications | SSE Streaming | Serverless |
+| ------------------------- | ---------------------- | ------------- | ---------- |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
+
+**Example with curl (stateful):**
+
+```bash
+# Initialize session
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+# Returns mcp-session-id header
+
+# List tools (with session)
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-session-id: YOUR_SESSION_ID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+```
 
 ---
 
