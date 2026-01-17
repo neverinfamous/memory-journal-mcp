@@ -8,10 +8,10 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import express from 'express'
 import type { Express, Request, Response } from 'express'
 import { z } from 'zod'
 
@@ -393,7 +393,52 @@ export async function createServer(options: ServerOptions): Promise<void> {
     } else {
         // HTTP transport with SSE support
         const port = options.port ?? 3000
-        const app: Express = createMcpExpressApp()
+        const app: Express = express()
+
+        // Manual CORS middleware for browser-based clients (e.g., MCP Inspector)
+        app.use((req: Request, res: Response, next: () => void) => {
+            // Set CORS headers on all responses
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+            res.setHeader(
+                'Access-Control-Allow-Headers',
+                'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version'
+            )
+            res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
+
+            // Handle OPTIONS preflight requests
+            if (req.method === 'OPTIONS') {
+                res.status(204).end()
+                return
+            }
+
+            next()
+        })
+
+        // JSON body parser for MCP requests
+        app.use(express.json())
+
+        // Explicit OPTIONS handler for /mcp - MUST be before other /mcp routes
+        // Using app.all to intercept before Express 5's auto-OPTIONS
+        app.all('/mcp', (req: Request, res: Response, next: () => void) => {
+            // Set CORS headers on ALL responses
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+            res.setHeader(
+                'Access-Control-Allow-Headers',
+                'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version'
+            )
+            res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
+
+            // For OPTIONS, respond immediately with CORS headers
+            if (req.method === 'OPTIONS') {
+                res.status(204).end()
+                return
+            }
+
+            // For other methods, continue to next handler
+            next()
+        })
 
         // Session transport storage
         const transports = new Map<string, StreamableHTTPServerTransport>()
@@ -530,7 +575,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         })
 
         // Start HTTP server
-        app.listen(port, () => {
+        const httpServer = app.listen(port, () => {
             logger.info('MCP server started on HTTP', {
                 module: 'McpServer',
                 port,
@@ -538,7 +583,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
             })
         })
 
-        // Handle shutdown for HTTP
+        // Keep process alive - httpServer keeps the event loop active
+        // but we also ensure it doesn't close prematurely
+        httpServer.on('close', () => {
+            logger.info('HTTP server closed', { module: 'McpServer' })
+        })
+
+        // Handle shutdown for HTTP - must be registered before blocking await
         process.on('SIGINT', () => {
             logger.info('Shutting down HTTP server...', { module: 'McpServer' })
 
@@ -558,11 +609,21 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 }
                 transports.clear()
 
+                httpServer.close()
                 db.close()
                 logger.info('Shutdown complete', { module: 'McpServer' })
                 process.exit(0)
             })()
         })
+
+        // Keep process alive with a heartbeat timer
+        // setInterval keeps the event loop active and prevents exit
+        setInterval(
+            () => {
+                // Heartbeat - keeps event loop active
+            },
+            1000 * 60 * 60
+        ) // 1 hour interval (just needs to exist)
     }
 }
 
