@@ -222,6 +222,374 @@ const StatisticsOutputSchema = z.object({
 })
 
 // ============================================================================
+// Phase 1: Core Read Tool Output Schemas
+// ============================================================================
+
+/**
+ * Entry with similarity score for semantic search results.
+ */
+const SemanticEntryOutputSchema = EntryOutputSchema.extend({
+    similarity: z.number(),
+})
+
+/**
+ * Schema for semantic_search output.
+ */
+const SemanticSearchOutputSchema = z.object({
+    query: z.string(),
+    entries: z.array(SemanticEntryOutputSchema),
+    count: z.number(),
+    hint: z.string().optional(),
+    error: z.string().optional(),
+})
+
+/**
+ * Tag with usage count.
+ */
+const TagOutputSchema = z.object({
+    name: z.string(),
+    count: z.number(),
+})
+
+/**
+ * Schema for list_tags output.
+ */
+const TagsListOutputSchema = z.object({
+    tags: z.array(TagOutputSchema),
+    count: z.number(),
+})
+
+/**
+ * Schema for get_vector_index_stats output.
+ */
+const VectorStatsOutputSchema = z.object({
+    available: z.boolean(),
+    error: z.string().optional(),
+    entryCount: z.number().optional(),
+    indexSize: z.number().optional(),
+})
+
+/**
+ * Schema for visualize_relationships output.
+ */
+const VisualizationOutputSchema = z.object({
+    entry_count: z.number(),
+    relationship_count: z.number(),
+    root_entry: z.number().nullable(),
+    depth: z.number(),
+    mermaid: z.string().nullable(),
+    message: z.string().optional(),
+    legend: z
+        .object({
+            blue: z.string(),
+            orange: z.string(),
+            arrows: z.record(z.string(), z.string()),
+        })
+        .optional(),
+})
+
+/**
+ * Project summary for cross-project insights.
+ */
+const ProjectSummaryOutputSchema = z.object({
+    project_number: z.number(),
+    entry_count: z.number(),
+    first_entry: z.string(),
+    last_entry: z.string(),
+    active_days: z.number(),
+    top_tags: z.array(TagOutputSchema),
+})
+
+/**
+ * Schema for get_cross_project_insights output.
+ */
+const CrossProjectInsightsOutputSchema = z.object({
+    project_count: z.number(),
+    total_entries: z.number(),
+    projects: z.array(ProjectSummaryOutputSchema),
+    inactive_projects: z.array(
+        z.object({
+            project_number: z.number(),
+            last_entry_date: z.string(),
+        })
+    ),
+    time_distribution: z.array(
+        z.object({
+            project_number: z.number(),
+            percentage: z.string(),
+        })
+    ),
+    message: z.string().optional(),
+})
+
+// ============================================================================
+// Phase 2: Mutation Tool Output Schemas
+// ============================================================================
+
+/**
+ * Schema for create_entry and create_entry_minimal output.
+ */
+const CreateEntryOutputSchema = z.object({
+    success: z.boolean(),
+    entry: EntryOutputSchema,
+})
+
+/**
+ * Schema for update_entry output (success or error).
+ */
+const UpdateEntryOutputSchema = z.object({
+    success: z.boolean().optional(),
+    entry: EntryOutputSchema.optional(),
+    error: z.string().optional(),
+})
+
+/**
+ * Schema for delete_entry output.
+ */
+const DeleteEntryOutputSchema = z.object({
+    success: z.boolean(),
+    entryId: z.number(),
+    permanent: z.boolean(),
+})
+
+/**
+ * Schema for link_entries output.
+ */
+const LinkEntriesOutputSchema = z.object({
+    success: z.boolean(),
+    relationship: RelationshipOutputSchema,
+})
+
+// ============================================================================
+// Phase 3: GitHub Tool Output Schemas
+// ============================================================================
+
+/**
+ * GitHub issue schema (mirrors GitHub API shape).
+ */
+const GitHubIssueOutputSchema = z.object({
+    number: z.number(),
+    title: z.string(),
+    url: z.string(),
+    state: z.enum(['OPEN', 'CLOSED']),
+})
+
+/**
+ * GitHub issue details schema (extended).
+ */
+const GitHubIssueDetailsOutputSchema = GitHubIssueOutputSchema.extend({
+    body: z.string().nullable(),
+    labels: z.array(z.string()),
+    assignees: z.array(z.string()),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    closedAt: z.string().nullable(),
+    commentsCount: z.number(),
+})
+
+/**
+ * Schema for get_github_issues output.
+ */
+const GitHubIssuesListOutputSchema = z.object({
+    owner: z.string(),
+    repo: z.string(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    issues: z.array(GitHubIssueOutputSchema),
+    count: z.number(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for get_github_issue output.
+ */
+const GitHubIssueResultOutputSchema = z.object({
+    issue: GitHubIssueDetailsOutputSchema.optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * GitHub pull request schema (mirrors GitHub API shape).
+ */
+const GitHubPullRequestOutputSchema = z.object({
+    number: z.number(),
+    title: z.string(),
+    url: z.string(),
+    state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+})
+
+/**
+ * GitHub PR details schema (extended).
+ */
+const GitHubPRDetailsOutputSchema = GitHubPullRequestOutputSchema.extend({
+    body: z.string().nullable(),
+    draft: z.boolean(),
+    headBranch: z.string(),
+    baseBranch: z.string(),
+    author: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    mergedAt: z.string().nullable(),
+    closedAt: z.string().nullable(),
+    additions: z.number(),
+    deletions: z.number(),
+    changedFiles: z.number(),
+})
+
+/**
+ * Schema for get_github_prs output.
+ */
+const GitHubPRsListOutputSchema = z.object({
+    owner: z.string(),
+    repo: z.string(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    pullRequests: z.array(GitHubPullRequestOutputSchema),
+    count: z.number(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for get_github_pr output.
+ */
+const GitHubPRResultOutputSchema = z.object({
+    pullRequest: GitHubPRDetailsOutputSchema.optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for get_github_context output.
+ */
+const GitHubContextOutputSchema = z.object({
+    repoName: z.string().nullable(),
+    branch: z.string().nullable(),
+    commit: z.string().nullable(),
+    remoteUrl: z.string().nullable(),
+    issues: z.array(GitHubIssueOutputSchema),
+    pullRequests: z.array(GitHubPullRequestOutputSchema),
+    issueCount: z.number(),
+    prCount: z.number(),
+    error: z.string().optional(),
+})
+
+/**
+ * Kanban item schema.
+ */
+const KanbanItemOutputSchema = z.object({
+    id: z.string(),
+    title: z.string(),
+    url: z.string(),
+    type: z.enum(['ISSUE', 'PULL_REQUEST', 'DRAFT_ISSUE']),
+    status: z.string().nullable(),
+    number: z.number().optional(),
+    labels: z.array(z.string()).optional(),
+    assignees: z.array(z.string()).optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+})
+
+/**
+ * Status option schema.
+ */
+const StatusOptionOutputSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    color: z.string().optional(),
+})
+
+/**
+ * Kanban column schema.
+ */
+const KanbanColumnOutputSchema = z.object({
+    status: z.string(),
+    statusOptionId: z.string(),
+    items: z.array(KanbanItemOutputSchema),
+})
+
+/**
+ * Schema for get_kanban_board output.
+ */
+const KanbanBoardOutputSchema = z.object({
+    projectId: z.string(),
+    projectNumber: z.number(),
+    projectTitle: z.string(),
+    statusFieldId: z.string(),
+    statusOptions: z.array(StatusOptionOutputSchema),
+    columns: z.array(KanbanColumnOutputSchema),
+    totalItems: z.number(),
+    owner: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    hint: z.string().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
+// Phase 4: Backup Tool Output Schemas
+// ============================================================================
+
+/**
+ * Schema for backup_journal output.
+ */
+const BackupResultOutputSchema = z.object({
+    success: z.boolean(),
+    message: z.string(),
+    filename: z.string(),
+    path: z.string(),
+    sizeBytes: z.number(),
+})
+
+/**
+ * Backup info schema.
+ */
+const BackupInfoOutputSchema = z.object({
+    filename: z.string(),
+    path: z.string(),
+    sizeBytes: z.number(),
+    createdAt: z.string(),
+})
+
+/**
+ * Schema for list_backups output.
+ */
+const BackupsListOutputSchema = z.object({
+    backups: z.array(BackupInfoOutputSchema),
+    total: z.number(),
+    backupsDirectory: z.string(),
+    hint: z.string().optional(),
+})
+
+/**
+ * Schema for restore_backup output.
+ */
+const RestoreResultOutputSchema = z.object({
+    success: z.boolean(),
+    message: z.string(),
+    restoredFrom: z.string(),
+    previousEntryCount: z.number(),
+    newEntryCount: z.number(),
+    warning: z.string().optional(),
+})
+
+// ============================================================================
 // Tool Definitions with MCP 2025-11-25 Annotations
 // ============================================================================
 
@@ -299,6 +667,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 'Create a new journal entry with context and tags (v2.1.0: GitHub Actions support)',
             group: 'core',
             inputSchema: CreateEntrySchema,
+            outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
                 const input = CreateEntrySchema.parse(params)
@@ -371,6 +740,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Minimal entry creation without context or tags',
             group: 'core',
             inputSchema: CreateEntryMinimalSchema,
+            outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
                 const { content } = CreateEntryMinimalSchema.parse(params)
@@ -458,6 +828,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Perform semantic/vector search on journal entries using AI embeddings',
             group: 'search',
             inputSchema: SemanticSearchSchema,
+            outputSchema: SemanticSearchOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (params: unknown) => {
                 const input = SemanticSearchSchema.parse(params)
@@ -533,6 +904,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .default(3)
                     .describe('Minimum entries to include project'),
             }),
+            outputSchema: CrossProjectInsightsOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const input = z
@@ -662,6 +1034,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Create a relationship between two journal entries',
             group: 'relationships',
             inputSchema: LinkEntriesSchema,
+            outputSchema: LinkEntriesOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
                 const input = LinkEntriesSchema.parse(params)
@@ -694,6 +1067,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .describe('Relationship traversal depth'),
                 limit: z.number().optional().default(20).describe('Maximum entries to include'),
             }),
+            outputSchema: VisualizationOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const input = z
@@ -920,6 +1294,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Update an existing journal entry',
             group: 'admin',
             inputSchema: UpdateEntrySchema,
+            outputSchema: UpdateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
                 const input = UpdateEntrySchema.parse(params)
@@ -949,6 +1324,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Delete a journal entry (soft delete with timestamp)',
             group: 'admin',
             inputSchema: DeleteEntrySchema,
+            outputSchema: DeleteEntryOutputSchema,
             annotations: { readOnlyHint: false, destructiveHint: true },
             handler: (params: unknown) => {
                 const { entry_id, permanent } = DeleteEntrySchema.parse(params)
@@ -963,6 +1339,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'List all available tags',
             group: 'core',
             inputSchema: z.object({}),
+            outputSchema: TagsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (_params: unknown) => {
                 const tags = db.listTags()
@@ -1011,6 +1388,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Get statistics about the semantic search vector index',
             group: 'search',
             inputSchema: z.object({}),
+            outputSchema: VectorStatsOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (_params: unknown) => {
                 if (!vectorManager) {
@@ -1043,6 +1421,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 state: z.enum(['open', 'closed', 'all']).optional().default('open'),
                 limit: z.number().optional().default(20),
             }),
+            outputSchema: GitHubIssuesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -1103,6 +1482,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 state: z.enum(['open', 'closed', 'all']).optional().default('open'),
                 limit: z.number().optional().default(20),
             }),
+            outputSchema: GitHubPRsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -1163,6 +1543,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
             }),
+            outputSchema: GitHubIssueResultOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -1219,6 +1600,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
             }),
+            outputSchema: GitHubPRResultOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -1271,6 +1653,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 'Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).',
             group: 'github',
             inputSchema: z.object({}),
+            outputSchema: GitHubContextOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (_params: unknown) => {
                 if (!github) {
@@ -1304,6 +1687,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .optional()
                     .describe('Repository owner - LEAVE EMPTY to auto-detect from git'),
             }),
+            outputSchema: KanbanBoardOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -1772,6 +2156,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .optional()
                     .describe('Custom backup name (optional, defaults to timestamp)'),
             }),
+            outputSchema: BackupResultOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: true },
             handler: (params: unknown) => {
                 const input = z
@@ -1795,6 +2180,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'List all available backup files with their sizes and creation dates',
             group: 'backup',
             inputSchema: z.object({}),
+            outputSchema: BackupsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (_params: unknown) => {
                 const backups = db.listBackups()
@@ -1823,6 +2209,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .literal(true)
                     .describe('Must be set to true to confirm the restore operation'),
             }),
+            outputSchema: RestoreResultOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
             handler: async (params: unknown) => {
                 const input = z
