@@ -165,6 +165,7 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 | `GITHUB_TOKEN`           | GitHub personal access token for API access                            |
 | `GITHUB_REPO_PATH`       | Path to git repo inside container (mount your repo)                    |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
+| `AUTO_REBUILD_INDEX`     | Set to `true` to rebuild vector index on server startup                |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 
