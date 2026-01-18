@@ -318,7 +318,7 @@ When GitHub tools cannot auto-detect repository information:
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **17 Resources** (11 Static + 6 Template)
+### 📡 **18 Resources** (12 Static + 6 Template)
 
 **Static Resources** (appear in resource lists):
 
@@ -449,7 +449,7 @@ flowchart TB
 
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 33 Tools"]
-        Resources["📡 17 Resources"]
+        Resources["📡 18 Resources"]
         Prompts["💬 15 Prompts"]
     end
 
