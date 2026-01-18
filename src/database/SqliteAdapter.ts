@@ -713,12 +713,28 @@ export class SqliteAdapter {
     // =========================================================================
 
     /**
-     * Get entry statistics
+     * Get entry statistics with enhanced analytics metrics
      */
     getStatistics(groupBy: 'day' | 'week' | 'month' = 'week'): {
         totalEntries: number
         entriesByType: Record<string, number>
         entriesByPeriod: { period: string; count: number }[]
+        // Enhanced analytics (v4.3.0)
+        decisionDensity: { period: string; significantCount: number }[]
+        relationshipComplexity: {
+            totalRelationships: number
+            avgPerEntry: number
+        }
+        activityTrend: {
+            currentPeriod: string
+            previousPeriod: string
+            growthPercent: number | null
+        }
+        causalMetrics: {
+            blocked_by: number
+            resolved: number
+            caused: number
+        }
     } {
         const db = this.ensureDb()
 
@@ -767,10 +783,67 @@ export class SqliteAdapter {
             count: v[1] as number,
         }))
 
+        // =========================================================================
+        // Enhanced Analytics Metrics (v4.3.0)
+        // =========================================================================
+
+        // Decision Density: significant entries per period
+        const decisionDensityResult = db.exec(`
+            SELECT strftime('${dateFormat}', timestamp) as period, COUNT(*) as count
+            FROM memory_journal
+            WHERE deleted_at IS NULL AND significance_type IS NOT NULL
+            GROUP BY period
+            ORDER BY period DESC
+            LIMIT 52
+        `)
+        const decisionDensity = (decisionDensityResult[0]?.values ?? []).map((v: unknown[]) => ({
+            period: v[0] as string,
+            significantCount: v[1] as number,
+        }))
+
+        // Relationship Complexity: total relationships and avg per entry
+        const relCountResult = db.exec(`SELECT COUNT(*) FROM relationships`)
+        const totalRelationships = (relCountResult[0]?.values[0]?.[0] as number) ?? 0
+        const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
+
+        // Activity Trend: week-over-week growth
+        const currentPeriod = entriesByPeriod[0]?.period ?? ''
+        const previousPeriod = entriesByPeriod[1]?.period ?? ''
+        const currentCount = entriesByPeriod[0]?.count ?? 0
+        const previousCount = entriesByPeriod[1]?.count ?? 0
+        const growthPercent =
+            previousCount > 0
+                ? Math.round(((currentCount - previousCount) / previousCount) * 100)
+                : null
+
+        // Causal Metrics: counts for causal relationship types
+        const causalResult = db.exec(`
+            SELECT relationship_type, COUNT(*) as count
+            FROM relationships
+            WHERE relationship_type IN ('blocked_by', 'resolved', 'caused')
+            GROUP BY relationship_type
+        `)
+        const causalMetrics = { blocked_by: 0, resolved: 0, caused: 0 }
+        for (const row of causalResult[0]?.values ?? []) {
+            const relType = row[0] as 'blocked_by' | 'resolved' | 'caused'
+            causalMetrics[relType] = row[1] as number
+        }
+
         return {
             totalEntries,
             entriesByType,
             entriesByPeriod,
+            decisionDensity,
+            relationshipComplexity: {
+                totalRelationships,
+                avgPerEntry: Math.round(avgPerEntry * 100) / 100, // 2 decimal places
+            },
+            activityTrend: {
+                currentPeriod,
+                previousPeriod,
+                growthPercent,
+            },
+            causalMetrics,
         }
     }
 

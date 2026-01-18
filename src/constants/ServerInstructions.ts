@@ -210,6 +210,7 @@ Valid values for \`entry_type\` parameter:
 - **Semantic search indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use \`rebuild_vector_index\` or enable \`AUTO_REBUILD_INDEX=true\` for automatic reconciliation on server startup.
 - **\`semantic_search\` thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
 - **Causal relationship types**: Use \`blocked_by\` (A was blocked by B), \`resolved\` (A resolved B), \`caused\` (A caused B) for decision tracing and failure analysis. Visualizations use distinct arrow styles for causal types.
+- **Enhanced analytics**: \`get_statistics\` returns \`decisionDensity\` (significant entries per period), \`relationshipComplexity\` (avg relationships per entry), \`activityTrend\` (period-over-period growth %), and \`causalMetrics\` (counts for blocked_by/resolved/caused).
 
 ## Key Resources
 | URI | Description |

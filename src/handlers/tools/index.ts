@@ -233,6 +233,27 @@ const StatisticsOutputSchema = z.object({
             count: z.number(),
         })
     ),
+    // Enhanced analytics (v4.3.0)
+    decisionDensity: z.array(
+        z.object({
+            period: z.string(),
+            significantCount: z.number(),
+        })
+    ),
+    relationshipComplexity: z.object({
+        totalRelationships: z.number(),
+        avgPerEntry: z.number(),
+    }),
+    activityTrend: z.object({
+        currentPeriod: z.string(),
+        previousPeriod: z.string(),
+        growthPercent: z.number().nullable(),
+    }),
+    causalMetrics: z.object({
+        blocked_by: z.number(),
+        resolved: z.number(),
+        caused: z.number(),
+    }),
 })
 
 // ============================================================================
