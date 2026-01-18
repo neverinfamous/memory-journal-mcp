@@ -258,7 +258,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                 let github: {
                     repo: string | null
                     branch: string | null
-                    ci: 'passing' | 'failing' | 'pending' | 'unknown'
+                    ci: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
                     openIssues: number
                     openPRs: number
                 } | null = null
@@ -271,7 +271,12 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 
                         if (owner && repo) {
                             // Get CI status (based on latest run only)
-                            let ciStatus: 'passing' | 'failing' | 'pending' | 'unknown' = 'unknown'
+                            let ciStatus:
+                                | 'passing'
+                                | 'failing'
+                                | 'pending'
+                                | 'cancelled'
+                                | 'unknown' = 'unknown'
                             try {
                                 const runs = await context.github.getWorkflowRuns(owner, repo, 1)
                                 if (runs.length > 0) {
@@ -280,10 +285,21 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                                         ciStatus = 'unknown'
                                     } else if (latestRun.status !== 'completed') {
                                         ciStatus = 'pending'
-                                    } else if (latestRun.conclusion === 'failure') {
-                                        ciStatus = 'failing'
-                                    } else if (latestRun.conclusion === 'success') {
-                                        ciStatus = 'passing'
+                                    } else {
+                                        // Map workflow conclusion to CI status
+                                        switch (latestRun.conclusion) {
+                                            case 'success':
+                                                ciStatus = 'passing'
+                                                break
+                                            case 'failure':
+                                                ciStatus = 'failing'
+                                                break
+                                            case 'cancelled':
+                                                ciStatus = 'cancelled'
+                                                break
+                                            default:
+                                                ciStatus = 'unknown'
+                                        }
                                     }
                                 }
                             } catch {
@@ -1105,7 +1121,8 @@ I have project memory access and will create entries for significant work.`,
                 // Get CI status from workflow runs
                 // Get CI status from latest workflow run (matches briefing logic)
                 const workflowRuns = await context.github.getWorkflowRuns(owner, repo, 5)
-                let ciStatus: 'passing' | 'failing' | 'pending' | 'unknown' = 'unknown'
+                let ciStatus: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown' =
+                    'unknown'
                 let latestRun: { name: string; conclusion: string | null; headSha: string } | null =
                     null
 
@@ -1122,8 +1139,20 @@ I have project memory access and will create entries for significant work.`,
 
                     // CI status based on latest completed run (consistent with briefing)
                     if (latestCompleted) {
-                        if (latestCompleted.conclusion === 'failure') ciStatus = 'failing'
-                        else if (latestCompleted.conclusion === 'success') ciStatus = 'passing'
+                        // Map workflow conclusion to CI status
+                        switch (latestCompleted.conclusion) {
+                            case 'success':
+                                ciStatus = 'passing'
+                                break
+                            case 'failure':
+                                ciStatus = 'failing'
+                                break
+                            case 'cancelled':
+                                ciStatus = 'cancelled'
+                                break
+                            default:
+                                ciStatus = 'unknown'
+                        }
                     } else if (workflowRuns.some((r) => r.status !== 'completed')) {
                         ciStatus = 'pending'
                     }

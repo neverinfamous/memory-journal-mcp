@@ -101,7 +101,7 @@ const SearchByDateRangeSchema = z.object({
 const SemanticSearchSchema = z.object({
     query: z.string(),
     limit: z.number().optional().default(10),
-    similarity_threshold: z.number().optional().default(0.3),
+    similarity_threshold: z.number().optional().default(0.25),
     is_personal: z.boolean().optional(),
     hint_on_empty: z
         .boolean()
@@ -628,6 +628,129 @@ const CleanupBackupsOutputSchema = z.object({
 })
 
 // ============================================================================
+// Phase 5: Remaining Tool Output Schemas
+// ============================================================================
+
+/**
+ * Schema for test_simple output.
+ */
+const TestSimpleOutputSchema = z.object({
+    message: z.string(),
+})
+
+/**
+ * Schema for export_entries output.
+ */
+const ExportEntriesOutputSchema = z.object({
+    format: z.enum(['json', 'markdown']),
+    entries: z.array(EntryOutputSchema).optional(), // For JSON format
+    content: z.string().optional(), // For markdown format
+})
+
+/**
+ * Schema for rebuild_vector_index output.
+ */
+const RebuildVectorIndexOutputSchema = z.object({
+    success: z.boolean(),
+    entriesIndexed: z.number(),
+    error: z.string().optional(),
+})
+
+/**
+ * Schema for add_to_vector_index output.
+ */
+const AddToVectorIndexOutputSchema = z.object({
+    success: z.boolean(),
+    entryId: z.number(),
+    error: z.string().optional(),
+})
+
+/**
+ * Schema for move_kanban_item output.
+ */
+const MoveKanbanItemOutputSchema = z.object({
+    success: z.boolean().optional(),
+    itemId: z.string().optional(),
+    newStatus: z.string().optional(),
+    projectNumber: z.number().optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    hint: z.string().optional(),
+})
+
+/**
+ * Schema for create_github_issue_with_entry output.
+ */
+const CreateGitHubIssueWithEntryOutputSchema = z.object({
+    success: z.boolean().optional(),
+    issue: z
+        .object({
+            number: z.number(),
+            title: z.string(),
+            url: z.string(),
+        })
+        .optional(),
+    project: z
+        .object({
+            projectNumber: z.number(),
+            added: z.boolean(),
+            message: z.string(),
+            initialStatus: z
+                .object({
+                    status: z.string(),
+                    set: z.boolean(),
+                })
+                .optional(),
+        })
+        .optional(),
+    journalEntry: z
+        .object({
+            id: z.number(),
+            linkedToIssue: z.number(),
+        })
+        .optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for close_github_issue_with_entry output.
+ */
+const CloseGitHubIssueWithEntryOutputSchema = z.object({
+    success: z.boolean().optional(),
+    issue: z
+        .object({
+            number: z.number(),
+            title: z.string(),
+            url: z.string(),
+            previousState: z.string(),
+            newState: z.string(),
+        })
+        .optional(),
+    journalEntry: z
+        .object({
+            id: z.number(),
+            linkedToIssue: z.number(),
+            significanceType: z.string(),
+        })
+        .optional(),
+    kanban: z
+        .object({
+            moved: z.boolean(),
+            projectNumber: z.number(),
+            message: z.string().optional(),
+        })
+        .optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
 // Tool Definitions with MCP 2025-11-25 Annotations
 // ============================================================================
 
@@ -800,6 +923,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Simple test tool that just returns a message',
             group: 'core',
             inputSchema: TestSimpleSchema,
+            outputSchema: TestSimpleOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 const { message } = TestSimpleSchema.parse(params)
@@ -885,7 +1009,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 const results = await vectorManager.search(
                     input.query,
                     input.limit ?? 10,
-                    input.similarity_threshold ?? 0.3
+                    input.similarity_threshold ?? 0.25
                 )
 
                 // Fetch full entries for matching IDs
@@ -917,7 +1041,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                           }
                         : includeHint && entries.length === 0
                           ? {
-                                hint: `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.3)}). Try lowering similarity_threshold (e.g., 0.2) for broader matches.`,
+                                hint: `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`,
                             }
                           : {}),
                 }
@@ -1320,6 +1444,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Export journal entries to JSON or Markdown format',
             group: 'export',
             inputSchema: ExportEntriesSchema,
+            outputSchema: ExportEntriesOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (params: unknown) => {
                 const input = ExportEntriesSchema.parse(params)
@@ -1487,6 +1612,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Rebuild the semantic search vector index from all existing entries',
             group: 'admin',
             inputSchema: z.object({}),
+            outputSchema: RebuildVectorIndexOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: async (_params: unknown) => {
                 if (!vectorManager) {
@@ -1502,6 +1628,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Add a specific entry to the semantic search vector index',
             group: 'admin',
             inputSchema: z.object({ entry_id: z.number() }),
+            outputSchema: AddToVectorIndexOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: true },
             handler: async (params: unknown) => {
                 const { entry_id } = z.object({ entry_id: z.number() }).parse(params)
@@ -1886,6 +2013,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .optional()
                     .describe('Repository owner - LEAVE EMPTY to auto-detect'),
             }),
+            outputSchema: MoveKanbanItemOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -1995,6 +2123,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .describe('Custom journal content (defaults to auto-generated summary)'),
                 tags: z.array(z.string()).optional().describe('Journal entry tags'),
             }),
+            outputSchema: CreateGitHubIssueWithEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -2201,6 +2330,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
                 tags: z.array(z.string()).optional().describe('Journal entry tags'),
             }),
+            outputSchema: CloseGitHubIssueWithEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
             handler: async (params: unknown) => {
                 const input = z
@@ -2479,7 +2609,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     warning:
                         'A pre-restore backup was automatically created. Any changes made since this backup (including tag merges, new entries, and relationships) have been reverted.',
                     revertedChanges: {
-                        tagMerges: 'Any merge_tags operations since this backup are reverted.',
+                        tagMerges:
+                            'Any merge_tags operations since this backup are reverted. Previously merged tags will reappear as separate tags.',
                         entries:
                             result.previousEntryCount !== result.newEntryCount
                                 ? `Entry count changed from ${String(result.previousEntryCount)} to ${String(result.newEntryCount)}`

@@ -135,7 +135,7 @@ const TOOL_PARAMETER_REFERENCE = `
 |------|---------------------|---------------------|
 | \`search_entries\` | \`query\` (string) | \`limit\`, \`entry_type\`, \`tags\` |
 | \`search_by_date_range\` | \`start_date\`, \`end_date\` (YYYY-MM-DD) | \`tags\`, \`entry_type\` |
-| \`semantic_search\` | \`query\` (string) | \`limit\` (default 10) |
+| \`semantic_search\` | \`query\` (string) | \`limit\`, \`similarity_threshold\` (default 0.3) |
 | \`get_vector_index_stats\` | none | none |
 
 ### Relationship Tools
@@ -206,7 +206,9 @@ Valid values for \`entry_type\` parameter:
 - **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).
 - **\`merge_tags\` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.
 - **\`prStatus\` in entries**: Reflects PR state at entry creation time, not current state. Use \`get_github_pr\` for live status.
-- **\`restore_backup\` behavior**: Restores entire database state. Any recent changes (new entries, tag merges, relationships) are reverted. A pre-restore backup is automatically created for safety.
+- **\`restore_backup\` behavior**: Restores entire database state. Any recent changes (new entries, tag merges via \`merge_tags\`, relationships) are reverted. A pre-restore backup is automatically created for safety.
+- **Semantic search indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use \`rebuild_vector_index\` or enable \`AUTO_REBUILD_INDEX=true\` for automatic reconciliation on server startup.
+- **\`semantic_search\` thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
 
 ## Key Resources
 | URI | Description |
