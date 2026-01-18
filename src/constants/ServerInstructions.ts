@@ -204,6 +204,8 @@ Valid values for \`entry_type\` parameter:
 - **\`autoContext\`**: Reserved for future automatic context capture. Currently always \`null\`.
 - **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`.
 - **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).
+- **\`merge_tags\` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.
+- **\`prStatus\` in entries**: Reflects PR state at entry creation time, not current state. Use \`get_github_pr\` for live status.
 
 ## Key Resources
 | URI | Description |

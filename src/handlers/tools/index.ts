@@ -376,6 +376,8 @@ const DeleteEntryOutputSchema = z.object({
 const LinkEntriesOutputSchema = z.object({
     success: z.boolean(),
     relationship: RelationshipOutputSchema,
+    duplicate: z.boolean().optional().describe('True if relationship already existed'),
+    message: z.string().optional().describe('Additional context about the operation'),
 })
 
 // ============================================================================
@@ -1078,6 +1080,24 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
                 const input = LinkEntriesSchema.parse(params)
+
+                // Check for existing duplicate relationship
+                const existingRelationships = db.getRelationships(input.from_entry_id)
+                const existing = existingRelationships.find(
+                    (r) =>
+                        r.toEntryId === input.to_entry_id &&
+                        r.relationshipType === input.relationship_type
+                )
+
+                if (existing) {
+                    return Promise.resolve({
+                        success: true,
+                        relationship: existing,
+                        duplicate: true,
+                        message: 'Relationship already exists',
+                    })
+                }
+
                 const relationship = db.linkEntries(
                     input.from_entry_id,
                     input.to_entry_id,
