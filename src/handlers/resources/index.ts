@@ -381,7 +381,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 I have project memory access and will create entries for significant work.`,
                         // Note for clients that don't auto-inject ServerInstructions
                         clientNote:
-                            'If prompts unavailable or Dynamic Context Management behaviors missing, read memory://instructions for full guidance.',
+                            'For complete tool reference and field notes, read memory://instructions.',
                     },
                     annotations: { lastModified },
                 } satisfies ResourceResult
@@ -402,7 +402,7 @@ I have project memory access and will create entries for significant work.`,
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
                 // Note: Query parameters (e.g., ?level=essential) are not supported
                 // because the MCP SDK performs exact URI matching before calling handlers.
-                const level: InstructionLevel = 'standard'
+                const level: InstructionLevel = 'full'
 
                 // Get enabled tools from filter config or all tools
                 const enabledTools = context.filterConfig?.enabledTools ?? new Set<string>()
