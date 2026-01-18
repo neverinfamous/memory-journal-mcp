@@ -121,7 +121,16 @@ const LinkEntriesSchema = z.object({
     from_entry_id: z.number(),
     to_entry_id: z.number(),
     relationship_type: z
-        .enum(['evolves_from', 'references', 'implements', 'clarifies', 'response_to'])
+        .enum([
+            'evolves_from',
+            'references',
+            'implements',
+            'clarifies',
+            'response_to',
+            'blocked_by',
+            'resolved',
+            'caused',
+        ])
         .optional()
         .default('references'),
     description: z.string().optional(),
@@ -1397,6 +1406,10 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     clarifies: '-.->',
                     evolves_from: '-->',
                     response_to: '<-->',
+                    // Causal relationship types
+                    blocked_by: '--x',
+                    resolved: '==>',
+                    caused: '-.->',
                 }
 
                 for (const rel of relationships) {
@@ -1429,9 +1442,10 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         orange: 'Project entries',
                         arrows: {
                             '-->': 'references / evolves_from',
-                            '==>': 'implements',
-                            '-.->': 'clarifies',
+                            '==>': 'implements / resolved',
+                            '-.->': 'clarifies / caused',
                             '<-->': 'response_to',
+                            '--x': 'blocked_by',
                         },
                     },
                 })

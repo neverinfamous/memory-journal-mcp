@@ -141,7 +141,7 @@ const TOOL_PARAMETER_REFERENCE = `
 ### Relationship Tools
 | Tool | Required Parameters | Notes |
 |------|---------------------|-------|
-| \`link_entries\` | \`from_entry_id\`, \`to_entry_id\` (numbers) | Types: \`evolves_from\`, \`references\`, \`implements\`, \`clarifies\`, \`response_to\` |
+| \`link_entries\` | \`from_entry_id\`, \`to_entry_id\` (numbers) | Types: \`evolves_from\`, \`references\`, \`implements\`, \`clarifies\`, \`response_to\`, \`blocked_by\`, \`resolved\`, \`caused\` |
 | \`visualize_relationships\` | \`entry_id\` (number) | Optional \`depth\` (default 2). Returns Mermaid diagram. |
 
 ### GitHub Tools
@@ -209,6 +209,7 @@ Valid values for \`entry_type\` parameter:
 - **\`restore_backup\` behavior**: Restores entire database state. Any recent changes (new entries, tag merges via \`merge_tags\`, relationships) are reverted. A pre-restore backup is automatically created for safety.
 - **Semantic search indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use \`rebuild_vector_index\` or enable \`AUTO_REBUILD_INDEX=true\` for automatic reconciliation on server startup.
 - **\`semantic_search\` thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
+- **Causal relationship types**: Use \`blocked_by\` (A was blocked by B), \`resolved\` (A resolved B), \`caused\` (A caused B) for decision tracing and failure analysis. Visualizations use distinct arrow styles for causal types.
 
 ## Key Resources
 | URI | Description |

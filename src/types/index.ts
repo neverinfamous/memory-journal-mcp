@@ -230,6 +230,18 @@ export type SignificanceType =
 
 /**
  * Relationship types between entries
+ *
+ * Standard types:
+ * - evolves_from: Entry builds upon previous work
+ * - references: Entry mentions or links to another
+ * - implements: Entry implements a spec/design
+ * - clarifies: Entry explains or clarifies another
+ * - response_to: Entry responds to a question/issue
+ *
+ * Causal types (for decision tracing):
+ * - blocked_by: Entry was blocked by another (e.g., blocker → resolution)
+ * - resolved: Entry resolved/fixed an issue from another
+ * - caused: Entry caused or led to another outcome
  */
 export type RelationshipType =
     | 'evolves_from'
@@ -237,6 +249,9 @@ export type RelationshipType =
     | 'implements'
     | 'clarifies'
     | 'response_to'
+    | 'blocked_by'
+    | 'resolved'
+    | 'caused'
 
 /**
  * Journal entry entity
