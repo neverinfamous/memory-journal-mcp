@@ -216,6 +216,7 @@ const RelationshipOutputSchema = z.object({
 const EntryByIdOutputSchema = z.object({
     entry: EntryOutputSchema.optional(),
     relationships: z.array(RelationshipOutputSchema).optional(),
+    importance: z.number().nullable().optional(), // Computed importance score (0.0-1.0)
     error: z.string().optional(),
 })
 
@@ -904,7 +905,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 if (!entry) {
                     return Promise.resolve({ error: `Entry ${entry_id} not found` })
                 }
-                const result: Record<string, unknown> = { entry }
+                const importance = db.calculateImportance(entry_id)
+                const result: Record<string, unknown> = { entry, importance }
                 if (include_relationships) {
                     result['relationships'] = db.getRelationships(entry_id)
                 }

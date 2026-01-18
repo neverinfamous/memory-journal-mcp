@@ -493,8 +493,15 @@ I have project memory access and will create entries for significant work.`,
                     LIMIT 20
                 `
                 )
-                const entries = rows.map(transformEntryRow)
-                return { entries, count: entries.length }
+                // Transform entries and calculate importance scores
+                const entriesWithImportance = rows.map((row) => {
+                    const entry = transformEntryRow(row)
+                    const importance = context.db.calculateImportance(entry['id'] as number)
+                    return { ...entry, importance }
+                })
+                // Sort by importance (highest first)
+                entriesWithImportance.sort((a, b) => b.importance - a.importance)
+                return { entries: entriesWithImportance, count: entriesWithImportance.length }
             },
         },
         {

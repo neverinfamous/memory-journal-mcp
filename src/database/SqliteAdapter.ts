@@ -297,6 +297,66 @@ export class SqliteAdapter {
     }
 
     /**
+     * Calculate importance score for an entry (0.0-1.0)
+     *
+     * Formula:
+     * - significanceWeight (0.30): 1.0 if significanceType set, else 0.0
+     * - relationshipWeight (0.35): min(relCount / 5, 1.0)
+     * - causalWeight (0.20): min(causalCount / 3, 1.0)
+     * - recencyWeight (0.15): max(0, 1 - daysSince / 90)
+     */
+    calculateImportance(entryId: number): number {
+        const db = this.ensureDb()
+
+        // Get entry data
+        const entryResult = db.exec(
+            `SELECT significance_type, timestamp FROM memory_journal WHERE id = ? AND deleted_at IS NULL`,
+            [entryId]
+        )
+        if (entryResult.length === 0 || entryResult[0]?.values.length === 0) return 0
+
+        const significanceType = entryResult[0]?.values[0]?.[0] as string | null
+        const timestamp = entryResult[0]?.values[0]?.[1] as string
+
+        // Significance weight: 1.0 if set, else 0.0
+        const significanceWeight = significanceType ? 1.0 : 0.0
+
+        // Relationship count (total relationships involving this entry)
+        const relResult = db.exec(
+            `SELECT COUNT(*) FROM relationships WHERE from_entry_id = ? OR to_entry_id = ?`,
+            [entryId, entryId]
+        )
+        const relCount = (relResult[0]?.values[0]?.[0] as number) ?? 0
+        const relationshipWeight = Math.min(relCount / 5, 1.0)
+
+        // Causal relationships count
+        const causalResult = db.exec(
+            `SELECT COUNT(*) FROM relationships
+             WHERE (from_entry_id = ? OR to_entry_id = ?)
+             AND relationship_type IN ('blocked_by', 'resolved', 'caused')`,
+            [entryId, entryId]
+        )
+        const causalCount = (causalResult[0]?.values[0]?.[0] as number) ?? 0
+        const causalWeight = Math.min(causalCount / 3, 1.0)
+
+        // Recency weight: decays over 90 days
+        const entryDate = new Date(timestamp)
+        const now = new Date()
+        const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
+        const recencyWeight = Math.max(0, 1 - daysSince / 90)
+
+        // Weighted sum
+        const importance =
+            significanceWeight * 0.3 +
+            relationshipWeight * 0.35 +
+            causalWeight * 0.2 +
+            recencyWeight * 0.15
+
+        // Round to 2 decimal places
+        return Math.round(importance * 100) / 100
+    }
+
+    /**
      * Get recent entries
      */
     getRecentEntries(limit = 10, isPersonal?: boolean): JournalEntry[] {

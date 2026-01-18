@@ -211,6 +211,7 @@ Valid values for \`entry_type\` parameter:
 - **\`semantic_search\` thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
 - **Causal relationship types**: Use \`blocked_by\` (A was blocked by B), \`resolved\` (A resolved B), \`caused\` (A caused B) for decision tracing and failure analysis. Visualizations use distinct arrow styles for causal types.
 - **Enhanced analytics**: \`get_statistics\` returns \`decisionDensity\` (significant entries per period), \`relationshipComplexity\` (avg relationships per entry), \`activityTrend\` (period-over-period growth %), and \`causalMetrics\` (counts for blocked_by/resolved/caused).
+- **Importance scores**: \`get_entry_by_id\` returns an \`importance\` score (0.0-1.0) based on: significance type (30%), relationship count (35%), causal relationships (20%), and recency (15%). \`memory://significant\` sorts entries by importance.
 
 ## Key Resources
 | URI | Description |
