@@ -307,7 +307,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./DOCKER_README.md
-          short-description: 'Persistent AI Project Memory w/Triple Search, Knowledge Graphs, GitHub Integration & Tool Filtering.'
+          short-description: 'AI Project Memory with Triple Search, Knowledge Graphs, GitHub Integration, HTTPS & Tool Filtering.'
 
       - name: Deployment Summary
         if: github.ref == 'refs/heads/main'
