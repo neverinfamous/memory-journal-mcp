@@ -616,17 +616,6 @@ const RestoreResultOutputSchema = z.object({
         .optional(),
 })
 
-/**
- * Schema for cleanup_backups output.
- */
-const CleanupBackupsOutputSchema = z.object({
-    success: z.boolean(),
-    deleted: z.array(z.string()),
-    deletedCount: z.number(),
-    keptCount: z.number(),
-    message: z.string(),
-})
-
 // ============================================================================
 // Phase 5: Remaining Tool Output Schemas
 // ============================================================================
@@ -748,6 +737,17 @@ const CloseGitHubIssueWithEntryOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
+})
+
+/**
+ * Schema for cleanup_backups output.
+ */
+const CleanupBackupsOutputSchema = z.object({
+    success: z.boolean(),
+    deleted: z.array(z.string()),
+    deletedCount: z.number(),
+    keptCount: z.number(),
+    message: z.string(),
 })
 
 // ============================================================================
