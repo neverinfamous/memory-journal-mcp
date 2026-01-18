@@ -206,6 +206,7 @@ Valid values for \`entry_type\` parameter:
 - **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).
 - **\`merge_tags\` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.
 - **\`prStatus\` in entries**: Reflects PR state at entry creation time, not current state. Use \`get_github_pr\` for live status.
+- **\`restore_backup\` behavior**: Restores entire database state. Any recent changes (new entries, tag merges, relationships) are reverted. A pre-restore backup is automatically created for safety.
 
 ## Key Resources
 | URI | Description |

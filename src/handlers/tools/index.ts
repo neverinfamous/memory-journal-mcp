@@ -607,6 +607,13 @@ const RestoreResultOutputSchema = z.object({
     previousEntryCount: z.number(),
     newEntryCount: z.number(),
     warning: z.string().optional(),
+    revertedChanges: z
+        .object({
+            tagMerges: z.string().optional(),
+            entries: z.string().optional(),
+            relationships: z.string().optional(),
+        })
+        .optional(),
 })
 
 /**
@@ -2469,7 +2476,15 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     restoredFrom: result.restoredFrom,
                     previousEntryCount: result.previousEntryCount,
                     newEntryCount: result.newEntryCount,
-                    warning: 'A pre-restore backup was automatically created.',
+                    warning:
+                        'A pre-restore backup was automatically created. Any changes made since this backup (including tag merges, new entries, and relationships) have been reverted.',
+                    revertedChanges: {
+                        tagMerges: 'Any merge_tags operations since this backup are reverted.',
+                        entries:
+                            result.previousEntryCount !== result.newEntryCount
+                                ? `Entry count changed from ${String(result.previousEntryCount)} to ${String(result.newEntryCount)}`
+                                : undefined,
+                    },
                 }
             },
         },

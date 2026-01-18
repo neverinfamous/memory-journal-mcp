@@ -704,19 +704,58 @@ I have project memory access and will create entries for significant work.`,
             uri: 'memory://prs/{pr_number}/timeline',
             name: 'PR Timeline',
             title: 'Combined PR and Journal Timeline',
-            description: 'Combined PR + journal timeline',
+            description: 'Combined PR + journal timeline with live PR metadata',
             mimeType: 'application/json',
             icons: [ICON_PR],
             annotations: {
                 audience: ['assistant'],
                 priority: 0.5,
             },
-            handler: (uri: string, context: ResourceContext) => {
+            handler: async (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/prs\/(\d+)\/timeline/.exec(uri)
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (prNumber === null) {
                     return { error: 'Invalid PR number' }
+                }
+
+                // Fetch live PR metadata from GitHub if available
+                let prMetadata: {
+                    title: string
+                    state: string
+                    draft: boolean
+                    mergedAt: string | null
+                    closedAt: string | null
+                    author: string
+                    headBranch: string
+                    baseBranch: string
+                } | null = null
+
+                if (context.github) {
+                    try {
+                        const repoInfo = await context.github.getRepoInfo()
+                        if (repoInfo.owner && repoInfo.repo) {
+                            const pr = await context.github.getPullRequest(
+                                repoInfo.owner,
+                                repoInfo.repo,
+                                prNumber
+                            )
+                            if (pr) {
+                                prMetadata = {
+                                    title: pr.title,
+                                    state: pr.state,
+                                    draft: pr.draft,
+                                    mergedAt: pr.mergedAt,
+                                    closedAt: pr.closedAt,
+                                    author: pr.author,
+                                    headBranch: pr.headBranch,
+                                    baseBranch: pr.baseBranch,
+                                }
+                            }
+                        }
+                    } catch {
+                        // GitHub not available, proceed without metadata
+                    }
                 }
 
                 const rows = execQuery(
@@ -730,10 +769,25 @@ I have project memory access and will create entries for significant work.`,
                     [prNumber]
                 )
                 const entries = rows.map(transformEntryRow)
+
+                // Build timeline note based on PR state
+                let timelineNote: string
+                if (prMetadata) {
+                    const stateDesc = prMetadata.state.toLowerCase()
+                    const mergedNote = prMetadata.mergedAt ? ' (merged)' : ''
+                    const draftNote = prMetadata.draft ? ' [DRAFT]' : ''
+                    timelineNote = `PR #${String(prNumber)} is ${stateDesc}${mergedNote}${draftNote}`
+                } else {
+                    timelineNote =
+                        'GitHub integration unavailable for live PR status. Entry timestamps show journal activity.'
+                }
+
                 return {
                     prNumber,
+                    prMetadata,
                     entries,
                     count: entries.length,
+                    timelineNote,
                     ...(entries.length === 0
                         ? {
                               hint: 'No journal entries linked to this PR. Use create_entry with pr_number to link entries.',
