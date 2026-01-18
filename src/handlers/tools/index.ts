@@ -863,6 +863,16 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
                 const input = CreateEntrySchema.parse(params)
+
+                // Auto-populate issueUrl if issue_number provided without issueUrl
+                let resolvedIssueUrl = input.issue_url
+                if (input.issue_number !== undefined && !input.issue_url && github) {
+                    const cachedRepo = github.getCachedRepoInfo()
+                    if (cachedRepo?.owner && cachedRepo?.repo) {
+                        resolvedIssueUrl = `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(input.issue_number)}`
+                    }
+                }
+
                 const entry = db.createEntry({
                     content: input.content,
                     entryType: input.entry_type as EntryType,
@@ -872,7 +882,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     projectNumber: input.project_number,
                     projectOwner: input.project_owner,
                     issueNumber: input.issue_number,
-                    issueUrl: input.issue_url,
+                    issueUrl: resolvedIssueUrl,
                     prNumber: input.pr_number,
                     prUrl: input.pr_url,
                     prStatus: input.pr_status,

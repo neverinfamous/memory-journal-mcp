@@ -494,13 +494,22 @@ I have project memory access and will create entries for significant work.`,
                 `
                 )
                 // Transform entries and calculate importance scores
-                const entriesWithImportance = rows.map((row) => {
-                    const entry = transformEntryRow(row)
-                    const importance = context.db.calculateImportance(entry['id'] as number)
-                    return { ...entry, importance }
+                const entriesWithImportance: (Record<string, unknown> & { importance: number })[] =
+                    rows.map((row) => {
+                        const entry = transformEntryRow(row)
+                        const importance = context.db.calculateImportance(entry['id'] as number)
+                        return { ...entry, importance }
+                    })
+                // Sort by importance (highest first), then by timestamp (newest first) for ties
+                entriesWithImportance.sort((a, b) => {
+                    if (b.importance !== a.importance) {
+                        return b.importance - a.importance
+                    }
+                    // Secondary sort: newest first for equal importance
+                    const aTime = new Date(a['timestamp'] as string).getTime()
+                    const bTime = new Date(b['timestamp'] as string).getTime()
+                    return bTime - aTime
                 })
-                // Sort by importance (highest first)
-                entriesWithImportance.sort((a, b) => b.importance - a.importance)
                 return { entries: entriesWithImportance, count: entriesWithImportance.length }
             },
         },
@@ -552,13 +561,23 @@ I have project memory access and will create entries for significant work.`,
                 const lines: string[] = ['graph TD']
                 const seenNodes = new Set<number>()
 
-                // Relationship type to arrow style mapping
+                // Relationship type to arrow style mapping (harmonized with visualize_relationships tool)
                 const arrowStyles: Record<string, string> = {
+                    // Standard relationship types
                     references: '-->',
-                    implements: '-.->',
-                    evolves_from: '==>',
-                    related_to: '<-->',
+                    evolves_from: '-->',
                     depends_on: '-->',
+                    // Emphasis relationships
+                    implements: '==>',
+                    resolved: '==>',
+                    // Subtle/clarifying relationships
+                    clarifies: '-.->',
+                    caused: '-.->',
+                    // Bidirectional
+                    related_to: '<-->',
+                    response_to: '<-->',
+                    // Blockers (crossed arrow)
+                    blocked_by: '--x',
                 }
 
                 for (const rel of relationships) {

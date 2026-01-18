@@ -73,6 +73,7 @@ export class GitHubIntegration {
     private graphqlWithAuth: typeof graphql | null = null
     private git: simpleGitImport.SimpleGit
     private readonly token: string | undefined
+    private cachedRepoInfo: RepoInfo | null = null
 
     constructor(workingDir = '.') {
         this.token = process.env['GITHUB_TOKEN']
@@ -117,6 +118,7 @@ export class GitHubIntegration {
 
     /**
      * Get local repository information
+     * Caches the result for synchronous access via getCachedRepoInfo()
      */
     async getRepoInfo(): Promise<RepoInfo> {
         try {
@@ -132,7 +134,10 @@ export class GitHubIntegration {
             // Parse owner/repo from remote URL
             const { owner, repo } = this.parseRemoteUrl(remoteUrl)
 
-            return { owner, repo, branch, remoteUrl }
+            const repoInfo = { owner, repo, branch, remoteUrl }
+            // Cache the result for synchronous access
+            this.cachedRepoInfo = repoInfo
+            return repoInfo
         } catch (error) {
             logger.debug('Failed to get repo info (may not be a git repo)', {
                 module: 'GitHub',
@@ -140,6 +145,15 @@ export class GitHubIntegration {
             })
             return { owner: null, repo: null, branch: null, remoteUrl: null }
         }
+    }
+
+    /**
+     * Get cached repository information (synchronous)
+     * Returns null if getRepoInfo() has never been called.
+     * Used for synchronous URL construction in create_entry.
+     */
+    getCachedRepoInfo(): RepoInfo | null {
+        return this.cachedRepoInfo
     }
 
     /**
