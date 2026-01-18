@@ -78,7 +78,7 @@ flowchart TB
 - **18 MCP resources** - 12 static + 6 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
-- **Knowledge graphs** - 5 relationship types, Mermaid visualization
+- **Knowledge graphs** - 8 relationship types, Mermaid visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
 
 ---
