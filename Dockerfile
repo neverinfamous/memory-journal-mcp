@@ -23,13 +23,13 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/diff && \
     rm diff-8.0.3.tgz
 
-# Fix CVE-2026-23745: Manually update npm's bundled tar@7.5.2 to 7.5.3
+# Fix CVE-2026-23950: Manually update npm's bundled tar@7.5.3 to 7.5.4
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.3 && \
+    npm pack tar@7.5.4 && \
     rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.3.tgz && \
+    tar -xzf tar-7.5.4.tgz && \
     mv package node_modules/tar && \
-    rm tar-7.5.3.tgz
+    rm tar-7.5.4.tgz
 
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
@@ -69,13 +69,13 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/diff && \
     rm diff-8.0.3.tgz
 
-# Fix CVE-2026-23745: Manually update npm's bundled tar@7.5.2 to 7.5.3
+# Fix CVE-2026-23950: Manually update npm's bundled tar@7.5.3 to 7.5.4
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.3 && \
+    npm pack tar@7.5.4 && \
     rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.3.tgz && \
+    tar -xzf tar-7.5.4.tgz && \
     mv package node_modules/tar && \
-    rm tar-7.5.3.tgz
+    rm tar-7.5.4.tgz
 
 # Copy built artifacts and production dependencies
 COPY --from=builder /app/dist ./dist
