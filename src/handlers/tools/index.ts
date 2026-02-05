@@ -1162,8 +1162,12 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
 
                 if (!projectsResult[0] || projectsResult[0].values.length === 0) {
                     return Promise.resolve({
-                        message: `No projects found with at least ${String(input.min_entries)} entries`,
+                        project_count: 0,
+                        total_entries: 0,
                         projects: [],
+                        inactive_projects: [],
+                        time_distribution: [],
+                        message: `No projects found with at least ${String(input.min_entries)} entries`,
                     })
                 }
 

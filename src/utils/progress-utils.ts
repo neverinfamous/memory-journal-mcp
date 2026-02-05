@@ -5,18 +5,29 @@
  * Follows MCP 2025-11-25 specification for notifications/progress.
  */
 
-// We intentionally use the lower-level Server class to access the notification method
-
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
+/**
+ * Minimal interface for sending MCP notifications.
+ * Uses structural typing to avoid importing the deprecated Server class.
+ */
+interface NotificationSender {
+    notification(notification: {
+        method: 'notifications/progress'
+        params: {
+            progressToken: string | number
+            progress: number
+            total?: number
+            message?: string
+        }
+    }): Promise<void>
+}
 
 /** Progress token from client request _meta */
 export type ProgressToken = string | number
 
 /** Context required to send progress notifications */
 export interface ProgressContext {
-    /** MCP Server instance for sending notifications */
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    server: Server
+    /** Object with notification method for sending progress updates */
+    server: NotificationSender
     /** Progress token from request _meta (if client requested progress) */
     progressToken?: ProgressToken
 }

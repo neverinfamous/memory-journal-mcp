@@ -56,8 +56,9 @@ WORKDIR /app
 
 # Install runtime dependencies with security fixes
 # Use Alpine edge for curl with CVE fixes
+# Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
 RUN apk add --no-cache git ca-certificates && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat && \
     apk upgrade --no-cache && \
     npm install -g npm@latest --force && npm cache clean --force
 

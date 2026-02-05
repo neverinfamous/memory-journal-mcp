@@ -9,6 +9,7 @@ import initSqlJs, { type Database } from 'sql.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../utils/logger.js'
+import { validateDateFormatPattern } from '../utils/security-utils.js'
 import type {
     JournalEntry,
     Tag,
@@ -816,18 +817,8 @@ export class SqliteAdapter {
             entriesByType[row[0] as string] = row[1] as number
         }
 
-        // By period
-        let dateFormat: string
-        switch (groupBy) {
-            case 'day':
-                dateFormat = '%Y-%m-%d'
-                break
-            case 'month':
-                dateFormat = '%Y-%m'
-                break
-            default:
-                dateFormat = '%Y-W%W'
-        }
+        // By period - use validated date format pattern (defense-in-depth)
+        const dateFormat = validateDateFormatPattern(groupBy)
 
         const byPeriodResult = db.exec(`
             SELECT strftime('${dateFormat}', timestamp) as period, COUNT(*) as count
