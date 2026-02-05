@@ -14,7 +14,10 @@
         "lint": "eslint src/",
         "lint:fix": "eslint src/ --fix",
         "typecheck": "tsc --noEmit",
-        "check": "npm run lint && npm run typecheck"
+        "check": "npm run lint && npm run typecheck",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage"
     },
     "keywords": [
         "mcp",
@@ -63,10 +66,12 @@
         "@types/cors": "^2.8.19",
         "@types/express": "^5.0.6",
         "@types/node": "^25.2.0",
+        "@vitest/coverage-v8": "^4.0.18",
         "eslint": "^9.39.2",
         "globals": "^17.3.0",
         "typescript": "^5.9.3",
-        "typescript-eslint": "^8.54.0"
+        "typescript-eslint": "^8.54.0",
+        "vitest": "^4.0.17"
     },
     "overrides": {
         "axios": "^1.13.2",
