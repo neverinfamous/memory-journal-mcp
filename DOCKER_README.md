@@ -186,6 +186,8 @@ When GitHub tools cannot auto-detect repository information:
 
 **Google AntiGravity IDE:**
 
+- **AntiGravity Users:** Server instructions are automatically sent to MCP clients during initialization. However, AntiGravity does not currently support MCP server instructions. For optimal usage in AntiGravity, manually provide the contents of [`src/constants/ServerInstructions.ts`](src/constants/ServerInstructions.ts) to the agent in your prompt or user rules.
+
 - **Session start**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp."
 
 - **Full guidance**: If behaviors missing, read `memory://instructions` for complete Dynamic Context Management patterns.
