@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated: February 5, 2026**
+**Last Updated February 13, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -204,7 +204,7 @@ For remote access, web-based clients, or HTTP-compatible MCP hosts:
 docker run --rm -p 3000:3000 \
   -v ./data:/app/data \
   writenotenow/memory-journal-mcp:latest \
-  --transport http --port 3000
+  --transport http --port 3000 --server-host 0.0.0.0
 ```
 
 **Stateless Mode (serverless):**
@@ -213,7 +213,7 @@ docker run --rm -p 3000:3000 \
 docker run --rm -p 3000:3000 \
   -v ./data:/app/data \
   writenotenow/memory-journal-mcp:latest \
-  --transport http --port 3000 --stateless
+  --transport http --port 3000 --server-host 0.0.0.0 --stateless
 ```
 
 **Endpoints:**
@@ -352,6 +352,9 @@ Including `memory://briefing` for session initialization, `memory://instructions
 
 # Tool filtering (optional - control which tools are exposed)
 -e MEMORY_JOURNAL_MCP_TOOL_FILTER="-github"
+
+# Server bind host (required for containers, default: localhost)
+-e MCP_HOST=0.0.0.0
 
 # Database location
 -e DB_PATH=/app/data/custom.db

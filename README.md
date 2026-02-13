@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated: February 5, 2026**
+**Last Updated February 13, 2026**
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -182,6 +182,12 @@ For remote access or web-based clients, run the server in HTTP mode:
 memory-journal-mcp --transport http --port 3000
 ```
 
+To bind to all interfaces (required for containers):
+
+```bash
+memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
+```
+
 **Endpoints:**
 
 - `POST /mcp` — JSON-RPC requests (initialize, tools/call, etc.)
@@ -247,6 +253,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 | `GITHUB_REPO_PATH`       | Path to the git repository for auto-detecting owner/repo               |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
 | `AUTO_REBUILD_INDEX`     | Set to `true` to rebuild vector index on server startup                |
+| `MCP_HOST`               | Server bind host (`0.0.0.0` for containers, default: `localhost`)      |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
 

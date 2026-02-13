@@ -34,6 +34,7 @@ import pkg from '../../package.json' with { type: 'json' }
 export interface ServerOptions {
     transport: 'stdio' | 'http'
     port?: number
+    host?: string
     dbPath: string
     toolFilter?: string
     defaultProjectNumber?: number
@@ -394,6 +395,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     } else {
         // HTTP transport with SSE support
         const port = options.port ?? 3000
+        const host = options.host ?? 'localhost'
         const app: Express = express()
 
         // Manual CORS middleware for browser-based clients (e.g., MCP Inspector)
@@ -479,11 +481,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
             })
 
             // Start HTTP server
-            const httpServer = app.listen(port, () => {
+            const httpServer = app.listen(port, host, () => {
                 logger.info('MCP server started on HTTP (stateless)', {
                     module: 'McpServer',
                     port,
-                    endpoint: `http://localhost:${port}/mcp`,
+                    host,
+                    endpoint: `http://${host}:${port}/mcp`,
                 })
             })
 
@@ -656,11 +659,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
             })
 
             // Start HTTP server
-            const httpServer = app.listen(port, () => {
+            const httpServer = app.listen(port, host, () => {
                 logger.info('MCP server started on HTTP (stateful)', {
                     module: 'McpServer',
                     port,
-                    endpoint: `http://localhost:${port}/mcp`,
+                    host,
+                    endpoint: `http://${host}:${port}/mcp`,
                 })
             })
 
