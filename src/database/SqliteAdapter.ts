@@ -438,9 +438,14 @@ export class SqliteAdapter {
 
     /**
      * Soft delete an entry
+     * Returns false if entry does not exist (P154: Proactive Object Existence Verification)
      */
     deleteEntry(id: number, permanent = false): boolean {
         const db = this.ensureDb()
+
+        // P154: Pre-check entry existence before mutation
+        const entry = this.getEntryById(id)
+        if (!entry) return false
 
         if (permanent) {
             db.run('DELETE FROM memory_journal WHERE id = ?', [id])
@@ -708,6 +713,7 @@ export class SqliteAdapter {
 
     /**
      * Link two entries
+     * Throws if either entry does not exist (P154: Proactive Object Existence Verification)
      */
     linkEntries(
         fromEntryId: number,
@@ -716,6 +722,16 @@ export class SqliteAdapter {
         description?: string
     ): Relationship {
         const db = this.ensureDb()
+
+        // P154: Pre-check both entries exist before creating relationship
+        const fromEntry = this.getEntryById(fromEntryId)
+        if (!fromEntry) {
+            throw new Error(`Source entry ${String(fromEntryId)} not found`)
+        }
+        const toEntry = this.getEntryById(toEntryId)
+        if (!toEntry) {
+            throw new Error(`Target entry ${String(toEntryId)} not found`)
+        }
 
         db.run(
             `

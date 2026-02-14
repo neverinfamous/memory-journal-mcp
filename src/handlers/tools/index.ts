@@ -399,6 +399,7 @@ const DeleteEntryOutputSchema = z.object({
     success: z.boolean(),
     entryId: z.number(),
     permanent: z.boolean(),
+    error: z.string().optional(),
 })
 
 /**
@@ -1275,13 +1276,29 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     })
                 }
 
-                const relationship = db.linkEntries(
-                    input.from_entry_id,
-                    input.to_entry_id,
-                    input.relationship_type as RelationshipType,
-                    input.description
-                )
-                return Promise.resolve({ success: true, relationship })
+                // P154: linkEntries throws for nonexistent entries
+                try {
+                    const relationship = db.linkEntries(
+                        input.from_entry_id,
+                        input.to_entry_id,
+                        input.relationship_type as RelationshipType,
+                        input.description
+                    )
+                    return Promise.resolve({ success: true, relationship })
+                } catch (error) {
+                    return Promise.resolve({
+                        success: false,
+                        relationship: {
+                            id: 0,
+                            fromEntryId: input.from_entry_id,
+                            toEntryId: input.to_entry_id,
+                            relationshipType: input.relationship_type,
+                            description: input.description ?? null,
+                            createdAt: '',
+                        },
+                        message: error instanceof Error ? error.message : 'Unknown error',
+                    })
+                }
             },
         },
         {
@@ -1320,6 +1337,19 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 let entriesResult
 
                 if (input.entry_id !== undefined) {
+                    // P154: Pre-check entry existence to disambiguate responses
+                    const entry = db.getEntryById(input.entry_id)
+                    if (!entry) {
+                        return Promise.resolve({
+                            entry_count: 0,
+                            relationship_count: 0,
+                            root_entry: input.entry_id,
+                            depth: input.depth,
+                            mermaid: null,
+                            message: `Entry ${String(input.entry_id)} not found`,
+                        })
+                    }
+
                     // Use recursive CTE to get connected entries up to depth
                     entriesResult = rawDb.exec(
                         `
@@ -1382,8 +1412,12 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
 
                 if (!entriesResult[0] || entriesResult[0].values.length === 0) {
                     return Promise.resolve({
-                        message: 'No entries found with relationships matching your criteria',
+                        entry_count: 0,
+                        relationship_count: 0,
+                        root_entry: input.entry_id ?? null,
+                        depth: input.depth,
                         mermaid: null,
+                        message: 'No entries found with relationships matching your criteria',
                     })
                 }
 
@@ -1573,8 +1607,18 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 const { entry_id, permanent } = DeleteEntrySchema.parse(params)
                 const success = db.deleteEntry(entry_id, permanent)
 
+                // P154: Surface structured error for nonexistent entries
+                if (!success) {
+                    return Promise.resolve({
+                        success: false,
+                        entryId: entry_id,
+                        permanent,
+                        error: `Entry ${String(entry_id)} not found`,
+                    })
+                }
+
                 // Remove from vector index (non-critical if fails)
-                if (success && vectorManager) {
+                if (vectorManager) {
                     vectorManager.removeEntry(entry_id).catch(() => {
                         // Non-critical failure, entry already deleted from DB
                     })
