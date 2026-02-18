@@ -48,7 +48,7 @@ jobs:
 
       # Run SARIF scan first (non-blocking) to always generate the file
       - name: Run Trivy scanner for SARIF output
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           image-ref: security-test:latest
           format: 'sarif'
@@ -67,7 +67,7 @@ jobs:
 
       # Run table scan (blocking) after SARIF is uploaded
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@0.34.0
         with:
           image-ref: security-test:latest
           format: 'table'
