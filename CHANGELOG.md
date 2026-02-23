@@ -17,8 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Dependency Updates**
-  - `@types/node`: 25.2.0 → 25.2.3 (patch)
-  - `typescript-eslint`: 8.54.0 → 8.55.0 (minor)
+  - `@eslint/js`: 9.39.2 → 10.0.1 (major)
+  - `@types/node`: 25.2.0 → 25.3.0 (minor)
+  - `eslint`: 9.39.2 → 10.0.1 (major)
+  - `simple-git`: 3.28.0 → 3.32.2 (minor)
+  - `sql.js`: 1.12.0 → 1.14.0 (minor)
+  - `typescript-eslint`: 8.54.0 → 8.56.1 (minor)
   - `axios` override: 1.13.2 → 1.13.5 (patch) — fixes GHSA-43fc-jf86-j433 (DoS via `__proto__` key in `parseConfig`)
 
 ### Documentation
