@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **GHSA-w7fw-mjwx-w883 (qs)** — Updated `qs` 6.14.1 → 6.14.2 to fix low-severity arrayLimit bypass in comma parsing that allows denial of service
+- **CVE-2026-26960 (tar)** — Manually patched npm's bundled `tar` → `7.5.8` in Dockerfile to fix HIGH severity path traversal vulnerability (CVSS 7.1). Also updated npm override.
 
 ## [4.3.1] - 2026-02-05
 
