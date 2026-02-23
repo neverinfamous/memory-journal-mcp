@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`link_entries` Existence Check (P154)** — Tool now pre-checks both source and target entry existence before creating relationship, returning `{ success: false, message: "Source/Target entry X not found" }` instead of silently creating orphan relationships
 - **`visualize_relationships` Existence Disambiguation (P154)** — When `entry_id` parameter specifies a nonexistent entry, tool now returns `{ message: "Entry X not found" }` instead of the ambiguous `"No entries found with relationships matching your criteria"`
 
+### CI/CD
+
+- **Removed Dependabot Auto-Merge Workflow** — Deleted `dependabot-auto-merge.yml`; dependency PRs now require manual review and merge
+- **Trivy Action Update** — Updated `aquasecurity/trivy-action` 0.33.1 → 0.34.0 in `security-update.yml` (bundles Trivy scanner 0.69.1)
+
 ### Security
 
 - **GHSA-w7fw-mjwx-w883 (qs)** — Updated `qs` 6.14.1 → 6.14.2 to fix low-severity arrayLimit bypass in comma parsing that allows denial of service
