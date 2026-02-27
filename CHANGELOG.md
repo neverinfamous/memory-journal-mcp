@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **AntiGravity IDE Guidance** — Added explicit note in README.md and DOCKER_README.md that AntiGravity does not currently support MCP server instructions, with workaround to manually provide `ServerInstructions.ts` contents
+- **`memory://milestones/{N}` Behavior Clarified** — Updated `test-memory-journal-mcp.md` to accurately document that this resource is designed to return milestone metadata + issue counts + `completionPercentage` + a `hint` to use `get_github_issues` for individual issue details (not full issue arrays)
 
 ### Improved
 
@@ -65,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`get_github_issue` Missing Milestone Field** — `getIssue()` in `GitHubIntegration.ts` now maps `issue.milestone` from the GitHub API response into the returned `IssueDetails` object. Previously the field was silently excluded, so `get_github_issue` and other callers never reflected milestone assignment even when the issue had one.
+- **`ServerInstructions.ts` Entry Types Corrected** — Updated `## Entry Types` reference list from 7 stale v4-era types (`technical_note`, `progress_update`, `deployment`, etc.) to the full 13 types in the `EntryType` union (`personal_reflection`, `project_decision`, `technical_achievement`, `bug_fix`, `feature_implementation`, `code_review`, `meeting_notes`, `learning`, `research`, `planning`, `retrospective`, `standup`, `other`). The most impactful addition is `planning`, which is the type auto-assigned by `create_github_issue_with_entry` and `close_github_issue_with_entry`. Updated the corresponding test in `server-instructions.test.ts`.
 - **`memory://milestones/{N}` Description Clarified** — Updated resource description to accurately state it returns milestone metadata + issue counts (`openIssues`, `closedIssues`) rather than full issue arrays. Added a `hint` field to the response directing users to the `get_github_issues` tool for individual issue details.
 - **Docker Hub Short Description** — Corrected "HTTPS" → "HTTP/SSE" and formatting in `docker-publish.yml` short-description field
 - **`delete_entry` Permanent Delete of Soft-Deleted Entries** — `delete_entry(id, permanent: true)` now works on previously soft-deleted entries. Added `getEntryByIdIncludeDeleted()` so permanent deletion can find entries regardless of soft-delete state. Previously returned `{ success: false, error: "Entry not found" }` for soft-deleted entries.

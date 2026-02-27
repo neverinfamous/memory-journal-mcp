@@ -366,15 +366,21 @@ describe('generateInstructions', () => {
     })
 
     describe('full level — entry types', () => {
-        it('should list all 7 entry types', () => {
+        it('should list all 13 entry types', () => {
             const result = fullInstructions()
             expect(result).toContain('personal_reflection')
-            expect(result).toContain('technical_note')
-            expect(result).toContain('bug_fix')
-            expect(result).toContain('progress_update')
-            expect(result).toContain('code_review')
-            expect(result).toContain('deployment')
+            expect(result).toContain('project_decision')
             expect(result).toContain('technical_achievement')
+            expect(result).toContain('bug_fix')
+            expect(result).toContain('feature_implementation')
+            expect(result).toContain('code_review')
+            expect(result).toContain('meeting_notes')
+            expect(result).toContain('learning')
+            expect(result).toContain('research')
+            expect(result).toContain('planning')
+            expect(result).toContain('retrospective')
+            expect(result).toContain('standup')
+            expect(result).toContain('other')
         })
     })
 

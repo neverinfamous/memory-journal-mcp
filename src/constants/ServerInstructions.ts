@@ -215,12 +215,18 @@ Milestone resources:
 ## Entry Types
 Valid values for \`entry_type\` parameter:
 - \`personal_reflection\` (default) - Personal thoughts and notes
-- \`technical_note\` - Technical documentation
-- \`bug_fix\` - Bug fixes and resolutions
-- \`progress_update\` - Project progress updates
-- \`code_review\` - Code review notes
-- \`deployment\` - Deployment records
+- \`project_decision\` - Architectural and team decisions
 - \`technical_achievement\` - Milestones and breakthroughs
+- \`bug_fix\` - Bug fixes and resolutions
+- \`feature_implementation\` - Feature builds and rollouts
+- \`code_review\` - Code review notes
+- \`meeting_notes\` - Meeting summaries
+- \`learning\` - Learning and research insights
+- \`research\` - Research and exploration
+- \`planning\` - Planning sessions and roadmaps (\`create_github_issue_with_entry\` uses this type)
+- \`retrospective\` - Sprint and project retrospectives
+- \`standup\` - Daily standup notes
+- \`other\` - Miscellaneous
 
 ## Field Notes
 - **\`autoContext\`**: Reserved for future automatic context capture. Currently always \`null\`.
