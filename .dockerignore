@@ -38,6 +38,9 @@ Thumbs.db
 .prettierrc
 .prettierignore
 eslint.config.js
+vitest.config.ts
+tests/
+coverage/
 
 # -----------------------------------------------------------------------------
 # Local Development Files
