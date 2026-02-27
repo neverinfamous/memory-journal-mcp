@@ -80,9 +80,9 @@
 
 ### 📈 **Current Capabilities**
 
-- **38 MCP tools** - Complete development workflow + backup/restore + Kanban + Milestones + issue management
+- **39 MCP tools** - Complete development workflow + backup/restore + Kanban + Milestones + Insights + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
-- **20 MCP resources** - 13 static + 7 template (require parameters)
+- **21 MCP resources** - 14 static + 7 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**, **Milestones**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 8 relationship types, Mermaid visualization
@@ -305,18 +305,18 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 
 ## ⚡ Core Features
 
-### 🛠️ 38 MCP Tools (8 Groups)
+### 🛠️ 39 MCP Tools (8 Groups)
 
-| Group           | Tools | Description                                                       |
-| --------------- | ----- | ----------------------------------------------------------------- |
-| `core`          | 6     | Entry CRUD, tags, test                                            |
-| `search`        | 4     | Text search, date range, semantic, vector stats                   |
-| `analytics`     | 2     | Statistics, cross-project insights                                |
-| `relationships` | 2     | Link entries, visualize graphs                                    |
-| `export`        | 1     | JSON/Markdown export                                              |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags           |
-| `github`        | 14    | Issues, PRs, context, Kanban, **Milestones**, **issue lifecycle** |
-| `backup`        | 4     | Backup, list, restore, cleanup                                    |
+| Group           | Tools | Description                                                                     |
+| --------------- | ----- | ------------------------------------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                                                          |
+| `search`        | 4     | Text search, date range, semantic, vector stats                                 |
+| `analytics`     | 2     | Statistics, cross-project insights                                              |
+| `relationships` | 2     | Link entries, visualize graphs                                                  |
+| `export`        | 1     | JSON/Markdown export                                                            |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                         |
+| `github`        | 15    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle** |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                  |
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -325,9 +325,9 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 20 Resources (13 Static + 7 Template)
+### 📡 21 Resources (14 Static + 7 Template)
 
-Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, `memory://kanban/{n}` for Kanban boards, and `memory://github/milestones` for milestone tracking. Template resources require parameters and are accessed directly by URI.
+Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, `memory://kanban/{n}` for Kanban boards, `memory://github/milestones` for milestone tracking, and `memory://github/insights` for repository traffic analytics. Template resources require parameters and are accessed directly by URI.
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ---
@@ -383,6 +383,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - `get_kanban_board` / `move_kanban_item` - **Kanban management**
 - `get_github_milestones` / `get_github_milestone` - **Milestone tracking with completion %**
 - `create_github_milestone` / `update_github_milestone` / `delete_github_milestone` - **Milestone CRUD**
+- `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
 - `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
 
 **Agent Operations (via gh CLI):**

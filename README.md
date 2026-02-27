@@ -75,9 +75,9 @@ flowchart TB
 
 ### 📈 **Current Capabilities**
 
-- **38 MCP tools** - Complete development workflow + backup/restore + Kanban + Milestones + issue management
+- **39 MCP tools** - Complete development workflow + backup/restore + Kanban + Milestones + Insights + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
-- **20 MCP resources** - 13 static + 7 template (require parameters)
+- **21 MCP resources** - 14 static + 7 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**, **Milestones**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 8 relationship types, Mermaid visualization
@@ -297,18 +297,18 @@ When GitHub tools cannot auto-detect repository information:
 
 ## 📋 Core Capabilities
 
-### 🛠️ **38 MCP Tools** (8 Groups)
+### 🛠️ **39 MCP Tools** (8 Groups)
 
-| Group           | Tools | Description                                                       |
-| --------------- | ----- | ----------------------------------------------------------------- |
-| `core`          | 6     | Entry CRUD, tags, test                                            |
-| `search`        | 4     | Text search, date range, semantic, vector stats                   |
-| `analytics`     | 2     | Statistics, cross-project insights                                |
-| `relationships` | 2     | Link entries, visualize graphs                                    |
-| `export`        | 1     | JSON/Markdown export                                              |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags           |
-| `github`        | 14    | Issues, PRs, context, Kanban, **Milestones**, **issue lifecycle** |
-| `backup`        | 4     | Backup, list, restore, cleanup                                    |
+| Group           | Tools | Description                                                                     |
+| --------------- | ----- | ------------------------------------------------------------------------------- |
+| `core`          | 6     | Entry CRUD, tags, test                                                          |
+| `search`        | 4     | Text search, date range, semantic, vector stats                                 |
+| `analytics`     | 2     | Statistics, cross-project insights                                              |
+| `relationships` | 2     | Link entries, visualize graphs                                                  |
+| `export`        | 1     | JSON/Markdown export                                                            |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                         |
+| `github`        | 15    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle** |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                  |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -332,7 +332,7 @@ When GitHub tools cannot auto-detect repository information:
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **20 Resources** (13 Static + 7 Template)
+### 📡 **21 Resources** (14 Static + 7 Template)
 
 **Static Resources** (appear in resource lists):
 
@@ -348,6 +348,7 @@ When GitHub tools cannot auto-detect repository information:
 - `memory://tags` - All tags with usage counts
 - `memory://statistics` - Journal statistics
 - `memory://github/status` - GitHub repository status overview
+- `memory://github/insights` - Repository stars, forks, and 14-day traffic summary
 - `memory://github/milestones` - Open milestones with completion percentages
 
 **Template Resources** (require parameters, fetch directly by URI):
@@ -391,6 +392,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - `get_kanban_board` / `move_kanban_item` - **Kanban management**
 - `get_github_milestones` / `get_github_milestone` - **Milestone tracking with completion %**
 - `create_github_milestone` / `update_github_milestone` / `delete_github_milestone` - **Milestone CRUD**
+- `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
 - `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
 
 **Agent Operations (via gh CLI):**
@@ -450,7 +452,7 @@ export MEMORY_JOURNAL_MCP_TOOL_FILTER="-analytics,-github"
 | -------------- | ------------- | ----- |
 | Starter        | `starter`     | ~10   |
 | Essential      | `essential`   | ~6    |
-| Full (default) | `full`        | 38    |
+| Full (default) | `full`        | 39    |
 | Read-only      | `readonly`    | ~20   |
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
@@ -466,8 +468,8 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 38 Tools"]
-        Resources["📡 20 Resources"]
+        Tools["🛠️ 39 Tools"]
+        Resources["📡 21 Resources"]
         Prompts["💬 15 Prompts"]
     end
 
@@ -495,7 +497,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (38)      │  │ Resources (20)  │  │ Prompts (15)│  │
+│  │ Tools (39)      │  │ Resources (21)  │  │ Prompts (15)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
