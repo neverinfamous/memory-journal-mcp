@@ -266,6 +266,17 @@ export interface JournalEntry {
     autoContext: string | null
     deletedAt: string | null
     tags: string[]
+    // GitHub integration fields
+    projectNumber?: number | null
+    projectOwner?: string | null
+    issueNumber?: number | null
+    issueUrl?: string | null
+    prNumber?: number | null
+    prUrl?: string | null
+    prStatus?: string | null
+    workflowRunId?: number | null
+    workflowName?: string | null
+    workflowStatus?: string | null
 }
 
 /**

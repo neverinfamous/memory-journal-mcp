@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`delete_entry` Existence Check (P154)** — Tool now pre-checks entry existence before mutation, returning `{ success: false, error: "Entry X not found" }` for nonexistent entries instead of always returning `success: true`
 - **`link_entries` Existence Check (P154)** — Tool now pre-checks both source and target entry existence before creating relationship, returning `{ success: false, message: "Source/Target entry X not found" }` instead of silently creating orphan relationships
 - **`visualize_relationships` Existence Disambiguation (P154)** — When `entry_id` parameter specifies a nonexistent entry, tool now returns `{ message: "Entry X not found" }` instead of the ambiguous `"No entries found with relationships matching your criteria"`
+- **`memory://health` Tool Count** — Health resource now dynamically computes tool count from `TOOL_GROUPS` instead of a hardcoded value. Previously reported 33 tools; now correctly reports 38 after milestone tools were added.
+- **`delete_github_milestone` Structured Error** — Tool now returns `{ success: false, milestoneNumber, message, error }` matching `DeleteMilestoneOutputSchema` when deletion fails. Previously returned only `{ error }` without structured fields.
+- **`JournalEntry` GitHub Metadata** — Entry output now includes 10 GitHub integration fields (`issueNumber`, `issueUrl`, `prNumber`, `prUrl`, `prStatus`, `projectNumber`, `projectOwner`, `workflowRunId`, `workflowName`, `workflowStatus`) in all tool responses. Previously stored in DB but omitted from `create_entry`, `get_entry_by_id`, `get_recent_entries`, and search results.
 
 ### CI/CD
 

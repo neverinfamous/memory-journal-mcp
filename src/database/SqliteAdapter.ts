@@ -1211,6 +1211,17 @@ export class SqliteAdapter {
             autoContext: row['auto_context'] as string | null,
             deletedAt: row['deleted_at'] as string | null,
             tags: this.getTagsForEntry(id),
+            // GitHub integration fields
+            projectNumber: (row['project_number'] as number | null) ?? null,
+            projectOwner: (row['project_owner'] as string | null) ?? null,
+            issueNumber: (row['issue_number'] as number | null) ?? null,
+            issueUrl: (row['issue_url'] as string | null) ?? null,
+            prNumber: (row['pr_number'] as number | null) ?? null,
+            prUrl: (row['pr_url'] as string | null) ?? null,
+            prStatus: (row['pr_status'] as string | null) ?? null,
+            workflowRunId: (row['workflow_run_id'] as number | null) ?? null,
+            workflowName: (row['workflow_name'] as string | null) ?? null,
+            workflowStatus: (row['workflow_status'] as string | null) ?? null,
         }
     }
 

@@ -3025,9 +3025,10 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
 
                 if (!result.success) {
                     return {
-                        error:
-                            result.error ??
-                            `Failed to delete milestone #${String(input.milestone_number)}`,
+                        success: false,
+                        milestoneNumber: input.milestone_number,
+                        message: `Failed to delete milestone #${String(input.milestone_number)}`,
+                        error: result.error ?? undefined,
                     }
                 }
 

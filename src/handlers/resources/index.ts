@@ -7,6 +7,7 @@
 import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
 import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
 import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
+import { getAllToolNames } from '../../filtering/ToolFilter.js'
 import type { Tag, McpIcon } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
 import { generateInstructions, type InstructionLevel } from '../../constants/ServerInstructions.js'
@@ -193,8 +194,7 @@ function execQuery(
  * Get total tool count for health status
  */
 function getTotalToolCount(): number {
-    // Import dynamically to avoid circular dependency
-    return 33 // 6 core + 4 search + 2 analytics + 2 relationships + 1 export + 5 admin + 9 github + 4 backup
+    return getAllToolNames().length
 }
 
 /**
