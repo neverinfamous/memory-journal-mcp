@@ -77,13 +77,15 @@ SECURITY.md
 data/
 
 # -----------------------------------------------------------------------------
-# Database Files (runtime only)
+# Database and Index Files (runtime only)
 # -----------------------------------------------------------------------------
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
+.vectra_index/
+*.vectra/
 
 # -----------------------------------------------------------------------------
 # Temporary Files
