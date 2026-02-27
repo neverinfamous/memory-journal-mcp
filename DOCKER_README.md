@@ -13,7 +13,7 @@
 ![Coverage](https://img.shields.io/badge/Coverage-78.94%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-409_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, and Knowledge Graphs into every conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs into every conversation.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -26,6 +26,7 @@
 - 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs
 - 🔍 **Triple search** (full-text, semantic, date range)
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
+- 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
 
 ### Deployment Options
