@@ -41,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Docker Hub Short Description** — Corrected "HTTPS" → "HTTP/SSE" and formatting in `docker-publish.yml` short-description field
+- **`delete_entry` Permanent Delete of Soft-Deleted Entries** — `delete_entry(id, permanent: true)` now works on previously soft-deleted entries. Added `getEntryByIdIncludeDeleted()` so permanent deletion can find entries regardless of soft-delete state. Previously returned `{ success: false, error: "Entry not found" }` for soft-deleted entries.
+- **`list_tags` Zero-Count Tag Filtering** — `list_tags` tool and `memory://tags` resource no longer return orphan tags with zero usage count, reducing clutter from deleted or merged tags
 - **`delete_entry` Existence Check (P154)** — Tool now pre-checks entry existence before mutation, returning `{ success: false, error: "Entry X not found" }` for nonexistent entries instead of always returning `success: true`
 - **`link_entries` Existence Check (P154)** — Tool now pre-checks both source and target entry existence before creating relationship, returning `{ success: false, message: "Source/Target entry X not found" }` instead of silently creating orphan relationships
 - **`visualize_relationships` Existence Disambiguation (P154)** — When `entry_id` parameter specifies a nonexistent entry, tool now returns `{ message: "Entry X not found" }` instead of the ambiguous `"No entries found with relationships matching your criteria"`

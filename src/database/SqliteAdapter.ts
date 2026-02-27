@@ -298,6 +298,23 @@ export class SqliteAdapter {
     }
 
     /**
+     * Get entry by ID, including soft-deleted entries.
+     * Used for permanent deletion of previously soft-deleted entries.
+     */
+    getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
+        const db = this.ensureDb()
+        const result = db.exec(`SELECT * FROM memory_journal WHERE id = ?`, [id])
+
+        if (result.length === 0 || result[0]?.values.length === 0) return null
+
+        const columns = result[0]?.columns ?? []
+        const values = result[0]?.values[0] ?? []
+        const row = this.rowToObject(columns, values)
+
+        return this.rowToEntry(row)
+    }
+
+    /**
      * Calculate importance score for an entry (0.0-1.0)
      *
      * Formula:
@@ -444,7 +461,8 @@ export class SqliteAdapter {
         const db = this.ensureDb()
 
         // P154: Pre-check entry existence before mutation
-        const entry = this.getEntryById(id)
+        // For permanent deletion, also look through soft-deleted entries
+        const entry = permanent ? this.getEntryByIdIncludeDeleted(id) : this.getEntryById(id)
         if (!entry) return false
 
         if (permanent) {
@@ -615,11 +633,11 @@ export class SqliteAdapter {
     }
 
     /**
-     * List all tags
+     * List all tags with at least one usage
      */
     listTags(): Tag[] {
         const db = this.ensureDb()
-        const result = db.exec('SELECT * FROM tags ORDER BY usage_count DESC')
+        const result = db.exec('SELECT * FROM tags WHERE usage_count > 0 ORDER BY usage_count DESC')
 
         if (result.length === 0) return []
 
