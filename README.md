@@ -12,8 +12,10 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
+![Coverage](https://img.shields.io/badge/Coverage-80.11%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-393_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, and knowledge graphs — into every conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, and Knowledge Graphs — into every conversation.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -27,7 +29,7 @@
 ### Key Benefits
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
-- 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, PRs, projects)
+- 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
 - 🔗 **Build knowledge graphs** linking specs → implementations → tests → PRs
 - 🔍 **Triple search** (full-text, semantic, date range)
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
