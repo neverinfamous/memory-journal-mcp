@@ -611,6 +611,63 @@ const KanbanBoardOutputSchema = z.object({
 })
 
 // ============================================================================
+// Phase 3b: Repository Insights Output Schema
+// ============================================================================
+
+/**
+ * Schema for get_repo_insights output.
+ * Uses optional sections to minimize token usage.
+ */
+const RepoInsightsOutputSchema = z.object({
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    section: z.string().optional(),
+    stars: z.number().optional(),
+    forks: z.number().optional(),
+    watchers: z.number().optional(),
+    openIssues: z.number().optional(),
+    size: z.number().optional(),
+    defaultBranch: z.string().optional(),
+    traffic: z
+        .object({
+            clones: z.object({
+                total: z.number(),
+                unique: z.number(),
+                dailyAvg: z.number(),
+            }),
+            views: z.object({
+                total: z.number(),
+                unique: z.number(),
+                dailyAvg: z.number(),
+            }),
+            period: z.string(),
+        })
+        .optional(),
+    referrers: z
+        .array(
+            z.object({
+                referrer: z.string(),
+                count: z.number(),
+                uniques: z.number(),
+            })
+        )
+        .optional(),
+    paths: z
+        .array(
+            z.object({
+                path: z.string(),
+                title: z.string(),
+                count: z.number(),
+                uniques: z.number(),
+            })
+        )
+        .optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
 // Phase 4: Backup Tool Output Schemas
 // ============================================================================
 
@@ -3053,6 +3110,107 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     milestoneNumber: input.milestone_number,
                     message: `Deleted milestone #${String(input.milestone_number)}`,
                 }
+            },
+        },
+        // Repository insights tool
+        {
+            name: 'get_repo_insights',
+            title: 'Repository Insights',
+            description:
+                'Get repository insights: stars, forks, traffic (clones/views), referrers, and popular paths. Use "sections" to control token usage: stars (~50 tokens), traffic (~100), referrers (~100), paths (~100), or all (~350).',
+            group: 'github',
+            inputSchema: z.object({
+                sections: z
+                    .enum(['stars', 'traffic', 'referrers', 'paths', 'all'])
+                    .optional()
+                    .default('stars')
+                    .describe(
+                        'Data section to return (default: stars). Use "all" for full payload.'
+                    ),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe('Repository owner - LEAVE EMPTY to auto-detect'),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe('Repository name - LEAVE EMPTY to auto-detect'),
+            }),
+            outputSchema: RepoInsightsOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z
+                    .object({
+                        sections: z
+                            .enum(['stars', 'traffic', 'referrers', 'paths', 'all'])
+                            .optional()
+                            .default('stars'),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' }
+                }
+
+                const repoInfo = await github.getRepoInfo()
+                const owner = input.owner ?? repoInfo.owner ?? undefined
+                const repo = input.repo ?? repoInfo.repo ?? undefined
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
+                        requiresUserInput: true,
+                        instruction:
+                            'Ask the user: "What GitHub repository should I get insights for? Please provide the owner and repo name (e.g., owner/repo)."',
+                    }
+                }
+
+                const section = input.sections
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- building response dynamically
+                const result: Record<string, any> = {
+                    owner,
+                    repo,
+                    section,
+                }
+
+                // Stars section (default)
+                if (section === 'stars' || section === 'all') {
+                    const stats = await github.getRepoStats(owner, repo)
+                    if (stats) {
+                        result['stars'] = stats.stars
+                        result['forks'] = stats.forks
+                        result['watchers'] = stats.watchers
+                        result['openIssues'] = stats.openIssues
+                        if (section === 'all') {
+                            result['size'] = stats.size
+                            result['defaultBranch'] = stats.defaultBranch
+                        }
+                    }
+                }
+
+                // Traffic section
+                if (section === 'traffic' || section === 'all') {
+                    const traffic = await github.getTrafficData(owner, repo)
+                    if (traffic) {
+                        result['traffic'] = traffic
+                    }
+                }
+
+                // Referrers section
+                if (section === 'referrers' || section === 'all') {
+                    const referrers = await github.getTopReferrers(owner, repo, 5)
+                    result['referrers'] = referrers
+                }
+
+                // Paths section
+                if (section === 'paths' || section === 'all') {
+                    const paths = await github.getPopularPaths(owner, repo, 5)
+                    result['paths'] = paths
+                }
+
+                return result
             },
         },
         // Backup tools

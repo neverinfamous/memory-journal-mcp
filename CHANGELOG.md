@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance Benchmarking Suite** — Added a `vitest bench` powered benchmarking suite to measure baseline performance for database operations, vector indexing, and tool execution overhead. Included new `"bench"` npm script.
 
 - **GitHub Milestones Integration** — Full CRUD support for GitHub Milestones
-  - 5 new tools: `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` (38 total tools)
+  - 5 new tools: `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` (39 total tools)
   - 2 new resources: `memory://github/milestones` (list view) and `memory://milestones/{number}` (detail view) (20 total resources)
   - Session briefing (`memory://briefing`) now includes milestone progress in the user message table
   - GitHub status resource (`memory://github/status`) now includes milestone summary data
@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Defaults to `localhost`; set to `0.0.0.0` for container deployments
   - Also reads `HOST` environment variable as fallback
   - CLI flag takes precedence over environment variables
+
+- **Repository Insights/Traffic Tool** — New `get_repo_insights` tool and `memory://github/insights` resource for monitoring repository health
+  - 1 new tool: `get_repo_insights` (39 total tools, github group: 14 → 15)
+  - 1 new resource: `memory://github/insights` — compact summary of stars, forks, and 14-day traffic totals (~150 tokens)
+  - **Token-efficient sections parameter**: `stars` (~50 tokens), `traffic` (~100), `referrers` (~100), `paths` (~100), or `all` (~350)
+  - Surfaces stars, forks, watchers, clone/view aggregates (14-day rolling), top referrer sources, and popular repository pages
+  - Uses extended 10-minute cache TTL (vs 5-minute for other GitHub data) since traffic data changes slowly
+  - 4 new `GitHubIntegration` methods: `getRepoStats()`, `getTrafficData()`, `getTopReferrers()`, `getPopularPaths()`
+  - New types: `RepoStats`, `TrafficData`, `TrafficReferrer`, `PopularPath`
+  - Requires push access to repository for traffic endpoints
 
 ### Changed
 

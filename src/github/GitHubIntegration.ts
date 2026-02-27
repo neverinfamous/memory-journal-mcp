@@ -19,10 +19,17 @@ import type {
     KanbanColumn,
     ProjectV2Item,
     ProjectV2StatusOption,
+    RepoStats,
+    TrafficData,
+    TrafficReferrer,
+    PopularPath,
 } from '../types/index.js'
 
 /** TTL for cached GitHub API responses (5 minutes) */
 const CACHE_TTL_MS = 5 * 60 * 1000
+
+/** TTL for cached traffic/insights responses (10 minutes - traffic data changes slowly) */
+const TRAFFIC_CACHE_TTL_MS = 10 * 60 * 1000
 
 /** Generic cache entry with timestamp */
 interface CacheEntry<T> {
@@ -1365,6 +1372,182 @@ export class GitHubIntegration {
             this.invalidateCache(`milestones:${owner}:${repo}`)
             this.invalidateCache(`milestone:${owner}:${repo}:${String(milestoneNumber)}`)
             this.invalidateCache('context:')
+        }
+    }
+
+    // ==========================================================================
+    // Repository Insights/Traffic Methods
+    // ==========================================================================
+
+    /**
+     * Get a cached value with a custom TTL.
+     * Used for traffic endpoints which change slowly (10-min TTL).
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is needed at call sites for type-safe casts
+    private getCachedWithTtl<T>(key: string, ttlMs: number): T | undefined {
+        const entry = this.apiCache.get(key)
+        if (entry && Date.now() - entry.timestamp < ttlMs) {
+            return entry.data as T
+        }
+        if (entry) {
+            this.apiCache.delete(key)
+        }
+        return undefined
+    }
+
+    /**
+     * Get repository statistics (stars, forks, watchers).
+     * Uses a single GET /repos/{owner}/{repo} API call.
+     */
+    async getRepoStats(owner: string, repo: string): Promise<RepoStats | null> {
+        if (!this.octokit) {
+            return null
+        }
+
+        const cacheKey = `repostats:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<RepoStats>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached
+
+        try {
+            const response = await this.octokit.repos.get({ owner, repo })
+            const data = response.data
+
+            const result: RepoStats = {
+                stars: data.stargazers_count,
+                forks: data.forks_count,
+                watchers: data.subscribers_count,
+                openIssues: data.open_issues_count,
+                size: data.size,
+                defaultBranch: data.default_branch,
+            }
+
+            this.setCache(cacheKey, result)
+            return result
+        } catch (error) {
+            logger.error('Failed to get repo stats', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return null
+        }
+    }
+
+    /**
+     * Get aggregated traffic data (14-day rolling clones + views).
+     * Combines GET /repos/{owner}/{repo}/traffic/clones and /traffic/views.
+     * Requires push access to the repository.
+     */
+    async getTrafficData(owner: string, repo: string): Promise<TrafficData | null> {
+        if (!this.octokit) {
+            return null
+        }
+
+        const cacheKey = `traffic:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<TrafficData>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached
+
+        try {
+            const [clonesRes, viewsRes] = await Promise.all([
+                this.octokit.rest.repos.getClones({ owner, repo }),
+                this.octokit.rest.repos.getViews({ owner, repo }),
+            ])
+
+            const clonesDays = clonesRes.data.clones?.length ?? 0
+            const viewsDays = viewsRes.data.views?.length ?? 0
+
+            const result: TrafficData = {
+                clones: {
+                    total: clonesRes.data.count,
+                    unique: clonesRes.data.uniques,
+                    dailyAvg: clonesDays > 0 ? Math.round(clonesRes.data.count / clonesDays) : 0,
+                },
+                views: {
+                    total: viewsRes.data.count,
+                    unique: viewsRes.data.uniques,
+                    dailyAvg: viewsDays > 0 ? Math.round(viewsRes.data.count / viewsDays) : 0,
+                },
+                period: '14 days',
+            }
+
+            this.setCache(cacheKey, result)
+            return result
+        } catch (error) {
+            logger.error('Failed to get traffic data', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return null
+        }
+    }
+
+    /**
+     * Get top referrer sources for the repository (14-day rolling).
+     * Requires push access to the repository.
+     */
+    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[]> {
+        if (!this.octokit) {
+            return []
+        }
+
+        const cacheKey = `referrers:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<TrafficReferrer[]>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached.slice(0, limit)
+
+        try {
+            const response = await this.octokit.rest.repos.getTopReferrers({ owner, repo })
+
+            const result: TrafficReferrer[] = response.data.map((r) => ({
+                referrer: r.referrer,
+                count: r.count,
+                uniques: r.uniques,
+            }))
+
+            this.setCache(cacheKey, result)
+            return result.slice(0, limit)
+        } catch (error) {
+            logger.error('Failed to get top referrers', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return []
+        }
+    }
+
+    /**
+     * Get popular repository paths (14-day rolling).
+     * Requires push access to the repository.
+     */
+    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[]> {
+        if (!this.octokit) {
+            return []
+        }
+
+        const cacheKey = `paths:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<PopularPath[]>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached.slice(0, limit)
+
+        try {
+            const response = await this.octokit.rest.repos.getTopPaths({ owner, repo })
+
+            const result: PopularPath[] = response.data.map((p) => ({
+                path: p.path,
+                title: p.title,
+                count: p.count,
+                uniques: p.uniques,
+            }))
+
+            this.setCache(cacheKey, result)
+            return result.slice(0, limit)
+        } catch (error) {
+            logger.error('Failed to get popular paths', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return []
         }
     }
 }

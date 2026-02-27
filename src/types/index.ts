@@ -416,6 +416,50 @@ export interface ProjectContext {
 }
 
 // ============================================================================
+// Repository Insights/Traffic Types
+// ============================================================================
+
+/**
+ * Repository statistics (stars, forks, watchers)
+ */
+export interface RepoStats {
+    stars: number
+    forks: number
+    watchers: number
+    openIssues: number
+    size: number // KB
+    defaultBranch: string
+}
+
+/**
+ * Aggregated traffic data (14-day rolling)
+ */
+export interface TrafficData {
+    clones: { total: number; unique: number; dailyAvg: number }
+    views: { total: number; unique: number; dailyAvg: number }
+    period: string // e.g. "14 days"
+}
+
+/**
+ * Traffic referrer source
+ */
+export interface TrafficReferrer {
+    referrer: string
+    count: number
+    uniques: number
+}
+
+/**
+ * Popular repository path
+ */
+export interface PopularPath {
+    path: string
+    title: string
+    count: number
+    uniques: number
+}
+
+// ============================================================================
 // GitHub Projects v2 Kanban Types
 // ============================================================================
 

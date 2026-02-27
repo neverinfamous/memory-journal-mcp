@@ -55,11 +55,7 @@
     // Error Lens Configuration
     // ═══════════════════════════════════════════════════════════════════════
     "errorLens.enabled": true,
-    "errorLens.enabledDiagnosticLevels": [
-        "error",
-        "warning",
-        "info"
-    ],
+    "errorLens.enabledDiagnosticLevels": ["error", "warning", "info"],
     "errorLens.messageEnabled": true,
     "errorLens.statusBarMessageEnabled": true,
     "errorLens.gutterIconsEnabled": true,

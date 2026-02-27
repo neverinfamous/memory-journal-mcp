@@ -1293,6 +1293,77 @@ I have project memory access and will create entries for significant work.`,
                 }
             },
         },
+        // Repository insights resource
+        {
+            uri: 'memory://github/insights',
+            name: 'Repository Insights',
+            title: 'Repository Stars & Traffic Summary',
+            description: 'Compact repo insights: stars, forks, 14-day traffic totals (~150 tokens)',
+            mimeType: 'application/json',
+            icons: [ICON_ANALYTICS],
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.4, // Lower than status — optional enrichment
+            },
+            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+                const lastModified = new Date().toISOString()
+
+                if (!context.github) {
+                    return {
+                        data: {
+                            error: 'GitHub integration not available',
+                            hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                        },
+                        annotations: { lastModified },
+                    }
+                }
+
+                const repoInfo = await context.github.getRepoInfo()
+                const owner = repoInfo.owner
+                const repo = repoInfo.repo
+
+                if (!owner || !repo) {
+                    return {
+                        data: {
+                            error: 'Could not detect repository',
+                            hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                        },
+                        annotations: { lastModified },
+                    }
+                }
+
+                // Get repo stats (stars, forks)
+                const stats = await context.github.getRepoStats(owner, repo)
+
+                // Get traffic data (clones, views) - may fail if token lacks push access
+                let traffic: { clones14d: number; views14d: number } | null = null
+                try {
+                    const trafficData = await context.github.getTrafficData(owner, repo)
+                    if (trafficData) {
+                        traffic = {
+                            clones14d: trafficData.clones.total,
+                            views14d: trafficData.views.total,
+                        }
+                    }
+                } catch {
+                    // Traffic data requires push access - silently skip
+                }
+
+                return {
+                    data: {
+                        repository: `${owner}/${repo}`,
+                        stars: stats?.stars ?? null,
+                        forks: stats?.forks ?? null,
+                        watchers: stats?.watchers ?? null,
+                        ...(traffic ?? {}),
+                        hint: !traffic
+                            ? 'Traffic data requires push access to the repository.'
+                            : undefined,
+                    },
+                    annotations: { lastModified },
+                }
+            },
+        },
         // Milestone resources
         {
             uri: 'memory://github/milestones',

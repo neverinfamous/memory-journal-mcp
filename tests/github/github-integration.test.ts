@@ -44,9 +44,18 @@ function createOctokitMock() {
             list: vi.fn(),
             get: vi.fn(),
         },
+        repos: {
+            get: vi.fn(),
+        },
         rest: {
             actions: {
                 listWorkflowRunsForRepo: vi.fn(),
+            },
+            repos: {
+                getClones: vi.fn(),
+                getViews: vi.fn(),
+                getTopReferrers: vi.fn(),
+                getTopPaths: vi.fn(),
             },
         },
     }
@@ -817,6 +826,199 @@ describe('GitHubIntegration', () => {
             const result = await gh.addProjectItem('P', 'C')
             expect(result.success).toBe(false)
             expect(result.error).toContain('Failed')
+        })
+    })
+
+    // ==========================================================================
+    // Repository Insights/Traffic Tests
+    // ==========================================================================
+
+    describe('getRepoStats', () => {
+        it('should return repo stats', async () => {
+            octokit.repos.get.mockResolvedValue({
+                data: {
+                    stargazers_count: 42,
+                    forks_count: 10,
+                    subscribers_count: 5,
+                    open_issues_count: 3,
+                    size: 1024,
+                    default_branch: 'main',
+                },
+            })
+
+            const result = await gh.getRepoStats('testowner', 'testrepo')
+            expect(result).toEqual({
+                stars: 42,
+                forks: 10,
+                watchers: 5,
+                openIssues: 3,
+                size: 1024,
+                defaultBranch: 'main',
+            })
+        })
+
+        it('should return null without octokit', async () => {
+            const bare = new GitHubIntegration('.')
+            const result = await bare.getRepoStats('o', 'r')
+            expect(result).toBeNull()
+        })
+
+        it('should return null on API error', async () => {
+            octokit.repos.get.mockRejectedValue(new Error('Not found'))
+            const result = await gh.getRepoStats('o', 'r')
+            expect(result).toBeNull()
+        })
+
+        it('should cache results with extended TTL', async () => {
+            octokit.repos.get.mockResolvedValue({
+                data: {
+                    stargazers_count: 1,
+                    forks_count: 0,
+                    subscribers_count: 0,
+                    open_issues_count: 0,
+                    size: 100,
+                    default_branch: 'main',
+                },
+            })
+
+            await gh.getRepoStats('o', 'r')
+            await gh.getRepoStats('o', 'r')
+            expect(octokit.repos.get).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    describe('getTrafficData', () => {
+        it('should return aggregated traffic data', async () => {
+            octokit.rest.repos.getClones.mockResolvedValue({
+                data: {
+                    count: 100,
+                    uniques: 50,
+                    clones: new Array(10).fill({ count: 10, uniques: 5 }),
+                },
+            })
+            octokit.rest.repos.getViews.mockResolvedValue({
+                data: {
+                    count: 500,
+                    uniques: 200,
+                    views: new Array(14).fill({ count: 36, uniques: 14 }),
+                },
+            })
+
+            const result = await gh.getTrafficData('testowner', 'testrepo')
+            expect(result).toEqual({
+                clones: { total: 100, unique: 50, dailyAvg: 10 },
+                views: { total: 500, unique: 200, dailyAvg: 36 },
+                period: '14 days',
+            })
+        })
+
+        it('should return null without octokit', async () => {
+            const bare = new GitHubIntegration('.')
+            const result = await bare.getTrafficData('o', 'r')
+            expect(result).toBeNull()
+        })
+
+        it('should return null on API error', async () => {
+            octokit.rest.repos.getClones.mockRejectedValue(new Error('Forbidden'))
+            octokit.rest.repos.getViews.mockRejectedValue(new Error('Forbidden'))
+            const result = await gh.getTrafficData('o', 'r')
+            expect(result).toBeNull()
+        })
+
+        it('should handle zero days gracefully', async () => {
+            octokit.rest.repos.getClones.mockResolvedValue({
+                data: { count: 0, uniques: 0, clones: [] },
+            })
+            octokit.rest.repos.getViews.mockResolvedValue({
+                data: { count: 0, uniques: 0, views: [] },
+            })
+
+            const result = await gh.getTrafficData('o', 'r')
+            expect(result).toEqual({
+                clones: { total: 0, unique: 0, dailyAvg: 0 },
+                views: { total: 0, unique: 0, dailyAvg: 0 },
+                period: '14 days',
+            })
+        })
+    })
+
+    describe('getTopReferrers', () => {
+        it('should return referrer list', async () => {
+            octokit.rest.repos.getTopReferrers.mockResolvedValue({
+                data: [
+                    { referrer: 'google.com', count: 100, uniques: 50 },
+                    { referrer: 'github.com', count: 80, uniques: 40 },
+                ],
+            })
+
+            const result = await gh.getTopReferrers('testowner', 'testrepo')
+            expect(result).toHaveLength(2)
+            expect(result[0]).toEqual({ referrer: 'google.com', count: 100, uniques: 50 })
+        })
+
+        it('should respect limit parameter', async () => {
+            octokit.rest.repos.getTopReferrers.mockResolvedValue({
+                data: [
+                    { referrer: 'a.com', count: 10, uniques: 5 },
+                    { referrer: 'b.com', count: 8, uniques: 4 },
+                    { referrer: 'c.com', count: 6, uniques: 3 },
+                ],
+            })
+
+            const result = await gh.getTopReferrers('o', 'r', 2)
+            expect(result).toHaveLength(2)
+        })
+
+        it('should return empty array without octokit', async () => {
+            const bare = new GitHubIntegration('.')
+            const result = await bare.getTopReferrers('o', 'r')
+            expect(result).toEqual([])
+        })
+
+        it('should return empty array on error', async () => {
+            octokit.rest.repos.getTopReferrers.mockRejectedValue(new Error('Forbidden'))
+            const result = await gh.getTopReferrers('o', 'r')
+            expect(result).toEqual([])
+        })
+    })
+
+    describe('getPopularPaths', () => {
+        it('should return popular paths', async () => {
+            octokit.rest.repos.getTopPaths.mockResolvedValue({
+                data: [
+                    { path: '/repo', title: 'repo', count: 200, uniques: 100 },
+                    { path: '/repo/issues', title: 'Issues', count: 50, uniques: 30 },
+                ],
+            })
+
+            const result = await gh.getPopularPaths('testowner', 'testrepo')
+            expect(result).toHaveLength(2)
+            expect(result[0]).toEqual({ path: '/repo', title: 'repo', count: 200, uniques: 100 })
+        })
+
+        it('should respect limit parameter', async () => {
+            octokit.rest.repos.getTopPaths.mockResolvedValue({
+                data: [
+                    { path: '/a', title: 'A', count: 10, uniques: 5 },
+                    { path: '/b', title: 'B', count: 8, uniques: 4 },
+                    { path: '/c', title: 'C', count: 6, uniques: 3 },
+                ],
+            })
+
+            const result = await gh.getPopularPaths('o', 'r', 1)
+            expect(result).toHaveLength(1)
+        })
+
+        it('should return empty array without octokit', async () => {
+            const bare = new GitHubIntegration('.')
+            const result = await bare.getPopularPaths('o', 'r')
+            expect(result).toEqual([])
+        })
+
+        it('should return empty array on error', async () => {
+            octokit.rest.repos.getTopPaths.mockRejectedValue(new Error('Forbidden'))
+            const result = await gh.getPopularPaths('o', 'r')
+            expect(result).toEqual([])
         })
     })
 })
