@@ -10,8 +10,8 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-80.11%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-393_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-78.94%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-409_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, and Knowledge Graphs into every conversation.
 
@@ -350,8 +350,6 @@ Including `memory://briefing` for session initialization, `memory://instructions
 ```bash
 # GitHub integration (optional - enables Projects/Issues/PRs)
 -e GITHUB_TOKEN=your_token
--e GITHUB_ORG_TOKEN=your_org_token  # For org projects
--e DEFAULT_ORG=your-org-name
 
 # Tool filtering (optional - control which tools are exposed)
 -e MEMORY_JOURNAL_MCP_TOOL_FILTER="-github"
@@ -363,7 +361,7 @@ Including `memory://briefing` for session initialization, `memory://instructions
 -e DB_PATH=/app/data/custom.db
 ```
 
-**Token Scopes:** `repo`, `project`, `read:org` (org projects only)
+**Token Scopes:** `repo`, `project`, `read:org` (org-level project discovery only)
 **[Full configuration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation#configuration)**
 
 ### GitHub Management Capabilities

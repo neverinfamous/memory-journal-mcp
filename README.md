@@ -12,8 +12,8 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-80.11%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-393_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-78.94%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-409_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, and Knowledge Graphs — into every conversation.
 
@@ -369,20 +369,18 @@ When GitHub tools cannot auto-detect repository information:
 
 ```bash
 export GITHUB_TOKEN="your_token"              # For Projects/Issues/PRs
-export GITHUB_ORG_TOKEN="your_org_token"      # Optional: org projects
-export DEFAULT_ORG="your-org-name"            # Optional: default org
 ```
 
-**Scopes:** `repo`, `project`, `read:org` (org only)
+**Scopes:** `repo`, `project`, `read:org` (org-level project discovery only)
 
 ### GitHub Management Capabilities
 
 Memory Journal provides a **hybrid approach** to GitHub management:
 
-| Capability Source  | Purpose                                                                        |
-| ------------------ | ------------------------------------------------------------------------------ |
-| **MCP Server**     | Specialized features: Kanban visualization, journal linking, project timelines |
-| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases  |
+| Capability Source  | Purpose                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| **MCP Server**     | Specialized features: Kanban visualization, Milestones, journal linking, project timelines |
+| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases              |
 
 **MCP Server Tools (Read + Kanban + Milestones + Issue Lifecycle):**
 
