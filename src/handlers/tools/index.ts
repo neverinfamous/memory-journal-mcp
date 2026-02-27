@@ -424,6 +424,13 @@ const GitHubIssueOutputSchema = z.object({
     title: z.string(),
     url: z.string(),
     state: z.enum(['OPEN', 'CLOSED']),
+    milestone: z
+        .object({
+            number: z.number(),
+            title: z.string(),
+        })
+        .nullable()
+        .optional(),
 })
 
 /**
@@ -765,6 +772,93 @@ const CloseGitHubIssueWithEntryOutputSchema = z.object({
             message: z.string().optional(),
         })
         .optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
+// GitHub Milestone Output Schemas
+// ============================================================================
+
+/**
+ * GitHub milestone schema.
+ */
+const GitHubMilestoneOutputSchema = z.object({
+    number: z.number(),
+    title: z.string(),
+    description: z.string().nullable(),
+    state: z.enum(['open', 'closed']),
+    url: z.string(),
+    dueOn: z.string().nullable(),
+    openIssues: z.number(),
+    closedIssues: z.number(),
+    completionPercentage: z.number().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    creator: z.string().nullable(),
+})
+
+/**
+ * Schema for get_github_milestones output.
+ */
+const GitHubMilestonesListOutputSchema = z.object({
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    milestones: z.array(GitHubMilestoneOutputSchema).optional(),
+    count: z.number().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for get_github_milestone output.
+ */
+const GitHubMilestoneResultOutputSchema = z.object({
+    milestone: GitHubMilestoneOutputSchema.optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for create_github_milestone output.
+ */
+const CreateMilestoneOutputSchema = z.object({
+    success: z.boolean().optional(),
+    milestone: GitHubMilestoneOutputSchema.optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for update_github_milestone output.
+ */
+const UpdateMilestoneOutputSchema = z.object({
+    success: z.boolean().optional(),
+    milestone: GitHubMilestoneOutputSchema.optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+/**
+ * Schema for delete_github_milestone output.
+ */
+const DeleteMilestoneOutputSchema = z.object({
+    success: z.boolean().optional(),
+    milestoneNumber: z.number().optional(),
     message: z.string().optional(),
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
@@ -2194,6 +2288,10 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 body: z.string().optional().describe('Issue body/description'),
                 labels: z.array(z.string()).optional().describe('Labels to apply'),
                 assignees: z.array(z.string()).optional().describe('Users to assign'),
+                milestone_number: z
+                    .number()
+                    .optional()
+                    .describe('Milestone number to assign this issue to'),
                 project_number: z
                     .number()
                     .optional()
@@ -2227,6 +2325,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         body: z.string().optional(),
                         labels: z.array(z.string()).optional(),
                         assignees: z.array(z.string()).optional(),
+                        milestone_number: z.number().optional(),
                         project_number: z.number().optional(),
                         initial_status: z.string().optional(),
                         owner: z.string().optional(),
@@ -2260,7 +2359,8 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     input.title,
                     input.body,
                     input.labels,
-                    input.assignees
+                    input.assignees,
+                    input.milestone_number
                 )
 
                 if (!issue) {
@@ -2585,6 +2685,356 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     message:
                         `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}` +
                         (kanbanResult?.moved ? ' and moved to Done' : ''),
+                }
+            },
+        },
+        // Milestone tools
+        {
+            name: 'get_github_milestones',
+            title: 'List GitHub Milestones',
+            description:
+                'List GitHub milestones for the repository with completion percentages and due dates.',
+            group: 'github',
+            inputSchema: z.object({
+                state: z
+                    .enum(['open', 'closed', 'all'])
+                    .optional()
+                    .default('open')
+                    .describe('Filter by state (default: open)'),
+                limit: z
+                    .number()
+                    .optional()
+                    .default(20)
+                    .describe('Max milestones to return (default: 20)'),
+                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+            }),
+            outputSchema: GitHubMilestonesListOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z
+                    .object({
+                        state: z.enum(['open', 'closed', 'all']).optional().default('open'),
+                        limit: z.number().optional().default(20),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' }
+                }
+
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const detectedRepo = repoInfo.repo
+
+                const owner = input.owner ?? detectedOwner ?? undefined
+                const repo = input.repo ?? detectedRepo ?? undefined
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
+                        requiresUserInput: true,
+                        detectedOwner,
+                        detectedRepo,
+                        instruction:
+                            'Ask the user: "What GitHub repository should I list milestones for? Please provide the owner and repo name (e.g., owner/repo)."',
+                    }
+                }
+
+                const milestones = await github.getMilestones(owner, repo, input.state, input.limit)
+                const milestonesWithPercentage = milestones.map((ms) => {
+                    const total = ms.openIssues + ms.closedIssues
+                    const completionPercentage =
+                        total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                    return { ...ms, completionPercentage }
+                })
+
+                return {
+                    milestones: milestonesWithPercentage,
+                    count: milestonesWithPercentage.length,
+                    owner,
+                    repo,
+                    detectedOwner,
+                    detectedRepo,
+                }
+            },
+        },
+        {
+            name: 'get_github_milestone',
+            title: 'Get GitHub Milestone Details',
+            description:
+                'Get detailed information about a specific GitHub milestone including progress and linked issue counts.',
+            group: 'github',
+            inputSchema: z.object({
+                milestone_number: z.number().describe('Milestone number'),
+                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+            }),
+            outputSchema: GitHubMilestoneResultOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z
+                    .object({
+                        milestone_number: z.number(),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' }
+                }
+
+                const repoInfo = await github.getRepoInfo()
+                const detectedOwner = repoInfo.owner
+                const detectedRepo = repoInfo.repo
+
+                const owner = input.owner ?? detectedOwner ?? undefined
+                const repo = input.repo ?? detectedRepo ?? undefined
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
+                        requiresUserInput: true,
+                        detectedOwner,
+                        detectedRepo,
+                        instruction:
+                            'Ask the user: "What GitHub repository is this milestone from? Please provide the owner and repo name (e.g., owner/repo)."',
+                    }
+                }
+
+                const milestone = await github.getMilestone(owner, repo, input.milestone_number)
+                if (!milestone) {
+                    return {
+                        error: `Milestone #${String(input.milestone_number)} not found`,
+                        owner,
+                        repo,
+                        detectedOwner,
+                        detectedRepo,
+                    }
+                }
+
+                const total = milestone.openIssues + milestone.closedIssues
+                const completionPercentage =
+                    total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+
+                return {
+                    milestone: { ...milestone, completionPercentage },
+                    owner,
+                    repo,
+                    detectedOwner,
+                    detectedRepo,
+                }
+            },
+        },
+        {
+            name: 'create_github_milestone',
+            title: 'Create GitHub Milestone',
+            description:
+                'Create a new GitHub milestone for tracking progress toward a project goal.',
+            group: 'github',
+            inputSchema: z.object({
+                title: z.string().min(1).describe('Milestone title'),
+                description: z.string().optional().describe('Milestone description'),
+                due_on: z.string().optional().describe('Due date in YYYY-MM-DD format (optional)'),
+                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+            }),
+            outputSchema: CreateMilestoneOutputSchema,
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z
+                    .object({
+                        title: z.string().min(1),
+                        description: z.string().optional(),
+                        due_on: z.string().optional(),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' }
+                }
+
+                const repoInfo = await github.getRepoInfo()
+                const owner = input.owner ?? repoInfo.owner ?? undefined
+                const repo = input.repo ?? repoInfo.repo ?? undefined
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
+                        requiresUserInput: true,
+                        instruction:
+                            'Ask the user: "What GitHub repository should I create the milestone in?"',
+                    }
+                }
+
+                // Format due_on to ISO 8601 if provided (GitHub expects YYYY-MM-DDTHH:MM:SSZ)
+                const dueOn = input.due_on ? `${input.due_on}T08:00:00Z` : undefined
+
+                const milestone = await github.createMilestone(
+                    owner,
+                    repo,
+                    input.title,
+                    input.description,
+                    dueOn
+                )
+
+                if (!milestone) {
+                    return {
+                        error: 'Failed to create milestone. Check GITHUB_TOKEN permissions.',
+                    }
+                }
+
+                return {
+                    success: true,
+                    milestone: { ...milestone, completionPercentage: 0 },
+                    message: `Created milestone #${String(milestone.number)}: ${milestone.title}`,
+                }
+            },
+        },
+        {
+            name: 'update_github_milestone',
+            title: 'Update GitHub Milestone',
+            description:
+                'Update a GitHub milestone (title, description, due date, or state). Use state "closed" to close a completed milestone.',
+            group: 'github',
+            inputSchema: z.object({
+                milestone_number: z.number().describe('Milestone number to update'),
+                title: z.string().optional().describe('New title'),
+                description: z.string().optional().describe('New description'),
+                due_on: z.string().optional().describe('New due date in YYYY-MM-DD format'),
+                state: z
+                    .enum(['open', 'closed'])
+                    .optional()
+                    .describe('Set to "closed" to close the milestone'),
+                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+            }),
+            outputSchema: UpdateMilestoneOutputSchema,
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+            handler: async (params: unknown) => {
+                const input = z
+                    .object({
+                        milestone_number: z.number(),
+                        title: z.string().optional(),
+                        description: z.string().optional(),
+                        due_on: z.string().optional(),
+                        state: z.enum(['open', 'closed']).optional(),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' }
+                }
+
+                const repoInfo = await github.getRepoInfo()
+                const owner = input.owner ?? repoInfo.owner ?? undefined
+                const repo = input.repo ?? repoInfo.repo ?? undefined
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
+                        requiresUserInput: true,
+                        instruction: 'Ask the user: "What GitHub repository is this milestone in?"',
+                    }
+                }
+
+                const dueOn = input.due_on ? `${input.due_on}T08:00:00Z` : undefined
+
+                const milestone = await github.updateMilestone(
+                    owner,
+                    repo,
+                    input.milestone_number,
+                    {
+                        title: input.title,
+                        description: input.description,
+                        dueOn,
+                        state: input.state,
+                    }
+                )
+
+                if (!milestone) {
+                    return {
+                        error: `Failed to update milestone #${String(input.milestone_number)}. Check that it exists and GITHUB_TOKEN has permissions.`,
+                    }
+                }
+
+                const total = milestone.openIssues + milestone.closedIssues
+                const completionPercentage =
+                    total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+
+                return {
+                    success: true,
+                    milestone: { ...milestone, completionPercentage },
+                    message: `Updated milestone #${String(milestone.number)}: ${milestone.title}`,
+                }
+            },
+        },
+        {
+            name: 'delete_github_milestone',
+            title: 'Delete GitHub Milestone',
+            description:
+                'Permanently delete a GitHub milestone. Issues assigned to the milestone will be un-assigned but not deleted.',
+            group: 'github',
+            inputSchema: z.object({
+                milestone_number: z.number().describe('Milestone number to delete'),
+                confirm: z.literal(true).describe('Must be set to true to confirm deletion'),
+                owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+                repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
+            }),
+            outputSchema: DeleteMilestoneOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                idempotentHint: false,
+                destructiveHint: true,
+                openWorldHint: true,
+            },
+            handler: async (params: unknown) => {
+                const input = z
+                    .object({
+                        milestone_number: z.number(),
+                        confirm: z.literal(true),
+                        owner: z.string().optional(),
+                        repo: z.string().optional(),
+                    })
+                    .parse(params)
+
+                if (!github) {
+                    return { error: 'GitHub integration not available' }
+                }
+
+                const repoInfo = await github.getRepoInfo()
+                const owner = input.owner ?? repoInfo.owner ?? undefined
+                const repo = input.repo ?? repoInfo.repo ?? undefined
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
+                        requiresUserInput: true,
+                        instruction: 'Ask the user: "What GitHub repository is this milestone in?"',
+                    }
+                }
+
+                const result = await github.deleteMilestone(owner, repo, input.milestone_number)
+
+                if (!result.success) {
+                    return {
+                        error:
+                            result.error ??
+                            `Failed to delete milestone #${String(input.milestone_number)}`,
+                    }
+                }
+
+                return {
+                    success: true,
+                    milestoneNumber: input.milestone_number,
+                    message: `Deleted milestone #${String(input.milestone_number)}`,
                 }
             },
         },

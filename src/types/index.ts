@@ -320,6 +320,7 @@ export interface GitHubIssue {
     title: string
     url: string
     state: 'OPEN' | 'CLOSED'
+    milestone?: { number: number; title: string } | null
 }
 
 /**
@@ -330,6 +331,23 @@ export interface GitHubPullRequest {
     title: string
     url: string
     state: 'OPEN' | 'CLOSED' | 'MERGED'
+}
+
+/**
+ * GitHub milestone information
+ */
+export interface GitHubMilestone {
+    number: number
+    title: string
+    description: string | null
+    state: 'open' | 'closed'
+    url: string
+    dueOn: string | null
+    openIssues: number
+    closedIssues: number
+    createdAt: string
+    updatedAt: string
+    creator: string | null
 }
 
 /**
@@ -359,6 +377,7 @@ export interface ProjectContext {
     issues: GitHubIssue[]
     pullRequests: GitHubPullRequest[]
     workflowRuns: GitHubWorkflowRun[]
+    milestones: GitHubMilestone[]
 }
 
 // ============================================================================

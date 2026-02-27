@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **GitHub Milestones Integration** — Full CRUD support for GitHub Milestones
+  - 5 new tools: `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` (38 total tools)
+  - 2 new resources: `memory://github/milestones` (list view) and `memory://milestones/{number}` (detail view) (20 total resources)
+  - Session briefing (`memory://briefing`) now includes milestone progress in the user message table
+  - GitHub status resource (`memory://github/status`) now includes milestone summary data
+  - `create_github_issue_with_entry` now accepts optional `milestone_number` parameter to assign issues to milestones
+  - `get_github_issues` and issue resources now include milestone association data
+  - New `ICON_MILESTONE` flag icon for milestone tools and resources
+  - Milestone tools reference added to `ServerInstructions.ts` for agent guidance
 - **Server Host Bind Parameter** — New `--server-host` CLI option and `MCP_HOST` environment variable for configuring HTTP transport bind address
   - Defaults to `localhost`; set to `0.0.0.0` for container deployments
   - Also reads `HOST` environment variable as fallback

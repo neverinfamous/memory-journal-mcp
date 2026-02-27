@@ -80,6 +80,7 @@ const GITHUB_INSTRUCTIONS = `
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
 - Kanban: \`get_kanban_board(project_number)\` → \`move_kanban_item\` → document completion
+- Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
 - GitHub tools auto-detect owner/repo from git context; specify explicitly if null
 `
 
@@ -176,6 +177,19 @@ Kanban resources:
 - \`memory://kanban/{project_number}\` - JSON board data
 - \`memory://kanban/{project_number}/diagram\` - Mermaid visualization
 
+### Milestone Tools
+| Tool | Required Parameters | Notes |
+|------|---------------------|-------|
+| \`get_github_milestones\` | none | Optional \`state\` (open/closed/all), \`limit\` |
+| \`get_github_milestone\` | \`milestone_number\` (number) | Single milestone with completion % |
+| \`create_github_milestone\` | \`title\` (string) | Optional \`description\`, \`due_on\` (YYYY-MM-DD) |
+| \`update_github_milestone\` | \`milestone_number\` (number) | Optional \`title\`, \`description\`, \`due_on\`, \`state\` |
+| \`delete_github_milestone\` | \`milestone_number\`, \`confirm: true\` | Permanent deletion |
+
+Milestone resources:
+- \`memory://github/milestones\` - Open milestones with completion %
+- \`memory://milestones/{number}\` - Single milestone detail
+
 ### Admin Tools
 | Tool | Required Parameters | Notes |
 |------|---------------------|-------|
@@ -224,6 +238,8 @@ Valid values for \`entry_type\` parameter:
 | \`memory://significant\` | Entries marked as milestones/breakthroughs |
 | \`memory://graph/recent\` | Mermaid diagram of recent relationships |
 | \`memory://kanban/{n}\` | Kanban board for project number n |
+| \`memory://github/milestones\` | Open milestones with completion % |
+| \`memory://milestones/{n}\` | Single milestone detail + progress |
 `
 
 /**

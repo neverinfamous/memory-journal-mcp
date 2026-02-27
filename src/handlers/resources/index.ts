@@ -17,6 +17,7 @@ import {
     ICON_GRAPH,
     ICON_HEALTH,
     ICON_GITHUB,
+    ICON_MILESTONE,
     ICON_STAR,
     ICON_TAG,
     ICON_TEAM,
@@ -261,6 +262,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     ci: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
                     openIssues: number
                     openPRs: number
+                    milestones: { title: string; progress: string; dueOn: string | null }[]
                 } | null = null
 
                 if (context.github) {
@@ -328,12 +330,40 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                                 // Counts unavailable
                             }
 
+                            // Get milestone summary for briefing
+                            let milestones: {
+                                title: string
+                                progress: string
+                                dueOn: string | null
+                            }[] = []
+                            try {
+                                const msList = await context.github.getMilestones(
+                                    owner,
+                                    repo,
+                                    'open',
+                                    3
+                                )
+                                milestones = msList.map((m) => {
+                                    const total = m.closedIssues + m.openIssues
+                                    const pct =
+                                        total > 0 ? Math.round((m.closedIssues / total) * 100) : 0
+                                    return {
+                                        title: m.title,
+                                        progress: `${String(pct)}%`,
+                                        dueOn: m.dueOn,
+                                    }
+                                })
+                            } catch {
+                                // Milestones unavailable
+                            }
+
                             github = {
                                 repo: `${owner}/${repo}`,
                                 branch: repoInfo.branch ?? null,
                                 ci: ciStatus,
                                 openIssues,
                                 openPRs,
+                                milestones,
                             }
                         }
                     } catch {
@@ -356,6 +386,11 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     ? `#${latestEntries[0].id} (${latestEntries[0].type}): ${latestEntries[0].preview}`
                     : 'No entries yet'
 
+                const milestoneRow =
+                    github?.milestones && github.milestones.length > 0
+                        ? `\n| **Milestones** | ${github.milestones.map((m) => `${m.title} (${m.progress}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`).join(', ')} |`
+                        : ''
+
                 return {
                     data: {
                         version: pkg.version,
@@ -377,6 +412,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                             'memory://prs/{pr_number}/timeline',
                             'memory://kanban/{project_number}',
                             'memory://kanban/{project_number}/diagram',
+                            'memory://milestones/{number}',
                         ],
                         more: {
                             fullHealth: 'memory://health',
@@ -392,7 +428,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 | **Branch** | ${branchName} |
 | **CI Status** | ${ciStatus} |
 | **Journal** | ${totalEntries} entries |
-| **Latest** | ${latestPreview} |
+| **Latest** | ${latestPreview} |${milestoneRow}
 
 I have project memory access and will create entries for significant work.`,
                         // Note for clients that don't auto-inject ServerInstructions
@@ -1198,6 +1234,39 @@ I have project memory access and will create entries for significant work.`,
                     // Kanban not available
                 }
 
+                // Get milestone summary
+                let milestoneSummary:
+                    | {
+                          number: number
+                          title: string
+                          state: string
+                          openIssues: number
+                          closedIssues: number
+                          completionPercentage: number
+                          dueOn: string | null
+                      }[]
+                    | null = null
+                try {
+                    const milestones = await context.github.getMilestones(owner, repo, 'open', 5)
+                    if (milestones.length > 0) {
+                        milestoneSummary = milestones.map((ms) => {
+                            const total = ms.openIssues + ms.closedIssues
+                            const pct = total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                            return {
+                                number: ms.number,
+                                title: ms.title,
+                                state: ms.state,
+                                openIssues: ms.openIssues,
+                                closedIssues: ms.closedIssues,
+                                completionPercentage: pct,
+                                dueOn: ms.dueOn,
+                            }
+                        })
+                    }
+                } catch {
+                    // Milestones not available
+                }
+
                 return {
                     data: {
                         repository: `${owner}/${repo}`,
@@ -1216,8 +1285,110 @@ I have project memory access and will create entries for significant work.`,
                             items: openPrs,
                         },
                         kanbanSummary,
+                        milestones: milestoneSummary,
                     },
                     annotations: { lastModified },
+                }
+            },
+        },
+        // Milestone resources
+        {
+            uri: 'memory://github/milestones',
+            name: 'GitHub Milestones',
+            title: 'GitHub Repository Milestones',
+            description:
+                'Open GitHub milestones with completion percentages, due dates, and issue counts',
+            mimeType: 'application/json',
+            icons: [ICON_MILESTONE],
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.6,
+            },
+            handler: async (_uri: string, context: ResourceContext) => {
+                if (!context.github) {
+                    return {
+                        error: 'GitHub integration not available',
+                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    }
+                }
+
+                const repoInfo = await context.github.getRepoInfo()
+                const owner = repoInfo.owner
+                const repo = repoInfo.repo
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'Could not detect repository',
+                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                    }
+                }
+
+                const milestones = await context.github.getMilestones(owner, repo, 'open', 20)
+                const milestonesWithProgress = milestones.map((ms) => {
+                    const total = ms.openIssues + ms.closedIssues
+                    const completionPercentage =
+                        total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                    return { ...ms, completionPercentage }
+                })
+
+                return {
+                    repository: `${owner}/${repo}`,
+                    milestones: milestonesWithProgress,
+                    count: milestonesWithProgress.length,
+                    hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                }
+            },
+        },
+        {
+            uri: 'memory://milestones/{number}',
+            name: 'Milestone Detail',
+            title: 'GitHub Milestone Detail',
+            description:
+                'Detailed view of a single GitHub milestone with completion progress and linked issues',
+            mimeType: 'application/json',
+            icons: [ICON_MILESTONE],
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.5,
+            },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/milestones\/(\d+)/.exec(uri)
+                const milestoneNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (milestoneNumber === null) {
+                    return { error: 'Invalid milestone number' }
+                }
+
+                if (!context.github) {
+                    return {
+                        error: 'GitHub integration not available',
+                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    }
+                }
+
+                const repoInfo = await context.github.getRepoInfo()
+                const owner = repoInfo.owner
+                const repo = repoInfo.repo
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'Could not detect repository',
+                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                    }
+                }
+
+                const milestone = await context.github.getMilestone(owner, repo, milestoneNumber)
+                if (!milestone) {
+                    return { error: `Milestone #${String(milestoneNumber)} not found` }
+                }
+
+                const total = milestone.openIssues + milestone.closedIssues
+                const completionPercentage =
+                    total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+
+                return {
+                    repository: `${owner}/${repo}`,
+                    milestone: { ...milestone, completionPercentage },
                 }
             },
         },

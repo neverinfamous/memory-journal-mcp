@@ -11,6 +11,7 @@ import * as simpleGitImport from 'simple-git'
 import { logger } from '../utils/logger.js'
 import type {
     GitHubIssue,
+    GitHubMilestone,
     GitHubPullRequest,
     GitHubWorkflowRun,
     ProjectContext,
@@ -222,6 +223,12 @@ export class GitHubIntegration {
                     title: issue.title,
                     url: issue.html_url,
                     state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
+                    milestone: issue.milestone
+                        ? {
+                              number: issue.milestone.number,
+                              title: issue.milestone.title,
+                          }
+                        : null,
                 }))
         } catch (error) {
             logger.error('Failed to get issues', {
@@ -286,7 +293,8 @@ export class GitHubIntegration {
         title: string,
         body?: string,
         labels?: string[],
-        assignees?: string[]
+        assignees?: string[],
+        milestone?: number
     ): Promise<{ number: number; url: string; title: string; nodeId: string } | null> {
         if (!this.octokit) {
             logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' })
@@ -301,6 +309,7 @@ export class GitHubIntegration {
                 body,
                 labels,
                 assignees,
+                milestone,
             })
 
             logger.info('Created GitHub issue', {
@@ -521,6 +530,7 @@ export class GitHubIntegration {
             issues: [],
             pullRequests: [],
             workflowRuns: [],
+            milestones: [],
         }
 
         // Get current commit
@@ -541,6 +551,7 @@ export class GitHubIntegration {
                 10
             )
             context.workflowRuns = await this.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10)
+            context.milestones = await this.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10)
         }
 
         return context
@@ -968,6 +979,257 @@ export class GitHubIntegration {
             logger.error('Failed to add item to project', {
                 module: 'GitHub',
                 context: { projectId, contentId },
+                error: errorMessage,
+            })
+            return { success: false, error: errorMessage }
+        }
+    }
+
+    // ==========================================================================
+    // GitHub Milestones Methods
+    // ==========================================================================
+
+    /**
+     * List milestones for a repository
+     */
+    async getMilestones(
+        owner: string,
+        repo: string,
+        state: 'open' | 'closed' | 'all' = 'open',
+        limit = 20
+    ): Promise<GitHubMilestone[]> {
+        if (!this.octokit) {
+            return []
+        }
+
+        try {
+            // GitHub REST API uses 'open' | 'closed' | 'all' for milestone state
+            const apiState = state === 'all' ? undefined : state
+            const response = await this.octokit.issues.listMilestones({
+                owner,
+                repo,
+                state: apiState,
+                per_page: limit,
+                sort: 'due_on',
+                direction: 'asc',
+            })
+
+            return response.data.map((ms) => ({
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? 'open' : 'closed',
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }))
+        } catch (error) {
+            logger.error('Failed to get milestones', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
+        }
+    }
+
+    /**
+     * Get a single milestone by number
+     */
+    async getMilestone(
+        owner: string,
+        repo: string,
+        milestoneNumber: number
+    ): Promise<GitHubMilestone | null> {
+        if (!this.octokit) {
+            return null
+        }
+
+        try {
+            const response = await this.octokit.issues.getMilestone({
+                owner,
+                repo,
+                milestone_number: milestoneNumber,
+            })
+
+            const ms = response.data
+            return {
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? 'open' : 'closed',
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }
+        } catch (error) {
+            logger.error('Failed to get milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return null
+        }
+    }
+
+    /**
+     * Create a new milestone
+     */
+    async createMilestone(
+        owner: string,
+        repo: string,
+        title: string,
+        description?: string,
+        dueOn?: string
+    ): Promise<GitHubMilestone | null> {
+        if (!this.octokit) {
+            logger.error('Cannot create milestone: GitHub API not available', {
+                module: 'GitHub',
+            })
+            return null
+        }
+
+        try {
+            const response = await this.octokit.issues.createMilestone({
+                owner,
+                repo,
+                title,
+                description,
+                due_on: dueOn,
+            })
+
+            const ms = response.data
+
+            logger.info('Created GitHub milestone', {
+                module: 'GitHub',
+                entityId: ms.number,
+                context: { title, owner, repo },
+            })
+
+            return {
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? 'open' : 'closed',
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }
+        } catch (error) {
+            logger.error('Failed to create milestone', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { title, owner, repo },
+            })
+            return null
+        }
+    }
+
+    /**
+     * Update an existing milestone
+     */
+    async updateMilestone(
+        owner: string,
+        repo: string,
+        milestoneNumber: number,
+        updates: {
+            title?: string
+            description?: string
+            dueOn?: string | null
+            state?: 'open' | 'closed'
+        }
+    ): Promise<GitHubMilestone | null> {
+        if (!this.octokit) {
+            logger.error('Cannot update milestone: GitHub API not available', {
+                module: 'GitHub',
+            })
+            return null
+        }
+
+        try {
+            const response = await this.octokit.issues.updateMilestone({
+                owner,
+                repo,
+                milestone_number: milestoneNumber,
+                title: updates.title,
+                description: updates.description,
+                due_on: updates.dueOn === null ? undefined : updates.dueOn,
+                state: updates.state,
+            })
+
+            const ms = response.data
+
+            logger.info('Updated GitHub milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                context: { owner, repo, updates: Object.keys(updates) },
+            })
+
+            return {
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? 'open' : 'closed',
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }
+        } catch (error) {
+            logger.error('Failed to update milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return null
+        }
+    }
+
+    /**
+     * Delete a milestone
+     */
+    async deleteMilestone(
+        owner: string,
+        repo: string,
+        milestoneNumber: number
+    ): Promise<{ success: boolean; error?: string }> {
+        if (!this.octokit) {
+            return { success: false, error: 'GitHub API not available' }
+        }
+
+        try {
+            await this.octokit.issues.deleteMilestone({
+                owner,
+                repo,
+                milestone_number: milestoneNumber,
+            })
+
+            logger.info('Deleted GitHub milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                context: { owner, repo },
+            })
+
+            return { success: true }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            logger.error('Failed to delete milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
                 error: errorMessage,
             })
             return { success: false, error: errorMessage }
