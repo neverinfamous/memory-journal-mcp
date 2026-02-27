@@ -239,4 +239,53 @@ describe('Resource Handlers', () => {
             )
         })
     })
+
+    // ========================================================================
+    // readResource - branch coverage for query params & variants
+    // ========================================================================
+
+    describe('readResource - additional branch coverage', () => {
+        it('should read memory://graph/actions', async () => {
+            const result = await readResource('memory://graph/actions', db)
+
+            const data = result.data as { format: string; diagram: string }
+            expect(data.format).toBe('mermaid')
+        })
+
+        it('should read memory://actions/recent', async () => {
+            const result = await readResource('memory://actions/recent', db)
+
+            const data = result.data as { entries: unknown[]; count: number }
+            expect(data.entries).toBeDefined()
+        })
+
+        it('should return briefing with expected structure', async () => {
+            const result = await readResource('memory://briefing', db)
+            const data = result.data as {
+                version: string
+                journal: { totalEntries: number }
+                behaviors: { create: string }
+                userMessage: string
+                templateResources: string[]
+            }
+
+            expect(data.behaviors.create).toContain('implementations')
+            expect(data.templateResources).toContain('memory://projects/{number}/timeline')
+        })
+
+        it('should return annotations on recent entries', async () => {
+            const result = await readResource('memory://recent', db)
+
+            expect(result.annotations).toBeDefined()
+            expect(result.annotations?.lastModified).toBeDefined()
+        })
+
+        it('should handle PR timeline template', async () => {
+            // PR 15 was seeded with an entry
+            const result = await readResource('memory://prs/15/timeline', db)
+
+            const data = result.data as { prNumber: number }
+            expect(data.prNumber).toBe(15)
+        })
+    })
 })

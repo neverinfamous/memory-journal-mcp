@@ -384,4 +384,173 @@ describe('GitHub Tool Handlers', () => {
             expect(result.journalEntry.id).toBeGreaterThan(0)
         })
     })
+
+    // ========================================================================
+    // Kanban operations
+    // ========================================================================
+
+    describe('move_kanban_item', () => {
+        it('should move item when board and status found', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [
+                        { id: 'OPT_TODO', name: 'Todo' },
+                        { id: 'OPT_DONE', name: 'Done' },
+                    ],
+                    columns: [],
+                    totalItems: 0,
+                }),
+            })
+
+            const result = (await callTool(
+                'move_kanban_item',
+                {
+                    project_number: 1,
+                    item_id: 'PVTITEM_1',
+                    target_status: 'Done',
+                },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; newStatus: string }
+
+            expect(result.success).toBe(true)
+            expect(result.newStatus).toBe('Done')
+        })
+
+        it('should return error when status not found', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [{ id: 'OPT_TODO', name: 'Todo' }],
+                    columns: [],
+                    totalItems: 0,
+                }),
+            })
+
+            const result = (await callTool(
+                'move_kanban_item',
+                {
+                    project_number: 1,
+                    item_id: 'PVTITEM_1',
+                    target_status: 'Nonexistent',
+                },
+                db,
+                undefined,
+                github
+            )) as { error: string; availableStatuses: string[] }
+
+            expect(result.error).toContain('not found')
+            expect(result.availableStatuses).toEqual(['Todo'])
+        })
+
+        it('should return error when no github', async () => {
+            const result = (await callTool(
+                'move_kanban_item',
+                {
+                    project_number: 1,
+                    item_id: 'X',
+                    target_status: 'Done',
+                },
+                db
+            )) as { error: string }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+
+        it('should return error when project not found', async () => {
+            const github = createMockGitHub()
+            const result = (await callTool(
+                'move_kanban_item',
+                {
+                    project_number: 999,
+                    item_id: 'X',
+                    target_status: 'Done',
+                },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('not found')
+        })
+    })
+
+    // ========================================================================
+    // Close issue with entry
+    // ========================================================================
+
+    describe('close_github_issue_with_entry', () => {
+        it('should close issue and create journal entry', async () => {
+            const github = createMockGitHub()
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                { issue_number: 1, resolution_notes: 'Fixed the bug' },
+                db,
+                undefined,
+                github
+            )) as {
+                success: boolean
+                issue: { number: number; newState: string }
+                journalEntry: { id: number }
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.issue.number).toBe(1)
+            expect(result.issue.newState).toBe('CLOSED')
+            expect(result.journalEntry.id).toBeGreaterThan(0)
+        })
+
+        it('should return error when issue not found', async () => {
+            const github = createMockGitHub({
+                getIssue: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                { issue_number: 999 },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('not found')
+        })
+
+        it('should return error when issue already closed', async () => {
+            const github = createMockGitHub({
+                getIssue: vi.fn().mockResolvedValue({
+                    number: 1,
+                    title: 'Test',
+                    url: 'url',
+                    state: 'CLOSED',
+                }),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                { issue_number: 1 },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('already closed')
+        })
+
+        it('should return error when no github', async () => {
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                { issue_number: 1 },
+                db
+            )) as { error: string }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+    })
 })

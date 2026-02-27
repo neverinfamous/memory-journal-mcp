@@ -484,4 +484,72 @@ describe('SqliteAdapter', () => {
             tempDb.close()
         })
     })
+
+    // ========================================================================
+    // Additional branch coverage
+    // ========================================================================
+
+    describe('updateEntry', () => {
+        it('should update entry content', () => {
+            const entry = db.createEntry({ content: 'Original content' })
+            const updated = db.updateEntry(entry.id, { content: 'Updated content' })
+
+            expect(updated).not.toBeNull()
+            expect(updated?.content).toBe('Updated content')
+        })
+
+        it('should update tags', () => {
+            const entry = db.createEntry({ content: 'Tag update', tags: ['initial'] })
+            const updated = db.updateEntry(entry.id, { tags: ['updated-tag'] })
+
+            expect(updated).not.toBeNull()
+            const tags = db.getTagsForEntry(entry.id)
+            expect(tags).toContain('updated-tag')
+        })
+
+        it('should return null for nonexistent entry', () => {
+            const result = db.updateEntry(99999, { content: 'Nope' })
+            expect(result).toBeNull()
+        })
+    })
+
+    describe('searchEntries - advanced filters', () => {
+        it('should filter by issueNumber', () => {
+            db.createEntry({ content: 'Issue filter test', issueNumber: 888 })
+            const results = db.searchEntries('', { issueNumber: 888 })
+            expect(results.length).toBeGreaterThan(0)
+        })
+
+        it('should filter by prNumber', () => {
+            db.createEntry({ content: 'PR filter test', prNumber: 77 })
+            const results = db.searchEntries('', { prNumber: 77 })
+            expect(results.length).toBeGreaterThan(0)
+        })
+
+        it('should filter by isPersonal', () => {
+            const results = db.searchEntries('', { isPersonal: false })
+            expect(results.every((e) => !e.isPersonal)).toBe(true)
+        })
+    })
+
+    describe('searchByDateRange - with type filter', () => {
+        it('should filter by entry type', () => {
+            const today = new Date().toISOString().split('T')[0]!
+            const results = db.searchByDateRange(today, today, {
+                entryType: 'decision',
+            })
+            for (const r of results) {
+                expect(r.entryType).toBe('decision')
+            }
+        })
+
+        it('should filter by tags', () => {
+            db.createEntry({ content: 'Tag date range', tags: ['daterange-tag'] })
+            const today = new Date().toISOString().split('T')[0]!
+            const results = db.searchByDateRange(today, today, {
+                tags: ['daterange-tag'],
+            })
+            expect(results.length).toBeGreaterThan(0)
+        })
+    })
 })
