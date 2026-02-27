@@ -40,8 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 
-- **`get_entry_by_id` Importance Scoring Breakdown** — Tool now returns `importanceBreakdown` alongside the `importance` score, showing weighted component contributions: `significance` (30%), `relationships` (35%), `causal` (20%), `recency` (15%). Gives agents transparency into *why* an entry scored a given importance level.
+- **`get_entry_by_id` Importance Scoring Breakdown** — Tool now returns `importanceBreakdown` alongside the `importance` score, showing weighted component contributions: `significance` (30%), `relationships` (35%), `causal` (20%), `recency` (15%). Gives agents transparency into _why_ an entry scored a given importance level.
 - **`get_cross_project_insights` Inactive Threshold Visibility** — Tool output now includes `inactiveThresholdDays: 7` field, making the hardcoded inactive project classification criteria self-documenting. Previously, consumers saw an empty `inactive_projects` array with no way to know the cutoff.
+- **Database I/O — Debounced Save** — Mutation methods (`createEntry`, `updateEntry`, `deleteEntry`, `linkEntries`, `mergeTags`) now use a 500ms debounced `scheduleSave()` instead of synchronous `save()` on every call, batching rapid writes into a single disk flush. `close()` and `restoreFromFile()` still flush immediately for data safety.
+- **Database I/O — Zero-Copy Buffer** — `flushSave()` uses `Buffer.from(data.buffer, data.byteOffset, data.byteLength)` to wrap the `sql.js` export directly, avoiding a redundant copy that `Buffer.from(Uint8Array)` would create.
+- **Vector Index Rebuild — Paginated Fetching** — `rebuildIndex()` now uses `getEntriesPage(offset, limit)` with `REBUILD_PAGE_SIZE=200` instead of loading all entries at once via `getRecentEntries(10000)`, reducing peak memory usage for large journals.
+- **Vector Index Rebuild — Parallel Batch Embedding** — Entries are embedded in parallel batches of 5 (`REBUILD_BATCH_SIZE`) via `Promise.all` instead of sequentially, improving rebuild throughput.
+- **Vector Index Rebuild — Eliminated Double-Delete** — New `addEntryDirect()` fast path skips the per-item upsert delete during rebuild (the index is pre-cleaned in bulk), removing N redundant delete calls.
+- **Server Startup — `getTools()` Deduplication** — Eliminated a duplicate `getTools()` call during server startup; tool names for instruction generation are now extracted from the same array used for registration, saving one full tool-construction pass.
+- **GitHub API — TTL Response Cache** — Read methods (`getIssues`, `getIssue`, `getPullRequests`, `getPullRequest`, `getWorkflowRuns`, `getRepoContext`, `getMilestones`, `getMilestone`) now cache responses for 5 minutes. Mutation methods (`createIssue`, `closeIssue`, `createMilestone`, `updateMilestone`, `deleteMilestone`, `moveProjectItem`, `addProjectItem`) automatically invalidate related caches. Public `clearCache()` method available for manual invalidation.
 
 ### Fixed
 

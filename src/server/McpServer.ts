@@ -108,14 +108,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
           }
         : undefined
 
+    // Get all tools once (unfiltered) for both instruction generation and registration
+    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber })
+    const allToolNames = new Set(allTools.map((t) => (t as { name: string }).name))
+
     // Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
     const instructions = generateInstructions(
-        filterConfig?.enabledTools ??
-            new Set(
-                getTools(db, null, vectorManager, github, { defaultProjectNumber }).map(
-                    (t) => (t as { name: string }).name
-                )
-            ),
+        filterConfig?.enabledTools ?? allToolNames,
         resources.map((r) => {
             const res = r as { uri: string; name: string; description?: string }
             return { uri: res.uri, name: res.name, description: res.description }
@@ -141,8 +140,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     )
 
-    // Get filtered tools and register them dynamically
-    const tools = getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber })
+    // Apply filter to get the set of tools to register
+    const tools = filterConfig
+        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber })
+        : allTools
     for (const tool of tools) {
         const toolDef = tool as {
             name: string

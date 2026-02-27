@@ -127,6 +127,12 @@ export class SqliteAdapter {
     private readonly dbPath: string
     private initialized = false
 
+    /** Timer handle for debounced save */
+    private saveTimer: ReturnType<typeof setTimeout> | null = null
+
+    /** Debounce interval for batching disk writes (ms) */
+    private static readonly SAVE_DEBOUNCE_MS = 500
+
     constructor(dbPath: string) {
         this.dbPath = dbPath
     }
@@ -166,26 +172,49 @@ export class SqliteAdapter {
 
         logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath })
 
-        // Save after initialization
-        this.save()
+        // Immediate flush after initialization to persist schema
+        this.flushSave()
     }
 
     /**
-     * Save database to disk
+     * Schedule a debounced save to disk.
+     * Batches rapid mutations into a single write after SAVE_DEBOUNCE_MS.
+     * Used by all mutation methods (createEntry, updateEntry, etc.).
      */
-    private save(): void {
+    private scheduleSave(): void {
+        if (this.saveTimer !== null) {
+            clearTimeout(this.saveTimer)
+        }
+        this.saveTimer = setTimeout(() => {
+            this.flushSave()
+        }, SqliteAdapter.SAVE_DEBOUNCE_MS)
+    }
+
+    /**
+     * Immediately flush the database to disk (synchronous).
+     * Cancels any pending debounced save. Uses zero-copy Buffer
+     * to avoid duplicate memory allocation.
+     * Used by close() and initialize() for guaranteed persistence.
+     */
+    flushSave(): void {
+        if (this.saveTimer !== null) {
+            clearTimeout(this.saveTimer)
+            this.saveTimer = null
+        }
         if (!this.db) return
         const data = this.db.export()
-        const buffer = Buffer.from(data)
+        // Zero-copy: wrap the Uint8Array's underlying ArrayBuffer directly
+        const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
         fs.writeFileSync(this.dbPath, buffer)
     }
 
     /**
-     * Close database connection
+     * Close database connection.
+     * Flushes any pending writes immediately before closing.
      */
     close(): void {
         if (this.db) {
-            this.save()
+            this.flushSave()
             this.db.close()
             this.db = null
         }
@@ -266,7 +295,7 @@ export class SqliteAdapter {
             this.linkTagsToEntry(entryId, tags)
         }
 
-        this.save()
+        this.scheduleSave()
 
         logger.info('Entry created', {
             module: 'SqliteAdapter',
@@ -430,6 +459,34 @@ export class SqliteAdapter {
     }
 
     /**
+     * Get a page of active entries for batch processing (e.g., vector index rebuild).
+     * Returns entries ordered by ID ascending for deterministic pagination.
+     */
+    getEntriesPage(offset: number, limit: number): JournalEntry[] {
+        const db = this.ensureDb()
+        const result = db.exec(
+            `SELECT * FROM memory_journal WHERE deleted_at IS NULL ORDER BY id ASC LIMIT ? OFFSET ?`,
+            [limit, offset]
+        )
+        if (result.length === 0) return []
+
+        const columns = result[0]?.columns ?? []
+        return (result[0]?.values ?? []).map((values) =>
+            this.rowToEntry(this.rowToObject(columns, values))
+        )
+    }
+
+    /**
+     * Get total count of active (non-deleted) entries.
+     * Used for progress reporting and pagination bounds.
+     */
+    getActiveEntryCount(): number {
+        const db = this.ensureDb()
+        const result = db.exec(`SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL`)
+        return (result[0]?.values[0]?.[0] as number) ?? 0
+    }
+
+    /**
      * Update an entry
      */
     updateEntry(
@@ -472,7 +529,7 @@ export class SqliteAdapter {
             this.linkTagsToEntry(id, updates.tags)
         }
 
-        this.save()
+        this.scheduleSave()
 
         logger.info('Entry updated', {
             module: 'SqliteAdapter',
@@ -501,7 +558,7 @@ export class SqliteAdapter {
             db.run(`UPDATE memory_journal SET deleted_at = datetime('now') WHERE id = ?`, [id])
         }
 
-        this.save()
+        this.scheduleSave()
         return true
     }
 
@@ -744,7 +801,7 @@ export class SqliteAdapter {
         db.run('DELETE FROM entry_tags WHERE tag_id = ?', [sourceTagId])
         db.run('DELETE FROM tags WHERE id = ?', [sourceTagId])
 
-        this.save()
+        this.scheduleSave()
 
         logger.info('Tags merged', {
             module: 'SqliteAdapter',
@@ -792,7 +849,7 @@ export class SqliteAdapter {
         const result = db.exec('SELECT last_insert_rowid() as id')
         const id = result[0]?.values[0]?.[0] as number
 
-        this.save()
+        this.scheduleSave()
 
         return {
             id,
@@ -1141,7 +1198,7 @@ export class SqliteAdapter {
         const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         // Save to main database path
-        this.save()
+        this.flushSave()
 
         logger.info('Database restored from backup', {
             module: 'SqliteAdapter',

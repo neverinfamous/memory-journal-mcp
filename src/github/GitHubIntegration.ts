@@ -21,6 +21,15 @@ import type {
     ProjectV2StatusOption,
 } from '../types/index.js'
 
+/** TTL for cached GitHub API responses (5 minutes) */
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+/** Generic cache entry with timestamp */
+interface CacheEntry<T> {
+    data: T
+    timestamp: number
+}
+
 // Handle simpleGit ESM/CJS interop
 type SimpleGitType = typeof simpleGitImport.simpleGit
 const simpleGit: SimpleGitType = simpleGitImport.simpleGit
@@ -76,6 +85,9 @@ export class GitHubIntegration {
     private readonly token: string | undefined
     private cachedRepoInfo: RepoInfo | null = null
 
+    /** TTL response cache for GitHub API read methods */
+    private readonly apiCache = new Map<string, CacheEntry<unknown>>()
+
     constructor(workingDir = '.') {
         this.token = process.env['GITHUB_TOKEN']
 
@@ -115,6 +127,47 @@ export class GitHubIntegration {
      */
     isApiAvailable(): boolean {
         return this.octokit !== null
+    }
+
+    /**
+     * Get a cached value if it exists and hasn't expired.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is needed at call sites for type-safe casts
+    private getCached<T>(key: string): T | undefined {
+        const entry = this.apiCache.get(key)
+        if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+            return entry.data as T
+        }
+        if (entry) {
+            this.apiCache.delete(key)
+        }
+        return undefined
+    }
+
+    /**
+     * Store a value in the cache.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T preserves type inference at call sites
+    private setCache<T>(key: string, data: T): void {
+        this.apiCache.set(key, { data, timestamp: Date.now() })
+    }
+
+    /**
+     * Invalidate all cache entries matching a prefix.
+     */
+    private invalidateCache(prefix: string): void {
+        for (const key of this.apiCache.keys()) {
+            if (key.startsWith(prefix)) {
+                this.apiCache.delete(key)
+            }
+        }
+    }
+
+    /**
+     * Clear all cached GitHub API responses.
+     */
+    clearCache(): void {
+        this.apiCache.clear()
     }
 
     /**
@@ -205,6 +258,10 @@ export class GitHubIntegration {
             return []
         }
 
+        const cacheKey = `issues:${owner}:${repo}:${state}:${String(limit)}`
+        const cached = this.getCached<GitHubIssue[]>(cacheKey)
+        if (cached) return cached
+
         try {
             const response = await this.octokit.issues.listForRepo({
                 owner,
@@ -216,13 +273,13 @@ export class GitHubIntegration {
             })
 
             // Filter out pull requests (GitHub API includes PRs in issues)
-            return response.data
+            const result = response.data
                 .filter((issue) => !issue.pull_request)
                 .map((issue) => ({
                     number: issue.number,
                     title: issue.title,
                     url: issue.html_url,
-                    state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
+                    state: issue.state === 'open' ? ('OPEN' as const) : ('CLOSED' as const),
                     milestone: issue.milestone
                         ? {
                               number: issue.milestone.number,
@@ -230,6 +287,9 @@ export class GitHubIntegration {
                           }
                         : null,
                 }))
+
+            this.setCache(cacheKey, result)
+            return result
         } catch (error) {
             logger.error('Failed to get issues', {
                 module: 'GitHub',
@@ -247,6 +307,10 @@ export class GitHubIntegration {
             return null
         }
 
+        const cacheKey = `issue:${owner}:${repo}:${String(issueNumber)}`
+        const cached = this.getCached<IssueDetails | null>(cacheKey)
+        if (cached !== undefined) return cached
+
         try {
             const response = await this.octokit.issues.get({
                 owner,
@@ -261,7 +325,7 @@ export class GitHubIntegration {
                 return null
             }
 
-            return {
+            const details: IssueDetails = {
                 number: issue.number,
                 title: issue.title,
                 url: issue.html_url,
@@ -274,6 +338,9 @@ export class GitHubIntegration {
                 closedAt: issue.closed_at,
                 commentsCount: issue.comments,
             }
+
+            this.setCache(cacheKey, details)
+            return details
         } catch (error) {
             logger.error('Failed to get issue details', {
                 module: 'GitHub',
@@ -331,6 +398,9 @@ export class GitHubIntegration {
                 context: { title, owner, repo },
             })
             return null
+        } finally {
+            this.invalidateCache(`issues:${owner}:${repo}`)
+            this.invalidateCache('context:')
         }
     }
 
@@ -384,6 +454,10 @@ export class GitHubIntegration {
                 error: error instanceof Error ? error.message : String(error),
             })
             return null
+        } finally {
+            this.invalidateCache(`issues:${owner}:${repo}`)
+            this.invalidateCache(`issue:${owner}:${repo}:${String(issueNumber)}`)
+            this.invalidateCache('context:')
         }
     }
 
@@ -400,6 +474,10 @@ export class GitHubIntegration {
             return []
         }
 
+        const cacheKey = `prs:${owner}:${repo}:${state}:${String(limit)}`
+        const cached = this.getCached<GitHubPullRequest[]>(cacheKey)
+        if (cached) return cached
+
         try {
             const response = await this.octokit.pulls.list({
                 owner,
@@ -410,12 +488,19 @@ export class GitHubIntegration {
                 direction: 'desc',
             })
 
-            return response.data.map((pr) => ({
+            const result = response.data.map((pr) => ({
                 number: pr.number,
                 title: pr.title,
                 url: pr.html_url,
-                state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',
+                state: pr.merged_at
+                    ? ('MERGED' as const)
+                    : pr.state === 'open'
+                      ? ('OPEN' as const)
+                      : ('CLOSED' as const),
             }))
+
+            this.setCache(cacheKey, result)
+            return result
         } catch (error) {
             logger.error('Failed to get pull requests', {
                 module: 'GitHub',
@@ -437,6 +522,10 @@ export class GitHubIntegration {
             return null
         }
 
+        const cacheKey = `pr:${owner}:${repo}:${String(prNumber)}`
+        const cached = this.getCached<PullRequestDetails | null>(cacheKey)
+        if (cached !== undefined) return cached
+
         try {
             const response = await this.octokit.pulls.get({
                 owner,
@@ -446,7 +535,7 @@ export class GitHubIntegration {
 
             const pr = response.data
 
-            return {
+            const details: PullRequestDetails = {
                 number: pr.number,
                 title: pr.title,
                 url: pr.html_url,
@@ -464,6 +553,9 @@ export class GitHubIntegration {
                 deletions: pr.deletions,
                 changedFiles: pr.changed_files,
             }
+
+            this.setCache(cacheKey, details)
+            return details
         } catch (error) {
             logger.error('Failed to get PR details', {
                 module: 'GitHub',
@@ -483,6 +575,10 @@ export class GitHubIntegration {
             return []
         }
 
+        const cacheKey = `workflows:${owner}:${repo}:${String(limit)}`
+        const cached = this.getCached<GitHubWorkflowRun[]>(cacheKey)
+        if (cached) return cached
+
         try {
             const response = await this.octokit.rest.actions.listWorkflowRunsForRepo({
                 owner,
@@ -490,7 +586,7 @@ export class GitHubIntegration {
                 per_page: limit,
             })
 
-            return response.data.workflow_runs.map((run) => ({
+            const result = response.data.workflow_runs.map((run) => ({
                 id: run.id,
                 name: run.name ?? 'Unknown Workflow',
                 status: run.status as 'queued' | 'in_progress' | 'completed',
@@ -506,6 +602,9 @@ export class GitHubIntegration {
                 createdAt: run.created_at,
                 updatedAt: run.updated_at,
             }))
+
+            this.setCache(cacheKey, result)
+            return result
         } catch (error) {
             logger.error('Failed to get workflow runs', {
                 module: 'GitHub',
@@ -519,6 +618,9 @@ export class GitHubIntegration {
      * Get full repository context (issues, PRs, branch info)
      */
     async getRepoContext(): Promise<ProjectContext> {
+        const cached = this.getCached<ProjectContext>('context:repo')
+        if (cached) return cached
+
         const repoInfo = await this.getRepoInfo()
 
         const context: ProjectContext = {
@@ -554,6 +656,7 @@ export class GitHubIntegration {
             context.milestones = await this.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10)
         }
 
+        this.setCache('context:repo', context)
         return context
     }
 
@@ -934,6 +1037,8 @@ export class GitHubIntegration {
                 error: errorMessage,
             })
             return { success: false, error: errorMessage }
+        } finally {
+            this.invalidateCache('kanban:')
         }
     }
 
@@ -982,6 +1087,8 @@ export class GitHubIntegration {
                 error: errorMessage,
             })
             return { success: false, error: errorMessage }
+        } finally {
+            this.invalidateCache('kanban:')
         }
     }
 
@@ -1002,6 +1109,10 @@ export class GitHubIntegration {
             return []
         }
 
+        const cacheKey = `milestones:${owner}:${repo}:${state}:${String(limit)}`
+        const cached = this.getCached<GitHubMilestone[]>(cacheKey)
+        if (cached) return cached
+
         try {
             // GitHub REST API uses 'open' | 'closed' | 'all' for milestone state
             const apiState = state === 'all' ? undefined : state
@@ -1014,11 +1125,11 @@ export class GitHubIntegration {
                 direction: 'asc',
             })
 
-            return response.data.map((ms) => ({
+            const result = response.data.map((ms) => ({
                 number: ms.number,
                 title: ms.title,
                 description: ms.description ?? null,
-                state: ms.state === 'open' ? 'open' : 'closed',
+                state: ms.state === 'open' ? ('open' as const) : ('closed' as const),
                 url: ms.html_url,
                 dueOn: ms.due_on ?? null,
                 openIssues: ms.open_issues,
@@ -1027,6 +1138,9 @@ export class GitHubIntegration {
                 updatedAt: ms.updated_at,
                 creator: ms.creator?.login ?? null,
             }))
+
+            this.setCache(cacheKey, result)
+            return result
         } catch (error) {
             logger.error('Failed to get milestones', {
                 module: 'GitHub',
@@ -1048,6 +1162,10 @@ export class GitHubIntegration {
             return null
         }
 
+        const cacheKey = `milestone:${owner}:${repo}:${String(milestoneNumber)}`
+        const cached = this.getCached<GitHubMilestone | null>(cacheKey)
+        if (cached !== undefined) return cached
+
         try {
             const response = await this.octokit.issues.getMilestone({
                 owner,
@@ -1056,7 +1174,7 @@ export class GitHubIntegration {
             })
 
             const ms = response.data
-            return {
+            const milestone: GitHubMilestone = {
                 number: ms.number,
                 title: ms.title,
                 description: ms.description ?? null,
@@ -1069,6 +1187,9 @@ export class GitHubIntegration {
                 updatedAt: ms.updated_at,
                 creator: ms.creator?.login ?? null,
             }
+
+            this.setCache(cacheKey, milestone)
+            return milestone
         } catch (error) {
             logger.error('Failed to get milestone', {
                 module: 'GitHub',
@@ -1133,6 +1254,9 @@ export class GitHubIntegration {
                 context: { title, owner, repo },
             })
             return null
+        } finally {
+            this.invalidateCache(`milestones:${owner}:${repo}`)
+            this.invalidateCache('context:')
         }
     }
 
@@ -1196,6 +1320,10 @@ export class GitHubIntegration {
                 error: error instanceof Error ? error.message : String(error),
             })
             return null
+        } finally {
+            this.invalidateCache(`milestones:${owner}:${repo}`)
+            this.invalidateCache(`milestone:${owner}:${repo}:${String(milestoneNumber)}`)
+            this.invalidateCache('context:')
         }
     }
 
@@ -1233,6 +1361,10 @@ export class GitHubIntegration {
                 error: errorMessage,
             })
             return { success: false, error: errorMessage }
+        } finally {
+            this.invalidateCache(`milestones:${owner}:${repo}`)
+            this.invalidateCache(`milestone:${owner}:${repo}:${String(milestoneNumber)}`)
+            this.invalidateCache('context:')
         }
     }
 }

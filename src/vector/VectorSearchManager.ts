@@ -20,6 +20,12 @@ const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2'
 /** Embedding dimensions for all-MiniLM-L6-v2 */
 const EMBEDDING_DIMENSIONS = 384
 
+/** Number of entries to embed concurrently during rebuild */
+const REBUILD_BATCH_SIZE = 5
+
+/** Number of entries to fetch per page during rebuild */
+const REBUILD_PAGE_SIZE = 200
+
 /** Search result with similarity score */
 export interface SemanticSearchResult {
     entryId: number
@@ -168,6 +174,31 @@ export class VectorSearchManager {
     }
 
     /**
+     * Add an entry directly without upsert delete (fast path for rebuild).
+     * Caller must ensure the item does not already exist in the index.
+     */
+    private async addEntryDirect(entryId: number, content: string): Promise<boolean> {
+        if (!this.index) return false
+
+        try {
+            const embedding = await this.generateEmbedding(content)
+            await this.index.insertItem({
+                id: String(entryId),
+                vector: embedding,
+                metadata: { entryId, contentPreview: content.slice(0, 100) },
+            })
+            return true
+        } catch (error) {
+            logger.error('Failed to add entry to vector index (direct)', {
+                module: 'VectorSearch',
+                entityId: entryId,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return false
+        }
+    }
+
+    /**
      * Perform semantic search
      */
     async search(
@@ -225,7 +256,8 @@ export class VectorSearchManager {
     }
 
     /**
-     * Rebuild index from database entries
+     * Rebuild index from database entries.
+     * Uses paginated fetching and parallel batch embedding for performance.
      * @param db - Database adapter
      * @param progress - Optional progress context for notifications
      */
@@ -240,9 +272,17 @@ export class VectorSearchManager {
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
 
-        // Step 1: Get all entries from database
-        const entries = db.getRecentEntries(10000) // Get up to 10k entries
-        const dbIds = new Set(entries.map((e) => String(e.id)))
+        // Step 1: Get total entry count and build ID set for orphan detection
+        const totalEntries = db.getActiveEntryCount()
+        const dbIds = new Set<string>()
+
+        // Collect all active entry IDs via pagination (avoids loading all content at once)
+        for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
+            const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
+            for (const entry of page) {
+                dbIds.add(String(entry.id))
+            }
+        }
 
         // Step 2: Clean up orphaned entries from the index
         // These are vector entries for database records that were permanently deleted
@@ -264,42 +304,50 @@ export class VectorSearchManager {
             })
         }
 
-        // Step 3: Re-index all current entries
-        const total = entries.length
+        // Step 3: Delete all remaining items to prepare for clean re-index
+        // This avoids the double-delete overhead of calling addEntry (upsert) per item
+        const remainingItems = await this.index.listItems()
+        for (const item of remainingItems) {
+            try {
+                await this.index.deleteItem(item.id)
+            } catch {
+                // Ignore
+            }
+        }
 
-        // Send initial progress
-        await sendProgress(progress, 0, total, 'Starting vector index rebuild...')
+        // Step 4: Re-index all entries using paginated fetch + parallel batching
+        await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild...')
 
         let indexed = 0
-        for (const entry of entries) {
-            // Delete existing item first to avoid "already exists" error
-            try {
-                await this.index.deleteItem(String(entry.id))
-            } catch {
-                // Item may not exist, ignore
-            }
+        for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
+            const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
 
-            const success = await this.addEntry(entry.id, entry.content)
-            if (success) indexed++
-
-            // Report progress every 10 entries to avoid flooding
-            if (indexed % 10 === 0 || indexed === total) {
-                await sendProgress(
-                    progress,
-                    indexed,
-                    total,
-                    `Indexed ${String(indexed)} of ${String(total)} entries`
+            // Process page in parallel batches of REBUILD_BATCH_SIZE
+            for (let i = 0; i < page.length; i += REBUILD_BATCH_SIZE) {
+                const batch = page.slice(i, i + REBUILD_BATCH_SIZE)
+                const results = await Promise.all(
+                    batch.map((entry) => this.addEntryDirect(entry.id, entry.content))
                 )
+                indexed += results.filter(Boolean).length
+
+                // Report progress every 10 entries to avoid flooding
+                if (indexed % 10 === 0 || indexed === totalEntries) {
+                    await sendProgress(
+                        progress,
+                        indexed,
+                        totalEntries,
+                        `Indexed ${String(indexed)} of ${String(totalEntries)} entries`
+                    )
+                }
             }
         }
 
         // Force index to refresh by re-listing items
         // This ensures the internal query structures are updated and ready for search
-        // The 100ms delay was insufficient because it didn't refresh the internal state
         await this.index.listItems()
 
         // Final progress
-        await sendProgress(progress, indexed, total, 'Vector index rebuild complete')
+        await sendProgress(progress, indexed, totalEntries, 'Vector index rebuild complete')
 
         logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
             module: 'VectorSearch',
