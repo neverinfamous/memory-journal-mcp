@@ -165,6 +165,7 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 | `GITHUB_REPO_PATH`       | Path to git repo inside container (mount your repo)                    |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
 | `AUTO_REBUILD_INDEX`     | Set to `true` to rebuild vector index on server startup                |
+| `MCP_HOST`               | Server bind host (`0.0.0.0` for containers, default: `localhost`)      |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 
@@ -311,7 +312,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 | `analytics`     | 2     | Statistics, cross-project insights                                |
 | `relationships` | 2     | Link entries, visualize graphs                                    |
 | `export`        | 1     | JSON/Markdown export                                              |
-| `admin`         | 5     | Update, delete, vector index management, merge tags               |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags           |
 | `github`        | 14    | Issues, PRs, context, Kanban, **Milestones**, **issue lifecycle** |
 | `backup`        | 4     | Backup, list, restore, cleanup                                    |
 
@@ -455,9 +456,9 @@ docker run -i --rm \
 
 **Available Tags:**
 
-- `4.0.0` - Specific version (recommended for production)
-- `3.0` - Latest patch in 3.0.x series
-- `3` - Latest minor in 3.x series
+- `4.3.1` - Specific version (recommended for production)
+- `4.3` - Latest patch in 4.3.x series
+- `4` - Latest minor in 4.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
 

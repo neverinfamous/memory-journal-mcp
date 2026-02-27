@@ -319,11 +319,14 @@ When GitHub tools cannot auto-detect repository information:
 - `analyze-period` - Deep period analysis with insights
 - `goal-tracker` - Milestone and achievement tracking
 - `get-context-bundle` - Project context with Git/GitHub/Kanban
+- `get-recent-entries` - Formatted recent entries
+- `project-status-summary` - GitHub Project status reports
 - `pr-summary` - Pull request journal activity summary
 - `code-review-prep` - Comprehensive PR review preparation
 - `pr-retrospective` - Completed PR analysis with learnings
 - `actions-failure-digest` - CI/CD failure analysis
-- `confirm-briefing` - **NEW** Acknowledge session context to user
+- `project-milestone-tracker` - Milestone progress tracking
+- `confirm-briefing` - Acknowledge session context to user
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -332,7 +335,7 @@ When GitHub tools cannot auto-detect repository information:
 **Static Resources** (appear in resource lists):
 
 - `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
-- `memory://instructions` - **Behavioral guidance**: complete server instructions (supports `?level=essential|standard|full`)
+- `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
 - `memory://graph/recent` - Live Mermaid diagram of recent relationships
@@ -525,6 +528,8 @@ flowchart TB
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-11-25 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
+- **HTTP transport hardening** - Configurable CORS, 1MB body limit, security headers, 30-min session timeout
+- **Token scrubbing** - GitHub tokens and credentials automatically redacted from error logs
 
 ### Data & Privacy
 
