@@ -177,5 +177,15 @@ yarn-error.log*
 # TypeScript incremental build info
 *.tsbuildinfo
 
+# Temporary files and logs
+temp/
+tmp/
+*.tmp
+*.temp
+logs/
+
+# Backups
+backups/
+
 # Dependencies
 node_modules/

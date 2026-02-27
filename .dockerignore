@@ -15,6 +15,7 @@ node_modules/
 .git/
 .gitignore
 .github/
+.gitattributes
 
 # -----------------------------------------------------------------------------
 # IDE and Editor Files
@@ -25,6 +26,7 @@ node_modules/
 *.swp
 *.swo
 *~
+*.tsbuildinfo
 
 # -----------------------------------------------------------------------------
 # OS Files
@@ -41,6 +43,7 @@ eslint.config.js
 vitest.config.ts
 tests/
 coverage/
+dist/
 
 # -----------------------------------------------------------------------------
 # Local Development Files
@@ -94,6 +97,7 @@ temp/
 tmp/
 *.tmp
 *.temp
+backups/
 
 # -----------------------------------------------------------------------------
 # Logs
