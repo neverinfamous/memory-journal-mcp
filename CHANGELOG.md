@@ -64,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`get_github_issue` Missing Milestone Field** — `getIssue()` in `GitHubIntegration.ts` now maps `issue.milestone` from the GitHub API response into the returned `IssueDetails` object. Previously the field was silently excluded, so `get_github_issue` and other callers never reflected milestone assignment even when the issue had one.
+- **`memory://milestones/{N}` Description Clarified** — Updated resource description to accurately state it returns milestone metadata + issue counts (`openIssues`, `closedIssues`) rather than full issue arrays. Added a `hint` field to the response directing users to the `get_github_issues` tool for individual issue details.
 - **Docker Hub Short Description** — Corrected "HTTPS" → "HTTP/SSE" and formatting in `docker-publish.yml` short-description field
 - **`delete_entry` Permanent Delete of Soft-Deleted Entries** — `delete_entry(id, permanent: true)` now works on previously soft-deleted entries. Added `getEntryByIdIncludeDeleted()` so permanent deletion can find entries regardless of soft-delete state. Previously returned `{ success: false, error: "Entry not found" }` for soft-deleted entries.
 - **`list_tags` Zero-Count Tag Filtering** — `list_tags` tool and `memory://tags` resource no longer return orphan tags with zero usage count, reducing clutter from deleted or merged tags

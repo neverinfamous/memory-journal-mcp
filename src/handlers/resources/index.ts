@@ -1477,7 +1477,7 @@ I have project memory access and will create entries for significant work.`,
             name: 'Milestone Detail',
             title: 'GitHub Milestone Detail',
             description:
-                'Detailed view of a single GitHub milestone with completion progress and linked issues',
+                'Detailed view of a single GitHub milestone with completion progress and issue counts. Use get_github_issues with the milestone filter for individual issue details.',
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
             annotations: {
@@ -1522,6 +1522,7 @@ I have project memory access and will create entries for significant work.`,
                 return {
                     repository: `${owner}/${repo}`,
                     milestone: { ...milestone, completionPercentage },
+                    hint: 'Use get_github_issues tool to list issues associated with this milestone.',
                 }
             },
         },

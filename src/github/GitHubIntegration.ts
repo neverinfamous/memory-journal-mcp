@@ -344,6 +344,9 @@ export class GitHubIntegration {
                 updatedAt: issue.updated_at,
                 closedAt: issue.closed_at,
                 commentsCount: issue.comments,
+                milestone: issue.milestone
+                    ? { number: issue.milestone.number, title: issue.milestone.title }
+                    : null,
             }
 
             this.setCache(cacheKey, details)
