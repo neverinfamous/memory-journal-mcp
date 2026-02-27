@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Performance Benchmarking Suite** — Added a `vitest bench` powered benchmarking suite to measure baseline performance for database operations, vector indexing, and tool execution overhead. Included new `"bench"` npm script.
+
 - **GitHub Milestones Integration** — Full CRUD support for GitHub Milestones
   - 5 new tools: `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` (38 total tools)
   - 2 new resources: `memory://github/milestones` (list view) and `memory://milestones/{number}` (detail view) (20 total resources)

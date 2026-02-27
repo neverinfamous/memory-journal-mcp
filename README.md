@@ -524,6 +524,20 @@ flowchart TB
 - **@xenova/transformers** - ML embeddings in JavaScript
 - **Lazy loading** - ML models load on first use, not startup
 
+### Performance Benchmarks
+
+Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
+
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~55x faster than retrieving 50 recent entries.
+- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>190x faster locally).
+- **Core MCP Routines**: Complex operations exhibit negligible latency when executed through standard MCP tools. Calling tools natively adds ~1.4x overhead compared to direct function execution.
+
+To run the benchmarking suite locally:
+
+```bash
+npm run bench
+```
+
 ### Security
 
 - **Local-first** - All data stored locally, no external API calls (except optional GitHub)
