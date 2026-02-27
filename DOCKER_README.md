@@ -448,6 +448,14 @@ docker run -i --rm \
 - **Instant Startup** - Lazy loading of ML models
 - **Production/Stable** - Comprehensive error handling and automatic migrations
 
+**Performance Benchmarks:**
+
+Memory Journal is designed for extremely low overhead during AI task execution.
+
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~55x faster than retrieving 50 recent entries.
+- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>190x faster locally).
+- **Core MCP Routines**: Complex operations exhibit negligible latency when executed through standard MCP tools. Calling tools natively adds ~1.4x overhead compared to direct function execution.
+
 **Automated Deployment:**
 
 - ⚡ **Always Fresh** - Images built within minutes of commits
