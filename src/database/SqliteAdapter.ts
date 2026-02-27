@@ -17,6 +17,8 @@ import type {
     EntryType,
     SignificanceType,
     RelationshipType,
+    ImportanceBreakdown,
+    ImportanceResult,
 } from '../types/index.js'
 
 // Schema SQL for initialization
@@ -315,29 +317,47 @@ export class SqliteAdapter {
     }
 
     /**
+     * Importance score result with scoring breakdown
+     */
+    static readonly IMPORTANCE_WEIGHTS = {
+        significance: 0.3,
+        relationships: 0.35,
+        causal: 0.2,
+        recency: 0.15,
+    } as const
+
+    /**
      * Calculate importance score for an entry (0.0-1.0)
      *
      * Formula:
-     * - significanceWeight (0.30): 1.0 if significanceType set, else 0.0
-     * - relationshipWeight (0.35): min(relCount / 5, 1.0)
-     * - causalWeight (0.20): min(causalCount / 3, 1.0)
-     * - recencyWeight (0.15): max(0, 1 - daysSince / 90)
+     * - significance (0.30): 1.0 if significanceType set, else 0.0
+     * - relationships (0.35): min(relCount / 5, 1.0)
+     * - causal (0.20): min(causalCount / 3, 1.0)
+     * - recency (0.15): max(0, 1 - daysSince / 90)
+     *
+     * Returns ImportanceResult with score and component breakdown.
      */
-    calculateImportance(entryId: number): number {
+    calculateImportance(entryId: number): ImportanceResult {
         const db = this.ensureDb()
+        const round2 = (n: number): number => Math.round(n * 100) / 100
 
         // Get entry data
         const entryResult = db.exec(
             `SELECT significance_type, timestamp FROM memory_journal WHERE id = ? AND deleted_at IS NULL`,
             [entryId]
         )
-        if (entryResult.length === 0 || entryResult[0]?.values.length === 0) return 0
+        if (entryResult.length === 0 || entryResult[0]?.values.length === 0) {
+            return {
+                score: 0,
+                breakdown: { significance: 0, relationships: 0, causal: 0, recency: 0 },
+            }
+        }
 
         const significanceType = entryResult[0]?.values[0]?.[0] as string | null
         const timestamp = entryResult[0]?.values[0]?.[1] as string
 
         // Significance weight: 1.0 if set, else 0.0
-        const significanceWeight = significanceType ? 1.0 : 0.0
+        const significanceRaw = significanceType ? 1.0 : 0.0
 
         // Relationship count (total relationships involving this entry)
         const relResult = db.exec(
@@ -345,7 +365,7 @@ export class SqliteAdapter {
             [entryId, entryId]
         )
         const relCount = (relResult[0]?.values[0]?.[0] as number) ?? 0
-        const relationshipWeight = Math.min(relCount / 5, 1.0)
+        const relationshipsRaw = Math.min(relCount / 5, 1.0)
 
         // Causal relationships count
         const causalResult = db.exec(
@@ -355,23 +375,33 @@ export class SqliteAdapter {
             [entryId, entryId]
         )
         const causalCount = (causalResult[0]?.values[0]?.[0] as number) ?? 0
-        const causalWeight = Math.min(causalCount / 3, 1.0)
+        const causalRaw = Math.min(causalCount / 3, 1.0)
 
         // Recency weight: decays over 90 days
         const entryDate = new Date(timestamp)
         const now = new Date()
         const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
-        const recencyWeight = Math.max(0, 1 - daysSince / 90)
+        const recencyRaw = Math.max(0, 1 - daysSince / 90)
 
-        // Weighted sum
-        const importance =
-            significanceWeight * 0.3 +
-            relationshipWeight * 0.35 +
-            causalWeight * 0.2 +
-            recencyWeight * 0.15
+        const w = SqliteAdapter.IMPORTANCE_WEIGHTS
 
-        // Round to 2 decimal places
-        return Math.round(importance * 100) / 100
+        // Weighted contributions
+        const breakdown: ImportanceBreakdown = {
+            significance: round2(significanceRaw * w.significance),
+            relationships: round2(relationshipsRaw * w.relationships),
+            causal: round2(causalRaw * w.causal),
+            recency: round2(recencyRaw * w.recency),
+        }
+
+        // Total score
+        const score = round2(
+            significanceRaw * w.significance +
+                relationshipsRaw * w.relationships +
+                causalRaw * w.causal +
+                recencyRaw * w.recency
+        )
+
+        return { score, breakdown }
     }
 
     /**

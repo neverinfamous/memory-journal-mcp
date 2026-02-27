@@ -213,10 +213,18 @@ const RelationshipOutputSchema = z.object({
  * Schema for get_entry_by_id output (entry with optional relationships).
  * Handles both success (entry found) and error (entry not found) cases.
  */
+const ImportanceBreakdownSchema = z.object({
+    significance: z.number(),
+    relationships: z.number(),
+    causal: z.number(),
+    recency: z.number(),
+})
+
 const EntryByIdOutputSchema = z.object({
     entry: EntryOutputSchema.optional(),
     relationships: z.array(RelationshipOutputSchema).optional(),
     importance: z.number().nullable().optional(), // Computed importance score (0.0-1.0)
+    importanceBreakdown: ImportanceBreakdownSchema.optional(), // Weighted component contributions
     error: z.string().optional(),
 })
 
@@ -362,6 +370,7 @@ const CrossProjectInsightsOutputSchema = z.object({
             last_entry_date: z.string(),
         })
     ),
+    inactiveThresholdDays: z.number(), // Cutoff for inactive classification
     time_distribution: z.array(
         z.object({
             project_number: z.number(),
@@ -1010,8 +1019,13 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 if (!entry) {
                     return Promise.resolve({ error: `Entry ${entry_id} not found` })
                 }
-                const importance = db.calculateImportance(entry_id)
-                const result: Record<string, unknown> = { entry, importance }
+                const { score: importance, breakdown: importanceBreakdown } =
+                    db.calculateImportance(entry_id)
+                const result: Record<string, unknown> = {
+                    entry,
+                    importance,
+                    importanceBreakdown,
+                }
                 if (include_relationships) {
                     result['relationships'] = db.getRelationships(entry_id)
                 }
@@ -1261,6 +1275,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         total_entries: 0,
                         projects: [],
                         inactive_projects: [],
+                        inactiveThresholdDays: 7,
                         time_distribution: [],
                         message: `No projects found with at least ${String(input.min_entries)} entries`,
                     })
@@ -1337,6 +1352,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                         top_tags: projectTags[p['project_number'] as number] ?? [],
                     })),
                     inactive_projects: inactiveProjects,
+                    inactiveThresholdDays: 7,
                     time_distribution: distribution,
                 })
             },

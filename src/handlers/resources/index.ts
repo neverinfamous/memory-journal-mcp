@@ -533,7 +533,9 @@ I have project memory access and will create entries for significant work.`,
                 const entriesWithImportance: (Record<string, unknown> & { importance: number })[] =
                     rows.map((row) => {
                         const entry = transformEntryRow(row)
-                        const importance = context.db.calculateImportance(entry['id'] as number)
+                        const { score: importance } = context.db.calculateImportance(
+                            entry['id'] as number
+                        )
                         return { ...entry, importance }
                     })
                 // Sort by importance (highest first), then by timestamp (newest first) for ties

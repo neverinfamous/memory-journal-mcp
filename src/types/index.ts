@@ -309,6 +309,30 @@ export interface Embedding {
     modelName: string
 }
 
+/**
+ * Importance scoring breakdown showing weighted component contributions
+ */
+export interface ImportanceBreakdown {
+    /** Significance type contribution (weight: 0.30) */
+    significance: number
+    /** Relationship count contribution (weight: 0.35) */
+    relationships: number
+    /** Causal relationship contribution (weight: 0.20) */
+    causal: number
+    /** Recency decay contribution (weight: 0.15) */
+    recency: number
+}
+
+/**
+ * Importance calculation result with total score and component breakdown
+ */
+export interface ImportanceResult {
+    /** Total importance score (0.0-1.0) */
+    score: number
+    /** Weighted component contributions */
+    breakdown: ImportanceBreakdown
+}
+
 // ============================================================================
 // GitHub Integration Types
 // ============================================================================

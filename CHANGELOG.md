@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **AntiGravity IDE Guidance** — Added explicit note in README.md and DOCKER_README.md that AntiGravity does not currently support MCP server instructions, with workaround to manually provide `ServerInstructions.ts` contents
 
+### Improved
+
+- **`get_entry_by_id` Importance Scoring Breakdown** — Tool now returns `importanceBreakdown` alongside the `importance` score, showing weighted component contributions: `significance` (30%), `relationships` (35%), `causal` (20%), `recency` (15%). Gives agents transparency into *why* an entry scored a given importance level.
+- **`get_cross_project_insights` Inactive Threshold Visibility** — Tool output now includes `inactiveThresholdDays: 7` field, making the hardcoded inactive project classification criteria self-documenting. Previously, consumers saw an empty `inactive_projects` array with no way to know the cutoff.
+
 ### Fixed
 
 - **Docker Hub Short Description** — Corrected "HTTPS" → "HTTP/SSE" and formatting in `docker-publish.yml` short-description field
