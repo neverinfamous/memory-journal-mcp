@@ -578,14 +578,14 @@ I have project memory access and will create entries for significant work.`,
                 priority: 0.7,
             },
             handler: (_uri: string, context: ResourceContext) => {
+                // Fetch ALL significant entries so importance sort runs on the full set
+                // (not just the 20 most recent). We then slice after sorting.
                 const rows = execQuery(
                     context.db,
                     `
                     SELECT * FROM memory_journal
                     WHERE significance_type IS NOT NULL
                     AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                    LIMIT 20
                 `
                 )
                 // Transform entries and calculate importance scores
@@ -607,7 +607,9 @@ I have project memory access and will create entries for significant work.`,
                     const bTime = new Date(b['timestamp'] as string).getTime()
                     return bTime - aTime
                 })
-                return { entries: entriesWithImportance, count: entriesWithImportance.length }
+                // Slice to top 20 AFTER sorting (not before) to ensure correctness
+                const top20 = entriesWithImportance.slice(0, 20)
+                return { entries: top20, count: top20.length }
             },
         },
         {

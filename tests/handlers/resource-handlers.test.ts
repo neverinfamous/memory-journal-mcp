@@ -143,6 +143,45 @@ describe('Resource Handlers', () => {
             expect(data.count).toBeGreaterThan(0)
         })
 
+        it('should sort memory://significant by importance descending, not by timestamp', async () => {
+            // Create 3 significant entries: e2 gets a relationship (higher importance), e3 gets 2 (highest)
+            const eBase = db.createEntry({ content: 'Sort test: base entry (no relationships)' })
+            const e1 = db.createEntry({
+                content: 'Sort test: sig entry 1 - no relationships',
+                significanceType: 'milestone',
+            })
+            const e2 = db.createEntry({
+                content: 'Sort test: sig entry 2 - one relationship',
+                significanceType: 'blocker_resolved',
+            })
+            const e3 = db.createEntry({
+                content: 'Sort test: sig entry 3 - two relationships',
+                significanceType: 'milestone',
+            })
+            // Give e2 one relationship, e3 two relationships → e3 should score highest
+            db.linkEntries(e2.id, eBase.id, 'references', 'One link')
+            db.linkEntries(e3.id, eBase.id, 'references', 'Link A')
+            db.linkEntries(e3.id, e1.id, 'references', 'Link B')
+
+            const result = await readResource('memory://significant', db)
+            const data = result.data as {
+                entries: { id: number; importance: number }[]
+                count: number
+            }
+
+            // 1: importance field present on all entries
+            for (const entry of data.entries) {
+                expect(typeof entry.importance).toBe('number')
+            }
+
+            // 2: entries sorted descending by importance (no entry should be less important than its successor)
+            for (let i = 1; i < data.entries.length; i++) {
+                const prev = data.entries[i - 1]!
+                const curr = data.entries[i]!
+                expect(prev.importance).toBeGreaterThanOrEqual(curr.importance)
+            }
+        })
+
         it('should read memory://tags', async () => {
             const result = await readResource('memory://tags', db)
 
