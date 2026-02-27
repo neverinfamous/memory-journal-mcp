@@ -88,6 +88,15 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
             branch: 'main',
             remoteUrl: 'git@github.com:testowner/testrepo.git',
         }),
+        getRepoStats: vi.fn().mockResolvedValue({
+            stars: 42,
+            forks: 7,
+            watchers: 3,
+        }),
+        getTrafficData: vi.fn().mockResolvedValue({
+            clones: { total: 120, uniqueCloners: 30 },
+            views: { total: 500, uniqueVisitors: 80 },
+        }),
         ...overrides,
     }
     return mock as unknown as GitHubIntegration
@@ -372,6 +381,93 @@ describe('GitHub Resource Handlers', () => {
             const data = result.data as { format: string; diagram: string }
             expect(data.format).toBe('mermaid')
             expect(data.diagram).toContain('NoGitHub')
+        })
+    })
+
+    // ========================================================================
+    // memory://briefing with GitHub insights
+    // ========================================================================
+
+    describe('memory://briefing with GitHub', () => {
+        it('should include insights with stars, forks, and traffic', async () => {
+            const github = createMockGitHub()
+            const result = await readResource('memory://briefing', db, undefined, undefined, github)
+
+            const data = result.data as {
+                github: {
+                    repo: string
+                    insights?: {
+                        stars: number | null
+                        forks: number | null
+                        clones14d?: number
+                        views14d?: number
+                    }
+                }
+                userMessage: string
+            }
+
+            expect(data.github.repo).toBe('testowner/testrepo')
+            expect(data.github.insights).toBeDefined()
+            expect(data.github.insights!.stars).toBe(42)
+            expect(data.github.insights!.forks).toBe(7)
+            expect(data.github.insights!.clones14d).toBe(120)
+            expect(data.github.insights!.views14d).toBe(500)
+            expect(data.userMessage).toContain('stars')
+            expect(data.userMessage).toContain('forks')
+            expect(data.userMessage).toContain('clones')
+        })
+
+        it('should include insights without traffic when getTrafficData fails', async () => {
+            const github = createMockGitHub({
+                getTrafficData: vi.fn().mockRejectedValue(new Error('403 Forbidden')),
+            })
+            const result = await readResource('memory://briefing', db, undefined, undefined, github)
+
+            const data = result.data as {
+                github: {
+                    insights?: {
+                        stars: number | null
+                        forks: number | null
+                        clones14d?: number
+                        views14d?: number
+                    }
+                }
+                userMessage: string
+            }
+
+            // Stars and forks should still be present
+            expect(data.github.insights).toBeDefined()
+            expect(data.github.insights!.stars).toBe(42)
+            expect(data.github.insights!.forks).toBe(7)
+            // Traffic should be absent
+            expect(data.github.insights!.clones14d).toBeUndefined()
+            expect(data.github.insights!.views14d).toBeUndefined()
+        })
+
+        it('should omit insights when getRepoStats fails', async () => {
+            const github = createMockGitHub({
+                getRepoStats: vi.fn().mockRejectedValue(new Error('API error')),
+            })
+            const result = await readResource('memory://briefing', db, undefined, undefined, github)
+
+            const data = result.data as {
+                github: {
+                    insights?: unknown
+                }
+            }
+
+            expect(data.github.insights).toBeUndefined()
+        })
+
+        it('should include repoInsights in more section', async () => {
+            const github = createMockGitHub()
+            const result = await readResource('memory://briefing', db, undefined, undefined, github)
+
+            const data = result.data as {
+                more: { repoInsights: string }
+            }
+
+            expect(data.more.repoInsights).toBe('memory://github/insights')
         })
     })
 })

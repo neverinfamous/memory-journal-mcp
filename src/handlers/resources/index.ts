@@ -263,6 +263,12 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     openIssues: number
                     openPRs: number
                     milestones: { title: string; progress: string; dueOn: string | null }[]
+                    insights?: {
+                        stars: number | null
+                        forks: number | null
+                        clones14d?: number
+                        views14d?: number
+                    }
                 } | null = null
 
                 if (context.github) {
@@ -357,6 +363,40 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                                 // Milestones unavailable
                             }
 
+                            // Get repo insights (stars, forks, traffic)
+                            let insights:
+                                | {
+                                      stars: number | null
+                                      forks: number | null
+                                      clones14d?: number
+                                      views14d?: number
+                                  }
+                                | undefined = undefined
+                            try {
+                                const repoStats = await context.github.getRepoStats(owner, repo)
+                                if (repoStats) {
+                                    insights = {
+                                        stars: repoStats.stars ?? null,
+                                        forks: repoStats.forks ?? null,
+                                    }
+                                    // Traffic requires push access - may fail
+                                    try {
+                                        const trafficData = await context.github.getTrafficData(
+                                            owner,
+                                            repo
+                                        )
+                                        if (trafficData) {
+                                            insights.clones14d = trafficData.clones.total
+                                            insights.views14d = trafficData.views.total
+                                        }
+                                    } catch {
+                                        // Traffic data unavailable (requires push access)
+                                    }
+                                }
+                            } catch {
+                                // Repo stats unavailable
+                            }
+
                             github = {
                                 repo: `${owner}/${repo}`,
                                 branch: repoInfo.branch ?? null,
@@ -364,6 +404,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                                 openIssues,
                                 openPRs,
                                 milestones,
+                                insights,
                             }
                         }
                     } catch {
@@ -390,6 +431,24 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     github?.milestones && github.milestones.length > 0
                         ? `\n| **Milestones** | ${github.milestones.map((m) => `${m.title} (${m.progress}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`).join(', ')} |`
                         : ''
+
+                // Build insights row for userMessage
+                let insightsRow = ''
+                if (github?.insights) {
+                    const parts: string[] = []
+                    if (github.insights.stars !== null)
+                        parts.push(`⭐ ${String(github.insights.stars)} stars`)
+                    if (github.insights.forks !== null)
+                        parts.push(`🍴 ${String(github.insights.forks)} forks`)
+                    if (github.insights.clones14d !== undefined)
+                        parts.push(`📦 ${String(github.insights.clones14d)} clones`)
+                    if (github.insights.views14d !== undefined)
+                        parts.push(`👁️ ${String(github.insights.views14d)} views`)
+                    if (parts.length > 0) {
+                        const trafficNote = github.insights.clones14d !== undefined ? ' (14d)' : ''
+                        insightsRow = `\n| **Insights** | ${parts.join(' · ')}${trafficNote} |`
+                    }
+                }
 
                 return {
                     data: {
@@ -418,6 +477,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                             fullHealth: 'memory://health',
                             allRecent: 'memory://recent',
                             githubStatus: 'memory://github/status',
+                            repoInsights: 'memory://github/insights',
                             contextBundle: 'get-context-bundle prompt',
                         },
                         // IMPORTANT: Agent should relay this message to the user
@@ -428,7 +488,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 | **Branch** | ${branchName} |
 | **CI Status** | ${ciStatus} |
 | **Journal** | ${totalEntries} entries |
-| **Latest** | ${latestPreview} |${milestoneRow}
+| **Latest** | ${latestPreview} |${milestoneRow}${insightsRow}
 
 I have project memory access and will create entries for significant work.`,
                         // Note for clients that don't auto-inject ServerInstructions

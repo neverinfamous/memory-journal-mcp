@@ -240,6 +240,7 @@ Valid values for \`entry_type\` parameter:
 | \`memory://kanban/{n}\` | Kanban board for project number n |
 | \`memory://github/milestones\` | Open milestones with completion % |
 | \`memory://milestones/{n}\` | Single milestone detail + progress |
+| \`memory://github/insights\` | Stars, forks, and 14-day traffic summary |
 `
 
 /**
