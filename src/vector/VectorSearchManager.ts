@@ -174,31 +174,6 @@ export class VectorSearchManager {
     }
 
     /**
-     * Add an entry directly without upsert delete (fast path for rebuild).
-     * Caller must ensure the item does not already exist in the index.
-     */
-    private async addEntryDirect(entryId: number, content: string): Promise<boolean> {
-        if (!this.index) return false
-
-        try {
-            const embedding = await this.generateEmbedding(content)
-            await this.index.insertItem({
-                id: String(entryId),
-                vector: embedding,
-                metadata: { entryId, contentPreview: content.slice(0, 100) },
-            })
-            return true
-        } catch (error) {
-            logger.error('Failed to add entry to vector index (direct)', {
-                module: 'VectorSearch',
-                entityId: entryId,
-                error: error instanceof Error ? error.message : String(error),
-            })
-            return false
-        }
-    }
-
-    /**
      * Perform semantic search
      */
     async search(
@@ -284,51 +259,99 @@ export class VectorSearchManager {
             }
         }
 
-        // Step 2: Clean up orphaned entries from the index
-        // These are vector entries for database records that were permanently deleted
-        const indexItems = await this.index.listItems()
-        let orphansRemoved = 0
-        for (const item of indexItems) {
-            if (!dbIds.has(item.id)) {
-                try {
-                    await this.index.deleteItem(item.id)
-                    orphansRemoved++
-                } catch {
-                    // Ignore errors during cleanup
+        // Step 2: Clean up existing index items
+        // If the index is corrupted (e.g., from a process kill), recreate it
+        try {
+            const indexItems = await this.index.listItems()
+            let orphansRemoved = 0
+            for (const item of indexItems) {
+                if (!dbIds.has(item.id)) {
+                    try {
+                        await this.index.deleteItem(item.id)
+                        orphansRemoved++
+                    } catch {
+                        // Ignore errors during cleanup
+                    }
                 }
             }
-        }
-        if (orphansRemoved > 0) {
-            logger.info(`Cleaned up ${String(orphansRemoved)} orphaned vector entries`, {
-                module: 'VectorSearch',
-            })
-        }
-
-        // Step 3: Delete all remaining items to prepare for clean re-index
-        // This avoids the double-delete overhead of calling addEntry (upsert) per item
-        const remainingItems = await this.index.listItems()
-        for (const item of remainingItems) {
-            try {
-                await this.index.deleteItem(item.id)
-            } catch {
-                // Ignore
+            if (orphansRemoved > 0) {
+                logger.info(`Cleaned up ${String(orphansRemoved)} orphaned vector entries`, {
+                    module: 'VectorSearch',
+                })
             }
+
+            // Step 3: Delete all remaining items to prepare for clean re-index
+            // This avoids the double-delete overhead of calling addEntry (upsert) per item
+            const remainingItems = await this.index.listItems()
+            for (const item of remainingItems) {
+                try {
+                    await this.index.deleteItem(item.id)
+                } catch {
+                    // Ignore
+                }
+            }
+        } catch (indexError) {
+            // Index files are corrupted — recreate from scratch
+            logger.warning('Vector index corrupted, recreating...', {
+                module: 'VectorSearch',
+                error: indexError instanceof Error ? indexError.message : String(indexError),
+            })
+            // Delete and recreate the vectra index directory
+            if (fs.existsSync(this.indexPath)) {
+                fs.rmSync(this.indexPath, { recursive: true, force: true })
+                fs.mkdirSync(this.indexPath, { recursive: true })
+            }
+            this.index = new LocalIndex(this.indexPath)
+            await this.index.createIndex()
+            logger.info('Recreated vector index after corruption', { module: 'VectorSearch' })
         }
 
-        // Step 4: Re-index all entries using paginated fetch + parallel batching
+        // Step 4: Re-index all entries using paginated fetch
+        // Embeddings are generated in parallel batches (CPU-bound, safe),
+        // but vectra insertions are sequential (file I/O, not concurrency-safe)
         await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild...')
 
         let indexed = 0
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
             const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
 
-            // Process page in parallel batches of REBUILD_BATCH_SIZE
+            // Generate embeddings in parallel batches
             for (let i = 0; i < page.length; i += REBUILD_BATCH_SIZE) {
                 const batch = page.slice(i, i + REBUILD_BATCH_SIZE)
-                const results = await Promise.all(
-                    batch.map((entry) => this.addEntryDirect(entry.id, entry.content))
+
+                // Parallel embedding generation
+                const embeddings = await Promise.all(
+                    batch.map(async (entry) => {
+                        try {
+                            return { entry, embedding: await this.generateEmbedding(entry.content) }
+                        } catch {
+                            return { entry, embedding: null }
+                        }
+                    })
                 )
-                indexed += results.filter(Boolean).length
+
+                // Sequential vectra insertion (file I/O not concurrency-safe)
+                for (const { entry, embedding } of embeddings) {
+                    if (embedding !== null) {
+                        try {
+                            await this.index.insertItem({
+                                id: String(entry.id),
+                                vector: embedding,
+                                metadata: {
+                                    entryId: entry.id,
+                                    contentPreview: entry.content.slice(0, 100),
+                                },
+                            })
+                            indexed++
+                        } catch (error) {
+                            logger.error('Failed to insert entry into vector index', {
+                                module: 'VectorSearch',
+                                entityId: entry.id,
+                                error: error instanceof Error ? error.message : String(error),
+                            })
+                        }
+                    }
+                }
 
                 // Report progress every 10 entries to avoid flooding
                 if (indexed % 10 === 0 || indexed === totalEntries) {

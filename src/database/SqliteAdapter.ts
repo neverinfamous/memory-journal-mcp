@@ -192,8 +192,7 @@ export class SqliteAdapter {
 
     /**
      * Immediately flush the database to disk (synchronous).
-     * Cancels any pending debounced save. Uses zero-copy Buffer
-     * to avoid duplicate memory allocation.
+     * Cancels any pending debounced save.
      * Used by close() and initialize() for guaranteed persistence.
      */
     flushSave(): void {
@@ -203,8 +202,7 @@ export class SqliteAdapter {
         }
         if (!this.db) return
         const data = this.db.export()
-        // Zero-copy: wrap the Uint8Array's underlying ArrayBuffer directly
-        const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+        const buffer = Buffer.from(data)
         fs.writeFileSync(this.dbPath, buffer)
     }
 
