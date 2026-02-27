@@ -166,8 +166,8 @@ GitHub tools auto-detect owner/repo from GITHUB_REPO_PATH. If \`detectedOwner\`/
 ### Kanban Tools (GitHub Projects v2)
 | Tool | Required Parameters | Notes |
 |------|---------------------|-------|
-| \`get_kanban_board\` | \`project_number\` (number) | Returns columns with items grouped by Status |
-| \`move_kanban_item\` | \`project_number\`, \`item_id\` (string), \`target_status\` (string) | \`item_id\` is the GraphQL node ID from board items. Status matching is case-insensitive. |
+| \`get_kanban_board\` | \`project_number\` (number) | Optional \`owner\`. Returns columns with items grouped by Status |
+| \`move_kanban_item\` | \`project_number\`, \`item_id\` (string), \`target_status\` (string) | Optional \`owner\`. \`item_id\` is the GraphQL node ID from board items. Status matching is case-insensitive. |
 
 **Finding the right project**: User may have multiple projects. Use \`get_kanban_board\` with different project numbers (1, 2, 3...) to find the correct one by checking \`projectTitle\`.
 
@@ -264,6 +264,10 @@ Valid values for \`entry_type\` parameter:
 | \`memory://kanban/{n}\` | Kanban board for project number n |
 | \`memory://kanban/{n}/diagram\` | Mermaid Kanban visualization |
 | \`memory://milestones/{n}\` | Single milestone detail + progress |
+| \`memory://projects/{n}/timeline\` | Project entries timeline |
+| \`memory://issues/{n}/entries\` | Entries linked to issue n |
+| \`memory://prs/{n}/entries\` | Entries linked to PR n |
+| \`memory://prs/{n}/timeline\` | PR lifecycle and linked entries |
 `
 
 /**

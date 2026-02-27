@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **Server Instructions Fixes** — Added missing Kanban optional `owner` parameters and the four new Phase 6 GitHub template resources to `ServerInstructions.ts`'s Key Resources table to ensure agents have complete tool/resource context.
+- **Testing Prompt Polish** — Fixed minor typos and phase numbering inconsistencies in the comprehensive verification plan (`test-memory-journal-mcp.md`).
 - **AntiGravity IDE Guidance** — Added explicit note in README.md and DOCKER_README.md that AntiGravity does not currently support MCP server instructions, with workaround to manually provide `ServerInstructions.ts` contents
 - **`memory://milestones/{N}` Behavior Clarified** — Updated `test-memory-journal-mcp.md` to accurately document that this resource is designed to return milestone metadata + issue counts + `completionPercentage` + a `hint` to use `get_github_issues` for individual issue details (not full issue arrays)
 
