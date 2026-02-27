@@ -116,6 +116,15 @@ describe('Resource Handlers', () => {
             expect(result.data as string).toContain('Session Start')
         })
 
+        it('should show all tools in memory://instructions when no filter is set', async () => {
+            // Bug fix: when filterConfig is null (all tools enabled), memory://instructions
+            // must show Active Tools (39), not Active Tools (3) from the old hardcoded fallback
+            const result = await readResource('memory://instructions', db, undefined, null)
+
+            const text = result.data as string
+            expect(text).toContain('Active Tools (39)')
+        })
+
         it('should read memory://recent', async () => {
             const result = await readResource('memory://recent', db)
 

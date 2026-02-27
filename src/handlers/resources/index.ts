@@ -516,8 +516,9 @@ I have project memory access and will create entries for significant work.`,
                 // because the MCP SDK performs exact URI matching before calling handlers.
                 const level: InstructionLevel = 'full'
 
-                // Get enabled tools from filter config or all tools
-                const enabledTools = context.filterConfig?.enabledTools ?? new Set<string>()
+                // Get enabled tools from filter config, or fall back to all tool names
+                const allToolNames = new Set(getAllToolNames())
+                const enabledTools = context.filterConfig?.enabledTools ?? allToolNames
 
                 // Get prompts for instruction generation
                 const prompts = getPrompts().map((p) => {
@@ -533,9 +534,7 @@ I have project memory access and will create entries for significant work.`,
 
                 // Generate instructions at requested level
                 const instructions = generateInstructions(
-                    enabledTools.size > 0
-                        ? enabledTools
-                        : new Set(['create_entry', 'search_entries', 'get_recent_entries']),
+                    enabledTools,
                     resources,
                     prompts,
                     undefined, // No latest entry needed for instructions
