@@ -99,9 +99,10 @@ ENV DB_PATH=/app/data/memory_journal.db
 # Switch to non-root user
 USER appuser
 
-# Health check
+# Health check - validates Node.js is responsive
+# For HTTP mode, override with: HEALTHCHECK CMD curl -f http://localhost:3000/mcp || exit 1
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "console.log('Server healthy')" || exit 1
+    CMD node -e "process.exit(0)" || exit 1
 
 # Run the MCP server
 CMD ["node", "dist/cli.js"]
@@ -109,6 +110,6 @@ CMD ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="4.0.0"
+LABEL version="4.3.1"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

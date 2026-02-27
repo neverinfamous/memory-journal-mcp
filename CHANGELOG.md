@@ -65,11 +65,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Removed Dependabot Auto-Merge Workflow** — Deleted `dependabot-auto-merge.yml`; dependency PRs now require manual review and merge
 - **Trivy Action Update** — Updated `aquasecurity/trivy-action` 0.33.1 → 0.34.0 in `security-update.yml` (bundles Trivy scanner 0.69.1)
+- **CI Test Matrix Alignment** — Updated Node.js test matrix from `[20.x, 22.x, 25.x]` to `[24.x, 25.x]` to match `engines.node: >=24.0.0`
+- **Blocking npm audit** — Removed `continue-on-error: true` from `npm audit` step in lint-and-test.yml; known vulnerabilities now fail the pipeline
+- **Blocking Secret Scanning** — Removed `continue-on-error: true` from TruffleHog step in secrets-scanning.yml; verified secret leaks now fail the pipeline
 
 ### Security
 
 - **GHSA-w7fw-mjwx-w883 (qs)** — Updated `qs` 6.14.1 → 6.14.2 to fix low-severity arrayLimit bypass in comma parsing that allows denial of service
 - **CVE-2026-26960 (tar)** — Manually patched npm's bundled `tar` → `7.5.8` in Dockerfile to fix HIGH severity path traversal vulnerability (CVSS 7.1). Also updated npm override.
+- **HTTP Transport Hardening** — Comprehensive security improvements for HTTP mode:
+  - **Configurable CORS** — New `--cors-origin` CLI flag and `MCP_CORS_ORIGIN` env var (default: `*`). Previously hardcoded `Access-Control-Allow-Origin: *`.
+  - **Request Body Size Limit** — Added 1MB limit to `express.json()` to prevent memory exhaustion DoS attacks
+  - **Security Headers** — Added `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on all HTTP responses
+  - **Session Timeout** — Stateful HTTP sessions now expire after 30 minutes of inactivity (5-minute sweep interval). Prevents unbounded memory growth from abandoned sessions.
+- **Error Log Token Scrubbing** — Logger now automatically sanitizes `error` context fields to redact GitHub tokens (classic `ghp_`, fine-grained `github_pat_`), Bearer tokens, and Authorization headers before writing to stderr. New `sanitizeErrorForLogging()` in `security-utils.ts`.
+- **SECURITY.md Rewrite** — Complete rewrite for TypeScript era. Removed all outdated Python references. Added documentation for HTTP transport security (CORS, headers, session timeout, body limits), GitHub token handling, and CI/CD security pipeline.
+- **docker-compose.yml Rewrite** — Replaced Python-era configuration with TypeScript commands. Removed SSH/gitconfig root mounts, deprecated `version` key, and `PYTHONPATH`. Added HTTP transport service with resource limits and secure volume mount options.
+- **Dockerfile Version Label** — Updated hardcoded `4.0.0` → `4.3.1` to match actual package version
+- **Dockerfile Healthcheck** — Replaced no-op `console.log` healthcheck with `process.exit(0)` validation. Added documentation for HTTP-mode override using `curl`.
+- **Legacy Cleanup** — Removed leftover Python `__pycache__` directories from `src/` subtree
 
 ## [4.3.1] - 2026-02-05
 

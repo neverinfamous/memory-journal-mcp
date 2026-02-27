@@ -21,6 +21,7 @@ program
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
+    .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: *)')
     .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
     .action(
         async (options: {
@@ -32,6 +33,7 @@ program
             toolFilter?: string
             defaultProject: string
             autoRebuildIndex?: boolean
+            corsOrigin?: string
             logLevel: string
         }) => {
             // Set log level
@@ -64,6 +66,7 @@ program
                           : undefined,
                     autoRebuildIndex:
                         options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
+                    corsOrigin: options.corsOrigin,
                 })
             } catch (error) {
                 logger.error('Failed to start server', {
