@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **CVE-2026-27903 + CVE-2026-27904 (minimatch)** — Added npm override `minimatch@^10.2.3` to fix HIGH severity ReDoS and algorithmic complexity vulnerabilities (CVSS 7.5) that blocked Docker deploy
+
 ## [4.4.0] - 2026-02-27
 
 ### Added
