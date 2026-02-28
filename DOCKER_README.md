@@ -466,8 +466,8 @@ Memory Journal is designed for extremely low overhead during AI task execution.
 
 **Available Tags:**
 
-- `4.3.1` - Specific version (recommended for production)
-- `4.3` - Latest patch in 4.3.x series
+- `4.4.0` - Specific version (recommended for production)
+- `4.4` - Latest patch in 4.4.x series
 - `4` - Latest minor in 4.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
