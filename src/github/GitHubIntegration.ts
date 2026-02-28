@@ -11,6 +11,7 @@ import * as simpleGitImport from 'simple-git'
 import { logger } from '../utils/logger.js'
 import type {
     GitHubIssue,
+    GitHubMilestone,
     GitHubPullRequest,
     GitHubWorkflowRun,
     ProjectContext,
@@ -18,7 +19,23 @@ import type {
     KanbanColumn,
     ProjectV2Item,
     ProjectV2StatusOption,
+    RepoStats,
+    TrafficData,
+    TrafficReferrer,
+    PopularPath,
 } from '../types/index.js'
+
+/** TTL for cached GitHub API responses (5 minutes) */
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+/** TTL for cached traffic/insights responses (10 minutes - traffic data changes slowly) */
+const TRAFFIC_CACHE_TTL_MS = 10 * 60 * 1000
+
+/** Generic cache entry with timestamp */
+interface CacheEntry<T> {
+    data: T
+    timestamp: number
+}
 
 // Handle simpleGit ESM/CJS interop
 type SimpleGitType = typeof simpleGitImport.simpleGit
@@ -75,6 +92,9 @@ export class GitHubIntegration {
     private readonly token: string | undefined
     private cachedRepoInfo: RepoInfo | null = null
 
+    /** TTL response cache for GitHub API read methods */
+    private readonly apiCache = new Map<string, CacheEntry<unknown>>()
+
     constructor(workingDir = '.') {
         this.token = process.env['GITHUB_TOKEN']
 
@@ -114,6 +134,47 @@ export class GitHubIntegration {
      */
     isApiAvailable(): boolean {
         return this.octokit !== null
+    }
+
+    /**
+     * Get a cached value if it exists and hasn't expired.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is needed at call sites for type-safe casts
+    private getCached<T>(key: string): T | undefined {
+        const entry = this.apiCache.get(key)
+        if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+            return entry.data as T
+        }
+        if (entry) {
+            this.apiCache.delete(key)
+        }
+        return undefined
+    }
+
+    /**
+     * Store a value in the cache.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T preserves type inference at call sites
+    private setCache<T>(key: string, data: T): void {
+        this.apiCache.set(key, { data, timestamp: Date.now() })
+    }
+
+    /**
+     * Invalidate all cache entries matching a prefix.
+     */
+    private invalidateCache(prefix: string): void {
+        for (const key of this.apiCache.keys()) {
+            if (key.startsWith(prefix)) {
+                this.apiCache.delete(key)
+            }
+        }
+    }
+
+    /**
+     * Clear all cached GitHub API responses.
+     */
+    clearCache(): void {
+        this.apiCache.clear()
     }
 
     /**
@@ -204,6 +265,10 @@ export class GitHubIntegration {
             return []
         }
 
+        const cacheKey = `issues:${owner}:${repo}:${state}:${String(limit)}`
+        const cached = this.getCached<GitHubIssue[]>(cacheKey)
+        if (cached) return cached
+
         try {
             const response = await this.octokit.issues.listForRepo({
                 owner,
@@ -215,14 +280,23 @@ export class GitHubIntegration {
             })
 
             // Filter out pull requests (GitHub API includes PRs in issues)
-            return response.data
+            const result = response.data
                 .filter((issue) => !issue.pull_request)
                 .map((issue) => ({
                     number: issue.number,
                     title: issue.title,
                     url: issue.html_url,
-                    state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
+                    state: issue.state === 'open' ? ('OPEN' as const) : ('CLOSED' as const),
+                    milestone: issue.milestone
+                        ? {
+                              number: issue.milestone.number,
+                              title: issue.milestone.title,
+                          }
+                        : null,
                 }))
+
+            this.setCache(cacheKey, result)
+            return result
         } catch (error) {
             logger.error('Failed to get issues', {
                 module: 'GitHub',
@@ -240,6 +314,10 @@ export class GitHubIntegration {
             return null
         }
 
+        const cacheKey = `issue:${owner}:${repo}:${String(issueNumber)}`
+        const cached = this.getCached<IssueDetails | null>(cacheKey)
+        if (cached !== undefined) return cached
+
         try {
             const response = await this.octokit.issues.get({
                 owner,
@@ -254,7 +332,7 @@ export class GitHubIntegration {
                 return null
             }
 
-            return {
+            const details: IssueDetails = {
                 number: issue.number,
                 title: issue.title,
                 url: issue.html_url,
@@ -266,7 +344,13 @@ export class GitHubIntegration {
                 updatedAt: issue.updated_at,
                 closedAt: issue.closed_at,
                 commentsCount: issue.comments,
+                milestone: issue.milestone
+                    ? { number: issue.milestone.number, title: issue.milestone.title }
+                    : null,
             }
+
+            this.setCache(cacheKey, details)
+            return details
         } catch (error) {
             logger.error('Failed to get issue details', {
                 module: 'GitHub',
@@ -286,7 +370,8 @@ export class GitHubIntegration {
         title: string,
         body?: string,
         labels?: string[],
-        assignees?: string[]
+        assignees?: string[],
+        milestone?: number
     ): Promise<{ number: number; url: string; title: string; nodeId: string } | null> {
         if (!this.octokit) {
             logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' })
@@ -301,6 +386,7 @@ export class GitHubIntegration {
                 body,
                 labels,
                 assignees,
+                milestone,
             })
 
             logger.info('Created GitHub issue', {
@@ -322,6 +408,9 @@ export class GitHubIntegration {
                 context: { title, owner, repo },
             })
             return null
+        } finally {
+            this.invalidateCache(`issues:${owner}:${repo}`)
+            this.invalidateCache('context:')
         }
     }
 
@@ -375,6 +464,10 @@ export class GitHubIntegration {
                 error: error instanceof Error ? error.message : String(error),
             })
             return null
+        } finally {
+            this.invalidateCache(`issues:${owner}:${repo}`)
+            this.invalidateCache(`issue:${owner}:${repo}:${String(issueNumber)}`)
+            this.invalidateCache('context:')
         }
     }
 
@@ -391,6 +484,10 @@ export class GitHubIntegration {
             return []
         }
 
+        const cacheKey = `prs:${owner}:${repo}:${state}:${String(limit)}`
+        const cached = this.getCached<GitHubPullRequest[]>(cacheKey)
+        if (cached) return cached
+
         try {
             const response = await this.octokit.pulls.list({
                 owner,
@@ -401,12 +498,19 @@ export class GitHubIntegration {
                 direction: 'desc',
             })
 
-            return response.data.map((pr) => ({
+            const result = response.data.map((pr) => ({
                 number: pr.number,
                 title: pr.title,
                 url: pr.html_url,
-                state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',
+                state: pr.merged_at
+                    ? ('MERGED' as const)
+                    : pr.state === 'open'
+                      ? ('OPEN' as const)
+                      : ('CLOSED' as const),
             }))
+
+            this.setCache(cacheKey, result)
+            return result
         } catch (error) {
             logger.error('Failed to get pull requests', {
                 module: 'GitHub',
@@ -428,6 +532,10 @@ export class GitHubIntegration {
             return null
         }
 
+        const cacheKey = `pr:${owner}:${repo}:${String(prNumber)}`
+        const cached = this.getCached<PullRequestDetails | null>(cacheKey)
+        if (cached !== undefined) return cached
+
         try {
             const response = await this.octokit.pulls.get({
                 owner,
@@ -437,7 +545,7 @@ export class GitHubIntegration {
 
             const pr = response.data
 
-            return {
+            const details: PullRequestDetails = {
                 number: pr.number,
                 title: pr.title,
                 url: pr.html_url,
@@ -455,6 +563,9 @@ export class GitHubIntegration {
                 deletions: pr.deletions,
                 changedFiles: pr.changed_files,
             }
+
+            this.setCache(cacheKey, details)
+            return details
         } catch (error) {
             logger.error('Failed to get PR details', {
                 module: 'GitHub',
@@ -474,6 +585,10 @@ export class GitHubIntegration {
             return []
         }
 
+        const cacheKey = `workflows:${owner}:${repo}:${String(limit)}`
+        const cached = this.getCached<GitHubWorkflowRun[]>(cacheKey)
+        if (cached) return cached
+
         try {
             const response = await this.octokit.rest.actions.listWorkflowRunsForRepo({
                 owner,
@@ -481,7 +596,7 @@ export class GitHubIntegration {
                 per_page: limit,
             })
 
-            return response.data.workflow_runs.map((run) => ({
+            const result = response.data.workflow_runs.map((run) => ({
                 id: run.id,
                 name: run.name ?? 'Unknown Workflow',
                 status: run.status as 'queued' | 'in_progress' | 'completed',
@@ -497,6 +612,9 @@ export class GitHubIntegration {
                 createdAt: run.created_at,
                 updatedAt: run.updated_at,
             }))
+
+            this.setCache(cacheKey, result)
+            return result
         } catch (error) {
             logger.error('Failed to get workflow runs', {
                 module: 'GitHub',
@@ -510,6 +628,9 @@ export class GitHubIntegration {
      * Get full repository context (issues, PRs, branch info)
      */
     async getRepoContext(): Promise<ProjectContext> {
+        const cached = this.getCached<ProjectContext>('context:repo')
+        if (cached) return cached
+
         const repoInfo = await this.getRepoInfo()
 
         const context: ProjectContext = {
@@ -521,6 +642,7 @@ export class GitHubIntegration {
             issues: [],
             pullRequests: [],
             workflowRuns: [],
+            milestones: [],
         }
 
         // Get current commit
@@ -541,8 +663,10 @@ export class GitHubIntegration {
                 10
             )
             context.workflowRuns = await this.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10)
+            context.milestones = await this.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10)
         }
 
+        this.setCache('context:repo', context)
         return context
     }
 
@@ -923,6 +1047,8 @@ export class GitHubIntegration {
                 error: errorMessage,
             })
             return { success: false, error: errorMessage }
+        } finally {
+            this.invalidateCache('kanban:')
         }
     }
 
@@ -971,6 +1097,460 @@ export class GitHubIntegration {
                 error: errorMessage,
             })
             return { success: false, error: errorMessage }
+        } finally {
+            this.invalidateCache('kanban:')
+        }
+    }
+
+    // ==========================================================================
+    // GitHub Milestones Methods
+    // ==========================================================================
+
+    /**
+     * List milestones for a repository
+     */
+    async getMilestones(
+        owner: string,
+        repo: string,
+        state: 'open' | 'closed' | 'all' = 'open',
+        limit = 20
+    ): Promise<GitHubMilestone[]> {
+        if (!this.octokit) {
+            return []
+        }
+
+        const cacheKey = `milestones:${owner}:${repo}:${state}:${String(limit)}`
+        const cached = this.getCached<GitHubMilestone[]>(cacheKey)
+        if (cached) return cached
+
+        try {
+            // GitHub REST API uses 'open' | 'closed' | 'all' for milestone state
+            const apiState = state === 'all' ? undefined : state
+            const response = await this.octokit.issues.listMilestones({
+                owner,
+                repo,
+                state: apiState,
+                per_page: limit,
+                sort: 'due_on',
+                direction: 'asc',
+            })
+
+            const result = response.data.map((ms) => ({
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? ('open' as const) : ('closed' as const),
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }))
+
+            this.setCache(cacheKey, result)
+            return result
+        } catch (error) {
+            logger.error('Failed to get milestones', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
+        }
+    }
+
+    /**
+     * Get a single milestone by number
+     */
+    async getMilestone(
+        owner: string,
+        repo: string,
+        milestoneNumber: number
+    ): Promise<GitHubMilestone | null> {
+        if (!this.octokit) {
+            return null
+        }
+
+        const cacheKey = `milestone:${owner}:${repo}:${String(milestoneNumber)}`
+        const cached = this.getCached<GitHubMilestone | null>(cacheKey)
+        if (cached !== undefined) return cached
+
+        try {
+            const response = await this.octokit.issues.getMilestone({
+                owner,
+                repo,
+                milestone_number: milestoneNumber,
+            })
+
+            const ms = response.data
+            const milestone: GitHubMilestone = {
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? 'open' : 'closed',
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }
+
+            this.setCache(cacheKey, milestone)
+            return milestone
+        } catch (error) {
+            logger.error('Failed to get milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return null
+        }
+    }
+
+    /**
+     * Create a new milestone
+     */
+    async createMilestone(
+        owner: string,
+        repo: string,
+        title: string,
+        description?: string,
+        dueOn?: string
+    ): Promise<GitHubMilestone | null> {
+        if (!this.octokit) {
+            logger.error('Cannot create milestone: GitHub API not available', {
+                module: 'GitHub',
+            })
+            return null
+        }
+
+        try {
+            const response = await this.octokit.issues.createMilestone({
+                owner,
+                repo,
+                title,
+                description,
+                due_on: dueOn,
+            })
+
+            const ms = response.data
+
+            logger.info('Created GitHub milestone', {
+                module: 'GitHub',
+                entityId: ms.number,
+                context: { title, owner, repo },
+            })
+
+            return {
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? 'open' : 'closed',
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }
+        } catch (error) {
+            logger.error('Failed to create milestone', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { title, owner, repo },
+            })
+            return null
+        } finally {
+            this.invalidateCache(`milestones:${owner}:${repo}`)
+            this.invalidateCache('context:')
+        }
+    }
+
+    /**
+     * Update an existing milestone
+     */
+    async updateMilestone(
+        owner: string,
+        repo: string,
+        milestoneNumber: number,
+        updates: {
+            title?: string
+            description?: string
+            dueOn?: string | null
+            state?: 'open' | 'closed'
+        }
+    ): Promise<GitHubMilestone | null> {
+        if (!this.octokit) {
+            logger.error('Cannot update milestone: GitHub API not available', {
+                module: 'GitHub',
+            })
+            return null
+        }
+
+        try {
+            const response = await this.octokit.issues.updateMilestone({
+                owner,
+                repo,
+                milestone_number: milestoneNumber,
+                title: updates.title,
+                description: updates.description,
+                due_on: updates.dueOn === null ? undefined : updates.dueOn,
+                state: updates.state,
+            })
+
+            const ms = response.data
+
+            logger.info('Updated GitHub milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                context: { owner, repo, updates: Object.keys(updates) },
+            })
+
+            return {
+                number: ms.number,
+                title: ms.title,
+                description: ms.description ?? null,
+                state: ms.state === 'open' ? 'open' : 'closed',
+                url: ms.html_url,
+                dueOn: ms.due_on ?? null,
+                openIssues: ms.open_issues,
+                closedIssues: ms.closed_issues,
+                createdAt: ms.created_at,
+                updatedAt: ms.updated_at,
+                creator: ms.creator?.login ?? null,
+            }
+        } catch (error) {
+            logger.error('Failed to update milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return null
+        } finally {
+            this.invalidateCache(`milestones:${owner}:${repo}`)
+            this.invalidateCache(`milestone:${owner}:${repo}:${String(milestoneNumber)}`)
+            this.invalidateCache('context:')
+        }
+    }
+
+    /**
+     * Delete a milestone
+     */
+    async deleteMilestone(
+        owner: string,
+        repo: string,
+        milestoneNumber: number
+    ): Promise<{ success: boolean; error?: string }> {
+        if (!this.octokit) {
+            return { success: false, error: 'GitHub API not available' }
+        }
+
+        try {
+            await this.octokit.issues.deleteMilestone({
+                owner,
+                repo,
+                milestone_number: milestoneNumber,
+            })
+
+            logger.info('Deleted GitHub milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                context: { owner, repo },
+            })
+
+            return { success: true }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            logger.error('Failed to delete milestone', {
+                module: 'GitHub',
+                entityId: milestoneNumber,
+                error: errorMessage,
+            })
+            return { success: false, error: errorMessage }
+        } finally {
+            this.invalidateCache(`milestones:${owner}:${repo}`)
+            this.invalidateCache(`milestone:${owner}:${repo}:${String(milestoneNumber)}`)
+            this.invalidateCache('context:')
+        }
+    }
+
+    // ==========================================================================
+    // Repository Insights/Traffic Methods
+    // ==========================================================================
+
+    /**
+     * Get a cached value with a custom TTL.
+     * Used for traffic endpoints which change slowly (10-min TTL).
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is needed at call sites for type-safe casts
+    private getCachedWithTtl<T>(key: string, ttlMs: number): T | undefined {
+        const entry = this.apiCache.get(key)
+        if (entry && Date.now() - entry.timestamp < ttlMs) {
+            return entry.data as T
+        }
+        if (entry) {
+            this.apiCache.delete(key)
+        }
+        return undefined
+    }
+
+    /**
+     * Get repository statistics (stars, forks, watchers).
+     * Uses a single GET /repos/{owner}/{repo} API call.
+     */
+    async getRepoStats(owner: string, repo: string): Promise<RepoStats | null> {
+        if (!this.octokit) {
+            return null
+        }
+
+        const cacheKey = `repostats:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<RepoStats>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached
+
+        try {
+            const response = await this.octokit.repos.get({ owner, repo })
+            const data = response.data
+
+            const result: RepoStats = {
+                stars: data.stargazers_count,
+                forks: data.forks_count,
+                watchers: data.subscribers_count,
+                openIssues: data.open_issues_count,
+                size: data.size,
+                defaultBranch: data.default_branch,
+            }
+
+            this.setCache(cacheKey, result)
+            return result
+        } catch (error) {
+            logger.error('Failed to get repo stats', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return null
+        }
+    }
+
+    /**
+     * Get aggregated traffic data (14-day rolling clones + views).
+     * Combines GET /repos/{owner}/{repo}/traffic/clones and /traffic/views.
+     * Requires push access to the repository.
+     */
+    async getTrafficData(owner: string, repo: string): Promise<TrafficData | null> {
+        if (!this.octokit) {
+            return null
+        }
+
+        const cacheKey = `traffic:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<TrafficData>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached
+
+        try {
+            const [clonesRes, viewsRes] = await Promise.all([
+                this.octokit.rest.repos.getClones({ owner, repo }),
+                this.octokit.rest.repos.getViews({ owner, repo }),
+            ])
+
+            const clonesDays = clonesRes.data.clones?.length ?? 0
+            const viewsDays = viewsRes.data.views?.length ?? 0
+
+            const result: TrafficData = {
+                clones: {
+                    total: clonesRes.data.count,
+                    unique: clonesRes.data.uniques,
+                    dailyAvg: clonesDays > 0 ? Math.round(clonesRes.data.count / clonesDays) : 0,
+                },
+                views: {
+                    total: viewsRes.data.count,
+                    unique: viewsRes.data.uniques,
+                    dailyAvg: viewsDays > 0 ? Math.round(viewsRes.data.count / viewsDays) : 0,
+                },
+                period: '14 days',
+            }
+
+            this.setCache(cacheKey, result)
+            return result
+        } catch (error) {
+            logger.error('Failed to get traffic data', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return null
+        }
+    }
+
+    /**
+     * Get top referrer sources for the repository (14-day rolling).
+     * Requires push access to the repository.
+     */
+    async getTopReferrers(owner: string, repo: string, limit = 5): Promise<TrafficReferrer[]> {
+        if (!this.octokit) {
+            return []
+        }
+
+        const cacheKey = `referrers:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<TrafficReferrer[]>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached.slice(0, limit)
+
+        try {
+            const response = await this.octokit.rest.repos.getTopReferrers({ owner, repo })
+
+            const result: TrafficReferrer[] = response.data.map((r) => ({
+                referrer: r.referrer,
+                count: r.count,
+                uniques: r.uniques,
+            }))
+
+            this.setCache(cacheKey, result)
+            return result.slice(0, limit)
+        } catch (error) {
+            logger.error('Failed to get top referrers', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return []
+        }
+    }
+
+    /**
+     * Get popular repository paths (14-day rolling).
+     * Requires push access to the repository.
+     */
+    async getPopularPaths(owner: string, repo: string, limit = 5): Promise<PopularPath[]> {
+        if (!this.octokit) {
+            return []
+        }
+
+        const cacheKey = `paths:${owner}:${repo}`
+        const cached = this.getCachedWithTtl<PopularPath[]>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        if (cached) return cached.slice(0, limit)
+
+        try {
+            const response = await this.octokit.rest.repos.getTopPaths({ owner, repo })
+
+            const result: PopularPath[] = response.data.map((p) => ({
+                path: p.path,
+                title: p.title,
+                count: p.count,
+                uniques: p.uniques,
+            }))
+
+            this.setCache(cacheKey, result)
+            return result.slice(0, limit)
+        } catch (error) {
+            logger.error('Failed to get popular paths', {
+                module: 'GitHub',
+                error: error instanceof Error ? error.message : String(error),
+                context: { owner, repo },
+            })
+            return []
         }
     }
 }

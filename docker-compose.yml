@@ -1,37 +1,46 @@
-version: '3.8'
-
 services:
   memory-journal-mcp:
     build: .
     container_name: memory-journal-mcp
     volumes:
       # Mount local data directory for persistent SQLite database
-      - ./data:/app/data
-      # Mount git config for context bundle functionality
-      - ${HOME}/.gitconfig:/root/.gitconfig:ro
-      # Mount SSH keys for GitHub access (optional)
-      - ${HOME}/.ssh:/root/.ssh:ro
+      - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
-      - PYTHONPATH=/app
+      # Optional: GitHub integration
+      # - GITHUB_TOKEN=ghp_your_token_here
+      # - GITHUB_REPO_PATH=/app/repo
+      # Optional: CORS origin (default: *)
+      # - MCP_CORS_ORIGIN=http://localhost:3000
     stdin_open: true
     tty: true
-    # For MCP stdio communication
-    command: python src/server.py
+    # MCP stdio communication (default transport)
+    command: ['node', 'dist/cli.js']
     restart: unless-stopped
 
-  # Alternative service for testing without git/ssh mounts
-  memory-journal-mcp-basic:
+  # HTTP transport service for remote access
+  memory-journal-mcp-http:
     build: .
-    container_name: memory-journal-mcp-basic
+    container_name: memory-journal-mcp-http
     volumes:
-      - ./data:/app/data
+      - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
-      - PYTHONPATH=/app
-    stdin_open: true
-    tty: true
-    command: python src/server.py
+      - MCP_HOST=0.0.0.0
+      # Optional: GitHub integration
+      # - GITHUB_TOKEN=ghp_your_token_here
+      # - GITHUB_REPO_PATH=/app/repo
+      # Optional: CORS origin (default: *)
+      # - MCP_CORS_ORIGIN=http://localhost:3000
+    ports:
+      - '3000:3000'
+    command:
+      ['node', 'dist/cli.js', '--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '1.0'
     profiles:
-      - basic
+      - http

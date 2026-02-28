@@ -7,44 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-02-27
+
 ### Added
 
+- **Performance Benchmarking Suite** — Added a `vitest bench` powered benchmarking suite to measure baseline performance for database operations, vector indexing, and tool execution overhead. Included new `"bench"` npm script.
+
+- **GitHub Milestones Integration** — Full CRUD support for GitHub Milestones
+  - 5 new tools: `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` (39 total tools)
+  - 2 new resources: `memory://github/milestones` (list view) and `memory://milestones/{number}` (detail view) (20 total resources)
+  - Session briefing (`memory://briefing`) now includes milestone progress in the user message table
+  - GitHub status resource (`memory://github/status`) now includes milestone summary data
+  - `create_github_issue_with_entry` now accepts optional `milestone_number` parameter to assign issues to milestones
+  - `get_github_issues` and issue resources now include milestone association data
+  - New `ICON_MILESTONE` flag icon for milestone tools and resources
+  - Milestone tools reference added to `ServerInstructions.ts` for agent guidance
 - **Server Host Bind Parameter** — New `--server-host` CLI option and `MCP_HOST` environment variable for configuring HTTP transport bind address
   - Defaults to `localhost`; set to `0.0.0.0` for container deployments
   - Also reads `HOST` environment variable as fallback
   - CLI flag takes precedence over environment variables
 
+- **Repository Insights/Traffic Tool** — New `get_repo_insights` tool and `memory://github/insights` resource for monitoring repository health
+  - 1 new tool: `get_repo_insights` (39 total tools, github group: 14 → 15)
+  - 1 new resource: `memory://github/insights` — compact summary of stars, forks, and 14-day traffic totals (~150 tokens)
+  - **Token-efficient sections parameter**: `stars` (~50 tokens), `traffic` (~100), `referrers` (~100), `paths` (~100), or `all` (~350)
+  - Surfaces stars, forks, watchers, clone/view aggregates (14-day rolling), top referrer sources, and popular repository pages
+  - Uses extended 10-minute cache TTL (vs 5-minute for other GitHub data) since traffic data changes slowly
+  - 4 new `GitHubIntegration` methods: `getRepoStats()`, `getTrafficData()`, `getTopReferrers()`, `getPopularPaths()`
+  - New types: `RepoStats`, `TrafficData`, `TrafficReferrer`, `PopularPath`
+  - Requires push access to repository for traffic endpoints
+
 ### Changed
 
 - **Dependency Updates**
   - `@eslint/js`: 9.39.2 → 10.0.1 (major)
-  - `@types/node`: 25.2.0 → 25.3.0 (minor)
-  - `eslint`: 9.39.2 → 10.0.1 (major)
-  - `simple-git`: 3.28.0 → 3.32.2 (minor)
+  - `@modelcontextprotocol/sdk`: 1.26.0 → 1.27.1 (minor)
+  - `@types/node`: 25.2.0 → 25.3.2 (minor)
+  - `eslint`: 9.39.2 → 10.0.2 (major)
+  - `simple-git`: 3.28.0 → 3.32.3 (minor)
   - `sql.js`: 1.12.0 → 1.14.0 (minor)
   - `typescript-eslint`: 8.54.0 → 8.56.1 (minor)
   - `axios` override: 1.13.2 → 1.13.5 (patch) — fixes GHSA-43fc-jf86-j433 (DoS via `__proto__` key in `parseConfig`)
 
 ### Documentation
 
+- **Server Instructions Fixes** — Added missing Kanban optional `owner` parameters and the four new Phase 6 GitHub template resources to `ServerInstructions.ts`'s Key Resources table to ensure agents have complete tool/resource context.
+- **Testing Prompt Polish** — Fixed minor typos and phase numbering inconsistencies in the comprehensive verification plan (`test-memory-journal-mcp.md`).
 - **AntiGravity IDE Guidance** — Added explicit note in README.md and DOCKER_README.md that AntiGravity does not currently support MCP server instructions, with workaround to manually provide `ServerInstructions.ts` contents
+- **`memory://milestones/{N}` Behavior Clarified** — Updated `test-memory-journal-mcp.md` to accurately document that this resource is designed to return milestone metadata + issue counts + `completionPercentage` + a `hint` to use `get_github_issues` for individual issue details (not full issue arrays)
+
+### Improved
+
+- **`get_entry_by_id` Importance Scoring Breakdown** — Tool now returns `importanceBreakdown` alongside the `importance` score, showing weighted component contributions: `significance` (30%), `relationships` (35%), `causal` (20%), `recency` (15%). Gives agents transparency into _why_ an entry scored a given importance level.
+- **`get_cross_project_insights` Inactive Threshold Visibility** — Tool output now includes `inactiveThresholdDays: 7` field, making the hardcoded inactive project classification criteria self-documenting. Previously, consumers saw an empty `inactive_projects` array with no way to know the cutoff.
+- **Database I/O — Debounced Save** — Mutation methods (`createEntry`, `updateEntry`, `deleteEntry`, `linkEntries`, `mergeTags`) now use a 500ms debounced `scheduleSave()` instead of synchronous `save()` on every call, batching rapid writes into a single disk flush. `close()` and `restoreFromFile()` still flush immediately for data safety.
+- **Vector Index Rebuild — Paginated Fetching** — `rebuildIndex()` now uses `getEntriesPage(offset, limit)` with `REBUILD_PAGE_SIZE=200` instead of loading all entries at once via `getRecentEntries(10000)`, reducing peak memory usage for large journals.
+- **Vector Index Rebuild — Parallel Batch Embedding** — Entries are embedded in parallel batches of 5 (`REBUILD_BATCH_SIZE`) via `Promise.all` instead of sequentially, improving rebuild throughput.
+- **Vector Index Rebuild — Sequential Insertion** — Embeddings are generated in parallel batches for throughput, but vectra insertions are sequential to avoid file I/O race conditions. Index is pre-cleaned in bulk to eliminate per-item upsert deletes.
+- **Server Startup — `getTools()` Deduplication** — Eliminated a duplicate `getTools()` call during server startup; tool names for instruction generation are now extracted from the same array used for registration, saving one full tool-construction pass.
+- **GitHub API — TTL Response Cache** — Read methods (`getIssues`, `getIssue`, `getPullRequests`, `getPullRequest`, `getWorkflowRuns`, `getRepoContext`, `getMilestones`, `getMilestone`) now cache responses for 5 minutes. Mutation methods (`createIssue`, `closeIssue`, `createMilestone`, `updateMilestone`, `deleteMilestone`, `moveProjectItem`, `addProjectItem`) automatically invalidate related caches. Public `clearCache()` method available for manual invalidation.
 
 ### Fixed
 
+- **`memory://instructions` Active Tool Count** — Fixed resource returning `Active Tools (3)` instead of `Active Tools (N)` when no tool filter is configured. The handler incorrectly fell back to a hardcoded 3-tool set (`create_entry`, `search_entries`, `get_recent_entries`) when `filterConfig` is `null`. Now correctly uses `getAllToolNames()` so the count reflects all enabled tools (e.g., `Active Tools (39)`). Added regression test to `resource-handlers.test.ts`.
+
+- **`get_github_issue` Missing Milestone Field** — `getIssue()` in `GitHubIntegration.ts` now maps `issue.milestone` from the GitHub API response into the returned `IssueDetails` object. Previously the field was silently excluded, so `get_github_issue` and other callers never reflected milestone assignment even when the issue had one.
+- **`ServerInstructions.ts` Entry Types Corrected** — Updated `## Entry Types` reference list from 7 stale v4-era types (`technical_note`, `progress_update`, `deployment`, etc.) to the full 13 types in the `EntryType` union (`personal_reflection`, `project_decision`, `technical_achievement`, `bug_fix`, `feature_implementation`, `code_review`, `meeting_notes`, `learning`, `research`, `planning`, `retrospective`, `standup`, `other`). The most impactful addition is `planning`, which is the type auto-assigned by `create_github_issue_with_entry` and `close_github_issue_with_entry`. Updated the corresponding test in `server-instructions.test.ts`.
+- **`memory://milestones/{N}` Description Clarified** — Updated resource description to accurately state it returns milestone metadata + issue counts (`openIssues`, `closedIssues`) rather than full issue arrays. Added a `hint` field to the response directing users to the `get_github_issues` tool for individual issue details.
 - **Docker Hub Short Description** — Corrected "HTTPS" → "HTTP/SSE" and formatting in `docker-publish.yml` short-description field
+- **`delete_entry` Permanent Delete of Soft-Deleted Entries** — `delete_entry(id, permanent: true)` now works on previously soft-deleted entries. Added `getEntryByIdIncludeDeleted()` so permanent deletion can find entries regardless of soft-delete state. Previously returned `{ success: false, error: "Entry not found" }` for soft-deleted entries.
+- **`list_tags` Zero-Count Tag Filtering** — `list_tags` tool and `memory://tags` resource no longer return orphan tags with zero usage count, reducing clutter from deleted or merged tags
 - **`delete_entry` Existence Check (P154)** — Tool now pre-checks entry existence before mutation, returning `{ success: false, error: "Entry X not found" }` for nonexistent entries instead of always returning `success: true`
 - **`link_entries` Existence Check (P154)** — Tool now pre-checks both source and target entry existence before creating relationship, returning `{ success: false, message: "Source/Target entry X not found" }` instead of silently creating orphan relationships
 - **`visualize_relationships` Existence Disambiguation (P154)** — When `entry_id` parameter specifies a nonexistent entry, tool now returns `{ message: "Entry X not found" }` instead of the ambiguous `"No entries found with relationships matching your criteria"`
+- **`memory://health` Tool Count** — Health resource now dynamically computes tool count from `TOOL_GROUPS` instead of a hardcoded value. Previously reported 33 tools; now correctly reports 38 after milestone tools were added.
+- **`memory://significant` Importance Sort Correctness** — Fixed resource returning entries sorted by timestamp instead of importance when the database has more than 20 significant entries. Previously, `LIMIT 20` was applied in SQL (`ORDER BY timestamp DESC LIMIT 20`) before the JavaScript importance sort, meaning older but higher-importance entries were excluded before sorting ran. Now all significant entries are fetched, sorted by `importance` descending in JavaScript, then the top 20 are returned. Added regression test verifying sort order across entries with different relationship counts.
+
+- **`delete_github_milestone` Structured Error** — Tool now returns `{ success: false, milestoneNumber, message, error }` matching `DeleteMilestoneOutputSchema` when deletion fails. Previously returned only `{ error }` without structured fields.
+- **`JournalEntry` GitHub Metadata** — Entry output now includes 10 GitHub integration fields (`issueNumber`, `issueUrl`, `prNumber`, `prUrl`, `prStatus`, `projectNumber`, `projectOwner`, `workflowRunId`, `workflowName`, `workflowStatus`) in all tool responses. Previously stored in DB but omitted from `create_entry`, `get_entry_by_id`, `get_recent_entries`, and search results.
 
 ### CI/CD
 
 - **Removed Dependabot Auto-Merge Workflow** — Deleted `dependabot-auto-merge.yml`; dependency PRs now require manual review and merge
 - **Trivy Action Update** — Updated `aquasecurity/trivy-action` 0.33.1 → 0.34.0 in `security-update.yml` (bundles Trivy scanner 0.69.1)
+- **CI Test Matrix Alignment** — Updated Node.js test matrix from `[20.x, 22.x, 25.x]` to `[24.x, 25.x]` to match `engines.node: >=24.0.0`
+- **Blocking npm audit** — Removed `continue-on-error: true` from `npm audit` step in lint-and-test.yml; known vulnerabilities now fail the pipeline
+- **Blocking Secret Scanning** — Removed `continue-on-error: true` from TruffleHog step in secrets-scanning.yml; verified secret leaks now fail the pipeline
 
 ### Security
 
 - **GHSA-w7fw-mjwx-w883 (qs)** — Updated `qs` 6.14.1 → 6.14.2 to fix low-severity arrayLimit bypass in comma parsing that allows denial of service
 - **CVE-2026-26960 (tar)** — Manually patched npm's bundled `tar` → `7.5.8` in Dockerfile to fix HIGH severity path traversal vulnerability (CVSS 7.1). Also updated npm override.
+- **HTTP Transport Hardening** — Comprehensive security improvements for HTTP mode:
+  - **Configurable CORS** — New `--cors-origin` CLI flag and `MCP_CORS_ORIGIN` env var (default: `*`). Previously hardcoded `Access-Control-Allow-Origin: *`.
+  - **Request Body Size Limit** — Added 1MB limit to `express.json()` to prevent memory exhaustion DoS attacks
+  - **Security Headers** — Added `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on all HTTP responses
+  - **Session Timeout** — Stateful HTTP sessions now expire after 30 minutes of inactivity (5-minute sweep interval). Prevents unbounded memory growth from abandoned sessions.
+- **Error Log Token Scrubbing** — Logger now automatically sanitizes `error` context fields to redact GitHub tokens (classic `ghp_`, fine-grained `github_pat_`), Bearer tokens, and Authorization headers before writing to stderr. New `sanitizeErrorForLogging()` in `security-utils.ts`.
+- **SECURITY.md Rewrite** — Complete rewrite for TypeScript era. Removed all outdated Python references. Added documentation for HTTP transport security (CORS, headers, session timeout, body limits), GitHub token handling, and CI/CD security pipeline.
+- **docker-compose.yml Rewrite** — Replaced Python-era configuration with TypeScript commands. Removed SSH/gitconfig root mounts, deprecated `version` key, and `PYTHONPATH`. Added HTTP transport service with resource limits and secure volume mount options.
+- **Dockerfile Version Label** — Updated hardcoded `4.0.0` → `4.3.1` to match actual package version
+- **Dockerfile Healthcheck** — Replaced no-op `console.log` healthcheck with `process.exit(0)` validation. Added documentation for HTTP-mode override using `curl`.
+- **Legacy Cleanup** — Removed leftover Python `__pycache__` directories from `src/` subtree
 
 ## [4.3.1] - 2026-02-05
 

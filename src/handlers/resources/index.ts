@@ -7,6 +7,7 @@
 import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
 import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
 import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
+import { getAllToolNames } from '../../filtering/ToolFilter.js'
 import type { Tag, McpIcon } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
 import { generateInstructions, type InstructionLevel } from '../../constants/ServerInstructions.js'
@@ -17,6 +18,7 @@ import {
     ICON_GRAPH,
     ICON_HEALTH,
     ICON_GITHUB,
+    ICON_MILESTONE,
     ICON_STAR,
     ICON_TAG,
     ICON_TEAM,
@@ -192,8 +194,7 @@ function execQuery(
  * Get total tool count for health status
  */
 function getTotalToolCount(): number {
-    // Import dynamically to avoid circular dependency
-    return 33 // 6 core + 4 search + 2 analytics + 2 relationships + 1 export + 5 admin + 9 github + 4 backup
+    return getAllToolNames().length
 }
 
 /**
@@ -261,6 +262,13 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     ci: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
                     openIssues: number
                     openPRs: number
+                    milestones: { title: string; progress: string; dueOn: string | null }[]
+                    insights?: {
+                        stars: number | null
+                        forks: number | null
+                        clones14d?: number
+                        views14d?: number
+                    }
                 } | null = null
 
                 if (context.github) {
@@ -328,12 +336,75 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                                 // Counts unavailable
                             }
 
+                            // Get milestone summary for briefing
+                            let milestones: {
+                                title: string
+                                progress: string
+                                dueOn: string | null
+                            }[] = []
+                            try {
+                                const msList = await context.github.getMilestones(
+                                    owner,
+                                    repo,
+                                    'open',
+                                    3
+                                )
+                                milestones = msList.map((m) => {
+                                    const total = m.closedIssues + m.openIssues
+                                    const pct =
+                                        total > 0 ? Math.round((m.closedIssues / total) * 100) : 0
+                                    return {
+                                        title: m.title,
+                                        progress: `${String(pct)}%`,
+                                        dueOn: m.dueOn,
+                                    }
+                                })
+                            } catch {
+                                // Milestones unavailable
+                            }
+
+                            // Get repo insights (stars, forks, traffic)
+                            let insights:
+                                | {
+                                      stars: number | null
+                                      forks: number | null
+                                      clones14d?: number
+                                      views14d?: number
+                                  }
+                                | undefined = undefined
+                            try {
+                                const repoStats = await context.github.getRepoStats(owner, repo)
+                                if (repoStats) {
+                                    insights = {
+                                        stars: repoStats.stars ?? null,
+                                        forks: repoStats.forks ?? null,
+                                    }
+                                    // Traffic requires push access - may fail
+                                    try {
+                                        const trafficData = await context.github.getTrafficData(
+                                            owner,
+                                            repo
+                                        )
+                                        if (trafficData) {
+                                            insights.clones14d = trafficData.clones.total
+                                            insights.views14d = trafficData.views.total
+                                        }
+                                    } catch {
+                                        // Traffic data unavailable (requires push access)
+                                    }
+                                }
+                            } catch {
+                                // Repo stats unavailable
+                            }
+
                             github = {
                                 repo: `${owner}/${repo}`,
                                 branch: repoInfo.branch ?? null,
                                 ci: ciStatus,
                                 openIssues,
                                 openPRs,
+                                milestones,
+                                insights,
                             }
                         }
                     } catch {
@@ -356,6 +427,29 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                     ? `#${latestEntries[0].id} (${latestEntries[0].type}): ${latestEntries[0].preview}`
                     : 'No entries yet'
 
+                const milestoneRow =
+                    github?.milestones && github.milestones.length > 0
+                        ? `\n| **Milestones** | ${github.milestones.map((m) => `${m.title} (${m.progress}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`).join(', ')} |`
+                        : ''
+
+                // Build insights row for userMessage
+                let insightsRow = ''
+                if (github?.insights) {
+                    const parts: string[] = []
+                    if (github.insights.stars !== null)
+                        parts.push(`⭐ ${String(github.insights.stars)} stars`)
+                    if (github.insights.forks !== null)
+                        parts.push(`🍴 ${String(github.insights.forks)} forks`)
+                    if (github.insights.clones14d !== undefined)
+                        parts.push(`📦 ${String(github.insights.clones14d)} clones`)
+                    if (github.insights.views14d !== undefined)
+                        parts.push(`👁️ ${String(github.insights.views14d)} views`)
+                    if (parts.length > 0) {
+                        const trafficNote = github.insights.clones14d !== undefined ? ' (14d)' : ''
+                        insightsRow = `\n| **Insights** | ${parts.join(' · ')}${trafficNote} |`
+                    }
+                }
+
                 return {
                     data: {
                         version: pkg.version,
@@ -377,11 +471,13 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
                             'memory://prs/{pr_number}/timeline',
                             'memory://kanban/{project_number}',
                             'memory://kanban/{project_number}/diagram',
+                            'memory://milestones/{number}',
                         ],
                         more: {
                             fullHealth: 'memory://health',
                             allRecent: 'memory://recent',
                             githubStatus: 'memory://github/status',
+                            repoInsights: 'memory://github/insights',
                             contextBundle: 'get-context-bundle prompt',
                         },
                         // IMPORTANT: Agent should relay this message to the user
@@ -392,7 +488,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
 | **Branch** | ${branchName} |
 | **CI Status** | ${ciStatus} |
 | **Journal** | ${totalEntries} entries |
-| **Latest** | ${latestPreview} |
+| **Latest** | ${latestPreview} |${milestoneRow}${insightsRow}
 
 I have project memory access and will create entries for significant work.`,
                         // Note for clients that don't auto-inject ServerInstructions
@@ -420,8 +516,9 @@ I have project memory access and will create entries for significant work.`,
                 // because the MCP SDK performs exact URI matching before calling handlers.
                 const level: InstructionLevel = 'full'
 
-                // Get enabled tools from filter config or all tools
-                const enabledTools = context.filterConfig?.enabledTools ?? new Set<string>()
+                // Get enabled tools from filter config, or fall back to all tool names
+                const allToolNames = new Set(getAllToolNames())
+                const enabledTools = context.filterConfig?.enabledTools ?? allToolNames
 
                 // Get prompts for instruction generation
                 const prompts = getPrompts().map((p) => {
@@ -437,9 +534,7 @@ I have project memory access and will create entries for significant work.`,
 
                 // Generate instructions at requested level
                 const instructions = generateInstructions(
-                    enabledTools.size > 0
-                        ? enabledTools
-                        : new Set(['create_entry', 'search_entries', 'get_recent_entries']),
+                    enabledTools,
                     resources,
                     prompts,
                     undefined, // No latest entry needed for instructions
@@ -483,21 +578,23 @@ I have project memory access and will create entries for significant work.`,
                 priority: 0.7,
             },
             handler: (_uri: string, context: ResourceContext) => {
+                // Fetch ALL significant entries so importance sort runs on the full set
+                // (not just the 20 most recent). We then slice after sorting.
                 const rows = execQuery(
                     context.db,
                     `
                     SELECT * FROM memory_journal
                     WHERE significance_type IS NOT NULL
                     AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                    LIMIT 20
                 `
                 )
                 // Transform entries and calculate importance scores
                 const entriesWithImportance: (Record<string, unknown> & { importance: number })[] =
                     rows.map((row) => {
                         const entry = transformEntryRow(row)
-                        const importance = context.db.calculateImportance(entry['id'] as number)
+                        const { score: importance } = context.db.calculateImportance(
+                            entry['id'] as number
+                        )
                         return { ...entry, importance }
                     })
                 // Sort by importance (highest first), then by timestamp (newest first) for ties
@@ -510,7 +607,9 @@ I have project memory access and will create entries for significant work.`,
                     const bTime = new Date(b['timestamp'] as string).getTime()
                     return bTime - aTime
                 })
-                return { entries: entriesWithImportance, count: entriesWithImportance.length }
+                // Slice to top 20 AFTER sorting (not before) to ensure correctness
+                const top20 = entriesWithImportance.slice(0, 20)
+                return { entries: top20, count: top20.length }
             },
         },
         {
@@ -1198,6 +1297,39 @@ I have project memory access and will create entries for significant work.`,
                     // Kanban not available
                 }
 
+                // Get milestone summary
+                let milestoneSummary:
+                    | {
+                          number: number
+                          title: string
+                          state: string
+                          openIssues: number
+                          closedIssues: number
+                          completionPercentage: number
+                          dueOn: string | null
+                      }[]
+                    | null = null
+                try {
+                    const milestones = await context.github.getMilestones(owner, repo, 'open', 5)
+                    if (milestones.length > 0) {
+                        milestoneSummary = milestones.map((ms) => {
+                            const total = ms.openIssues + ms.closedIssues
+                            const pct = total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                            return {
+                                number: ms.number,
+                                title: ms.title,
+                                state: ms.state,
+                                openIssues: ms.openIssues,
+                                closedIssues: ms.closedIssues,
+                                completionPercentage: pct,
+                                dueOn: ms.dueOn,
+                            }
+                        })
+                    }
+                } catch {
+                    // Milestones not available
+                }
+
                 return {
                     data: {
                         repository: `${owner}/${repo}`,
@@ -1216,8 +1348,182 @@ I have project memory access and will create entries for significant work.`,
                             items: openPrs,
                         },
                         kanbanSummary,
+                        milestones: milestoneSummary,
                     },
                     annotations: { lastModified },
+                }
+            },
+        },
+        // Repository insights resource
+        {
+            uri: 'memory://github/insights',
+            name: 'Repository Insights',
+            title: 'Repository Stars & Traffic Summary',
+            description: 'Compact repo insights: stars, forks, 14-day traffic totals (~150 tokens)',
+            mimeType: 'application/json',
+            icons: [ICON_ANALYTICS],
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.4, // Lower than status — optional enrichment
+            },
+            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+                const lastModified = new Date().toISOString()
+
+                if (!context.github) {
+                    return {
+                        data: {
+                            error: 'GitHub integration not available',
+                            hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                        },
+                        annotations: { lastModified },
+                    }
+                }
+
+                const repoInfo = await context.github.getRepoInfo()
+                const owner = repoInfo.owner
+                const repo = repoInfo.repo
+
+                if (!owner || !repo) {
+                    return {
+                        data: {
+                            error: 'Could not detect repository',
+                            hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                        },
+                        annotations: { lastModified },
+                    }
+                }
+
+                // Get repo stats (stars, forks)
+                const stats = await context.github.getRepoStats(owner, repo)
+
+                // Get traffic data (clones, views) - may fail if token lacks push access
+                let traffic: { clones14d: number; views14d: number } | null = null
+                try {
+                    const trafficData = await context.github.getTrafficData(owner, repo)
+                    if (trafficData) {
+                        traffic = {
+                            clones14d: trafficData.clones.total,
+                            views14d: trafficData.views.total,
+                        }
+                    }
+                } catch {
+                    // Traffic data requires push access - silently skip
+                }
+
+                return {
+                    data: {
+                        repository: `${owner}/${repo}`,
+                        stars: stats?.stars ?? null,
+                        forks: stats?.forks ?? null,
+                        watchers: stats?.watchers ?? null,
+                        ...(traffic ?? {}),
+                        hint: !traffic
+                            ? 'Traffic data requires push access to the repository.'
+                            : undefined,
+                    },
+                    annotations: { lastModified },
+                }
+            },
+        },
+        // Milestone resources
+        {
+            uri: 'memory://github/milestones',
+            name: 'GitHub Milestones',
+            title: 'GitHub Repository Milestones',
+            description:
+                'Open GitHub milestones with completion percentages, due dates, and issue counts',
+            mimeType: 'application/json',
+            icons: [ICON_MILESTONE],
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.6,
+            },
+            handler: async (_uri: string, context: ResourceContext) => {
+                if (!context.github) {
+                    return {
+                        error: 'GitHub integration not available',
+                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    }
+                }
+
+                const repoInfo = await context.github.getRepoInfo()
+                const owner = repoInfo.owner
+                const repo = repoInfo.repo
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'Could not detect repository',
+                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                    }
+                }
+
+                const milestones = await context.github.getMilestones(owner, repo, 'open', 20)
+                const milestonesWithProgress = milestones.map((ms) => {
+                    const total = ms.openIssues + ms.closedIssues
+                    const completionPercentage =
+                        total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                    return { ...ms, completionPercentage }
+                })
+
+                return {
+                    repository: `${owner}/${repo}`,
+                    milestones: milestonesWithProgress,
+                    count: milestonesWithProgress.length,
+                    hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                }
+            },
+        },
+        {
+            uri: 'memory://milestones/{number}',
+            name: 'Milestone Detail',
+            title: 'GitHub Milestone Detail',
+            description:
+                'Detailed view of a single GitHub milestone with completion progress and issue counts. Use get_github_issues with the milestone filter for individual issue details.',
+            mimeType: 'application/json',
+            icons: [ICON_MILESTONE],
+            annotations: {
+                audience: ['assistant'],
+                priority: 0.5,
+            },
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/milestones\/(\d+)/.exec(uri)
+                const milestoneNumber = match?.[1] ? parseInt(match[1], 10) : null
+
+                if (milestoneNumber === null) {
+                    return { error: 'Invalid milestone number' }
+                }
+
+                if (!context.github) {
+                    return {
+                        error: 'GitHub integration not available',
+                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    }
+                }
+
+                const repoInfo = await context.github.getRepoInfo()
+                const owner = repoInfo.owner
+                const repo = repoInfo.repo
+
+                if (!owner || !repo) {
+                    return {
+                        error: 'Could not detect repository',
+                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                    }
+                }
+
+                const milestone = await context.github.getMilestone(owner, repo, milestoneNumber)
+                if (!milestone) {
+                    return { error: `Milestone #${String(milestoneNumber)} not found` }
+                }
+
+                const total = milestone.openIssues + milestone.closedIssues
+                const completionPercentage =
+                    total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+
+                return {
+                    repository: `${owner}/${repo}`,
+                    milestone: { ...milestone, completionPercentage },
+                    hint: 'Use get_github_issues tool to list issues associated with this milestone.',
                 }
             },
         },

@@ -20,6 +20,12 @@ const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2'
 /** Embedding dimensions for all-MiniLM-L6-v2 */
 const EMBEDDING_DIMENSIONS = 384
 
+/** Number of entries to embed concurrently during rebuild */
+const REBUILD_BATCH_SIZE = 5
+
+/** Number of entries to fetch per page during rebuild */
+const REBUILD_PAGE_SIZE = 200
+
 /** Search result with similarity score */
 export interface SemanticSearchResult {
     entryId: number
@@ -225,7 +231,8 @@ export class VectorSearchManager {
     }
 
     /**
-     * Rebuild index from database entries
+     * Rebuild index from database entries.
+     * Uses paginated fetching and parallel batch embedding for performance.
      * @param db - Database adapter
      * @param progress - Optional progress context for notifications
      */
@@ -240,66 +247,130 @@ export class VectorSearchManager {
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
 
-        // Step 1: Get all entries from database
-        const entries = db.getRecentEntries(10000) // Get up to 10k entries
-        const dbIds = new Set(entries.map((e) => String(e.id)))
+        // Step 1: Get total entry count and build ID set for orphan detection
+        const totalEntries = db.getActiveEntryCount()
+        const dbIds = new Set<string>()
 
-        // Step 2: Clean up orphaned entries from the index
-        // These are vector entries for database records that were permanently deleted
-        const indexItems = await this.index.listItems()
-        let orphansRemoved = 0
-        for (const item of indexItems) {
-            if (!dbIds.has(item.id)) {
-                try {
-                    await this.index.deleteItem(item.id)
-                    orphansRemoved++
-                } catch {
-                    // Ignore errors during cleanup
+        // Collect all active entry IDs via pagination (avoids loading all content at once)
+        for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
+            const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
+            for (const entry of page) {
+                dbIds.add(String(entry.id))
+            }
+        }
+
+        // Step 2: Clean up existing index items
+        // If the index is corrupted (e.g., from a process kill), recreate it
+        try {
+            const indexItems = await this.index.listItems()
+            let orphansRemoved = 0
+            for (const item of indexItems) {
+                if (!dbIds.has(item.id)) {
+                    try {
+                        await this.index.deleteItem(item.id)
+                        orphansRemoved++
+                    } catch {
+                        // Ignore errors during cleanup
+                    }
                 }
             }
-        }
-        if (orphansRemoved > 0) {
-            logger.info(`Cleaned up ${String(orphansRemoved)} orphaned vector entries`, {
-                module: 'VectorSearch',
-            })
-        }
-
-        // Step 3: Re-index all current entries
-        const total = entries.length
-
-        // Send initial progress
-        await sendProgress(progress, 0, total, 'Starting vector index rebuild...')
-
-        let indexed = 0
-        for (const entry of entries) {
-            // Delete existing item first to avoid "already exists" error
-            try {
-                await this.index.deleteItem(String(entry.id))
-            } catch {
-                // Item may not exist, ignore
+            if (orphansRemoved > 0) {
+                logger.info(`Cleaned up ${String(orphansRemoved)} orphaned vector entries`, {
+                    module: 'VectorSearch',
+                })
             }
 
-            const success = await this.addEntry(entry.id, entry.content)
-            if (success) indexed++
+            // Step 3: Delete all remaining items to prepare for clean re-index
+            // This avoids the double-delete overhead of calling addEntry (upsert) per item
+            const remainingItems = await this.index.listItems()
+            for (const item of remainingItems) {
+                try {
+                    await this.index.deleteItem(item.id)
+                } catch {
+                    // Ignore
+                }
+            }
+        } catch (indexError) {
+            // Index files are corrupted — recreate from scratch
+            logger.warning('Vector index corrupted, recreating...', {
+                module: 'VectorSearch',
+                error: indexError instanceof Error ? indexError.message : String(indexError),
+            })
+            // Delete and recreate the vectra index directory
+            if (fs.existsSync(this.indexPath)) {
+                fs.rmSync(this.indexPath, { recursive: true, force: true })
+                fs.mkdirSync(this.indexPath, { recursive: true })
+            }
+            this.index = new LocalIndex(this.indexPath)
+            await this.index.createIndex()
+            logger.info('Recreated vector index after corruption', { module: 'VectorSearch' })
+        }
 
-            // Report progress every 10 entries to avoid flooding
-            if (indexed % 10 === 0 || indexed === total) {
-                await sendProgress(
-                    progress,
-                    indexed,
-                    total,
-                    `Indexed ${String(indexed)} of ${String(total)} entries`
+        // Step 4: Re-index all entries using paginated fetch
+        // Embeddings are generated in parallel batches (CPU-bound, safe),
+        // but vectra insertions are sequential (file I/O, not concurrency-safe)
+        await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild...')
+
+        let indexed = 0
+        for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
+            const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
+
+            // Generate embeddings in parallel batches
+            for (let i = 0; i < page.length; i += REBUILD_BATCH_SIZE) {
+                const batch = page.slice(i, i + REBUILD_BATCH_SIZE)
+
+                // Parallel embedding generation
+                const embeddings = await Promise.all(
+                    batch.map(async (entry) => {
+                        try {
+                            return { entry, embedding: await this.generateEmbedding(entry.content) }
+                        } catch {
+                            return { entry, embedding: null }
+                        }
+                    })
                 )
+
+                // Sequential vectra insertion (file I/O not concurrency-safe)
+                for (const { entry, embedding } of embeddings) {
+                    if (embedding !== null) {
+                        try {
+                            await this.index.insertItem({
+                                id: String(entry.id),
+                                vector: embedding,
+                                metadata: {
+                                    entryId: entry.id,
+                                    contentPreview: entry.content.slice(0, 100),
+                                },
+                            })
+                            indexed++
+                        } catch (error) {
+                            logger.error('Failed to insert entry into vector index', {
+                                module: 'VectorSearch',
+                                entityId: entry.id,
+                                error: error instanceof Error ? error.message : String(error),
+                            })
+                        }
+                    }
+                }
+
+                // Report progress every 10 entries to avoid flooding
+                if (indexed % 10 === 0 || indexed === totalEntries) {
+                    await sendProgress(
+                        progress,
+                        indexed,
+                        totalEntries,
+                        `Indexed ${String(indexed)} of ${String(totalEntries)} entries`
+                    )
+                }
             }
         }
 
         // Force index to refresh by re-listing items
         // This ensures the internal query structures are updated and ready for search
-        // The 100ms delay was insufficient because it didn't refresh the internal state
         await this.index.listItems()
 
         // Final progress
-        await sendProgress(progress, indexed, total, 'Vector index rebuild complete')
+        await sendProgress(progress, indexed, totalEntries, 'Vector index rebuild complete')
 
         logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
             module: 'VectorSearch',

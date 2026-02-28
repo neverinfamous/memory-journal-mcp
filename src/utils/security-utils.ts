@@ -168,3 +168,38 @@ export function assertNoPathTraversal(filename: string): void {
         throw new PathTraversalError(filename)
     }
 }
+
+// ============================================================================
+// Error Message Sanitization
+// ============================================================================
+
+/**
+ * Patterns that may contain sensitive tokens in error messages.
+ * Used to scrub error output before logging.
+ */
+const TOKEN_PATTERNS = [
+    // GitHub personal access tokens (classic and fine-grained)
+    /ghp_[A-Za-z0-9_]{36,}/g,
+    /github_pat_[A-Za-z0-9_]{82,}/g,
+    // Authorization headers in error dumps
+    /Authorization:\s*(?:token|Bearer)\s+\S+/gi,
+    // Generic Bearer tokens
+    /Bearer\s+[A-Za-z0-9._\-~+/]+=*/gi,
+] as const
+
+/**
+ * Sanitizes an error message by replacing any detected tokens with '[REDACTED]'.
+ * This is a defense-in-depth measure for error logging paths.
+ *
+ * @param message - The error message to sanitize
+ * @returns The sanitized message with tokens replaced
+ */
+export function sanitizeErrorForLogging(message: string): string {
+    let sanitized = message
+    for (const pattern of TOKEN_PATTERNS) {
+        // Reset lastIndex for global regex patterns
+        pattern.lastIndex = 0
+        sanitized = sanitized.replace(pattern, '[REDACTED]')
+    }
+    return sanitized
+}

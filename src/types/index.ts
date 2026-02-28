@@ -266,6 +266,17 @@ export interface JournalEntry {
     autoContext: string | null
     deletedAt: string | null
     tags: string[]
+    // GitHub integration fields
+    projectNumber?: number | null
+    projectOwner?: string | null
+    issueNumber?: number | null
+    issueUrl?: string | null
+    prNumber?: number | null
+    prUrl?: string | null
+    prStatus?: string | null
+    workflowRunId?: number | null
+    workflowName?: string | null
+    workflowStatus?: string | null
 }
 
 /**
@@ -298,6 +309,30 @@ export interface Embedding {
     modelName: string
 }
 
+/**
+ * Importance scoring breakdown showing weighted component contributions
+ */
+export interface ImportanceBreakdown {
+    /** Significance type contribution (weight: 0.30) */
+    significance: number
+    /** Relationship count contribution (weight: 0.35) */
+    relationships: number
+    /** Causal relationship contribution (weight: 0.20) */
+    causal: number
+    /** Recency decay contribution (weight: 0.15) */
+    recency: number
+}
+
+/**
+ * Importance calculation result with total score and component breakdown
+ */
+export interface ImportanceResult {
+    /** Total importance score (0.0-1.0) */
+    score: number
+    /** Weighted component contributions */
+    breakdown: ImportanceBreakdown
+}
+
 // ============================================================================
 // GitHub Integration Types
 // ============================================================================
@@ -320,6 +355,7 @@ export interface GitHubIssue {
     title: string
     url: string
     state: 'OPEN' | 'CLOSED'
+    milestone?: { number: number; title: string } | null
 }
 
 /**
@@ -330,6 +366,23 @@ export interface GitHubPullRequest {
     title: string
     url: string
     state: 'OPEN' | 'CLOSED' | 'MERGED'
+}
+
+/**
+ * GitHub milestone information
+ */
+export interface GitHubMilestone {
+    number: number
+    title: string
+    description: string | null
+    state: 'open' | 'closed'
+    url: string
+    dueOn: string | null
+    openIssues: number
+    closedIssues: number
+    createdAt: string
+    updatedAt: string
+    creator: string | null
 }
 
 /**
@@ -359,6 +412,51 @@ export interface ProjectContext {
     issues: GitHubIssue[]
     pullRequests: GitHubPullRequest[]
     workflowRuns: GitHubWorkflowRun[]
+    milestones: GitHubMilestone[]
+}
+
+// ============================================================================
+// Repository Insights/Traffic Types
+// ============================================================================
+
+/**
+ * Repository statistics (stars, forks, watchers)
+ */
+export interface RepoStats {
+    stars: number
+    forks: number
+    watchers: number
+    openIssues: number
+    size: number // KB
+    defaultBranch: string
+}
+
+/**
+ * Aggregated traffic data (14-day rolling)
+ */
+export interface TrafficData {
+    clones: { total: number; unique: number; dailyAvg: number }
+    views: { total: number; unique: number; dailyAvg: number }
+    period: string // e.g. "14 days"
+}
+
+/**
+ * Traffic referrer source
+ */
+export interface TrafficReferrer {
+    referrer: string
+    count: number
+    uniques: number
+}
+
+/**
+ * Popular repository path
+ */
+export interface PopularPath {
+    path: string
+    title: string
+    count: number
+    uniques: number
 }
 
 // ============================================================================

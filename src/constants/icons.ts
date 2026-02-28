@@ -143,6 +143,13 @@ export const ICON_PR: McpIcon = {
     sizes: ['24x24'],
 }
 
+/** Flag for milestone tracking */
+export const ICON_MILESTONE: McpIcon = {
+    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpath d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/%3E%3Cline x1="4" y1="22" x2="4" y2="15"/%3E%3C/svg%3E',
+    mimeType: 'image/svg+xml',
+    sizes: ['24x24'],
+}
+
 /** Message bubble for prompts */
 export const ICON_PROMPT: McpIcon = {
     src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpath d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/%3E%3C/svg%3E',

@@ -31,6 +31,12 @@ import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
 import pkg from '../../package.json' with { type: 'json' }
 
+/** Session timeout for stateful HTTP mode (30 minutes) */
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000
+
+/** Session timeout sweep interval (5 minutes) */
+const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000
+
 export interface ServerOptions {
     transport: 'stdio' | 'http'
     port?: number
@@ -40,6 +46,7 @@ export interface ServerOptions {
     defaultProjectNumber?: number
     autoRebuildIndex?: boolean
     statelessHttp?: boolean
+    corsOrigin?: string
 }
 
 /**
@@ -108,14 +115,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
           }
         : undefined
 
+    // Get all tools once (unfiltered) for both instruction generation and registration
+    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber })
+    const allToolNames = new Set(allTools.map((t) => (t as { name: string }).name))
+
     // Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
     const instructions = generateInstructions(
-        filterConfig?.enabledTools ??
-            new Set(
-                getTools(db, null, vectorManager, github, { defaultProjectNumber }).map(
-                    (t) => (t as { name: string }).name
-                )
-            ),
+        filterConfig?.enabledTools ?? allToolNames,
         resources.map((r) => {
             const res = r as { uri: string; name: string; description?: string }
             return { uri: res.uri, name: res.name, description: res.description }
@@ -141,8 +147,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     )
 
-    // Get filtered tools and register them dynamically
-    const tools = getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber })
+    // Apply filter to get the set of tools to register
+    const tools = filterConfig
+        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber })
+        : allTools
     for (const tool of tools) {
         const toolDef = tool as {
             name: string
@@ -396,12 +404,20 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // HTTP transport with SSE support
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
+        const corsOrigin = options.corsOrigin ?? process.env['MCP_CORS_ORIGIN'] ?? '*'
         const app: Express = express()
 
-        // Manual CORS middleware for browser-based clients (e.g., MCP Inspector)
+        // Security headers middleware
+        app.use((_req: Request, res: Response, next: () => void) => {
+            res.setHeader('X-Content-Type-Options', 'nosniff')
+            res.setHeader('X-Frame-Options', 'DENY')
+            next()
+        })
+
+        // CORS middleware for browser-based clients (e.g., MCP Inspector)
+        // Origin is configurable via --cors-origin flag or MCP_CORS_ORIGIN env var
         app.use((req: Request, res: Response, next: () => void) => {
-            // Set CORS headers on all responses
-            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Origin', corsOrigin)
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
             res.setHeader(
                 'Access-Control-Allow-Headers',
@@ -418,22 +434,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
             next()
         })
 
-        // JSON body parser for MCP requests
-        app.use(express.json())
+        // JSON body parser with size limit to prevent memory exhaustion (DoS)
+        app.use(express.json({ limit: '1mb' }))
 
         // Explicit OPTIONS handler for /mcp - MUST be before other /mcp routes
         // Using app.all to intercept before Express 5's auto-OPTIONS
         app.all('/mcp', (req: Request, res: Response, next: () => void) => {
-            // Set CORS headers on ALL responses
-            res.setHeader('Access-Control-Allow-Origin', '*')
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-            res.setHeader(
-                'Access-Control-Allow-Headers',
-                'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version'
-            )
-            res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
-
-            // For OPTIONS, respond immediately with CORS headers
+            // CORS headers are already set by the middleware above.
+            // For OPTIONS, respond immediately.
             if (req.method === 'OPTIONS') {
                 res.status(204).end()
                 return
@@ -524,8 +532,37 @@ export async function createServer(options: ServerOptions): Promise<void> {
             // === STATEFUL MODE ===
             // Session-based transport with SSE support for notifications
 
-            // Session transport storage
+            // Session transport storage with last-activity timestamps
             const transports = new Map<string, StreamableHTTPServerTransport>()
+            const sessionLastActivity = new Map<string, number>()
+
+            /** Update the last-activity timestamp for a session */
+            const touchSession = (sid: string): void => {
+                sessionLastActivity.set(sid, Date.now())
+            }
+
+            /** Sweep expired sessions (called periodically) */
+            const sweepExpiredSessions = (): void => {
+                const now = Date.now()
+                for (const [sid, lastActivity] of sessionLastActivity) {
+                    if (now - lastActivity > SESSION_TIMEOUT_MS && transports.has(sid)) {
+                        logger.info('Expiring idle HTTP session', {
+                            module: 'McpServer',
+                            sessionId: sid,
+                            idleMinutes: Math.round((now - lastActivity) / 60_000),
+                        })
+                        const t = transports.get(sid)
+                        if (t) {
+                            void t.close()
+                        }
+                        transports.delete(sid)
+                        sessionLastActivity.delete(sid)
+                    }
+                }
+            }
+
+            // Start session timeout sweep (runs every 5 minutes)
+            const sessionSweepTimer = setInterval(sweepExpiredSessions, SESSION_SWEEP_INTERVAL_MS)
 
             // POST /mcp - Handle JSON-RPC requests
             app.post('/mcp', (req: Request, res: Response): void => {
@@ -536,7 +573,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         let httpTransport: StreamableHTTPServerTransport | undefined
 
                         if (sessionId && transports.has(sessionId)) {
-                            // Reuse existing transport
+                            // Reuse existing transport and refresh session activity
+                            touchSession(sessionId)
                             httpTransport = transports.get(sessionId)
                         } else if (sessionId === undefined && isInitializeRequest(req.body)) {
                             // New initialization request - create transport
@@ -548,6 +586,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                         sessionId: sid,
                                     })
                                     transports.set(sid, newTransport)
+                                    touchSession(sid)
                                 },
                             })
 
@@ -560,6 +599,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                         sessionId: sid,
                                     })
                                     transports.delete(sid)
+                                    sessionLastActivity.delete(sid)
                                 }
                             }
 
@@ -616,6 +656,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     res.status(400).send('Invalid or missing session ID')
                     return
                 }
+
+                // Refresh session activity on SSE reconnect
+                touchSession(sessionId)
 
                 const lastEventId = req.headers['last-event-id']
                 if (lastEventId !== undefined) {
@@ -693,6 +736,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         }
                     }
                     transports.clear()
+                    sessionLastActivity.clear()
+                    clearInterval(sessionSweepTimer)
 
                     httpServer.close()
                     db.close()
@@ -701,14 +746,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 })()
             })
 
-            // Keep process alive with a heartbeat timer
-            // setInterval keeps the event loop active and prevents exit
-            setInterval(
-                () => {
-                    // Heartbeat - keeps event loop active
-                },
-                1000 * 60 * 60
-            ) // 1 hour interval (just needs to exist)
+            // sessionSweepTimer keeps the event loop active (no additional heartbeat needed)
         }
     }
 }

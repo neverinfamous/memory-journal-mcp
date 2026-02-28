@@ -1,0 +1,29 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Force LF for source files
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+
+# Docker
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+
+# Config
+.prettierrc text eol=lf
+.prettierignore text eol=lf
+.eslintrc* text eol=lf
+.gitignore text eol=lf
+
+# Explicitly binary
+*.db binary
+*.wasm binary
+*.png binary
+*.jpg binary
+*.ico binary

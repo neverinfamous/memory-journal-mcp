@@ -17,6 +17,8 @@ import type {
     EntryType,
     SignificanceType,
     RelationshipType,
+    ImportanceBreakdown,
+    ImportanceResult,
 } from '../types/index.js'
 
 // Schema SQL for initialization
@@ -125,6 +127,12 @@ export class SqliteAdapter {
     private readonly dbPath: string
     private initialized = false
 
+    /** Timer handle for debounced save */
+    private saveTimer: ReturnType<typeof setTimeout> | null = null
+
+    /** Debounce interval for batching disk writes (ms) */
+    private static readonly SAVE_DEBOUNCE_MS = 500
+
     constructor(dbPath: string) {
         this.dbPath = dbPath
     }
@@ -164,14 +172,34 @@ export class SqliteAdapter {
 
         logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath })
 
-        // Save after initialization
-        this.save()
+        // Immediate flush after initialization to persist schema
+        this.flushSave()
     }
 
     /**
-     * Save database to disk
+     * Schedule a debounced save to disk.
+     * Batches rapid mutations into a single write after SAVE_DEBOUNCE_MS.
+     * Used by all mutation methods (createEntry, updateEntry, etc.).
      */
-    private save(): void {
+    private scheduleSave(): void {
+        if (this.saveTimer !== null) {
+            clearTimeout(this.saveTimer)
+        }
+        this.saveTimer = setTimeout(() => {
+            this.flushSave()
+        }, SqliteAdapter.SAVE_DEBOUNCE_MS)
+    }
+
+    /**
+     * Immediately flush the database to disk (synchronous).
+     * Cancels any pending debounced save.
+     * Used by close() and initialize() for guaranteed persistence.
+     */
+    flushSave(): void {
+        if (this.saveTimer !== null) {
+            clearTimeout(this.saveTimer)
+            this.saveTimer = null
+        }
         if (!this.db) return
         const data = this.db.export()
         const buffer = Buffer.from(data)
@@ -179,11 +207,12 @@ export class SqliteAdapter {
     }
 
     /**
-     * Close database connection
+     * Close database connection.
+     * Flushes any pending writes immediately before closing.
      */
     close(): void {
         if (this.db) {
-            this.save()
+            this.flushSave()
             this.db.close()
             this.db = null
         }
@@ -264,7 +293,7 @@ export class SqliteAdapter {
             this.linkTagsToEntry(entryId, tags)
         }
 
-        this.save()
+        this.scheduleSave()
 
         logger.info('Entry created', {
             module: 'SqliteAdapter',
@@ -298,29 +327,64 @@ export class SqliteAdapter {
     }
 
     /**
+     * Get entry by ID, including soft-deleted entries.
+     * Used for permanent deletion of previously soft-deleted entries.
+     */
+    getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
+        const db = this.ensureDb()
+        const result = db.exec(`SELECT * FROM memory_journal WHERE id = ?`, [id])
+
+        if (result.length === 0 || result[0]?.values.length === 0) return null
+
+        const columns = result[0]?.columns ?? []
+        const values = result[0]?.values[0] ?? []
+        const row = this.rowToObject(columns, values)
+
+        return this.rowToEntry(row)
+    }
+
+    /**
+     * Importance score result with scoring breakdown
+     */
+    static readonly IMPORTANCE_WEIGHTS = {
+        significance: 0.3,
+        relationships: 0.35,
+        causal: 0.2,
+        recency: 0.15,
+    } as const
+
+    /**
      * Calculate importance score for an entry (0.0-1.0)
      *
      * Formula:
-     * - significanceWeight (0.30): 1.0 if significanceType set, else 0.0
-     * - relationshipWeight (0.35): min(relCount / 5, 1.0)
-     * - causalWeight (0.20): min(causalCount / 3, 1.0)
-     * - recencyWeight (0.15): max(0, 1 - daysSince / 90)
+     * - significance (0.30): 1.0 if significanceType set, else 0.0
+     * - relationships (0.35): min(relCount / 5, 1.0)
+     * - causal (0.20): min(causalCount / 3, 1.0)
+     * - recency (0.15): max(0, 1 - daysSince / 90)
+     *
+     * Returns ImportanceResult with score and component breakdown.
      */
-    calculateImportance(entryId: number): number {
+    calculateImportance(entryId: number): ImportanceResult {
         const db = this.ensureDb()
+        const round2 = (n: number): number => Math.round(n * 100) / 100
 
         // Get entry data
         const entryResult = db.exec(
             `SELECT significance_type, timestamp FROM memory_journal WHERE id = ? AND deleted_at IS NULL`,
             [entryId]
         )
-        if (entryResult.length === 0 || entryResult[0]?.values.length === 0) return 0
+        if (entryResult.length === 0 || entryResult[0]?.values.length === 0) {
+            return {
+                score: 0,
+                breakdown: { significance: 0, relationships: 0, causal: 0, recency: 0 },
+            }
+        }
 
         const significanceType = entryResult[0]?.values[0]?.[0] as string | null
         const timestamp = entryResult[0]?.values[0]?.[1] as string
 
         // Significance weight: 1.0 if set, else 0.0
-        const significanceWeight = significanceType ? 1.0 : 0.0
+        const significanceRaw = significanceType ? 1.0 : 0.0
 
         // Relationship count (total relationships involving this entry)
         const relResult = db.exec(
@@ -328,7 +392,7 @@ export class SqliteAdapter {
             [entryId, entryId]
         )
         const relCount = (relResult[0]?.values[0]?.[0] as number) ?? 0
-        const relationshipWeight = Math.min(relCount / 5, 1.0)
+        const relationshipsRaw = Math.min(relCount / 5, 1.0)
 
         // Causal relationships count
         const causalResult = db.exec(
@@ -338,23 +402,33 @@ export class SqliteAdapter {
             [entryId, entryId]
         )
         const causalCount = (causalResult[0]?.values[0]?.[0] as number) ?? 0
-        const causalWeight = Math.min(causalCount / 3, 1.0)
+        const causalRaw = Math.min(causalCount / 3, 1.0)
 
         // Recency weight: decays over 90 days
         const entryDate = new Date(timestamp)
         const now = new Date()
         const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
-        const recencyWeight = Math.max(0, 1 - daysSince / 90)
+        const recencyRaw = Math.max(0, 1 - daysSince / 90)
 
-        // Weighted sum
-        const importance =
-            significanceWeight * 0.3 +
-            relationshipWeight * 0.35 +
-            causalWeight * 0.2 +
-            recencyWeight * 0.15
+        const w = SqliteAdapter.IMPORTANCE_WEIGHTS
 
-        // Round to 2 decimal places
-        return Math.round(importance * 100) / 100
+        // Weighted contributions
+        const breakdown: ImportanceBreakdown = {
+            significance: round2(significanceRaw * w.significance),
+            relationships: round2(relationshipsRaw * w.relationships),
+            causal: round2(causalRaw * w.causal),
+            recency: round2(recencyRaw * w.recency),
+        }
+
+        // Total score
+        const score = round2(
+            significanceRaw * w.significance +
+                relationshipsRaw * w.relationships +
+                causalRaw * w.causal +
+                recencyRaw * w.recency
+        )
+
+        return { score, breakdown }
     }
 
     /**
@@ -380,6 +454,34 @@ export class SqliteAdapter {
         return (result[0]?.values ?? []).map((values) =>
             this.rowToEntry(this.rowToObject(columns, values))
         )
+    }
+
+    /**
+     * Get a page of active entries for batch processing (e.g., vector index rebuild).
+     * Returns entries ordered by ID ascending for deterministic pagination.
+     */
+    getEntriesPage(offset: number, limit: number): JournalEntry[] {
+        const db = this.ensureDb()
+        const result = db.exec(
+            `SELECT * FROM memory_journal WHERE deleted_at IS NULL ORDER BY id ASC LIMIT ? OFFSET ?`,
+            [limit, offset]
+        )
+        if (result.length === 0) return []
+
+        const columns = result[0]?.columns ?? []
+        return (result[0]?.values ?? []).map((values) =>
+            this.rowToEntry(this.rowToObject(columns, values))
+        )
+    }
+
+    /**
+     * Get total count of active (non-deleted) entries.
+     * Used for progress reporting and pagination bounds.
+     */
+    getActiveEntryCount(): number {
+        const db = this.ensureDb()
+        const result = db.exec(`SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL`)
+        return (result[0]?.values[0]?.[0] as number) ?? 0
     }
 
     /**
@@ -425,7 +527,7 @@ export class SqliteAdapter {
             this.linkTagsToEntry(id, updates.tags)
         }
 
-        this.save()
+        this.scheduleSave()
 
         logger.info('Entry updated', {
             module: 'SqliteAdapter',
@@ -444,7 +546,8 @@ export class SqliteAdapter {
         const db = this.ensureDb()
 
         // P154: Pre-check entry existence before mutation
-        const entry = this.getEntryById(id)
+        // For permanent deletion, also look through soft-deleted entries
+        const entry = permanent ? this.getEntryByIdIncludeDeleted(id) : this.getEntryById(id)
         if (!entry) return false
 
         if (permanent) {
@@ -453,7 +556,7 @@ export class SqliteAdapter {
             db.run(`UPDATE memory_journal SET deleted_at = datetime('now') WHERE id = ?`, [id])
         }
 
-        this.save()
+        this.scheduleSave()
         return true
     }
 
@@ -615,11 +718,11 @@ export class SqliteAdapter {
     }
 
     /**
-     * List all tags
+     * List all tags with at least one usage
      */
     listTags(): Tag[] {
         const db = this.ensureDb()
-        const result = db.exec('SELECT * FROM tags ORDER BY usage_count DESC')
+        const result = db.exec('SELECT * FROM tags WHERE usage_count > 0 ORDER BY usage_count DESC')
 
         if (result.length === 0) return []
 
@@ -696,7 +799,7 @@ export class SqliteAdapter {
         db.run('DELETE FROM entry_tags WHERE tag_id = ?', [sourceTagId])
         db.run('DELETE FROM tags WHERE id = ?', [sourceTagId])
 
-        this.save()
+        this.scheduleSave()
 
         logger.info('Tags merged', {
             module: 'SqliteAdapter',
@@ -744,7 +847,7 @@ export class SqliteAdapter {
         const result = db.exec('SELECT last_insert_rowid() as id')
         const id = result[0]?.values[0]?.[0] as number
 
-        this.save()
+        this.scheduleSave()
 
         return {
             id,
@@ -1093,7 +1196,7 @@ export class SqliteAdapter {
         const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         // Save to main database path
-        this.save()
+        this.flushSave()
 
         logger.info('Database restored from backup', {
             module: 'SqliteAdapter',
@@ -1211,6 +1314,17 @@ export class SqliteAdapter {
             autoContext: row['auto_context'] as string | null,
             deletedAt: row['deleted_at'] as string | null,
             tags: this.getTagsForEntry(id),
+            // GitHub integration fields
+            projectNumber: (row['project_number'] as number | null) ?? null,
+            projectOwner: (row['project_owner'] as string | null) ?? null,
+            issueNumber: (row['issue_number'] as number | null) ?? null,
+            issueUrl: (row['issue_url'] as string | null) ?? null,
+            prNumber: (row['pr_number'] as number | null) ?? null,
+            prUrl: (row['pr_url'] as string | null) ?? null,
+            prStatus: (row['pr_status'] as string | null) ?? null,
+            workflowRunId: (row['workflow_run_id'] as number | null) ?? null,
+            workflowName: (row['workflow_name'] as string | null) ?? null,
+            workflowStatus: (row['workflow_status'] as string | null) ?? null,
         }
     }
 

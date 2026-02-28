@@ -3,7 +3,10 @@
  *
  * Centralized logging to stderr only (stdout reserved for MCP protocol).
  * Follows RFC 5424 severity levels.
+ * Automatically sanitizes error fields to prevent token leakage.
  */
+
+import { sanitizeErrorForLogging } from './security-utils.js'
 
 type LogLevel = 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical'
 
@@ -57,7 +60,13 @@ class Logger {
     private log(level: LogLevel, message: string, context?: LogContext): void {
         if (!this.shouldLog(level)) return
 
-        const formatted = this.formatMessage(level, message, context)
+        // Sanitize error fields to prevent token leakage in logs
+        let sanitizedContext = context
+        if (context?.['error'] != null && typeof context['error'] === 'string') {
+            sanitizedContext = { ...context, error: sanitizeErrorForLogging(context['error']) }
+        }
+
+        const formatted = this.formatMessage(level, message, sanitizedContext)
 
         // Always write to stderr (stdout is reserved for MCP protocol)
         console.error(formatted)

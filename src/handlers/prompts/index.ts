@@ -572,6 +572,7 @@ ${entrySummary}
 **For More Context:**
 - Full entries: \`memory://recent\` or \`get_entry_by_id(ID)\`
 - GitHub status: \`memory://github/status\`
+- Repo insights: \`memory://github/insights\` (stars, traffic, clones)
 - Full health: \`memory://health\`
 
 Please confirm this context to the user in a concise, friendly format. Use a table if helpful.`,

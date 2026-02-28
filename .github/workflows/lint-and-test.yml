@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20.x, 22.x, 25.x]
+        node-version: [24.x, 25.x]
 
     steps:
       - name: Checkout code
@@ -55,4 +55,3 @@ jobs:
 
       - name: Run npm audit
         run: npm audit --audit-level=moderate
-        continue-on-error: true

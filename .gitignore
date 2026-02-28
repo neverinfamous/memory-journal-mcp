@@ -36,6 +36,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Unit test / coverage reports
+coverage/
 htmlcov/
 .tox/
 .nox/
@@ -164,6 +165,7 @@ github_auth.json
 data/
 
 # Vector index files (created by vectra)
+.vectra_index/
 *.vectra/
 index/
 
@@ -174,6 +176,16 @@ yarn-error.log*
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Temporary files and logs
+temp/
+tmp/
+*.tmp
+*.temp
+logs/
+
+# Backups
+backups/
 
 # Dependencies
 node_modules/
