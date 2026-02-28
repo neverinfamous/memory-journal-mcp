@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [4.4.1] - 2026-02-27
+## [4.4.2] - 2026-02-27
 
 ### Security
 
-- **CVE-2026-27903 + CVE-2026-27904 (minimatch)** — Added npm override `minimatch@^10.2.3` to fix HIGH severity ReDoS and algorithmic complexity vulnerabilities (CVSS 7.5) that blocked Docker deploy
+- **CVE-2026-27903 + CVE-2026-27904 (minimatch)** — Manually patched npm's bundled `minimatch` → `10.2.3` in Dockerfile to fix HIGH severity ReDoS and algorithmic complexity vulnerabilities (CVSS 7.5). The v4.4.1 npm override only affected project dependencies; Docker Scout detected the vulnerable copy inside npm's own bundled packages. Also added npm override.
 
 ## [4.4.0] - 2026-02-27
 
