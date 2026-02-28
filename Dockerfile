@@ -31,6 +31,14 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/tar && \
     rm tar-7.5.8.tgz
 
+# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.3
+RUN cd /usr/local/lib/node_modules/npm && \
+    npm pack minimatch@10.2.3 && \
+    rm -rf node_modules/minimatch && \
+    tar -xzf minimatch-10.2.3.tgz && \
+    mv package node_modules/minimatch && \
+    rm minimatch-10.2.3.tgz
+
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
 
@@ -78,6 +86,14 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/tar && \
     rm tar-7.5.8.tgz
 
+# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.3
+RUN cd /usr/local/lib/node_modules/npm && \
+    npm pack minimatch@10.2.3 && \
+    rm -rf node_modules/minimatch && \
+    tar -xzf minimatch-10.2.3.tgz && \
+    mv package node_modules/minimatch && \
+    rm minimatch-10.2.3.tgz
+
 # Copy built artifacts and production dependencies
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
@@ -110,6 +126,6 @@ CMD ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="4.4.1"
+LABEL version="4.4.2"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"
