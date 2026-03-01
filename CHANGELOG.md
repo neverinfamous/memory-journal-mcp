@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Session Start briefing in Cursor** — Added Cursor-specific `FetchMcpResource` server name (`user-memory-journal-mcp`) to the Session Start instructions. Cursor prefixes MCP server names with `user-`, so agents using the generic name would get "Server not found" errors when fetching `memory://briefing`.
+
 ### Added
 
 - **Automated Scheduler (HTTP/SSE only)** — New in-process scheduler runs periodic maintenance jobs for long-running HTTP/SSE server processes. Configured via CLI flags:

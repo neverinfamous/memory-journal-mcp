@@ -58,6 +58,7 @@ const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 ## Session Start
 
 1. Read \`memory://briefing\` for project context
+   - In Cursor, use \`FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://briefing")\`
 2. **Show the \`userMessage\` to the user** (it contains a formatted summary of project context)
 3. Proceed with the user's request
 
@@ -400,3 +401,4 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * @deprecated Use generateInstructions() instead for dynamic content
  */
 export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
+
