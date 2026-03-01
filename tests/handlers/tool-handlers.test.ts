@@ -108,6 +108,17 @@ describe('Tool Handlers', () => {
             expect(result.entry.entryType).toBe('project_decision')
             expect(result.entry.tags).toContain('tool-tag-a')
         })
+
+        it('should set isPersonal to false when share_with_team is true', async () => {
+            const result = (await callTool(
+                'create_entry',
+                { content: 'Team shared entry', share_with_team: true },
+                db
+            )) as { success: boolean; entry: { isPersonal: boolean } }
+
+            expect(result.success).toBe(true)
+            expect(result.entry.isPersonal).toBe(false)
+        })
     })
 
     describe('callTool - create_entry_minimal', () => {

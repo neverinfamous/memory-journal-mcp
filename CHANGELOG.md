@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Path Traversal Test Assertion** — Updated `sql-injection.test.ts` to assert `PathTraversalError` type instead of old inline error message string, matching refactored `assertNoPathTraversal()` usage.
 - **Tool Handler Test Fix** — Updated `tool-handlers.test.ts` to use valid entry_type enum value (`project_decision` instead of `decision`), matching the new enum constraint.
+- **`share_with_team` Not Setting `isPersonal`** — `create_entry` with `share_with_team: true` now correctly sets `isPersonal: false`, making the entry visible in team-scoped resources like `memory://team/recent`. Previously, the `share_with_team` parameter was parsed but never applied to the `isPersonal` field.
 
 ### Removed
 

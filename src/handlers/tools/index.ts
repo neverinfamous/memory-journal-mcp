@@ -1074,7 +1074,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                     content: input.content,
                     entryType: input.entry_type,
                     tags: input.tags,
-                    isPersonal: input.is_personal,
+                    isPersonal: input.share_with_team ? false : input.is_personal,
                     significanceType: input.significance_type ?? null,
                     projectNumber: input.project_number,
                     projectOwner: input.project_owner,
