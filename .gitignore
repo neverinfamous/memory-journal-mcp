@@ -121,6 +121,7 @@ dmypy.json
 *.sqlite3
 
 # IDE files
+.cursor/
 .vscode/
 .idea/
 *.swp
