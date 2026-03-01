@@ -314,16 +314,14 @@ describe('SqliteAdapter SQL Injection Protection', () => {
     describe('restoreFromFile - Path Traversal Protection', () => {
         it('should reject filenames with path traversal', async () => {
             await expect(db.restoreFromFile('../../../etc/passwd')).rejects.toThrow(
-                'Invalid backup filename: path separators not allowed'
+                PathTraversalError
             )
 
             await expect(db.restoreFromFile('..\\..\\windows\\system32')).rejects.toThrow(
-                'Invalid backup filename: path separators not allowed'
+                PathTraversalError
             )
 
-            await expect(db.restoreFromFile('/etc/passwd')).rejects.toThrow(
-                'Invalid backup filename: path separators not allowed'
-            )
+            await expect(db.restoreFromFile('/etc/passwd')).rejects.toThrow(PathTraversalError)
         })
     })
 

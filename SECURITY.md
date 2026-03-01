@@ -4,29 +4,19 @@ The Memory Journal MCP server implements comprehensive security measures to prot
 
 ## 🛡️ **Database Security**
 
-### **WAL Mode Enabled**
+### **sql.js In-Memory Architecture**
 
-- ✅ **Write-Ahead Logging (WAL)** enabled for better concurrency and crash recovery
-- ✅ **Atomic transactions** ensure data consistency
-- ✅ **Better performance** with concurrent read/write operations
+The server uses **sql.js** (pure JavaScript SQLite compiled to WebAssembly) which operates on an in-memory database copy with periodic flushing to disk. This differs from native SQLite:
 
-### **Optimized PRAGMA Settings**
+- ✅ **PRAGMA foreign_keys = ON** — enforces referential integrity and `ON DELETE CASCADE`
+- ✅ **Parameterized queries** — all user input bound via `?` placeholders
+- ✅ **Debounced disk writes** — periodic flushing with immediate flush on critical operations
+- ⚠️ WAL mode, mmap, busy_timeout, and other file-level PRAGMAs are **not applicable** to sql.js
 
-```sql
-PRAGMA foreign_keys = ON          -- Enforce referential integrity
-PRAGMA journal_mode = WAL         -- Enable WAL mode
-PRAGMA synchronous = NORMAL       -- Balance safety and performance
-PRAGMA cache_size = -64000        -- 64MB cache for better performance
-PRAGMA mmap_size = 268435456      -- 256MB memory-mapped I/O
-PRAGMA temp_store = MEMORY        -- Store temp tables in memory
-PRAGMA busy_timeout = 30000       -- 30-second timeout for busy database
-```
+### **File Permissions (Docker)**
 
-### **File Permissions**
-
-- ✅ **Database files**: `600` (read/write for owner only)
-- ✅ **Data directory**: `700` (full access for owner only)
-- ✅ **Automatic permission setting** on database creation
+- ✅ **Data directory**: `700` (full access for owner only) in Docker
+- ✅ **Non-root user** (`appuser:appgroup`) owns data directory
 
 ## 🔐 **Input Validation**
 
@@ -77,8 +67,12 @@ export MCP_CORS_ORIGIN="http://localhost:3000"
 
 ### **Security Headers**
 
-- ✅ **X-Content-Type-Options: nosniff** - prevents MIME sniffing
-- ✅ **X-Frame-Options: DENY** - prevents clickjacking
+- ✅ **X-Content-Type-Options: nosniff** — prevents MIME sniffing
+- ✅ **X-Frame-Options: DENY** — prevents clickjacking
+- ✅ **Content-Security-Policy: default-src 'none'; frame-ancestors 'none'** — prevents XSS and framing
+- ✅ **Cache-Control: no-store** — prevents caching of sensitive journal data
+- ✅ **Referrer-Policy: no-referrer** — prevents referrer leakage
+- ⚠️ **CORS wildcard warning** — server logs a warning when CORS origin is `*`
 
 ### **Session Management (Stateful Mode)**
 
@@ -187,17 +181,16 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 
 ## 📋 **Security Checklist**
 
-- [x] WAL mode enabled for database consistency
-- [x] Proper file permissions (600/700)
+- [x] Foreign key enforcement (`PRAGMA foreign_keys = ON`)
 - [x] Input validation and length limits (Zod schemas)
 - [x] Parameterized SQL queries
-- [x] SQL injection detection heuristics
-- [x] Path traversal protection
-- [x] LIKE pattern sanitization
-- [x] Date format whitelisting
+- [x] SQL injection detection heuristics (defense-in-depth)
+- [x] Path traversal protection (`assertNoPathTraversal`)
+- [x] LIKE pattern sanitization (`sanitizeSearchQuery`)
+- [x] Date format whitelisting (`validateDateFormatPattern`)
 - [x] HTTP body size limit (1MB)
-- [x] Configurable CORS origin
-- [x] Security headers (X-Content-Type-Options, X-Frame-Options)
+- [x] Configurable CORS origin (with wildcard warning)
+- [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy)
 - [x] Session timeout (30 minutes)
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build

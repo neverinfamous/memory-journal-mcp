@@ -9,7 +9,11 @@ import initSqlJs, { type Database } from 'sql.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../utils/logger.js'
-import { validateDateFormatPattern } from '../utils/security-utils.js'
+import {
+    validateDateFormatPattern,
+    sanitizeSearchQuery,
+    assertNoPathTraversal,
+} from '../utils/security-utils.js'
 import type {
     JournalEntry,
     Tag,
@@ -168,6 +172,11 @@ export class SqliteAdapter {
 
         // Initialize schema
         this.db.run(SCHEMA_SQL)
+
+        // Enable foreign key enforcement (SQLite disables by default)
+        // Required for ON DELETE CASCADE in entry_tags, relationships, embeddings
+        this.db.run('PRAGMA foreign_keys = ON')
+
         this.initialized = true
 
         logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath })
@@ -582,9 +591,9 @@ export class SqliteAdapter {
 
         let sql = `
             SELECT * FROM memory_journal
-            WHERE deleted_at IS NULL AND content LIKE ?
+            WHERE deleted_at IS NULL AND content LIKE ? ESCAPE '\\'
         `
-        const params: unknown[] = [`%${query}%`]
+        const params: unknown[] = [`%${sanitizeSearchQuery(query)}%`]
 
         if (isPersonal !== undefined) {
             sql += ` AND is_personal = ?`
@@ -1155,9 +1164,7 @@ export class SqliteAdapter {
         newEntryCount: number
     }> {
         // Validate filename (prevent path traversal)
-        if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-            throw new Error('Invalid backup filename: path separators not allowed')
-        }
+        assertNoPathTraversal(filename)
 
         const backupsDir = this.getBackupsDir()
         const backupPath = path.join(backupsDir, filename)

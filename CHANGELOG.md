@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Wire Dead-Code Security Utilities (F-001)** — `sanitizeSearchQuery()` and `assertNoPathTraversal()` from `security-utils.ts` were defined but never imported or called. Now wired into active code paths:
+  - `SqliteAdapter.searchEntries()` applies `sanitizeSearchQuery()` to LIKE patterns with `ESCAPE '\\'` clause, preventing wildcard injection (F-002)
+  - `SqliteAdapter.restoreFromFile()` uses `assertNoPathTraversal()` instead of inline checks, throwing `PathTraversalError`
+- **HTTP Security Headers (F-003)** — Added three additional security headers to HTTP transport middleware:
+  - `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` — prevents XSS and framing
+  - `Cache-Control: no-store` — prevents caching of sensitive journal data
+  - `Referrer-Policy: no-referrer` — prevents referrer leakage
+- **PRAGMA foreign_keys = ON (F-005)** — SQLite foreign key enforcement now enabled on database initialization. `ON DELETE CASCADE` constraints in `entry_tags`, `relationships`, and `embeddings` tables are now enforced at the database level.
+- **CORS Wildcard Warning (F-006)** — Server now logs a warning when HTTP transport CORS origin is `*` (the default), advising operators to set `--cors-origin` or `MCP_CORS_ORIGIN` for production deployments.
+
+### Documentation
+
+- **SECURITY.md Accuracy (F-004)** — Rewrote Database Security section to accurately reflect sql.js in-memory architecture. Removed false claims about WAL mode and 7 PRAGMAs that are not applicable to sql.js. Updated security checklist to reference actual function names (`assertNoPathTraversal`, `sanitizeSearchQuery`, `validateDateFormatPattern`). Updated HTTP security headers list to include CSP, Cache-Control, and Referrer-Policy.
+
+### Fixed
+
+- **Path Traversal Test Assertion** — Updated `sql-injection.test.ts` to assert `PathTraversalError` type instead of old inline error message string, matching refactored `assertNoPathTraversal()` usage.
+
 ## [4.4.2] - 2026-02-27
 
 ### Security

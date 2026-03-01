@@ -405,12 +405,24 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
         const corsOrigin = options.corsOrigin ?? process.env['MCP_CORS_ORIGIN'] ?? '*'
+
+        if (corsOrigin === '*') {
+            logger.warning(
+                'CORS origin is set to "*" (all origins). ' +
+                    'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
+                { module: 'McpServer' }
+            )
+        }
+
         const app: Express = express()
 
         // Security headers middleware
         app.use((_req: Request, res: Response, next: () => void) => {
             res.setHeader('X-Content-Type-Options', 'nosniff')
             res.setHeader('X-Frame-Options', 'DENY')
+            res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+            res.setHeader('Cache-Control', 'no-store')
+            res.setHeader('Referrer-Policy', 'no-referrer')
             next()
         })
 
