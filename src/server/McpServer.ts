@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import express from 'express'
 import type { Express, Request, Response } from 'express'
+import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 
 import { SqliteAdapter } from '../database/SqliteAdapter.js'
@@ -448,6 +449,19 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         // JSON body parser with size limit to prevent memory exhaustion (DoS)
         app.use(express.json({ limit: '1mb' }))
+
+        // Rate limiting to prevent abuse (100 requests/minute per IP)
+        const limiter = rateLimit({
+            windowMs: 60 * 1000,
+            limit: 100,
+            standardHeaders: 'draft-8',
+            legacyHeaders: false,
+            message: { error: 'Too many requests, please try again later' },
+        })
+        app.use(limiter)
+        logger.info('Rate limiting enabled: 100 requests/minute per IP', {
+            module: 'McpServer',
+        })
 
         // Explicit OPTIONS handler for /mcp - MUST be before other /mcp routes
         // Using app.all to intercept before Express 5's auto-OPTIONS

@@ -1046,6 +1046,11 @@ export class SqliteAdapter {
         const db = this.ensureDb()
         const backupsDir = this.getBackupsDir()
 
+        // Validate backup name against path traversal before sanitization
+        if (backupName) {
+            assertNoPathTraversal(backupName)
+        }
+
         // Ensure backups directory exists
         if (!fs.existsSync(backupsDir)) {
             fs.mkdirSync(backupsDir, { recursive: true })
@@ -1336,7 +1341,8 @@ export class SqliteAdapter {
     }
 
     /**
-     * Get raw database for advanced operations
+     * Get raw sql.js Database handle for advanced queries.
+     * @internal Callers MUST use parameterized queries — never concatenate user input into SQL.
      */
     getRawDb(): Database {
         return this.ensureDb()

@@ -28,6 +28,7 @@
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
+- 👥 **Team collaboration** — opt-in sharing of context via Git-tracked team database (requires npm install; see [wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration))
 - 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 

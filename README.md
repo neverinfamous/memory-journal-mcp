@@ -35,6 +35,7 @@
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
+- 👥 **Team collaboration** — opt-in sharing of context via Git-tracked team database ([wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration))
 - 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 
@@ -579,7 +580,7 @@ npm run bench
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-11-25 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
-- **HTTP transport hardening** - Configurable CORS, 1MB body limit, security headers, 30-min session timeout
+- **HTTP transport hardening** - Configurable CORS, 1MB body limit, security headers, 30-min session timeout, rate limiting (100 req/min)
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error logs
 
 ### Data & Privacy

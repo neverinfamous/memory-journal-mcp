@@ -28,11 +28,10 @@ The server uses **sql.js** (pure JavaScript SQLite compiled to WebAssembly) whic
 - **Significance types**: 50 characters maximum
 - **HTTP request body**: 1MB maximum (prevents memory exhaustion)
 
-### **Character Filtering**
+### **Character Handling**
 
-Dangerous characters are blocked in tags:
-
-- `<` `>` `"` `'` `&` `\x00`
+Tags are stored as-is via parameterized queries. Special characters in tags
+are safely handled by the database layer and do not pose injection risks.
 
 ### **SQL Injection Prevention**
 

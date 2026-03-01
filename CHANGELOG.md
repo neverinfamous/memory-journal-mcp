@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **Wire Dead-Code Security Utilities (F-001)** — `sanitizeSearchQuery()` and `assertNoPathTraversal()` from `security-utils.ts` were defined but never imported or called. Now wired into active code paths:
-  - `SqliteAdapter.searchEntries()` applies `sanitizeSearchQuery()` to LIKE patterns with `ESCAPE '\\'` clause, preventing wildcard injection (F-002)
+  - `SqliteAdapter.searchEntries()` applies `sanitizeSearchQuery()` to LIKE patterns with `ESCAPE '\\\\'` clause, preventing wildcard injection (F-002)
   - `SqliteAdapter.restoreFromFile()` uses `assertNoPathTraversal()` instead of inline checks, throwing `PathTraversalError`
 - **HTTP Security Headers (F-003)** — Added three additional security headers to HTTP transport middleware:
   - `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` — prevents XSS and framing
@@ -18,14 +18,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Referrer-Policy: no-referrer` — prevents referrer leakage
 - **PRAGMA foreign_keys = ON (F-005)** — SQLite foreign key enforcement now enabled on database initialization. `ON DELETE CASCADE` constraints in `entry_tags`, `relationships`, and `embeddings` tables are now enforced at the database level.
 - **CORS Wildcard Warning (F-006)** — Server now logs a warning when HTTP transport CORS origin is `*` (the default), advising operators to set `--cors-origin` or `MCP_CORS_ORIGIN` for production deployments.
+- **Constrain `entry_type` / `significance_type` to Enums** — `entry_type` now validated against 13 allowed values and `significance_type` against 7 allowed values via Zod enums. Previously accepted arbitrary strings; invalid types now rejected at schema validation. Removes unsafe `as EntryType` / `as SignificanceType` casts.
+- **Date Format Validation** — All date string fields (`start_date`, `end_date`) across `SearchByDateRangeSchema`, `GetStatisticsSchema`, `ExportEntriesSchema`, and `CrossProjectInsightsSchema` now validate `YYYY-MM-DD` format via regex. Prevents malformed dates from reaching the database layer.
+- **HTTP Rate Limiting** — Added `express-rate-limit` middleware for HTTP transport (100 requests/minute per IP). Returns `429 Too Many Requests` on excess. Only applies to HTTP mode; stdio transport unaffected.
+- **Remove Dead SQL Injection Detection Code** — Removed `containsSqlInjection()`, `assertNoSqlInjection()`, `SqlInjectionError`, and `SQL_INJECTION_PATTERNS` from `security-utils.ts`. These regex-based detection functions were never called anywhere and provided a false sense of security. Parameterized queries (used consistently throughout) are the actual defense.
+- **`exportToFile()` Path Traversal Protection** — Added `assertNoPathTraversal()` check to backup export, matching the pattern already used in `restoreFromFile()`. Rejects malicious backup names containing `/`, `\\`, or `..`.
+- **`getRawDb()` Safety Documentation** — Added `@internal` JSDoc tag warning callers to use parameterized queries when accessing the raw database handle.
 
 ### Documentation
 
 - **SECURITY.md Accuracy (F-004)** — Rewrote Database Security section to accurately reflect sql.js in-memory architecture. Removed false claims about WAL mode and 7 PRAGMAs that are not applicable to sql.js. Updated security checklist to reference actual function names (`assertNoPathTraversal`, `sanitizeSearchQuery`, `validateDateFormatPattern`). Updated HTTP security headers list to include CSP, Cache-Control, and Referrer-Policy.
+- **SECURITY.md Tag Filtering Correction** — Replaced inaccurate claim that dangerous characters are blocked in tags with accurate statement that tags are safely handled via parameterized queries.
+- **Team Collaboration in READMEs** — Added team collaboration feature to Key Benefits in both `README.md` and `DOCKER_README.md`, with links to the wiki [Team-Collaboration](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration) page. DOCKER_README notes that team collaboration requires npm installation.
+- **Wiki Security Page Updates** — Added LIKE pattern sanitization, path traversal protection, HTTP security headers, rate limiting, and team database security note to the wiki Security.md page. Expanded self-audit checklist from 10 to 16 items.
+- **Rate Limiting Documentation** — Added rate limiting mention to README.md Security section.
 
 ### Fixed
 
 - **Path Traversal Test Assertion** — Updated `sql-injection.test.ts` to assert `PathTraversalError` type instead of old inline error message string, matching refactored `assertNoPathTraversal()` usage.
+- **Tool Handler Test Fix** — Updated `tool-handlers.test.ts` to use valid entry_type enum value (`project_decision` instead of `decision`), matching the new enum constraint.
+
+### Removed
+
+- **Unused `cors` Dependency** — Removed `cors` and `@types/cors` packages. CORS is handled by custom middleware in `McpServer.ts`.
 
 ## [4.4.2] - 2026-02-27
 
