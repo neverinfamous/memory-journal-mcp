@@ -121,7 +121,7 @@ dmypy.json
 *.sqlite3
 
 # IDE files
-# .vscode/settings.json is tracked for shared team settings
+.vscode/
 .idea/
 *.swp
 *.swo
