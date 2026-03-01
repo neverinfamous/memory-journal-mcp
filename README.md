@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated February 27, 2026**
+**Last Updated February 28, 2026**
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -15,7 +15,7 @@
 ![Coverage](https://img.shields.io/badge/Coverage-80.7%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-479_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — into every conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff**. Integrates your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — into every conversation.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -35,6 +35,8 @@
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
+- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
+- 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 
 ```mermaid
 flowchart TB
@@ -59,6 +61,7 @@ flowchart TB
         PRs["Pull Requests"]
         Actions["GitHub Actions"]
         Kanban["Kanban Boards"]
+        Insights["Repository Insights"]
     end
 
     subgraph Outputs["📊 Outputs"]
@@ -67,11 +70,17 @@ flowchart TB
         Timeline["Project Timelines"]
     end
 
+    subgraph SessionEnd["🔄 Session End"]
+        Summary["Session Summary Entry<br/>(retrospective + session-summary tag)"]
+    end
+
     Session --> Core
     Core --> Search
     Core <--> GitHub
     Search --> Outputs
     GitHub --> Outputs
+    Core --> SessionEnd
+    SessionEnd -.->|"next session"| Briefing
 ```
 
 ### 📈 **Current Capabilities**
@@ -83,6 +92,7 @@ flowchart TB
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 8 relationship types, Mermaid visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
+- **IDE Hooks** - Ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](hooks/))
 
 ---
 

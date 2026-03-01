@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated February 27, 2026**
+**Last Updated February 28, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -13,7 +13,7 @@
 ![Coverage](https://img.shields.io/badge/Coverage-80.7%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-479_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs into every conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff**. Integrates your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — into every conversation.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -28,6 +28,8 @@
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
+- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
+- 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 
 ### Deployment Options
 
@@ -76,6 +78,14 @@
         |  - Standups & Retros      |
         |  - Knowledge Graphs       |
         |  - Project Timelines      |
+        +-------------+-------------+
+                      |
+                      v
+        +---------------------------+
+        | 🔄 Session End            |
+        |---------------------------|
+        |  - Auto-summary entry     |
+        |  - Flows to next briefing |
         +---------------------------+
 ```
 
@@ -197,6 +207,14 @@ When GitHub tools cannot auto-detect repository information:
 - **Full guidance**: If behaviors missing, read `memory://instructions` for complete Dynamic Context Management patterns.
 
 - **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
+
+### 🔄 Session Management
+
+Memory Journal captures **end-of-session context** automatically. When a session wraps up, the agent creates a `retrospective` entry tagged `session-summary`. The next session's `memory://briefing` includes it automatically.
+
+**IDE Hooks:** Ready-to-use hook configs for Cursor, Kiro, and Kilo Code are available in the [hooks/](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks) directory.
+
+**Fallback:** Clients without hook support use the built-in `ServerInstructions` behavior — the agent detects session end and creates the entry automatically. This is **opt-out**.
 
 ### HTTP/SSE Transport (Remote Access)
 
