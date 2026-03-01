@@ -77,7 +77,7 @@ When a conversation or task is wrapping up (user says "thanks," final deliverabl
    - **What's unfinished or blocked** (pending items, open questions)
    - **Context for next session** (relevant entry IDs, branch names, PR numbers)
 2. Use \`entry_type: "retrospective"\` and tag with \`session-summary\`
-3. This is opt-out — create the entry by default unless the user asks you not to
+3. This is opt-out — ALWAYS create the entry, even for short/trivial sessions, unless the user explicitly says to skip it
 
 > If your client has hooks configured for session-end journaling (e.g., Cursor \`sessionEnd\` hook), this is handled automatically. Otherwise, follow the steps above.
 
@@ -401,4 +401,3 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * @deprecated Use generateInstructions() instead for dynamic content
  */
 export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
-

@@ -1,10 +1,10 @@
 {
-  "version": 1,
-  "hooks": {
-    "sessionEnd": [
-      {
-        "command": ".cursor/hooks/session-end.sh"
-      }
-    ]
-  }
+    "version": 1,
+    "hooks": {
+        "sessionEnd": [
+            {
+                "command": ".cursor/hooks/session-end.sh"
+            }
+        ]
+    }
 }

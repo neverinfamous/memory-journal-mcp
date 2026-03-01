@@ -343,11 +343,11 @@ Memory Journal bridges AI sessions automatically — the agent reads project con
 
 **Setup by IDE:** Ready-to-use rules and hooks in [`hooks/`](hooks/):
 
-| Client         | Primary (agent behavior)                                                                                   | Optional (audit/logging)                                                                              |
-| -------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Cursor**     | Copy [`hooks/cursor/memory-journal.mdc`](hooks/cursor/memory-journal.mdc) to `.cursor/rules/`             | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) + `session-end.sh` to `.cursor/`            |
-| **Kiro (AWS)** | Server instructions (automatic)                                                                            | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`                       |
-| **Kilo Code**  | Server instructions (automatic)                                                                            | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json)               |
+| Client         | Primary (agent behavior)                                                                      | Optional (audit/logging)                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Cursor**     | Copy [`hooks/cursor/memory-journal.mdc`](hooks/cursor/memory-journal.mdc) to `.cursor/rules/` | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) + `session-end.sh` to `.cursor/` |
+| **Kiro (AWS)** | Server instructions (automatic)                                                               | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`            |
+| **Kilo Code**  | Server instructions (automatic)                                                               | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json)    |
 
 **No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. The Cursor rule improves reliability by giving the agent explicit always-on instructions. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
 

@@ -47,6 +47,7 @@ cp <path-to-memory-journal-mcp>/hooks/cursor/memory-journal.mdc .cursor/rules/me
 ```
 
 This `alwaysApply` rule instructs the agent to:
+
 - Read `memory://briefing` and show project context at session start
 - Create a session summary entry when the conversation wraps up
 

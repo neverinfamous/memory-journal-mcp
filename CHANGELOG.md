@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Remove Dead SQL Injection Detection Code** — Removed `containsSqlInjection()`, `assertNoSqlInjection()`, `SqlInjectionError`, and `SQL_INJECTION_PATTERNS` from `security-utils.ts`. These regex-based detection functions were never called anywhere and provided a false sense of security. Parameterized queries (used consistently throughout) are the actual defense.
 - **`exportToFile()` Path Traversal Protection** — Added `assertNoPathTraversal()` check to backup export, matching the pattern already used in `restoreFromFile()`. Rejects malicious backup names containing `/`, `\\`, or `..`.
 - **`getRawDb()` Safety Documentation** — Added `@internal` JSDoc tag warning callers to use parameterized queries when accessing the raw database handle.
+- **Logger `LOG_LEVEL` Validation (L1)** — `LOG_LEVEL` environment variable is now validated against known levels (`debug`, `info`, `notice`, `warning`, `error`, `critical`). Invalid values fall back to `info` instead of silently setting `minLevel` to `undefined`, which would disable all logging.
+- **Logger `setLevel()` Guard (L2)** — `Logger.setLevel()` now validates the level parameter before applying, preventing invalid values from disabling logging.
+- **CI `security-scan` Node Version Alignment (L3)** — Updated Node.js version in `security-scan` job from 22.x to 24.x to match `engines.node: >=24.0.0`.
 
 ### Documentation
 

@@ -97,11 +97,14 @@ class Logger {
     }
 
     setLevel(level: LogLevel): void {
-        this.minLevel = LOG_LEVELS[level]
+        if (level in LOG_LEVELS) {
+            this.minLevel = LOG_LEVELS[level]
+        }
     }
 }
 
-// Get log level from environment
-const envLevel = (process.env['LOG_LEVEL'] ?? 'info') as LogLevel
+// Get log level from environment (validated against known levels)
+const rawLevel = process.env['LOG_LEVEL'] ?? 'info'
+const envLevel: LogLevel = rawLevel in LOG_LEVELS ? (rawLevel as LogLevel) : 'info'
 
 export const logger = new Logger(envLevel)
