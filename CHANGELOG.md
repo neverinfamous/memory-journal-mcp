@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Each job is error-isolated: failures are logged but don't affect other scheduled jobs.
   - New module: `src/server/Scheduler.ts` — clean separation from `McpServer.ts`.
 
+### Changed
+
+- **Dependency Updates**
+  - `@types/node`: 25.3.2 → 25.3.3 (patch)
+  - `globals`: 17.3.0 → 17.4.0 (minor)
+  - `minimatch` override: 10.2.3 → 10.2.4 (patch) — npm + Docker layers
+  - `tar` override: 7.5.8 → 7.5.9 (patch) — npm + Docker layers
+
 ### Security
 
 - **Wire Dead-Code Security Utilities (F-001)** — `sanitizeSearchQuery()` and `assertNoPathTraversal()` from `security-utils.ts` were defined but never imported or called. Now wired into active code paths:
