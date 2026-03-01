@@ -331,25 +331,25 @@ When GitHub tools cannot auto-detect repository information:
 
 ---
 
-### 🔄 Session Management & IDE Hooks
+### 🔄 Session Management
 
-Memory Journal captures **end-of-session context** automatically so the next AI session starts with full awareness of prior work.
+Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
 
 **How it works:**
 
-1. When a session wraps up, the agent creates a `retrospective` entry tagged `session-summary`
-2. The next session reads `memory://briefing` and sees the summary in `latestEntries`
-3. Context flows seamlessly between sessions — no manual copying needed
+1. Session starts → agent reads `memory://briefing` and shows you a project context summary
+2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+3. Next session's briefing includes the previous summary — context flows seamlessly
 
-**IDE Hooks (preferred):** Ready-to-use hook configs in [`hooks/`](hooks/) for automatic session-end capture:
+**Setup by IDE:** Ready-to-use rules and hooks in [`hooks/`](hooks/):
 
-| Client         | Hook Type                      | Setup                                                                                   |
-| -------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
-| **Cursor**     | `sessionEnd` message injection | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) to `.cursor/hooks.json`       |
-| **Kiro (AWS)** | Manual trigger hook            | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`         |
-| **Kilo Code**  | Custom mode                    | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json) |
+| Client         | Primary (agent behavior)                                                                                   | Optional (audit/logging)                                                                              |
+| -------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Cursor**     | Copy [`hooks/cursor/memory-journal.mdc`](hooks/cursor/memory-journal.mdc) to `.cursor/rules/`             | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) + `session-end.sh` to `.cursor/`            |
+| **Kiro (AWS)** | Server instructions (automatic)                                                                            | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`                       |
+| **Kilo Code**  | Server instructions (automatic)                                                                            | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json)               |
 
-**Fallback:** Clients without hook support (AntiGravity, VS Code Copilot preview) use the built-in `ServerInstructions` behavior — the agent detects session end and creates the entry automatically. This is **opt-out**: tell the agent "skip the summary" to disable.
+**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. The Cursor rule improves reliability by giving the agent explicit always-on instructions. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
 
 See [`hooks/README.md`](hooks/README.md) for detailed setup instructions.
 

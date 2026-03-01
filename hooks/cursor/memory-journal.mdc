@@ -1,0 +1,22 @@
+---
+description: Memory Journal MCP - session start briefing and session end summary
+alwaysApply: true
+---
+
+# Memory Journal MCP
+
+## Session Start
+
+Before responding to the first user message in every conversation:
+
+1. Fetch `memory://briefing` from the memory-journal-mcp server
+2. Show the `userMessage` field to the user (it contains a formatted project context summary)
+3. Then proceed with the user's request
+
+## Session End
+
+When the conversation is wrapping up (user says "thanks," final deliverable complete, no more work planned):
+
+1. Create a journal entry summarizing: what was accomplished, what's unfinished, and context for the next session
+2. Use `entry_type: "retrospective"` and tag with `session-summary`
+3. This is opt-out — create the entry unless the user says to skip it

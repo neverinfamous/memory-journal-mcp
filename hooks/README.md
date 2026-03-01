@@ -1,51 +1,73 @@
-# IDE Hook Configurations
+# IDE Hook & Rule Configurations
 
-Ready-to-use hook configurations for automatic session-end journaling with memory-journal-mcp.
+Ready-to-use configurations for automatic session management with memory-journal-mcp.
 
 ## How It Works
 
-When a session ends, the hook prompts the agent to create a journal entry summarizing:
+Memory Journal bridges AI sessions with two behaviors:
 
-- **What was accomplished** — key changes, decisions, files modified
-- **What's unfinished** — pending items, open questions
-- **Context for next session** — entry IDs, branch names, PR numbers
+- **Session start** — Agent reads `memory://briefing` and shows the user a project context summary
+- **Session end** — Agent creates a `retrospective` entry tagged `session-summary` capturing what was done, what's pending, and context for the next session
 
-The entry uses `entry_type: "retrospective"` tagged `session-summary`. The next session's `memory://briefing` automatically includes it.
+The next session's briefing automatically includes the previous session's summary.
 
 ## Progressive Enhancement
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  IDE Hooks (most reliable)                          │
-│  Cursor sessionEnd · Kiro hooks · Kilo Code modes   │
-│  ↓ fires automatically on session close             │
+│  Cursor Rule (most reliable for agent behavior)     │
+│  .cursor/rules/memory-journal.mdc                   │
+│  ↓ always-apply rule instructs agent directly       │
 ├─────────────────────────────────────────────────────┤
-│  ServerInstructions.ts (fallback)                   │
-│  Agent detects session end → creates entry           │
-│  ↓ works in any MCP client                          │
+│  Server Instructions (fallback for any MCP client)  │
+│  Embedded in MCP server initialization              │
+│  ↓ agent follows Session Start / Session End steps  │
+├─────────────────────────────────────────────────────┤
+│  IDE Hooks (audit & logging)                        │
+│  Cursor sessionEnd · Kiro hooks · Kilo Code modes   │
+│  ↓ fire-and-forget observation on session close     │
 ├─────────────────────────────────────────────────────┤
 │  User opt-out                                       │
 │  User says "skip the summary" → agent skips          │
 └─────────────────────────────────────────────────────┘
 ```
 
-If both a hook **and** the instructions fire, two similar entries is acceptable — two is better than zero.
-
 ## Setup by IDE
 
 ### Cursor
 
-Copy `cursor/hooks.json` to your project's `.cursor/hooks.json`:
+#### Step 1: Cursor Rule (handles session start + end behavior)
+
+Copy `cursor/memory-journal.mdc` to your project's `.cursor/rules/`:
 
 ```powershell
 # From your project root
-mkdir -p .cursor
-cp <path-to-memory-journal-mcp>/hooks/cursor/hooks.json .cursor/hooks.json
+mkdir -p .cursor/rules
+cp <path-to-memory-journal-mcp>/hooks/cursor/memory-journal.mdc .cursor/rules/memory-journal.mdc
 ```
 
-The hook uses the **message-injection** approach: on `sessionEnd`, it injects a user message telling the agent to create the summary entry. This is simpler and more reliable than directly calling MCP tools from a hook script.
+This `alwaysApply` rule instructs the agent to:
+- Read `memory://briefing` and show project context at session start
+- Create a session summary entry when the conversation wraps up
 
-**Requirements**: Cursor v1.7+ with Hooks (beta) enabled.
+**Requirements**: Cursor with Rules support (`.cursor/rules/` directory).
+
+#### Step 2: sessionEnd Hook (optional — audit logging)
+
+Copy `cursor/hooks.json` and `cursor/session-end.sh` to your project's `.cursor/`:
+
+```powershell
+cp <path-to-memory-journal-mcp>/hooks/cursor/hooks.json .cursor/hooks.json
+mkdir -p .cursor/hooks
+cp <path-to-memory-journal-mcp>/hooks/cursor/session-end.sh .cursor/hooks/session-end.sh
+chmod +x .cursor/hooks/session-end.sh
+```
+
+The `sessionEnd` hook is **fire-and-forget** — Cursor does not use its output. It logs session metadata to `/tmp/memory-journal-sessions.log`. Customize the script for your own auditing needs.
+
+> **Note:** Cursor's `sessionEnd` hook cannot inject messages or trigger agent actions. Session summary creation is handled by the Cursor rule and server instructions, not the hook.
+
+**Requirements**: Cursor v1.7+ with Hooks enabled.
 
 ### Kiro (AWS)
 
@@ -71,14 +93,14 @@ This creates a `session-end` custom mode. Switch to it at the end of a session a
 
 ### VS Code + GitHub Copilot
 
-Agent hooks are in **preview** (early 2026). When stabilized, a configuration will be added here. In the meantime, the `ServerInstructions.ts` fallback handles session-end capture.
+Agent hooks are in **preview** (early 2026). When stabilized, a configuration will be added here. In the meantime, the server instructions fallback handles session management.
 
 ### AntiGravity
 
-Does not currently support hooks. The `ServerInstructions.ts` fallback handles session-end capture automatically.
+Does not currently support hooks or rules. The server instructions fallback handles session management automatically. For session-start behavior, add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp."
 
-## No Hooks? No Problem
+## No Rules or Hooks? No Problem
 
-The `server-instructions.md` in this project includes a **Session End** behavior section that instructs any MCP-connected agent to create a session summary entry when the conversation wraps up. This works in **every** MCP client, regardless of hook support.
+The `server-instructions.md` in this project includes **Session Start** and **Session End** behavior sections that instruct any MCP-connected agent to manage sessions automatically. This works in **every** MCP client, regardless of rule or hook support — though reliability varies by client.
 
 To **disable** session-end entries, tell the agent: "Skip the session summary" or "Don't create an end-of-session entry."

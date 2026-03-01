@@ -213,11 +213,15 @@ When GitHub tools cannot auto-detect repository information:
 
 ### 🔄 Session Management
 
-Memory Journal captures **end-of-session context** automatically. When a session wraps up, the agent creates a `retrospective` entry tagged `session-summary`. The next session's `memory://briefing` includes it automatically.
+Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
 
-**IDE Hooks:** Ready-to-use hook configs for Cursor, Kiro, and Kilo Code are available in the [hooks/](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks) directory.
+1. Session starts → agent reads `memory://briefing` and shows you a project context summary
+2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+3. Next session's briefing includes the previous summary — context flows seamlessly
 
-**Fallback:** Clients without hook support use the built-in `ServerInstructions` behavior — the agent detects session end and creates the entry automatically. This is **opt-out**.
+**Cursor users:** Copy the [`memory-journal.mdc`](https://github.com/neverinfamous/memory-journal-mcp/blob/main/hooks/cursor/memory-journal.mdc) rule to `.cursor/rules/` for the most reliable session management. Optional audit hooks for Cursor, Kiro, and Kilo Code are available in the [hooks/](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks) directory.
+
+**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
 
 ### HTTP/SSE Transport (Remote Access)
 
