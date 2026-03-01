@@ -30,6 +30,7 @@ import { getTools, callTool } from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
+import { Scheduler, type SchedulerOptions } from './Scheduler.js'
 import pkg from '../../package.json' with { type: 'json' }
 
 /** Session timeout for stateful HTTP mode (30 minutes) */
@@ -48,6 +49,7 @@ export interface ServerOptions {
     autoRebuildIndex?: boolean
     statelessHttp?: boolean
     corsOrigin?: string
+    scheduler?: SchedulerOptions
 }
 
 /**
@@ -291,7 +293,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         db,
                         vectorManager,
                         filterConfig,
-                        github
+                        github,
+                        scheduler
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -325,7 +328,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         db,
                         vectorManager,
                         filterConfig,
-                        github
+                        github,
+                        scheduler
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -387,6 +391,25 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 return Promise.resolve(result)
             }
         )
+    }
+
+    // Initialize scheduler (HTTP/SSE only)
+    let scheduler: Scheduler | null = null
+    if (options.scheduler) {
+        const hasAnyJob =
+            options.scheduler.backupIntervalMinutes > 0 ||
+            options.scheduler.vacuumIntervalMinutes > 0 ||
+            options.scheduler.rebuildIndexIntervalMinutes > 0
+
+        if (hasAnyJob && transport === 'stdio') {
+            logger.warning(
+                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
+                    'Use HTTP/SSE transport for automated scheduling.',
+                { module: 'Scheduler' }
+            )
+        } else if (hasAnyJob) {
+            scheduler = new Scheduler(options.scheduler, db, vectorManager)
+        }
     }
 
     // Start server based on transport
@@ -524,6 +547,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 })
             })
 
+            // Start scheduler after HTTP server is listening
+            scheduler?.start()
+
             httpServer.on('close', () => {
                 logger.info('HTTP server closed', { module: 'McpServer' })
             })
@@ -532,6 +558,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             process.on('SIGINT', () => {
                 logger.info('Shutting down HTTP server...', { module: 'McpServer' })
                 void (async () => {
+                    scheduler?.stop()
                     try {
                         await statelessTransport.close()
                     } catch (error) {
@@ -737,6 +764,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 })
             })
 
+            // Start scheduler after HTTP server is listening
+            scheduler?.start()
+
             // Keep process alive - httpServer keeps the event loop active
             // but we also ensure it doesn't close prematurely
             httpServer.on('close', () => {
@@ -748,6 +778,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 logger.info('Shutting down HTTP server...', { module: 'McpServer' })
 
                 void (async () => {
+                    scheduler?.stop()
+
                     // Close all active transports
                     for (const [sessionId, httpTransport] of transports) {
                         try {

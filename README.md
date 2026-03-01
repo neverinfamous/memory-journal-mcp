@@ -35,6 +35,7 @@
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
+- ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running HTTP deployments
 - 👥 **Team collaboration** — opt-in sharing of context via Git-tracked team database ([wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration))
 - 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
@@ -94,6 +95,7 @@ flowchart TB
 - **Knowledge graphs** - 8 relationship types, Mermaid visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
 - **IDE Hooks** - Ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](hooks/))
+- **Automated maintenance** - Scheduled backups, database optimization, and vector index rebuilds (HTTP/SSE only)
 
 ---
 
@@ -240,6 +242,28 @@ memory-journal-mcp --transport http --port 3000 --stateless
 | ------------------------- | ---------------------- | ------------- | ---------- |
 | Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
 | Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
+
+#### Automated Scheduling (HTTP Only)
+
+When running in HTTP/SSE mode, enable periodic maintenance jobs with CLI flags. These jobs run in-process on `setInterval` — no external cron needed.
+
+> **Note:** These flags are ignored for stdio transport because stdio sessions are short-lived (tied to your IDE session). For stdio, use OS-level scheduling (Task Scheduler, cron) or run the backup/cleanup tools manually.
+
+```bash
+memory-journal-mcp --transport http --port 3000 \
+  --backup-interval 60 --keep-backups 10 \
+  --vacuum-interval 1440 \
+  --rebuild-index-interval 720
+```
+
+| Flag                             | Default | Description                                                          |
+| -------------------------------- | ------- | -------------------------------------------------------------------- |
+| `--backup-interval <min>`        | 0 (off) | Create timestamped database backups and prune old ones automatically |
+| `--keep-backups <count>`         | 5       | Max backups retained during automated cleanup                        |
+| `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
+| `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
+
+Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
 ### GitHub Integration Configuration
 

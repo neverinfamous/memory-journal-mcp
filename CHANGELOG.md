@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Automated Scheduler (HTTP/SSE only)** — New in-process scheduler runs periodic maintenance jobs for long-running HTTP/SSE server processes. Configured via CLI flags:
+  - `--backup-interval <minutes>` — Automated backup interval (0 = disabled, default: 0). Backups are created with `exportToFile()` and old backups cleaned up automatically.
+  - `--keep-backups <count>` — Max backups to retain during automated cleanup (default: 5).
+  - `--vacuum-interval <minutes>` — Database optimize interval (0 = disabled, default: 0). Runs `PRAGMA optimize` and flushes the database to disk.
+  - `--rebuild-index-interval <minutes>` — Vector index rebuild interval (0 = disabled, default: 0). Full vector index rebuild from all entries.
+  - Scheduler status is reported in the `memory://health` resource under the `scheduler` field.
+  - Stdio transport ignores scheduler options with a warning log — use OS-level scheduling for stdio.
+  - Each job is error-isolated: failures are logged but don't affect other scheduled jobs.
+  - New module: `src/server/Scheduler.ts` — clean separation from `McpServer.ts`.
+
 ### Security
 
 - **Wire Dead-Code Security Utilities (F-001)** — `sanitizeSearchQuery()` and `assertNoPathTraversal()` from `security-utils.ts` were defined but never imported or called. Now wired into active code paths:
