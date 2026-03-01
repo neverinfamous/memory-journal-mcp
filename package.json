@@ -18,7 +18,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "bench": "vitest bench --run"
+        "bench": "vitest bench --run",
+        "generate:instructions": "node scripts/generate-server-instructions.ts"
     },
     "keywords": [
         "mcp",
