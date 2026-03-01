@@ -296,6 +296,30 @@ When GitHub tools cannot auto-detect repository information:
 
 ---
 
+### 🔄 Session Management & IDE Hooks
+
+Memory Journal captures **end-of-session context** automatically so the next AI session starts with full awareness of prior work.
+
+**How it works:**
+
+1. When a session wraps up, the agent creates a `retrospective` entry tagged `session-summary`
+2. The next session reads `memory://briefing` and sees the summary in `latestEntries`
+3. Context flows seamlessly between sessions — no manual copying needed
+
+**IDE Hooks (preferred):** Ready-to-use hook configs in [`hooks/`](hooks/) for automatic session-end capture:
+
+| Client         | Hook Type                      | Setup                                                                                   |
+| -------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| **Cursor**     | `sessionEnd` message injection | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) to `.cursor/hooks.json`       |
+| **Kiro (AWS)** | Manual trigger hook            | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`         |
+| **Kilo Code**  | Custom mode                    | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json) |
+
+**Fallback:** Clients without hook support (AntiGravity, VS Code Copilot preview) use the built-in `ServerInstructions` behavior — the agent detects session end and creates the entry automatically. This is **opt-out**: tell the agent "skip the summary" to disable.
+
+See [`hooks/README.md`](hooks/README.md) for detailed setup instructions.
+
+---
+
 ## 📋 Core Capabilities
 
 ### 🛠️ **39 MCP Tools** (8 Groups)

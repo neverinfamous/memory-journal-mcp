@@ -14,6 +14,27 @@
 - **Search before**: major decisions, referencing prior work, understanding project context
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
+## Session End
+
+When a conversation or task is wrapping up (user says "thanks," final deliverable complete, no more work planned):
+
+1. Create a journal entry summarizing the session:
+   - **What was accomplished** (key changes, decisions, files modified)
+   - **What's unfinished or blocked** (pending items, open questions)
+   - **Context for next session** (relevant entry IDs, branch names, PR numbers)
+2. Use `entry_type: "retrospective"` and tag with `session-summary`
+3. This is opt-out — create the entry by default unless the user asks you not to
+
+> If your client has hooks configured for session-end journaling (e.g., Cursor `sessionEnd` hook), this is handled automatically. Otherwise, follow the steps above.
+
+## Rule & Skill Suggestions
+
+When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
+
+- **Offer to create a rule or skill** — always ask the user first, never create silently
+- Examples: coding conventions, testing patterns, deployment steps, project-specific commands
+- Frame it as: "I noticed you always [pattern]. Would you like me to save this as a rule/skill so future agents follow it automatically?"
+
 ## Quick Access
 
 | Purpose         | Action                      |

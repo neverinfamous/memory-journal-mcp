@@ -1,0 +1,11 @@
+{
+    "hooks": [
+        {
+            "event": "sessionEnd",
+            "description": "Creates a session summary journal entry via memory-journal-mcp",
+            "response": {
+                "user_message": "Before ending, please create a memory-journal-mcp entry summarizing this session: what was accomplished, key decisions, unfinished items, and context for the next session. Use entry_type 'retrospective' and tag with 'session-summary'."
+            }
+        }
+    ]
+}

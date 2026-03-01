@@ -99,6 +99,32 @@ describe('generateInstructions', () => {
             )
             expect(result).not.toContain('## GitHub Integration')
         })
+
+        it('should include Session End section', () => {
+            const result = generateInstructions(
+                TEST_TOOLS,
+                TEST_RESOURCES,
+                TEST_PROMPTS,
+                undefined,
+                'essential'
+            )
+            expect(result).toContain('Session End')
+            expect(result).toContain('session-summary')
+            expect(result).toContain('retrospective')
+            expect(result).toContain('opt-out')
+        })
+
+        it('should include Rule & Skill Suggestions section', () => {
+            const result = generateInstructions(
+                TEST_TOOLS,
+                TEST_RESOURCES,
+                TEST_PROMPTS,
+                undefined,
+                'essential'
+            )
+            expect(result).toContain('Rule & Skill Suggestions')
+            expect(result).toContain('always ask the user first')
+        })
     })
 
     describe('standard level', () => {
