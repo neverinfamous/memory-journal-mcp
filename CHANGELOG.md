@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Logger `LOG_LEVEL` Validation (L1)** — `LOG_LEVEL` environment variable is now validated against known levels (`debug`, `info`, `notice`, `warning`, `error`, `critical`). Invalid values fall back to `info` instead of silently setting `minLevel` to `undefined`, which would disable all logging.
 - **Logger `setLevel()` Guard (L2)** — `Logger.setLevel()` now validates the level parameter before applying, preventing invalid values from disabling logging.
 - **CI `security-scan` Node Version Alignment (L3)** — Updated Node.js version in `security-scan` job from 22.x to 24.x to match `engines.node: >=24.0.0`.
+- **CI Trivy SARIF Upload Guard** — `security-update.yml` upload-sarif step now checks that `trivy-results.sarif` exists before attempting upload. Previously, `if: always()` caused the step to fail when the Docker build failed upstream and no SARIF file was produced.
 
 ### Documentation
 
