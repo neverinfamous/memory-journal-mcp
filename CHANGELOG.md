@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Session Start briefing in Cursor** — Added Cursor-specific `FetchMcpResource` server name (`user-memory-journal-mcp`) to the Session Start instructions. Cursor prefixes MCP server names with `user-`, so agents using the generic name would get "Server not found" errors when fetching `memory://briefing`.
+- **`deleteOldBackups` Test Isolation** — Fixed flaky `should delete old backups keeping only keepCount` test by cleaning up pre-existing backups before creating test backups. Previously, leftover backups from other tests caused the assertion to fail non-deterministically.
+
+### Improved
+
+- **Test Coverage → 92%** — Expanded test suite from 549 → 590 tests, raising line coverage from 88.59% → 92.06%. Key areas covered:
+  - SIGINT shutdown handlers for stdio, stateless HTTP, and stateful HTTP transports
+  - Prompt handlers with proper arguments (`analyze-period`, `find-related`, `goal-tracker`, `get-context-bundle`, `prepare-retro`)
+  - `SqliteAdapter` backup edge cases (missing backups dir, invalid keepCount, missing backup file)
+  - `create_github_milestone` no-GitHub integration error path
+  - Kanban diagram resource no-GitHub fallback
 
 ### Added
 

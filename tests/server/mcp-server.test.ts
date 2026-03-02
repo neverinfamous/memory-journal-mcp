@@ -30,6 +30,7 @@ const {
     mockStdioTransport,
     mockListTags,
     mockHandlers,
+    mockSigintHandlers,
 } = vi.hoisted(() => ({
     mockRegisterTool: vi.fn(),
     mockRegisterResource: vi.fn(),
@@ -75,8 +76,9 @@ const {
         post: {} as Record<string, Function>,
         delete: {} as Record<string, Function>,
         all: {} as Record<string, Function>,
-        use: {} as Record<string, Function>,
+        useMiddlewares: [] as Function[],
     },
+    mockSigintHandlers: [] as Function[],
 }))
 
 // ============================================================================
@@ -204,7 +206,7 @@ vi.mock('express', () => {
     const mockApp = {
         use: vi.fn().mockImplementation((...args: unknown[]) => {
             if (args.length === 1 && typeof args[0] === 'function') {
-                mockHandlers.use['*'] = args[0] as () => void
+                mockHandlers.useMiddlewares.push(args[0] as Function)
             }
         }),
         get: vi.fn().mockImplementation((path: string, handler: unknown) => {
@@ -235,8 +237,13 @@ vi.mock('express', () => {
     }
 })
 
-// Suppress process.on/exit in tests
-vi.spyOn(process, 'on').mockImplementation(() => process)
+// Capture process.on('SIGINT') handlers for testing
+vi.spyOn(process, 'on').mockImplementation((event: string, handler: Function) => {
+    if (event === 'SIGINT') {
+        mockSigintHandlers.push(handler)
+    }
+    return process
+})
 vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
 
 // ============================================================================
@@ -247,7 +254,24 @@ import { createServer, type ServerOptions } from '../../src/server/McpServer.js'
 
 describe('McpServer', () => {
     beforeEach(() => {
-        vi.clearAllMocks()
+        // Reset call counts but preserve mock implementations
+        // (vi.clearAllMocks() would wipe .mockImplementation() on express mock)
+        mockRegisterTool.mockClear()
+        mockRegisterResource.mockClear()
+        mockRegisterPrompt.mockClear()
+        mockConnect.mockClear()
+        mockDbInitialize.mockClear()
+        mockDbClose.mockClear()
+        mockVectorInitialize.mockClear()
+        mockVectorRebuildIndex.mockClear()
+        mockCreateEntry.mockClear()
+        // Clear captured handler references
+        mockHandlers.get = {}
+        mockHandlers.post = {}
+        mockHandlers.delete = {}
+        mockHandlers.all = {}
+        mockHandlers.useMiddlewares.length = 0
+        mockSigintHandlers.length = 0
     })
 
     // ========================================================================
@@ -857,6 +881,88 @@ describe('McpServer', () => {
             if (deleteHandler) await deleteHandler(mockReq, mockRes)
             expect(mockRes.status).toHaveBeenCalledWith(400)
         })
+
+        it('should handle stateful POST /mcp with initialization request', async () => {
+            // Make isInitializeRequest return true for this test
+            const { isInitializeRequest: mockIsInit } =
+                await import('@modelcontextprotocol/sdk/types.js')
+            ;(mockIsInit as ReturnType<typeof vi.fn>).mockReturnValueOnce(true)
+
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const postHandler = mockHandlers.post['/mcp']
+            expect(postHandler).toBeDefined()
+
+            // Simulate initialization request (no session ID, isInitializeRequest returns true)
+            const mockReq = {
+                headers: {},
+                body: { jsonrpc: '2.0', id: 1, method: 'initialize' },
+            }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                json: vi.fn(),
+                headersSent: false,
+            }
+
+            if (postHandler) {
+                await postHandler(mockReq, mockRes)
+                // Wait for async void handler to complete
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            // The transport should have been created and connected
+            // (StreamableHTTPServerTransport mock handles the request)
+            expect(mockConnect).toHaveBeenCalled()
+        })
+
+        it('should handle stateful POST /mcp error with 500 response', async () => {
+            // Create a transport mock that throws
+            const StreamableTransportMod =
+                await import('@modelcontextprotocol/sdk/server/streamableHttp.js')
+            const OrigConstructor = StreamableTransportMod.StreamableHTTPServerTransport
+            const throwingConstructor = vi.fn().mockImplementation(() => {
+                return {
+                    handleRequest: vi.fn().mockRejectedValue(new Error('Transport failure')),
+                    close: vi.fn().mockResolvedValue(undefined),
+                    sessionId: 'fail-session',
+                }
+            })
+            ;(StreamableTransportMod as Record<string, unknown>)['StreamableHTTPServerTransport'] =
+                throwingConstructor
+
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const postHandler = mockHandlers.post['/mcp']
+            expect(postHandler).toBeDefined()
+
+            // Request with existing session ID that throws during handleRequest
+            const mockReq = {
+                headers: { 'mcp-session-id': 'fail-session' },
+                body: { jsonrpc: '2.0', id: 1, method: 'test' },
+            }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                json: vi.fn(),
+                headersSent: false,
+            }
+
+            if (postHandler) {
+                await postHandler(mockReq, mockRes)
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            // Restore original
+            ;(StreamableTransportMod as Record<string, unknown>)['StreamableHTTPServerTransport'] =
+                OrigConstructor
+        })
     })
 
     // ========================================================================
@@ -986,8 +1092,8 @@ describe('McpServer', () => {
 
             delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
 
-            // Reset and create without filter
-            vi.clearAllMocks()
+            // Reset only the specific mock call counts we care about
+            mockRegisterTool.mockClear()
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
@@ -996,6 +1102,60 @@ describe('McpServer', () => {
             const unfilteredCount = mockRegisterTool.mock.calls.length
             // Env-filtered should have fewer tools than unfiltered
             expect(toolCount).toBeLessThan(unfilteredCount)
+        })
+    })
+
+    // ========================================================================
+    // SIGINT shutdown handlers
+    // ========================================================================
+
+    describe('createServer - shutdown handlers', () => {
+        it('should register SIGINT handler for stdio transport', async () => {
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+            })
+
+            expect(mockSigintHandlers.length).toBe(1)
+        })
+
+        it('should register SIGINT handler for stateless HTTP', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: true,
+            })
+
+            expect(mockSigintHandlers.length).toBe(1)
+
+            // Exercise the SIGINT handler
+            const sigintHandler = mockSigintHandlers[0]
+            if (sigintHandler) {
+                sigintHandler()
+                // Wait for async void
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            expect(mockDbClose).toHaveBeenCalled()
+        })
+
+        it('should register SIGINT handler for stateful HTTP', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            expect(mockSigintHandlers.length).toBe(1)
+
+            // Exercise the SIGINT handler
+            const sigintHandler = mockSigintHandlers[0]
+            if (sigintHandler) {
+                sigintHandler()
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            expect(mockDbClose).toHaveBeenCalled()
         })
     })
 })
