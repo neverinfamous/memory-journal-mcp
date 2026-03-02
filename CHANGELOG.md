@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Session Start briefing in Cursor** — Added Cursor-specific `FetchMcpResource` server name (`user-memory-journal-mcp`) to the Session Start instructions. Cursor prefixes MCP server names with `user-`, so agents using the generic name would get "Server not found" errors when fetching `memory://briefing`.
 - **`deleteOldBackups` Test Isolation** — Fixed flaky `should delete old backups keeping only keepCount` test by cleaning up pre-existing backups before creating test backups. Previously, leftover backups from other tests caused the assertion to fail non-deterministically.
+- **`deleteOldBackups` NaN Guard** — `keepCount` parameter now rejects `NaN` values. Previously, `NaN < 1` evaluated to `false`, bypassing the guard. With `NaN`, `backups.slice(0, NaN)` returns an empty array and `backups.slice(NaN)` returns all backups, causing every backup to be deleted.
+- **`restoreFromFile` Foreign Key Enforcement** — `PRAGMA foreign_keys = ON` is now applied after restoring a database from backup. Previously, `restoreFromFile()` bypassed `initialize()`, so `ON DELETE CASCADE` constraints in `entry_tags`, `relationships`, and `embeddings` tables were silently unenforced for the rest of the server's lifetime.
 
 ### Improved
 

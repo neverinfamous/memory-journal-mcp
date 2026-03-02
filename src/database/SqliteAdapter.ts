@@ -1132,7 +1132,7 @@ export class SqliteAdapter {
     deleteOldBackups(keepCount: number): { deleted: string[]; kept: number } {
         const backups = this.listBackups() // Already sorted newest-first
 
-        if (keepCount < 1) {
+        if (keepCount < 1 || Number.isNaN(keepCount)) {
             throw new Error('keepCount must be at least 1')
         }
 
@@ -1199,6 +1199,7 @@ export class SqliteAdapter {
         // Initialize new database from backup
         const SQL = await import('sql.js').then((m) => m.default())
         this.db = new SQL.Database(backupBuffer)
+        this.db.run('PRAGMA foreign_keys = ON')
         this.initialized = true
 
         // Get new entry count
