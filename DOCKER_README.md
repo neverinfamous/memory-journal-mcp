@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 1, 2026**
+**Last Updated March 2, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -10,8 +10,8 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-88.08%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-549_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-92%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-590_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff**. Integrates your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — into every conversation.
 
@@ -516,8 +516,8 @@ Memory Journal is designed for extremely low overhead during AI task execution.
 
 **Available Tags:**
 
-- `4.4.2` - Specific version (recommended for production)
-- `4.4` - Latest patch in 4.4.x series
+- `4.5.0` - Specific version (recommended for production)
+- `4.5` - Latest patch in 4.5.x series
 - `4` - Latest minor in 4.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
