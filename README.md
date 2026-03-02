@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated February 27, 2026**
+**Last Updated March 2, 2026**
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -12,12 +12,12 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-80.7%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-479_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-92%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-590_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — into every conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff**. Integrates your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — into every conversation.
 
-**[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
+**[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
 **🚀 Quick Deploy:**
 
@@ -35,6 +35,10 @@
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
+- ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running HTTP deployments
+- 👥 **Team collaboration** — opt-in sharing of context via Git-tracked team database ([wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration))
+- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
+- 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 
 ```mermaid
 flowchart TB
@@ -59,6 +63,7 @@ flowchart TB
         PRs["Pull Requests"]
         Actions["GitHub Actions"]
         Kanban["Kanban Boards"]
+        Insights["Repository Insights"]
     end
 
     subgraph Outputs["📊 Outputs"]
@@ -67,11 +72,17 @@ flowchart TB
         Timeline["Project Timelines"]
     end
 
+    subgraph SessionEnd["🔄 Session End"]
+        Summary["Session Summary Entry<br/>(retrospective + session-summary tag)"]
+    end
+
     Session --> Core
     Core --> Search
     Core <--> GitHub
     Search --> Outputs
     GitHub --> Outputs
+    Core --> SessionEnd
+    SessionEnd -.->|"next session"| Briefing
 ```
 
 ### 📈 **Current Capabilities**
@@ -83,6 +94,8 @@ flowchart TB
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 8 relationship types, Mermaid visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
+- **IDE Hooks** - Ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](hooks/))
+- **Automated maintenance** - Scheduled backups, database optimization, and vector index rebuilds (HTTP/SSE only)
 
 ---
 
@@ -230,6 +243,28 @@ memory-journal-mcp --transport http --port 3000 --stateless
 | Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
 | Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
 
+#### Automated Scheduling (HTTP Only)
+
+When running in HTTP/SSE mode, enable periodic maintenance jobs with CLI flags. These jobs run in-process on `setInterval` — no external cron needed.
+
+> **Note:** These flags are ignored for stdio transport because stdio sessions are short-lived (tied to your IDE session). For stdio, use OS-level scheduling (Task Scheduler, cron) or run the backup/cleanup tools manually.
+
+```bash
+memory-journal-mcp --transport http --port 3000 \
+  --backup-interval 60 --keep-backups 10 \
+  --vacuum-interval 1440 \
+  --rebuild-index-interval 720
+```
+
+| Flag                             | Default | Description                                                          |
+| -------------------------------- | ------- | -------------------------------------------------------------------- |
+| `--backup-interval <min>`        | 0 (off) | Create timestamped database backups and prune old ones automatically |
+| `--keep-backups <count>`         | 5       | Max backups retained during automated cleanup                        |
+| `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
+| `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
+
+Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
+
 ### GitHub Integration Configuration
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect the repository from your git context. However, MCP clients may run the server from a different directory than your project.
@@ -293,6 +328,30 @@ When GitHub tools cannot auto-detect repository information:
 - **Full guidance**: If behaviors missing, read `memory://instructions` for complete Dynamic Context Management patterns.
 
 - **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
+
+---
+
+### 🔄 Session Management
+
+Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
+
+**How it works:**
+
+1. Session starts → agent reads `memory://briefing` and shows you a project context summary
+2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+3. Next session's briefing includes the previous summary — context flows seamlessly
+
+**Setup by IDE:** Ready-to-use rules and hooks in [`hooks/`](hooks/):
+
+| Client         | Primary (agent behavior)                                                                      | Optional (audit/logging)                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Cursor**     | Copy [`hooks/cursor/memory-journal.mdc`](hooks/cursor/memory-journal.mdc) to `.cursor/rules/` | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) + `session-end.sh` to `.cursor/` |
+| **Kiro (AWS)** | Server instructions (automatic)                                                               | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`            |
+| **Kilo Code**  | Server instructions (automatic)                                                               | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json)    |
+
+**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. The Cursor rule improves reliability by giving the agent explicit always-on instructions. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
+
+See [`hooks/README.md`](hooks/README.md) for detailed setup instructions.
 
 ---
 
@@ -545,7 +604,7 @@ npm run bench
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-11-25 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
-- **HTTP transport hardening** - Configurable CORS, 1MB body limit, security headers, 30-min session timeout
+- **HTTP transport hardening** - Configurable CORS, 1MB body limit, security headers, 30-min session timeout, rate limiting (100 req/min)
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error logs
 
 ### Data & Privacy

@@ -10,6 +10,7 @@ import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
 import { getAllToolNames } from '../../filtering/ToolFilter.js'
 import type { Tag, McpIcon } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
+import type { Scheduler } from '../../server/Scheduler.js'
 import { generateInstructions, type InstructionLevel } from '../../constants/ServerInstructions.js'
 import { getPrompts } from '../prompts/index.js'
 import {
@@ -36,6 +37,7 @@ export interface ResourceContext {
     vectorManager?: VectorSearchManager
     filterConfig?: ToolFilterConfig | null
     github?: GitHubIntegration | null
+    scheduler?: Scheduler | null
 }
 
 /**
@@ -131,10 +133,11 @@ export async function readResource(
     db: SqliteAdapter,
     vectorManager?: VectorSearchManager,
     filterConfig?: ToolFilterConfig | null,
-    github?: GitHubIntegration | null
+    github?: GitHubIntegration | null,
+    scheduler?: Scheduler | null
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     const resources = getAllResourceDefinitions()
-    const context: ResourceContext = { db, vectorManager, filterConfig, github }
+    const context: ResourceContext = { db, vectorManager, filterConfig, github, scheduler }
 
     // Strip query parameters for matching, but pass full URI to handler
     const baseUri = getBaseUri(uri)
@@ -1172,6 +1175,9 @@ I have project memory access and will create entries for significant work.`,
                         ...dbHealth,
                         vectorIndex,
                         toolFilter,
+                        scheduler: context.scheduler
+                            ? context.scheduler.getStatus()
+                            : { active: false, jobs: [] },
                         timestamp: lastModified,
                     },
                     annotations: { lastModified },

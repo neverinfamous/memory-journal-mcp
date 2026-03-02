@@ -5,7 +5,87 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.5.0] - 2026-03-02
+
+### Fixed
+
+- **Session Start briefing in Cursor** — Added Cursor-specific `FetchMcpResource` server name (`user-memory-journal-mcp`) to the Session Start instructions. Cursor prefixes MCP server names with `user-`, so agents using the generic name would get "Server not found" errors when fetching `memory://briefing`.
+- **`deleteOldBackups` Test Isolation** — Fixed flaky `should delete old backups keeping only keepCount` test by cleaning up pre-existing backups before creating test backups. Previously, leftover backups from other tests caused the assertion to fail non-deterministically.
+- **`deleteOldBackups` NaN Guard** — `keepCount` parameter now rejects `NaN` values. Previously, `NaN < 1` evaluated to `false`, bypassing the guard. With `NaN`, `backups.slice(0, NaN)` returns an empty array and `backups.slice(NaN)` returns all backups, causing every backup to be deleted.
+- **`restoreFromFile` Foreign Key Enforcement** — `PRAGMA foreign_keys = ON` is now applied after restoring a database from backup. Previously, `restoreFromFile()` bypassed `initialize()`, so `ON DELETE CASCADE` constraints in `entry_tags`, `relationships`, and `embeddings` tables were silently unenforced for the rest of the server's lifetime.
+
+### Improved
+
+- **Test Coverage → 92%** — Expanded test suite from 549 → 590 tests, raising line coverage from 88.59% → 92.06%. Key areas covered:
+  - SIGINT shutdown handlers for stdio, stateless HTTP, and stateful HTTP transports
+  - Prompt handlers with proper arguments (`analyze-period`, `find-related`, `goal-tracker`, `get-context-bundle`, `prepare-retro`)
+  - `SqliteAdapter` backup edge cases (missing backups dir, invalid keepCount, missing backup file)
+  - `create_github_milestone` no-GitHub integration error path
+  - Kanban diagram resource no-GitHub fallback
+
+### Added
+
+- **Automated Scheduler (HTTP/SSE only)** — New in-process scheduler runs periodic maintenance jobs for long-running HTTP/SSE server processes. Configured via CLI flags:
+  - `--backup-interval <minutes>` — Automated backup interval (0 = disabled, default: 0). Backups are created with `exportToFile()` and old backups cleaned up automatically.
+  - `--keep-backups <count>` — Max backups to retain during automated cleanup (default: 5).
+  - `--vacuum-interval <minutes>` — Database optimize interval (0 = disabled, default: 0). Runs `PRAGMA optimize` and flushes the database to disk.
+  - `--rebuild-index-interval <minutes>` — Vector index rebuild interval (0 = disabled, default: 0). Full vector index rebuild from all entries.
+  - Scheduler status is reported in the `memory://health` resource under the `scheduler` field.
+  - Stdio transport ignores scheduler options with a warning log — use OS-level scheduling for stdio.
+  - Each job is error-isolated: failures are logged but don't affect other scheduled jobs.
+  - New module: `src/server/Scheduler.ts` — clean separation from `McpServer.ts`.
+
+### Changed
+
+- **Dependency Updates**
+  - `@types/node`: 25.3.2 → 25.3.3 (patch)
+  - `globals`: 17.3.0 → 17.4.0 (minor)
+  - `minimatch` override: 10.2.3 → 10.2.4 (patch) — npm + Docker layers
+  - `tar` override: 7.5.8 → 7.5.9 (patch) — npm + Docker layers
+
+### Security
+
+- **Wire Dead-Code Security Utilities (F-001)** — `sanitizeSearchQuery()` and `assertNoPathTraversal()` from `security-utils.ts` were defined but never imported or called. Now wired into active code paths:
+  - `SqliteAdapter.searchEntries()` applies `sanitizeSearchQuery()` to LIKE patterns with `ESCAPE '\\\\'` clause, preventing wildcard injection (F-002)
+  - `SqliteAdapter.restoreFromFile()` uses `assertNoPathTraversal()` instead of inline checks, throwing `PathTraversalError`
+- **HTTP Security Headers (F-003)** — Added three additional security headers to HTTP transport middleware:
+  - `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` — prevents XSS and framing
+  - `Cache-Control: no-store` — prevents caching of sensitive journal data
+  - `Referrer-Policy: no-referrer` — prevents referrer leakage
+- **PRAGMA foreign_keys = ON (F-005)** — SQLite foreign key enforcement now enabled on database initialization. `ON DELETE CASCADE` constraints in `entry_tags`, `relationships`, and `embeddings` tables are now enforced at the database level.
+- **CORS Wildcard Warning (F-006)** — Server now logs a warning when HTTP transport CORS origin is `*` (the default), advising operators to set `--cors-origin` or `MCP_CORS_ORIGIN` for production deployments.
+- **Constrain `entry_type` / `significance_type` to Enums** — `entry_type` now validated against 13 allowed values and `significance_type` against 7 allowed values via Zod enums. Previously accepted arbitrary strings; invalid types now rejected at schema validation. Removes unsafe `as EntryType` / `as SignificanceType` casts.
+- **Date Format Validation** — All date string fields (`start_date`, `end_date`) across `SearchByDateRangeSchema`, `GetStatisticsSchema`, `ExportEntriesSchema`, and `CrossProjectInsightsSchema` now validate `YYYY-MM-DD` format via regex. Prevents malformed dates from reaching the database layer.
+- **HTTP Rate Limiting** — Added `express-rate-limit` middleware for HTTP transport (100 requests/minute per IP). Returns `429 Too Many Requests` on excess. Only applies to HTTP mode; stdio transport unaffected.
+- **Remove Dead SQL Injection Detection Code** — Removed `containsSqlInjection()`, `assertNoSqlInjection()`, `SqlInjectionError`, and `SQL_INJECTION_PATTERNS` from `security-utils.ts`. These regex-based detection functions were never called anywhere and provided a false sense of security. Parameterized queries (used consistently throughout) are the actual defense.
+- **`exportToFile()` Path Traversal Protection** — Added `assertNoPathTraversal()` check to backup export, matching the pattern already used in `restoreFromFile()`. Rejects malicious backup names containing `/`, `\\`, or `..`.
+- **`getRawDb()` Safety Documentation** — Added `@internal` JSDoc tag warning callers to use parameterized queries when accessing the raw database handle.
+- **Logger `LOG_LEVEL` Validation (L1)** — `LOG_LEVEL` environment variable is now validated against known levels (`debug`, `info`, `notice`, `warning`, `error`, `critical`). Invalid values fall back to `info` instead of silently setting `minLevel` to `undefined`, which would disable all logging.
+- **Logger `setLevel()` Guard (L2)** — `Logger.setLevel()` now validates the level parameter before applying, preventing invalid values from disabling logging.
+- **CI `security-scan` Node Version Alignment (L3)** — Updated Node.js version in `security-scan` job from 22.x to 24.x to match `engines.node: >=24.0.0`.
+- **CI Trivy SARIF Upload Guard** — `security-update.yml` upload-sarif step now checks that `trivy-results.sarif` exists before attempting upload. Previously, `if: always()` caused the step to fail when the Docker build failed upstream and no SARIF file was produced.
+
+### Documentation
+
+- **Cursor Rule for Session Management** — Added `hooks/cursor/memory-journal.mdc`, an `alwaysApply` Cursor rule that instructs agents to read `memory://briefing` at session start and create a retrospective summary at session end. This is the most reliable mechanism for session behavior in Cursor, replacing the previous reliance on MCP server instructions alone.
+- **Fixed Cursor sessionEnd Hook Format** — Rewrote `hooks/cursor/hooks.json` from a non-standard format to Cursor's documented `version: 1` schema. Added companion `hooks/cursor/session-end.sh` audit script. Corrected documentation: Cursor's `sessionEnd` hook is fire-and-forget (cannot inject messages); session summary creation is handled by the Cursor rule and server instructions.
+- **Revised hooks/README.md** — Rewritten to accurately describe progressive enhancement: Cursor rule (primary) > server instructions (fallback) > hooks (audit only). Removed incorrect claim that Cursor `sessionEnd` does message injection. Added rule setup as Step 1 for Cursor users.
+- **Updated Session Management in README.md and DOCKER_README.md** — Session Management sections now lead with the Cursor rule as the primary setup mechanism, with a three-column table showing primary (agent behavior) vs optional (audit/logging) configurations per IDE.
+- **SECURITY.md Accuracy (F-004)** — Rewrote Database Security section to accurately reflect sql.js in-memory architecture. Removed false claims about WAL mode and 7 PRAGMAs that are not applicable to sql.js. Updated security checklist to reference actual function names (`assertNoPathTraversal`, `sanitizeSearchQuery`, `validateDateFormatPattern`). Updated HTTP security headers list to include CSP, Cache-Control, and Referrer-Policy.
+- **SECURITY.md Tag Filtering Correction** — Replaced inaccurate claim that dangerous characters are blocked in tags with accurate statement that tags are safely handled via parameterized queries.
+- **Team Collaboration in READMEs** — Added team collaboration feature to Key Benefits in both `README.md` and `DOCKER_README.md`, with links to the wiki [Team-Collaboration](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration) page. DOCKER_README notes that team collaboration requires npm installation.
+- **Wiki Security Page Updates** — Added LIKE pattern sanitization, path traversal protection, HTTP security headers, rate limiting, and team database security note to the wiki Security.md page. Expanded self-audit checklist from 10 to 16 items.
+- **Rate Limiting Documentation** — Added rate limiting mention to README.md Security section.
+
+### Fixed
+
+- **Path Traversal Test Assertion** — Updated `sql-injection.test.ts` to assert `PathTraversalError` type instead of old inline error message string, matching refactored `assertNoPathTraversal()` usage.
+- **Tool Handler Test Fix** — Updated `tool-handlers.test.ts` to use valid entry_type enum value (`project_decision` instead of `decision`), matching the new enum constraint.
+- **`share_with_team` Not Setting `isPersonal`** — `create_entry` with `share_with_team: true` now correctly sets `isPersonal: false`, making the entry visible in team-scoped resources like `memory://team/recent`. Previously, the `share_with_team` parameter was parsed but never applied to the `isPersonal` field.
+
+### Removed
+
+- **Unused `cors` Dependency** — Removed `cors` and `@types/cors` packages. CORS is handled by custom middleware in `McpServer.ts`.
 
 ## [4.4.2] - 2026-02-27
 

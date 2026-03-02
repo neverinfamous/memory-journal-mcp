@@ -471,6 +471,65 @@ describe('SqliteAdapter', () => {
                 fs.unlinkSync(backup.path)
             }
         })
+
+        it('should delete old backups keeping only keepCount', () => {
+            const fs = require('node:fs')
+
+            // Clean up any pre-existing backups from other tests
+            const preExisting = db.listBackups()
+            for (const backup of preExisting) {
+                if (fs.existsSync(backup.path)) fs.unlinkSync(backup.path)
+            }
+
+            // Create 3 backups
+            const b1 = db.exportToFile('cleanup-1')
+            const b2 = db.exportToFile('cleanup-2')
+            const b3 = db.exportToFile('cleanup-3')
+
+            // Keep only 1 newest
+            db.deleteOldBackups(1)
+
+            const remaining = db.listBackups()
+            // Should have exactly 1 backup remaining (newest)
+            expect(remaining.length).toBe(1)
+
+            // Cleanup any remaining
+            for (const path of [b1.path, b2.path, b3.path]) {
+                if (fs.existsSync(path)) fs.unlinkSync(path)
+            }
+        })
+
+        it('should restore from a backup file', async () => {
+            const fs = require('node:fs')
+            // Create an entry and backup
+            db.createEntry({ content: 'Before restore test' })
+            const countBefore = db.getActiveEntryCount()
+            const backup = db.exportToFile('restore-test')
+
+            // Create more entries after backup
+            db.createEntry({ content: 'After backup 1' })
+            db.createEntry({ content: 'After backup 2' })
+            const countAfterAdding = db.getActiveEntryCount()
+            expect(countAfterAdding).toBeGreaterThan(countBefore)
+
+            // Restore should revert to backup state
+            const result = await db.restoreFromFile(backup.filename)
+            expect(result.previousEntryCount).toBe(countAfterAdding)
+            expect(result.newEntryCount).toBe(countBefore)
+
+            // Cleanup
+            const backups = db.listBackups()
+            for (const b of backups) {
+                const path = require('node:path').join('backups', b.filename)
+                if (fs.existsSync(path)) fs.unlinkSync(path)
+            }
+        })
+
+        it('should get raw database handle', () => {
+            const rawDb = db.getRawDb()
+            expect(rawDb).toBeDefined()
+            expect(typeof rawDb.exec).toBe('function')
+        })
     })
 
     // ========================================================================
@@ -550,6 +609,31 @@ describe('SqliteAdapter', () => {
                 tags: ['daterange-tag'],
             })
             expect(results.length).toBeGreaterThan(0)
+        })
+    })
+
+    // ========================================================================
+    // Backup edge cases
+    // ========================================================================
+
+    describe('backup edge cases', () => {
+        it('should return empty array when backups directory does not exist', () => {
+            // Use a fresh adapter with no backups dir created
+            const tempDb = new SqliteAdapter('./test-no-backups.db')
+            tempDb.initialize()
+            const backups = tempDb.listBackups()
+            expect(backups).toEqual([])
+            tempDb.close()
+        })
+
+        it('should throw when deleteOldBackups keepCount is less than 1', () => {
+            expect(() => db.deleteOldBackups(0)).toThrow('keepCount must be at least 1')
+        })
+
+        it('should throw when restoring from non-existent backup file', async () => {
+            await expect(db.restoreFromFile('nonexistent-backup.db')).rejects.toThrow(
+                'Backup file not found'
+            )
         })
     })
 })

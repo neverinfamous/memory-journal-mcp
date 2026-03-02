@@ -335,5 +335,37 @@ describe('Resource Handlers', () => {
             const data = result.data as { prNumber: number }
             expect(data.prNumber).toBe(15)
         })
+
+        it('should handle resource URI with query parameters', async () => {
+            // Query params should be stripped for matching but the full URI is passed to the handler
+            const result = await readResource('memory://recent?limit=5', db)
+            const data = result.data as { entries: unknown[]; count: number }
+            expect(data.entries).toBeDefined()
+        })
+
+        it('should handle resource URI with hash fragment', async () => {
+            const result = await readResource('memory://recent#section', db)
+            const data = result.data as { entries: unknown[]; count: number }
+            expect(data.entries).toBeDefined()
+        })
+
+        it('should handle template URI with query parameters', async () => {
+            const result = await readResource('memory://projects/42/timeline?sort=asc', db)
+            const data = result.data as { projectNumber: number }
+            expect(data.projectNumber).toBe(42)
+        })
+
+        it('should return no-github diagram for kanban without integration', async () => {
+            const result = await readResource(
+                'memory://kanban/1/diagram',
+                db,
+                undefined,
+                undefined,
+                null // no github
+            )
+            const data = result.data as { format: string; diagram: string; message: string }
+            expect(data.format).toBe('mermaid')
+            expect(data.diagram).toContain('GitHub integration not available')
+        })
     })
 })

@@ -9,7 +9,11 @@ import initSqlJs, { type Database } from 'sql.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../utils/logger.js'
-import { validateDateFormatPattern } from '../utils/security-utils.js'
+import {
+    validateDateFormatPattern,
+    sanitizeSearchQuery,
+    assertNoPathTraversal,
+} from '../utils/security-utils.js'
 import type {
     JournalEntry,
     Tag,
@@ -168,6 +172,11 @@ export class SqliteAdapter {
 
         // Initialize schema
         this.db.run(SCHEMA_SQL)
+
+        // Enable foreign key enforcement (SQLite disables by default)
+        // Required for ON DELETE CASCADE in entry_tags, relationships, embeddings
+        this.db.run('PRAGMA foreign_keys = ON')
+
         this.initialized = true
 
         logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath })
@@ -582,9 +591,9 @@ export class SqliteAdapter {
 
         let sql = `
             SELECT * FROM memory_journal
-            WHERE deleted_at IS NULL AND content LIKE ?
+            WHERE deleted_at IS NULL AND content LIKE ? ESCAPE '\\'
         `
-        const params: unknown[] = [`%${query}%`]
+        const params: unknown[] = [`%${sanitizeSearchQuery(query)}%`]
 
         if (isPersonal !== undefined) {
             sql += ` AND is_personal = ?`
@@ -1037,6 +1046,11 @@ export class SqliteAdapter {
         const db = this.ensureDb()
         const backupsDir = this.getBackupsDir()
 
+        // Validate backup name against path traversal before sanitization
+        if (backupName) {
+            assertNoPathTraversal(backupName)
+        }
+
         // Ensure backups directory exists
         if (!fs.existsSync(backupsDir)) {
             fs.mkdirSync(backupsDir, { recursive: true })
@@ -1118,7 +1132,7 @@ export class SqliteAdapter {
     deleteOldBackups(keepCount: number): { deleted: string[]; kept: number } {
         const backups = this.listBackups() // Already sorted newest-first
 
-        if (keepCount < 1) {
+        if (keepCount < 1 || Number.isNaN(keepCount)) {
             throw new Error('keepCount must be at least 1')
         }
 
@@ -1155,9 +1169,7 @@ export class SqliteAdapter {
         newEntryCount: number
     }> {
         // Validate filename (prevent path traversal)
-        if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-            throw new Error('Invalid backup filename: path separators not allowed')
-        }
+        assertNoPathTraversal(filename)
 
         const backupsDir = this.getBackupsDir()
         const backupPath = path.join(backupsDir, filename)
@@ -1187,6 +1199,7 @@ export class SqliteAdapter {
         // Initialize new database from backup
         const SQL = await import('sql.js').then((m) => m.default())
         this.db = new SQL.Database(backupBuffer)
+        this.db.run('PRAGMA foreign_keys = ON')
         this.initialized = true
 
         // Get new entry count
@@ -1329,7 +1342,8 @@ export class SqliteAdapter {
     }
 
     /**
-     * Get raw database for advanced operations
+     * Get raw sql.js Database handle for advanced queries.
+     * @internal Callers MUST use parameterized queries — never concatenate user input into SQL.
      */
     getRawDb(): Database {
         return this.ensureDb()

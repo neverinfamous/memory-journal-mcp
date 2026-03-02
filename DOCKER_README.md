@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated February 27, 2026**
+**Last Updated March 2, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -10,12 +10,12 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-80.7%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-479_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-92%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-590_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory, while integrating your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs into every conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff**. Integrates your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — into every conversation.
 
-**[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/wiki/CHANGELOG)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
+**[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/blob/main/CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
 ## 🎯 What This Does
 
@@ -28,6 +28,10 @@
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
+- ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running containers
+- 👥 **Team collaboration** — opt-in sharing of context via Git-tracked team database (requires npm install; see [wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration))
+- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
+- 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 
 ### Deployment Options
 
@@ -76,6 +80,14 @@
         |  - Standups & Retros      |
         |  - Knowledge Graphs       |
         |  - Project Timelines      |
+        +-------------+-------------+
+                      |
+                      v
+        +---------------------------+
+        | 🔄 Session End            |
+        |---------------------------|
+        |  - Auto-summary entry     |
+        |  - Flows to next briefing |
         +---------------------------+
 ```
 
@@ -88,6 +100,7 @@
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 8 relationship types, Mermaid visualization
 - **Semantic search** - AI-powered conceptual search via `@xenova/transformers`
+- **Automated maintenance** - Scheduled backups, database optimization, and vector index rebuilds (HTTP/SSE only)
 
 ---
 
@@ -198,6 +211,18 @@ When GitHub tools cannot auto-detect repository information:
 
 - **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
 
+### 🔄 Session Management
+
+Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
+
+1. Session starts → agent reads `memory://briefing` and shows you a project context summary
+2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+3. Next session's briefing includes the previous summary — context flows seamlessly
+
+**Cursor users:** Copy the [`memory-journal.mdc`](https://github.com/neverinfamous/memory-journal-mcp/blob/main/hooks/cursor/memory-journal.mdc) rule to `.cursor/rules/` for the most reliable session management. Optional audit hooks for Cursor, Kiro, and Kilo Code are available in the [hooks/](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks) directory.
+
+**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
+
 ### HTTP/SSE Transport (Remote Access)
 
 For remote access, web-based clients, or HTTP-compatible MCP hosts:
@@ -232,6 +257,31 @@ docker run --rm -p 3000:3000 \
 | ------------------------- | ---------------------- | ------------- | ---------- |
 | Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
 | Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
+
+#### Automated Scheduling (HTTP Only)
+
+Enable periodic maintenance jobs for long-running containers. These jobs run in-process on `setInterval` — no external cron needed.
+
+> **Note:** These flags only work with HTTP/SSE transport. Stdio transport (used by IDE integrations like Cursor and AntiGravity) ignores scheduler flags because those sessions are short-lived. For stdio, use the `backup_journal` and `cleanup_backups` tools manually.
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v ./data:/app/data \
+  writenotenow/memory-journal-mcp:latest \
+  --transport http --port 3000 --server-host 0.0.0.0 \
+  --backup-interval 60 --keep-backups 10 \
+  --vacuum-interval 1440 \
+  --rebuild-index-interval 720
+```
+
+| Flag                             | Default | Description                                                          |
+| -------------------------------- | ------- | -------------------------------------------------------------------- |
+| `--backup-interval <min>`        | 0 (off) | Create timestamped database backups and prune old ones automatically |
+| `--keep-backups <count>`         | 5       | Max backups retained during automated cleanup                        |
+| `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
+| `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
+
+Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
 **Example with curl (stateful):**
 
@@ -466,8 +516,8 @@ Memory Journal is designed for extremely low overhead during AI task execution.
 
 **Available Tags:**
 
-- `4.4.2` - Specific version (recommended for production)
-- `4.4` - Latest patch in 4.4.x series
+- `4.5.0` - Specific version (recommended for production)
+- `4.5` - Latest patch in 4.5.x series
 - `4` - Latest minor in 4.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security

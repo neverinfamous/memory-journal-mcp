@@ -23,6 +23,22 @@ program
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
     .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: *)')
     .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
+    .option(
+        '--backup-interval <minutes>',
+        'Automated backup interval in minutes, HTTP only (0 = disabled)',
+        '0'
+    )
+    .option('--keep-backups <count>', 'Max backups to retain during automated cleanup', '5')
+    .option(
+        '--vacuum-interval <minutes>',
+        'Database optimize interval in minutes, HTTP only (0 = disabled)',
+        '0'
+    )
+    .option(
+        '--rebuild-index-interval <minutes>',
+        'Vector index rebuild interval in minutes, HTTP only (0 = disabled)',
+        '0'
+    )
     .action(
         async (options: {
             transport: string
@@ -35,6 +51,10 @@ program
             autoRebuildIndex?: boolean
             corsOrigin?: string
             logLevel: string
+            backupInterval: string
+            keepBackups: string
+            vacuumInterval: string
+            rebuildIndexInterval: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -67,6 +87,12 @@ program
                     autoRebuildIndex:
                         options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
                     corsOrigin: options.corsOrigin,
+                    scheduler: {
+                        backupIntervalMinutes: parseInt(options.backupInterval, 10),
+                        keepBackups: parseInt(options.keepBackups, 10),
+                        vacuumIntervalMinutes: parseInt(options.vacuumInterval, 10),
+                        rebuildIndexIntervalMinutes: parseInt(options.rebuildIndexInterval, 10),
+                    },
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

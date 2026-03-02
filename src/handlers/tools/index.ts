@@ -37,12 +37,48 @@ export interface ToolContext {
 // Zod Schemas for Input Validation
 // ============================================================================
 
+/**
+ * Valid entry types (matches EntryType union in types/index.ts)
+ */
+const ENTRY_TYPES = [
+    'personal_reflection',
+    'project_decision',
+    'technical_achievement',
+    'bug_fix',
+    'feature_implementation',
+    'code_review',
+    'meeting_notes',
+    'learning',
+    'research',
+    'planning',
+    'retrospective',
+    'standup',
+    'other',
+] as const
+
+/**
+ * Valid significance types (matches SignificanceType union in types/index.ts)
+ */
+const SIGNIFICANCE_TYPES = [
+    'milestone',
+    'breakthrough',
+    'technical_breakthrough',
+    'decision',
+    'lesson_learned',
+    'blocker_resolved',
+    'release',
+] as const
+
+/** YYYY-MM-DD date format regex */
+const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
+const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'
+
 const CreateEntrySchema = z.object({
     content: z.string().min(1).max(50000),
-    entry_type: z.string().optional().default('personal_reflection'),
+    entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     is_personal: z.boolean().optional().default(true),
-    significance_type: z.string().optional(),
+    significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
     auto_context: z.boolean().optional().default(true),
     project_number: z.number().optional(),
     project_owner: z.string().optional(),
@@ -87,9 +123,9 @@ const SearchEntriesSchema = z.object({
 })
 
 const SearchByDateRangeSchema = z.object({
-    start_date: z.string(),
-    end_date: z.string(),
-    entry_type: z.string().optional(),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
+    entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
@@ -112,8 +148,8 @@ const SemanticSearchSchema = z.object({
 
 const GetStatisticsSchema = z.object({
     group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
-    start_date: z.string().optional(),
-    end_date: z.string().optional(),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     project_breakdown: z.boolean().optional().default(false),
 })
 
@@ -138,9 +174,9 @@ const LinkEntriesSchema = z.object({
 
 const ExportEntriesSchema = z.object({
     format: z.enum(['json', 'markdown']).optional().default('json'),
-    start_date: z.string().optional(),
-    end_date: z.string().optional(),
-    entry_types: z.array(z.string()).optional(),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
     tags: z.array(z.string()).optional(),
     limit: z.number().optional().default(100).describe('Maximum entries to export (default: 100)'),
 })
@@ -148,7 +184,7 @@ const ExportEntriesSchema = z.object({
 const UpdateEntrySchema = z.object({
     entry_id: z.number(),
     content: z.string().optional(),
-    entry_type: z.string().optional(),
+    entry_type: z.enum(ENTRY_TYPES).optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),
 })
@@ -1036,10 +1072,10 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
 
                 const entry = db.createEntry({
                     content: input.content,
-                    entryType: input.entry_type as EntryType,
+                    entryType: input.entry_type,
                     tags: input.tags,
-                    isPersonal: input.is_personal,
-                    significanceType: (input.significance_type as SignificanceType) ?? null,
+                    isPersonal: input.share_with_team ? false : input.is_personal,
+                    significanceType: input.significance_type ?? null,
                     projectNumber: input.project_number,
                     projectOwner: input.project_owner,
                     issueNumber: input.issue_number,
@@ -1184,7 +1220,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 const input = SearchByDateRangeSchema.parse(params)
                 const entries = db.searchByDateRange(input.start_date, input.end_date, {
-                    entryType: input.entry_type as EntryType | undefined,
+                    entryType: input.entry_type,
                     tags: input.tags,
                     isPersonal: input.is_personal,
                     projectNumber: input.project_number,
@@ -1277,8 +1313,16 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             description: 'Analyze patterns across all GitHub Projects tracked in journal entries',
             group: 'analytics',
             inputSchema: z.object({
-                start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
-                end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
+                start_date: z
+                    .string()
+                    .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+                    .optional()
+                    .describe('Start date (YYYY-MM-DD)'),
+                end_date: z
+                    .string()
+                    .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+                    .optional()
+                    .describe('End date (YYYY-MM-DD)'),
                 min_entries: z
                     .number()
                     .optional()
@@ -1290,8 +1334,14 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 const input = z
                     .object({
-                        start_date: z.string().optional(),
-                        end_date: z.string().optional(),
+                        start_date: z
+                            .string()
+                            .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+                            .optional(),
+                        end_date: z
+                            .string()
+                            .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+                            .optional(),
                         min_entries: z.number().optional().default(3),
                     })
                     .parse(params)
@@ -1744,7 +1794,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
                 const input = UpdateEntrySchema.parse(params)
                 const entry = db.updateEntry(input.entry_id, {
                     content: input.content,
-                    entryType: input.entry_type as EntryType | undefined,
+                    entryType: input.entry_type,
                     isPersonal: input.is_personal,
                     tags: input.tags,
                 })

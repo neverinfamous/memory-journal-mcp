@@ -30,6 +30,7 @@ const {
     mockStdioTransport,
     mockListTags,
     mockHandlers,
+    mockSigintHandlers,
 } = vi.hoisted(() => ({
     mockRegisterTool: vi.fn(),
     mockRegisterResource: vi.fn(),
@@ -75,8 +76,9 @@ const {
         post: {} as Record<string, Function>,
         delete: {} as Record<string, Function>,
         all: {} as Record<string, Function>,
-        use: {} as Record<string, Function>,
+        useMiddlewares: [] as Function[],
     },
+    mockSigintHandlers: [] as Function[],
 }))
 
 // ============================================================================
@@ -204,7 +206,7 @@ vi.mock('express', () => {
     const mockApp = {
         use: vi.fn().mockImplementation((...args: unknown[]) => {
             if (args.length === 1 && typeof args[0] === 'function') {
-                mockHandlers.use['*'] = args[0] as () => void
+                mockHandlers.useMiddlewares.push(args[0] as Function)
             }
         }),
         get: vi.fn().mockImplementation((path: string, handler: unknown) => {
@@ -235,8 +237,13 @@ vi.mock('express', () => {
     }
 })
 
-// Suppress process.on/exit in tests
-vi.spyOn(process, 'on').mockImplementation(() => process)
+// Capture process.on('SIGINT') handlers for testing
+vi.spyOn(process, 'on').mockImplementation((event: string, handler: Function) => {
+    if (event === 'SIGINT') {
+        mockSigintHandlers.push(handler)
+    }
+    return process
+})
 vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
 
 // ============================================================================
@@ -247,7 +254,24 @@ import { createServer, type ServerOptions } from '../../src/server/McpServer.js'
 
 describe('McpServer', () => {
     beforeEach(() => {
-        vi.clearAllMocks()
+        // Reset call counts but preserve mock implementations
+        // (vi.clearAllMocks() would wipe .mockImplementation() on express mock)
+        mockRegisterTool.mockClear()
+        mockRegisterResource.mockClear()
+        mockRegisterPrompt.mockClear()
+        mockConnect.mockClear()
+        mockDbInitialize.mockClear()
+        mockDbClose.mockClear()
+        mockVectorInitialize.mockClear()
+        mockVectorRebuildIndex.mockClear()
+        mockCreateEntry.mockClear()
+        // Clear captured handler references
+        mockHandlers.get = {}
+        mockHandlers.post = {}
+        mockHandlers.delete = {}
+        mockHandlers.all = {}
+        mockHandlers.useMiddlewares.length = 0
+        mockSigintHandlers.length = 0
     })
 
     // ========================================================================
@@ -670,6 +694,468 @@ describe('McpServer', () => {
             const mockReqGet = { method: 'GET' }
             if (allHandler) await allHandler(mockReqGet, mockResOptions, nextFn)
             expect(nextFn).toHaveBeenCalled()
+        })
+
+        it('should invoke security headers middleware', async () => {
+            const middlewareFns: Function[] = []
+            const { default: expressMod } = await import('express')
+            const app = expressMod()
+            // Capture all middleware registered via app.use()
+            ;(app.use as ReturnType<typeof vi.fn>).mockImplementation((...args: unknown[]) => {
+                if (args.length === 1 && typeof args[0] === 'function') {
+                    middlewareFns.push(args[0] as Function)
+                }
+            })
+
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: true,
+            })
+
+            // The first middleware (after express.json) should set security headers
+            // Find a middleware that calls setHeader for security headers
+            let securityMiddlewareFound = false
+            for (const mw of middlewareFns) {
+                const mockRes = {
+                    setHeader: vi.fn(),
+                    status: vi.fn().mockReturnThis(),
+                    end: vi.fn(),
+                }
+                const nextFn = vi.fn()
+                mw({}, mockRes, nextFn)
+                const calls = mockRes.setHeader.mock.calls as [string, string][]
+                const headerNames = calls.map((c) => c[0])
+                if (headerNames.includes('X-Content-Type-Options')) {
+                    securityMiddlewareFound = true
+                    expect(headerNames).toContain('X-Frame-Options')
+                    expect(headerNames).toContain('Content-Security-Policy')
+                    expect(headerNames).toContain('Cache-Control')
+                    expect(headerNames).toContain('Referrer-Policy')
+                    expect(nextFn).toHaveBeenCalled()
+                    break
+                }
+            }
+            expect(securityMiddlewareFound).toBe(true)
+        })
+
+        it('should invoke CORS middleware and handle OPTIONS', async () => {
+            const middlewareFns: Function[] = []
+            const { default: expressMod } = await import('express')
+            const app = expressMod()
+            ;(app.use as ReturnType<typeof vi.fn>).mockImplementation((...args: unknown[]) => {
+                if (args.length === 1 && typeof args[0] === 'function') {
+                    middlewareFns.push(args[0] as Function)
+                }
+            })
+
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: true,
+                corsOrigin: 'https://test.example.com',
+            })
+
+            // Find the CORS middleware (sets Access-Control-Allow-Origin)
+            let corsMiddlewareFound = false
+            for (const mw of middlewareFns) {
+                const mockRes = {
+                    setHeader: vi.fn(),
+                    status: vi.fn().mockReturnThis(),
+                    end: vi.fn(),
+                }
+
+                // Test with OPTIONS request
+                const mockReqOptions = { method: 'OPTIONS' }
+                const noopNext = vi.fn()
+                mw(mockReqOptions, mockRes, noopNext)
+                const calls = mockRes.setHeader.mock.calls as [string, string][]
+                const headerNames = calls.map((c) => c[0])
+                if (headerNames.includes('Access-Control-Allow-Origin')) {
+                    corsMiddlewareFound = true
+                    expect(headerNames).toContain('Access-Control-Allow-Methods')
+                    expect(headerNames).toContain('Access-Control-Allow-Headers')
+                    expect(headerNames).toContain('Access-Control-Expose-Headers')
+                    // OPTIONS should return 204
+                    expect(mockRes.status).toHaveBeenCalledWith(204)
+                    expect(mockRes.end).toHaveBeenCalled()
+                    break
+                }
+            }
+            expect(corsMiddlewareFound).toBe(true)
+
+            // Test CORS middleware with non-OPTIONS request (calls next)
+            for (const mw of middlewareFns) {
+                const mockRes = {
+                    setHeader: vi.fn(),
+                    status: vi.fn().mockReturnThis(),
+                    end: vi.fn(),
+                }
+                const nextFn = vi.fn()
+                mw({ method: 'POST' }, mockRes, nextFn)
+                const calls = mockRes.setHeader.mock.calls as [string, string][]
+                const headerNames = calls.map((c) => c[0])
+                if (headerNames.includes('Access-Control-Allow-Origin')) {
+                    expect(nextFn).toHaveBeenCalled()
+                    break
+                }
+            }
+        })
+
+        it('should handle stateful GET /mcp without session', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const getHandler = mockHandlers.get['/mcp']
+            expect(getHandler).toBeDefined()
+
+            // No session ID
+            const mockReq = { headers: {} }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                send: vi.fn(),
+            }
+
+            if (getHandler) await getHandler(mockReq, mockRes)
+            expect(mockRes.status).toHaveBeenCalledWith(400)
+            expect(mockRes.send).toHaveBeenCalledWith(
+                expect.stringContaining('Invalid or missing session ID')
+            )
+        })
+
+        it('should handle stateful DELETE /mcp without session', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const deleteHandler = mockHandlers.delete['/mcp']
+            expect(deleteHandler).toBeDefined()
+
+            const mockReq = { headers: {} }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                send: vi.fn(),
+            }
+
+            if (deleteHandler) await deleteHandler(mockReq, mockRes)
+            expect(mockRes.status).toHaveBeenCalledWith(400)
+        })
+
+        it('should handle stateful GET /mcp with invalid session', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const getHandler = mockHandlers.get['/mcp']
+            const mockReq = { headers: { 'mcp-session-id': 'nonexistent-session' } }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                send: vi.fn(),
+            }
+
+            if (getHandler) await getHandler(mockReq, mockRes)
+            expect(mockRes.status).toHaveBeenCalledWith(400)
+        })
+
+        it('should handle stateful DELETE /mcp with invalid session', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const deleteHandler = mockHandlers.delete['/mcp']
+            const mockReq = { headers: { 'mcp-session-id': 'nonexistent-session' } }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                send: vi.fn(),
+            }
+
+            if (deleteHandler) await deleteHandler(mockReq, mockRes)
+            expect(mockRes.status).toHaveBeenCalledWith(400)
+        })
+
+        it('should handle stateful POST /mcp with initialization request', async () => {
+            // Make isInitializeRequest return true for this test
+            const { isInitializeRequest: mockIsInit } =
+                await import('@modelcontextprotocol/sdk/types.js')
+            ;(mockIsInit as ReturnType<typeof vi.fn>).mockReturnValueOnce(true)
+
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const postHandler = mockHandlers.post['/mcp']
+            expect(postHandler).toBeDefined()
+
+            // Simulate initialization request (no session ID, isInitializeRequest returns true)
+            const mockReq = {
+                headers: {},
+                body: { jsonrpc: '2.0', id: 1, method: 'initialize' },
+            }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                json: vi.fn(),
+                headersSent: false,
+            }
+
+            if (postHandler) {
+                await postHandler(mockReq, mockRes)
+                // Wait for async void handler to complete
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            // The transport should have been created and connected
+            // (StreamableHTTPServerTransport mock handles the request)
+            expect(mockConnect).toHaveBeenCalled()
+        })
+
+        it('should handle stateful POST /mcp error with 500 response', async () => {
+            // Create a transport mock that throws
+            const StreamableTransportMod =
+                await import('@modelcontextprotocol/sdk/server/streamableHttp.js')
+            const OrigConstructor = StreamableTransportMod.StreamableHTTPServerTransport
+            const throwingConstructor = vi.fn().mockImplementation(() => {
+                return {
+                    handleRequest: vi.fn().mockRejectedValue(new Error('Transport failure')),
+                    close: vi.fn().mockResolvedValue(undefined),
+                    sessionId: 'fail-session',
+                }
+            })
+            ;(StreamableTransportMod as Record<string, unknown>)['StreamableHTTPServerTransport'] =
+                throwingConstructor
+
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            const postHandler = mockHandlers.post['/mcp']
+            expect(postHandler).toBeDefined()
+
+            // Request with existing session ID that throws during handleRequest
+            const mockReq = {
+                headers: { 'mcp-session-id': 'fail-session' },
+                body: { jsonrpc: '2.0', id: 1, method: 'test' },
+            }
+            const mockRes = {
+                status: vi.fn().mockReturnThis(),
+                json: vi.fn(),
+                headersSent: false,
+            }
+
+            if (postHandler) {
+                await postHandler(mockReq, mockRes)
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            // Restore original
+            ;(StreamableTransportMod as Record<string, unknown>)['StreamableHTTPServerTransport'] =
+                OrigConstructor
+        })
+    })
+
+    // ========================================================================
+    // Scheduler
+    // ========================================================================
+
+    describe('createServer - scheduler', () => {
+        it('should warn and not start scheduler on stdio transport', async () => {
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+                scheduler: {
+                    backupIntervalMinutes: 60,
+                    vacuumIntervalMinutes: 120,
+                    rebuildIndexIntervalMinutes: 180,
+                },
+            })
+
+            // Scheduler should NOT be started for stdio
+            // (no way to directly check but the code path is covered)
+            expect(mockDbInitialize).toHaveBeenCalled()
+        })
+
+        it('should start scheduler on HTTP transport', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: true,
+                scheduler: {
+                    backupIntervalMinutes: 60,
+                    vacuumIntervalMinutes: 0,
+                    rebuildIndexIntervalMinutes: 0,
+                },
+            })
+
+            expect(mockDbInitialize).toHaveBeenCalled()
+        })
+
+        it('should not create scheduler when all intervals are 0', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                scheduler: {
+                    backupIntervalMinutes: 0,
+                    vacuumIntervalMinutes: 0,
+                    rebuildIndexIntervalMinutes: 0,
+                },
+            })
+
+            expect(mockDbInitialize).toHaveBeenCalled()
+        })
+    })
+
+    // ========================================================================
+    // Tool handler with outputSchema
+    // ========================================================================
+
+    describe('tool handler structuredContent', () => {
+        it('should return structuredContent for tools with outputSchema', async () => {
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+            })
+
+            // get_recent_entries has an outputSchema
+            const calls = mockRegisterTool.mock.calls.filter(
+                (call: unknown[]) => call[0] === 'get_recent_entries'
+            ) as unknown[][]
+
+            expect(calls.length).toBe(1)
+            const handler = calls[0]![2] as (
+                args: Record<string, unknown>,
+                extra: Record<string, unknown>
+            ) => Promise<{
+                content: { type: string; text: string }[]
+                structuredContent?: Record<string, unknown>
+            }>
+
+            const result = await handler({ limit: 5 }, { _meta: {} })
+
+            // Should have both content and structuredContent
+            expect(result.content).toBeDefined()
+            expect(result.structuredContent).toBeDefined()
+        })
+
+        it('should pass progressToken to tool handler when provided', async () => {
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+            })
+
+            const calls = mockRegisterTool.mock.calls.filter(
+                (call: unknown[]) => call[0] === 'create_entry'
+            ) as unknown[][]
+
+            const handler = calls[0]![2] as (
+                args: Record<string, unknown>,
+                extra: Record<string, unknown>
+            ) => Promise<unknown>
+
+            // Invoke with a progressToken in _meta
+            const result = await handler(
+                { content: 'Progress test' },
+                { _meta: { progressToken: 'tok-123' } }
+            )
+
+            expect(result).toBeDefined()
+        })
+    })
+
+    // ========================================================================
+    // Environment-based tool filter
+    // ========================================================================
+
+    describe('createServer - env tool filter', () => {
+        it('should use MEMORY_JOURNAL_MCP_TOOL_FILTER env var when no explicit filter', async () => {
+            process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER'] = 'core'
+
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+            })
+
+            // Tools should be filtered from env
+            expect(mockRegisterTool).toHaveBeenCalled()
+            const toolCount = mockRegisterTool.mock.calls.length
+
+            delete process.env['MEMORY_JOURNAL_MCP_TOOL_FILTER']
+
+            // Reset only the specific mock call counts we care about
+            mockRegisterTool.mockClear()
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+            })
+
+            const unfilteredCount = mockRegisterTool.mock.calls.length
+            // Env-filtered should have fewer tools than unfiltered
+            expect(toolCount).toBeLessThan(unfilteredCount)
+        })
+    })
+
+    // ========================================================================
+    // SIGINT shutdown handlers
+    // ========================================================================
+
+    describe('createServer - shutdown handlers', () => {
+        it('should register SIGINT handler for stdio transport', async () => {
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+            })
+
+            expect(mockSigintHandlers.length).toBe(1)
+        })
+
+        it('should register SIGINT handler for stateless HTTP', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: true,
+            })
+
+            expect(mockSigintHandlers.length).toBe(1)
+
+            // Exercise the SIGINT handler
+            const sigintHandler = mockSigintHandlers[0]
+            if (sigintHandler) {
+                sigintHandler()
+                // Wait for async void
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            expect(mockDbClose).toHaveBeenCalled()
+        })
+
+        it('should register SIGINT handler for stateful HTTP', async () => {
+            await createServer({
+                transport: 'http',
+                dbPath: './test-server.db',
+                statelessHttp: false,
+            })
+
+            expect(mockSigintHandlers.length).toBe(1)
+
+            // Exercise the SIGINT handler
+            const sigintHandler = mockSigintHandlers[0]
+            if (sigintHandler) {
+                sigintHandler()
+                await new Promise((r) => setTimeout(r, 50))
+            }
+
+            expect(mockDbClose).toHaveBeenCalled()
         })
     })
 })

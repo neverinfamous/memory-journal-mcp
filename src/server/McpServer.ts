@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import express from 'express'
 import type { Express, Request, Response } from 'express'
+import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 
 import { SqliteAdapter } from '../database/SqliteAdapter.js'
@@ -29,6 +30,7 @@ import { getTools, callTool } from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
+import { Scheduler, type SchedulerOptions } from './Scheduler.js'
 import pkg from '../../package.json' with { type: 'json' }
 
 /** Session timeout for stateful HTTP mode (30 minutes) */
@@ -47,6 +49,7 @@ export interface ServerOptions {
     autoRebuildIndex?: boolean
     statelessHttp?: boolean
     corsOrigin?: string
+    scheduler?: SchedulerOptions
 }
 
 /**
@@ -290,7 +293,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         db,
                         vectorManager,
                         filterConfig,
-                        github
+                        github,
+                        scheduler
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -324,7 +328,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         db,
                         vectorManager,
                         filterConfig,
-                        github
+                        github,
+                        scheduler
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -388,6 +393,25 @@ export async function createServer(options: ServerOptions): Promise<void> {
         )
     }
 
+    // Initialize scheduler (HTTP/SSE only)
+    let scheduler: Scheduler | null = null
+    if (options.scheduler) {
+        const hasAnyJob =
+            options.scheduler.backupIntervalMinutes > 0 ||
+            options.scheduler.vacuumIntervalMinutes > 0 ||
+            options.scheduler.rebuildIndexIntervalMinutes > 0
+
+        if (hasAnyJob && transport === 'stdio') {
+            logger.warning(
+                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
+                    'Use HTTP/SSE transport for automated scheduling.',
+                { module: 'Scheduler' }
+            )
+        } else if (hasAnyJob) {
+            scheduler = new Scheduler(options.scheduler, db, vectorManager)
+        }
+    }
+
     // Start server based on transport
     if (transport === 'stdio') {
         const stdioTransport = new StdioServerTransport()
@@ -405,12 +429,24 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
         const corsOrigin = options.corsOrigin ?? process.env['MCP_CORS_ORIGIN'] ?? '*'
+
+        if (corsOrigin === '*') {
+            logger.warning(
+                'CORS origin is set to "*" (all origins). ' +
+                    'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
+                { module: 'McpServer' }
+            )
+        }
+
         const app: Express = express()
 
         // Security headers middleware
         app.use((_req: Request, res: Response, next: () => void) => {
             res.setHeader('X-Content-Type-Options', 'nosniff')
             res.setHeader('X-Frame-Options', 'DENY')
+            res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+            res.setHeader('Cache-Control', 'no-store')
+            res.setHeader('Referrer-Policy', 'no-referrer')
             next()
         })
 
@@ -436,6 +472,19 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         // JSON body parser with size limit to prevent memory exhaustion (DoS)
         app.use(express.json({ limit: '1mb' }))
+
+        // Rate limiting to prevent abuse (100 requests/minute per IP)
+        const limiter = rateLimit({
+            windowMs: 60 * 1000,
+            limit: 100,
+            standardHeaders: 'draft-8',
+            legacyHeaders: false,
+            message: { error: 'Too many requests, please try again later' },
+        })
+        app.use(limiter)
+        logger.info('Rate limiting enabled: 100 requests/minute per IP', {
+            module: 'McpServer',
+        })
 
         // Explicit OPTIONS handler for /mcp - MUST be before other /mcp routes
         // Using app.all to intercept before Express 5's auto-OPTIONS
@@ -498,6 +547,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 })
             })
 
+            // Start scheduler after HTTP server is listening
+            scheduler?.start()
+
             httpServer.on('close', () => {
                 logger.info('HTTP server closed', { module: 'McpServer' })
             })
@@ -506,6 +558,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             process.on('SIGINT', () => {
                 logger.info('Shutting down HTTP server...', { module: 'McpServer' })
                 void (async () => {
+                    scheduler?.stop()
                     try {
                         await statelessTransport.close()
                     } catch (error) {
@@ -711,6 +764,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 })
             })
 
+            // Start scheduler after HTTP server is listening
+            scheduler?.start()
+
             // Keep process alive - httpServer keeps the event loop active
             // but we also ensure it doesn't close prematurely
             httpServer.on('close', () => {
@@ -722,6 +778,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 logger.info('Shutting down HTTP server...', { module: 'McpServer' })
 
                 void (async () => {
+                    scheduler?.stop()
+
                     // Close all active transports
                     for (const [sessionId, httpTransport] of transports) {
                         try {

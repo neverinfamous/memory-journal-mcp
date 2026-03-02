@@ -264,3 +264,49 @@ describe('getFilterSummary', () => {
         expect(summary.length).toBeGreaterThan(0)
     })
 })
+
+// ============================================================================
+// parseToolFilter edge cases
+// ============================================================================
+
+describe('parseToolFilter edge cases', () => {
+    it('should handle blacklist-first mode (-admin = all except admin)', () => {
+        const config = parseToolFilter('-admin')
+        // Should have all tools EXCEPT admin tools
+        expect(config.enabledTools.has('create_entry')).toBe(true)
+        expect(config.enabledTools.has('search_entries')).toBe(true)
+        expect(config.enabledTools.has('backup_journal')).toBe(true)
+        // Admin tools should be excluded
+        expect(config.enabledTools.has('delete_entry')).toBe(false)
+    })
+
+    it('should handle single tool name whitelist', () => {
+        const config = parseToolFilter('create_entry')
+        expect(config.enabledTools.has('create_entry')).toBe(true)
+        expect(config.enabledTools.size).toBe(1)
+    })
+
+    it('should handle meta-group in non-first position', () => {
+        const config = parseToolFilter('backup,starter')
+        // starter = core + search, plus backup group
+        expect(config.enabledTools.has('create_entry')).toBe(true)
+        expect(config.enabledTools.has('search_entries')).toBe(true)
+        expect(config.enabledTools.has('backup_journal')).toBe(true)
+    })
+
+    it('should handle combined meta-group with tool exclusion', () => {
+        const config = parseToolFilter('starter,-create_entry_minimal')
+        expect(config.enabledTools.has('create_entry')).toBe(true)
+        expect(config.enabledTools.has('create_entry_minimal')).toBe(false)
+    })
+
+    it('should handle multiple exclusions', () => {
+        const config = parseToolFilter('full,-admin,-backup,-github')
+        expect(config.enabledTools.has('create_entry')).toBe(true)
+        expect(config.enabledTools.has('search_entries')).toBe(true)
+        // Excluded groups
+        expect(config.enabledTools.has('delete_entry')).toBe(false)
+        expect(config.enabledTools.has('backup_journal')).toBe(false)
+        expect(config.enabledTools.has('get_github_issues')).toBe(false)
+    })
+})

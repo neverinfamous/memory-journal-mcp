@@ -23,21 +23,21 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/diff && \
     rm diff-8.0.3.tgz
 
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960: Manually update npm's bundled tar to 7.5.8
+# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960: Manually update npm's bundled tar to 7.5.9
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.8 && \
+    npm pack tar@7.5.9 && \
     rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.8.tgz && \
+    tar -xzf tar-7.5.9.tgz && \
     mv package node_modules/tar && \
-    rm tar-7.5.8.tgz
+    rm tar-7.5.9.tgz
 
-# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.3
+# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.4
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack minimatch@10.2.3 && \
+    npm pack minimatch@10.2.4 && \
     rm -rf node_modules/minimatch && \
-    tar -xzf minimatch-10.2.3.tgz && \
+    tar -xzf minimatch-10.2.4.tgz && \
     mv package node_modules/minimatch && \
-    rm minimatch-10.2.3.tgz
+    rm minimatch-10.2.4.tgz
 
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
@@ -78,21 +78,21 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/diff && \
     rm diff-8.0.3.tgz
 
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960: Manually update npm's bundled tar to 7.5.8
+# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960: Manually update npm's bundled tar to 7.5.9
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.8 && \
+    npm pack tar@7.5.9 && \
     rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.8.tgz && \
+    tar -xzf tar-7.5.9.tgz && \
     mv package node_modules/tar && \
-    rm tar-7.5.8.tgz
+    rm tar-7.5.9.tgz
 
-# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.3
+# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.4
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack minimatch@10.2.3 && \
+    npm pack minimatch@10.2.4 && \
     rm -rf node_modules/minimatch && \
-    tar -xzf minimatch-10.2.3.tgz && \
+    tar -xzf minimatch-10.2.4.tgz && \
     mv package node_modules/minimatch && \
-    rm minimatch-10.2.3.tgz
+    rm minimatch-10.2.4.tgz
 
 # Copy built artifacts and production dependencies
 COPY --from=builder /app/dist ./dist
@@ -126,6 +126,6 @@ CMD ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="4.4.2"
+LABEL version="4.5.0"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

@@ -331,5 +331,65 @@ describe('VectorSearchManager', () => {
             const indexed = await vm.rebuildIndex(mockDb as any)
             expect(indexed).toBe(0)
         })
+
+        it('should recover from corrupted index', async () => {
+            await initManager(vm)
+            mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
+
+            // First listItems call throws (corrupted index)
+            mockListItems.mockRejectedValueOnce(new Error('Corrupted index'))
+            // After recreation, listItems returns empty
+            mockListItems.mockResolvedValueOnce([])
+            mockInsertItem.mockResolvedValue(undefined)
+
+            const mockDb = {
+                getActiveEntryCount: vi.fn().mockReturnValue(1),
+                getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Entry' }]),
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const indexed = await vm.rebuildIndex(mockDb as any)
+            expect(indexed).toBe(1)
+        })
+
+        it('should skip entries with embedding failures', async () => {
+            await initManager(vm)
+            // First call succeeds, second fails
+            mockEmbedderFn
+                .mockResolvedValueOnce({ data: fakeEmbedding(1) })
+                .mockRejectedValueOnce(new Error('Embedding failed'))
+            mockListItems.mockResolvedValue([])
+            mockInsertItem.mockResolvedValue(undefined)
+
+            const mockDb = {
+                getActiveEntryCount: vi.fn().mockReturnValue(2),
+                getEntriesPage: vi.fn().mockReturnValue([
+                    { id: 1, content: 'Good entry' },
+                    { id: 2, content: 'Will fail embedding' },
+                ]),
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const indexed = await vm.rebuildIndex(mockDb as any)
+            // Only 1 should be indexed (the other failed)
+            expect(indexed).toBe(1)
+        })
+    })
+
+    // ========================================================================
+    // Initialize Error
+    // ========================================================================
+
+    describe('initialize error', () => {
+        it('should rethrow pipeline errors', async () => {
+            const { pipeline: pipelineMock } = await import('@xenova/transformers')
+            ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                new Error('Model not found')
+            )
+
+            const vm2 = new VectorSearchManager('/tmp/test-error.db')
+            await expect(vm2.initialize()).rejects.toThrow('Model not found')
+            expect(vm2.isInitialized()).toBe(false)
+        })
     })
 })

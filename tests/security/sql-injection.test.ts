@@ -10,11 +10,8 @@ import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
 import {
     validateDateFormatPattern,
     sanitizeSearchQuery,
-    containsSqlInjection,
-    assertNoSqlInjection,
     assertNoPathTraversal,
     InvalidDateFormatError,
-    SqlInjectionError,
     PathTraversalError,
 } from '../../src/utils/security-utils.js'
 
@@ -117,52 +114,6 @@ describe('Security Utilities', () => {
         it('should not modify safe strings', () => {
             expect(sanitizeSearchQuery('normal text')).toBe('normal text')
             expect(sanitizeSearchQuery("it's fine")).toBe("it's fine")
-        })
-    })
-
-    describe('containsSqlInjection', () => {
-        it('should detect stacked query injection', () => {
-            expect(containsSqlInjection('; DROP TABLE users')).toBe(true)
-            expect(containsSqlInjection("'; DELETE FROM logs --")).toBe(true)
-        })
-
-        it('should detect comment injection', () => {
-            expect(containsSqlInjection('value -- comment')).toBe(true)
-            expect(containsSqlInjection('test /* block */ comment')).toBe(true)
-        })
-
-        it('should detect UNION injection', () => {
-            expect(containsSqlInjection("' UNION SELECT * FROM users")).toBe(true)
-            expect(containsSqlInjection("' UNION ALL SELECT 1")).toBe(true)
-        })
-
-        it('should detect boolean bypass', () => {
-            expect(containsSqlInjection("' OR '1'='1")).toBe(true)
-        })
-
-        it('should detect SQLite-specific attacks', () => {
-            expect(containsSqlInjection("ATTACH DATABASE 'mal.db' AS x")).toBe(true)
-            expect(containsSqlInjection("load_extension('evil.so')")).toBe(true)
-        })
-
-        it('should not flag safe inputs', () => {
-            for (const input of SAFE_INPUTS) {
-                expect(containsSqlInjection(input)).toBe(false)
-            }
-        })
-    })
-
-    describe('assertNoSqlInjection', () => {
-        it('should throw SqlInjectionError for injection attempts', () => {
-            for (const payload of INJECTION_PAYLOADS) {
-                expect(() => assertNoSqlInjection(payload)).toThrow(SqlInjectionError)
-            }
-        })
-
-        it('should not throw for safe inputs', () => {
-            for (const input of SAFE_INPUTS) {
-                expect(() => assertNoSqlInjection(input)).not.toThrow()
-            }
         })
     })
 
@@ -314,16 +265,14 @@ describe('SqliteAdapter SQL Injection Protection', () => {
     describe('restoreFromFile - Path Traversal Protection', () => {
         it('should reject filenames with path traversal', async () => {
             await expect(db.restoreFromFile('../../../etc/passwd')).rejects.toThrow(
-                'Invalid backup filename: path separators not allowed'
+                PathTraversalError
             )
 
             await expect(db.restoreFromFile('..\\..\\windows\\system32')).rejects.toThrow(
-                'Invalid backup filename: path separators not allowed'
+                PathTraversalError
             )
 
-            await expect(db.restoreFromFile('/etc/passwd')).rejects.toThrow(
-                'Invalid backup filename: path separators not allowed'
-            )
+            await expect(db.restoreFromFile('/etc/passwd')).rejects.toThrow(PathTraversalError)
         })
     })
 

@@ -470,4 +470,457 @@ describe('GitHub Resource Handlers', () => {
             expect(data.more.repoInsights).toBe('memory://github/insights')
         })
     })
+
+    // ========================================================================
+    // memory://github/insights
+    // ========================================================================
+
+    describe('memory://github/insights', () => {
+        it('should return insights with stars and traffic', async () => {
+            const github = createMockGitHub()
+            const result = await readResource(
+                'memory://github/insights',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                repository: string
+                stars: number
+                forks: number
+                clones14d?: number
+                views14d?: number
+            }
+
+            expect(data.repository).toBe('testowner/testrepo')
+            expect(data.stars).toBe(42)
+            expect(data.forks).toBe(7)
+            expect(data.clones14d).toBe(120)
+            expect(data.views14d).toBe(500)
+        })
+
+        it('should return error when no github', async () => {
+            const result = await readResource(
+                'memory://github/insights',
+                db,
+                undefined,
+                undefined,
+                null
+            )
+
+            const data = result.data as { error: string }
+            expect(data.error).toContain('GitHub integration not available')
+        })
+
+        it('should return error when no owner/repo', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null, branch: null }),
+            })
+
+            const result = await readResource(
+                'memory://github/insights',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as { error: string }
+            expect(data.error).toContain('Could not detect repository')
+        })
+
+        it('should handle traffic data failure gracefully', async () => {
+            const github = createMockGitHub({
+                getTrafficData: vi.fn().mockRejectedValue(new Error('403')),
+            })
+
+            const result = await readResource(
+                'memory://github/insights',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                stars: number
+                hint?: string
+            }
+
+            expect(data.stars).toBe(42)
+            expect(data.hint).toBeDefined()
+        })
+    })
+
+    // ========================================================================
+    // memory://graph/actions
+    // ========================================================================
+
+    describe('memory://graph/actions', () => {
+        it('should return mermaid diagram with workflow runs', async () => {
+            const github = createMockGitHub()
+            const result = await readResource(
+                'memory://graph/actions',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                format: string
+                diagram: string
+                workflowRunCount: number
+            }
+
+            expect(data.format).toBe('mermaid')
+            expect(data.diagram).toContain('graph LR')
+            expect(data.workflowRunCount).toBe(1)
+        })
+
+        it('should return fallback when no github', async () => {
+            const result = await readResource(
+                'memory://graph/actions',
+                db,
+                undefined,
+                undefined,
+                null
+            )
+
+            const data = result.data as { format: string; diagram: string; message: string }
+            expect(data.diagram).toContain('NoGitHub')
+        })
+
+        it('should return fallback when no repo detected', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null, branch: null }),
+            })
+
+            const result = await readResource(
+                'memory://graph/actions',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as { diagram: string }
+            expect(data.diagram).toContain('NoRepo')
+        })
+
+        it('should return fallback when no workflow runs', async () => {
+            const github = createMockGitHub({
+                getWorkflowRuns: vi.fn().mockResolvedValue([]),
+            })
+
+            const result = await readResource(
+                'memory://graph/actions',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as { diagram: string }
+            expect(data.diagram).toContain('NoRuns')
+        })
+    })
+
+    // ========================================================================
+    // memory://actions/recent
+    // ========================================================================
+
+    describe('memory://actions/recent', () => {
+        it('should return entries from GitHub API when available', async () => {
+            const github = createMockGitHub()
+            const result = await readResource(
+                'memory://actions/recent',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                entries: unknown[]
+                count: number
+                source: string
+            }
+
+            expect(data.source).toBe('github_api')
+            expect(data.count).toBe(1)
+        })
+
+        it('should fallback to database when no github', async () => {
+            const result = await readResource(
+                'memory://actions/recent',
+                db,
+                undefined,
+                undefined,
+                null
+            )
+
+            const data = result.data as { source: string }
+            expect(data.source).toBe('database')
+        })
+
+        it('should fallback to database when github API fails', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockRejectedValue(new Error('API error')),
+            })
+
+            const result = await readResource(
+                'memory://actions/recent',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as { source: string }
+            expect(data.source).toBe('database')
+        })
+    })
+
+    // ========================================================================
+    // memory://prs/{n}/timeline
+    // ========================================================================
+
+    describe('memory://prs/{n}/timeline', () => {
+        it('should return timeline with PR metadata from GitHub', async () => {
+            const github = createMockGitHub({
+                getPullRequest: vi.fn().mockResolvedValue({
+                    number: 10,
+                    title: 'Feature PR',
+                    state: 'open',
+                    draft: false,
+                    mergedAt: null,
+                    closedAt: null,
+                    author: 'dev1',
+                    headBranch: 'feature',
+                    baseBranch: 'main',
+                }),
+            })
+
+            const result = await readResource(
+                'memory://prs/10/timeline',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                prNumber: number
+                prMetadata: { title: string; state: string }
+                timelineNote: string
+            }
+
+            expect(data.prNumber).toBe(10)
+            expect(data.prMetadata).toBeDefined()
+            expect(data.prMetadata.title).toBe('Feature PR')
+            expect(data.timelineNote).toContain('open')
+        })
+
+        it('should return timeline without PR metadata when no github', async () => {
+            const result = await readResource(
+                'memory://prs/10/timeline',
+                db,
+                undefined,
+                undefined,
+                null
+            )
+
+            const data = result.data as {
+                prNumber: number
+                prMetadata: unknown
+                timelineNote: string
+            }
+
+            expect(data.prNumber).toBe(10)
+            expect(data.prMetadata).toBeNull()
+            expect(data.timelineNote).toContain('unavailable')
+        })
+
+        it('should return error for invalid PR number', async () => {
+            const result = await readResource(
+                'memory://prs/abc/timeline',
+                db,
+                undefined,
+                undefined,
+                null
+            )
+
+            const data = result.data as { error: string }
+            expect(data.error).toContain('Invalid PR number')
+        })
+    })
+
+    // ========================================================================
+    // memory://health
+    // ========================================================================
+
+    describe('memory://health', () => {
+        it('should return health status with vector and scheduler info', async () => {
+            const mockVectorManager = {
+                getStats: vi.fn().mockResolvedValue({
+                    itemCount: 50,
+                    modelName: 'test-model',
+                    dimensions: 384,
+                }),
+            }
+            const mockScheduler = {
+                getStatus: vi.fn().mockReturnValue({
+                    active: true,
+                    jobs: [{ name: 'backup', intervalMinutes: 60 }],
+                }),
+            }
+
+            const result = await readResource(
+                'memory://health',
+                db,
+                mockVectorManager as any,
+                null,
+                null,
+                mockScheduler as any
+            )
+
+            const data = result.data as {
+                vectorIndex: { available: boolean; itemCount: number }
+                scheduler: { active: boolean }
+                toolFilter: { active: boolean }
+            }
+
+            expect(data.vectorIndex).toBeDefined()
+            expect(data.vectorIndex.available).toBe(true)
+            expect(data.vectorIndex.itemCount).toBe(50)
+            expect(data.scheduler.active).toBe(true)
+            expect(data.toolFilter.active).toBe(false) // filterConfig is null
+        })
+
+        it('should handle vector manager error gracefully', async () => {
+            const mockVectorManager = {
+                getStats: vi.fn().mockRejectedValue(new Error('Not initialized')),
+            }
+
+            const result = await readResource(
+                'memory://health',
+                db,
+                mockVectorManager as any,
+                null,
+                null,
+                null
+            )
+
+            const data = result.data as {
+                vectorIndex: { available: boolean }
+            }
+
+            expect(data.vectorIndex.available).toBe(false)
+        })
+    })
+
+    // ========================================================================
+    // memory://github/status CI edge cases
+    // ========================================================================
+
+    describe('memory://github/status CI edge cases', () => {
+        it('should report failing CI when latest completed run failed', async () => {
+            const github = createMockGitHub({
+                getWorkflowRuns: vi.fn().mockResolvedValue([
+                    {
+                        id: 200,
+                        name: 'CI',
+                        status: 'completed',
+                        conclusion: 'failure',
+                        url: 'url',
+                        headBranch: 'main',
+                        headSha: 'def5678',
+                        createdAt: '2025-01-02T00:00:00Z',
+                        updatedAt: '2025-01-02T01:00:00Z',
+                    },
+                ]),
+            })
+
+            const result = await readResource(
+                'memory://github/status',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                ci: { status: string }
+            }
+
+            expect(data.ci.status).toBe('failing')
+        })
+
+        it('should report pending CI when runs are in progress', async () => {
+            const github = createMockGitHub({
+                getWorkflowRuns: vi.fn().mockResolvedValue([
+                    {
+                        id: 300,
+                        name: 'CI',
+                        status: 'in_progress',
+                        conclusion: null,
+                        url: 'url',
+                        headBranch: 'main',
+                        headSha: 'ghi9012',
+                        createdAt: '2025-01-03T00:00:00Z',
+                        updatedAt: '2025-01-03T00:30:00Z',
+                    },
+                ]),
+            })
+
+            const result = await readResource(
+                'memory://github/status',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                ci: { status: string }
+            }
+
+            expect(data.ci.status).toBe('pending')
+        })
+
+        it('should include kanban summary and milestones in status', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    columns: [
+                        { status: 'Todo', items: [{ id: 'I1' }, { id: 'I2' }] },
+                        { status: 'Done', items: [{ id: 'I3' }] },
+                    ],
+                    statusOptions: [],
+                    totalItems: 3,
+                }),
+            })
+
+            const result = await readResource(
+                'memory://github/status',
+                db,
+                undefined,
+                undefined,
+                github
+            )
+
+            const data = result.data as {
+                kanbanSummary: Record<string, number> | null
+                milestones: unknown[] | null
+            }
+
+            expect(data.kanbanSummary).toBeDefined()
+            expect(data.kanbanSummary!['Todo']).toBe(2)
+            expect(data.kanbanSummary!['Done']).toBe(1)
+            expect(data.milestones).toBeDefined()
+        })
+    })
 })

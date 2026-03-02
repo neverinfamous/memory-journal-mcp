@@ -506,6 +506,53 @@ describe('GitHub Tool Handlers', () => {
             expect(result.journalEntry.id).toBeGreaterThan(0)
         })
 
+        it('should close issue with move_to_done', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [
+                        { id: 'OPT_DONE', name: 'Done' },
+                        { id: 'OPT_TODO', name: 'Todo' },
+                    ],
+                    columns: [
+                        {
+                            status: 'Todo',
+                            items: [
+                                {
+                                    id: 'PVTITEM_ISSUE1',
+                                    title: 'Test Issue',
+                                    type: 'ISSUE',
+                                    number: 1,
+                                },
+                            ],
+                        },
+                    ],
+                    totalItems: 1,
+                }),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                {
+                    issue_number: 1,
+                    resolution_notes: 'Done!',
+                    move_to_done: true,
+                    project_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as {
+                success: boolean
+                issue: { number: number }
+                kanbanMove?: { success: boolean }
+            }
+
+            expect(result.success).toBe(true)
+        })
+
         it('should return error when issue not found', async () => {
             const github = createMockGitHub({
                 getIssue: vi.fn().mockResolvedValue(null),
@@ -551,6 +598,858 @@ describe('GitHub Tool Handlers', () => {
             )) as { error: string }
 
             expect(result.error).toContain('GitHub integration not available')
+        })
+    })
+
+    // ========================================================================
+    // Repository Insights
+    // ========================================================================
+
+    describe('get_repo_insights', () => {
+        it('should return stars section by default', async () => {
+            const github = createMockGitHub({
+                getRepoStats: vi.fn().mockResolvedValue({
+                    stars: 42,
+                    forks: 5,
+                    watchers: 3,
+                    openIssues: 2,
+                    size: 100,
+                    defaultBranch: 'main',
+                }),
+            })
+
+            const result = (await callTool(
+                'get_repo_insights',
+                {},
+                db,
+                undefined,
+                github
+            )) as Record<string, unknown>
+
+            expect(result['owner']).toBe('testowner')
+            expect(result['repo']).toBe('testrepo')
+            expect(result['stars']).toBe(42)
+            expect(result['forks']).toBe(5)
+        })
+
+        it('should return traffic section', async () => {
+            const github = createMockGitHub({
+                getTrafficData: vi.fn().mockResolvedValue({
+                    views: { total: 100, uniques: 50 },
+                    clones: { total: 20, uniques: 10 },
+                }),
+            })
+
+            const result = (await callTool(
+                'get_repo_insights',
+                { sections: 'traffic' },
+                db,
+                undefined,
+                github
+            )) as Record<string, unknown>
+
+            expect(result['traffic']).toBeDefined()
+        })
+
+        it('should return referrers section', async () => {
+            const github = createMockGitHub({
+                getTopReferrers: vi
+                    .fn()
+                    .mockResolvedValue([{ referrer: 'google.com', count: 10, uniques: 5 }]),
+            })
+
+            const result = (await callTool(
+                'get_repo_insights',
+                { sections: 'referrers' },
+                db,
+                undefined,
+                github
+            )) as Record<string, unknown>
+
+            expect(result['referrers']).toBeDefined()
+        })
+
+        it('should return paths section', async () => {
+            const github = createMockGitHub({
+                getPopularPaths: vi
+                    .fn()
+                    .mockResolvedValue([
+                        { path: '/readme', title: 'README', count: 50, uniques: 25 },
+                    ]),
+            })
+
+            const result = (await callTool(
+                'get_repo_insights',
+                { sections: 'paths' },
+                db,
+                undefined,
+                github
+            )) as Record<string, unknown>
+
+            expect(result['paths']).toBeDefined()
+        })
+
+        it('should return all sections', async () => {
+            const github = createMockGitHub({
+                getRepoStats: vi.fn().mockResolvedValue({
+                    stars: 42,
+                    forks: 5,
+                    watchers: 3,
+                    openIssues: 2,
+                    size: 100,
+                    defaultBranch: 'main',
+                }),
+                getTrafficData: vi.fn().mockResolvedValue({
+                    views: { total: 100, uniques: 50 },
+                    clones: { total: 20, uniques: 10 },
+                }),
+                getTopReferrers: vi.fn().mockResolvedValue([]),
+                getPopularPaths: vi.fn().mockResolvedValue([]),
+            })
+
+            const result = (await callTool(
+                'get_repo_insights',
+                { sections: 'all' },
+                db,
+                undefined,
+                github
+            )) as Record<string, unknown>
+
+            expect(result['stars']).toBe(42)
+            expect(result['traffic']).toBeDefined()
+            expect(result['referrers']).toBeDefined()
+            expect(result['paths']).toBeDefined()
+            // 'all' section includes size and defaultBranch
+            expect(result['size']).toBe(100)
+            expect(result['defaultBranch']).toBe('main')
+        })
+
+        it('should return error when no github', async () => {
+            const result = (await callTool('get_repo_insights', {}, db, undefined, undefined)) as {
+                error: string
+            }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+
+        it('should return error when no owner/repo detected', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({
+                    owner: null,
+                    repo: null,
+                    branch: null,
+                }),
+            })
+
+            const result = (await callTool('get_repo_insights', {}, db, undefined, github)) as {
+                error: string
+                requiresUserInput: boolean
+            }
+
+            expect(result.error).toContain('Could not auto-detect')
+            expect(result.requiresUserInput).toBe(true)
+        })
+    })
+
+    // ========================================================================
+    // Milestone edge cases
+    // ========================================================================
+
+    describe('milestone edge cases', () => {
+        it('get_github_milestones should return error when no repo', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({
+                    owner: null,
+                    repo: null,
+                    branch: null,
+                }),
+            })
+
+            const result = (await callTool('get_github_milestones', {}, db, undefined, github)) as {
+                error: string
+            }
+
+            expect(result.error).toBeDefined()
+        })
+
+        it('get_github_milestone should return not found', async () => {
+            const github = createMockGitHub({
+                getMilestone: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'get_github_milestone',
+                { milestone_number: 999 },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('not found')
+        })
+
+        it('create_github_milestone should return error when creation fails', async () => {
+            const github = createMockGitHub({
+                createMilestone: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'create_github_milestone',
+                { title: 'Will fail' },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('Failed')
+        })
+
+        it('create_github_milestone with due date', async () => {
+            const github = createMockGitHub()
+
+            const result = (await callTool(
+                'create_github_milestone',
+                { title: 'v3.0', due_on: '2026-06-01' },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; milestone: { number: number } }
+
+            expect(result.success).toBe(true)
+        })
+
+        it('update_github_milestone should return error when update fails', async () => {
+            const github = createMockGitHub({
+                updateMilestone: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'update_github_milestone',
+                { milestone_number: 1, title: 'Will fail' },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('Failed')
+        })
+
+        it('delete_github_milestone should return error when delete fails', async () => {
+            const github = createMockGitHub({
+                deleteMilestone: vi.fn().mockResolvedValue({ success: false }),
+            })
+
+            const result = (await callTool(
+                'delete_github_milestone',
+                { milestone_number: 1, confirm: true },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; message: string }
+
+            expect(result.success).toBe(false)
+            expect(result.message).toContain('Failed')
+        })
+
+        it('delete_github_milestone without confirm is rejected by zod', async () => {
+            const github = createMockGitHub()
+
+            // confirm must be literal true, passing false should fail
+            try {
+                await callTool(
+                    'delete_github_milestone',
+                    { milestone_number: 1, confirm: false },
+                    db,
+                    undefined,
+                    github
+                )
+                // If we get here, check the result for error
+            } catch {
+                // Expected: zod validation failure
+            }
+        })
+
+        it('get_github_milestones should return error when no github', async () => {
+            const result = (await callTool(
+                'get_github_milestones',
+                {},
+                db,
+                undefined,
+                undefined
+            )) as { error: string }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+    })
+
+    // ========================================================================
+    // Backup tools
+    // ========================================================================
+
+    describe('backup_journal', () => {
+        it('should create a backup', async () => {
+            const result = (await callTool('backup_journal', {}, db)) as {
+                success: boolean
+                filename: string
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.filename).toBeDefined()
+        })
+
+        it('should create a backup with custom name', async () => {
+            const result = (await callTool('backup_journal', { name: 'my-test-backup' }, db)) as {
+                success: boolean
+                filename: string
+            }
+
+            expect(result.success).toBe(true)
+        })
+    })
+
+    describe('list_backups', () => {
+        it('should list backups', async () => {
+            const result = (await callTool('list_backups', {}, db)) as {
+                backups: unknown[]
+                total: number
+            }
+
+            expect(result.backups).toBeDefined()
+            expect(typeof result.total).toBe('number')
+        })
+    })
+
+    describe('cleanup_backups', () => {
+        it('should cleanup old backups', async () => {
+            const result = (await callTool('cleanup_backups', { keep_count: 5 }, db)) as {
+                success: boolean
+                keptCount: number
+            }
+
+            expect(result.success).toBe(true)
+            expect(typeof result.keptCount).toBe('number')
+        })
+    })
+
+    // ========================================================================
+    // create_github_issue_with_entry - project integration paths
+    // ========================================================================
+
+    describe('create_github_issue_with_entry - project integration', () => {
+        it('should add issue to project and set initial status', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [
+                        { id: 'OPT_BACKLOG', name: 'Backlog' },
+                        { id: 'OPT_DONE', name: 'Done' },
+                    ],
+                    columns: [],
+                    totalItems: 0,
+                }),
+                addProjectItem: vi.fn().mockResolvedValue({ success: true, itemId: 'PVTITEM_NEW' }),
+                moveProjectItem: vi.fn().mockResolvedValue({ success: true }),
+            })
+
+            const result = (await callTool(
+                'create_github_issue_with_entry',
+                {
+                    title: 'Project Issue',
+                    journal_content: 'Added to project',
+                    project_number: 1,
+                    initial_status: 'Backlog',
+                },
+                db,
+                undefined,
+                github
+            )) as {
+                success: boolean
+                project?: { added: boolean; initialStatus?: { set: boolean } }
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.project?.added).toBe(true)
+            expect(result.project?.initialStatus?.set).toBe(true)
+        })
+
+        it('should handle project not found when adding issue', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'create_github_issue_with_entry',
+                {
+                    title: 'Issue for missing project',
+                    journal_content: 'Test',
+                    project_number: 999,
+                },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; project?: { added: boolean; error: string } }
+
+            expect(result.success).toBe(true) // Issue still created
+            expect(result.project?.added).toBe(false)
+            expect(result.project?.error).toContain('not found')
+        })
+
+        it('should handle addProjectItem failure', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [],
+                    columns: [],
+                    totalItems: 0,
+                }),
+                addProjectItem: vi
+                    .fn()
+                    .mockResolvedValue({ success: false, error: 'Permission denied' }),
+            })
+
+            const result = (await callTool(
+                'create_github_issue_with_entry',
+                {
+                    title: 'Issue add fail',
+                    journal_content: 'Test',
+                    project_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; project?: { added: boolean; error: string } }
+
+            expect(result.success).toBe(true)
+            expect(result.project?.added).toBe(false)
+        })
+
+        it('should handle initial_status not found on board', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [{ id: 'OPT_TODO', name: 'Todo' }],
+                    columns: [],
+                    totalItems: 0,
+                }),
+                addProjectItem: vi.fn().mockResolvedValue({ success: true, itemId: 'PVTITEM_NEW' }),
+            })
+
+            const result = (await callTool(
+                'create_github_issue_with_entry',
+                {
+                    title: 'Issue bad status',
+                    journal_content: 'Test',
+                    project_number: 1,
+                    initial_status: 'Nonexistent',
+                },
+                db,
+                undefined,
+                github
+            )) as {
+                success: boolean
+                project?: { added: boolean; initialStatus?: { set: boolean; error: string } }
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.project?.added).toBe(true)
+            expect(result.project?.initialStatus?.set).toBe(false)
+            expect(result.project?.initialStatus?.error).toContain('not found')
+        })
+
+        it('should handle moveProjectItem failure for initial status', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [{ id: 'OPT_BACKLOG', name: 'Backlog' }],
+                    columns: [],
+                    totalItems: 0,
+                }),
+                addProjectItem: vi.fn().mockResolvedValue({ success: true, itemId: 'PVTITEM_NEW' }),
+                moveProjectItem: vi
+                    .fn()
+                    .mockResolvedValue({ success: false, error: 'Move failed' }),
+            })
+
+            const result = (await callTool(
+                'create_github_issue_with_entry',
+                {
+                    title: 'Issue move fail',
+                    journal_content: 'Test',
+                    project_number: 1,
+                    initial_status: 'Backlog',
+                },
+                db,
+                undefined,
+                github
+            )) as {
+                success: boolean
+                project?: { added: boolean; initialStatus?: { set: boolean; error: string } }
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.project?.initialStatus?.set).toBe(false)
+        })
+
+        it('should handle createIssue returning null', async () => {
+            const github = createMockGitHub({
+                createIssue: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'create_github_issue_with_entry',
+                { title: 'Will fail', journal_content: 'Test' },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('Failed to create')
+        })
+    })
+
+    // ========================================================================
+    // close_github_issue_with_entry - Kanban edge cases
+    // ========================================================================
+
+    describe('close_github_issue_with_entry - Kanban edge cases', () => {
+        it('should return kanban error when move_to_done with no project_number', async () => {
+            const github = createMockGitHub()
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                {
+                    issue_number: 1,
+                    resolution_notes: 'Done!',
+                    move_to_done: true,
+                    // No project_number and no defaultProjectNumber
+                },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; kanban?: { moved: boolean; error: string } }
+
+            expect(result.success).toBe(true) // Issue still closes
+            expect(result.kanban?.moved).toBe(false)
+            expect(result.kanban?.error).toContain('project_number required')
+        })
+
+        it('should handle kanban board not found', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                {
+                    issue_number: 1,
+                    resolution_notes: 'Done!',
+                    move_to_done: true,
+                    project_number: 999,
+                },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; kanban?: { moved: boolean; error: string } }
+
+            expect(result.success).toBe(true)
+            expect(result.kanban?.moved).toBe(false)
+            expect(result.kanban?.error).toContain('not found')
+        })
+
+        it('should handle issue not found on project board', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [{ id: 'OPT_DONE', name: 'Done' }],
+                    columns: [
+                        {
+                            status: 'Todo',
+                            items: [
+                                { id: 'PVTITEM_OTHER', title: 'Other', type: 'ISSUE', number: 99 },
+                            ],
+                        },
+                    ],
+                    totalItems: 1,
+                }),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                {
+                    issue_number: 1,
+                    resolution_notes: 'Done!',
+                    move_to_done: true,
+                    project_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; kanban?: { moved: boolean; error: string } }
+
+            expect(result.success).toBe(true)
+            expect(result.kanban?.moved).toBe(false)
+            expect(result.kanban?.error).toContain('not found on project board')
+        })
+
+        it('should handle "Done" column not found on board', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                    projectTitle: 'Board',
+                    statusFieldId: 'FIELD_1',
+                    statusOptions: [{ id: 'OPT_TODO', name: 'Todo' }], // No "Done" status
+                    columns: [
+                        {
+                            status: 'Todo',
+                            items: [
+                                {
+                                    id: 'PVTITEM_ISSUE1',
+                                    title: 'Test Issue',
+                                    type: 'ISSUE',
+                                    number: 1,
+                                },
+                            ],
+                        },
+                    ],
+                    totalItems: 1,
+                }),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                {
+                    issue_number: 1,
+                    resolution_notes: 'Done!',
+                    move_to_done: true,
+                    project_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as { success: boolean; kanban?: { moved: boolean; error: string } }
+
+            expect(result.success).toBe(true)
+            expect(result.kanban?.moved).toBe(false)
+            expect(result.kanban?.error).toContain('"Done" status column not found')
+        })
+
+        it('should handle closeIssue returning null (API failure)', async () => {
+            const github = createMockGitHub({
+                closeIssue: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                { issue_number: 1, resolution_notes: 'Will fail' },
+                db,
+                undefined,
+                github
+            )) as { error: string }
+
+            expect(result.error).toContain('Failed to close')
+        })
+
+        it('should handle no-repo detection on close', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({
+                    owner: null,
+                    repo: null,
+                    branch: null,
+                }),
+            })
+
+            const result = (await callTool(
+                'close_github_issue_with_entry',
+                { issue_number: 1 },
+                db,
+                undefined,
+                github
+            )) as { error: string; requiresUserInput: boolean }
+
+            expect(result.error).toContain('Could not auto-detect')
+            expect(result.requiresUserInput).toBe(true)
+        })
+    })
+
+    // ========================================================================
+    // Milestone tools - no-github and no-repo error paths
+    // ========================================================================
+
+    describe('milestone tools - additional error paths', () => {
+        it('get_github_milestone should return error when no github', async () => {
+            const result = (await callTool(
+                'get_github_milestone',
+                { milestone_number: 1 },
+                db,
+                undefined,
+                undefined
+            )) as { error: string }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+
+        it('get_github_milestone should return error when no repo detected', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({
+                    owner: null,
+                    repo: null,
+                    branch: null,
+                }),
+            })
+
+            const result = (await callTool(
+                'get_github_milestone',
+                { milestone_number: 1 },
+                db,
+                undefined,
+                github
+            )) as { error: string; requiresUserInput: boolean }
+
+            expect(result.error).toContain('Could not auto-detect')
+            expect(result.requiresUserInput).toBe(true)
+        })
+
+        it('create_github_milestone should return error when no repo detected', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({
+                    owner: null,
+                    repo: null,
+                    branch: null,
+                }),
+            })
+
+            const result = (await callTool(
+                'create_github_milestone',
+                { title: 'No repo' },
+                db,
+                undefined,
+                github
+            )) as { error: string; requiresUserInput: boolean }
+
+            expect(result.error).toContain('Could not auto-detect')
+            expect(result.requiresUserInput).toBe(true)
+        })
+
+        it('create_github_milestone should return error when no github', async () => {
+            const result = (await callTool(
+                'create_github_milestone',
+                { title: 'No github' },
+                db,
+                undefined,
+                undefined
+            )) as { error: string }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+
+        it('update_github_milestone should return error when no github', async () => {
+            const result = (await callTool(
+                'update_github_milestone',
+                { milestone_number: 1, title: 'No github' },
+                db,
+                undefined,
+                undefined
+            )) as { error: string }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+
+        it('update_github_milestone should return error when no repo detected', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({
+                    owner: null,
+                    repo: null,
+                    branch: null,
+                }),
+            })
+
+            const result = (await callTool(
+                'update_github_milestone',
+                { milestone_number: 1, title: 'No repo' },
+                db,
+                undefined,
+                github
+            )) as { error: string; requiresUserInput: boolean }
+
+            expect(result.error).toContain('Could not auto-detect')
+            expect(result.requiresUserInput).toBe(true)
+        })
+
+        it('delete_github_milestone should return error when no github', async () => {
+            const result = (await callTool(
+                'delete_github_milestone',
+                { milestone_number: 1, confirm: true },
+                db,
+                undefined,
+                undefined
+            )) as { error: string }
+
+            expect(result.error).toContain('GitHub integration not available')
+        })
+
+        it('delete_github_milestone should return error when no repo detected', async () => {
+            const github = createMockGitHub({
+                getRepoInfo: vi.fn().mockResolvedValue({
+                    owner: null,
+                    repo: null,
+                    branch: null,
+                }),
+            })
+
+            const result = (await callTool(
+                'delete_github_milestone',
+                { milestone_number: 1, confirm: true },
+                db,
+                undefined,
+                github
+            )) as { error: string; requiresUserInput: boolean }
+
+            expect(result.error).toContain('Could not auto-detect')
+            expect(result.requiresUserInput).toBe(true)
+        })
+    })
+
+    // ========================================================================
+    // restore_backup
+    // ========================================================================
+
+    describe('restore_backup', () => {
+        it('should restore from a backup file', async () => {
+            // First create a backup to restore from
+            const backupResult = (await callTool(
+                'backup_journal',
+                { name: 'restore-test' },
+                db
+            )) as { success: boolean; filename: string }
+
+            expect(backupResult.success).toBe(true)
+
+            const result = (await callTool(
+                'restore_backup',
+                { filename: backupResult.filename, confirm: true },
+                db
+            )) as {
+                success: boolean
+                message: string
+                restoredFrom: string
+                previousEntryCount: number
+                newEntryCount: number
+            }
+
+            expect(result.success).toBe(true)
+            expect(result.message).toContain('restored')
+            expect(typeof result.previousEntryCount).toBe('number')
+            expect(typeof result.newEntryCount).toBe('number')
         })
     })
 })

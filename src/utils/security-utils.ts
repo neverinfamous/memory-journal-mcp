@@ -33,16 +33,6 @@ export class InvalidDateFormatError extends SecurityError {
 }
 
 /**
- * Thrown when SQL injection patterns are detected in input
- */
-export class SqlInjectionError extends SecurityError {
-    constructor(pattern: string) {
-        super(`Potential SQL injection detected: '${pattern}'`, 'SQL_INJECTION')
-        this.name = 'SqlInjectionError'
-    }
-}
-
-/**
  * Thrown when path traversal is detected in input
  */
 export class PathTraversalError extends SecurityError {
@@ -109,48 +99,6 @@ export function validateDateFormatPattern(groupBy: string): string {
 export function sanitizeSearchQuery(query: string): string {
     // Escape backslashes first, then LIKE wildcards
     return query.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
-}
-
-// ============================================================================
-// SQL Injection Detection
-// ============================================================================
-
-/**
- * Patterns that indicate SQL injection attempts.
- * Used for validation in edge cases where parameterized queries aren't possible.
- */
-const SQL_INJECTION_PATTERNS = [
-    /;\s*(DROP|DELETE|INSERT|UPDATE|CREATE|ALTER|TRUNCATE)/i,
-    /--\s*/,
-    /\/\*[\s\S]*?\*\//,
-    /UNION\s+(ALL\s+)?SELECT/i,
-    /'\s*OR\s+['"]?1['"]?\s*=\s*['"]?1/i,
-    /ATTACH\s+DATABASE/i,
-    /DETACH\s+DATABASE/i,
-    /load_extension\s*\(/i,
-] as const
-
-/**
- * Checks if a string contains potential SQL injection patterns.
- * This is a secondary defense layer; parameterized queries are the primary defense.
- *
- * @param input - The string to check
- * @returns true if injection patterns are detected, false otherwise
- */
-export function containsSqlInjection(input: string): boolean {
-    return SQL_INJECTION_PATTERNS.some((pattern) => pattern.test(input))
-}
-
-/**
- * Validates that input does not contain SQL injection patterns.
- *
- * @param input - The string to validate
- * @throws SqlInjectionError if injection patterns are detected
- */
-export function assertNoSqlInjection(input: string): void {
-    if (containsSqlInjection(input)) {
-        throw new SqlInjectionError(input.substring(0, 50))
-    }
 }
 
 // ============================================================================
