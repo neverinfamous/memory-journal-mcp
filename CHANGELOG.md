@@ -5,6 +5,14 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### CI/CD
+
+- **CodeQL Default Setup Disabled** — Disabled GitHub's CodeQL "Default Setup" to resolve persistent "Error when processing the SARIF file" warning. Both the Default Setup and the custom `codeql.yml` workflow were uploading SARIF results for `javascript-typescript`, causing a conflict during ingestion. The custom workflow is now the sole CodeQL scanner.
+- **CodeQL `actions` Language Coverage** — Added `actions` to the CodeQL workflow language matrix to replace coverage previously provided by the Default Setup. The workflow now scans both `javascript-typescript` and `actions`.
+- **Trivy Action Update** — Updated `aquasecurity/trivy-action` 0.34.0 → 0.34.1 in `security-update.yml` (bundles Trivy scanner 0.69.2)
+
 ## [4.5.0] - 2026-03-02
 
 ### Fixed
