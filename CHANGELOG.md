@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency Updates**
+  - `sql.js`: 1.14.0 → 1.14.1 (patch)
+
 ### CI/CD
 
 - **CodeQL Default Setup Disabled** — Disabled GitHub's CodeQL "Default Setup" to resolve persistent "Error when processing the SARIF file" warning. Both the Default Setup and the custom `codeql.yml` workflow were uploading SARIF results for `javascript-typescript`, causing a conflict during ingestion. The custom workflow is now the sole CodeQL scanner.
