@@ -157,12 +157,28 @@ export class SqliteAdapter {
         // Fix any tags with NULL usage_count (data repair from legacy DBs)
         db.run('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL')
 
-        if (added.length > 0) {
+        // Drop legacy FTS5 triggers from Python-era databases.
+        // sql.js WASM does not include FTS5; these triggers cause "no such module: fts5"
+        // on INSERT/UPDATE/DELETE operations. The TypeScript codebase uses LIKE queries.
+        // NOTE: We only drop triggers (regular objects). Dropping FTS5 virtual tables
+        // would also require the fts5 module, so we leave the inert shadow tables in place.
+        const dropped: string[] = []
+        const triggers = db.exec(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%fts%'"
+        )
+        for (const row of triggers[0]?.values ?? []) {
+            const name = String(row[0])
+            db.run(`DROP TRIGGER IF EXISTS "${name}"`)
+            dropped.push(`trigger:${name}`)
+        }
+
+        const changes = [...added.map((c) => `column:${c}`), ...dropped]
+        if (changes.length > 0) {
             this.flushSave()
             logger.info('Schema migrated', {
                 module: 'SqliteAdapter',
                 dbPath: this.dbPath,
-                columnsAdded: added,
+                changes,
             })
         }
     }
