@@ -26,7 +26,7 @@
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
 - 🔗 **Knowledge graphs** - 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization
-- 🔍 **Triple search** - full-text (FTS5), semantic (AI-powered via `@xenova/transformers`), and date range
+- 🔍 **Triple search** - full-text, semantic (AI-powered via `@xenova/transformers`), and date range
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
@@ -34,6 +34,7 @@
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
 - 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
+- 🔧 **IDE Hooks** — ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks))
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
@@ -52,59 +53,7 @@
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
 
-```
-+---------------------------+
-| 🤖 AI Session Start       |
-|---------------------------|
-|  📋 Read Briefing         |
-|  (memory://briefing)      |
-+-------------+-------------+
-              |
-              v
-+---------------------------+
-| 📝 Journal Operations     |
-|---------------------------|
-|  - Create Entry           |
-|  - Retrieve & Search      |
-|  - Link Entries           |
-+------+------+------+------+
-       |      |      |
-       |      |      |
-       v      |      v
-+--------------+   +---------------------------+
-| 🔍 Triple    |<->| 🐙 GitHub Integration    |
-|    Search    |   |---------------------------|
-|--------------|   |  - Issues & Milestones    |
-|  - Full-Text |   |  - Pull Requests          |
-|    (FTS5)    |   |  - GitHub Actions         |
-|  - Semantic  |   |  - Kanban Boards          |
-|    (Vector)  |   +-------------+-------------+
-|  - Date      |                 |
-|    Range     |                 |
-+------+-------+                 |
-       |                         |
-       v                         v
-       +-----------+-------------+
-                   |
-                   v
-        +---------------------------+
-        | 📊 Outputs                |
-        |---------------------------|
-        |  - Standups & Retros      |
-        |  - Knowledge Graphs       |
-        |  - Project Timelines      |
-        +-------------+-------------+
-                      |
-                      v
-        +---------------------------+
-        | 🔄 Session End            |
-        |---------------------------|
-        |  - Auto-summary entry     |
-        |  - Flows to next briefing |
-        +---------------------------+
-```
-
----
+**Flow:** AI Session Start → Read `memory://briefing` → Journal Operations (Create, Search, Link) → Triple Search + GitHub Integration → Outputs (Standups, Knowledge Graphs, Timelines) → Session End (auto-summary → next briefing)
 
 ### Tool Filtering
 
@@ -143,19 +92,61 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 15 Workflow Prompts
+### 🎯 **15 Workflow Prompts**
 
-Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking
+- `find-related` - Discover connected entries via semantic similarity
+- `prepare-standup` - Daily standup summaries
+- `prepare-retro` - Sprint retrospectives
+- `weekly-digest` - Day-by-day weekly summaries
+- `analyze-period` - Deep period analysis with insights
+- `goal-tracker` - Milestone and achievement tracking
+- `get-context-bundle` - Project context with Git/GitHub/Kanban
+- `get-recent-entries` - Formatted recent entries
+- `project-status-summary` - GitHub Project status reports
+- `pr-summary` - Pull request journal activity summary
+- `code-review-prep` - Comprehensive PR review preparation
+- `pr-retrospective` - Completed PR analysis with learnings
+- `actions-failure-digest` - CI/CD failure analysis
+- `project-milestone-tracker` - Milestone progress tracking
+- `confirm-briefing` - Acknowledge session context to user
+
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 22 Resources (15 Static + 7 Template)
+### 📡 **22 Resources** (15 Static + 7 Template)
 
-Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, `memory://kanban/{n}` for Kanban boards, `memory://github/milestones` for milestone tracking, `memory://github/insights` for repository traffic analytics, and `memory://team/recent` + `memory://team/statistics` for team collaboration. Template resources require parameters and are accessed directly by URI.
+**Static Resources** (appear in resource lists):
+
+- `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
+- `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
+- `memory://recent` - 10 most recent entries
+- `memory://significant` - Significant milestones and breakthroughs
+- `memory://graph/recent` - Live Mermaid diagram of recent relationships
+- `memory://health` - Server health & diagnostics
+- `memory://graph/actions` - CI/CD narrative graph
+- `memory://actions/recent` - Recent workflow runs
+- `memory://tags` - All tags with usage counts
+- `memory://statistics` - Journal statistics
+- `memory://github/status` - GitHub repository status overview
+- `memory://github/insights` - Repository stars, forks, and 14-day traffic summary
+- `memory://github/milestones` - Open milestones with completion percentages
+- `memory://team/recent` - Recent team entries with author attribution
+- `memory://team/statistics` - Team entry counts, types, and author breakdown
+
+**Template Resources** (require parameters, fetch directly by URI):
+
+- `memory://projects/{number}/timeline` - Project activity timeline
+- `memory://issues/{issue_number}/entries` - Entries linked to issue
+- `memory://prs/{pr_number}/entries` - Entries linked to PR
+- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
+- `memory://kanban/{project_number}` - GitHub Project Kanban board
+- `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
+- `memory://milestones/{number}` - Milestone detail with completion progress
+
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
----
-
 ## 🚀 Quick Start (2 Minutes)
+
+**Prerequisites:** Docker installed and running · ~300MB disk space · **[Full Installation Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation)**
 
 ### 1. Pull the Image
 
@@ -329,7 +320,7 @@ docker run --rm -p 3000:3000 \
 
 Enable periodic maintenance jobs for long-running containers. These jobs run in-process on `setInterval` — no external cron needed.
 
-> **Note:** These flags only work with HTTP/SSE transport. Stdio transport (used by IDE integrations like Cursor and AntiGravity) ignores scheduler flags because those sessions are short-lived. For stdio, use the `backup_journal` and `cleanup_backups` tools manually.
+> **Note:** These flags only work with HTTP/SSE transport. Stdio sessions (IDE integrations) are short-lived — use `backup_journal` and `cleanup_backups` tools manually instead.
 
 ```bash
 docker run --rm -p 3000:3000 \
@@ -361,32 +352,7 @@ curl -X POST http://localhost:3000/mcp \
 # Include mcp-session-id header in subsequent requests
 ```
 
----
-
-## ⚡ **Install to Cursor IDE**
-
-### **One-Click Installation**
-
-Click the button below to install directly into Cursor:
-
-[![Install to Cursor](https://img.shields.io/badge/Install%20to%20Cursor-Click%20Here-blue?style=for-the-badge)](cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbC1tY3AiOnsiYXJncyI6WyJydW4iLCItLXJtIiwiLWkiLCItdiIsIi4vZGF0YTovYXBwL2RhdGEiLCJ3cml0ZW5vdGVub3cvbWVtb3J5LWpvdXJuYWwtbWNwOmxhdGVzdCJdLCJjb21tYW5kIjoiZG9ja2VyIn19)
-
-Or copy this deep link:
-
-```
-cursor://anysphere.cursor-deeplink/mcp/install?name=Memory%20Journal%20MCP&config=eyJtZW1vcnktam91cm5hbC1tY3AiOnsiYXJncyI6WyJydW4iLCItLXJtIiwiLWkiLCItdiIsIi4vZGF0YTovYXBwL2RhdGEiLCJ3cml0ZW5vdGVub3cvbWVtb3J5LWpvdXJuYWwtbWNwOmxhdGVzdCJdLCJjb21tYW5kIjoiZG9ja2VyIn19
-```
-
-### **Prerequisites**
-
-- ✅ Docker installed and running
-- ✅ ~300MB disk space available
-
-**📖 [See Full Installation Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation)**
-
----
-
-## 🛡️ Supply Chain Security
+## ️ Supply Chain Security
 
 For enhanced security and reproducible builds, use SHA-pinned images:
 
@@ -434,11 +400,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
 - `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
 
-> **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, Milestones, timeline resources, context linking). Standard GitHub mutations (create/close issues, merge PRs, manage releases) are handled directly by agents via `gh` CLI.
-
 **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
-
----
 
 ## 📦 Image Details
 
@@ -457,13 +419,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - **Instant Startup** - Lazy loading of ML models
 - **Production/Stable** - Deterministic error handling (`{success, error}` on every tool) and automatic migrations
 
-**Performance Benchmarks:**
-
-Memory Journal is designed for extremely low overhead during AI task execution.
-
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~55x faster than retrieving 50 recent entries.
-- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>190x faster locally).
-- **Core MCP Routines**: Complex operations exhibit negligible latency when executed through standard MCP tools. Calling tools natively adds ~1.4x overhead compared to direct function execution.
+Designed for extremely low overhead: database reads in sub-millisecond, vector search >190x faster than indexing, native MCP tool calls add ~1.4x overhead vs direct execution. Run `npm run bench` for local benchmarks.
 
 **Automated Deployment:**
 
@@ -480,8 +436,6 @@ Memory Journal is designed for extremely low overhead during AI task execution.
 - `4` - Latest minor in 4.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
-
----
 
 ## 🏗️ Build from Source
 
@@ -513,20 +467,14 @@ Update your `~/.cursor/mcp.json` to use the local build:
 }
 ```
 
----
-
 ## 📚 Documentation & Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution
 - **[Issues](https://github.com/neverinfamous/memory-journal-mcp/issues)** - Bug reports & feature requests
 
----
-
 ## 📄 License
 
 MIT License - See [LICENSE](https://github.com/neverinfamous/memory-journal-mcp/blob/main/LICENSE)
-
----
 
 _Migrating from v2.x?_ Your existing database is fully compatible. The TypeScript version uses the same schema and data format.

@@ -15,7 +15,7 @@
 ![Coverage](https://img.shields.io/badge/Coverage-92%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-604_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge Disconnected AI sessions with Persistent Project Memory and **Automatic Session Handoff**. Integrates your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — Into Every Conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -33,7 +33,7 @@
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
 - 🔗 **Knowledge graphs** - 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization
-- 🔍 **Triple search** - full-text (FTS5), semantic (AI-powered via `@xenova/transformers`), and date range
+- 🔍 **Triple search** - full-text, semantic (AI-powered via `@xenova/transformers`), and date range
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
@@ -84,7 +84,7 @@ flowchart TB
     end
 
     subgraph Search["🔍 Triple Search"]
-        FTS["Full-Text (FTS5)"]
+        FTS["Full-Text"]
         Semantic["Semantic (Vector)"]
         DateRange["Date Range"]
     end
