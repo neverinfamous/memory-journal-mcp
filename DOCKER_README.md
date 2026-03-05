@@ -247,16 +247,31 @@ docker run --rm -p 3000:3000 \
 
 **Endpoints:**
 
-- `POST /mcp` — JSON-RPC requests (initialize, tools/call, resources/read, etc.)
-- `GET /mcp` — SSE stream for server-to-client notifications (stateful only)
-- `DELETE /mcp` — Session termination (stateful only)
+| Endpoint         | Description                                      | Mode     |
+| ---------------- | ------------------------------------------------ | -------- |
+| `GET /`          | Server info and available endpoints              | Both     |
+| `POST /mcp`      | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
+| `GET /mcp`       | SSE stream for server-to-client notifications    | Stateful |
+| `DELETE /mcp`    | Session termination                              | Stateful |
+| `GET /sse`       | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
+| `POST /messages` | Legacy SSE message endpoint                      | Stateful |
+| `GET /health`    | Health check (`{ status, timestamp }`)           | Both     |
 
 **Session Management:** In stateful mode, include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
-| Mode                      | Progress Notifications | SSE Streaming | Serverless |
-| ------------------------- | ---------------------- | ------------- | ---------- |
-| Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
-| Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
+**Security Features:**
+
+- **6 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`
+- **Rate Limiting** — 100 requests/minute per IP (429 on excess)
+- **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`)
+- **Body Size Limit** — 1 MB maximum
+- **404 Handler** — Unknown paths return `{ error: "Not found" }`
+- **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
+
+| Mode                      | Progress Notifications | Legacy SSE | Serverless |
+| ------------------------- | ---------------------- | ---------- | ---------- |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Complex |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Native  |
 
 #### Automated Scheduling (HTTP Only)
 

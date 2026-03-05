@@ -206,11 +206,26 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 
 **Endpoints:**
 
-- `POST /mcp` — JSON-RPC requests (initialize, tools/call, etc.)
-- `GET /mcp` — SSE stream for server-to-client notifications
-- `DELETE /mcp` — Session termination
+| Endpoint         | Description                                      | Mode     |
+| ---------------- | ------------------------------------------------ | -------- |
+| `GET /`          | Server info and available endpoints              | Both     |
+| `POST /mcp`      | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
+| `GET /mcp`       | SSE stream for server-to-client notifications    | Stateful |
+| `DELETE /mcp`    | Session termination                              | Stateful |
+| `GET /sse`       | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
+| `POST /messages` | Legacy SSE message endpoint                      | Stateful |
+| `GET /health`    | Health check (`{ status, timestamp }`)           | Both     |
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
+
+**Security Features:**
+
+- **6 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`
+- **Rate Limiting** — 100 requests/minute per IP (429 on excess)
+- **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`)
+- **Body Size Limit** — 1 MB maximum
+- **404 Handler** — Unknown paths return `{ error: "Not found" }`
+- **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
 
 **Example with curl:**
 
@@ -238,10 +253,10 @@ For serverless deployments (Lambda, Workers, Vercel), use stateless mode:
 memory-journal-mcp --transport http --port 3000 --stateless
 ```
 
-| Mode                      | Progress Notifications | SSE Streaming | Serverless |
-| ------------------------- | ---------------------- | ------------- | ---------- |
-| Stateful (default)        | ✅ Yes                 | ✅ Yes        | ⚠️ Complex |
-| Stateless (`--stateless`) | ❌ No                  | ❌ No         | ✅ Native  |
+| Mode                      | Progress Notifications | Legacy SSE | Serverless |
+| ------------------------- | ---------------------- | ---------- | ---------- |
+| Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Complex |
+| Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Native  |
 
 #### Automated Scheduling (HTTP Only)
 
@@ -604,7 +619,7 @@ npm run bench
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-11-25 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
-- **HTTP transport hardening** - Configurable CORS, 1MB body limit, security headers, 30-min session timeout, rate limiting (100 req/min)
+- **HTTP transport hardening** - 6 security headers (`X-Content-Type-Options`, `X-Frame-Options`, `CSP`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`), configurable CORS, 1MB body limit, rate limiting (100 req/min), 30-min session timeout, 404 handler, cross-protocol guard
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error logs
 
 ### Data & Privacy
