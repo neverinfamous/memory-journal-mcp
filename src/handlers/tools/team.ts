@@ -23,7 +23,7 @@ import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema } from './schemas.js
  */
 function resolveAuthor(): string {
     // 1. Explicit env var
-    const envAuthor = process.env['TEAM_AUTHOR']
+    const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
     if (envAuthor) return envAuthor
 
     // 2. Git config
@@ -31,7 +31,9 @@ function resolveAuthor(): string {
         const gitUser = execSync('git config user.name', {
             encoding: 'utf-8',
             timeout: 3000,
-        }).trim()
+        })
+            .trim()
+            .replace(/"/g, '')
         if (gitUser) return gitUser
     } catch {
         // Git not available or not configured

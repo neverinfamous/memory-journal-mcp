@@ -120,13 +120,15 @@ const TagsListOutputSchema = z.object({
 
 /** Resolve the author name for team-shared entries */
 function resolveTeamAuthor(): string {
-    const envAuthor = process.env['TEAM_AUTHOR']
+    const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
     if (envAuthor) return envAuthor
     try {
         const gitUser = execSync('git config user.name', {
             encoding: 'utf-8',
             timeout: 3000,
-        }).trim()
+        })
+            .trim()
+            .replace(/"/g, '')
         if (gitUser) return gitUser
     } catch {
         // Git not available
