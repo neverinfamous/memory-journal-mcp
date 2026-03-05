@@ -12,7 +12,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-92%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-88%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-604_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
@@ -552,8 +552,8 @@ flowchart TB
 
 Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
 
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~55x faster than retrieving 50 recent entries.
-- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>190x faster locally).
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~33x faster than retrieving 50 recent entries.
+- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>115x faster locally).
 - **Core MCP Routines**: Complex operations exhibit negligible latency when executed through standard MCP tools. Calling tools natively adds ~1.4x overhead compared to direct function execution.
 
 To run the benchmarking suite locally:

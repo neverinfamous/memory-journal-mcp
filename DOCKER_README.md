@@ -10,7 +10,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-92%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-88%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-604_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
@@ -419,7 +419,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - **Instant Startup** - Lazy loading of ML models
 - **Production/Stable** - Deterministic error handling (`{success, error}` on every tool) and automatic migrations
 
-Designed for extremely low overhead: database reads in sub-millisecond, vector search >190x faster than indexing, native MCP tool calls add ~1.4x overhead vs direct execution. Run `npm run bench` for local benchmarks.
+Designed for extremely low overhead: database reads in sub-millisecond, vector search >115x faster than indexing, native MCP tool calls add ~1.4x overhead vs direct execution. Run `npm run bench` for local benchmarks.
 
 **Automated Deployment:**
 

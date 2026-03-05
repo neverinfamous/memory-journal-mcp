@@ -30,10 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **`ICON_TEAM`** — Users group SVG icon for team tools
   - Tool count: 39 → 42, tool groups: 8 → 9, resources: 20 → 22
 
-### Changed
-
-- **HTTP Transport Modularized** — Extracted HTTP transport code from `McpServer.ts` (813 → ~450 lines) into a dedicated `src/transports/http.ts` module with `HttpTransport` class, matching the architecture of mysql-mcp, postgres-mcp, and db-mcp
-
 ### Removed
 
 - **Legacy Team Collaboration System** — Removed non-functional team collaboration feature (remnant of Python-era architecture), then rebuilt from scratch (see Added > Team Collaboration)
@@ -74,6 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mermaid Arrow Inconsistency for `caused`** — Fixed `memory://graph/recent` using `-.->` (two-dot Mermaid syntax) for `caused` relationship type instead of `-.->` (single-dot), which is the canonical style used by `visualize_relationships` tool. Both now consistently use `-.->`.
 
 ### Changed
+
+- **HTTP Transport Modularized** — Extracted HTTP transport code from `McpServer.ts` (813 → ~450 lines) into a dedicated `src/transports/http.ts` module with `HttpTransport` class, matching the architecture of mysql-mcp, postgres-mcp, and db-mcp
 
 - **Dependency Updates**
   - `sql.js`: 1.14.0 → 1.14.1 (patch)
