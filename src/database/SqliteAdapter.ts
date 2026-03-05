@@ -78,6 +78,9 @@ export class SqliteAdapter {
         // Initialize schema
         this.db.run(SCHEMA_SQL)
 
+        // Migrate existing databases that may lack newer columns
+        this.migrateSchema()
+
         // Enable foreign key enforcement (SQLite disables by default)
         // Required for ON DELETE CASCADE in entry_tags, relationships, embeddings
         this.db.run('PRAGMA foreign_keys = ON')
@@ -88,6 +91,80 @@ export class SqliteAdapter {
 
         // Immediate flush after initialization to persist schema
         this.flushSave()
+    }
+
+    /**
+     * Migrate existing databases that may lack newer columns.
+     * Required because CREATE TABLE IF NOT EXISTS is a no-op on
+     * existing tables — columns added after initial creation are
+     * never added. This method checks for each expected column and
+     * runs ALTER TABLE as needed.
+     * Idempotent — safe to call on databases that already have all columns.
+     */
+    private migrateSchema(): void {
+        const db = this.ensureDb()
+        const tableInfo = db.exec('PRAGMA table_info(memory_journal)')
+        const columns = new Set((tableInfo[0]?.values ?? []).map((row) => String(row[1])))
+
+        const requiredColumns: { name: string; sql: string }[] = [
+            {
+                name: 'significance_type',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT',
+            },
+            {
+                name: 'auto_context',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT',
+            },
+            { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
+            {
+                name: 'project_number',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER',
+            },
+            {
+                name: 'project_owner',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT',
+            },
+            {
+                name: 'issue_number',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER',
+            },
+            { name: 'issue_url', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_url TEXT' },
+            { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
+            { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
+            { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
+            {
+                name: 'workflow_run_id',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER',
+            },
+            {
+                name: 'workflow_name',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT',
+            },
+            {
+                name: 'workflow_status',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT',
+            },
+        ]
+
+        const added: string[] = []
+        for (const col of requiredColumns) {
+            if (!columns.has(col.name)) {
+                db.run(col.sql)
+                added.push(col.name)
+            }
+        }
+
+        // Fix any tags with NULL usage_count (data repair from legacy DBs)
+        db.run('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL')
+
+        if (added.length > 0) {
+            this.flushSave()
+            logger.info('Schema migrated', {
+                module: 'SqliteAdapter',
+                dbPath: this.dbPath,
+                columnsAdded: added,
+            })
+        }
     }
 
     /**
@@ -707,7 +784,9 @@ export class SqliteAdapter {
      */
     listTags(): Tag[] {
         const db = this.ensureDb()
-        const result = db.exec('SELECT * FROM tags WHERE usage_count > 0 ORDER BY usage_count DESC')
+        const result = db.exec(
+            'SELECT id, name, COALESCE(usage_count, 0) as usage_count FROM tags WHERE COALESCE(usage_count, 0) > 0 ORDER BY usage_count DESC'
+        )
 
         if (result.length === 0) return []
 

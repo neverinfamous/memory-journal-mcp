@@ -122,5 +122,5 @@ export const ImportanceBreakdownSchema = z.object({
  */
 export const TagOutputSchema = z.object({
     name: z.string(),
-    count: z.number(),
+    count: z.number().nullable(),
 })
