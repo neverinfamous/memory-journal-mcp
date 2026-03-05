@@ -13,7 +13,7 @@
 ![Coverage](https://img.shields.io/badge/Coverage-92%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-604_passed-brightgreen.svg)
 
-🎯 **AI Context + Project Intelligence:** Bridge Disconnected AI sessions with Persistent Project Memory and **Automatic Session Handoff**. Integrates your complete GitHub workflow — Issues, PRs, Actions, Kanban boards, Milestones, Repository Insights, and Knowledge Graphs — Into Every Conversation.
+🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/blob/main/CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -32,7 +32,7 @@
 - 🗄️ **Backup & restore** your journal data with one command
 - ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running containers
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
-- 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools (npm install only)
+- 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
 - 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
@@ -257,7 +257,7 @@ When GitHub tools cannot auto-detect repository information:
 
 **Google AntiGravity IDE:**
 
-- **Server instructions**: Auto-injected via MCP protocol but may be truncated. Read `memory://instructions` for the full, untruncated version.
+- **Server instructions**: Auto-injected via MCP protocol but may be truncated. Read `memory://instructions` for the full, untruncated version if needed.
 
 - **Session start**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp."
 
