@@ -1,0 +1,369 @@
+/**
+ * Shared GitHub Output Schemas
+ */
+
+import { z } from 'zod'
+
+// ============================================================================
+// Issue Schemas
+// ============================================================================
+
+export const GitHubIssueOutputSchema = z.object({
+    number: z.number(),
+    title: z.string(),
+    url: z.string(),
+    state: z.enum(['OPEN', 'CLOSED']),
+    milestone: z
+        .object({
+            number: z.number(),
+            title: z.string(),
+        })
+        .nullable()
+        .optional(),
+})
+
+export const GitHubIssueDetailsOutputSchema = GitHubIssueOutputSchema.extend({
+    body: z.string().nullable(),
+    labels: z.array(z.string()),
+    assignees: z.array(z.string()),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    closedAt: z.string().nullable(),
+    commentsCount: z.number(),
+})
+
+export const GitHubIssuesListOutputSchema = z.object({
+    owner: z.string(),
+    repo: z.string(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    issues: z.array(GitHubIssueOutputSchema),
+    count: z.number(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+export const GitHubIssueResultOutputSchema = z.object({
+    issue: GitHubIssueDetailsOutputSchema.optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
+// PR Schemas
+// ============================================================================
+
+export const GitHubPullRequestOutputSchema = z.object({
+    number: z.number(),
+    title: z.string(),
+    url: z.string(),
+    state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
+})
+
+export const GitHubPRDetailsOutputSchema = GitHubPullRequestOutputSchema.extend({
+    body: z.string().nullable(),
+    draft: z.boolean(),
+    headBranch: z.string(),
+    baseBranch: z.string(),
+    author: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    mergedAt: z.string().nullable(),
+    closedAt: z.string().nullable(),
+    additions: z.number(),
+    deletions: z.number(),
+    changedFiles: z.number(),
+})
+
+export const GitHubPRsListOutputSchema = z.object({
+    owner: z.string(),
+    repo: z.string(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    pullRequests: z.array(GitHubPullRequestOutputSchema),
+    count: z.number(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+export const GitHubPRResultOutputSchema = z.object({
+    pullRequest: GitHubPRDetailsOutputSchema.optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
+// Context Schema
+// ============================================================================
+
+export const GitHubContextOutputSchema = z.object({
+    repoName: z.string().nullable(),
+    branch: z.string().nullable(),
+    commit: z.string().nullable(),
+    remoteUrl: z.string().nullable(),
+    issues: z.array(GitHubIssueOutputSchema),
+    pullRequests: z.array(GitHubPullRequestOutputSchema),
+    issueCount: z.number(),
+    prCount: z.number(),
+    error: z.string().optional(),
+})
+
+// ============================================================================
+// Kanban Schemas
+// ============================================================================
+
+const KanbanItemOutputSchema = z.object({
+    id: z.string(),
+    title: z.string(),
+    url: z.string(),
+    type: z.enum(['ISSUE', 'PULL_REQUEST', 'DRAFT_ISSUE']),
+    status: z.string().nullable(),
+    number: z.number().optional(),
+    labels: z.array(z.string()).optional(),
+    assignees: z.array(z.string()).optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+})
+
+const StatusOptionOutputSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    color: z.string().optional(),
+})
+
+const KanbanColumnOutputSchema = z.object({
+    status: z.string(),
+    statusOptionId: z.string(),
+    items: z.array(KanbanItemOutputSchema),
+})
+
+export const KanbanBoardOutputSchema = z.object({
+    projectId: z.string(),
+    projectNumber: z.number(),
+    projectTitle: z.string(),
+    statusFieldId: z.string(),
+    statusOptions: z.array(StatusOptionOutputSchema),
+    columns: z.array(KanbanColumnOutputSchema),
+    totalItems: z.number(),
+    owner: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    hint: z.string().optional(),
+    instruction: z.string().optional(),
+})
+
+export const MoveKanbanItemOutputSchema = z.object({
+    success: z.boolean().optional(),
+    itemId: z.string().optional(),
+    newStatus: z.string().optional(),
+    projectNumber: z.number().optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    hint: z.string().optional(),
+})
+
+// ============================================================================
+// Issue Lifecycle Schemas
+// ============================================================================
+
+export const CreateGitHubIssueWithEntryOutputSchema = z.object({
+    success: z.boolean().optional(),
+    issue: z
+        .object({
+            number: z.number(),
+            title: z.string(),
+            url: z.string(),
+        })
+        .optional(),
+    project: z
+        .object({
+            projectNumber: z.number(),
+            added: z.boolean(),
+            message: z.string(),
+            initialStatus: z
+                .object({
+                    status: z.string(),
+                    set: z.boolean(),
+                })
+                .optional(),
+        })
+        .optional(),
+    journalEntry: z
+        .object({
+            id: z.number(),
+            linkedToIssue: z.number(),
+        })
+        .optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+export const CloseGitHubIssueWithEntryOutputSchema = z.object({
+    success: z.boolean().optional(),
+    issue: z
+        .object({
+            number: z.number(),
+            title: z.string(),
+            url: z.string(),
+            previousState: z.string(),
+            newState: z.string(),
+        })
+        .optional(),
+    journalEntry: z
+        .object({
+            id: z.number(),
+            linkedToIssue: z.number(),
+            significanceType: z.string(),
+        })
+        .optional(),
+    kanban: z
+        .object({
+            moved: z.boolean(),
+            projectNumber: z.number(),
+            message: z.string().optional(),
+        })
+        .optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
+// Milestone Schemas
+// ============================================================================
+
+export const GitHubMilestoneOutputSchema = z.object({
+    number: z.number(),
+    title: z.string(),
+    description: z.string().nullable(),
+    state: z.enum(['open', 'closed']),
+    url: z.string(),
+    dueOn: z.string().nullable(),
+    openIssues: z.number(),
+    closedIssues: z.number(),
+    completionPercentage: z.number().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    creator: z.string().nullable(),
+})
+
+export const GitHubMilestonesListOutputSchema = z.object({
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    milestones: z.array(GitHubMilestoneOutputSchema).optional(),
+    count: z.number().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+export const GitHubMilestoneResultOutputSchema = z.object({
+    milestone: GitHubMilestoneOutputSchema.optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+export const CreateMilestoneOutputSchema = z.object({
+    success: z.boolean().optional(),
+    milestone: GitHubMilestoneOutputSchema.optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+export const UpdateMilestoneOutputSchema = z.object({
+    success: z.boolean().optional(),
+    milestone: GitHubMilestoneOutputSchema.optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+export const DeleteMilestoneOutputSchema = z.object({
+    success: z.boolean().optional(),
+    milestoneNumber: z.number().optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})
+
+// ============================================================================
+// Insights Schema
+// ============================================================================
+
+export const RepoInsightsOutputSchema = z.object({
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    section: z.string().optional(),
+    stars: z.number().optional(),
+    forks: z.number().optional(),
+    watchers: z.number().optional(),
+    openIssues: z.number().optional(),
+    size: z.number().optional(),
+    defaultBranch: z.string().optional(),
+    traffic: z
+        .object({
+            clones: z.object({
+                total: z.number(),
+                unique: z.number(),
+                dailyAvg: z.number(),
+            }),
+            views: z.object({
+                total: z.number(),
+                unique: z.number(),
+                dailyAvg: z.number(),
+            }),
+            period: z.string(),
+        })
+        .optional(),
+    referrers: z
+        .array(
+            z.object({
+                referrer: z.string(),
+                count: z.number(),
+                uniques: z.number(),
+            })
+        )
+        .optional(),
+    paths: z
+        .array(
+            z.object({
+                path: z.string(),
+                title: z.string(),
+                count: z.number(),
+                uniques: z.number(),
+            })
+        )
+        .optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+    instruction: z.string().optional(),
+})

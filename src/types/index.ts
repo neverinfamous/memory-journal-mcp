@@ -5,6 +5,11 @@
  * database entities, and filtering.
  */
 
+import type { SqliteAdapter } from '../database/SqliteAdapter.js'
+import type { VectorSearchManager } from '../vector/VectorSearchManager.js'
+import type { GitHubIntegration } from '../github/GitHubIntegration.js'
+import type { ProgressContext } from '../utils/progress-utils.js'
+
 // ============================================================================
 // Tool Filtering Types
 // ============================================================================
@@ -143,7 +148,31 @@ export interface ToolDefinition {
     annotations: ToolAnnotations
 
     /** Tool handler function */
-    handler: (params: unknown) => Promise<unknown>
+    handler: (params: unknown) => unknown
+}
+
+/**
+ * Tool handler configuration options
+ */
+export interface ToolHandlerConfig {
+    /** Default GitHub Project number for auto-assignment */
+    defaultProjectNumber?: number
+}
+
+/**
+ * Tool execution context passed to all tool group modules
+ */
+export interface ToolContext {
+    /** Database adapter */
+    db: SqliteAdapter
+    /** Vector search manager (optional) */
+    vectorManager?: VectorSearchManager
+    /** GitHub integration (optional) */
+    github?: GitHubIntegration
+    /** Handler configuration */
+    config?: ToolHandlerConfig
+    /** Progress reporting context */
+    progress?: ProgressContext
 }
 
 /**

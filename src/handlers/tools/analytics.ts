@@ -1,0 +1,266 @@
+/**
+ * Analytics Tool Group - 2 tools
+ *
+ * Tools: get_statistics, get_cross_project_insights
+ */
+
+import { z } from 'zod'
+import type { ToolDefinition, ToolContext } from '../../types/index.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
+import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema } from './schemas.js'
+
+// ============================================================================
+// Output Schemas
+// ============================================================================
+
+const StatisticsOutputSchema = z.object({
+    groupBy: z.string(),
+    totalEntries: z.number(),
+    entriesByType: z.record(z.string(), z.number()),
+    entriesByPeriod: z.array(
+        z.object({
+            period: z.string(),
+            count: z.number(),
+        })
+    ),
+    decisionDensity: z.array(
+        z.object({
+            period: z.string(),
+            significantCount: z.number(),
+        })
+    ),
+    relationshipComplexity: z.object({
+        totalRelationships: z.number(),
+        avgPerEntry: z.number(),
+    }),
+    activityTrend: z.object({
+        currentPeriod: z.string(),
+        previousPeriod: z.string(),
+        growthPercent: z.number().nullable(),
+    }),
+    causalMetrics: z.object({
+        blocked_by: z.number(),
+        resolved: z.number(),
+        caused: z.number(),
+    }),
+})
+
+const ProjectSummaryOutputSchema = z.object({
+    project_number: z.number(),
+    entry_count: z.number(),
+    first_entry: z.string(),
+    last_entry: z.string(),
+    active_days: z.number(),
+    top_tags: z.array(TagOutputSchema),
+})
+
+const CrossProjectInsightsOutputSchema = z.object({
+    project_count: z.number(),
+    total_entries: z.number(),
+    projects: z.array(ProjectSummaryOutputSchema),
+    inactive_projects: z.array(
+        z.object({
+            project_number: z.number(),
+            last_entry_date: z.string(),
+        })
+    ),
+    inactiveThresholdDays: z.number(),
+    time_distribution: z.array(
+        z.object({
+            project_number: z.number(),
+            percentage: z.string(),
+        })
+    ),
+    message: z.string().optional(),
+})
+
+// ============================================================================
+// Input Schemas
+// ============================================================================
+
+const GetStatisticsSchema = z.object({
+    group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    project_breakdown: z.boolean().optional().default(false),
+})
+
+const CrossProjectInsightsInputSchema = z.object({
+    start_date: z
+        .string()
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .optional()
+        .describe('Start date (YYYY-MM-DD)'),
+    end_date: z
+        .string()
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .optional()
+        .describe('End date (YYYY-MM-DD)'),
+    min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+})
+
+// ============================================================================
+// Tool Definitions
+// ============================================================================
+
+export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
+    const { db } = context
+    return [
+        {
+            name: 'get_statistics',
+            title: 'Get Statistics',
+            description:
+                'Get journal statistics and analytics (Phase 2: includes project breakdown)',
+            group: 'analytics',
+            inputSchema: GetStatisticsSchema,
+            outputSchema: StatisticsOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true },
+            handler: (params: unknown) => {
+                try {
+                    const { group_by } = GetStatisticsSchema.parse(params)
+                    const stats = db.getStatistics(group_by)
+                    return { ...stats, groupBy: group_by }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'get_cross_project_insights',
+            title: 'Get Cross-Project Insights',
+            description: 'Analyze patterns across all GitHub Projects tracked in journal entries',
+            group: 'analytics',
+            inputSchema: CrossProjectInsightsInputSchema,
+            outputSchema: CrossProjectInsightsOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true },
+            handler: (params: unknown) => {
+                try {
+                    const input = CrossProjectInsightsInputSchema.parse(params)
+
+                    const rawDb = db.getRawDb()
+
+                    // Build WHERE clause
+                    let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
+                    const sqlParams: unknown[] = []
+
+                    if (input.start_date) {
+                        where += ' AND DATE(timestamp) >= DATE(?)'
+                        sqlParams.push(input.start_date)
+                    }
+                    if (input.end_date) {
+                        where += ' AND DATE(timestamp) <= DATE(?)'
+                        sqlParams.push(input.end_date)
+                    }
+
+                    // Get active projects with stats
+                    const projectsResult = rawDb.exec(
+                        `
+                        SELECT project_number, COUNT(*) as entry_count,
+                               MIN(DATE(timestamp)) as first_entry,
+                               MAX(DATE(timestamp)) as last_entry,
+                               COUNT(DISTINCT DATE(timestamp)) as active_days
+                        FROM memory_journal ${where}
+                        GROUP BY project_number
+                        HAVING entry_count >= ?
+                        ORDER BY entry_count DESC
+                    `,
+                        [...sqlParams, input.min_entries]
+                    )
+
+                    if (!projectsResult[0] || projectsResult[0].values.length === 0) {
+                        return {
+                            project_count: 0,
+                            total_entries: 0,
+                            projects: [],
+                            inactive_projects: [],
+                            inactiveThresholdDays: 7,
+                            time_distribution: [],
+                            message: `No projects found with at least ${String(input.min_entries)} entries`,
+                        }
+                    }
+
+                    const columns = projectsResult[0].columns
+                    const projects = projectsResult[0].values.map((row) => {
+                        const obj: Record<string, unknown> = {}
+                        columns.forEach((col, i) => {
+                            obj[col] = row[i]
+                        })
+                        return obj
+                    })
+
+                    // Get top tags per project
+                    const projectTags: Record<number, { name: string; count: number }[]> = {}
+                    for (const proj of projects) {
+                        const projNum = proj['project_number'] as number
+                        const tagsResult = rawDb.exec(
+                            `
+                            SELECT t.name, COUNT(*) as count
+                            FROM tags t
+                            JOIN entry_tags et ON t.id = et.tag_id
+                            JOIN memory_journal m ON et.entry_id = m.id
+                            WHERE m.project_number = ? AND m.deleted_at IS NULL
+                            GROUP BY t.name
+                            ORDER BY count DESC
+                            LIMIT 5
+                        `,
+                            [projNum]
+                        )
+                        if (tagsResult[0]) {
+                            projectTags[projNum] = tagsResult[0].values.map((row) => ({
+                                name: row[0] as string,
+                                count: row[1] as number,
+                            }))
+                        }
+                    }
+
+                    // Find inactive projects (last entry > 7 days ago)
+                    const cutoffDate = new Date(Date.now() - 7 * 86400000)
+                        .toISOString()
+                        .split('T')[0]
+                    const inactiveResult = rawDb.exec(
+                        `
+                        SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
+                        FROM memory_journal
+                        WHERE deleted_at IS NULL AND project_number IS NOT NULL
+                        GROUP BY project_number
+                        HAVING last_entry_date < ?
+                    `,
+                        [cutoffDate]
+                    )
+
+                    const inactiveProjects =
+                        inactiveResult[0]?.values.map((row) => ({
+                            project_number: row[0] as number,
+                            last_entry_date: row[1] as string,
+                        })) ?? []
+
+                    // Calculate time distribution
+                    const totalEntries = projects.reduce(
+                        (sum, p) => sum + (p['entry_count'] as number),
+                        0
+                    )
+                    const distribution = projects.slice(0, 5).map((p) => ({
+                        project_number: p['project_number'],
+                        percentage: (((p['entry_count'] as number) / totalEntries) * 100).toFixed(
+                            1
+                        ),
+                    }))
+
+                    return {
+                        project_count: projects.length,
+                        total_entries: totalEntries,
+                        projects: projects.map((p) => ({
+                            ...p,
+                            top_tags: projectTags[p['project_number'] as number] ?? [],
+                        })),
+                        inactive_projects: inactiveProjects,
+                        inactiveThresholdDays: 7,
+                        time_distribution: distribution,
+                    }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+    ]
+}

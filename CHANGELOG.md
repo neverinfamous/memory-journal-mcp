@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **HTTP Transport Modularized** — Extracted HTTP transport code from `McpServer.ts` (813 → ~450 lines) into a dedicated `src/transports/http.ts` module with `HttpTransport` class, matching the architecture of mysql-mcp, postgres-mcp, and db-mcp
+- **Tool Handler Modularized** — Replaced 3,428-line monolith `src/handlers/tools/index.ts` with 12 focused modules + barrel file (~140 lines):
+  - `core.ts` (6), `search.ts` (4), `analytics.ts` (2), `relationships.ts` (2), `export.ts` (1), `admin.ts` (5), `backup.ts` (4)
+  - `github/` sub-directory: `read-tools.ts` (5), `mutation-tools.ts` (4), `milestone-tools.ts` (5), `insights-tools.ts` (1), `schemas.ts`
+  - Shared Zod output schemas extracted to `schemas.ts` and `github/schemas.ts`
+  - Public API (`getTools`, `callTool`) unchanged — zero breaking changes for `McpServer.ts`
+- **Deterministic Error Handling** — All 39 tool handlers wrapped with `try/catch` + `formatHandlerError()` returning `{ success: false, error }` instead of throwing raw MCP errors. Matches the error handling standard from mysql-mcp.
+  - New utility: `src/utils/error-helpers.ts` — `formatHandlerError()`, `formatZodError()`
+  - `ToolDefinition.handler` return type changed from `Promise<unknown>` to `unknown` (supports both sync and async handlers)
+  - GitHub `resolveOwnerRepo()` helpers now return validated `github` instance, eliminating all non-null assertions
 - **`Permissions-Policy` Header** — Added `Permissions-Policy: camera=(), microphone=(), geolocation=()` to security headers (6 headers total)
 
 ### Fixed
