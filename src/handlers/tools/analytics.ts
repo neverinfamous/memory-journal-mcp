@@ -78,6 +78,7 @@ const CrossProjectInsightsOutputSchema = z.object({
 // Input Schemas
 // ============================================================================
 
+/** Strict schema — used inside handler for structured Zod errors */
 const GetStatisticsSchema = z.object({
     group_by: z.enum(['day', 'week', 'month']).optional().default('week'),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
@@ -85,6 +86,15 @@ const GetStatisticsSchema = z.object({
     project_breakdown: z.boolean().optional().default(false),
 })
 
+/** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
+const GetStatisticsSchemaMcp = z.object({
+    group_by: z.string().optional().default('week'),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    project_breakdown: z.boolean().optional().default(false),
+})
+
+/** Strict schema — used inside handler for structured Zod errors */
 const CrossProjectInsightsInputSchema = z.object({
     start_date: z
         .string()
@@ -96,6 +106,13 @@ const CrossProjectInsightsInputSchema = z.object({
         .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
         .optional()
         .describe('End date (YYYY-MM-DD)'),
+    min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
+const CrossProjectInsightsInputSchemaMcp = z.object({
+    start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
 })
 
@@ -112,7 +129,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get journal statistics and analytics (Phase 2: includes project breakdown)',
             group: 'analytics',
-            inputSchema: GetStatisticsSchema,
+            inputSchema: GetStatisticsSchemaMcp,
             outputSchema: StatisticsOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
@@ -130,7 +147,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Cross-Project Insights',
             description: 'Analyze patterns across all GitHub Projects tracked in journal entries',
             group: 'analytics',
-            inputSchema: CrossProjectInsightsInputSchema,
+            inputSchema: CrossProjectInsightsInputSchemaMcp,
             outputSchema: CrossProjectInsightsOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {

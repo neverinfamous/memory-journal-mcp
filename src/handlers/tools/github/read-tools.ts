@@ -86,7 +86,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .describe(
                         'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
                     ),
-                state: z.enum(['open', 'closed', 'all']).optional().default('open'),
+                state: z.string().optional().default('open'),
                 limit: z.number().optional().default(20),
             }),
             outputSchema: GitHubIssuesListOutputSchema,
@@ -147,7 +147,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     .describe(
                         'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
                     ),
-                state: z.enum(['open', 'closed', 'all']).optional().default('open'),
+                state: z.string().optional().default('open'),
                 limit: z.number().optional().default(20),
             }),
             outputSchema: GitHubPRsListOutputSchema,

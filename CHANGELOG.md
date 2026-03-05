@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - GitHub `resolveOwnerRepo()` helpers now return validated `github` instance, eliminating all non-null assertions
 - **`Permissions-Policy` Header** — Added `Permissions-Policy: camera=(), microphone=(), geolocation=()` to security headers (6 headers total)
 
+### Improved
+
+- **Dual-Schema Validation for Structured Errors** — All tools now use a dual-schema pattern to ensure Zod validation errors produce structured `{ success: false, error }` responses instead of raw MCP `-32602` error frames. Relaxed schemas (`z.string()`) are passed to the SDK's `inputSchema` for type-level validation, while strict schemas (`z.enum()`, `z.string().regex()`) are used inside handlers via `.parse()` with `formatHandlerError()` catch. Applied across 8 tool files covering 13 enum fields and 8 date regex fields: `core.ts`, `search.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `relationships.ts`, `github/read-tools.ts`, `github/milestone-tools.ts`.
+
 ### Fixed
 
 - **Multi-Session Connect Crash** — Fixed `Already connected to a transport` error when creating 2+ concurrent Streamable HTTP sessions

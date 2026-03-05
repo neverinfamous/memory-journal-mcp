@@ -13,6 +13,7 @@ import { RelationshipOutputSchema } from './schemas.js'
 // Input Schemas
 // ============================================================================
 
+/** Strict schema — used inside handler for structured Zod errors */
 const LinkEntriesSchema = z.object({
     from_entry_id: z.number(),
     to_entry_id: z.number(),
@@ -29,6 +30,14 @@ const LinkEntriesSchema = z.object({
         ])
         .optional()
         .default('references'),
+    description: z.string().optional(),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
+const LinkEntriesSchemaMcp = z.object({
+    from_entry_id: z.number(),
+    to_entry_id: z.number(),
+    relationship_type: z.string().optional().default('references'),
     description: z.string().optional(),
 })
 
@@ -81,7 +90,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             title: 'Link Entries',
             description: 'Create a relationship between two journal entries',
             group: 'relationships',
-            inputSchema: LinkEntriesSchema,
+            inputSchema: LinkEntriesSchemaMcp,
             outputSchema: LinkEntriesOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {

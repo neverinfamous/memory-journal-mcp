@@ -19,6 +19,7 @@ import {
 // Input Schemas
 // ============================================================================
 
+/** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
     query: z.string().optional(),
     limit: z.number().optional().default(10),
@@ -30,10 +31,36 @@ const SearchEntriesSchema = z.object({
     workflow_run_id: z.number().optional(),
 })
 
+/** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
+const SearchEntriesSchemaMcp = z.object({
+    query: z.string().optional(),
+    limit: z.number().optional().default(10),
+    is_personal: z.boolean().optional(),
+    project_number: z.number().optional(),
+    issue_number: z.number().optional(),
+    pr_number: z.number().optional(),
+    pr_status: z.string().optional(),
+    workflow_run_id: z.number().optional(),
+})
+
+/** Strict schema — used inside handler for structured Zod errors */
 const SearchByDateRangeSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     entry_type: z.enum(ENTRY_TYPES).optional(),
+    tags: z.array(z.string()).optional(),
+    is_personal: z.boolean().optional(),
+    project_number: z.number().optional(),
+    issue_number: z.number().optional(),
+    pr_number: z.number().optional(),
+    workflow_run_id: z.number().optional(),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
+const SearchByDateRangeSchemaMcp = z.object({
+    start_date: z.string(),
+    end_date: z.string(),
+    entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
@@ -90,7 +117,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Search journal entries with optional filters for GitHub Projects, Issues, PRs, and Actions',
             group: 'search',
-            inputSchema: SearchEntriesSchema,
+            inputSchema: SearchEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
@@ -125,7 +152,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             title: 'Search by Date Range',
             description: 'Search journal entries within a date range with optional filters',
             group: 'search',
-            inputSchema: SearchByDateRangeSchema,
+            inputSchema: SearchByDateRangeSchemaMcp,
             outputSchema: EntriesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {

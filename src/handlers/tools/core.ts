@@ -22,6 +22,7 @@ import {
 // Input Schemas
 // ============================================================================
 
+/** Strict schema — used inside handler for structured Zod errors */
 const CreateEntrySchema = z.object({
     content: z.string().min(1).max(50000),
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
@@ -39,6 +40,27 @@ const CreateEntrySchema = z.object({
     workflow_run_id: z.number().optional(),
     workflow_name: z.string().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
+    share_with_team: z.boolean().optional().default(false),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
+const CreateEntrySchemaMcp = z.object({
+    content: z.string().min(1).max(50000),
+    entry_type: z.string().optional().default('personal_reflection'),
+    tags: z.array(z.string()).optional().default([]),
+    is_personal: z.boolean().optional().default(true),
+    significance_type: z.string().optional(),
+    auto_context: z.boolean().optional().default(true),
+    project_number: z.number().optional(),
+    project_owner: z.string().optional(),
+    issue_number: z.number().optional(),
+    issue_url: z.string().optional(),
+    pr_number: z.number().optional(),
+    pr_url: z.string().optional(),
+    pr_status: z.string().optional(),
+    workflow_run_id: z.number().optional(),
+    workflow_name: z.string().optional(),
+    workflow_status: z.string().optional(),
     share_with_team: z.boolean().optional().default(false),
 })
 
@@ -99,7 +121,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Create a new journal entry with context and tags (v2.1.0: GitHub Actions support)',
             group: 'core',
-            inputSchema: CreateEntrySchema,
+            inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {

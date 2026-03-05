@@ -19,11 +19,22 @@ import {
 // Input Schemas
 // ============================================================================
 
+/** Strict schema — used inside handler for structured Zod errors */
 const ExportEntriesSchema = z.object({
     format: z.enum(['json', 'markdown']).optional().default('json'),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     entry_types: z.array(z.enum(ENTRY_TYPES)).optional(),
+    tags: z.array(z.string()).optional(),
+    limit: z.number().optional().default(100).describe('Maximum entries to export (default: 100)'),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
+const ExportEntriesSchemaMcp = z.object({
+    format: z.string().optional().default('json'),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
     limit: z.number().optional().default(100).describe('Maximum entries to export (default: 100)'),
 })
@@ -50,7 +61,7 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
             title: 'Export Entries',
             description: 'Export journal entries to JSON or Markdown format',
             group: 'export',
-            inputSchema: ExportEntriesSchema,
+            inputSchema: ExportEntriesSchemaMcp,
             outputSchema: ExportEntriesOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (params: unknown) => {

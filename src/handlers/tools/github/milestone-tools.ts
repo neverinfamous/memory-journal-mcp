@@ -75,7 +75,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
             group: 'github',
             inputSchema: z.object({
                 state: z
-                    .enum(['open', 'closed', 'all'])
+                    .string()
                     .optional()
                     .default('open')
                     .describe('Filter by state (default: open)'),
@@ -265,10 +265,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 title: z.string().optional().describe('New title'),
                 description: z.string().optional().describe('New description'),
                 due_on: z.string().optional().describe('New due date in YYYY-MM-DD format'),
-                state: z
-                    .enum(['open', 'closed'])
-                    .optional()
-                    .describe('Set to "closed" to close the milestone'),
+                state: z.string().optional().describe('Set to "closed" to close the milestone'),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect'),
             }),

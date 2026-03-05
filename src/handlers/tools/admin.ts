@@ -13,10 +13,20 @@ import { ENTRY_TYPES, EntryOutputSchema } from './schemas.js'
 // Input Schemas
 // ============================================================================
 
+/** Strict schema — used inside handler for structured Zod errors */
 const UpdateEntrySchema = z.object({
     entry_id: z.number(),
     content: z.string().optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
+    is_personal: z.boolean().optional(),
+    tags: z.array(z.string()).optional(),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
+const UpdateEntrySchemaMcp = z.object({
+    entry_id: z.number(),
+    content: z.string().optional(),
+    entry_type: z.string().optional(),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional(),
 })
@@ -77,7 +87,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             title: 'Update Entry',
             description: 'Update an existing journal entry',
             group: 'admin',
-            inputSchema: UpdateEntrySchema,
+            inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {
