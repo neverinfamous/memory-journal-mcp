@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 2, 2026**
+**Last Updated March 5, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -204,11 +204,9 @@ When GitHub tools cannot auto-detect repository information:
 
 **Google AntiGravity IDE:**
 
-- **AntiGravity Users:** Server instructions are automatically sent to MCP clients during initialization. However, AntiGravity does not currently support MCP server instructions. For optimal usage in AntiGravity, manually provide the contents of [`src/constants/ServerInstructions.ts`](src/constants/ServerInstructions.ts) to the agent in your prompt or user rules.
+- **Server instructions**: Auto-injected via MCP protocol but may be truncated. Read `memory://instructions` for the full, untruncated version.
 
 - **Session start**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp."
-
-- **Full guidance**: If behaviors missing, read `memory://instructions` for complete Dynamic Context Management patterns.
 
 - **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
 
