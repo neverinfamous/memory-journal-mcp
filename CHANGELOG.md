@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Legacy SSE Transport** — HTTP transport now supports both Streamable HTTP (MCP 2025-03-26) and Legacy SSE (MCP 2024-11-05) protocols simultaneously (stateful mode only)
+  - `GET /sse` — Opens Legacy SSE connection for backward-compatible clients
+  - `POST /messages?sessionId=<id>` — Routes messages to Legacy SSE transport
+  - Cross-protocol guard: SSE session IDs rejected on `/mcp` and vice versa
+- **Health Endpoint** — `GET /health` returns `{ status: "healthy", timestamp }` for monitoring and load balancer probes
+- **Root Info Endpoint** — `GET /` returns server name, version, description, all available endpoints, and documentation link
+- **404 Handler** — Unknown paths now return `404 { error: "Not found" }` instead of Express default HTML
+
+### Changed
+
+- **HTTP Transport Modularized** — Extracted HTTP transport code from `McpServer.ts` (813 → ~450 lines) into a dedicated `src/transports/http.ts` module with `HttpTransport` class, matching the architecture of mysql-mcp, postgres-mcp, and db-mcp
+- **`Permissions-Policy` Header** — Added `Permissions-Policy: camera=(), microphone=(), geolocation=()` to security headers (6 headers total)
+
+### Fixed
+
+- **Multi-Session Connect Crash** — Fixed `Already connected to a transport` error when creating 2+ concurrent Streamable HTTP sessions
+  - SDK's `McpServer.connect()` only supports one active transport; second `connect()` threw
+  - Added close-before-reconnect pattern wrapping `server.connect()` in try-catch
+
 ### Changed
 
 - **Dependency Updates**
