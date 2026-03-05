@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `github/` sub-directory: `read-tools.ts` (5), `mutation-tools.ts` (4), `milestone-tools.ts` (5), `insights-tools.ts` (1), `schemas.ts`
   - Shared Zod output schemas extracted to `schemas.ts` and `github/schemas.ts`
   - Public API (`getTools`, `callTool`) unchanged — zero breaking changes for `McpServer.ts`
+- **Types Modularized** — Split `types/index.ts` (652 lines) into `types/filtering.ts`, `types/entities.ts`, `types/github.ts` with barrel re-exports
+- **Database Schema Extracted** — Extracted SQL DDL + `CreateEntryInput` from `SqliteAdapter.ts` into `database/schema.ts`
+- **Resource Handlers Modularized** — Split `resources/index.ts` (1,692 lines) into 5 sub-modules + barrel (~120 lines):
+  - `shared.ts` (types/helpers), `core.ts` (8 resources), `graph.ts` (3), `github.ts` (4), `templates.ts` (6)
+- **Prompt Handlers Modularized** — Split `prompts/index.ts` (587 lines) into `workflow.ts` (9 prompts), `github.ts` (6 prompts) + barrel (~95 lines)
+- **Mutation Tools Modularized** — Split `mutation-tools.ts` (660 lines) into `helpers.ts`, `kanban-tools.ts` (2 tools), `issue-tools.ts` (2 tools) + barrel
 - **Deterministic Error Handling** — All 39 tool handlers wrapped with `try/catch` + `formatHandlerError()` returning `{ success: false, error }` instead of throwing raw MCP errors. Matches the error handling standard from mysql-mcp.
   - New utility: `src/utils/error-helpers.ts` — `formatHandlerError()`, `formatZodError()`
   - `ToolDefinition.handler` return type changed from `Promise<unknown>` to `unknown` (supports both sync and async handlers)
