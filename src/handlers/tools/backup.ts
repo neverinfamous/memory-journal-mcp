@@ -15,10 +15,11 @@ import { sendProgress } from '../../utils/progress-utils.js'
 
 const BackupResultOutputSchema = z.object({
     success: z.boolean(),
-    message: z.string(),
-    filename: z.string(),
-    path: z.string(),
-    sizeBytes: z.number(),
+    message: z.string().optional(),
+    filename: z.string().optional(),
+    path: z.string().optional(),
+    sizeBytes: z.number().optional(),
+    error: z.string().optional(),
 })
 
 const BackupInfoSchema = z.object({
@@ -28,18 +29,20 @@ const BackupInfoSchema = z.object({
 })
 
 const BackupsListOutputSchema = z.object({
-    backups: z.array(BackupInfoSchema),
-    total: z.number(),
-    backupsDirectory: z.string(),
+    success: z.boolean().optional(),
+    backups: z.array(BackupInfoSchema).optional(),
+    total: z.number().optional(),
+    backupsDirectory: z.string().optional(),
     hint: z.string().optional(),
+    error: z.string().optional(),
 })
 
 const RestoreResultOutputSchema = z.object({
     success: z.boolean(),
-    message: z.string(),
-    restoredFrom: z.string(),
-    previousEntryCount: z.number(),
-    newEntryCount: z.number(),
+    message: z.string().optional(),
+    restoredFrom: z.string().optional(),
+    previousEntryCount: z.number().optional(),
+    newEntryCount: z.number().optional(),
     warning: z.string().optional(),
     revertedChanges: z
         .object({
@@ -47,14 +50,16 @@ const RestoreResultOutputSchema = z.object({
             entries: z.string().optional(),
         })
         .optional(),
+    error: z.string().optional(),
 })
 
 const CleanupBackupsOutputSchema = z.object({
     success: z.boolean(),
-    deleted: z.array(z.string()),
-    deletedCount: z.number(),
-    keptCount: z.number(),
-    message: z.string(),
+    deleted: z.array(z.string()).optional(),
+    deletedCount: z.number().optional(),
+    keptCount: z.number().optional(),
+    message: z.string().optional(),
+    error: z.string().optional(),
 })
 
 // ============================================================================

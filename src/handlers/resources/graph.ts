@@ -68,7 +68,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                     implements: '==>',
                     resolved: '==>',
                     clarifies: '-..->',
-                    caused: '-..->',
+                    caused: '-.->',
                     related_to: '<-->',
                     response_to: '<-->',
                     blocked_by: '--x',

@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-Session Connect Crash** — Fixed `Already connected to a transport` error when creating 2+ concurrent Streamable HTTP sessions
   - SDK's `McpServer.connect()` only supports one active transport; second `connect()` threw
   - Added close-before-reconnect pattern wrapping `server.connect()` in try-catch
+- **Backup Tool Error Path Output Schema** — Backup tool error responses from `formatHandlerError()` (returning `{ success: false, error }`) now pass Zod output validation. Previously, `BackupResultOutputSchema`, `BackupsListOutputSchema`, `RestoreResultOutputSchema`, and `CleanupBackupsOutputSchema` required non-optional fields (`message`, `filename`, `path`, `sizeBytes`, etc.) that error responses don't include, causing raw MCP `-32602` errors on error paths like path traversal in backup names.
+- **Mermaid Arrow Inconsistency for `caused`** — Fixed `memory://graph/recent` using `-.->` (two-dot Mermaid syntax) for `caused` relationship type instead of `-.->` (single-dot), which is the canonical style used by `visualize_relationships` tool. Both now consistently use `-.->`.
 
 ### Changed
 
