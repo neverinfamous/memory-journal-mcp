@@ -22,6 +22,11 @@ program
         'Database path (env: DB_PATH)',
         process.env['DB_PATH'] ?? './memory_journal.db'
     )
+    .option(
+        '--team-db <path>',
+        'Team database path (env: TEAM_DB_PATH)',
+        process.env['TEAM_DB_PATH'] ?? undefined
+    )
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
@@ -50,6 +55,7 @@ program
             serverHost?: string
             stateless?: boolean
             db: string
+            teamDb?: string
             toolFilter?: string
             defaultProject: string
             autoRebuildIndex?: boolean
@@ -72,6 +78,7 @@ program
                 transport: options.transport,
                 stateless: options.stateless ?? false,
                 db: options.db,
+                ...(options.teamDb ? { teamDb: options.teamDb } : {}),
                 ...(host ? { host } : {}),
             })
 
@@ -82,6 +89,7 @@ program
                     host,
                     statelessHttp: options.stateless === true,
                     dbPath: options.db,
+                    teamDbPath: options.teamDb,
                     toolFilter: options.toolFilter,
                     defaultProjectNumber: options.defaultProject
                         ? parseInt(options.defaultProject, 10)

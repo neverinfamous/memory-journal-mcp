@@ -217,6 +217,26 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                 const stats = context.db.getStatistics('week')
                 const totalEntries = stats.totalEntries ?? 0
 
+                // Team DB context (if configured)
+                let teamContext:
+                    | { totalEntries: number; latestPreview: string | null }
+                    | undefined = undefined
+                if (context.teamDb) {
+                    try {
+                        const teamStats = context.teamDb.getStatistics('week')
+                        const teamRecent = context.teamDb.getRecentEntries(1)
+                        const teamLatest = teamRecent[0]
+                            ? `#${teamRecent[0].id}: ${teamRecent[0].content.slice(0, 60)}${teamRecent[0].content.length > 60 ? '...' : ''}`
+                            : null
+                        teamContext = {
+                            totalEntries: teamStats.totalEntries ?? 0,
+                            latestPreview: teamLatest,
+                        }
+                    } catch {
+                        // Team DB unavailable
+                    }
+                }
+
                 // Determine lastModified from most recent entry or current time
                 const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
@@ -260,6 +280,7 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                             latestEntries,
                         },
                         github,
+                        teamContext,
                         behaviors: {
                             create: 'implementations, decisions, bug-fixes, milestones',
                             search: 'before decisions, referencing prior work',
@@ -288,7 +309,7 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
 | **Project** | ${repoName} |
 | **Branch** | ${branchName} |
 | **CI Status** | ${ciStatus} |
-| **Journal** | ${totalEntries} entries |
+| **Journal** | ${totalEntries} entries |${teamContext ? `\n| **Team DB** | ${teamContext.totalEntries} entries |` : ''}
 | **Latest** | ${latestPreview} |${milestoneRow}${insightsRow}
 
 I have project memory access and will create entries for significant work.`,
@@ -488,6 +509,12 @@ I have project memory access and will create entries for significant work.`,
                         ...dbHealth,
                         vectorIndex,
                         toolFilter,
+                        teamDatabase: context.teamDb
+                            ? {
+                                  configured: true,
+                                  ...context.teamDb.getHealthStatus(),
+                              }
+                            : { configured: false },
                         scheduler: context.scheduler
                             ? context.scheduler.getStatus()
                             : { active: false, jobs: [] },

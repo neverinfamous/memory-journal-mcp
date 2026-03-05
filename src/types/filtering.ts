@@ -14,6 +14,7 @@ export type ToolGroup =
     | 'admin' // Admin: update_entry, delete_entry
     | 'github' // Reserved for future GitHub-specific tools
     | 'backup' // Backup: backup_journal, list_backups, restore_backup
+    | 'team' // Team: team_create_entry, team_get_recent, team_search
 
 /**
  * Meta-group identifiers for common multi-group selections

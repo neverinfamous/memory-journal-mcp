@@ -24,7 +24,7 @@ import type {
     ImportanceBreakdown,
     ImportanceResult,
 } from '../types/index.js'
-import { SCHEMA_SQL } from './schema.js'
+import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from './schema.js'
 export type { CreateEntryInput } from './schema.js'
 import type { CreateEntryInput } from './schema.js'
 
@@ -88,6 +88,77 @@ export class SqliteAdapter {
 
         // Immediate flush after initialization to persist schema
         this.flushSave()
+    }
+
+    /**
+     * Apply additional schema for team databases (adds author column).
+     * Also migrates legacy team DBs that may be missing columns from the
+     * current main schema (e.g. issue_number, pr_number added after v2).
+     * Idempotent — safe to call on databases that already have all columns.
+     */
+    applyTeamSchema(): void {
+        const db = this.ensureDb()
+        const tableInfo = db.exec('PRAGMA table_info(memory_journal)')
+        const columns = new Set((tableInfo[0]?.values ?? []).map((row) => String(row[1])))
+
+        // Columns required by the current schema that legacy team DBs may lack
+        const requiredColumns: { name: string; sql: string }[] = [
+            {
+                name: 'issue_number',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER',
+            },
+            { name: 'issue_url', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_url TEXT' },
+            { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
+            { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
+            { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
+            {
+                name: 'workflow_run_id',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER',
+            },
+            {
+                name: 'workflow_name',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT',
+            },
+            {
+                name: 'workflow_status',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT',
+            },
+            {
+                name: 'project_number',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER',
+            },
+            {
+                name: 'project_owner',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT',
+            },
+            {
+                name: 'significance_type',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT',
+            },
+            {
+                name: 'auto_context',
+                sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT',
+            },
+            { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
+            { name: 'author', sql: TEAM_SCHEMA_SQL.trim() },
+        ]
+
+        const added: string[] = []
+        for (const col of requiredColumns) {
+            if (!columns.has(col.name)) {
+                db.run(col.sql)
+                added.push(col.name)
+            }
+        }
+
+        if (added.length > 0) {
+            this.flushSave()
+            logger.info('Team schema migrated', {
+                module: 'SqliteAdapter',
+                dbPath: this.dbPath,
+                columnsAdded: added,
+            })
+        }
     }
 
     /**

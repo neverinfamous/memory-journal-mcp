@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Root Info Endpoint** — `GET /` returns server name, version, description, all available endpoints, and documentation link
 - **404 Handler** — Unknown paths now return `404 { error: "Not found" }` instead of Express default HTML
 - **`DB_PATH` Environment Variable** — CLI `--db` flag now accepts `DB_PATH` as a fallback (precedence: CLI flag > `DB_PATH` env > `./memory_journal.db`). Enables database path configuration via MCP client env blocks without needing CLI args.
+- **Team Collaboration (Redesign)** — Rebuilt team collaboration from scratch with proper architecture:
+  - **Separate team database** — `TEAM_DB_PATH` env var / `--team-db` CLI flag for a public, git-tracked `.db` file
+  - **Author attribution** — Auto-detected from `TEAM_AUTHOR` env or `git config user.name`
+  - **3 dedicated tools** — `team_create_entry`, `team_get_recent`, `team_search` (new `team` tool group)
+  - **`share_with_team`** — Optional parameter on `create_entry` to copy entries to team DB
+  - **Cross-database search** — `search_entries` and `search_by_date_range` auto-merge team results with `source` marker
+  - **2 team resources** — `memory://team/recent` (author-enriched entries), `memory://team/statistics` (author breakdown)
+  - **Briefing integration** — `memory://briefing` shows team entry count when team DB configured
+  - **Health integration** — `memory://health` includes team database status block
+  - **Server instructions** — Team collaboration section + team tool reference at standard+ level
+  - **`ICON_TEAM`** — Users group SVG icon for team tools
+  - Tool count: 39 → 42, tool groups: 8 → 9, resources: 20 → 22
 
 ### Changed
 
@@ -24,14 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **Legacy Team Collaboration System** — Removed non-functional team collaboration feature (remnant of Python-era architecture):
-  - Removed `share_with_team` parameter from `create_entry` and `create_entry_minimal` tool schemas
-  - Removed `memory://team/recent` resource (was registered but returned empty data)
-  - Removed `ICON_TEAM` constant and its import
-  - Removed `.memory-journal-team.db` gitignore negation rule
+- **Legacy Team Collaboration System** — Removed non-functional team collaboration feature (remnant of Python-era architecture), then rebuilt from scratch (see Added > Team Collaboration)
+  - Removed old `share_with_team` parameter, `memory://team/recent` resource, and `ICON_TEAM` constant
   - Deleted unused `.memory-journal-team.db` file
-  - Updated resource count from 21 → 20 (14 → 13 static) across all documentation
-  - Wiki `Team-Collaboration.md` retained as reference for future re-implementation
+  - Database files reorganized into `data/` directory
 - **Database Files Reorganized** — Moved `memory_journal.db` and `backups/` into `data/` directory for cleaner project structure
 - **Tool Handler Modularized** — Replaced 3,428-line monolith `src/handlers/tools/index.ts` with 12 focused modules + barrel file (~140 lines):
   - `core.ts` (6), `search.ts` (4), `analytics.ts` (2), `relationships.ts` (2), `export.ts` (1), `admin.ts` (5), `backup.ts` (4)
@@ -44,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `shared.ts` (types/helpers), `core.ts` (8 resources), `graph.ts` (3), `github.ts` (4), `templates.ts` (6)
 - **Prompt Handlers Modularized** — Split `prompts/index.ts` (587 lines) into `workflow.ts` (9 prompts), `github.ts` (6 prompts) + barrel (~95 lines)
 - **Mutation Tools Modularized** — Split `mutation-tools.ts` (660 lines) into `helpers.ts`, `kanban-tools.ts` (2 tools), `issue-tools.ts` (2 tools) + barrel
-- **Deterministic Error Handling** — All 39 tool handlers wrapped with `try/catch` + `formatHandlerError()` returning `{ success: false, error }` instead of throwing raw MCP errors. Matches the error handling standard from mysql-mcp.
+- **Deterministic Error Handling** — All 42 tool handlers wrapped with `try/catch` + `formatHandlerError()` returning `{ success: false, error }` instead of throwing raw MCP errors. Matches the error handling standard from mysql-mcp.
   - New utility: `src/utils/error-helpers.ts` — `formatHandlerError()`, `formatZodError()`
   - `ToolDefinition.handler` return type changed from `Promise<unknown>` to `unknown` (supports both sync and async handlers)
   - GitHub `resolveOwnerRepo()` helpers now return validated `github` instance, eliminating all non-null assertions
@@ -142,7 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated Session Management in README.md and DOCKER_README.md** — Session Management sections now lead with the Cursor rule as the primary setup mechanism, with a three-column table showing primary (agent behavior) vs optional (audit/logging) configurations per IDE.
 - **SECURITY.md Accuracy (F-004)** — Rewrote Database Security section to accurately reflect sql.js in-memory architecture. Removed false claims about WAL mode and 7 PRAGMAs that are not applicable to sql.js. Updated security checklist to reference actual function names (`assertNoPathTraversal`, `sanitizeSearchQuery`, `validateDateFormatPattern`). Updated HTTP security headers list to include CSP, Cache-Control, and Referrer-Policy.
 - **SECURITY.md Tag Filtering Correction** — Replaced inaccurate claim that dangerous characters are blocked in tags with accurate statement that tags are safely handled via parameterized queries.
-- **Team Collaboration in READMEs** — Added team collaboration feature to Key Benefits in both `README.md` and `DOCKER_README.md`, with links to the wiki [Team-Collaboration](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration) page. DOCKER_README notes that team collaboration requires npm installation.
+- **Team Collaboration in READMEs** — Added team collaboration feature to Key Benefits in both `README.md` and `DOCKER_README.md`.
 - **Wiki Security Page Updates** — Added LIKE pattern sanitization, path traversal protection, HTTP security headers, rate limiting, and team database security note to the wiki Security.md page. Expanded self-audit checklist from 10 to 16 items.
 - **Rate Limiting Documentation** — Added rate limiting mention to README.md Security section.
 

@@ -32,6 +32,7 @@ export interface ServerOptions {
     port?: number
     host?: string
     dbPath: string
+    teamDbPath?: string
     toolFilter?: string
     defaultProjectNumber?: number
     autoRebuildIndex?: boolean
@@ -44,12 +45,21 @@ export interface ServerOptions {
  * Create and start the MCP server
  */
 export async function createServer(options: ServerOptions): Promise<void> {
-    const { transport, dbPath, toolFilter, defaultProjectNumber } = options
+    const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
 
     // Initialize database (async for sql.js)
     const db = new SqliteAdapter(dbPath)
     await db.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath })
+
+    // Initialize team database if configured
+    let teamDb: SqliteAdapter | undefined
+    if (teamDbPath) {
+        teamDb = new SqliteAdapter(teamDbPath)
+        await teamDb.initialize()
+        teamDb.applyTeamSchema()
+        logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
+    }
 
     // Initialize vector search manager (lazy loading - model loads on first use)
     const vectorManager = new VectorSearchManager(dbPath)
@@ -107,7 +117,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         : undefined
 
     // Get all tools once (unfiltered) for both instruction generation and registration
-    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber })
+    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber }, teamDb)
     const allToolNames = new Set(allTools.map((t) => (t as { name: string }).name))
 
     // Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
@@ -140,7 +150,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Apply filter to get the set of tools to register
     const tools = filterConfig
-        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber })
+        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber }, teamDb)
         : allTools
     for (const tool of tools) {
         const toolDef = tool as {
@@ -203,7 +213,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         vectorManager,
                         github,
                         { defaultProjectNumber },
-                        progressContext
+                        progressContext,
+                        teamDb
                     )
 
                     // MCP 2025-11-25: If tool has outputSchema, return both:
@@ -282,7 +293,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         vectorManager,
                         filterConfig,
                         github,
-                        scheduler
+                        scheduler,
+                        teamDb
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -317,7 +329,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         vectorManager,
                         filterConfig,
                         github,
-                        scheduler
+                        scheduler,
+                        teamDb
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -410,6 +423,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         process.on('SIGINT', () => {
             logger.info('Shutting down...', { module: 'McpServer' })
             db.close()
+            teamDb?.close()
             process.exit(0)
         })
     } else {
@@ -432,6 +446,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             void (async () => {
                 await httpTransport.stop(scheduler)
                 db.close()
+                teamDb?.close()
                 process.exit(0)
             })()
         })

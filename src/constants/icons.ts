@@ -69,6 +69,13 @@ export const ICON_BACKUP: McpIcon = {
     sizes: ['24x24'],
 }
 
+/** Users group for team collaboration */
+export const ICON_TEAM: McpIcon = {
+    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpath d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/%3E%3Ccircle cx="9" cy="7" r="4"/%3E%3Cpath d="M23 21v-2a4 4 0 00-3-3.87"/%3E%3Cpath d="M16 3.13a4 4 0 010 7.75"/%3E%3C/svg%3E',
+    mimeType: 'image/svg+xml',
+    sizes: ['24x24'],
+}
+
 // ============================================================================
 // Resource Icons
 // ============================================================================
@@ -164,6 +171,7 @@ export const TOOL_GROUP_ICONS: Record<string, McpIcon> = {
     admin: ICON_ADMIN,
     github: ICON_GITHUB,
     backup: ICON_BACKUP,
+    team: ICON_TEAM,
 }
 
 /**

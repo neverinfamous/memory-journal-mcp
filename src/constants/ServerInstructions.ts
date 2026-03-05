@@ -115,6 +115,19 @@ const GITHUB_INSTRUCTIONS = `
 `
 
 /**
+ * Team collaboration patterns
+ */
+const TEAM_INSTRUCTIONS = `
+## Team Collaboration
+
+- **TEAM_DB_PATH**: Set to enable team database. Entries are shared via binary \`.db\` file in git.
+- **Author**: Auto-detected from \`TEAM_AUTHOR\` env or \`git config user.name\`.
+- Use \`team_create_entry\` for team-visible entries, or \`share_with_team: true\` on \`create_entry\`.
+- \`search_entries\` and \`search_by_date_range\` auto-merge team results when team DB is configured.
+- Team resources: \`memory://team/recent\`, \`memory://team/statistics\`.
+`
+
+/**
  * Server access instructions - critical for AI agents to call tools correctly
  */
 const SERVER_ACCESS_INSTRUCTIONS = `
@@ -262,6 +275,16 @@ Milestone resources:
 | ---------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
 | \`export_entries\` | none                | Optional \`format\` (json/markdown), \`limit\` (default 100), \`tags\`, \`start_date\`, \`end_date\`, \`entry_types\` |
 
+### Team Tools
+
+| Tool                | Required Parameters | Notes                                                                        |
+| ------------------- | ------------------- | ---------------------------------------------------------------------------- |
+| \`team_create_entry\` | \`content\` (string)  | Optional \`tags\`, \`entry_type\`, \`author\`, \`issue_number\`, \`pr_number\`, \`project_number\` |
+| \`team_get_recent\`   | none                | Optional \`limit\` (default 10). Returns entries with \`author\` field.          |
+| \`team_search\`       | none                | Optional \`query\`, \`tags\` (array), \`limit\`.                                   |
+
+\`create_entry\` also accepts \`share_with_team: true\` to copy entry to team DB.
+
 ## Entry Types
 
 Valid values for \`entry_type\` parameter:
@@ -322,6 +345,8 @@ Valid values for \`entry_type\` parameter:
 | \`memory://issues/{n}/entries\` | Entries linked to issue n |
 | \`memory://prs/{n}/entries\` | Entries linked to PR n |
 | \`memory://prs/{n}/timeline\` | PR lifecycle and linked entries |
+| \`memory://team/recent\` | Recent team-shared entries with author |
+| \`memory://team/statistics\` | Team DB stats and author breakdown |
 `
 
 /**
@@ -348,9 +373,10 @@ export function generateInstructions(
         instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
     }
 
-    // Standard and full levels include GitHub patterns
+    // Standard and full levels include GitHub and team patterns
     if (level === 'standard' || level === 'full') {
         instructions += GITHUB_INSTRUCTIONS
+        instructions += TEAM_INSTRUCTIONS
     }
 
     // Full level includes server access instructions and tool parameter reference
@@ -401,4 +427,3 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * @deprecated Use generateInstructions() instead for dynamic content
  */
 export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
-

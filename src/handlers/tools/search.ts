@@ -110,7 +110,7 @@ const VectorStatsOutputSchema = z.object({
 // ============================================================================
 
 export function getSearchTools(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager } = context
+    const { db, teamDb, vectorManager } = context
     return [
         {
             name: 'search_entries',
@@ -130,19 +130,41 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.pr_number !== undefined ||
                         input.is_personal !== undefined
 
+                    let personalEntries
                     if (!input.query && !hasFilters) {
-                        const entries = db.getRecentEntries(input.limit, input.is_personal)
-                        return { entries, count: entries.length }
+                        personalEntries = db.getRecentEntries(input.limit, input.is_personal)
+                    } else {
+                        personalEntries = db.searchEntries(input.query || '', {
+                            limit: input.limit,
+                            isPersonal: input.is_personal,
+                            projectNumber: input.project_number,
+                            issueNumber: input.issue_number,
+                            prNumber: input.pr_number,
+                        })
                     }
 
-                    const entries = db.searchEntries(input.query || '', {
-                        limit: input.limit,
-                        isPersonal: input.is_personal,
-                        projectNumber: input.project_number,
-                        issueNumber: input.issue_number,
-                        prNumber: input.pr_number,
-                    })
-                    return { entries, count: entries.length }
+                    // Cross-database merge when team DB is available
+                    if (teamDb) {
+                        let teamEntries
+                        if (!input.query && !hasFilters) {
+                            teamEntries = teamDb.getRecentEntries(input.limit)
+                        } else {
+                            teamEntries = teamDb.searchEntries(input.query || '', {
+                                limit: input.limit,
+                                projectNumber: input.project_number,
+                                issueNumber: input.issue_number,
+                                prNumber: input.pr_number,
+                            })
+                        }
+                        const merged = mergeAndDedup(
+                            personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
+                            teamEntries.map((e) => ({ ...e, source: 'team' as const })),
+                            input.limit
+                        )
+                        return { entries: merged, count: merged.length }
+                    }
+
+                    return { entries: personalEntries, count: personalEntries.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -159,13 +181,32 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
-                    const entries = db.searchByDateRange(input.start_date, input.end_date, {
+                    const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         projectNumber: input.project_number,
                     })
-                    return { entries, count: entries.length }
+
+                    // Cross-database merge when team DB is available
+                    if (teamDb) {
+                        const teamEntries = teamDb.searchByDateRange(
+                            input.start_date,
+                            input.end_date,
+                            {
+                                entryType: input.entry_type,
+                                tags: input.tags,
+                                projectNumber: input.project_number,
+                            }
+                        )
+                        const merged = mergeAndDedup(
+                            personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
+                            teamEntries.map((e) => ({ ...e, source: 'team' as const }))
+                        )
+                        return { entries: merged, count: merged.length }
+                    }
+
+                    return { entries: personalEntries, count: personalEntries.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -254,4 +295,44 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             },
         },
     ]
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+interface EntryWithSource {
+    content: string
+    timestamp: string
+    source: 'personal' | 'team'
+    [key: string]: unknown
+}
+
+/**
+ * Merge personal and team results, deduplicate by content,
+ * and sort by timestamp descending.
+ */
+function mergeAndDedup(
+    personal: EntryWithSource[],
+    team: EntryWithSource[],
+    limit?: number
+): EntryWithSource[] {
+    const seen = new Set<string>()
+    const merged: EntryWithSource[] = []
+
+    // Concat and sort by timestamp descending
+    const all = [...personal, ...team].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    )
+
+    for (const entry of all) {
+        // Deduplicate by content (same entry shared to team)
+        const key = entry.content.slice(0, 200)
+        if (!seen.has(key)) {
+            seen.add(key)
+            merged.push(entry)
+        }
+    }
+
+    return limit !== undefined ? merged.slice(0, limit) : merged
 }

@@ -30,6 +30,7 @@ import { getExportTools } from './export.js'
 import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
+import { getTeamTools } from './team.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -82,6 +83,11 @@ function getToolIcon(
             title: 'Backup',
             description: 'Backup and restore',
         },
+        team: {
+            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-group.svg',
+            title: 'Team',
+            description: 'Team collaboration',
+        },
     }
     return iconMap[group]
 }
@@ -98,9 +104,10 @@ export function getTools(
     filterConfig: ToolFilterConfig | null,
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
-    config?: ToolHandlerConfig
+    config?: ToolHandlerConfig,
+    teamDb?: SqliteAdapter
 ): object[] {
-    const context: ToolContext = { db, vectorManager, github, config }
+    const context: ToolContext = { db, teamDb, vectorManager, github, config }
     const allTools = getAllToolDefinitions(context)
 
     const mapTool = (t: ToolDefinition): object => ({
@@ -129,9 +136,10 @@ export function callTool(
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
-    progress?: ProgressContext
+    progress?: ProgressContext,
+    teamDb?: SqliteAdapter
 ): Promise<unknown> {
-    const context: ToolContext = { db, vectorManager, github, config, progress }
+    const context: ToolContext = { db, teamDb, vectorManager, github, config, progress }
     const tools = getAllToolDefinitions(context)
     const tool = tools.find((t) => t.name === name)
 
@@ -155,5 +163,6 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         ...getAdminTools(context),
         ...getGitHubTools(context),
         ...getBackupTools(context),
+        ...getTeamTools(context),
     ]
 }

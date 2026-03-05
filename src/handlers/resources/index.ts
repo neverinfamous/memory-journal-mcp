@@ -19,6 +19,7 @@ import { getCoreResourceDefinitions } from './core.js'
 import { getGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
+import { getTeamResourceDefinitions } from './team.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 
 /**
@@ -85,10 +86,11 @@ export async function readResource(
     vectorManager?: VectorSearchManager,
     filterConfig?: ToolFilterConfig | null,
     github?: GitHubIntegration | null,
-    scheduler?: Scheduler | null
+    scheduler?: Scheduler | null,
+    teamDb?: SqliteAdapter
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     const resources = getAllResourceDefinitions()
-    const context = { db, vectorManager, filterConfig, github, scheduler }
+    const context = { db, teamDb, vectorManager, filterConfig, github, scheduler }
 
     // Strip query parameters for matching, but pass full URI to handler
     const baseUri = getBaseUri(uri)
@@ -131,5 +133,6 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
         ...getGraphResourceDefinitions(),
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
+        ...getTeamResourceDefinitions(),
     ]
 }

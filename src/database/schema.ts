@@ -106,3 +106,20 @@ export interface CreateEntryInput {
     workflowName?: string
     workflowStatus?: 'queued' | 'in_progress' | 'completed'
 }
+
+/**
+ * SQL migration to add the author column for team databases.
+ * Applied after SCHEMA_SQL when initializing a team database.
+ */
+export const TEAM_SCHEMA_SQL = `
+-- Author column for team entries (identifies who shared the entry)
+ALTER TABLE memory_journal ADD COLUMN author TEXT;
+`
+
+/**
+ * Input for creating a team entry (extends standard entry with author)
+ */
+export interface CreateTeamEntryInput extends CreateEntryInput {
+    /** Author name (auto-detected from git config or TEAM_AUTHOR env) */
+    author?: string
+}

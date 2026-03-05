@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod'
+import { execSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import {
@@ -40,6 +41,7 @@ const CreateEntrySchema = z.object({
     workflow_run_id: z.number().optional(),
     workflow_name: z.string().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
+    share_with_team: z.boolean().optional().default(false),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -60,6 +62,7 @@ const CreateEntrySchemaMcp = z.object({
     workflow_run_id: z.number().optional(),
     workflow_name: z.string().optional(),
     workflow_status: z.string().optional(),
+    share_with_team: z.boolean().optional().default(false),
 })
 
 const GetEntryByIdSchema = z.object({
@@ -87,6 +90,8 @@ const TestSimpleSchema = z.object({
 const CreateEntryOutputSchema = z.object({
     success: z.boolean().optional(),
     entry: EntryOutputSchema.optional(),
+    sharedWithTeam: z.boolean().optional(),
+    author: z.string().optional(),
     error: z.string().optional(),
 })
 
@@ -110,11 +115,31 @@ const TagsListOutputSchema = z.object({
 })
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/** Resolve the author name for team-shared entries */
+function resolveTeamAuthor(): string {
+    const envAuthor = process.env['TEAM_AUTHOR']
+    if (envAuthor) return envAuthor
+    try {
+        const gitUser = execSync('git config user.name', {
+            encoding: 'utf-8',
+            timeout: 3000,
+        }).trim()
+        if (gitUser) return gitUser
+    } catch {
+        // Git not available
+    }
+    return 'unknown'
+}
+
+// ============================================================================
 // Tool Definitions
 // ============================================================================
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
-    const { db, vectorManager, github } = context
+    const { db, teamDb, vectorManager, github } = context
     return [
         {
             name: 'create_entry',
@@ -163,7 +188,47 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         })
                     }
 
-                    return { success: true, entry }
+                    // Share with team if requested
+                    let sharedWithTeam = false
+                    let author: string | undefined
+                    if (input.share_with_team && teamDb) {
+                        try {
+                            author = resolveTeamAuthor()
+                            const teamEntry = teamDb.createEntry({
+                                content: input.content,
+                                entryType: input.entry_type,
+                                tags: input.tags,
+                                isPersonal: false,
+                                significanceType: input.significance_type ?? null,
+                                autoContext: JSON.stringify({ author }),
+                                projectNumber: input.project_number,
+                                projectOwner: input.project_owner,
+                                issueNumber: input.issue_number,
+                                issueUrl: resolvedIssueUrl,
+                                prNumber: input.pr_number,
+                                prUrl: input.pr_url,
+                                prStatus: input.pr_status,
+                                workflowRunId: input.workflow_run_id,
+                                workflowName: input.workflow_name,
+                                workflowStatus: input.workflow_status,
+                            })
+                            const rawTeamDb = teamDb.getRawDb()
+                            rawTeamDb.run('UPDATE memory_journal SET author = ? WHERE id = ?', [
+                                author,
+                                teamEntry.id,
+                            ])
+                            teamDb.flushSave()
+                            sharedWithTeam = true
+                        } catch {
+                            // Team share failed — entry still saved to personal DB
+                        }
+                    }
+
+                    return {
+                        success: true,
+                        entry,
+                        ...(sharedWithTeam ? { sharedWithTeam: true, author } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

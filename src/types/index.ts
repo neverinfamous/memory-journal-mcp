@@ -143,6 +143,8 @@ export interface ToolHandlerConfig {
 export interface ToolContext {
     /** Database adapter */
     db: SqliteAdapter
+    /** Team database adapter (optional, requires TEAM_DB_PATH) */
+    teamDb?: SqliteAdapter
     /** Vector search manager (optional) */
     vectorManager?: VectorSearchManager
     /** GitHub integration (optional) */

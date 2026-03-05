@@ -16,6 +16,7 @@ import type { Scheduler } from '../../server/Scheduler.js'
  */
 export interface ResourceContext {
     db: SqliteAdapter
+    teamDb?: SqliteAdapter
     vectorManager?: VectorSearchManager
     filterConfig?: ToolFilterConfig | null
     github?: GitHubIntegration | null
