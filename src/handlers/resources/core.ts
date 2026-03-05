@@ -1,7 +1,7 @@
 /**
  * Memory Journal MCP Server - Core Resource Definitions
  *
- * Resources: briefing, instructions, recent, significant, tags, statistics, health, team/recent
+ * Resources: briefing, instructions, recent, significant, tags, statistics, health
  */
 
 import type { Tag } from '../../types/index.js'
@@ -14,7 +14,6 @@ import {
     ICON_HEALTH,
     ICON_STAR,
     ICON_TAG,
-    ICON_TEAM,
     ICON_ANALYTICS,
 } from '../../constants/icons.js'
 import pkg from '../../../package.json' with { type: 'json' }
@@ -404,22 +403,7 @@ I have project memory access and will create entries for significant work.`,
                 return { entries: top20, count: top20.length }
             },
         },
-        {
-            uri: 'memory://team/recent',
-            name: 'Team Entries',
-            title: 'Recent Team-Shared Entries',
-            description: 'Recent team-shared entries',
-            mimeType: 'application/json',
-            icons: [ICON_TEAM],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.6,
-            },
-            handler: (_uri: string, context: ResourceContext) => {
-                const entries = context.db.getRecentEntries(10, false)
-                return { entries, count: entries.length }
-            },
-        },
+
         {
             uri: 'memory://tags',
             name: 'All Tags',

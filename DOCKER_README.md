@@ -29,7 +29,7 @@
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
 - ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running containers
-- 👥 **Team collaboration** — opt-in sharing of context via Git-tracked team database (requires npm install; see [wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration))
+
 - 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 
@@ -95,7 +95,7 @@
 
 - **39 MCP tools** - Complete development workflow + backup/restore + Kanban + Milestones + Insights + issue management
 - **15 workflow prompts** - Standups, retrospectives, PR workflows, CI/CD failure analysis, session acknowledgment
-- **21 MCP resources** - 14 static + 7 template (require parameters)
+- **20 MCP resources** - 13 static + 7 template (require parameters)
 - **GitHub Integration** - Projects, Issues, Pull Requests, Actions, **Kanban boards**, **Milestones**
 - **8 tool groups** - `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`
 - **Knowledge graphs** - 8 relationship types, Mermaid visualization
@@ -177,6 +177,7 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 
 | Environment Variable     | Description                                                            |
 | ------------------------ | ---------------------------------------------------------------------- |
+| `DB_PATH`                | Database location (default: `/app/data/memory_journal.db` in Docker)   |
 | `GITHUB_TOKEN`           | GitHub personal access token for API access                            |
 | `GITHUB_REPO_PATH`       | Path to git repo inside container (mount your repo)                    |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
@@ -391,7 +392,7 @@ docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 Standups • Retrospectives • Weekly digests • PR summaries • Code review prep • Goal tracking
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 21 Resources (14 Static + 7 Template)
+### 📡 20 Resources (13 Static + 7 Template)
 
 Including `memory://briefing` for session initialization, `memory://instructions` for behavioral guidance, `memory://health` for diagnostics, `memory://kanban/{n}` for Kanban boards, `memory://github/milestones` for milestone tracking, and `memory://github/insights` for repository traffic analytics. Template resources require parameters and are accessed directly by URI.
 **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**

@@ -17,7 +17,11 @@ program
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost)')
     .option('--stateless', 'Use stateless HTTP mode (no session management)')
-    .option('--db <path>', 'Database path', './memory_journal.db')
+    .option(
+        '--db <path>',
+        'Database path (env: DB_PATH)',
+        process.env['DB_PATH'] ?? './memory_journal.db'
+    )
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')

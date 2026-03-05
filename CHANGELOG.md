@@ -16,10 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Health Endpoint** — `GET /health` returns `{ status: "healthy", timestamp }` for monitoring and load balancer probes
 - **Root Info Endpoint** — `GET /` returns server name, version, description, all available endpoints, and documentation link
 - **404 Handler** — Unknown paths now return `404 { error: "Not found" }` instead of Express default HTML
+- **`DB_PATH` Environment Variable** — CLI `--db` flag now accepts `DB_PATH` as a fallback (precedence: CLI flag > `DB_PATH` env > `./memory_journal.db`). Enables database path configuration via MCP client env blocks without needing CLI args.
 
 ### Changed
 
 - **HTTP Transport Modularized** — Extracted HTTP transport code from `McpServer.ts` (813 → ~450 lines) into a dedicated `src/transports/http.ts` module with `HttpTransport` class, matching the architecture of mysql-mcp, postgres-mcp, and db-mcp
+
+### Removed
+
+- **Legacy Team Collaboration System** — Removed non-functional team collaboration feature (remnant of Python-era architecture):
+  - Removed `share_with_team` parameter from `create_entry` and `create_entry_minimal` tool schemas
+  - Removed `memory://team/recent` resource (was registered but returned empty data)
+  - Removed `ICON_TEAM` constant and its import
+  - Removed `.memory-journal-team.db` gitignore negation rule
+  - Deleted unused `.memory-journal-team.db` file
+  - Updated resource count from 21 → 20 (14 → 13 static) across all documentation
+  - Wiki `Team-Collaboration.md` retained as reference for future re-implementation
+- **Database Files Reorganized** — Moved `memory_journal.db` and `backups/` into `data/` directory for cleaner project structure
 - **Tool Handler Modularized** — Replaced 3,428-line monolith `src/handlers/tools/index.ts` with 12 focused modules + barrel file (~140 lines):
   - `core.ts` (6), `search.ts` (4), `analytics.ts` (2), `relationships.ts` (2), `export.ts` (1), `admin.ts` (5), `backup.ts` (4)
   - `github/` sub-directory: `read-tools.ts` (5), `mutation-tools.ts` (4), `milestone-tools.ts` (5), `insights-tools.ts` (1), `schemas.ts`

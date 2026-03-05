@@ -76,7 +76,6 @@ describe('Resource Handlers', () => {
             expect(uris).toContain('memory://recent')
             expect(uris).toContain('memory://significant')
             expect(uris).toContain('memory://tags')
-            expect(uris).toContain('memory://team/recent')
         })
 
         it('should include template resources', () => {
@@ -201,13 +200,6 @@ describe('Resource Handlers', () => {
             expect(data.database.entryCount).toBeGreaterThan(0)
             expect(data.toolFilter.totalCount).toBeGreaterThan(0)
             expect(data.timestamp).toBeDefined()
-        })
-
-        it('should read memory://team/recent', async () => {
-            const result = await readResource('memory://team/recent', db)
-
-            const data = result.data as { entries: unknown[]; count: number }
-            expect(data.entries).toBeDefined()
         })
 
         it('should read memory://graph/recent', async () => {

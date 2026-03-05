@@ -64,7 +64,7 @@ describe('SqliteAdapter', () => {
         it('should create an entry with all fields', () => {
             const entry = db.createEntry({
                 content: 'Full entry',
-                entryType: 'decision',
+                entryType: 'project_decision',
                 tags: ['tag-a', 'tag-b'],
                 isPersonal: false,
                 significanceType: 'milestone',
@@ -73,7 +73,7 @@ describe('SqliteAdapter', () => {
                 issueNumber: 7,
             })
 
-            expect(entry.entryType).toBe('decision')
+            expect(entry.entryType).toBe('project_decision')
             expect(entry.isPersonal).toBe(false)
             expect(entry.tags).toContain('tag-a')
             expect(entry.tags).toContain('tag-b')
@@ -187,13 +187,13 @@ describe('SqliteAdapter', () => {
 
         it('should filter by isPersonal', () => {
             db.createEntry({ content: 'Personal entry', isPersonal: true })
-            db.createEntry({ content: 'Team entry', isPersonal: false })
+            db.createEntry({ content: 'Non-personal entry', isPersonal: false })
 
             const personal = db.getRecentEntries(100, true)
-            const team = db.getRecentEntries(100, false)
+            const nonPersonal = db.getRecentEntries(100, false)
 
             expect(personal.every((e) => e.isPersonal)).toBe(true)
-            expect(team.every((e) => !e.isPersonal)).toBe(true)
+            expect(nonPersonal.every((e) => !e.isPersonal)).toBe(true)
         })
     })
 
@@ -595,10 +595,10 @@ describe('SqliteAdapter', () => {
         it('should filter by entry type', () => {
             const today = new Date().toISOString().split('T')[0]!
             const results = db.searchByDateRange(today, today, {
-                entryType: 'decision',
+                entryType: 'project_decision',
             })
             for (const r of results) {
-                expect(r.entryType).toBe('decision')
+                expect(r.entryType).toBe('project_decision')
             }
         })
 

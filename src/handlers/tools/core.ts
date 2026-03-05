@@ -40,7 +40,6 @@ const CreateEntrySchema = z.object({
     workflow_run_id: z.number().optional(),
     workflow_name: z.string().optional(),
     workflow_status: z.enum(['queued', 'in_progress', 'completed']).optional(),
-    share_with_team: z.boolean().optional().default(false),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -61,7 +60,6 @@ const CreateEntrySchemaMcp = z.object({
     workflow_run_id: z.number().optional(),
     workflow_name: z.string().optional(),
     workflow_status: z.string().optional(),
-    share_with_team: z.boolean().optional().default(false),
 })
 
 const GetEntryByIdSchema = z.object({
@@ -144,7 +142,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         content: input.content,
                         entryType: input.entry_type,
                         tags: input.tags,
-                        isPersonal: input.share_with_team ? false : input.is_personal,
+                        isPersonal: input.is_personal,
                         significanceType: input.significance_type ?? null,
                         projectNumber: input.project_number,
                         projectOwner: input.project_owner,

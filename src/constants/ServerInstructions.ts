@@ -162,7 +162,7 @@ const TOOL_PARAMETER_REFERENCE = `
 
 | Tool                   | Required Parameters | Optional Parameters                                                                                                                                                                                                                                            |
 | ---------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| \`create_entry\`         | \`content\` (string)  | \`entry_type\`, \`tags\` (array), \`is_personal\`, \`significance_type\`, \`share_with_team\`, \`auto_context\`, \`issue_number\`, \`issue_url\`, \`pr_number\`, \`pr_url\`, \`pr_status\`, \`project_number\`, \`project_owner\`, \`workflow_run_id\`, \`workflow_name\`, \`workflow_status\` |
+| \`create_entry\`         | \`content\` (string)  | \`entry_type\`, \`tags\` (array), \`is_personal\`, \`significance_type\`, \`auto_context\`, \`issue_number\`, \`issue_url\`, \`pr_number\`, \`pr_url\`, \`pr_status\`, \`project_number\`, \`project_owner\`, \`workflow_run_id\`, \`workflow_name\`, \`workflow_status\` |
 | \`create_entry_minimal\` | \`content\` (string)  | none                                                                                                                                                                                                                                                           |
 | \`get_entry_by_id\`      | \`entry_id\` (number) | \`include_relationships\` (bool, default true)                                                                                                                                                                                                                   |
 | \`get_recent_entries\`   | none                | \`limit\` (default 5), \`is_personal\` (bool)                                                                                                                                                                                                                      |
@@ -311,7 +311,7 @@ Valid values for \`entry_type\` parameter:
 | \`memory://graph/recent\`          | Mermaid diagram of recent relationships            |
 | \`memory://graph/actions\`         | CI/CD narrative graph                              |
 | \`memory://actions/recent\`        | Recent workflow runs                               |
-| \`memory://team/recent\`           | Team-shared entries                                |
+
 | \`memory://github/status\`         | GitHub repo overview (CI, issues, PRs, milestones) |
 | \`memory://github/milestones\`     | Open milestones with completion %                  |
 | \`memory://github/insights\`       | Stars, forks, and 14-day traffic summary           |

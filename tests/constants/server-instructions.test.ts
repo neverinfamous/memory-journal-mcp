@@ -492,7 +492,7 @@ describe('generateInstructions', () => {
             'memory://graph/recent',
             'memory://graph/actions',
             'memory://actions/recent',
-            'memory://team/recent',
+
             'memory://github/status',
             'memory://github/milestones',
             'memory://github/insights',

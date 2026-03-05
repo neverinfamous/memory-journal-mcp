@@ -17,7 +17,6 @@ import {
     ICON_BRIEFING,
     ICON_CLOCK,
     ICON_TAG,
-    ICON_TEAM,
     ICON_STAR,
     ICON_ISSUE,
     ICON_PR,
@@ -57,7 +56,7 @@ describe('Resource icons', () => {
         { name: 'ICON_BRIEFING', icon: ICON_BRIEFING },
         { name: 'ICON_CLOCK', icon: ICON_CLOCK },
         { name: 'ICON_TAG', icon: ICON_TAG },
-        { name: 'ICON_TEAM', icon: ICON_TEAM },
+
         { name: 'ICON_STAR', icon: ICON_STAR },
         { name: 'ICON_ISSUE', icon: ICON_ISSUE },
         { name: 'ICON_PR', icon: ICON_PR },
