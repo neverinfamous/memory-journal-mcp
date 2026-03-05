@@ -14,35 +14,47 @@ import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema } from './schem
 // ============================================================================
 
 const StatisticsOutputSchema = z.object({
-    groupBy: z.string(),
-    totalEntries: z.number(),
-    entriesByType: z.record(z.string(), z.number()),
-    entriesByPeriod: z.array(
-        z.object({
-            period: z.string(),
-            count: z.number(),
+    groupBy: z.string().optional(),
+    totalEntries: z.number().optional(),
+    entriesByType: z.record(z.string(), z.number()).optional(),
+    entriesByPeriod: z
+        .array(
+            z.object({
+                period: z.string(),
+                count: z.number(),
+            })
+        )
+        .optional(),
+    decisionDensity: z
+        .array(
+            z.object({
+                period: z.string(),
+                significantCount: z.number(),
+            })
+        )
+        .optional(),
+    relationshipComplexity: z
+        .object({
+            totalRelationships: z.number(),
+            avgPerEntry: z.number(),
         })
-    ),
-    decisionDensity: z.array(
-        z.object({
-            period: z.string(),
-            significantCount: z.number(),
+        .optional(),
+    activityTrend: z
+        .object({
+            currentPeriod: z.string(),
+            previousPeriod: z.string(),
+            growthPercent: z.number().nullable(),
         })
-    ),
-    relationshipComplexity: z.object({
-        totalRelationships: z.number(),
-        avgPerEntry: z.number(),
-    }),
-    activityTrend: z.object({
-        currentPeriod: z.string(),
-        previousPeriod: z.string(),
-        growthPercent: z.number().nullable(),
-    }),
-    causalMetrics: z.object({
-        blocked_by: z.number(),
-        resolved: z.number(),
-        caused: z.number(),
-    }),
+        .optional(),
+    causalMetrics: z
+        .object({
+            blocked_by: z.number(),
+            resolved: z.number(),
+            caused: z.number(),
+        })
+        .optional(),
+    success: z.boolean().optional(),
+    error: z.string().optional(),
 })
 
 const ProjectSummaryOutputSchema = z.object({
@@ -55,23 +67,29 @@ const ProjectSummaryOutputSchema = z.object({
 })
 
 const CrossProjectInsightsOutputSchema = z.object({
-    project_count: z.number(),
-    total_entries: z.number(),
-    projects: z.array(ProjectSummaryOutputSchema),
-    inactive_projects: z.array(
-        z.object({
-            project_number: z.number(),
-            last_entry_date: z.string(),
-        })
-    ),
-    inactiveThresholdDays: z.number(),
-    time_distribution: z.array(
-        z.object({
-            project_number: z.number(),
-            percentage: z.string(),
-        })
-    ),
+    project_count: z.number().optional(),
+    total_entries: z.number().optional(),
+    projects: z.array(ProjectSummaryOutputSchema).optional(),
+    inactive_projects: z
+        .array(
+            z.object({
+                project_number: z.number(),
+                last_entry_date: z.string(),
+            })
+        )
+        .optional(),
+    inactiveThresholdDays: z.number().optional(),
+    time_distribution: z
+        .array(
+            z.object({
+                project_number: z.number(),
+                percentage: z.string(),
+            })
+        )
+        .optional(),
     message: z.string().optional(),
+    success: z.boolean().optional(),
+    error: z.string().optional(),
 })
 
 // ============================================================================

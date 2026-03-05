@@ -44,9 +44,11 @@ const ExportEntriesSchemaMcp = z.object({
 // ============================================================================
 
 const ExportEntriesOutputSchema = z.object({
-    format: z.enum(['json', 'markdown']),
+    format: z.enum(['json', 'markdown']).optional(),
     entries: z.array(EntryOutputSchema).optional(),
     content: z.string().optional(),
+    success: z.boolean().optional(),
+    error: z.string().optional(),
 })
 
 // ============================================================================

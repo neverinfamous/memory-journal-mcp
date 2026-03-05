@@ -89,8 +89,10 @@ export const EntryOutputSchema = z.object({
  * Used by get_recent_entries, search_entries, search_by_date_range.
  */
 export const EntriesListOutputSchema = z.object({
-    entries: z.array(EntryOutputSchema),
-    count: z.number(),
+    entries: z.array(EntryOutputSchema).optional(),
+    count: z.number().optional(),
+    success: z.boolean().optional(),
+    error: z.string().optional(),
 })
 
 /**

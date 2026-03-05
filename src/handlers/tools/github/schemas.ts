@@ -33,12 +33,12 @@ export const GitHubIssueDetailsOutputSchema = GitHubIssueOutputSchema.extend({
 })
 
 export const GitHubIssuesListOutputSchema = z.object({
-    owner: z.string(),
-    repo: z.string(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
     detectedOwner: z.string().nullable().optional(),
     detectedRepo: z.string().nullable().optional(),
-    issues: z.array(GitHubIssueOutputSchema),
-    count: z.number(),
+    issues: z.array(GitHubIssueOutputSchema).optional(),
+    count: z.number().optional(),
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
@@ -82,12 +82,12 @@ export const GitHubPRDetailsOutputSchema = GitHubPullRequestOutputSchema.extend(
 })
 
 export const GitHubPRsListOutputSchema = z.object({
-    owner: z.string(),
-    repo: z.string(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
     detectedOwner: z.string().nullable().optional(),
     detectedRepo: z.string().nullable().optional(),
-    pullRequests: z.array(GitHubPullRequestOutputSchema),
-    count: z.number(),
+    pullRequests: z.array(GitHubPullRequestOutputSchema).optional(),
+    count: z.number().optional(),
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
@@ -109,14 +109,14 @@ export const GitHubPRResultOutputSchema = z.object({
 // ============================================================================
 
 export const GitHubContextOutputSchema = z.object({
-    repoName: z.string().nullable(),
-    branch: z.string().nullable(),
-    commit: z.string().nullable(),
-    remoteUrl: z.string().nullable(),
-    issues: z.array(GitHubIssueOutputSchema),
-    pullRequests: z.array(GitHubPullRequestOutputSchema),
-    issueCount: z.number(),
-    prCount: z.number(),
+    repoName: z.string().nullable().optional(),
+    branch: z.string().nullable().optional(),
+    commit: z.string().nullable().optional(),
+    remoteUrl: z.string().nullable().optional(),
+    issues: z.array(GitHubIssueOutputSchema).optional(),
+    pullRequests: z.array(GitHubPullRequestOutputSchema).optional(),
+    issueCount: z.number().optional(),
+    prCount: z.number().optional(),
     error: z.string().optional(),
 })
 
@@ -150,13 +150,13 @@ const KanbanColumnOutputSchema = z.object({
 })
 
 export const KanbanBoardOutputSchema = z.object({
-    projectId: z.string(),
-    projectNumber: z.number(),
-    projectTitle: z.string(),
-    statusFieldId: z.string(),
-    statusOptions: z.array(StatusOptionOutputSchema),
-    columns: z.array(KanbanColumnOutputSchema),
-    totalItems: z.number(),
+    projectId: z.string().optional(),
+    projectNumber: z.number().optional(),
+    projectTitle: z.string().optional(),
+    statusFieldId: z.string().optional(),
+    statusOptions: z.array(StatusOptionOutputSchema).optional(),
+    columns: z.array(KanbanColumnOutputSchema).optional(),
+    totalItems: z.number().optional(),
     owner: z.string().optional(),
     detectedOwner: z.string().nullable().optional(),
     detectedRepo: z.string().nullable().optional(),

@@ -87,8 +87,9 @@ const TestSimpleSchema = z.object({
 // ============================================================================
 
 const CreateEntryOutputSchema = z.object({
-    success: z.boolean(),
-    entry: EntryOutputSchema,
+    success: z.boolean().optional(),
+    entry: EntryOutputSchema.optional(),
+    error: z.string().optional(),
 })
 
 const EntryByIdOutputSchema = z.object({
@@ -104,8 +105,10 @@ const TestSimpleOutputSchema = z.object({
 })
 
 const TagsListOutputSchema = z.object({
-    tags: z.array(TagOutputSchema),
-    count: z.number(),
+    tags: z.array(TagOutputSchema).optional(),
+    count: z.number().optional(),
+    success: z.boolean().optional(),
+    error: z.string().optional(),
 })
 
 // ============================================================================

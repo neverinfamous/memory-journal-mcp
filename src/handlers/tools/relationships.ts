@@ -56,18 +56,19 @@ const VisualizeInputSchema = z.object({
 // ============================================================================
 
 const LinkEntriesOutputSchema = z.object({
-    success: z.boolean(),
-    relationship: RelationshipOutputSchema,
+    success: z.boolean().optional(),
+    relationship: RelationshipOutputSchema.optional(),
     duplicate: z.boolean().optional().describe('True if relationship already existed'),
     message: z.string().optional().describe('Additional context about the operation'),
+    error: z.string().optional(),
 })
 
 const VisualizationOutputSchema = z.object({
-    entry_count: z.number(),
-    relationship_count: z.number(),
-    root_entry: z.number().nullable(),
-    depth: z.number(),
-    mermaid: z.string().nullable(),
+    entry_count: z.number().optional(),
+    relationship_count: z.number().optional(),
+    root_entry: z.number().nullable().optional(),
+    depth: z.number().optional(),
+    mermaid: z.string().nullable().optional(),
     message: z.string().optional(),
     legend: z
         .object({
@@ -76,6 +77,8 @@ const VisualizationOutputSchema = z.object({
             arrows: z.record(z.string(), z.string()),
         })
         .optional(),
+    success: z.boolean().optional(),
+    error: z.string().optional(),
 })
 
 // ============================================================================

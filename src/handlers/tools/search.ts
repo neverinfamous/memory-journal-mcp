@@ -90,10 +90,11 @@ const SemanticEntryOutputSchema = EntryOutputSchema.extend({
 })
 
 const SemanticSearchOutputSchema = z.object({
-    query: z.string(),
-    entries: z.array(SemanticEntryOutputSchema),
-    count: z.number(),
+    query: z.string().optional(),
+    entries: z.array(SemanticEntryOutputSchema).optional(),
+    count: z.number().optional(),
     hint: z.string().optional(),
+    success: z.boolean().optional(),
     error: z.string().optional(),
 })
 

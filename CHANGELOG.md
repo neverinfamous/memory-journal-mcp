@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Output Schema Validation for Error Responses** — All tool output schemas now accept error responses (`{ success: false, error: "..." }`) from `formatHandlerError()`. Previously, schemas with required success-path fields (e.g., `entries`, `count`, `relationship`, `entry`) rejected error responses with output validation `-32602` errors. Made success-path fields optional and added `success`/`error` fields across 9 schema files: `schemas.ts`, `core.ts`, `search.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `relationships.ts`, `github/schemas.ts`.
 - **Multi-Session Connect Crash** — Fixed `Already connected to a transport` error when creating 2+ concurrent Streamable HTTP sessions
   - SDK's `McpServer.connect()` only supports one active transport; second `connect()` threw
   - Added close-before-reconnect pattern wrapping `server.connect()` in try-catch

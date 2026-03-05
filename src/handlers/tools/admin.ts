@@ -47,31 +47,31 @@ const UpdateEntryOutputSchema = z.object({
 })
 
 const DeleteEntryOutputSchema = z.object({
-    success: z.boolean(),
-    entryId: z.number(),
-    permanent: z.boolean(),
+    success: z.boolean().optional(),
+    entryId: z.number().optional(),
+    permanent: z.boolean().optional(),
     error: z.string().optional(),
 })
 
 const MergeTagsOutputSchema = z.object({
-    success: z.boolean(),
-    sourceTag: z.string(),
-    targetTag: z.string(),
-    entriesUpdated: z.number(),
-    sourceDeleted: z.boolean(),
-    message: z.string(),
+    success: z.boolean().optional(),
+    sourceTag: z.string().optional(),
+    targetTag: z.string().optional(),
+    entriesUpdated: z.number().optional(),
+    sourceDeleted: z.boolean().optional(),
+    message: z.string().optional(),
     error: z.string().optional(),
 })
 
 const RebuildVectorIndexOutputSchema = z.object({
-    success: z.boolean(),
-    entriesIndexed: z.number(),
+    success: z.boolean().optional(),
+    entriesIndexed: z.number().optional(),
     error: z.string().optional(),
 })
 
 const AddToVectorIndexOutputSchema = z.object({
-    success: z.boolean(),
-    entryId: z.number(),
+    success: z.boolean().optional(),
+    entryId: z.number().optional(),
     error: z.string().optional(),
 })
 
