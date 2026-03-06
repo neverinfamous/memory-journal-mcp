@@ -17,11 +17,24 @@ program
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost)')
     .option('--stateless', 'Use stateless HTTP mode (no session management)')
-    .option('--db <path>', 'Database path', './memory_journal.db')
+    .option(
+        '--db <path>',
+        'Database path (env: DB_PATH)',
+        process.env['DB_PATH'] ?? './memory_journal.db'
+    )
+    .option(
+        '--team-db <path>',
+        'Team database path (env: TEAM_DB_PATH)',
+        process.env['TEAM_DB_PATH'] ?? undefined
+    )
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
     .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: *)')
+    .option(
+        '--auth-token <token>',
+        'Bearer token for HTTP transport authentication (env: MCP_AUTH_TOKEN)'
+    )
     .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
     .option(
         '--backup-interval <minutes>',
@@ -46,10 +59,12 @@ program
             serverHost?: string
             stateless?: boolean
             db: string
+            teamDb?: string
             toolFilter?: string
             defaultProject: string
             autoRebuildIndex?: boolean
             corsOrigin?: string
+            authToken?: string
             logLevel: string
             backupInterval: string
             keepBackups: string
@@ -68,6 +83,7 @@ program
                 transport: options.transport,
                 stateless: options.stateless ?? false,
                 db: options.db,
+                ...(options.teamDb ? { teamDb: options.teamDb } : {}),
                 ...(host ? { host } : {}),
             })
 
@@ -78,6 +94,7 @@ program
                     host,
                     statelessHttp: options.stateless === true,
                     dbPath: options.db,
+                    teamDbPath: options.teamDb,
                     toolFilter: options.toolFilter,
                     defaultProjectNumber: options.defaultProject
                         ? parseInt(options.defaultProject, 10)
@@ -87,6 +104,7 @@ program
                     autoRebuildIndex:
                         options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
                     corsOrigin: options.corsOrigin,
+                    authToken: options.authToken,
                     scheduler: {
                         backupIntervalMinutes: parseInt(options.backupInterval, 10),
                         keepBackups: parseInt(options.keepBackups, 10),

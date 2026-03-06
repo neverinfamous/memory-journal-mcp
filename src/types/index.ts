@@ -1,63 +1,44 @@
 /**
  * Memory Journal MCP Server - Type Definitions
  *
- * Core types for the MCP server including tools, resources, prompts,
- * database entities, and filtering.
+ * Barrel file re-exporting all types from sub-modules, plus types
+ * that depend on external imports (SqliteAdapter, VectorSearchManager, etc.).
  */
 
-// ============================================================================
-// Tool Filtering Types
-// ============================================================================
+import type { SqliteAdapter } from '../database/SqliteAdapter.js'
+import type { VectorSearchManager } from '../vector/VectorSearchManager.js'
+import type { GitHubIntegration } from '../github/GitHubIntegration.js'
+import type { ProgressContext } from '../utils/progress-utils.js'
 
-/**
- * Tool group identifiers for Memory Journal
- */
-export type ToolGroup =
-    | 'core' // Entry CRUD: create, get_by_id, get_recent, create_minimal, test_simple
-    | 'search' // Search: search_entries, search_by_date_range, semantic_search
-    | 'analytics' // Analytics: get_statistics, get_cross_project_insights
-    | 'relationships' // Relationships: link_entries, visualize_relationships
-    | 'export' // Export: export_entries
-    | 'admin' // Admin: update_entry, delete_entry
-    | 'github' // Reserved for future GitHub-specific tools
-    | 'backup' // Backup: backup_journal, list_backups, restore_backup
-
-/**
- * Meta-group identifiers for common multi-group selections
- */
-export type MetaGroup =
-    | 'starter' // core + search (~8 tools)
-    | 'essential' // core only (~5 tools)
-    | 'full' // all groups (~16 tools)
-    | 'readonly' // everything except admin
-
-/**
- * Tool filter rule
- */
-export interface ToolFilterRule {
-    /** Rule type: include or exclude */
-    type: 'include' | 'exclude'
-
-    /** Target: group name or tool name */
-    target: string
-
-    /** Whether target is a group (true) or individual tool (false) */
-    isGroup: boolean
-}
-
-/**
- * Parsed tool filter configuration
- */
-export interface ToolFilterConfig {
-    /** Original filter string */
-    raw: string
-
-    /** Parsed rules in order */
-    rules: ToolFilterRule[]
-
-    /** Set of enabled tool names after applying rules */
-    enabledTools: Set<string>
-}
+// Re-export sub-module types
+export type { ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig } from './filtering.js'
+export type {
+    EntryType,
+    SignificanceType,
+    RelationshipType,
+    JournalEntry,
+    Tag,
+    Relationship,
+    Embedding,
+    ImportanceBreakdown,
+    ImportanceResult,
+} from './entities.js'
+export type {
+    GitHubProject,
+    GitHubIssue,
+    GitHubPullRequest,
+    GitHubMilestone,
+    GitHubWorkflowRun,
+    ProjectContext,
+    RepoStats,
+    TrafficData,
+    TrafficReferrer,
+    PopularPath,
+    ProjectV2StatusOption,
+    ProjectV2Item,
+    KanbanColumn,
+    KanbanBoard,
+} from './github.js'
 
 // ============================================================================
 // MCP 2025-11-25 Annotations
@@ -117,6 +98,8 @@ export interface McpIcon {
 // Tool, Resource, Prompt Definitions
 // ============================================================================
 
+import type { ToolGroup } from './filtering.js'
+
 /**
  * Tool definition for registration
  */
@@ -143,7 +126,33 @@ export interface ToolDefinition {
     annotations: ToolAnnotations
 
     /** Tool handler function */
-    handler: (params: unknown) => Promise<unknown>
+    handler: (params: unknown) => unknown
+}
+
+/**
+ * Tool handler configuration options
+ */
+export interface ToolHandlerConfig {
+    /** Default GitHub Project number for auto-assignment */
+    defaultProjectNumber?: number
+}
+
+/**
+ * Tool execution context passed to all tool group modules
+ */
+export interface ToolContext {
+    /** Database adapter */
+    db: SqliteAdapter
+    /** Team database adapter (optional, requires TEAM_DB_PATH) */
+    teamDb?: SqliteAdapter
+    /** Vector search manager (optional) */
+    vectorManager?: VectorSearchManager
+    /** GitHub integration (optional) */
+    github?: GitHubIntegration
+    /** Handler configuration */
+    config?: ToolHandlerConfig
+    /** Progress reporting context */
+    progress?: ProgressContext
 }
 
 /**
@@ -191,323 +200,6 @@ export interface PromptDefinition {
 
     /** Prompt handler */
     handler: (args: Record<string, string>) => Promise<unknown>
-}
-
-// ============================================================================
-// Database Entity Types
-// ============================================================================
-
-/**
- * Entry types for journal entries
- */
-export type EntryType =
-    | 'personal_reflection'
-    | 'project_decision'
-    | 'technical_achievement'
-    | 'bug_fix'
-    | 'feature_implementation'
-    | 'code_review'
-    | 'meeting_notes'
-    | 'learning'
-    | 'research'
-    | 'planning'
-    | 'retrospective'
-    | 'standup'
-    | 'other'
-
-/**
- * Significance types for important entries
- */
-export type SignificanceType =
-    | 'milestone'
-    | 'breakthrough'
-    | 'technical_breakthrough'
-    | 'decision'
-    | 'lesson_learned'
-    | 'blocker_resolved'
-    | 'release'
-    | null
-
-/**
- * Relationship types between entries
- *
- * Standard types:
- * - evolves_from: Entry builds upon previous work
- * - references: Entry mentions or links to another
- * - implements: Entry implements a spec/design
- * - clarifies: Entry explains or clarifies another
- * - response_to: Entry responds to a question/issue
- *
- * Causal types (for decision tracing):
- * - blocked_by: Entry was blocked by another (e.g., blocker → resolution)
- * - resolved: Entry resolved/fixed an issue from another
- * - caused: Entry caused or led to another outcome
- */
-export type RelationshipType =
-    | 'evolves_from'
-    | 'references'
-    | 'implements'
-    | 'clarifies'
-    | 'response_to'
-    | 'blocked_by'
-    | 'resolved'
-    | 'caused'
-
-/**
- * Journal entry entity
- */
-export interface JournalEntry {
-    id: number
-    entryType: EntryType
-    content: string
-    timestamp: string
-    isPersonal: boolean
-    significanceType: SignificanceType
-    autoContext: string | null
-    deletedAt: string | null
-    tags: string[]
-    // GitHub integration fields
-    projectNumber?: number | null
-    projectOwner?: string | null
-    issueNumber?: number | null
-    issueUrl?: string | null
-    prNumber?: number | null
-    prUrl?: string | null
-    prStatus?: string | null
-    workflowRunId?: number | null
-    workflowName?: string | null
-    workflowStatus?: string | null
-}
-
-/**
- * Tag entity
- */
-export interface Tag {
-    id: number
-    name: string
-    usageCount: number
-}
-
-/**
- * Relationship entity
- */
-export interface Relationship {
-    id: number
-    fromEntryId: number
-    toEntryId: number
-    relationshipType: RelationshipType
-    description: string | null
-    createdAt: string
-}
-
-/**
- * Embedding entity for vector search
- */
-export interface Embedding {
-    entryId: number
-    embedding: Float32Array
-    modelName: string
-}
-
-/**
- * Importance scoring breakdown showing weighted component contributions
- */
-export interface ImportanceBreakdown {
-    /** Significance type contribution (weight: 0.30) */
-    significance: number
-    /** Relationship count contribution (weight: 0.35) */
-    relationships: number
-    /** Causal relationship contribution (weight: 0.20) */
-    causal: number
-    /** Recency decay contribution (weight: 0.15) */
-    recency: number
-}
-
-/**
- * Importance calculation result with total score and component breakdown
- */
-export interface ImportanceResult {
-    /** Total importance score (0.0-1.0) */
-    score: number
-    /** Weighted component contributions */
-    breakdown: ImportanceBreakdown
-}
-
-// ============================================================================
-// GitHub Integration Types
-// ============================================================================
-
-/**
- * GitHub project information
- */
-export interface GitHubProject {
-    number: number
-    title: string
-    url: string
-    state: 'OPEN' | 'CLOSED'
-}
-
-/**
- * GitHub issue information
- */
-export interface GitHubIssue {
-    number: number
-    title: string
-    url: string
-    state: 'OPEN' | 'CLOSED'
-    milestone?: { number: number; title: string } | null
-}
-
-/**
- * GitHub pull request information
- */
-export interface GitHubPullRequest {
-    number: number
-    title: string
-    url: string
-    state: 'OPEN' | 'CLOSED' | 'MERGED'
-}
-
-/**
- * GitHub milestone information
- */
-export interface GitHubMilestone {
-    number: number
-    title: string
-    description: string | null
-    state: 'open' | 'closed'
-    url: string
-    dueOn: string | null
-    openIssues: number
-    closedIssues: number
-    createdAt: string
-    updatedAt: string
-    creator: string | null
-}
-
-/**
- * GitHub workflow run information
- */
-export interface GitHubWorkflowRun {
-    id: number
-    name: string
-    status: 'queued' | 'in_progress' | 'completed'
-    conclusion: 'success' | 'failure' | 'cancelled' | 'skipped' | null
-    url: string
-    headBranch: string
-    headSha: string
-    createdAt: string
-    updatedAt: string
-}
-
-/**
- * Auto-captured project context
- */
-export interface ProjectContext {
-    repoName: string | null
-    branch: string | null
-    commit: string | null
-    remoteUrl: string | null
-    projects: GitHubProject[]
-    issues: GitHubIssue[]
-    pullRequests: GitHubPullRequest[]
-    workflowRuns: GitHubWorkflowRun[]
-    milestones: GitHubMilestone[]
-}
-
-// ============================================================================
-// Repository Insights/Traffic Types
-// ============================================================================
-
-/**
- * Repository statistics (stars, forks, watchers)
- */
-export interface RepoStats {
-    stars: number
-    forks: number
-    watchers: number
-    openIssues: number
-    size: number // KB
-    defaultBranch: string
-}
-
-/**
- * Aggregated traffic data (14-day rolling)
- */
-export interface TrafficData {
-    clones: { total: number; unique: number; dailyAvg: number }
-    views: { total: number; unique: number; dailyAvg: number }
-    period: string // e.g. "14 days"
-}
-
-/**
- * Traffic referrer source
- */
-export interface TrafficReferrer {
-    referrer: string
-    count: number
-    uniques: number
-}
-
-/**
- * Popular repository path
- */
-export interface PopularPath {
-    path: string
-    title: string
-    count: number
-    uniques: number
-}
-
-// ============================================================================
-// GitHub Projects v2 Kanban Types
-// ============================================================================
-
-/**
- * Status option for single-select field in Projects v2
- */
-export interface ProjectV2StatusOption {
-    id: string
-    name: string
-    color?: string
-}
-
-/**
- * Project item in a Kanban board
- */
-export interface ProjectV2Item {
-    id: string
-    title: string
-    url: string
-    type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE'
-    status: string | null
-    number?: number
-    labels?: string[]
-    assignees?: string[]
-    createdAt: string
-    updatedAt: string
-}
-
-/**
- * Kanban column (grouped by Status)
- */
-export interface KanbanColumn {
-    status: string
-    statusOptionId: string
-    items: ProjectV2Item[]
-}
-
-/**
- * Full Kanban board response
- */
-export interface KanbanBoard {
-    projectId: string
-    projectNumber: number
-    projectTitle: string
-    statusFieldId: string
-    statusOptions: ProjectV2StatusOption[]
-    columns: KanbanColumn[]
-    totalItems: number
 }
 
 // ============================================================================

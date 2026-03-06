@@ -5,6 +5,139 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [5.0.0] - 2026-03-06
+
+### Added
+
+- **Playwright E2E Test Suite** — 8 spec files testing HTTP/SSE transport layer end-to-end with Playwright:
+  - `health.spec.ts` — Health endpoint, root info, MCP initialization
+  - `protocols.spec.ts` — Streamable HTTP and Legacy SSE protocol error handling
+  - `security.spec.ts` — Security headers (6), CORS, HSTS, body size limits, 404 handler
+  - `auth.spec.ts` — Bearer token authentication enforcement (separate server with `--auth-token`)
+  - `sessions.spec.ts` — Session lifecycle: init → use → terminate → reject stale
+  - `tools.spec.ts` — MCP SDK client tool execution via Streamable HTTP (`test_simple`, `create_entry_minimal`, validation errors)
+  - `resources.spec.ts` — MCP SDK client resource reads via Streamable HTTP (`memory://health`, `memory://briefing`, etc.)
+  - `stateless.spec.ts` — Stateless mode: SSE disabled (405), DELETE no-op (204), no legacy SSE
+  - `scheduler.spec.ts` — Scheduler activation verification via `memory://health` resource
+  - New `test:e2e` npm script (`playwright test`)
+  - New devDependency: `@playwright/test`
+
+### Fixed
+
+- **Legacy SSE transport `start()` redundancy** — `setupLegacySSE` called `sseTransport.start()` after `server.connect()` which already auto-calls `start()`, causing "SSEServerTransport already started!" errors and preventing SDK clients from using Legacy SSE
+
+- **Legacy SSE Transport** — HTTP transport now supports both Streamable HTTP (MCP 2025-03-26) and Legacy SSE (MCP 2024-11-05) protocols simultaneously (stateful mode only)
+  - `GET /sse` — Opens Legacy SSE connection for backward-compatible clients
+  - `POST /messages?sessionId=<id>` — Routes messages to Legacy SSE transport
+  - Cross-protocol guard: SSE session IDs rejected on `/mcp` and vice versa
+- **Health Endpoint** — `GET /health` returns `{ status: "healthy", timestamp }` for monitoring and load balancer probes
+- **Root Info Endpoint** — `GET /` returns server name, version, description, all available endpoints, and documentation link
+- **404 Handler** — Unknown paths now return `404 { error: "Not found" }` instead of Express default HTML
+- **`DB_PATH` Environment Variable** — CLI `--db` flag now accepts `DB_PATH` as a fallback (precedence: CLI flag > `DB_PATH` env > `./memory_journal.db`). Enables database path configuration via MCP client env blocks without needing CLI args.
+- **Team Collaboration (Redesign)** — Rebuilt team collaboration from scratch with proper architecture:
+  - **Separate team database** — `TEAM_DB_PATH` env var / `--team-db` CLI flag for a public, git-tracked `.db` file
+  - **Author attribution** — Auto-detected from `TEAM_AUTHOR` env or `git config user.name`
+  - **3 dedicated tools** — `team_create_entry`, `team_get_recent`, `team_search` (new `team` tool group)
+  - **`share_with_team`** — Optional parameter on `create_entry` to copy entries to team DB
+  - **Cross-database search** — `search_entries` and `search_by_date_range` auto-merge team results with `source` marker
+  - **2 team resources** — `memory://team/recent` (author-enriched entries), `memory://team/statistics` (author breakdown)
+  - **Briefing integration** — `memory://briefing` shows team entry count when team DB configured
+  - **Health integration** — `memory://health` includes team database status block
+  - **Server instructions** — Team collaboration section + team tool reference at standard+ level
+  - **`ICON_TEAM`** — Users group SVG icon for team tools
+  - Tool count: 39 → 42, tool groups: 8 → 9, resources: 20 → 22
+
+### Removed
+
+- **Legacy Team Collaboration System** — Removed non-functional team collaboration feature (remnant of Python-era architecture), then rebuilt from scratch (see Added > Team Collaboration)
+  - Removed old `share_with_team` parameter, `memory://team/recent` resource, and `ICON_TEAM` constant
+  - Deleted unused `.memory-journal-team.db` file
+  - Database files reorganized into `data/` directory
+- **Database Files Reorganized** — Moved `memory_journal.db` and `backups/` into `data/` directory for cleaner project structure
+- **Tool Handler Modularized** — Replaced 3,428-line monolith `src/handlers/tools/index.ts` with 12 focused modules + barrel file (~140 lines):
+  - `core.ts` (6), `search.ts` (4), `analytics.ts` (2), `relationships.ts` (2), `export.ts` (1), `admin.ts` (5), `backup.ts` (4)
+  - `github/` sub-directory: `read-tools.ts` (5), `mutation-tools.ts` (4), `milestone-tools.ts` (5), `insights-tools.ts` (1), `schemas.ts`
+  - Shared Zod output schemas extracted to `schemas.ts` and `github/schemas.ts`
+  - Public API (`getTools`, `callTool`) unchanged — zero breaking changes for `McpServer.ts`
+- **Types Modularized** — Split `types/index.ts` (652 lines) into `types/filtering.ts`, `types/entities.ts`, `types/github.ts` with barrel re-exports
+- **Database Schema Extracted** — Extracted SQL DDL + `CreateEntryInput` from `SqliteAdapter.ts` into `database/schema.ts`
+- **Resource Handlers Modularized** — Split `resources/index.ts` (1,692 lines) into 5 sub-modules + barrel (~120 lines):
+  - `shared.ts` (types/helpers), `core.ts` (8 resources), `graph.ts` (3), `github.ts` (4), `templates.ts` (6)
+- **Prompt Handlers Modularized** — Split `prompts/index.ts` (587 lines) into `workflow.ts` (9 prompts), `github.ts` (6 prompts) + barrel (~95 lines)
+- **Mutation Tools Modularized** — Split `mutation-tools.ts` (660 lines) into `helpers.ts`, `kanban-tools.ts` (2 tools), `issue-tools.ts` (2 tools) + barrel
+- **Deterministic Error Handling** — All 42 tool handlers wrapped with `try/catch` + `formatHandlerError()` returning `{ success: false, error }` instead of throwing raw MCP errors. Matches the error handling standard from mysql-mcp.
+  - New utility: `src/utils/error-helpers.ts` — `formatHandlerError()`, `formatZodError()`
+  - `ToolDefinition.handler` return type changed from `Promise<unknown>` to `unknown` (supports both sync and async handlers)
+  - GitHub `resolveOwnerRepo()` helpers now return validated `github` instance, eliminating all non-null assertions
+- **`Permissions-Policy` Header** — Added `Permissions-Policy: camera=(), microphone=(), geolocation=()` to security headers (6 headers total)
+- **`--auth-token` CLI Option** — New `--auth-token <token>` CLI flag and `MCP_AUTH_TOKEN` environment variable for optional bearer token authentication on the HTTP transport. When configured, all endpoints except `GET /health` require `Authorization: Bearer <token>`. Backward compatible — no auth required when not set.
+
+### Security
+
+- **Trigger Name Validation in `migrateSchema()` (H-1)** — Added `SAFE_IDENTIFIER_RE` regex check (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) before interpolating trigger names into DDL during legacy FTS5 trigger cleanup. Prevents potential SQL injection if a legacy database contains a crafted trigger name. Unsafe names are now logged and skipped.
+- **Query Limit Caps (M-4)** — All `limit` parameters across tool handlers now enforce `.max(500)` via Zod schema validation, preventing unbounded memory-loading queries. Applied to 10 schemas across `core.ts`, `search.ts`, `team.ts`, `relationships.ts`, and `export.ts`.
+- **TruffleHog Pinned to Release Tag (M-2)** — `trufflesecurity/trufflehog@main` → `@v3.93.7` in `secrets-scanning.yml` to eliminate supply-chain risk from floating `@main` tag.
+- **Docker Scout Official Action (M-3)** — Replaced `curl | sh` Docker Scout CLI installer with `docker/scout-action@v1.18.2` in `docker-publish.yml`, eliminating supply-chain risk from executing arbitrary remote scripts in CI with elevated permissions.
+- **Gitleaks Blocking on Failure (L-4)** — Removed `continue-on-error: true` from Gitleaks step in `secrets-scanning.yml` so detected secret leaks now fail the workflow.
+- **HTTP Bearer Token Authentication (F-1)** — Optional bearer token middleware for HTTP transport. Logs a warning when HTTP mode starts without authentication configured.
+- **Gitleaks Pinned to Release Tag (F-3)** — `gitleaks/gitleaks-action@v2` → `@v2.3.9` in `secrets-scanning.yml` to eliminate supply-chain risk from floating major version tag.
+- **SSE Session Timeout Sweep (F-4)** — Legacy SSE sessions are now tracked in `sessionLastActivity` and expired by the 30-minute idle sweep, matching the behavior of Streamable HTTP sessions. Previously SSE sessions were only cleaned up on client disconnect.
+- **`searchByDateRange` Query Limit (F-6)** — Added `LIMIT` clause (default: 500, max: 500) to `searchByDateRange` SQL query to prevent unbounded result sets from broad date ranges. New `limit` parameter on `search_by_date_range` tool.
+- **Docker Production-Only Dependencies (I-2)** — Production image now runs `npm ci --omit=dev` instead of copying the full builder `node_modules`. Removes devDependencies (vitest, eslint, typescript, etc.) from the production image, reducing attack surface.
+- **CORS `Authorization` Header** — Added `Authorization` to `Access-Control-Allow-Headers` for bearer token authentication support.
+- **Timing-Safe Auth Token Comparison (L-1)** — Replaced string `!==` comparison with `crypto.timingSafeEqual()` for bearer token authentication, eliminating a timing side-channel that could theoretically leak token contents character-by-character.
+- **HSTS Header for Reverse Proxy (L-2)** — Added conditional `Strict-Transport-Security: max-age=31536000; includeSubDomains` header when `X-Forwarded-Proto: https` is detected, preventing downgrade attacks in TLS-terminating reverse proxy deployments.
+- **Docker Compose Auth Token (L-3)** — Added commented `MCP_AUTH_TOKEN` environment variable to the HTTP service in `docker-compose.yml`, making authentication configuration discoverable for production deployments.
+- **Shell-Free Git Author Detection (I-1)** — Replaced `execSync('git config user.name')` with `execFileSync('git', ['config', 'user.name'])` in `core.ts` and `team.ts` to avoid implicit shell invocation, reducing the surface for potential command injection if the call site were ever modified.
+- **Docker Compose Read-Only Filesystem** — Added `read_only: true` and `tmpfs: /tmp:noexec,nosuid,nodev` to both Docker Compose services. Limits container write surface to the `/app/data` volume and `/tmp` tmpfs, preventing filesystem-based persistence attacks.
+- **Docker Compose Generic Token Placeholder** — Replaced `ghp_your_token_here` placeholder with `<your-github-token>` to avoid false positive noise in secret scanners.
+- **Docker Compose Explicit `NODE_ENV`** — Added `NODE_ENV=production` to the HTTP service environment block for visibility and to prevent accidental override.
+- **CVE-2026-27171 (zlib)** — Explicitly install zlib from Alpine edge in Dockerfile builder and production stages to fix MEDIUM severity denial of service via infinite loop in CRC32 combine functions.
+- **Gitleaks `GITHUB_TOKEN`** — Pass `GITHUB_TOKEN` to `gitleaks/gitleaks-action@v2.3.9` in `secrets-scanning.yml` as now required for PR scanning.
+
+### Improved
+
+- **Batch Tag Fetching (N+1 Elimination)** — Multi-row methods (`getRecentEntries`, `getEntriesPage`, `searchEntries`, `searchByDateRange`) now batch-fetch tags in a single `IN (...)` query via `batchGetTagsForEntries()` + `rowsToEntries()`, eliminating the N+1 per-row `getTagsForEntry` pattern. `getRecentEntries(50)` reduced from 51 queries to 2.
+- **Batch Tag Linking** — `linkTagsToEntry()` batches tag inserts and lookups: single `INSERT OR IGNORE` for all tags, single `SELECT ... WHERE name IN (...)` for IDs, reducing from 4N to 2+2N SQL statements per entry.
+- **Tool Dispatch Cache** — `callTool()` now caches tool definitions in a `Map` for O(1) lookup instead of rebuilding all 42 `ToolDefinition` objects and doing a linear scan on every call. Cache invalidates when context parameters change.
+- **Conditional JOIN in `searchByDateRange`** — Tag tables (`entry_tags`, `tags`) are only JOINed when a tag filter is provided, avoiding unnecessary `DISTINCT` and row multiplication for the common no-tag-filter case.
+- **Consolidated `getStatistics` Queries** — Reduced from 5 sequential `db.exec()` calls to 3 using multi-statement `exec()`: combined total+type counts, period+density via `SUM(CASE ...)`, and relationship+causal counts.
+- **Simplified `rebuildIndex` Cleanup** — Removed redundant orphan detection pass that preceded a delete-all pass. Now performs a single delete-all before re-indexing.
+- **Dual-Schema Validation for Structured Errors** — All tools now use a dual-schema pattern to ensure Zod validation errors produce structured `{ success: false, error }` responses instead of raw MCP `-32602` error frames. Relaxed schemas (`z.string()`) are passed to the SDK's `inputSchema` for type-level validation, while strict schemas (`z.enum()`, `z.string().regex()`) are used inside handlers via `.parse()` with `formatHandlerError()` catch. Applied across 8 tool files covering 13 enum fields and 8 date regex fields: `core.ts`, `search.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `relationships.ts`, `github/read-tools.ts`, `github/milestone-tools.ts`.
+
+### Fixed
+
+- **Entry Type Enum Completeness** — Added 6 missing entry types to the `EntryType` union and `ENTRY_TYPES` Zod enum: `technical_note`, `development_note`, `enhancement`, `milestone`, `system_integration_test`, `test_entry`. These types existed in the database (from prior usage) but were rejected by input validation, preventing creation of entries with these types. Updated `server-instructions.md` Entry Types section accordingly.
+
+- **`get_github_milestones` State Filter** — Fixed `state: "all"` parameter being converted to `undefined` before passing to the GitHub REST API, causing the API to default to `"open"` and silently exclude closed milestones. The GitHub REST API natively supports `"all"` as a valid state value; the conversion was unnecessary.
+
+- **Legacy Database Schema Migration** — Added `migrateSchema()` to `SqliteAdapter.initialize()` that checks for missing columns via `PRAGMA table_info` and adds them with `ALTER TABLE`. `CREATE TABLE IF NOT EXISTS` is a no-op on existing tables, so columns added after initial creation (e.g., `significance_type`, `auto_context`, `deleted_at`, GitHub fields) were never added to databases created before those columns existed. Also drops legacy FTS5 triggers from the Python era that cause `no such module: fts5` on INSERT/UPDATE/DELETE (sql.js WASM does not include FTS5; the TypeScript codebase uses LIKE queries).
+- **`list_tags` Null Usage Count** — Fixed `list_tags` output schema validation failure (`expected number, received null`) on databases with corrupted `usage_count` values. `listTags()` query now uses `COALESCE(usage_count, 0)` and `TagOutputSchema.count` is `z.number().nullable()`. Also added data repair in `migrateSchema()` to fix null `usage_count` values in the `tags` table.
+- **Output Schema Validation for Error Responses** — All tool output schemas now accept error responses (`{ success: false, error: "..." }`) from `formatHandlerError()`. Previously, schemas with required success-path fields (e.g., `entries`, `count`, `relationship`, `entry`) rejected error responses with output validation `-32602` errors. Made success-path fields optional and added `success`/`error` fields across 9 schema files: `schemas.ts`, `core.ts`, `search.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `relationships.ts`, `github/schemas.ts`.
+- **Multi-Session Connect Crash** — Fixed `Already connected to a transport` error when creating 2+ concurrent Streamable HTTP sessions
+  - SDK's `McpServer.connect()` only supports one active transport; second `connect()` threw
+  - Added close-before-reconnect pattern wrapping `server.connect()` in try-catch
+- **Backup Tool Error Path Output Schema** — Backup tool error responses from `formatHandlerError()` (returning `{ success: false, error }`) now pass Zod output validation. Previously, `BackupResultOutputSchema`, `BackupsListOutputSchema`, `RestoreResultOutputSchema`, and `CleanupBackupsOutputSchema` required non-optional fields (`message`, `filename`, `path`, `sizeBytes`, etc.) that error responses don't include, causing raw MCP `-32602` errors on error paths like path traversal in backup names.
+- **Vector Benchmark `beforeAll` Timeout** — Added `benchmark.hookTimeout: 30000` to `vitest.config.ts` to accommodate transformer model loading in benchmark `beforeAll` hooks.
+- **Mermaid Arrow Inconsistency for `caused`** — Fixed `memory://graph/recent` using `-.->` (two-dot Mermaid syntax) for `caused` relationship type instead of `-.->` (single-dot), which is the canonical style used by `visualize_relationships` tool. Both now consistently use `-.->`.
+
+### Changed
+
+- **HTTP Transport Modularized** — Extracted HTTP transport code from `McpServer.ts` (813 → ~450 lines) into a dedicated `src/transports/http.ts` module with `HttpTransport` class, matching the architecture of mysql-mcp, postgres-mcp, and db-mcp
+
+- **Dependency Updates**
+  - `@types/node`: 25.3.3 → 25.3.5 (patch)
+  - `express-rate-limit`: 8.2.1 → 8.3.0 (minor)
+  - `sql.js`: 1.14.0 → 1.14.1 (patch)
+
+### CI/CD
+
+- **CodeQL Default Setup Disabled** — Disabled GitHub's CodeQL "Default Setup" to resolve persistent "Error when processing the SARIF file" warning. Both the Default Setup and the custom `codeql.yml` workflow were uploading SARIF results for `javascript-typescript`, causing a conflict during ingestion. The custom workflow is now the sole CodeQL scanner.
+- **CodeQL `actions` Language Coverage** — Added `actions` to the CodeQL workflow language matrix to replace coverage previously provided by the Default Setup. The workflow now scans both `javascript-typescript` and `actions`.
+- **Trivy Action Update** — Updated `aquasecurity/trivy-action` 0.34.0 → 0.34.1 in `security-update.yml` (bundles Trivy scanner 0.69.2)
+
 ## [4.5.0] - 2026-03-02
 
 ### Fixed
@@ -54,7 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Referrer-Policy: no-referrer` — prevents referrer leakage
 - **PRAGMA foreign_keys = ON (F-005)** — SQLite foreign key enforcement now enabled on database initialization. `ON DELETE CASCADE` constraints in `entry_tags`, `relationships`, and `embeddings` tables are now enforced at the database level.
 - **CORS Wildcard Warning (F-006)** — Server now logs a warning when HTTP transport CORS origin is `*` (the default), advising operators to set `--cors-origin` or `MCP_CORS_ORIGIN` for production deployments.
-- **Constrain `entry_type` / `significance_type` to Enums** — `entry_type` now validated against 13 allowed values and `significance_type` against 7 allowed values via Zod enums. Previously accepted arbitrary strings; invalid types now rejected at schema validation. Removes unsafe `as EntryType` / `as SignificanceType` casts.
+- **Constrain `entry_type` / `significance_type` to Enums** — `entry_type` now validated against 19 allowed values and `significance_type` against 7 allowed values via Zod enums. Previously accepted arbitrary strings; invalid types now rejected at schema validation. Removes unsafe `as EntryType` / `as SignificanceType` casts.
 - **Date Format Validation** — All date string fields (`start_date`, `end_date`) across `SearchByDateRangeSchema`, `GetStatisticsSchema`, `ExportEntriesSchema`, and `CrossProjectInsightsSchema` now validate `YYYY-MM-DD` format via regex. Prevents malformed dates from reaching the database layer.
 - **HTTP Rate Limiting** — Added `express-rate-limit` middleware for HTTP transport (100 requests/minute per IP). Returns `429 Too Many Requests` on excess. Only applies to HTTP mode; stdio transport unaffected.
 - **Remove Dead SQL Injection Detection Code** — Removed `containsSqlInjection()`, `assertNoSqlInjection()`, `SqlInjectionError`, and `SQL_INJECTION_PATTERNS` from `security-utils.ts`. These regex-based detection functions were never called anywhere and provided a false sense of security. Parameterized queries (used consistently throughout) are the actual defense.
@@ -73,7 +206,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated Session Management in README.md and DOCKER_README.md** — Session Management sections now lead with the Cursor rule as the primary setup mechanism, with a three-column table showing primary (agent behavior) vs optional (audit/logging) configurations per IDE.
 - **SECURITY.md Accuracy (F-004)** — Rewrote Database Security section to accurately reflect sql.js in-memory architecture. Removed false claims about WAL mode and 7 PRAGMAs that are not applicable to sql.js. Updated security checklist to reference actual function names (`assertNoPathTraversal`, `sanitizeSearchQuery`, `validateDateFormatPattern`). Updated HTTP security headers list to include CSP, Cache-Control, and Referrer-Policy.
 - **SECURITY.md Tag Filtering Correction** — Replaced inaccurate claim that dangerous characters are blocked in tags with accurate statement that tags are safely handled via parameterized queries.
-- **Team Collaboration in READMEs** — Added team collaboration feature to Key Benefits in both `README.md` and `DOCKER_README.md`, with links to the wiki [Team-Collaboration](https://github.com/neverinfamous/memory-journal-mcp/wiki/Team-Collaboration) page. DOCKER_README notes that team collaboration requires npm installation.
+- **Team Collaboration in READMEs** — Added team collaboration feature to Key Benefits in both `README.md` and `DOCKER_README.md`.
 - **Wiki Security Page Updates** — Added LIKE pattern sanitization, path traversal protection, HTTP security headers, rate limiting, and team database security note to the wiki Security.md page. Expanded self-audit checklist from 10 to 16 items.
 - **Rate Limiting Documentation** — Added rate limiting mention to README.md Security section.
 

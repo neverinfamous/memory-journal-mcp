@@ -1,6 +1,6 @@
 {
     "name": "memory-journal-mcp",
-    "version": "4.5.0",
+    "version": "5.0.0",
     "description": "Project context management for AI-assisted development - Persistent knowledge graphs and intelligent context recall across fragmented AI threads",
     "type": "module",
     "main": "dist/index.js",
@@ -19,6 +19,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "bench": "vitest bench --run",
+        "test:e2e": "playwright test",
         "generate:instructions": "node scripts/generate-server-instructions.ts"
     },
     "keywords": [
@@ -57,16 +58,17 @@
         "@xenova/transformers": "^2.17.2",
         "commander": "^14.0.3",
         "express": "^5.2.1",
-        "express-rate-limit": "^8.2.1",
+        "express-rate-limit": "^8.3.0",
         "simple-git": "^3.32.3",
-        "sql.js": "^1.14.0",
+        "sql.js": "^1.14.1",
         "vectra": "^0.12.3",
         "zod": "^4.3.6"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
+        "@playwright/test": "^1.58.2",
         "@types/express": "^5.0.6",
-        "@types/node": "^25.3.3",
+        "@types/node": "^25.3.5",
         "@vitest/coverage-v8": "^4.0.18",
         "eslint": "^10.0.2",
         "globals": "^17.4.0",

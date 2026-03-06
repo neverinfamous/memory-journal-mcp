@@ -513,7 +513,7 @@ describe('McpServer', () => {
             expect(result.content[0]!.type).toBe('text')
         })
 
-        it('should return error content when tool throws', async () => {
+        it('should return structured error content when tool throws', async () => {
             // Make createEntry throw
             mockCreateEntry.mockImplementationOnce(() => {
                 throw new Error('Database error')
@@ -538,8 +538,17 @@ describe('McpServer', () => {
 
             const result = await handler({ content: 'Will fail' }, { _meta: {} })
 
-            expect(result.isError).toBe(true)
-            expect(result.content[0]!.text).toContain('Error')
+            // With deterministic error handling, errors are caught by the handler
+            // and returned as structured JSON (not as MCP isError)
+            expect(result.isError).toBeUndefined()
+            expect(result.content[0]!.type).toBe('text')
+
+            const parsed = JSON.parse(result.content[0]!.text) as {
+                success: boolean
+                error: string
+            }
+            expect(parsed.success).toBe(false)
+            expect(parsed.error).toContain('Database error')
         })
     })
 

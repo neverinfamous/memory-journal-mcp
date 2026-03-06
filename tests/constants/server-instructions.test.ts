@@ -492,7 +492,7 @@ describe('generateInstructions', () => {
             'memory://graph/recent',
             'memory://graph/actions',
             'memory://actions/recent',
-            'memory://team/recent',
+
             'memory://github/status',
             'memory://github/milestones',
             'memory://github/insights',
@@ -508,9 +508,9 @@ describe('generateInstructions', () => {
     })
 
     describe('tool count consistency', () => {
-        it('should have 39 tools across all groups', () => {
+        it('should have 42 tools across all groups', () => {
             const allToolNames = getAllToolNames()
-            expect(allToolNames.length).toBe(39)
+            expect(allToolNames.length).toBe(42)
         })
 
         it('should show correct active tool count for all tools', () => {
@@ -518,7 +518,7 @@ describe('generateInstructions', () => {
             expect(result).toContain(`Active Tools (${String(ALL_TOOLS.size)})`)
         })
 
-        it('should list all 8 tool groups in active tools', () => {
+        it('should list all 9 tool groups in active tools', () => {
             const result = fullInstructions()
             const groups = Object.keys(TOOL_GROUPS)
             for (const group of groups) {

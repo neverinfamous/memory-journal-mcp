@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 39 tools are categorized here for filtering support.
+ * All 42 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -53,6 +53,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'get_repo_insights',
     ],
     backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
+    team: ['team_create_entry', 'team_get_recent', 'team_search'],
 }
 
 /**
@@ -61,7 +62,17 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
 export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
     starter: ['core', 'search'],
     essential: ['core'],
-    full: ['core', 'search', 'analytics', 'relationships', 'export', 'admin', 'github', 'backup'],
+    full: [
+        'core',
+        'search',
+        'analytics',
+        'relationships',
+        'export',
+        'admin',
+        'github',
+        'backup',
+        'team',
+    ],
     readonly: ['core', 'search', 'analytics', 'relationships', 'export'],
 }
 

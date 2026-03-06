@@ -8,10 +8,13 @@ services:
     environment:
       - DB_PATH=/app/data/memory_journal.db
       # Optional: GitHub integration
-      # - GITHUB_TOKEN=ghp_your_token_here
+      # - GITHUB_TOKEN=<your-github-token>
       # - GITHUB_REPO_PATH=/app/repo
       # Optional: CORS origin (default: *)
       # - MCP_CORS_ORIGIN=http://localhost:3000
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
     stdin_open: true
     tty: true
     # MCP stdio communication (default transport)
@@ -25,13 +28,19 @@ services:
     volumes:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
+      - NODE_ENV=production
       - DB_PATH=/app/data/memory_journal.db
       - MCP_HOST=0.0.0.0
+      # Optional: Bearer token authentication (recommended for production)
+      # - MCP_AUTH_TOKEN=your_secret_token_here
       # Optional: GitHub integration
-      # - GITHUB_TOKEN=ghp_your_token_here
+      # - GITHUB_TOKEN=<your-github-token>
       # - GITHUB_REPO_PATH=/app/repo
       # Optional: CORS origin (default: *)
       # - MCP_CORS_ORIGIN=http://localhost:3000
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev
     ports:
       - '3000:3000'
     command:

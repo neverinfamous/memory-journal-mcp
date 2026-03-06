@@ -98,15 +98,15 @@ Fetch `memory://health` to verify server status, database stats, and tool availa
 
 ### Entry Operations
 
-| Tool                   | Required Parameters | Optional Parameters                                                                                                                                                                                                                                            |
-| ---------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create_entry`         | `content` (string)  | `entry_type`, `tags` (array), `is_personal`, `significance_type`, `share_with_team`, `auto_context`, `issue_number`, `issue_url`, `pr_number`, `pr_url`, `pr_status`, `project_number`, `project_owner`, `workflow_run_id`, `workflow_name`, `workflow_status` |
-| `create_entry_minimal` | `content` (string)  | none                                                                                                                                                                                                                                                           |
-| `get_entry_by_id`      | `entry_id` (number) | `include_relationships` (bool, default true)                                                                                                                                                                                                                   |
-| `get_recent_entries`   | none                | `limit` (default 5), `is_personal` (bool)                                                                                                                                                                                                                      |
-| `update_entry`         | `entry_id` (number) | `content`, `tags`, `entry_type`, `is_personal`                                                                                                                                                                                                                 |
-| `delete_entry`         | `entry_id` (number) | `permanent` (bool, default false)                                                                                                                                                                                                                              |
-| `list_tags`            | none                | none                                                                                                                                                                                                                                                           |
+| Tool                   | Required Parameters | Optional Parameters                                                                                                                                                                                                                         |
+| ---------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_entry`         | `content` (string)  | `entry_type`, `tags` (array), `is_personal`, `significance_type`, `auto_context`, `issue_number`, `issue_url`, `pr_number`, `pr_url`, `pr_status`, `project_number`, `project_owner`, `workflow_run_id`, `workflow_name`, `workflow_status` |
+| `create_entry_minimal` | `content` (string)  | none                                                                                                                                                                                                                                        |
+| `get_entry_by_id`      | `entry_id` (number) | `include_relationships` (bool, default true)                                                                                                                                                                                                |
+| `get_recent_entries`   | none                | `limit` (default 5), `is_personal` (bool)                                                                                                                                                                                                   |
+| `update_entry`         | `entry_id` (number) | `content`, `tags`, `entry_type`, `is_personal`                                                                                                                                                                                              |
+| `delete_entry`         | `entry_id` (number) | `permanent` (bool, default false)                                                                                                                                                                                                           |
+| `list_tags`            | none                | none                                                                                                                                                                                                                                        |
 
 ### Search Tools
 
@@ -216,6 +216,12 @@ Valid values for `entry_type` parameter:
 - `planning` - Planning sessions and roadmaps (`create_github_issue_with_entry` uses this type)
 - `retrospective` - Sprint and project retrospectives
 - `standup` - Daily standup notes
+- `technical_note` - Technical notes and observations
+- `development_note` - Development process notes
+- `enhancement` - Enhancement tracking
+- `milestone` - Milestone documentation
+- `system_integration_test` - Integration test records
+- `test_entry` - Test and scratch entries
 - `other` - Miscellaneous
 
 ## Field Notes
@@ -237,26 +243,26 @@ Valid values for `entry_type` parameter:
 
 ## Key Resources
 
-| URI                              | Description                                        |
-| -------------------------------- | -------------------------------------------------- |
-| `memory://health`                | Server health, DB stats, tool filter status        |
-| `memory://briefing`              | Session context with userMessage to show user      |
-| `memory://instructions`          | Full server instructions and tool reference        |
-| `memory://statistics`            | Entry counts by type and period                    |
-| `memory://recent`                | 10 most recent entries                             |
-| `memory://tags`                  | All tags with usage counts                         |
-| `memory://significant`           | Entries sorted by importance score                 |
-| `memory://graph/recent`          | Mermaid diagram of recent relationships            |
-| `memory://graph/actions`         | CI/CD narrative graph                              |
-| `memory://actions/recent`        | Recent workflow runs                               |
-| `memory://team/recent`           | Team-shared entries                                |
-| `memory://github/status`         | GitHub repo overview (CI, issues, PRs, milestones) |
-| `memory://github/milestones`     | Open milestones with completion %                  |
-| `memory://github/insights`       | Stars, forks, and 14-day traffic summary           |
-| `memory://kanban/{n}`            | Kanban board for project number n                  |
-| `memory://kanban/{n}/diagram`    | Mermaid Kanban visualization                       |
-| `memory://milestones/{n}`        | Single milestone detail + progress                 |
-| `memory://projects/{n}/timeline` | Project entries timeline                           |
-| `memory://issues/{n}/entries`    | Entries linked to issue n                          |
-| `memory://prs/{n}/entries`       | Entries linked to PR n                             |
-| `memory://prs/{n}/timeline`      | PR lifecycle and linked entries                    |
+| URI                       | Description                                   |
+| ------------------------- | --------------------------------------------- |
+| `memory://health`         | Server health, DB stats, tool filter status   |
+| `memory://briefing`       | Session context with userMessage to show user |
+| `memory://instructions`   | Full server instructions and tool reference   |
+| `memory://statistics`     | Entry counts by type and period               |
+| `memory://recent`         | 10 most recent entries                        |
+| `memory://tags`           | All tags with usage counts                    |
+| `memory://significant`    | Entries sorted by importance score            |
+| `memory://graph/recent`   | Mermaid diagram of recent relationships       |
+| `memory://graph/actions`  | CI/CD narrative graph                         |
+| `memory://actions/recent` | Recent workflow runs                          |
+
+| `memory://github/status` | GitHub repo overview (CI, issues, PRs, milestones) |
+| `memory://github/milestones` | Open milestones with completion % |
+| `memory://github/insights` | Stars, forks, and 14-day traffic summary |
+| `memory://kanban/{n}` | Kanban board for project number n |
+| `memory://kanban/{n}/diagram` | Mermaid Kanban visualization |
+| `memory://milestones/{n}` | Single milestone detail + progress |
+| `memory://projects/{n}/timeline` | Project entries timeline |
+| `memory://issues/{n}/entries` | Entries linked to issue n |
+| `memory://prs/{n}/entries` | Entries linked to PR n |
+| `memory://prs/{n}/timeline` | PR lifecycle and linked entries |

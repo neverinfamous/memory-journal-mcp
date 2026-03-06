@@ -136,9 +136,7 @@ Thumbs.db
 memory_journal.db
 memory_journal.db-*
 
-# Team collaboration database (Git-tracked for team sharing)
-# This file SHOULD be committed to Git
-!.memory-journal-team.db
+
 
 # SQLite WAL (Write-Ahead Log) files - temporary, should NOT be committed
 *.db-shm
@@ -188,5 +186,10 @@ logs/
 # Backups
 backups/
 
+# Playwright
+/test-results/
+/playwright-report/
+
 # Dependencies
 node_modules/
+test-results.json
