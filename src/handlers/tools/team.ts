@@ -79,13 +79,13 @@ const TeamCreateEntrySchemaMcp = z.object({
 })
 
 const TeamGetRecentSchema = z.object({
-    limit: z.number().optional().default(10),
+    limit: z.number().max(500).optional().default(10),
 })
 
 const TeamSearchSchema = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    limit: z.number().optional().default(10),
+    limit: z.number().max(500).optional().default(10),
 })
 
 // ============================================================================

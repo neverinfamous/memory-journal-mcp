@@ -22,7 +22,7 @@ import {
 /** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
     query: z.string().optional(),
-    limit: z.number().optional().default(10),
+    limit: z.number().max(500).optional().default(10),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
     issue_number: z.number().optional(),
@@ -34,7 +34,7 @@ const SearchEntriesSchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const SearchEntriesSchemaMcp = z.object({
     query: z.string().optional(),
-    limit: z.number().optional().default(10),
+    limit: z.number().max(500).optional().default(10),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
     issue_number: z.number().optional(),
@@ -71,7 +71,7 @@ const SearchByDateRangeSchemaMcp = z.object({
 
 const SemanticSearchSchema = z.object({
     query: z.string(),
-    limit: z.number().optional().default(10),
+    limit: z.number().max(500).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     is_personal: z.boolean().optional(),
     hint_on_empty: z

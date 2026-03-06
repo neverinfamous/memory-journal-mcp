@@ -71,7 +71,7 @@ const GetEntryByIdSchema = z.object({
 })
 
 const GetRecentEntriesSchema = z.object({
-    limit: z.number().optional().default(5),
+    limit: z.number().max(500).optional().default(5),
     is_personal: z.boolean().optional(),
 })
 

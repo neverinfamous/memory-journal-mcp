@@ -48,7 +48,7 @@ const VisualizeInputSchema = z.object({
         .describe('Specific entry ID to visualize (shows connected entries)'),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),
     depth: z.number().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
-    limit: z.number().optional().default(20).describe('Maximum entries to include'),
+    limit: z.number().max(500).optional().default(20).describe('Maximum entries to include'),
 })
 
 // ============================================================================

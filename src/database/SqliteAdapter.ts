@@ -166,8 +166,17 @@ export class SqliteAdapter {
         const triggers = db.exec(
             "SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%fts%'"
         )
+        // Validate trigger names before interpolating into DDL (defense-in-depth)
+        const SAFE_IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
         for (const row of triggers[0]?.values ?? []) {
             const name = String(row[0])
+            if (!SAFE_IDENTIFIER_RE.test(name)) {
+                logger.warning('Skipping trigger with unsafe name during migration', {
+                    module: 'SqliteAdapter',
+                    triggerName: name,
+                })
+                continue
+            }
             db.run(`DROP TRIGGER IF EXISTS "${name}"`)
             dropped.push(`trigger:${name}`)
         }

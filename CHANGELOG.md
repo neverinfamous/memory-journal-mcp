@@ -54,6 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - GitHub `resolveOwnerRepo()` helpers now return validated `github` instance, eliminating all non-null assertions
 - **`Permissions-Policy` Header** — Added `Permissions-Policy: camera=(), microphone=(), geolocation=()` to security headers (6 headers total)
 
+### Security
+
+- **Trigger Name Validation in `migrateSchema()` (H-1)** — Added `SAFE_IDENTIFIER_RE` regex check (`/^[a-zA-Z_][a-zA-Z0-9_]*$/`) before interpolating trigger names into DDL during legacy FTS5 trigger cleanup. Prevents potential SQL injection if a legacy database contains a crafted trigger name. Unsafe names are now logged and skipped.
+- **Query Limit Caps (M-4)** — All `limit` parameters across tool handlers now enforce `.max(500)` via Zod schema validation, preventing unbounded memory-loading queries. Applied to 10 schemas across `core.ts`, `search.ts`, `team.ts`, `relationships.ts`, and `export.ts`.
+- **TruffleHog Pinned to Release Tag (M-2)** — `trufflesecurity/trufflehog@main` → `@v3.93.7` in `secrets-scanning.yml` to eliminate supply-chain risk from floating `@main` tag.
+- **Docker Scout Official Action (M-3)** — Replaced `curl | sh` Docker Scout CLI installer with `docker/scout-action@v1.18.2` in `docker-publish.yml`, eliminating supply-chain risk from executing arbitrary remote scripts in CI with elevated permissions.
+- **Gitleaks Blocking on Failure (L-4)** — Removed `continue-on-error: true` from Gitleaks step in `secrets-scanning.yml` so detected secret leaks now fail the workflow.
+
 ### Improved
 
 - **Batch Tag Fetching (N+1 Elimination)** — Multi-row methods (`getRecentEntries`, `getEntriesPage`, `searchEntries`, `searchByDateRange`) now batch-fetch tags in a single `IN (...)` query via `batchGetTagsForEntries()` + `rowsToEntries()`, eliminating the N+1 per-row `getTagsForEntry` pattern. `getRecentEntries(50)` reduced from 51 queries to 2.
