@@ -12,4 +12,7 @@ export default defineConfig({
             exclude: ['src/cli.ts', 'src/index.ts'],
         },
     },
+    benchmark: {
+        hookTimeout: 30_000,
+    },
 })

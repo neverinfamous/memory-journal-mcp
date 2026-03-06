@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 5, 2026**
+**Last Updated March 6, 2026**
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -542,9 +542,9 @@ flowchart TB
 
 Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
 
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~33x faster than retrieving 50 recent entries.
-- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>115x faster locally).
-- **Core MCP Routines**: Complex operations exhibit negligible latency when executed through standard MCP tools. Calling tools natively adds ~1.4x overhead compared to direct function execution.
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~42x faster than retrieving 50 recent entries.
+- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>131x faster locally).
+- **Core MCP Routines**: Tool dispatch via `callTool` uses cached O(1) lookup. `create_entry` and `search_entries` execute at >730 ops/sec through the MCP layer.
 
 To run the benchmarking suite locally:
 

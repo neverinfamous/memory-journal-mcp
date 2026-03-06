@@ -56,6 +56,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 
+- **Batch Tag Fetching (N+1 Elimination)** — Multi-row methods (`getRecentEntries`, `getEntriesPage`, `searchEntries`, `searchByDateRange`) now batch-fetch tags in a single `IN (...)` query via `batchGetTagsForEntries()` + `rowsToEntries()`, eliminating the N+1 per-row `getTagsForEntry` pattern. `getRecentEntries(50)` reduced from 51 queries to 2.
+- **Batch Tag Linking** — `linkTagsToEntry()` batches tag inserts and lookups: single `INSERT OR IGNORE` for all tags, single `SELECT ... WHERE name IN (...)` for IDs, reducing from 4N to 2+2N SQL statements per entry.
+- **Tool Dispatch Cache** — `callTool()` now caches tool definitions in a `Map` for O(1) lookup instead of rebuilding all 42 `ToolDefinition` objects and doing a linear scan on every call. Cache invalidates when context parameters change.
+- **Conditional JOIN in `searchByDateRange`** — Tag tables (`entry_tags`, `tags`) are only JOINed when a tag filter is provided, avoiding unnecessary `DISTINCT` and row multiplication for the common no-tag-filter case.
+- **Consolidated `getStatistics` Queries** — Reduced from 5 sequential `db.exec()` calls to 3 using multi-statement `exec()`: combined total+type counts, period+density via `SUM(CASE ...)`, and relationship+causal counts.
+- **Simplified `rebuildIndex` Cleanup** — Removed redundant orphan detection pass that preceded a delete-all pass. Now performs a single delete-all before re-indexing.
 - **Dual-Schema Validation for Structured Errors** — All tools now use a dual-schema pattern to ensure Zod validation errors produce structured `{ success: false, error }` responses instead of raw MCP `-32602` error frames. Relaxed schemas (`z.string()`) are passed to the SDK's `inputSchema` for type-level validation, while strict schemas (`z.enum()`, `z.string().regex()`) are used inside handlers via `.parse()` with `formatHandlerError()` catch. Applied across 8 tool files covering 13 enum fields and 8 date regex fields: `core.ts`, `search.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `relationships.ts`, `github/read-tools.ts`, `github/milestone-tools.ts`.
 
 ### Fixed
@@ -67,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SDK's `McpServer.connect()` only supports one active transport; second `connect()` threw
   - Added close-before-reconnect pattern wrapping `server.connect()` in try-catch
 - **Backup Tool Error Path Output Schema** — Backup tool error responses from `formatHandlerError()` (returning `{ success: false, error }`) now pass Zod output validation. Previously, `BackupResultOutputSchema`, `BackupsListOutputSchema`, `RestoreResultOutputSchema`, and `CleanupBackupsOutputSchema` required non-optional fields (`message`, `filename`, `path`, `sizeBytes`, etc.) that error responses don't include, causing raw MCP `-32602` errors on error paths like path traversal in backup names.
+- **Vector Benchmark `beforeAll` Timeout** — Added `benchmark.hookTimeout: 30000` to `vitest.config.ts` to accommodate transformer model loading in benchmark `beforeAll` hooks.
 - **Mermaid Arrow Inconsistency for `caused`** — Fixed `memory://graph/recent` using `-.->` (two-dot Mermaid syntax) for `caused` relationship type instead of `-.->` (single-dot), which is the canonical style used by `visualize_relationships` tool. Both now consistently use `-.->`.
 
 ### Changed

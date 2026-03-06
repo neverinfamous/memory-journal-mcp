@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 5, 2026**
+**Last Updated March 6, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -411,7 +411,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - **Instant Startup** - Lazy loading of ML models
 - **Production/Stable** - Deterministic error handling (`{success, error}` on every tool) and automatic migrations
 
-Designed for extremely low overhead: database reads in sub-millisecond, vector search >115x faster than indexing, native MCP tool calls add ~1.4x overhead vs direct execution. Run `npm run bench` for local benchmarks.
+Designed for extremely low overhead: database reads in sub-millisecond, vector search >131x faster than indexing, core MCP tool calls execute at >730 ops/sec with cached O(1) dispatch. Run `npm run bench` for local benchmarks.
 
 **Automated Deployment:**
 

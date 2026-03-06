@@ -247,48 +247,24 @@ export class VectorSearchManager {
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
 
-        // Step 1: Get total entry count and build ID set for orphan detection
+        // Step 1: Get total entry count for progress reporting
         const totalEntries = db.getActiveEntryCount()
-        const dbIds = new Set<string>()
 
-        // Collect all active entry IDs via pagination (avoids loading all content at once)
-        for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
-            const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
-            for (const entry of page) {
-                dbIds.add(String(entry.id))
-            }
-        }
-
-        // Step 2: Clean up existing index items
-        // If the index is corrupted (e.g., from a process kill), recreate it
+        // Step 2: Clean up existing index — delete all items for clean re-index
+        // (No orphan detection needed since everything is re-inserted from scratch)
         try {
             const indexItems = await this.index.listItems()
-            let orphansRemoved = 0
             for (const item of indexItems) {
-                if (!dbIds.has(item.id)) {
-                    try {
-                        await this.index.deleteItem(item.id)
-                        orphansRemoved++
-                    } catch {
-                        // Ignore errors during cleanup
-                    }
-                }
-            }
-            if (orphansRemoved > 0) {
-                logger.info(`Cleaned up ${String(orphansRemoved)} orphaned vector entries`, {
-                    module: 'VectorSearch',
-                })
-            }
-
-            // Step 3: Delete all remaining items to prepare for clean re-index
-            // This avoids the double-delete overhead of calling addEntry (upsert) per item
-            const remainingItems = await this.index.listItems()
-            for (const item of remainingItems) {
                 try {
                     await this.index.deleteItem(item.id)
                 } catch {
-                    // Ignore
+                    // Ignore individual deletion errors
                 }
+            }
+            if (indexItems.length > 0) {
+                logger.info(`Cleared ${String(indexItems.length)} items from vector index`, {
+                    module: 'VectorSearch',
+                })
             }
         } catch (indexError) {
             // Index files are corrupted — recreate from scratch

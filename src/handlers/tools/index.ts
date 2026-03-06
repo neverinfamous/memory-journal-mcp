@@ -127,6 +127,21 @@ export function getTools(
 }
 
 /**
+ * Cached tool map for O(1) lookup in callTool.
+ * Built lazily on first callTool invocation. Invalidates when any
+ * context parameter changes (happens in tests with different mocks;
+ * in production, all instances are stable).
+ */
+let toolMapCache: Map<string, ToolDefinition> | null = null
+let cachedContextRefs: {
+    db: SqliteAdapter
+    github?: GitHubIntegration
+    vectorManager?: VectorSearchManager
+    config?: ToolHandlerConfig
+    teamDb?: SqliteAdapter
+} | null = null
+
+/**
  * Call a tool by name
  */
 export function callTool(
@@ -140,8 +155,21 @@ export function callTool(
     teamDb?: SqliteAdapter
 ): Promise<unknown> {
     const context: ToolContext = { db, teamDb, vectorManager, github, config, progress }
-    const tools = getAllToolDefinitions(context)
-    const tool = tools.find((t) => t.name === name)
+
+    // Build tool map cache on first invocation or when context changes
+    if (
+        !toolMapCache ||
+        cachedContextRefs?.db !== db ||
+        cachedContextRefs.github !== github ||
+        cachedContextRefs.vectorManager !== vectorManager ||
+        cachedContextRefs.config !== config ||
+        cachedContextRefs.teamDb !== teamDb
+    ) {
+        toolMapCache = new Map(getAllToolDefinitions(context).map((t) => [t.name, t]))
+        cachedContextRefs = { db, github, vectorManager, config, teamDb }
+    }
+
+    const tool = toolMapCache.get(name)
 
     if (!tool) {
         return Promise.reject(new Error(`Unknown tool: ${name}`))
