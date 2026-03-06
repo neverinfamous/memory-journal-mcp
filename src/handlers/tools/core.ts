@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import {
@@ -123,7 +123,7 @@ function resolveTeamAuthor(): string {
     const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
     if (envAuthor) return envAuthor
     try {
-        const gitUser = execSync('git config user.name', {
+        const gitUser = execFileSync('git', ['config', 'user.name'], {
             encoding: 'utf-8',
             timeout: 3000,
         })

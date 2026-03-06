@@ -17,7 +17,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import express from 'express'
 import type { Express, Request, Response } from 'express'
@@ -87,13 +87,17 @@ export class HttpTransport {
         }
 
         // Security headers middleware
-        this.app.use((_req: Request, res: Response, next: () => void) => {
+        this.app.use((req: Request, res: Response, next: () => void) => {
             res.setHeader('X-Content-Type-Options', 'nosniff')
             res.setHeader('X-Frame-Options', 'DENY')
             res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
             res.setHeader('Cache-Control', 'no-store')
             res.setHeader('Referrer-Policy', 'no-referrer')
             res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+            // HSTS — only emit when behind a TLS-terminating reverse proxy
+            if (req.headers?.['x-forwarded-proto'] === 'https') {
+                res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+            }
             next()
         })
 
@@ -140,7 +144,9 @@ export class HttpTransport {
                 }
 
                 const header = req.headers.authorization
-                if (!header || header !== `Bearer ${authToken}`) {
+                const expected = Buffer.from(`Bearer ${authToken}`)
+                const received = Buffer.from(header ?? '')
+                if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
                     res.status(401).json({ error: 'Unauthorized' })
                     return
                 }

@@ -68,6 +68,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`searchByDateRange` Query Limit (F-6)** — Added `LIMIT` clause (default: 500, max: 500) to `searchByDateRange` SQL query to prevent unbounded result sets from broad date ranges. New `limit` parameter on `search_by_date_range` tool.
 - **Docker Production-Only Dependencies (I-2)** — Production image now runs `npm ci --omit=dev` instead of copying the full builder `node_modules`. Removes devDependencies (vitest, eslint, typescript, etc.) from the production image, reducing attack surface.
 - **CORS `Authorization` Header** — Added `Authorization` to `Access-Control-Allow-Headers` for bearer token authentication support.
+- **Timing-Safe Auth Token Comparison (L-1)** — Replaced string `!==` comparison with `crypto.timingSafeEqual()` for bearer token authentication, eliminating a timing side-channel that could theoretically leak token contents character-by-character.
+- **HSTS Header for Reverse Proxy (L-2)** — Added conditional `Strict-Transport-Security: max-age=31536000; includeSubDomains` header when `X-Forwarded-Proto: https` is detected, preventing downgrade attacks in TLS-terminating reverse proxy deployments.
+- **Docker Compose Auth Token (L-3)** — Added commented `MCP_AUTH_TOKEN` environment variable to the HTTP service in `docker-compose.yml`, making authentication configuration discoverable for production deployments.
+- **Shell-Free Git Author Detection (I-1)** — Replaced `execSync('git config user.name')` with `execFileSync('git', ['config', 'user.name'])` in `core.ts` and `team.ts` to avoid implicit shell invocation, reducing the surface for potential command injection if the call site were ever modified.
 
 ### Improved
 

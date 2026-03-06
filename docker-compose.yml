@@ -27,6 +27,8 @@ services:
     environment:
       - DB_PATH=/app/data/memory_journal.db
       - MCP_HOST=0.0.0.0
+      # Optional: Bearer token authentication (recommended for production)
+      # - MCP_AUTH_TOKEN=your_secret_token_here
       # Optional: GitHub integration
       # - GITHUB_TOKEN=ghp_your_token_here
       # - GITHUB_REPO_PATH=/app/repo
