@@ -72,6 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HSTS Header for Reverse Proxy (L-2)** — Added conditional `Strict-Transport-Security: max-age=31536000; includeSubDomains` header when `X-Forwarded-Proto: https` is detected, preventing downgrade attacks in TLS-terminating reverse proxy deployments.
 - **Docker Compose Auth Token (L-3)** — Added commented `MCP_AUTH_TOKEN` environment variable to the HTTP service in `docker-compose.yml`, making authentication configuration discoverable for production deployments.
 - **Shell-Free Git Author Detection (I-1)** — Replaced `execSync('git config user.name')` with `execFileSync('git', ['config', 'user.name'])` in `core.ts` and `team.ts` to avoid implicit shell invocation, reducing the surface for potential command injection if the call site were ever modified.
+- **Docker Compose Read-Only Filesystem** — Added `read_only: true` and `tmpfs: /tmp:noexec,nosuid,nodev` to both Docker Compose services. Limits container write surface to the `/app/data` volume and `/tmp` tmpfs, preventing filesystem-based persistence attacks.
+- **Docker Compose Generic Token Placeholder** — Replaced `ghp_your_token_here` placeholder with `<your-github-token>` to avoid false positive noise in secret scanners.
+- **Docker Compose Explicit `NODE_ENV`** — Added `NODE_ENV=production` to the HTTP service environment block for visibility and to prevent accidental override.
 
 ### Improved
 
