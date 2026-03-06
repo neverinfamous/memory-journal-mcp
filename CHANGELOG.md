@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.1] - 2026-03-06
+
+### Security
+
+- **GHSA-qffp-2rhf-9h96 (tar)** — Manually patched npm's bundled `tar` → `7.5.10` in Dockerfile to fix HIGH severity path traversal vulnerability (CVSS 8.2). Also updated npm override.
+
+### Changed
+
+- **Dependency Updates**
+  - `tar` override: 7.5.9 → 7.5.10 (patch) — npm + Docker layers
+
 ## [5.0.0] - 2026-03-06
 
 ### Added
