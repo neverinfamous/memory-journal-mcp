@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-03-06
+
 ### Added
 
 - **Playwright E2E Test Suite** — 8 spec files testing HTTP/SSE transport layer end-to-end with Playwright:

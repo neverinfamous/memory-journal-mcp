@@ -423,9 +423,9 @@ Designed for extremely low overhead: database reads in sub-millisecond, vector s
 
 **Available Tags:**
 
-- `4.5.0` - Specific version (recommended for production)
-- `4.5` - Latest patch in 4.5.x series
-- `4` - Latest minor in 4.x series
+- `5.0.0` - Specific version (recommended for production)
+- `5.0` - Latest patch in 5.0.x series
+- `5` - Latest minor in 5.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
 
