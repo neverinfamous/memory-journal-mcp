@@ -415,16 +415,6 @@ When GitHub tools cannot auto-detect repository information:
 
 - **Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `ListMcpResources()` without specifying a server parameter, or with `server: "user-memory-journal-mcp"` (Cursor prefixes server names with `user-`).
 
-**Google AntiGravity IDE:**
-
-- **Server instructions**: Auto-injected via MCP protocol but may be truncated. Read `memory://instructions` for the full, untruncated version if needed.
-
-- **Session start**: Add to your user rules: "At session start, read `memory://briefing` from memory-journal-mcp."
-
-- **Prompts not available**: AntiGravity does not currently support MCP prompts. The 15 workflow prompts are not accessible.
-
----
-
 ### 🔄 Session Management
 
 Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
