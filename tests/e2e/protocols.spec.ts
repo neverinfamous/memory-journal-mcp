@@ -101,5 +101,34 @@ test.describe('HTTP Transport Protocols', () => {
             const body = await response.json()
             expect(body.error).toHaveProperty('message', 'Session not found')
         })
+
+        test('should complete full SDK client round-trip via Legacy SSE', async () => {
+            // Regression test: server.connect() auto-calls start() on SSEServerTransport,
+            // so a redundant start() call would throw "already started!" and break SSE entirely.
+            const { Client } = await import('@modelcontextprotocol/sdk/client/index.js')
+            const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js')
+
+            const transport = new SSEClientTransport(new URL('http://localhost:3100/sse'))
+            const client = new Client(
+                { name: 'playwright-sse-regression', version: '1.0.0' },
+                { capabilities: {} }
+            )
+
+            try {
+                await client.connect(transport)
+
+                const response = await client.callTool({
+                    name: 'test_simple',
+                    arguments: { message: 'SSE round-trip' },
+                })
+
+                expect(response.isError).toBeUndefined()
+                expect(Array.isArray(response.content)).toBe(true)
+                const text = (response.content[0] as { type: string; text: string }).text
+                expect(text).toContain('SSE round-trip')
+            } finally {
+                await client.close()
+            }
+        })
     })
 })

@@ -573,7 +573,7 @@ export class HttpTransport {
                             sseTransport as unknown as Parameters<typeof server.connect>[0]
                         )
                     }
-                    await sseTransport.start()
+                    // Note: server.connect() auto-calls start() on SSEServerTransport
                     this.sseTransports.set(sseTransport.sessionId, sseTransport)
                     this.touchSession(sseTransport.sessionId)
                     logger.info('Legacy SSE connection established', {
