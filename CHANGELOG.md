@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ToolDefinition.handler` return type changed from `Promise<unknown>` to `unknown` (supports both sync and async handlers)
   - GitHub `resolveOwnerRepo()` helpers now return validated `github` instance, eliminating all non-null assertions
 - **`Permissions-Policy` Header** — Added `Permissions-Policy: camera=(), microphone=(), geolocation=()` to security headers (6 headers total)
+- **`--auth-token` CLI Option** — New `--auth-token <token>` CLI flag and `MCP_AUTH_TOKEN` environment variable for optional bearer token authentication on the HTTP transport. When configured, all endpoints except `GET /health` require `Authorization: Bearer <token>`. Backward compatible — no auth required when not set.
 
 ### Security
 
@@ -61,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TruffleHog Pinned to Release Tag (M-2)** — `trufflesecurity/trufflehog@main` → `@v3.93.7` in `secrets-scanning.yml` to eliminate supply-chain risk from floating `@main` tag.
 - **Docker Scout Official Action (M-3)** — Replaced `curl | sh` Docker Scout CLI installer with `docker/scout-action@v1.18.2` in `docker-publish.yml`, eliminating supply-chain risk from executing arbitrary remote scripts in CI with elevated permissions.
 - **Gitleaks Blocking on Failure (L-4)** — Removed `continue-on-error: true` from Gitleaks step in `secrets-scanning.yml` so detected secret leaks now fail the workflow.
+- **HTTP Bearer Token Authentication (F-1)** — Optional bearer token middleware for HTTP transport. Logs a warning when HTTP mode starts without authentication configured.
+- **Gitleaks Pinned to Release Tag (F-3)** — `gitleaks/gitleaks-action@v2` → `@v2.3.9` in `secrets-scanning.yml` to eliminate supply-chain risk from floating major version tag.
+- **SSE Session Timeout Sweep (F-4)** — Legacy SSE sessions are now tracked in `sessionLastActivity` and expired by the 30-minute idle sweep, matching the behavior of Streamable HTTP sessions. Previously SSE sessions were only cleaned up on client disconnect.
+- **`searchByDateRange` Query Limit (F-6)** — Added `LIMIT` clause (default: 500, max: 500) to `searchByDateRange` SQL query to prevent unbounded result sets from broad date ranges. New `limit` parameter on `search_by_date_range` tool.
+- **Docker Production-Only Dependencies (I-2)** — Production image now runs `npm ci --omit=dev` instead of copying the full builder `node_modules`. Removes devDependencies (vitest, eslint, typescript, etc.) from the production image, reducing attack surface.
+- **CORS `Authorization` Header** — Added `Authorization` to `Access-Control-Allow-Headers` for bearer token authentication support.
 
 ### Improved
 

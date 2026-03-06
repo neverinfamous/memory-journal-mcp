@@ -94,10 +94,12 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/minimatch && \
     rm minimatch-10.2.4.tgz
 
-# Copy built artifacts and production dependencies
+# Copy built artifacts and install production-only dependencies
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY package*.json ./
+COPY package*.json .npmrc ./
+RUN npm ci --omit=dev && \
+    rm -rf node_modules/protobufjs/cli && \
+    npm cache clean --force
 COPY LICENSE ./
 
 # Create data directory for SQLite database with proper permissions

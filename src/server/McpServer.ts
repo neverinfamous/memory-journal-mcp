@@ -38,6 +38,7 @@ export interface ServerOptions {
     autoRebuildIndex?: boolean
     statelessHttp?: boolean
     corsOrigin?: string
+    authToken?: string
     scheduler?: SchedulerOptions
 }
 
@@ -431,12 +432,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
         const corsOrigin = options.corsOrigin ?? process.env['MCP_CORS_ORIGIN'] ?? '*'
+        const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
 
         const httpTransport = new HttpTransport({
             port,
             host,
             corsOrigin,
             stateless: options.statelessHttp === true,
+            authToken,
         })
 
         await httpTransport.start(server, scheduler)

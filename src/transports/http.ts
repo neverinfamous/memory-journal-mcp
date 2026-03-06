@@ -40,6 +40,7 @@ export interface HttpTransportConfig {
     host: string
     corsOrigin: string
     stateless: boolean
+    authToken?: string
 }
 
 /**
@@ -67,12 +68,20 @@ export class HttpTransport {
      * Initialize and start the HTTP transport
      */
     async start(server: McpServer, scheduler: Scheduler | null): Promise<void> {
-        const { port, host, corsOrigin } = this.config
+        const { port, host, corsOrigin, authToken } = this.config
 
         if (corsOrigin === '*') {
             logger.warning(
                 'CORS origin is set to "*" (all origins). ' +
                     'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
+                { module: 'HTTP' }
+            )
+        }
+
+        if (!authToken) {
+            logger.warning(
+                'No authentication configured for HTTP transport. ' +
+                    'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
                 { module: 'HTTP' }
             )
         }
@@ -94,7 +103,7 @@ export class HttpTransport {
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
             res.setHeader(
                 'Access-Control-Allow-Headers',
-                'Content-Type, Accept, mcp-session-id, Last-Event-ID, mcp-protocol-version'
+                'Content-Type, Accept, Authorization, mcp-session-id, Last-Event-ID, mcp-protocol-version'
             )
             res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
 
@@ -121,6 +130,24 @@ export class HttpTransport {
         logger.info('Rate limiting enabled: 100 requests/minute per IP', {
             module: 'HTTP',
         })
+
+        // Bearer token authentication (when configured)
+        if (authToken) {
+            this.app.use((req: Request, res: Response, next: () => void) => {
+                if (req.path === '/health') {
+                    next()
+                    return
+                }
+
+                const header = req.headers.authorization
+                if (!header || header !== `Bearer ${authToken}`) {
+                    res.status(401).json({ error: 'Unauthorized' })
+                    return
+                }
+                next()
+            })
+            logger.info('Bearer token authentication enabled', { module: 'HTTP' })
+        }
 
         // Health check endpoint (before /mcp routes)
         this.app.get('/health', (_req: Request, res: Response): void => {
@@ -306,17 +333,36 @@ export class HttpTransport {
         this.sessionSweepTimer = setInterval(() => {
             const now = Date.now()
             for (const [sid, lastActivity] of this.sessionLastActivity) {
-                if (now - lastActivity > SESSION_TIMEOUT_MS && this.transports.has(sid)) {
+                const idleMs = now - lastActivity
+                if (idleMs <= SESSION_TIMEOUT_MS) continue
+
+                // Expire idle Streamable HTTP sessions
+                if (this.transports.has(sid)) {
                     logger.info('Expiring idle HTTP session', {
                         module: 'HTTP',
                         sessionId: sid,
-                        idleMinutes: Math.round((now - lastActivity) / 60_000),
+                        idleMinutes: Math.round(idleMs / 60_000),
                     })
                     const t = this.transports.get(sid)
                     if (t) {
                         void t.close()
                     }
                     this.transports.delete(sid)
+                    this.sessionLastActivity.delete(sid)
+                }
+
+                // Expire idle Legacy SSE sessions
+                if (this.sseTransports.has(sid)) {
+                    logger.info('Expiring idle SSE session', {
+                        module: 'HTTP',
+                        sessionId: sid,
+                        idleMinutes: Math.round(idleMs / 60_000),
+                    })
+                    const t = this.sseTransports.get(sid)
+                    if (t) {
+                        void t.close()
+                    }
+                    this.sseTransports.delete(sid)
                     this.sessionLastActivity.delete(sid)
                 }
             }
@@ -523,6 +569,7 @@ export class HttpTransport {
                     }
                     await sseTransport.start()
                     this.sseTransports.set(sseTransport.sessionId, sseTransport)
+                    this.touchSession(sseTransport.sessionId)
                     logger.info('Legacy SSE connection established', {
                         module: 'HTTP',
                         sessionId: sseTransport.sessionId,
@@ -541,6 +588,7 @@ export class HttpTransport {
             // Clean up when client disconnects
             req.on('close', () => {
                 this.sseTransports.delete(sseTransport.sessionId)
+                this.sessionLastActivity.delete(sseTransport.sessionId)
             })
         })
 
@@ -567,6 +615,9 @@ export class HttpTransport {
                 })
                 return
             }
+
+            // Refresh session activity on message receipt
+            this.touchSession(sessionId)
 
             void transport.handlePostMessage(
                 req as unknown as IncomingMessage,

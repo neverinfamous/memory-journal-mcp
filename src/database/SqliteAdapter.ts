@@ -704,6 +704,7 @@ export class SqliteAdapter {
             tags?: string[]
             isPersonal?: boolean
             projectNumber?: number
+            limit?: number
         } = {}
     ): JournalEntry[] {
         const db = this.ensureDb()
@@ -745,7 +746,8 @@ export class SqliteAdapter {
             params.push(projectNumber)
         }
 
-        sql += ` ORDER BY m.timestamp DESC`
+        sql += ` ORDER BY m.timestamp DESC LIMIT ?`
+        params.push(options.limit ?? 500)
 
         const result = db.exec(sql, params)
         if (result.length === 0) return []

@@ -54,6 +54,7 @@ const SearchByDateRangeSchema = z.object({
     issue_number: z.number().optional(),
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
+    limit: z.number().max(500).optional().default(500),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -67,6 +68,7 @@ const SearchByDateRangeSchemaMcp = z.object({
     issue_number: z.number().optional(),
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
+    limit: z.number().max(500).optional().default(500),
 })
 
 const SemanticSearchSchema = z.object({
@@ -186,6 +188,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         projectNumber: input.project_number,
+                        limit: input.limit,
                     })
 
                     // Cross-database merge when team DB is available
@@ -197,11 +200,13 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entryType: input.entry_type,
                                 tags: input.tags,
                                 projectNumber: input.project_number,
+                                limit: input.limit,
                             }
                         )
                         const merged = mergeAndDedup(
                             personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
-                            teamEntries.map((e) => ({ ...e, source: 'team' as const }))
+                            teamEntries.map((e) => ({ ...e, source: 'team' as const })),
+                            input.limit
                         )
                         return { entries: merged, count: merged.length }
                     }

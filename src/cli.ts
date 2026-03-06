@@ -31,6 +31,10 @@ program
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
     .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: *)')
+    .option(
+        '--auth-token <token>',
+        'Bearer token for HTTP transport authentication (env: MCP_AUTH_TOKEN)'
+    )
     .option('--log-level <level>', 'Log level: debug, info, warning, error', 'info')
     .option(
         '--backup-interval <minutes>',
@@ -60,6 +64,7 @@ program
             defaultProject: string
             autoRebuildIndex?: boolean
             corsOrigin?: string
+            authToken?: string
             logLevel: string
             backupInterval: string
             keepBackups: string
@@ -99,6 +104,7 @@ program
                     autoRebuildIndex:
                         options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
                     corsOrigin: options.corsOrigin,
+                    authToken: options.authToken,
                     scheduler: {
                         backupIntervalMinutes: parseInt(options.backupInterval, 10),
                         keepBackups: parseInt(options.keepBackups, 10),
