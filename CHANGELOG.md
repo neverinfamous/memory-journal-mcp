@@ -122,6 +122,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTTP Transport Modularized** — Extracted HTTP transport code from `McpServer.ts` (813 → ~450 lines) into a dedicated `src/transports/http.ts` module with `HttpTransport` class, matching the architecture of mysql-mcp, postgres-mcp, and db-mcp
 
 - **Dependency Updates**
+  - `@types/node`: 25.3.3 → 25.3.5 (patch)
+  - `express-rate-limit`: 8.2.1 → 8.3.0 (minor)
   - `sql.js`: 1.14.0 → 1.14.1 (patch)
 
 ### CI/CD
