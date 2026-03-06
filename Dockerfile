@@ -5,9 +5,9 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies and upgrade packages for security
-# Use Alpine edge for latest security patches (curl CVE-2025-14524, etc.)
+# Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, etc.)
 RUN apk add --no-cache python3 make g++ && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib && \
     apk upgrade --no-cache
 
 # Upgrade npm globally to get fixed versions of bundled packages
@@ -65,8 +65,9 @@ WORKDIR /app
 # Install runtime dependencies with security fixes
 # Use Alpine edge for curl with CVE fixes
 # Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
+# Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
 RUN apk add --no-cache git ca-certificates && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib && \
     apk upgrade --no-cache && \
     npm install -g npm@latest --force && npm cache clean --force
 

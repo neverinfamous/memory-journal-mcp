@@ -94,6 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docker Compose Read-Only Filesystem** — Added `read_only: true` and `tmpfs: /tmp:noexec,nosuid,nodev` to both Docker Compose services. Limits container write surface to the `/app/data` volume and `/tmp` tmpfs, preventing filesystem-based persistence attacks.
 - **Docker Compose Generic Token Placeholder** — Replaced `ghp_your_token_here` placeholder with `<your-github-token>` to avoid false positive noise in secret scanners.
 - **Docker Compose Explicit `NODE_ENV`** — Added `NODE_ENV=production` to the HTTP service environment block for visibility and to prevent accidental override.
+- **CVE-2026-27171 (zlib)** — Explicitly install zlib from Alpine edge in Dockerfile builder and production stages to fix MEDIUM severity denial of service via infinite loop in CRC32 combine functions.
+- **Gitleaks `GITHUB_TOKEN`** — Pass `GITHUB_TOKEN` to `gitleaks/gitleaks-action@v2.3.9` in `secrets-scanning.yml` as now required for PR scanning.
 
 ### Improved
 
