@@ -34,6 +34,12 @@ export const ENTRY_TYPES = [
     'planning',
     'retrospective',
     'standup',
+    'technical_note',
+    'development_note',
+    'enhancement',
+    'milestone',
+    'system_integration_test',
+    'test_entry',
     'other',
 ] as const
 

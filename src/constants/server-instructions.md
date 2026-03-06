@@ -216,6 +216,12 @@ Valid values for `entry_type` parameter:
 - `planning` - Planning sessions and roadmaps (`create_github_issue_with_entry` uses this type)
 - `retrospective` - Sprint and project retrospectives
 - `standup` - Daily standup notes
+- `technical_note` - Technical notes and observations
+- `development_note` - Development process notes
+- `enhancement` - Enhancement tracking
+- `milestone` - Milestone documentation
+- `system_integration_test` - Integration test records
+- `test_entry` - Test and scratch entries
 - `other` - Miscellaneous
 
 ## Field Notes
