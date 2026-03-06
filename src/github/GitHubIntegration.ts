@@ -1124,12 +1124,10 @@ export class GitHubIntegration {
         if (cached) return cached
 
         try {
-            // GitHub REST API uses 'open' | 'closed' | 'all' for milestone state
-            const apiState = state === 'all' ? undefined : state
             const response = await this.octokit.issues.listMilestones({
                 owner,
                 repo,
-                state: apiState,
+                state,
                 per_page: limit,
                 sort: 'due_on',
                 direction: 'asc',
