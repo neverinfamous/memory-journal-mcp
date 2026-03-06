@@ -10,8 +10,8 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-88%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-651_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-94%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-730_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 

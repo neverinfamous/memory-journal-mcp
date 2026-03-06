@@ -12,8 +12,8 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-88%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-651_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-94%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-730_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -554,11 +554,11 @@ npm run bench
 
 ### Testing
 
-**651 tests** across two test frameworks:
+**777 tests** across two test frameworks:
 
 | Suite                     | Tests | Command            | Covers                                                                |
 | ------------------------- | ----- | ------------------ | --------------------------------------------------------------------- |
-| Vitest (unit/integration) | 604   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
+| Vitest (unit/integration) | 730   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
 | Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler |
 
 ```bash
