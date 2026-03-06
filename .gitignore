@@ -186,6 +186,10 @@ logs/
 # Backups
 backups/
 
+# Playwright
+/test-results/
+/playwright-report/
+
 # Dependencies
 node_modules/
 test-results.json

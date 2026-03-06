@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Playwright E2E Test Suite** — 8 spec files testing HTTP/SSE transport layer end-to-end with Playwright:
+  - `health.spec.ts` — Health endpoint, root info, MCP initialization
+  - `protocols.spec.ts` — Streamable HTTP and Legacy SSE protocol error handling
+  - `security.spec.ts` — Security headers (6), CORS, HSTS, body size limits, 404 handler
+  - `auth.spec.ts` — Bearer token authentication enforcement (separate server with `--auth-token`)
+  - `sessions.spec.ts` — Session lifecycle: init → use → terminate → reject stale
+  - `tools.spec.ts` — MCP SDK client tool execution via Legacy SSE (`test_simple`, `create_entry_minimal`, validation errors)
+  - `resources.spec.ts` — MCP SDK client resource reads via Legacy SSE (`memory://health`, `memory://briefing`, etc.)
+  - `stateless.spec.ts` — Stateless mode: SSE disabled (405), DELETE no-op (204), no legacy SSE
+  - `scheduler.spec.ts` — Scheduler activation verification via `memory://health` resource
+  - New `test:e2e` npm script (`playwright test`)
+  - New devDependency: `@playwright/test`
+
 - **Legacy SSE Transport** — HTTP transport now supports both Streamable HTTP (MCP 2025-03-26) and Legacy SSE (MCP 2024-11-05) protocols simultaneously (stateful mode only)
   - `GET /sse` — Opens Legacy SSE connection for backward-compatible clients
   - `POST /messages?sessionId=<id>` — Routes messages to Legacy SSE transport

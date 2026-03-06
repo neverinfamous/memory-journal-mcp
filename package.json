@@ -19,6 +19,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "bench": "vitest bench --run",
+        "test:e2e": "playwright test",
         "generate:instructions": "node scripts/generate-server-instructions.ts"
     },
     "keywords": [
@@ -65,6 +66,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
+        "@playwright/test": "^1.58.2",
         "@types/express": "^5.0.6",
         "@types/node": "^25.3.3",
         "@vitest/coverage-v8": "^4.0.18",
@@ -72,6 +74,7 @@
         "globals": "^17.4.0",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.56.1",
+        "@playwright/test": "^1.58.2",
         "vitest": "^4.0.17"
     },
     "overrides": {
