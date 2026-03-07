@@ -118,10 +118,20 @@ const TagsListOutputSchema = z.object({
 // Helpers
 // ============================================================================
 
+/**
+ * Sanitize an author string: strip control characters and cap length.
+ * Prevents crafted git config or TEAM_AUTHOR values from injecting
+ * control characters into the database or JSON payloads.
+ */
+function sanitizeAuthor(raw: string): string {
+    // eslint-disable-next-line no-control-regex
+    return raw.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100)
+}
+
 /** Resolve the author name for team-shared entries */
 function resolveTeamAuthor(): string {
     const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return envAuthor
+    if (envAuthor) return sanitizeAuthor(envAuthor)
     try {
         const gitUser = execFileSync('git', ['config', 'user.name'], {
             encoding: 'utf-8',
@@ -129,7 +139,7 @@ function resolveTeamAuthor(): string {
         })
             .trim()
             .replace(/"/g, '')
-        if (gitUser) return gitUser
+        if (gitUser) return sanitizeAuthor(gitUser)
     } catch {
         // Git not available
     }

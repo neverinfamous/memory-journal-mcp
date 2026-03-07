@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Docker Compose Network Isolation (L-1)** — Added custom `mcp-net` bridge network to both services. Prevents MCP containers from accessing or being accessed by unrelated containers on the default Docker bridge.
+- **Docker Compose `no-new-privileges` (L-2)** — Added `security_opt: ["no-new-privileges:true"]` to both services. Prevents privilege escalation via `setuid`/`setgid` binaries inside containers.
+- **Author Input Sanitization (L-5)** — `resolveAuthor()` and `resolveTeamAuthor()` in `team.ts` and `core.ts` now strip ASCII control characters (`0x00`–`0x1F`, `0x7F`) and cap author strings at 100 characters. Prevents crafted `TEAM_AUTHOR` env or git config values from injecting control characters into the database `author` column or `autoContext` JSON payloads.
+
 ### Fixed
 
 - **Output schema mismatches causing MCP -32602 errors** — Three `outputSchema` definitions didn't match actual handler output, causing `structuredContent does not match the tool's output schema` errors:
@@ -15,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `BackupInfoSchema` (backup.ts) — Added `path` field to match `SqliteAdapter.listBackups()` output
 
 ### Changed
+
+- **CI `publish-npm.yml` Node Version Alignment (L-4)** — Updated Node.js version from 22.x to 24.x to match `engines.node: >=24.0.0` in `package.json` and the Dockerfile base image (`node:24-alpine`).
 
 - **Dependency Updates**
   - `eslint`: 10.0.2 → 10.0.3 (patch)
