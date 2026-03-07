@@ -204,6 +204,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         projectNumber: input.project_number,
+                        issueNumber: input.issue_number,
+                        prNumber: input.pr_number,
+                        workflowRunId: input.workflow_run_id,
                         limit: input.limit,
                     })
 
@@ -216,6 +219,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entryType: input.entry_type,
                                 tags: input.tags,
                                 projectNumber: input.project_number,
+                                issueNumber: input.issue_number,
+                                prNumber: input.pr_number,
+                                workflowRunId: input.workflow_run_id,
                                 limit: input.limit,
                             }
                         )

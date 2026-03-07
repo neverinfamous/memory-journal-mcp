@@ -739,11 +739,15 @@ export class SqliteAdapter {
             tags?: string[]
             isPersonal?: boolean
             projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
+            workflowRunId?: number
             limit?: number
         } = {}
     ): JournalEntry[] {
         const db = this.ensureDb()
-        const { entryType, tags, isPersonal, projectNumber } = options
+        const { entryType, tags, isPersonal, projectNumber, issueNumber, prNumber, workflowRunId } =
+            options
 
         let sql: string
         const params: unknown[] = [startDate, endDate + ' 23:59:59']
@@ -779,6 +783,18 @@ export class SqliteAdapter {
         if (projectNumber !== undefined) {
             sql += ` AND m.project_number = ?`
             params.push(projectNumber)
+        }
+        if (issueNumber !== undefined) {
+            sql += ` AND m.issue_number = ?`
+            params.push(issueNumber)
+        }
+        if (prNumber !== undefined) {
+            sql += ` AND m.pr_number = ?`
+            params.push(prNumber)
+        }
+        if (workflowRunId !== undefined) {
+            sql += ` AND m.workflow_run_id = ?`
+            params.push(workflowRunId)
         }
 
         sql += ` ORDER BY m.timestamp DESC LIMIT ?`

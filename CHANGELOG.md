@@ -54,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub Error Consistency** — All GitHub tool error responses (`get_github_issue`, `get_github_pr`, `get_github_context`, `get_repo_insights`, `resolveOwnerRepo`, `resolveOwner`) now include `success: false` field, matching the `{success: false, error}` pattern used by all other tools.
 - **`get_vector_index_stats` Missing `success` Field** — Handler now returns `success: true/false` in all response paths for schema consistency.
 - **No-Argument Prompts Failing with MCP `-32602`** — Prompts with no arguments (e.g., `session-summary`, `confirm-briefing`, `prepare-standup`) failed when the client called `prompts/get` without `arguments`. The registration code passed an empty `argsSchema: {}` to `registerPrompt`, which the SDK wrapped in `z.object({})` and attempted to validate against `undefined`. Now omits `argsSchema` entirely for argumentless prompts so the SDK skips validation.
+- **`get_github_milestone` Error Missing `success: false`** — Error response for non-existent milestones returned `{ error }` without `success` field. Now returns `{ success: false, error }` matching the consistent error shape used by all other tools.
+- **`get_kanban_board` Error Missing `success: false`** — Error response for non-existent projects returned `{ error }` without `success` field. Now returns `{ success: false, error }` matching the consistent error shape used by all other tools.
+- **`search_by_date_range` Silent Filter Bug** — `issue_number`, `pr_number`, and `workflow_run_id` parameters were accepted by the Zod schema but silently ignored — the handler never passed them to the database query. Now correctly forwards all three filters to `SqliteAdapter.searchByDateRange()`, which applies them as SQL WHERE clauses.
 
 ### Improved
 
