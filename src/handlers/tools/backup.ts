@@ -24,6 +24,7 @@ const BackupResultOutputSchema = z.object({
 
 const BackupInfoSchema = z.object({
     filename: z.string(),
+    path: z.string(),
     sizeBytes: z.number(),
     createdAt: z.string(),
 })
@@ -209,7 +210,6 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 keep_count: z
                     .number()
-                    .min(1)
                     .default(5)
                     .describe('Number of most recent backups to keep (default: 5)'),
             }),

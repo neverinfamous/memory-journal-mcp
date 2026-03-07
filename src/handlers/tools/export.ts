@@ -41,12 +41,7 @@ const ExportEntriesSchemaMcp = z.object({
     end_date: z.string().optional(),
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
-    limit: z
-        .number()
-        .max(500)
-        .optional()
-        .default(100)
-        .describe('Maximum entries to export (default: 100)'),
+    limit: z.number().optional().default(100).describe('Maximum entries to export (default: 100)'),
 })
 
 // ============================================================================
@@ -83,7 +78,30 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 0, 2, 'Fetching entries...')
 
-                    const entries = db.getRecentEntries(limit)
+                    // Apply filters — use searchByDateRange when dates/tags present
+                    let entries
+                    if (input.start_date || input.end_date) {
+                        const startDate = input.start_date ?? '1970-01-01'
+                        const endDate = input.end_date ?? '2999-12-31'
+                        entries = db.searchByDateRange(startDate, endDate, {
+                            tags: input.tags,
+                            limit,
+                        })
+                    } else if (input.tags && input.tags.length > 0) {
+                        // Tags-only filter: use a wide date range to leverage searchByDateRange
+                        entries = db.searchByDateRange('1970-01-01', '2999-12-31', {
+                            tags: input.tags,
+                            limit,
+                        })
+                    } else {
+                        entries = db.getRecentEntries(limit)
+                    }
+
+                    // Post-filter by entry_types if specified
+                    if (input.entry_types && input.entry_types.length > 0) {
+                        const allowedTypes = new Set(input.entry_types)
+                        entries = entries.filter((e) => allowedTypes.has(e.entryType))
+                    }
 
                     await sendProgress(
                         progress,

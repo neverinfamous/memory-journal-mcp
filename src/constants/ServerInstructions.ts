@@ -58,7 +58,10 @@ const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 ## Session Start
 
 1. Read \`memory://briefing\` for project context
-   - In Cursor, use \`FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://briefing")\`
+   - **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
+     - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` (e.g., \`mcp_memory-journal-mcp_create_entry\`). Server name = \`memory-journal-mcp\`.
+     - **Cursor**: Tools are \`user-{name}-{tool}\` (e.g., \`user-memory-journal-mcp-create_entry\`). Server name = \`user-memory-journal-mcp\`.
+     - **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly (e.g., \`memory-journal-mcp\`). Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method above if unsure.
 2. **Show the \`userMessage\` to the user** (it contains a formatted summary of project context)
 3. Proceed with the user's request
 
@@ -67,19 +70,6 @@ const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
-
-## Session End
-
-When a conversation or task is wrapping up (user says "thanks," final deliverable complete, no more work planned):
-
-1. Create a journal entry summarizing the session:
-   - **What was accomplished** (key changes, decisions, files modified)
-   - **What's unfinished or blocked** (pending items, open questions)
-   - **Context for next session** (relevant entry IDs, branch names, PR numbers)
-2. Use \`entry_type: "retrospective"\` and tag with \`session-summary\`
-3. This is opt-out — ALWAYS create the entry, even for short/trivial sessions, unless the user explicitly says to skip it
-
-> If your client has hooks configured for session-end journaling (e.g., Cursor \`sessionEnd\` hook), this is handled automatically. Otherwise, follow the steps above.
 
 ## Rule & Skill Suggestions
 
@@ -120,32 +110,25 @@ const GITHUB_INSTRUCTIONS = `
 const SERVER_ACCESS_INSTRUCTIONS = `
 ## How to Access This Server
 
+### Server Name Discovery
+
+The server name used for resource and tool calls depends on your MCP client:
+
+- **AntiGravity**: Prefixes tools with \`mcp_\` and uses underscores. If the server is named \`memory-journal-mcp\` in config, tools appear as \`mcp_memory-journal-mcp_create_entry\`. Use \`memory-journal-mcp\` as the server name for resource calls.
+- **Cursor**: Prepends \`user-\` to the configured name. If the server is named \`memory-journal-mcp\` in config, use \`user-memory-journal-mcp\` for \`ListMcpResources\` and \`FetchMcpResource\` calls.
+- **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly. Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method if unsure.
+
+To identify your server name: look at the tool name prefix. Strip the tool name suffix to get the server name. Examples: \`mcp_memory-journal-mcp_create_entry\` → \`memory-journal-mcp\`; \`user-memory-journal-mcp-create_entry\` → \`user-memory-journal-mcp\`.
+
 ### Calling Tools
 
-Use \`CallMcpTool\` with server name \`user-memory-journal-mcp\`:
+Use the tool functions directly — they are already available in your context by their full prefixed name.
 
-\`\`\`
-CallMcpTool(server: "user-memory-journal-mcp", toolName: "create_entry", arguments: {...})
-\`\`\`
+### Reading Resources
 
-### Listing Resources
+Use the resource-reading mechanism provided by your MCP client with the discovered server name and \`memory://\` URIs.
 
-Use \`ListMcpResources\` with server name:
-
-\`\`\`
-ListMcpResources(server: "user-memory-journal-mcp")
-\`\`\`
-
-Do NOT try to browse filesystem paths for MCP tool/resource definitions - use the MCP protocol directly.
-
-### Fetching Resources
-
-Use \`FetchMcpResource\` with server name and \`memory://\` URI:
-
-\`\`\`
-FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://recent")
-FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://kanban/1")
-\`\`\`
+Do NOT try to browse filesystem paths for MCP tool/resource definitions — use the MCP protocol directly.
 
 ## Quick Health Check
 

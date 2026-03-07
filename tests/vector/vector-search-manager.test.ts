@@ -17,6 +17,7 @@ const {
     mockCreateIndex,
     mockInsertItem,
     mockDeleteItem,
+    mockUpsertItem,
     mockQueryItems,
     mockListItems,
     mockGetIndexStats,
@@ -26,6 +27,7 @@ const {
     mockCreateIndex: vi.fn(),
     mockInsertItem: vi.fn(),
     mockDeleteItem: vi.fn(),
+    mockUpsertItem: vi.fn(),
     mockQueryItems: vi.fn(),
     mockListItems: vi.fn(),
     mockGetIndexStats: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock('vectra', () => ({
             createIndex: mockCreateIndex,
             insertItem: mockInsertItem,
             deleteItem: mockDeleteItem,
+            upsertItem: mockUpsertItem,
             queryItems: mockQueryItems,
             listItems: mockListItems,
             getIndexStats: mockGetIndexStats,
@@ -65,6 +68,7 @@ vi.mock('node:fs', async (importOriginal) => {
 
 // Import AFTER mocks are set up
 import { VectorSearchManager } from '../../src/vector/VectorSearchManager.js'
+import type { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
 
 /**
  * Helper to make the VectorSearchManager think it's initialized
@@ -147,17 +151,15 @@ describe('VectorSearchManager', () => {
     // ========================================================================
 
     describe('addEntry', () => {
-        it('should upsert entry (delete+insert)', async () => {
+        it('should upsert entry via upsertItem', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(1) })
-            mockDeleteItem.mockResolvedValue(undefined)
-            mockInsertItem.mockResolvedValue(undefined)
+            mockUpsertItem.mockResolvedValue(undefined)
 
             const result = await vm.addEntry(42, 'Some content')
             expect(result).toBe(true)
 
-            expect(mockDeleteItem).toHaveBeenCalledWith('42')
-            expect(mockInsertItem).toHaveBeenCalledWith(
+            expect(mockUpsertItem).toHaveBeenCalledWith(
                 expect.objectContaining({
                     id: '42',
                     metadata: expect.objectContaining({ entryId: 42 }),
@@ -292,8 +294,7 @@ describe('VectorSearchManager', () => {
                 ]),
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const indexed = await vm.rebuildIndex(mockDb as any)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
             expect(indexed).toBe(2)
             expect(mockInsertItem).toHaveBeenCalledTimes(2)
         })
@@ -315,8 +316,7 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Active entry' }]),
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const indexed = await vm.rebuildIndex(mockDb as any)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
             expect(indexed).toBe(1)
             expect(mockDeleteItem).toHaveBeenCalledWith('999')
         })
@@ -327,8 +327,7 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([]),
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const indexed = await vm.rebuildIndex(mockDb as any)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
             expect(indexed).toBe(0)
         })
 
@@ -347,8 +346,7 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Entry' }]),
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const indexed = await vm.rebuildIndex(mockDb as any)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
             expect(indexed).toBe(1)
         })
 
@@ -369,8 +367,7 @@ describe('VectorSearchManager', () => {
                 ]),
             }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const indexed = await vm.rebuildIndex(mockDb as any)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
             // Only 1 should be indexed (the other failed)
             expect(indexed).toBe(1)
         })

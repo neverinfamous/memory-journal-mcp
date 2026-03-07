@@ -321,23 +321,68 @@ describe('Tool Handler Coverage', () => {
             expect(result.groupBy).toBe('month')
         })
 
-        it('should support date range filter', async () => {
+        it('should filter by date range', async () => {
             const today = new Date().toISOString().split('T')[0]!
-            const result = (await callTool(
+            const allStats = (await callTool('get_statistics', {}, db)) as {
+                totalEntries: number
+            }
+            const filteredStats = (await callTool(
                 'get_statistics',
                 { start_date: today, end_date: today },
                 db
-            )) as { totalEntries: number }
+            )) as { totalEntries: number; dateRange: { startDate: string; endDate: string } }
 
-            expect(result.totalEntries).toBeGreaterThanOrEqual(0)
+            // Filtered count should be <= all entries
+            expect(filteredStats.totalEntries).toBeLessThanOrEqual(allStats.totalEntries)
+            expect(filteredStats.totalEntries).toBeGreaterThanOrEqual(0)
+            // dateRange should echo back the applied dates
+            expect(filteredStats.dateRange).toBeDefined()
+            expect(filteredStats.dateRange.startDate).toBe(today)
+            expect(filteredStats.dateRange.endDate).toBe(today)
         })
 
-        it('should support project_breakdown', async () => {
+        it('should return 0 entries for future date range', async () => {
+            const result = (await callTool(
+                'get_statistics',
+                { start_date: '2099-01-01', end_date: '2099-12-31' },
+                db
+            )) as { totalEntries: number; dateRange: { startDate: string; endDate: string } }
+
+            expect(result.totalEntries).toBe(0)
+            expect(result.dateRange.startDate).toBe('2099-01-01')
+        })
+
+        it('should return project_breakdown when requested', async () => {
+            // Create entry with a known project number
+            db.createEntry({ content: 'Project breakdown test', projectNumber: 777 })
+
             const result = (await callTool('get_statistics', { project_breakdown: true }, db)) as {
                 totalEntries: number
+                projectBreakdown: { project_number: number; entry_count: number }[]
             }
 
-            expect(result.totalEntries).toBeGreaterThanOrEqual(0)
+            expect(result.totalEntries).toBeGreaterThan(0)
+            expect(result.projectBreakdown).toBeDefined()
+            expect(Array.isArray(result.projectBreakdown)).toBe(true)
+            const proj777 = result.projectBreakdown.find((p) => p.project_number === 777)
+            expect(proj777).toBeDefined()
+            expect(proj777!.entry_count).toBeGreaterThanOrEqual(1)
+        })
+
+        it('should NOT return project_breakdown when not requested', async () => {
+            const result = (await callTool('get_statistics', {}, db)) as {
+                projectBreakdown?: unknown
+            }
+
+            expect(result.projectBreakdown).toBeUndefined()
+        })
+
+        it('should NOT return dateRange when no dates provided', async () => {
+            const result = (await callTool('get_statistics', {}, db)) as {
+                dateRange?: unknown
+            }
+
+            expect(result.dateRange).toBeUndefined()
         })
 
         it('should return error for invalid group_by', async () => {

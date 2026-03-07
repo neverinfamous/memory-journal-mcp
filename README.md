@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 6, 2026**
+**Last Updated March 7, 2026**
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -12,8 +12,8 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-94%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-730_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-93%78-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-785_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -28,7 +28,7 @@
 
 ### Key Benefits
 
-**42 MCP Tools** · **15 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**42 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -40,8 +40,7 @@
 - ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running HTTP deployments
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
-- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
-- 🔧 **IDE Hooks** — ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](hooks/))
+- 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
@@ -103,17 +102,11 @@ flowchart TB
         Timeline["Project Timelines"]
     end
 
-    subgraph SessionEnd["🔄 Session End"]
-        Summary["Session Summary Entry<br/>(retrospective + session-summary tag)"]
-    end
-
     Session --> Core
     Core --> Search
     Core <--> GitHub
     Search --> Outputs
     GitHub --> Outputs
-    Core --> SessionEnd
-    SessionEnd -.->|"next session"| Briefing
 ```
 
 ---
@@ -157,7 +150,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **15 Workflow Prompts**
+### 🎯 **16 Workflow Prompts**
 
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
@@ -174,6 +167,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `actions-failure-digest` - CI/CD failure analysis
 - `project-milestone-tracker` - Milestone progress tracking
 - `confirm-briefing` - Acknowledge session context to user
+- `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -304,18 +298,26 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 - **Body Size Limit** — 1 MB maximum
 - **404 Handler** — Unknown paths return `{ error: "Not found" }`
 - **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
+- **Build Provenance** - Cryptographic proof of build process
+- **SBOM Available** - Complete software bill of materials
+- **Supply Chain Attestations** - Verifiable build integrity
+- **Non-root Execution** - Minimal attack surface
+- **No Native Dependencies** - Pure JS stack reduces attack surface
 
 **Example with curl:**
 
+Initialize session (returns `mcp-session-id` header):
+
 ```bash
-# Initialize session
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-# Returns mcp-session-id header
+```
 
-# List tools (with session)
+List tools (with session):
+
+```bash
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -409,33 +411,13 @@ When GitHub tools cannot auto-detect repository information:
 }
 ```
 
-### Client-Specific Notes
-
-**Cursor IDE:**
-
-- **Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `ListMcpResources()` without specifying a server parameter, or with `server: "user-memory-journal-mcp"` (Cursor prefixes server names with `user-`).
-
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
+Memory Journal bridges AI sessions with a three-step cycle:
 
-**How it works:**
-
-1. Session starts → agent reads `memory://briefing` and shows you a project context summary
-2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
+2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
 3. Next session's briefing includes the previous summary — context flows seamlessly
-
-**Setup by IDE:** Ready-to-use rules and hooks in [`hooks/`](hooks/):
-
-| Client         | Primary (agent behavior)                                                                      | Optional (audit/logging)                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Cursor**     | Copy [`hooks/cursor/memory-journal.mdc`](hooks/cursor/memory-journal.mdc) to `.cursor/rules/` | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) + `session-end.sh` to `.cursor/` |
-| **Kiro (AWS)** | Server instructions (automatic)                                                               | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`            |
-| **Kilo Code**  | Server instructions (automatic)                                                               | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json)    |
-
-**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. The Cursor rule improves reliability by giving the agent explicit always-on instructions. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
-
-See [`hooks/README.md`](hooks/README.md) for detailed setup instructions.
 
 ## 🔧 Configuration
 
@@ -482,7 +464,7 @@ flowchart TB
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 42 Tools"]
         Resources["📡 22 Resources"]
-        Prompts["💬 15 Prompts"]
+        Prompts["💬 16 Prompts"]
     end
 
     subgraph Storage["Persistence Layer"]
@@ -509,7 +491,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (42)      │  │ Resources (22)  │  │ Prompts (15)│  │
+│  │ Tools (42)      │  │ Resources (22)  │  │ Prompts (16)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
@@ -542,9 +524,9 @@ flowchart TB
 
 Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
 
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~42x faster than retrieving 50 recent entries.
-- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>131x faster locally).
-- **Core MCP Routines**: Tool dispatch via `callTool` uses cached O(1) lookup. `create_entry` and `search_entries` execute at >730 ops/sec through the MCP layer.
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~7x faster than retrieving 50 recent entries (composite index optimization narrows this gap by accelerating `getRecentEntries` ~4x).
+- **Vector Search Engine**: Both search (780 ops/sec) and indexing (640 ops/sec) are high-throughput via `vectra` with native upsert support.
+- **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800x faster than tool execution). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
 
 To run the benchmarking suite locally:
 
@@ -554,11 +536,11 @@ npm run bench
 
 ### Testing
 
-**777 tests** across two test frameworks:
+**785 tests** across two test frameworks:
 
 | Suite                     | Tests | Command            | Covers                                                                |
 | ------------------------- | ----- | ------------------ | --------------------------------------------------------------------- |
-| Vitest (unit/integration) | 730   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
+| Vitest (unit/integration) | 738   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
 | Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler |
 
 ```bash

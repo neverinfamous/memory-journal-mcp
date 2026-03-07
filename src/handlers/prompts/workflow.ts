@@ -2,7 +2,8 @@
  * Memory Journal MCP Server - Workflow Prompt Definitions
  *
  * Prompts: find-related, prepare-standup, prepare-retro, weekly-digest,
- * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing
+ * analyze-period, goal-tracker, get-context-bundle, get-recent-entries, confirm-briefing,
+ * session-summary
  */
 
 import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
@@ -304,6 +305,47 @@ ${entrySummary}
 - Full health: \`memory://health\`
 
 Please confirm this context to the user in a concise, friendly format. Use a table if helpful.`,
+                            },
+                        },
+                    ],
+                }
+            },
+        },
+        {
+            name: 'session-summary',
+            description:
+                'Create a session summary entry capturing what was accomplished, pending items, and context for the next session',
+            icons: [ICON_PROMPT],
+            arguments: [],
+            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+                const recent = db.getRecentEntries(5)
+
+                const entrySummary =
+                    recent.length > 0
+                        ? recent
+                              .map(
+                                  (e) =>
+                                      `- #${String(e.id)} (${e.entryType}) ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`
+                              )
+                              .join('\n')
+                        : '- No entries yet'
+
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `Create a session summary journal entry based on this context:
+
+**Recent Entries:**
+${entrySummary}
+
+**Instructions:**
+1. Summarize what was accomplished in this session (key changes, decisions, files modified)
+2. Note what's unfinished or blocked (pending items, open questions)
+3. Include context for the next session (relevant entry IDs, branch names, PR numbers)
+4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\``,
                             },
                         },
                     ],

@@ -85,6 +85,13 @@ export class SqliteAdapter {
         // Required for ON DELETE CASCADE in entry_tags, relationships, embeddings
         this.db.run('PRAGMA foreign_keys = ON')
 
+        // Performance pragmas: sql.js operates entirely in-memory; the database
+        // file is only read at open and written by flushSave(). No need for
+        // journal or fsync overhead.
+        this.db.run('PRAGMA journal_mode = MEMORY')
+        this.db.run('PRAGMA synchronous = OFF')
+        this.db.run('PRAGMA temp_store = MEMORY')
+
         this.initialized = true
 
         logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath })
@@ -371,9 +378,12 @@ export class SqliteAdapter {
             ]
         )
 
-        // Get the inserted ID
-        const result = db.exec('SELECT last_insert_rowid() as id')
+        // Get the inserted ID and server-generated timestamp in one query
+        const result = db.exec(
+            'SELECT last_insert_rowid() as id, datetime(CURRENT_TIMESTAMP) as ts'
+        )
         const entryId = result[0]?.values[0]?.[0] as number
+        const timestamp = result[0]?.values[0]?.[1] as string
 
         // Create tags and link them
         if (tags.length > 0) {
@@ -388,11 +398,28 @@ export class SqliteAdapter {
             entityId: entryId,
         })
 
-        const entry = this.getEntryById(entryId)
-        if (!entry) {
-            throw new Error(`Failed to retrieve created entry with ID ${entryId}`)
+        // Build entry directly from known values — avoids a redundant SELECT + tag query
+        return {
+            id: entryId,
+            entryType,
+            content,
+            timestamp,
+            isPersonal,
+            significanceType,
+            autoContext,
+            deletedAt: null,
+            tags: [...tags],
+            projectNumber: projectNumber ?? null,
+            projectOwner: projectOwner ?? null,
+            issueNumber: issueNumber ?? null,
+            issueUrl: issueUrl ?? null,
+            prNumber: prNumber ?? null,
+            prUrl: prUrl ?? null,
+            prStatus: prStatus ?? null,
+            workflowRunId: workflowRunId ?? null,
+            workflowName: workflowName ?? null,
+            workflowStatus: workflowStatus ?? null,
         }
-        return entry
     }
 
     /**
@@ -455,40 +482,36 @@ export class SqliteAdapter {
         const db = this.ensureDb()
         const round2 = (n: number): number => Math.round(n * 100) / 100
 
-        // Get entry data
-        const entryResult = db.exec(
-            `SELECT significance_type, timestamp FROM memory_journal WHERE id = ? AND deleted_at IS NULL`,
-            [entryId]
+        // Single consolidated query: entry data + relationship counts via subqueries
+        const result = db.exec(
+            `SELECT
+                m.significance_type,
+                m.timestamp,
+                (SELECT COUNT(*) FROM relationships
+                 WHERE from_entry_id = ? OR to_entry_id = ?) AS rel_count,
+                (SELECT COUNT(*) FROM relationships
+                 WHERE (from_entry_id = ? OR to_entry_id = ?)
+                 AND relationship_type IN ('blocked_by', 'resolved', 'caused')) AS causal_count
+            FROM memory_journal m
+            WHERE m.id = ? AND m.deleted_at IS NULL`,
+            [entryId, entryId, entryId, entryId, entryId]
         )
-        if (entryResult.length === 0 || entryResult[0]?.values.length === 0) {
+        if (result.length === 0 || result[0]?.values.length === 0) {
             return {
                 score: 0,
                 breakdown: { significance: 0, relationships: 0, causal: 0, recency: 0 },
             }
         }
 
-        const significanceType = entryResult[0]?.values[0]?.[0] as string | null
-        const timestamp = entryResult[0]?.values[0]?.[1] as string
+        const row = result[0]?.values[0] ?? []
+        const significanceType = row[0] as string | null
+        const timestamp = row[1] as string
+        const relCount = (row[2] as number) ?? 0
+        const causalCount = (row[3] as number) ?? 0
 
         // Significance weight: 1.0 if set, else 0.0
         const significanceRaw = significanceType ? 1.0 : 0.0
-
-        // Relationship count (total relationships involving this entry)
-        const relResult = db.exec(
-            `SELECT COUNT(*) FROM relationships WHERE from_entry_id = ? OR to_entry_id = ?`,
-            [entryId, entryId]
-        )
-        const relCount = (relResult[0]?.values[0]?.[0] as number) ?? 0
         const relationshipsRaw = Math.min(relCount / 5, 1.0)
-
-        // Causal relationships count
-        const causalResult = db.exec(
-            `SELECT COUNT(*) FROM relationships
-             WHERE (from_entry_id = ? OR to_entry_id = ?)
-             AND relationship_type IN ('blocked_by', 'resolved', 'caused')`,
-            [entryId, entryId]
-        )
-        const causalCount = (causalResult[0]?.values[0]?.[0] as number) ?? 0
         const causalRaw = Math.min(causalCount / 3, 1.0)
 
         // Recency weight: decays over 90 days
@@ -578,8 +601,6 @@ export class SqliteAdapter {
         }
     ): JournalEntry | null {
         const db = this.ensureDb()
-        const entry = this.getEntryById(id)
-        if (!entry) return null
 
         const setClause: string[] = []
         const params: unknown[] = []
@@ -599,7 +620,21 @@ export class SqliteAdapter {
 
         if (setClause.length > 0) {
             params.push(id)
-            db.run(`UPDATE memory_journal SET ${setClause.join(', ')} WHERE id = ?`, params)
+            db.run(
+                `UPDATE memory_journal SET ${setClause.join(', ')} WHERE id = ? AND deleted_at IS NULL`,
+                params
+            )
+            // Check if any row was actually updated (entry exists and is active)
+            const changesResult = db.exec('SELECT changes()')
+            const rowsModified = (changesResult[0]?.values[0]?.[0] as number) ?? 0
+            if (rowsModified === 0) return null
+        } else {
+            // No column updates — still need to verify entry exists for tag updates / return value
+            const exists = db.exec(
+                'SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL',
+                [id]
+            )
+            if (exists.length === 0 || exists[0]?.values.length === 0) return null
         }
 
         // Update tags if provided
@@ -704,11 +739,15 @@ export class SqliteAdapter {
             tags?: string[]
             isPersonal?: boolean
             projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
+            workflowRunId?: number
             limit?: number
         } = {}
     ): JournalEntry[] {
         const db = this.ensureDb()
-        const { entryType, tags, isPersonal, projectNumber } = options
+        const { entryType, tags, isPersonal, projectNumber, issueNumber, prNumber, workflowRunId } =
+            options
 
         let sql: string
         const params: unknown[] = [startDate, endDate + ' 23:59:59']
@@ -744,6 +783,18 @@ export class SqliteAdapter {
         if (projectNumber !== undefined) {
             sql += ` AND m.project_number = ?`
             params.push(projectNumber)
+        }
+        if (issueNumber !== undefined) {
+            sql += ` AND m.issue_number = ?`
+            params.push(issueNumber)
+        }
+        if (prNumber !== undefined) {
+            sql += ` AND m.pr_number = ?`
+            params.push(prNumber)
+        }
+        if (workflowRunId !== undefined) {
+            sql += ` AND m.workflow_run_id = ?`
+            params.push(workflowRunId)
         }
 
         sql += ` ORDER BY m.timestamp DESC LIMIT ?`
@@ -782,16 +833,25 @@ export class SqliteAdapter {
 
         const tagIds: number[] = []
         for (const row of result[0]?.values ?? []) {
-            const tagId = row[0] as number
-            tagIds.push(tagId)
-            // Link tag to entry
-            db.run('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [
-                entryId,
-                tagId,
-            ])
-            // Increment usage
-            db.run('UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?', [tagId])
+            tagIds.push(row[0] as number)
         }
+
+        if (tagIds.length === 0) return
+
+        // Batch: link all tags to entry in one INSERT
+        const linkPlaceholders = tagIds.map(() => '(?, ?)').join(', ')
+        const linkParams = tagIds.flatMap((tagId) => [entryId, tagId])
+        db.run(
+            `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${linkPlaceholders}`,
+            linkParams
+        )
+
+        // Batch: increment usage counts in one UPDATE
+        const updatePlaceholders = tagIds.map(() => '?').join(', ')
+        db.run(
+            `UPDATE tags SET usage_count = usage_count + 1 WHERE id IN (${updatePlaceholders})`,
+            tagIds
+        )
     }
 
     /**
@@ -990,9 +1050,15 @@ export class SqliteAdapter {
     // =========================================================================
 
     /**
-     * Get entry statistics with enhanced analytics metrics
+     * Get entry statistics with enhanced analytics metrics.
+     * Supports optional date filtering and per-project breakdown.
      */
-    getStatistics(groupBy: 'day' | 'week' | 'month' = 'week'): {
+    getStatistics(
+        groupBy: 'day' | 'week' | 'month' = 'week',
+        startDate?: string,
+        endDate?: string,
+        projectBreakdown?: boolean
+    ): {
         totalEntries: number
         entriesByType: Record<string, number>
         entriesByPeriod: { period: string; count: number }[]
@@ -1012,36 +1078,73 @@ export class SqliteAdapter {
             resolved: number
             caused: number
         }
+        // Optional date range echo (v5.1.0)
+        dateRange?: { startDate: string; endDate: string }
+        // Optional project breakdown (v5.1.0)
+        projectBreakdown?: { project_number: number; entry_count: number }[]
     } {
         const db = this.ensureDb()
 
-        // Combined query 1: total entries + breakdown by type
-        const combinedResult = db.exec(`
-            SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL;
-            SELECT entry_type, COUNT(*) as count
-            FROM memory_journal
-            WHERE deleted_at IS NULL
-            GROUP BY entry_type
-        `)
-        const totalEntries = (combinedResult[0]?.values[0]?.[0] as number) ?? 0
-        const entriesByType: Record<string, number> = {}
-        for (const row of combinedResult[1]?.values ?? []) {
-            entriesByType[row[0] as string] = row[1] as number
+        // Build optional date filter clause + params
+        let dateFilter = ''
+        const dateParams: unknown[] = []
+        if (startDate) {
+            dateFilter += ' AND DATE(timestamp) >= DATE(?)'
+            dateParams.push(startDate)
+        }
+        if (endDate) {
+            dateFilter += ' AND DATE(timestamp) <= DATE(?)'
+            dateParams.push(endDate)
         }
 
-        // Combined query 2: period breakdown + decision density (using CASE)
+        // Combined query 1: total entries + breakdown by type
+        // sql.js multi-statement exec() does not support parameterized queries,
+        // so we run them separately when date filters are present.
+        let totalEntries: number
+        const entriesByType: Record<string, number> = {}
+
+        if (dateParams.length > 0) {
+            const countResult = db.exec(
+                `SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter}`,
+                [...dateParams]
+            )
+            totalEntries = (countResult[0]?.values[0]?.[0] as number) ?? 0
+
+            const typeResult = db.exec(
+                `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter} GROUP BY entry_type`,
+                [...dateParams]
+            )
+            for (const row of typeResult[0]?.values ?? []) {
+                entriesByType[row[0] as string] = row[1] as number
+            }
+        } else {
+            const combinedResult = db.exec(`
+                SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL;
+                SELECT entry_type, COUNT(*) as count
+                FROM memory_journal
+                WHERE deleted_at IS NULL
+                GROUP BY entry_type
+            `)
+            totalEntries = (combinedResult[0]?.values[0]?.[0] as number) ?? 0
+            for (const row of combinedResult[1]?.values ?? []) {
+                entriesByType[row[0] as string] = row[1] as number
+            }
+        }
+
+        // Query 2: period breakdown + decision density (using CASE)
         const dateFormat = validateDateFormatPattern(groupBy)
-        const periodResult = db.exec(`
-            SELECT
+        const periodResult = db.exec(
+            `SELECT
                 strftime('${dateFormat}', timestamp) as period,
                 COUNT(*) as total_count,
                 SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END) as significant_count
             FROM memory_journal
-            WHERE deleted_at IS NULL
+            WHERE deleted_at IS NULL${dateFilter}
             GROUP BY period
             ORDER BY period DESC
-            LIMIT 52
-        `)
+            LIMIT 52`,
+            [...dateParams]
+        )
 
         const entriesByPeriod = (periodResult[0]?.values ?? []).map((v: unknown[]) => ({
             period: v[0] as string,
@@ -1055,7 +1158,7 @@ export class SqliteAdapter {
                 significantCount: v[2] as number,
             }))
 
-        // Combined query 3: relationship counts + causal breakdown
+        // Query 3: relationship counts + causal breakdown (not date-filtered)
         const relResult = db.exec(`
             SELECT COUNT(*) FROM relationships;
             SELECT relationship_type, COUNT(*) as count
@@ -1066,7 +1169,7 @@ export class SqliteAdapter {
         const totalRelationships = (relResult[0]?.values[0]?.[0] as number) ?? 0
         const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
 
-        // Activity Trend: week-over-week growth
+        // Activity Trend: period-over-period growth
         const currentPeriod = entriesByPeriod[0]?.period ?? ''
         const previousPeriod = entriesByPeriod[1]?.period ?? ''
         const currentCount = entriesByPeriod[0]?.count ?? 0
@@ -1083,7 +1186,8 @@ export class SqliteAdapter {
             causalMetrics[relType] = row[1] as number
         }
 
-        return {
+        // Build result
+        const result: ReturnType<SqliteAdapter['getStatistics']> = {
             totalEntries,
             entriesByType,
             entriesByPeriod,
@@ -1099,6 +1203,32 @@ export class SqliteAdapter {
             },
             causalMetrics,
         }
+
+        // Optional: echo back applied date range
+        if (startDate || endDate) {
+            result.dateRange = {
+                startDate: startDate ?? '',
+                endDate: endDate ?? '',
+            }
+        }
+
+        // Optional: per-project entry breakdown
+        if (projectBreakdown) {
+            const projResult = db.exec(
+                `SELECT project_number, COUNT(*) as entry_count
+                FROM memory_journal
+                WHERE deleted_at IS NULL AND project_number IS NOT NULL${dateFilter}
+                GROUP BY project_number
+                ORDER BY entry_count DESC`,
+                [...dateParams]
+            )
+            result.projectBreakdown = (projResult[0]?.values ?? []).map((v: unknown[]) => ({
+                project_number: v[0] as number,
+                entry_count: v[1] as number,
+            }))
+        }
+
+        return result
     }
 
     // =========================================================================

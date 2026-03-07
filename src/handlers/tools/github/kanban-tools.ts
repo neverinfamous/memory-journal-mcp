@@ -44,6 +44,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
 
                     if (!board) {
                         return {
+                            success: false,
                             error: `Project #${String(input.project_number)} not found or Status field not configured`,
                             projectNumber: input.project_number,
                             owner: resolved.owner,

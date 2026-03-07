@@ -54,7 +54,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                         .parse(params)
 
                     if (!context.github) {
-                        return { error: 'GitHub integration not available' }
+                        return { success: false, error: 'GitHub integration not available' }
                     }
 
                     const repoInfo = await context.github.getRepoInfo()
@@ -63,6 +63,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
 
                     if (!owner || !repo) {
                         return {
+                            success: false,
                             error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
                             requiresUserInput: true,
                             instruction:
@@ -71,8 +72,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const section = input.sections
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- building response dynamically
-                    const result: Record<string, any> = {
+                    const result: Partial<z.infer<typeof RepoInsightsOutputSchema>> = {
                         owner,
                         repo,
                         section,
@@ -81,13 +81,13 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     if (section === 'stars' || section === 'all') {
                         const stats = await context.github.getRepoStats(owner, repo)
                         if (stats) {
-                            result['stars'] = stats.stars
-                            result['forks'] = stats.forks
-                            result['watchers'] = stats.watchers
-                            result['openIssues'] = stats.openIssues
+                            result.stars = stats.stars
+                            result.forks = stats.forks
+                            result.watchers = stats.watchers
+                            result.openIssues = stats.openIssues
                             if (section === 'all') {
-                                result['size'] = stats.size
-                                result['defaultBranch'] = stats.defaultBranch
+                                result.size = stats.size
+                                result.defaultBranch = stats.defaultBranch
                             }
                         }
                     }
@@ -95,18 +95,18 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     if (section === 'traffic' || section === 'all') {
                         const traffic = await context.github.getTrafficData(owner, repo)
                         if (traffic) {
-                            result['traffic'] = traffic
+                            result.traffic = traffic
                         }
                     }
 
                     if (section === 'referrers' || section === 'all') {
                         const referrers = await context.github.getTopReferrers(owner, repo, 5)
-                        result['referrers'] = referrers
+                        result.referrers = referrers
                     }
 
                     if (section === 'paths' || section === 'all') {
                         const paths = await context.github.getPopularPaths(owner, repo, 5)
-                        result['paths'] = paths
+                        result.paths = paths
                     }
 
                     return result

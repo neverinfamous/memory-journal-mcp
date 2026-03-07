@@ -51,6 +51,17 @@ const VisualizeInputSchema = z.object({
     limit: z.number().max(500).optional().default(20).describe('Maximum entries to include'),
 })
 
+/** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
+const VisualizeInputSchemaMcp = z.object({
+    entry_id: z
+        .number()
+        .optional()
+        .describe('Specific entry ID to visualize (shows connected entries)'),
+    tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+    depth: z.number().optional().default(2).describe('Relationship traversal depth'),
+    limit: z.number().optional().default(20).describe('Maximum entries to include'),
+})
+
 // ============================================================================
 // Output Schemas
 // ============================================================================
@@ -159,7 +170,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             title: 'Visualize Relationships',
             description: 'Generate a Mermaid diagram visualization of entry relationships',
             group: 'relationships',
-            inputSchema: VisualizeInputSchema,
+            inputSchema: VisualizeInputSchemaMcp,
             outputSchema: VisualizationOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {

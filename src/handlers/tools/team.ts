@@ -11,6 +11,7 @@ import { z } from 'zod'
 import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../utils/security-utils.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema } from './schemas.js'
 
 // ============================================================================
@@ -24,7 +25,7 @@ import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema } from './schemas.js
 function resolveAuthor(): string {
     // 1. Explicit env var
     const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return envAuthor
+    if (envAuthor) return sanitizeAuthor(envAuthor)
 
     // 2. Git config
     try {
@@ -34,7 +35,7 @@ function resolveAuthor(): string {
         })
             .trim()
             .replace(/"/g, '')
-        if (gitUser) return gitUser
+        if (gitUser) return sanitizeAuthor(gitUser)
     } catch {
         // Git not available or not configured
     }

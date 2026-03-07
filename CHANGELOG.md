@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-03-07
+
+### Added
+
+- **`session-summary` Prompt** — New workflow prompt that creates a session summary journal entry. Fetches recent entries for context and guides the agent to create a `retrospective` entry tagged `session-summary` capturing accomplishments, pending items, and next-session context. Invoked by the user when ready (e.g., `/session-summary`). Replaces the unreliable automatic session-end behavior. Prompt count: 15 → 16.
+
+### Performance
+
+- **`calculateImportance` Query Consolidation** — Merged 3 separate SQL queries (entry data, relationship count, causal count) into a single query with subqueries, reducing SQLite roundtrips 3→1.
+- **`linkTagsToEntry` Batch Operations** — Replaced per-tag `INSERT OR IGNORE` + `UPDATE` loop (2N SQL calls) with batched multi-row `INSERT`, `SELECT ... IN (...)`, and `UPDATE ... IN (...)` (4 SQL calls total for any N tags).
+- **`createEntry` Redundant Fetch Elimination** — Removed post-INSERT `getEntryById()` re-fetch (full SELECT + tag query). Entry is now constructed directly from input values + `last_insert_rowid()` + `datetime(CURRENT_TIMESTAMP)`.
+- **`updateEntry` Pre-check Elimination** — Removed pre-UPDATE `getEntryById()` existence check. Uses `UPDATE ... WHERE deleted_at IS NULL` + `SELECT changes()` to detect missing entries in one SQL call instead of a full SELECT + tag query.
+- **SQLite Performance PRAGMAs** — Added `PRAGMA journal_mode = MEMORY`, `synchronous = OFF`, and `temp_store = MEMORY` at initialization. sql.js operates in-memory with manual disk serialization; these eliminate unnecessary internal journal overhead.
+- **Composite Covering Index for `getRecentEntries`** — Added `idx_memory_journal_recent` on `(deleted_at, timestamp DESC, id DESC)` to enable index-only scan for the `WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC` query pattern.
+- **`addEntry` Native Upsert** — Replaced `deleteItem()` + `insertItem()` pattern with vectra's native `upsertItem()`, eliminating a full exception path on every new entry insertion.
+- **`getTools` Cached Output** — Extracted shared `ensureToolCache()` for both `getTools` and `callTool`. Unfiltered `getTools` calls now return a cached mapped array instead of rebuilding 42 tool objects and mapping them on every invocation (~4800x faster than tool execution).
+- **Lazy Module Loading for Startup** — Deferred `@xenova/transformers` (1.5s) and `vectra` (0.9s) from top-level imports in `VectorSearchManager.ts` to dynamic `import()` inside `initialize()`. These heavyweight modules are now loaded only when vector search is first used, reducing server cold-start by ~1.8s (VectorSearchManager import: 1515ms → 12ms).
+
+### Documentation
+
+- **Test Counts Updated** — Updated the `README.md` and `DOCKER_README.md` test count badges and the testing breakdown table to reflect the combined total of Vitest unit/integration tests and Playwright E2E tests (785 total tests).
+- **Performance Benchmark Claims Updated** — Updated benchmark numbers in `README.md` and `DOCKER_README.md` to reflect post-optimization measurements: vector ops >640 ops/sec, `getTools` ~4800x faster than tool execution, `getRecentEntries` ~4x faster via composite index.
+
+### Removed
+
+- **Automatic Session End Behavior** — Removed `## Session End` section from server instructions (`ServerInstructions.ts`, `server-instructions.md`). Agents cannot reliably detect when a thread/session ends. Replaced by the user-invoked `session-summary` prompt.
+- **`hooks/` Directory** — Deleted the entire hooks directory (`hooks/cursor/`, `hooks/kiro/`, `hooks/kilo-code/`, `hooks/README.md`). All hook files were session-end related. Session start is handled by server instructions.
+
+### Security
+
+- **Docker Compose Network Isolation (L-1)** — Added custom `mcp-net` bridge network to both services. Prevents MCP containers from accessing or being accessed by unrelated containers on the default Docker bridge.
+- **Docker Compose `no-new-privileges` (L-2)** — Added `security_opt: ["no-new-privileges:true"]` to both services. Prevents privilege escalation via `setuid`/`setgid` binaries inside containers.
+- **Author Input Sanitization (L-5)** — `resolveAuthor()` and `resolveTeamAuthor()` in `team.ts` and `core.ts` now strip ASCII control characters (`0x00`–`0x1F`, `0x7F`) and cap author strings at 100 characters. Prevents crafted `TEAM_AUTHOR` env or git config values from injecting control characters into the database `author` column or `autoContext` JSON payloads.
+- **Consolidated `sanitizeAuthor` (Audit)** — Moved duplicated `sanitizeAuthor()` from `core.ts` and `team.ts` into `security-utils.ts` as a single-source-of-truth export. Eliminates risk of divergent sanitization logic.
+- **Docker Compose `cap_drop: ALL` (Audit)** — Added `cap_drop: ALL` to both Docker Compose services, dropping all Linux capabilities (NET_RAW, SYS_CHROOT, etc.) that are unnecessary for a Node.js MCP server.
+- **CI Unit Test Gate (Audit)** — Added `npm run test` step to `lint-and-test.yml` workflow so unit tests run on every push/PR, not just lint/typecheck/build.
+
+### Fixed
+
+- **Output schema mismatches causing MCP -32602 errors** — Three `outputSchema` definitions didn't match actual handler output, causing `structuredContent does not match the tool's output schema` errors:
+  - `EntryOutputSchema` (schemas.ts) — Added `source` field (`'personal' | 'team'`) for cross-database search results that include a source marker
+  - `VectorStatsOutputSchema` (search.ts) — Updated to match `VectorSearchManager.getStats()` return shape (`itemCount`, `modelName`, `dimensions` instead of `entryCount`, `indexSize`)
+  - `BackupInfoSchema` (backup.ts) — Added `path` field to match `SqliteAdapter.listBackups()` output
+- **`get_statistics` Date Filtering** — `start_date` and `end_date` parameters now filter all statistics queries (total count, type breakdown, period breakdown, decision density). Previously parsed by Zod but ignored by the handler. Returns `dateRange` echo in the response when dates are provided.
+- **`get_statistics` Project Breakdown** — `project_breakdown: true` now returns a `projectBreakdown` array with per-project entry counts. Previously parsed but ignored.
+- **`export_entries` Filter Bypass** — Handler was calling `db.getRecentEntries(limit)` and ignoring all parsed filter parameters (`start_date`, `end_date`, `entry_types`, `tags`). Now correctly uses `db.searchByDateRange()` for date/tag filters and post-filters by `entry_types`.
+- **GitHub Error Consistency** — All GitHub tool error responses (`get_github_issue`, `get_github_pr`, `get_github_context`, `get_repo_insights`, `resolveOwnerRepo`, `resolveOwner`) now include `success: false` field, matching the `{success: false, error}` pattern used by all other tools.
+- **`get_vector_index_stats` Missing `success` Field** — Handler now returns `success: true/false` in all response paths for schema consistency.
+- **No-Argument Prompts Failing with MCP `-32602`** — Prompts with no arguments (e.g., `session-summary`, `confirm-briefing`, `prepare-standup`) failed when the client called `prompts/get` without `arguments`. The registration code passed an empty `argsSchema: {}` to `registerPrompt`, which the SDK wrapped in `z.object({})` and attempted to validate against `undefined`. Now omits `argsSchema` entirely for argumentless prompts so the SDK skips validation.
+- **`get_github_milestone` Error Missing `success: false`** — Error response for non-existent milestones returned `{ error }` without `success` field. Now returns `{ success: false, error }` matching the consistent error shape used by all other tools.
+- **`get_kanban_board` Error Missing `success: false`** — Error response for non-existent projects returned `{ error }` without `success` field. Now returns `{ success: false, error }` matching the consistent error shape used by all other tools.
+- **`search_by_date_range` Silent Filter Bug** — `issue_number`, `pr_number`, and `workflow_run_id` parameters were accepted by the Zod schema but silently ignored — the handler never passed them to the database query. Now correctly forwards all three filters to `SqliteAdapter.searchByDateRange()`, which applies them as SQL WHERE clauses.
+
+### Improved
+
+- **Zod Boundary Leak Prevention** — Created separate relaxed MCP schemas (without `min`/`max` constraints) for 7 tools so boundary violations reach the handler for structured `{success: false, error}` responses instead of leaking as raw MCP `-32602` error frames. Affected tools: `get_recent_entries`, `create_entry`, `create_entry_minimal`, `search_entries`, `search_by_date_range`, `semantic_search`, `export_entries`, `cleanup_backups`, `visualize_relationships`.
+
+### Changed
+
+- **CI `publish-npm.yml` Node Version Alignment (L-4)** — Updated Node.js version from 22.x to 24.x to match `engines.node: >=24.0.0` in `package.json` and the Dockerfile base image (`node:24-alpine`).
+
+- **Dependency Updates**
+  - `eslint`: 10.0.2 → 10.0.3 (patch)
+
 ## [5.0.1] - 2026-03-06
 
 ### Security
@@ -1280,7 +1344,16 @@ npm install -g memory-journal-mcp
 - SQLite FTS5 full-text search
 - Optional FAISS semantic search
 
-[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...HEAD
+[5.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.1...v5.1.0
+[5.0.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.0...v5.0.1
+[5.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.5.0...v5.0.0
+[4.5.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.2...v4.5.0
+[4.4.2]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.0...v4.4.2
+[4.4.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.1...v4.4.0
+[4.3.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.0...v4.3.1
+[4.3.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.2.0...v4.3.0
+[4.2.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.5...v4.0.0
 [3.1.5]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.4...v3.1.5

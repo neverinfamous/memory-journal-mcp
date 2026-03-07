@@ -170,6 +170,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     )
                     if (!milestone) {
                         return {
+                            success: false,
                             error: `Milestone #${String(input.milestone_number)} not found`,
                             owner: resolved.owner,
                             repo: resolved.repo,

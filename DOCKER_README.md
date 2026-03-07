@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 6, 2026**
+**Last Updated March 7, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -10,8 +10,8 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-94%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-730_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-93%78-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-785_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -21,7 +21,7 @@
 
 ### Key Benefits
 
-**42 MCP Tools** · **15 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**42 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -33,8 +33,7 @@
 - ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running containers
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
-- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
-- 🔧 **IDE Hooks** — ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks))
+- 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
@@ -53,7 +52,7 @@
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
 
-**Flow:** AI Session Start → Read `memory://briefing` → Journal Operations (Create, Search, Link) → Triple Search + GitHub Integration → Outputs (Standups, Knowledge Graphs, Timelines) → Session End (auto-summary → next briefing)
+**Flow:** AI Session Start → Read `memory://briefing` → Journal Operations (Create, Search, Link) → Triple Search + GitHub Integration → Outputs (Standups, Knowledge Graphs, Timelines) → Use `session-summary` prompt when ready to capture session context
 
 ### Tool Filtering
 
@@ -92,7 +91,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **15 Workflow Prompts**
+### 🎯 **16 Workflow Prompts**
 
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
@@ -109,6 +108,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `actions-failure-digest` - CI/CD failure analysis
 - `project-milestone-tracker` - Milestone progress tracking
 - `confirm-briefing` - Acknowledge session context to user
+- `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -248,15 +248,11 @@ When GitHub tools cannot auto-detect repository information:
 
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
+Memory Journal bridges AI sessions with a three-step cycle:
 
-1. Session starts → agent reads `memory://briefing` and shows you a project context summary
-2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
+2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
 3. Next session's briefing includes the previous summary — context flows seamlessly
-
-**Cursor users:** Copy the [`memory-journal.mdc`](https://github.com/neverinfamous/memory-journal-mcp/blob/main/hooks/cursor/memory-journal.mdc) rule to `.cursor/rules/` for the most reliable session management. Optional audit hooks for Cursor, Kiro, and Kilo Code are available in the [hooks/](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks) directory.
-
-**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
 
 ### HTTP/SSE Transport (Remote Access)
 
@@ -302,6 +298,11 @@ docker run --rm -p 3000:3000 \
 - **Body Size Limit** — 1 MB maximum
 - **404 Handler** — Unknown paths return `{ error: "Not found" }`
 - **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
+- **Build Provenance** - Cryptographic proof of build process
+- **SBOM Available** - Complete software bill of materials
+- **Supply Chain Attestations** - Verifiable build integrity
+- **Non-root Execution** - Minimal attack surface
+- **No Native Dependencies** - Pure JS stack reduces attack surface
 
 | Mode                      | Progress Notifications | Legacy SSE | Serverless |
 | ------------------------- | ---------------------- | ---------- | ---------- |
@@ -335,13 +336,13 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 
 **Example with curl:**
 
+Initialize session (returns `mcp-session-id` header). Include `mcp-session-id` header in subsequent requests.
+
 ```bash
-# Initialize session (returns mcp-session-id header)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-# Include mcp-session-id header in subsequent requests
 ```
 
 ## ️ Supply Chain Security
@@ -361,14 +362,6 @@ docker pull writenotenow/memory-journal-mcp:sha256-<manifest-digest>
 ```bash
 docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 ```
-
-**Security Features:**
-
-- ✅ **Build Provenance** - Cryptographic proof of build process
-- ✅ **SBOM Available** - Complete software bill of materials
-- ✅ **Supply Chain Attestations** - Verifiable build integrity
-- ✅ **Non-root Execution** - Minimal attack surface
-- ✅ **No Native Dependencies** - Pure JS stack reduces attack surface
 
 ## 🔧 Configuration
 
@@ -408,10 +401,10 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - **sql.js** - SQLite in pure JavaScript
 - **vectra** - Vector similarity search without native dependencies
 - **@xenova/transformers** - ML embeddings in JavaScript
-- **Instant Startup** - Lazy loading of ML models
+- **Faster Startup** - Lazy loading of ML models
 - **Production/Stable** - Deterministic error handling (`{success, error}` on every tool) and automatic migrations
 
-Designed for extremely low overhead: database reads in sub-millisecond, vector search >131x faster than indexing, core MCP tool calls execute at >730 ops/sec with cached O(1) dispatch. Run `npm run bench` for local benchmarks.
+Designed for extremely low overhead: database reads in sub-millisecond, vector search and indexing both exceed 640 ops/sec, tool dispatch cached at O(1) with >4800x overhead reduction. Run `npm run bench` for local benchmarks.
 
 **Automated Deployment:**
 
@@ -423,8 +416,8 @@ Designed for extremely low overhead: database reads in sub-millisecond, vector s
 
 **Available Tags:**
 
-- `5.0.1` - Specific version (recommended for production)
-- `5.0` - Latest patch in 5.0.x series
+- `5.1.0` - Specific version (recommended for production)
+- `5.1` - Latest patch in 5.1.x series
 - `5` - Latest minor in 5.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security

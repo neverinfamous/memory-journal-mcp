@@ -88,6 +88,7 @@ export const EntryOutputSchema = z.object({
     workflowRunId: z.number().nullable().optional(),
     workflowName: z.string().nullable().optional(),
     workflowStatus: z.string().nullable().optional(),
+    source: z.enum(['personal', 'team']).optional(),
 })
 
 /**

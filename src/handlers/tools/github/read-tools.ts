@@ -35,7 +35,10 @@ async function resolveOwnerRepo(
     | { error: true; response: Record<string, unknown> }
 > {
     if (!context.github) {
-        return { error: true, response: { error: 'GitHub integration not available' } }
+        return {
+            error: true,
+            response: { success: false, error: 'GitHub integration not available' },
+        }
     }
 
     const repoInfo = await context.github.getRepoInfo()
@@ -49,6 +52,7 @@ async function resolveOwnerRepo(
         return {
             error: true,
             response: {
+                success: false,
                 error: `STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.`,
                 requiresUserInput: true,
                 detectedOwner,
@@ -222,6 +226,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     )
                     if (!issue) {
                         return {
+                            success: false,
                             error: `Issue #${String(input.issue_number)} not found`,
                             owner: resolved.owner,
                             repo: resolved.repo,
@@ -274,6 +279,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     )
                     if (!pullRequest) {
                         return {
+                            success: false,
                             error: `PR #${String(input.pr_number)} not found`,
                             owner: resolved.owner,
                             repo: resolved.repo,
@@ -305,7 +311,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             handler: async (_params: unknown) => {
                 try {
                     if (!context.github) {
-                        return { error: 'GitHub integration not available' }
+                        return { success: false, error: 'GitHub integration not available' }
                     }
 
                     const ctx = await context.github.getRepoContext()

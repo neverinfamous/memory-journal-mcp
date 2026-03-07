@@ -151,3 +151,20 @@ export function sanitizeErrorForLogging(message: string): string {
     }
     return sanitized
 }
+
+// ============================================================================
+// Author Sanitization
+// ============================================================================
+
+/**
+ * Sanitize an author string: strip control characters and cap length.
+ * Prevents crafted git config or TEAM_AUTHOR values from injecting
+ * control characters into the database or JSON payloads.
+ *
+ * @param raw - The raw author string from git config or environment
+ * @returns Sanitized string with control characters removed and length capped at 100
+ */
+export function sanitizeAuthor(raw: string): string {
+    // eslint-disable-next-line no-control-regex
+    return raw.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100)
+}

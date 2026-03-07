@@ -21,7 +21,10 @@ export async function resolveOwner(
     | { error: true; response: Record<string, unknown> }
 > {
     if (!context.github) {
-        return { error: true, response: { error: 'GitHub integration not available' } }
+        return {
+            error: true,
+            response: { success: false, error: 'GitHub integration not available' },
+        }
     }
 
     const repoInfo = await context.github.getRepoInfo()
@@ -33,6 +36,7 @@ export async function resolveOwner(
         return {
             error: true,
             response: {
+                success: false,
                 error: 'STOP: Could not auto-detect repository owner. DO NOT GUESS. You MUST ask the user to provide the GitHub owner.',
                 requiresUserInput: true,
                 detectedOwner,
@@ -62,7 +66,10 @@ export async function resolveOwnerRepo(
     | { error: true; response: Record<string, unknown> }
 > {
     if (!context.github) {
-        return { error: true, response: { error: 'GitHub integration not available' } }
+        return {
+            error: true,
+            response: { success: false, error: 'GitHub integration not available' },
+        }
     }
 
     const repoInfo = await context.github.getRepoInfo()
@@ -75,6 +82,7 @@ export async function resolveOwnerRepo(
         return {
             error: true,
             response: {
+                success: false,
                 error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
                 requiresUserInput: true,
                 detected: { owner, repo },

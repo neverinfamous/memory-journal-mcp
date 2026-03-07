@@ -53,6 +53,20 @@ const StatisticsOutputSchema = z.object({
             caused: z.number(),
         })
         .optional(),
+    dateRange: z
+        .object({
+            startDate: z.string(),
+            endDate: z.string(),
+        })
+        .optional(),
+    projectBreakdown: z
+        .array(
+            z.object({
+                project_number: z.number(),
+                entry_count: z.number(),
+            })
+        )
+        .optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
 })
@@ -152,8 +166,14 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
                 try {
-                    const { group_by } = GetStatisticsSchema.parse(params)
-                    const stats = db.getStatistics(group_by)
+                    const { group_by, start_date, end_date, project_breakdown } =
+                        GetStatisticsSchema.parse(params)
+                    const stats = db.getStatistics(
+                        group_by,
+                        start_date,
+                        end_date,
+                        project_breakdown
+                    )
                     return { ...stats, groupBy: group_by }
                 } catch (err) {
                     return formatHandlerError(err)

@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../utils/security-utils.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -46,7 +47,7 @@ const CreateEntrySchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const CreateEntrySchemaMcp = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string(),
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     is_personal: z.boolean().optional().default(true),
@@ -75,8 +76,19 @@ const GetRecentEntriesSchema = z.object({
     is_personal: z.boolean().optional(),
 })
 
+/** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
+const GetRecentEntriesSchemaMcp = z.object({
+    limit: z.number().optional().default(5),
+    is_personal: z.boolean().optional(),
+})
+
 const CreateEntryMinimalSchema = z.object({
     content: z.string().min(1).max(50000),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
+const CreateEntryMinimalSchemaMcp = z.object({
+    content: z.string(),
 })
 
 const TestSimpleSchema = z.object({
@@ -121,7 +133,7 @@ const TagsListOutputSchema = z.object({
 /** Resolve the author name for team-shared entries */
 function resolveTeamAuthor(): string {
     const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return envAuthor
+    if (envAuthor) return sanitizeAuthor(envAuthor)
     try {
         const gitUser = execFileSync('git', ['config', 'user.name'], {
             encoding: 'utf-8',
@@ -129,7 +141,7 @@ function resolveTeamAuthor(): string {
         })
             .trim()
             .replace(/"/g, '')
-        if (gitUser) return gitUser
+        if (gitUser) return sanitizeAuthor(gitUser)
     } catch {
         // Git not available
     }
@@ -272,7 +284,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Recent Entries',
             description: 'Get recent journal entries',
             group: 'core',
-            inputSchema: GetRecentEntriesSchema,
+            inputSchema: GetRecentEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
@@ -290,7 +302,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'Create Entry (Minimal)',
             description: 'Minimal entry creation without context or tags',
             group: 'core',
-            inputSchema: CreateEntryMinimalSchema,
+            inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {

@@ -34,7 +34,7 @@ const SearchEntriesSchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const SearchEntriesSchemaMcp = z.object({
     query: z.string().optional(),
-    limit: z.number().max(500).optional().default(10),
+    limit: z.number().optional().default(10),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
     issue_number: z.number().optional(),
@@ -68,12 +68,26 @@ const SearchByDateRangeSchemaMcp = z.object({
     issue_number: z.number().optional(),
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
-    limit: z.number().max(500).optional().default(500),
+    limit: z.number().optional().default(500),
 })
 
+/** Strict schema — used inside handler for structured Zod errors */
 const SemanticSearchSchema = z.object({
     query: z.string(),
     limit: z.number().max(500).optional().default(10),
+    similarity_threshold: z.number().optional().default(0.25),
+    is_personal: z.boolean().optional(),
+    hint_on_empty: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include hint when no results found (default: true)'),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
+const SemanticSearchSchemaMcp = z.object({
+    query: z.string(),
+    limit: z.number().optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     is_personal: z.boolean().optional(),
     hint_on_empty: z
@@ -103,8 +117,10 @@ const SemanticSearchOutputSchema = z.object({
 const VectorStatsOutputSchema = z.object({
     available: z.boolean(),
     error: z.string().optional(),
-    entryCount: z.number().optional(),
-    indexSize: z.number().optional(),
+    itemCount: z.number().optional(),
+    modelName: z.string().optional(),
+    dimensions: z.number().optional(),
+    success: z.boolean().optional(),
 })
 
 // ============================================================================
@@ -188,6 +204,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         projectNumber: input.project_number,
+                        issueNumber: input.issue_number,
+                        prNumber: input.pr_number,
+                        workflowRunId: input.workflow_run_id,
                         limit: input.limit,
                     })
 
@@ -200,6 +219,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entryType: input.entry_type,
                                 tags: input.tags,
                                 projectNumber: input.project_number,
+                                issueNumber: input.issue_number,
+                                prNumber: input.pr_number,
+                                workflowRunId: input.workflow_run_id,
                                 limit: input.limit,
                             }
                         )
@@ -222,7 +244,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             title: 'Semantic Search',
             description: 'Perform semantic/vector search on journal entries using AI embeddings',
             group: 'search',
-            inputSchema: SemanticSearchSchema,
+            inputSchema: SemanticSearchSchemaMcp,
             outputSchema: SemanticSearchOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (params: unknown) => {
@@ -290,10 +312,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: async (_params: unknown) => {
                 try {
                     if (!vectorManager) {
-                        return { available: false, error: 'Vector search not available' }
+                        return {
+                            success: false,
+                            available: false,
+                            error: 'Vector search not available',
+                        }
                     }
                     const stats = await vectorManager.getStats()
-                    return { available: true, ...stats }
+                    return { success: true, available: true, ...stats }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
