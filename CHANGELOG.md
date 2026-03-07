@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `VectorStatsOutputSchema` (search.ts) — Updated to match `VectorSearchManager.getStats()` return shape (`itemCount`, `modelName`, `dimensions` instead of `entryCount`, `indexSize`)
   - `BackupInfoSchema` (backup.ts) — Added `path` field to match `SqliteAdapter.listBackups()` output
 
+### Changed
+
+- **Dependency Updates**
+  - `eslint`: 10.0.2 → 10.0.3 (patch)
+
 ## [5.0.1] - 2026-03-06
 
 ### Security

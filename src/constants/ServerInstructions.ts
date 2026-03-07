@@ -407,4 +407,3 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * @deprecated Use generateInstructions() instead for dynamic content
  */
 export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
-
