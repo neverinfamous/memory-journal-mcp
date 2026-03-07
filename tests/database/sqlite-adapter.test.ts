@@ -618,12 +618,24 @@ describe('SqliteAdapter', () => {
 
     describe('backup edge cases', () => {
         it('should return empty array when backups directory does not exist', () => {
-            // Use a fresh adapter with no backups dir created
-            const tempDb = new SqliteAdapter('./test-no-backups.db')
+            const fs = require('node:fs')
+            const isolatedDir = './test-isolation-dir'
+            if (!fs.existsSync(isolatedDir)) {
+                fs.mkdirSync(isolatedDir, { recursive: true })
+            }
+
+            // Use a fresh adapter in a unique directory so its 'backups' dir doesn't exist
+            const tempDb = new SqliteAdapter(`${isolatedDir}/test-no-backups.db`)
             tempDb.initialize()
+
             const backups = tempDb.listBackups()
             expect(backups).toEqual([])
+
             tempDb.close()
+            // Cleanup
+            if (fs.existsSync(isolatedDir)) {
+                fs.rmSync(isolatedDir, { recursive: true, force: true })
+            }
         })
 
         it('should throw when deleteOldBackups keepCount is less than 1', () => {
