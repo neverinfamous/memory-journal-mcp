@@ -5,7 +5,10 @@
 ## Session Start
 
 1. Read `memory://briefing` for project context
-   - In Cursor, use `FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://briefing")`
+   - **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
+     - **AntiGravity**: Tools are `mcp_{name}_{tool}` (e.g., `mcp_memory-journal-mcp_create_entry`). Server name = `memory-journal-mcp`.
+     - **Cursor**: Tools are `user-{name}-{tool}` (e.g., `user-memory-journal-mcp-create_entry`). Server name = `user-memory-journal-mcp`.
+     - **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly (e.g., `memory-journal-mcp`). Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method above if unsure.
 2. **Show the `userMessage` to the user** (it contains a formatted summary of project context)
 3. Proceed with the user's request
 
@@ -48,32 +51,25 @@ When you notice the user consistently applies patterns, preferences, or workflow
 
 ## How to Access This Server
 
+### Server Name Discovery
+
+The server name used for resource and tool calls depends on your MCP client:
+
+- **AntiGravity**: Prefixes tools with `mcp_` and uses underscores. If the server is named `memory-journal-mcp` in config, tools appear as `mcp_memory-journal-mcp_create_entry`. Use `memory-journal-mcp` as the server name for resource calls.
+- **Cursor**: Prepends `user-` to the configured name. If the server is named `memory-journal-mcp` in config, use `user-memory-journal-mcp` for `ListMcpResources` and `FetchMcpResource` calls.
+- **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly. Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method if unsure.
+
+To identify your server name: look at the tool name prefix. Strip the tool name suffix to get the server name. Examples: `mcp_memory-journal-mcp_create_entry` → `memory-journal-mcp`; `user-memory-journal-mcp-create_entry` → `user-memory-journal-mcp`.
+
 ### Calling Tools
 
-Use `CallMcpTool` with server name `user-memory-journal-mcp`:
+Use the tool functions directly — they are already available in your context by their full prefixed name.
 
-```
-CallMcpTool(server: "user-memory-journal-mcp", toolName: "create_entry", arguments: {...})
-```
+### Reading Resources
 
-### Listing Resources
+Use the resource-reading mechanism provided by your MCP client with the discovered server name and `memory://` URIs.
 
-Use `ListMcpResources` with server name:
-
-```
-ListMcpResources(server: "user-memory-journal-mcp")
-```
-
-Do NOT try to browse filesystem paths for MCP tool/resource definitions - use the MCP protocol directly.
-
-### Fetching Resources
-
-Use `FetchMcpResource` with server name and `memory://` URI:
-
-```
-FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://recent")
-FetchMcpResource(server: "user-memory-journal-mcp", uri: "memory://kanban/1")
-```
+Do NOT try to browse filesystem paths for MCP tool/resource definitions — use the MCP protocol directly.
 
 ## Quick Health Check
 
