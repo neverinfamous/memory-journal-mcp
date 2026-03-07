@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Output schema mismatches causing MCP -32602 errors** — Three `outputSchema` definitions didn't match actual handler output, causing `structuredContent does not match the tool's output schema` errors:
+  - `EntryOutputSchema` (schemas.ts) — Added `source` field (`'personal' | 'team'`) for cross-database search results that include a source marker
+  - `VectorStatsOutputSchema` (search.ts) — Updated to match `VectorSearchManager.getStats()` return shape (`itemCount`, `modelName`, `dimensions` instead of `entryCount`, `indexSize`)
+  - `BackupInfoSchema` (backup.ts) — Added `path` field to match `SqliteAdapter.listBackups()` output
+
 ## [5.0.1] - 2026-03-06
 
 ### Security

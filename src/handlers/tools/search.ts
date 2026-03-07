@@ -103,8 +103,10 @@ const SemanticSearchOutputSchema = z.object({
 const VectorStatsOutputSchema = z.object({
     available: z.boolean(),
     error: z.string().optional(),
-    entryCount: z.number().optional(),
-    indexSize: z.number().optional(),
+    itemCount: z.number().optional(),
+    modelName: z.string().optional(),
+    dimensions: z.number().optional(),
+    success: z.boolean().optional(),
 })
 
 // ============================================================================

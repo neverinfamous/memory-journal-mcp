@@ -24,6 +24,7 @@ const BackupResultOutputSchema = z.object({
 
 const BackupInfoSchema = z.object({
     filename: z.string(),
+    path: z.string(),
     sizeBytes: z.number(),
     createdAt: z.string(),
 })
