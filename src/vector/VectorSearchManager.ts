@@ -5,8 +5,10 @@
  * and vectra for vector indexing.
  */
 
-import { pipeline } from '@xenova/transformers'
-import { LocalIndex } from 'vectra'
+// @xenova/transformers is loaded lazily via dynamic import() in initialize()
+// to avoid 1.5s cold-start penalty from eagerly loading the module.
+// vectra is also loaded lazily via dynamic import() to avoid 0.9s cold-start penalty.
+import type { LocalIndex } from 'vectra'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { logger } from '../utils/logger.js'
@@ -73,13 +75,16 @@ export class VectorSearchManager {
             logger.info('Initializing vector search...', { module: 'VectorSearch' })
 
             // Load embedding model (downloads on first use, ~23MB)
+            // Dynamic import avoids 1.5s cold-start penalty from eagerly loading the module
             logger.info(`Loading embedding model: ${this.modelName}`, { module: 'VectorSearch' })
+            const { pipeline } = await import('@xenova/transformers')
             this.embedder = await pipeline('feature-extraction', this.modelName, {
                 quantized: true, // Use quantized model for faster inference
             })
             logger.info('Embedding model loaded', { module: 'VectorSearch' })
 
-            // Create or load vectra index
+            // Create or load vectra index (dynamic import avoids 0.9s cold-start)
+            const { LocalIndex } = await import('vectra')
             if (!fs.existsSync(this.indexPath)) {
                 fs.mkdirSync(this.indexPath, { recursive: true })
             }
@@ -270,7 +275,8 @@ export class VectorSearchManager {
                 fs.rmSync(this.indexPath, { recursive: true, force: true })
                 fs.mkdirSync(this.indexPath, { recursive: true })
             }
-            this.index = new LocalIndex(this.indexPath)
+            const { LocalIndex: LI } = await import('vectra')
+            this.index = new LI(this.indexPath)
             await this.index.createIndex()
             logger.info('Recreated vector index after corruption', { module: 'VectorSearch' })
         }

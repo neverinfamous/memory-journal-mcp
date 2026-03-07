@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Composite Covering Index for `getRecentEntries`** — Added `idx_memory_journal_recent` on `(deleted_at, timestamp DESC, id DESC)` to enable index-only scan for the `WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC` query pattern.
 - **`addEntry` Native Upsert** — Replaced `deleteItem()` + `insertItem()` pattern with vectra's native `upsertItem()`, eliminating a full exception path on every new entry insertion.
 - **`getTools` Cached Output** — Extracted shared `ensureToolCache()` for both `getTools` and `callTool`. Unfiltered `getTools` calls now return a cached mapped array instead of rebuilding 42 tool objects and mapping them on every invocation (~4800x faster than tool execution).
+- **Lazy Module Loading for Startup** — Deferred `@xenova/transformers` (1.5s) and `vectra` (0.9s) from top-level imports in `VectorSearchManager.ts` to dynamic `import()` inside `initialize()`. These heavyweight modules are now loaded only when vector search is first used, reducing server cold-start by ~1.8s (VectorSearchManager import: 1515ms → 12ms).
 
 ### Documentation
 
