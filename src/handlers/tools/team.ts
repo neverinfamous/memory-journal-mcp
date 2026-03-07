@@ -11,21 +11,12 @@ import { z } from 'zod'
 import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { sanitizeAuthor } from '../../utils/security-utils.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema } from './schemas.js'
 
 // ============================================================================
 // Author Detection
 // ============================================================================
-
-/**
- * Sanitize an author string: strip control characters and cap length.
- * Prevents crafted git config or TEAM_AUTHOR values from injecting
- * control characters into the database or JSON payloads.
- */
-function sanitizeAuthor(raw: string): string {
-    // eslint-disable-next-line no-control-regex
-    return raw.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100)
-}
 
 /**
  * Resolve the author name for team entries.

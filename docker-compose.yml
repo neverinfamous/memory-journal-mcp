@@ -17,6 +17,8 @@ services:
       - /tmp:noexec,nosuid,nodev
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - mcp-net
     stdin_open: true
@@ -47,6 +49,8 @@ services:
       - /tmp:noexec,nosuid,nodev
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - mcp-net
     ports:

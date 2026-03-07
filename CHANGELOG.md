@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Docker Compose Network Isolation (L-1)** — Added custom `mcp-net` bridge network to both services. Prevents MCP containers from accessing or being accessed by unrelated containers on the default Docker bridge.
 - **Docker Compose `no-new-privileges` (L-2)** — Added `security_opt: ["no-new-privileges:true"]` to both services. Prevents privilege escalation via `setuid`/`setgid` binaries inside containers.
 - **Author Input Sanitization (L-5)** — `resolveAuthor()` and `resolveTeamAuthor()` in `team.ts` and `core.ts` now strip ASCII control characters (`0x00`–`0x1F`, `0x7F`) and cap author strings at 100 characters. Prevents crafted `TEAM_AUTHOR` env or git config values from injecting control characters into the database `author` column or `autoContext` JSON payloads.
+- **Consolidated `sanitizeAuthor` (Audit)** — Moved duplicated `sanitizeAuthor()` from `core.ts` and `team.ts` into `security-utils.ts` as a single-source-of-truth export. Eliminates risk of divergent sanitization logic.
+- **Docker Compose `cap_drop: ALL` (Audit)** — Added `cap_drop: ALL` to both Docker Compose services, dropping all Linux capabilities (NET_RAW, SYS_CHROOT, etc.) that are unnecessary for a Node.js MCP server.
+- **CI Unit Test Gate (Audit)** — Added `npm run test` step to `lint-and-test.yml` workflow so unit tests run on every push/PR, not just lint/typecheck/build.
 
 ### Fixed
 
