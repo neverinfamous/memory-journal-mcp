@@ -33,7 +33,7 @@
 - ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running containers
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
-- 🔄 **Session continuity** — on-demand session summaries via the `session-summary` prompt flow into the next session's briefing
+- 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
