@@ -307,15 +307,18 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 
 **Example with curl:**
 
+Initialize session (returns `mcp-session-id` header):
+
 ```bash
-# Initialize session
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-# Returns mcp-session-id header
+```
 
-# List tools (with session)
+List tools (with session):
+
+```bash
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \

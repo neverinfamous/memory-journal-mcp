@@ -335,13 +335,13 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 
 **Example with curl:**
 
+Initialize session (returns `mcp-session-id` header). Include `mcp-session-id` header in subsequent requests.
+
 ```bash
-# Initialize session (returns mcp-session-id header)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-# Include mcp-session-id header in subsequent requests
 ```
 
 ## ️ Supply Chain Security
