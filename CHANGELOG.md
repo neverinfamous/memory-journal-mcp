@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `EntryOutputSchema` (schemas.ts) — Added `source` field (`'personal' | 'team'`) for cross-database search results that include a source marker
   - `VectorStatsOutputSchema` (search.ts) — Updated to match `VectorSearchManager.getStats()` return shape (`itemCount`, `modelName`, `dimensions` instead of `entryCount`, `indexSize`)
   - `BackupInfoSchema` (backup.ts) — Added `path` field to match `SqliteAdapter.listBackups()` output
+- **`get_statistics` Date Filtering** — `start_date` and `end_date` parameters now filter all statistics queries (total count, type breakdown, period breakdown, decision density). Previously parsed by Zod but ignored by the handler. Returns `dateRange` echo in the response when dates are provided.
+- **`get_statistics` Project Breakdown** — `project_breakdown: true` now returns a `projectBreakdown` array with per-project entry counts. Previously parsed but ignored.
 
 ### Changed
 

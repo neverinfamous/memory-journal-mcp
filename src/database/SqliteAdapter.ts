@@ -990,9 +990,15 @@ export class SqliteAdapter {
     // =========================================================================
 
     /**
-     * Get entry statistics with enhanced analytics metrics
+     * Get entry statistics with enhanced analytics metrics.
+     * Supports optional date filtering and per-project breakdown.
      */
-    getStatistics(groupBy: 'day' | 'week' | 'month' = 'week'): {
+    getStatistics(
+        groupBy: 'day' | 'week' | 'month' = 'week',
+        startDate?: string,
+        endDate?: string,
+        projectBreakdown?: boolean
+    ): {
         totalEntries: number
         entriesByType: Record<string, number>
         entriesByPeriod: { period: string; count: number }[]
@@ -1012,36 +1018,73 @@ export class SqliteAdapter {
             resolved: number
             caused: number
         }
+        // Optional date range echo (v5.1.0)
+        dateRange?: { startDate: string; endDate: string }
+        // Optional project breakdown (v5.1.0)
+        projectBreakdown?: { project_number: number; entry_count: number }[]
     } {
         const db = this.ensureDb()
 
-        // Combined query 1: total entries + breakdown by type
-        const combinedResult = db.exec(`
-            SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL;
-            SELECT entry_type, COUNT(*) as count
-            FROM memory_journal
-            WHERE deleted_at IS NULL
-            GROUP BY entry_type
-        `)
-        const totalEntries = (combinedResult[0]?.values[0]?.[0] as number) ?? 0
-        const entriesByType: Record<string, number> = {}
-        for (const row of combinedResult[1]?.values ?? []) {
-            entriesByType[row[0] as string] = row[1] as number
+        // Build optional date filter clause + params
+        let dateFilter = ''
+        const dateParams: unknown[] = []
+        if (startDate) {
+            dateFilter += ' AND DATE(timestamp) >= DATE(?)'
+            dateParams.push(startDate)
+        }
+        if (endDate) {
+            dateFilter += ' AND DATE(timestamp) <= DATE(?)'
+            dateParams.push(endDate)
         }
 
-        // Combined query 2: period breakdown + decision density (using CASE)
+        // Combined query 1: total entries + breakdown by type
+        // sql.js multi-statement exec() does not support parameterized queries,
+        // so we run them separately when date filters are present.
+        let totalEntries: number
+        const entriesByType: Record<string, number> = {}
+
+        if (dateParams.length > 0) {
+            const countResult = db.exec(
+                `SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter}`,
+                [...dateParams]
+            )
+            totalEntries = (countResult[0]?.values[0]?.[0] as number) ?? 0
+
+            const typeResult = db.exec(
+                `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter} GROUP BY entry_type`,
+                [...dateParams]
+            )
+            for (const row of typeResult[0]?.values ?? []) {
+                entriesByType[row[0] as string] = row[1] as number
+            }
+        } else {
+            const combinedResult = db.exec(`
+                SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL;
+                SELECT entry_type, COUNT(*) as count
+                FROM memory_journal
+                WHERE deleted_at IS NULL
+                GROUP BY entry_type
+            `)
+            totalEntries = (combinedResult[0]?.values[0]?.[0] as number) ?? 0
+            for (const row of combinedResult[1]?.values ?? []) {
+                entriesByType[row[0] as string] = row[1] as number
+            }
+        }
+
+        // Query 2: period breakdown + decision density (using CASE)
         const dateFormat = validateDateFormatPattern(groupBy)
-        const periodResult = db.exec(`
-            SELECT
+        const periodResult = db.exec(
+            `SELECT
                 strftime('${dateFormat}', timestamp) as period,
                 COUNT(*) as total_count,
                 SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END) as significant_count
             FROM memory_journal
-            WHERE deleted_at IS NULL
+            WHERE deleted_at IS NULL${dateFilter}
             GROUP BY period
             ORDER BY period DESC
-            LIMIT 52
-        `)
+            LIMIT 52`,
+            [...dateParams]
+        )
 
         const entriesByPeriod = (periodResult[0]?.values ?? []).map((v: unknown[]) => ({
             period: v[0] as string,
@@ -1055,7 +1098,7 @@ export class SqliteAdapter {
                 significantCount: v[2] as number,
             }))
 
-        // Combined query 3: relationship counts + causal breakdown
+        // Query 3: relationship counts + causal breakdown (not date-filtered)
         const relResult = db.exec(`
             SELECT COUNT(*) FROM relationships;
             SELECT relationship_type, COUNT(*) as count
@@ -1066,7 +1109,7 @@ export class SqliteAdapter {
         const totalRelationships = (relResult[0]?.values[0]?.[0] as number) ?? 0
         const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
 
-        // Activity Trend: week-over-week growth
+        // Activity Trend: period-over-period growth
         const currentPeriod = entriesByPeriod[0]?.period ?? ''
         const previousPeriod = entriesByPeriod[1]?.period ?? ''
         const currentCount = entriesByPeriod[0]?.count ?? 0
@@ -1083,7 +1126,8 @@ export class SqliteAdapter {
             causalMetrics[relType] = row[1] as number
         }
 
-        return {
+        // Build result
+        const result: ReturnType<SqliteAdapter['getStatistics']> = {
             totalEntries,
             entriesByType,
             entriesByPeriod,
@@ -1099,6 +1143,32 @@ export class SqliteAdapter {
             },
             causalMetrics,
         }
+
+        // Optional: echo back applied date range
+        if (startDate || endDate) {
+            result.dateRange = {
+                startDate: startDate ?? '',
+                endDate: endDate ?? '',
+            }
+        }
+
+        // Optional: per-project entry breakdown
+        if (projectBreakdown) {
+            const projResult = db.exec(
+                `SELECT project_number, COUNT(*) as entry_count
+                FROM memory_journal
+                WHERE deleted_at IS NULL AND project_number IS NOT NULL${dateFilter}
+                GROUP BY project_number
+                ORDER BY entry_count DESC`,
+                [...dateParams]
+            )
+            result.projectBreakdown = (projResult[0]?.values ?? []).map((v: unknown[]) => ({
+                project_number: v[0] as number,
+                entry_count: v[1] as number,
+            }))
+        }
+
+        return result
     }
 
     // =========================================================================

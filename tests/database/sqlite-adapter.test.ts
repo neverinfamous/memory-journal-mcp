@@ -421,6 +421,45 @@ describe('SqliteAdapter', () => {
             expect(typeof stats.causalMetrics.resolved).toBe('number')
             expect(typeof stats.causalMetrics.caused).toBe('number')
         })
+
+        it('should filter by date range', () => {
+            const allStats = db.getStatistics('day')
+            const today = new Date().toISOString().split('T')[0]!
+            const filteredStats = db.getStatistics('day', today, today)
+
+            expect(filteredStats.totalEntries).toBeLessThanOrEqual(allStats.totalEntries)
+            expect(filteredStats.dateRange).toBeDefined()
+            expect(filteredStats.dateRange!.startDate).toBe(today)
+            expect(filteredStats.dateRange!.endDate).toBe(today)
+        })
+
+        it('should return 0 entries for future date range', () => {
+            const stats = db.getStatistics('day', '2099-01-01', '2099-12-31')
+
+            expect(stats.totalEntries).toBe(0)
+            expect(stats.entriesByPeriod).toEqual([])
+        })
+
+        it('should not include dateRange when no dates provided', () => {
+            const stats = db.getStatistics('day')
+            expect(stats.dateRange).toBeUndefined()
+        })
+
+        it('should return project breakdown when requested', () => {
+            db.createEntry({ content: 'Stats project test', projectNumber: 555 })
+            const stats = db.getStatistics('day', undefined, undefined, true)
+
+            expect(stats.projectBreakdown).toBeDefined()
+            expect(Array.isArray(stats.projectBreakdown)).toBe(true)
+            const proj = stats.projectBreakdown!.find((p) => p.project_number === 555)
+            expect(proj).toBeDefined()
+            expect(proj!.entry_count).toBeGreaterThanOrEqual(1)
+        })
+
+        it('should not include projectBreakdown when not requested', () => {
+            const stats = db.getStatistics('day')
+            expect(stats.projectBreakdown).toBeUndefined()
+        })
     })
 
     // ========================================================================
