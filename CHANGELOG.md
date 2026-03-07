@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `BackupInfoSchema` (backup.ts) — Added `path` field to match `SqliteAdapter.listBackups()` output
 - **`get_statistics` Date Filtering** — `start_date` and `end_date` parameters now filter all statistics queries (total count, type breakdown, period breakdown, decision density). Previously parsed by Zod but ignored by the handler. Returns `dateRange` echo in the response when dates are provided.
 - **`get_statistics` Project Breakdown** — `project_breakdown: true` now returns a `projectBreakdown` array with per-project entry counts. Previously parsed but ignored.
+- **`export_entries` Filter Bypass** — Handler was calling `db.getRecentEntries(limit)` and ignoring all parsed filter parameters (`start_date`, `end_date`, `entry_types`, `tags`). Now correctly uses `db.searchByDateRange()` for date/tag filters and post-filters by `entry_types`.
+- **GitHub Error Consistency** — All GitHub tool error responses (`get_github_issue`, `get_github_pr`, `get_github_context`, `get_repo_insights`, `resolveOwnerRepo`, `resolveOwner`) now include `success: false` field, matching the `{success: false, error}` pattern used by all other tools.
+- **`get_vector_index_stats` Missing `success` Field** — Handler now returns `success: true/false` in all response paths for schema consistency.
+
+### Improved
+
+- **Zod Boundary Leak Prevention** — Created separate relaxed MCP schemas (without `min`/`max` constraints) for 7 tools so boundary violations reach the handler for structured `{success: false, error}` responses instead of leaking as raw MCP `-32602` error frames. Affected tools: `get_recent_entries`, `create_entry`, `create_entry_minimal`, `search_entries`, `search_by_date_range`, `semantic_search`, `export_entries`, `cleanup_backups`, `visualize_relationships`.
 
 ### Changed
 

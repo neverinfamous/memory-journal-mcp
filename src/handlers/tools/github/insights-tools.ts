@@ -54,7 +54,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                         .parse(params)
 
                     if (!context.github) {
-                        return { error: 'GitHub integration not available' }
+                        return { success: false, error: 'GitHub integration not available' }
                     }
 
                     const repoInfo = await context.github.getRepoInfo()
@@ -63,6 +63,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
 
                     if (!owner || !repo) {
                         return {
+                            success: false,
                             error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
                             requiresUserInput: true,
                             instruction:

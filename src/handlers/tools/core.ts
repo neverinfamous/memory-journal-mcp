@@ -46,7 +46,7 @@ const CreateEntrySchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const CreateEntrySchemaMcp = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string(),
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     is_personal: z.boolean().optional().default(true),
@@ -75,8 +75,19 @@ const GetRecentEntriesSchema = z.object({
     is_personal: z.boolean().optional(),
 })
 
+/** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
+const GetRecentEntriesSchemaMcp = z.object({
+    limit: z.number().optional().default(5),
+    is_personal: z.boolean().optional(),
+})
+
 const CreateEntryMinimalSchema = z.object({
     content: z.string().min(1).max(50000),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
+const CreateEntryMinimalSchemaMcp = z.object({
+    content: z.string(),
 })
 
 const TestSimpleSchema = z.object({
@@ -282,7 +293,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Recent Entries',
             description: 'Get recent journal entries',
             group: 'core',
-            inputSchema: GetRecentEntriesSchema,
+            inputSchema: GetRecentEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
@@ -300,7 +311,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'Create Entry (Minimal)',
             description: 'Minimal entry creation without context or tags',
             group: 'core',
-            inputSchema: CreateEntryMinimalSchema,
+            inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: (params: unknown) => {

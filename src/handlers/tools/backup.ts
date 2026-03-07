@@ -210,7 +210,6 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({
                 keep_count: z
                     .number()
-                    .min(1)
                     .default(5)
                     .describe('Number of most recent backups to keep (default: 5)'),
             }),
