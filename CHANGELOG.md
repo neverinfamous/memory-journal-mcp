@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.0] - 2026-03-07
+
 ### Added
 
-- **`session-summary` Prompt** — New workflow prompt that creates a session summary journal entry. Fetches recent entries for context and guides the agent to create a `retrospective` entry tagged `session-summary` capturing accomplishments, pending items, and next-session context. Invoked by the user when ready (e.g., `/session-summary` in Cursor). Replaces the unreliable automatic session-end behavior. Prompt count: 15 → 16.
+- **`session-summary` Prompt** — New workflow prompt that creates a session summary journal entry. Fetches recent entries for context and guides the agent to create a `retrospective` entry tagged `session-summary` capturing accomplishments, pending items, and next-session context. Invoked by the user when ready (e.g., `/session-summary`). Replaces the unreliable automatic session-end behavior. Prompt count: 15 → 16.
 
 ### Performance
 
@@ -1342,7 +1344,16 @@ npm install -g memory-journal-mcp
 - SQLite FTS5 full-text search
 - Optional FAISS semantic search
 
-[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...HEAD
+[5.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.1...v5.1.0
+[5.0.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.0...v5.0.1
+[5.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.5.0...v5.0.0
+[4.5.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.2...v4.5.0
+[4.4.2]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.0...v4.4.2
+[4.4.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.1...v4.4.0
+[4.3.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.0...v4.3.1
+[4.3.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.2.0...v4.3.0
+[4.2.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.5...v4.0.0
 [3.1.5]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.4...v3.1.5

@@ -356,11 +356,7 @@ describe('Tool Handler Coverage', () => {
             // Create entry with a known project number
             db.createEntry({ content: 'Project breakdown test', projectNumber: 777 })
 
-            const result = (await callTool(
-                'get_statistics',
-                { project_breakdown: true },
-                db
-            )) as {
+            const result = (await callTool('get_statistics', { project_breakdown: true }, db)) as {
                 totalEntries: number
                 projectBreakdown: { project_number: number; entry_count: number }[]
             }

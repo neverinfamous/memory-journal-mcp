@@ -10,7 +10,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-94%11-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-93%78-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-785_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
@@ -240,6 +240,12 @@ When GitHub tools cannot auto-detect repository information:
 
 **Note**: In Docker, mount your repo read-only (`-v /path/to/repo:/app/repo:ro`) for auto-detection.
 
+### Client-Specific Notes
+
+**Cursor IDE:**
+
+- **Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `ListMcpResources()` without specifying a server parameter, or with `server: "user-memory-journal-mcp"` (Cursor prefixes server names with `user-`).
+
 ### 🔄 Session Management
 
 Memory Journal bridges AI sessions with a three-step cycle:
@@ -410,8 +416,8 @@ Designed for extremely low overhead: database reads in sub-millisecond, vector s
 
 **Available Tags:**
 
-- `5.0.1` - Specific version (recommended for production)
-- `5.0` - Latest patch in 5.0.x series
+- `5.1.0` - Specific version (recommended for production)
+- `5.1` - Latest patch in 5.1.x series
 - `5` - Latest minor in 5.x series
 - `latest` - Always the newest version
 - `sha256-<digest>` - SHA-pinned for maximum security
