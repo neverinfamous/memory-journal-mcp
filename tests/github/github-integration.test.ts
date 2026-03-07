@@ -67,8 +67,7 @@ function injectMocks(
     octokit: ReturnType<typeof createOctokitMock>,
     graphqlFn?: ReturnType<typeof vi.fn>
 ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only field injection
-    const inst = gh as any
+    const inst = gh as unknown as { octokit: typeof octokit; graphqlWithAuth?: typeof graphqlFn }
     inst.octokit = octokit
     if (graphqlFn) inst.graphqlWithAuth = graphqlFn
 }
@@ -245,8 +244,7 @@ describe('GitHubIntegration', () => {
 
         it('should return empty when no octokit', async () => {
             injectMocks(gh, null as unknown as ReturnType<typeof createOctokitMock>)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const issues = await gh.getIssues('o', 'r')
             expect(issues).toEqual([])
         })
@@ -338,8 +336,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return null when no octokit', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const result = await gh.createIssue('o', 'r', 'No API')
             expect(result).toBeNull()
         })
@@ -410,8 +407,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return empty when no octokit', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const prs = await gh.getPullRequests('o', 'r')
             expect(prs).toEqual([])
         })
@@ -485,8 +481,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return empty when no octokit', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const runs = await gh.getWorkflowRuns('o', 'r')
             expect(runs).toEqual([])
         })
@@ -551,8 +546,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return empty when no octokit', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const ms = await gh.getMilestones('o', 'r')
             expect(ms).toEqual([])
         })
@@ -613,8 +607,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return null when no octokit', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const ms = await gh.createMilestone('o', 'r', 'v2.0')
             expect(ms).toBeNull()
         })
@@ -644,8 +637,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return null when no octokit', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const ms = await gh.updateMilestone('o', 'r', 1, { title: 'x' })
             expect(ms).toBeNull()
         })
@@ -666,8 +658,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return error when no octokit', async () => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(gh as any).octokit = null
+            ;(gh as unknown as { octokit: null }).octokit = null
             const result = await gh.deleteMilestone('o', 'r', 1)
             expect(result.success).toBe(false)
         })

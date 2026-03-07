@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-deprecated -- Intentional: SSEServerTransport provides backward compatibility for MCP 2024-11-05 clients */
 /**
  * Memory Journal MCP Server - HTTP Transport
  *
@@ -14,6 +13,7 @@
  */
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -54,6 +54,7 @@ export class HttpTransport {
     private readonly app: Express
     private readonly config: HttpTransportConfig
     private readonly transports = new Map<string, StreamableHTTPServerTransport>()
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
     private readonly sseTransports = new Map<string, SSEServerTransport>()
     private readonly sessionLastActivity = new Map<string, number>()
     private httpServer: ReturnType<Express['listen']> | null = null
@@ -545,6 +546,7 @@ export class HttpTransport {
         this.app.get('/sse', (req: Request, res: Response): void => {
             logger.info('Legacy SSE connection requested', { module: 'HTTP' })
 
+            // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
             const sseTransport = new SSEServerTransport(
                 '/messages',
                 res as unknown as ServerResponse

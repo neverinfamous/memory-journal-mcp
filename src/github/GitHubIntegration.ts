@@ -139,11 +139,10 @@ export class GitHubIntegration {
     /**
      * Get a cached value if it exists and hasn't expired.
      */
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is needed at call sites for type-safe casts
-    private getCached<T>(key: string): T | undefined {
+    private getCached(key: string): unknown {
         const entry = this.apiCache.get(key)
         if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
-            return entry.data as T
+            return entry.data
         }
         if (entry) {
             this.apiCache.delete(key)
@@ -154,8 +153,7 @@ export class GitHubIntegration {
     /**
      * Store a value in the cache.
      */
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T preserves type inference at call sites
-    private setCache<T>(key: string, data: T): void {
+    private setCache(key: string, data: unknown): void {
         this.apiCache.set(key, { data, timestamp: Date.now() })
     }
 
@@ -266,7 +264,7 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `issues:${owner}:${repo}:${state}:${String(limit)}`
-        const cached = this.getCached<GitHubIssue[]>(cacheKey)
+        const cached = this.getCached(cacheKey) as GitHubIssue[] | undefined
         if (cached) return cached
 
         try {
@@ -315,7 +313,7 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `issue:${owner}:${repo}:${String(issueNumber)}`
-        const cached = this.getCached<IssueDetails | null>(cacheKey)
+        const cached = this.getCached(cacheKey) as IssueDetails | null | undefined
         if (cached !== undefined) return cached
 
         try {
@@ -485,7 +483,7 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `prs:${owner}:${repo}:${state}:${String(limit)}`
-        const cached = this.getCached<GitHubPullRequest[]>(cacheKey)
+        const cached = this.getCached(cacheKey) as GitHubPullRequest[] | undefined
         if (cached) return cached
 
         try {
@@ -533,7 +531,7 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `pr:${owner}:${repo}:${String(prNumber)}`
-        const cached = this.getCached<PullRequestDetails | null>(cacheKey)
+        const cached = this.getCached(cacheKey) as PullRequestDetails | null | undefined
         if (cached !== undefined) return cached
 
         try {
@@ -586,7 +584,7 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `workflows:${owner}:${repo}:${String(limit)}`
-        const cached = this.getCached<GitHubWorkflowRun[]>(cacheKey)
+        const cached = this.getCached(cacheKey) as GitHubWorkflowRun[] | undefined
         if (cached) return cached
 
         try {
@@ -628,7 +626,7 @@ export class GitHubIntegration {
      * Get full repository context (issues, PRs, branch info)
      */
     async getRepoContext(): Promise<ProjectContext> {
-        const cached = this.getCached<ProjectContext>('context:repo')
+        const cached = this.getCached('context:repo') as ProjectContext | undefined
         if (cached) return cached
 
         const repoInfo = await this.getRepoInfo()
@@ -1120,7 +1118,7 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `milestones:${owner}:${repo}:${state}:${String(limit)}`
-        const cached = this.getCached<GitHubMilestone[]>(cacheKey)
+        const cached = this.getCached(cacheKey) as GitHubMilestone[] | undefined
         if (cached) return cached
 
         try {
@@ -1171,7 +1169,7 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `milestone:${owner}:${repo}:${String(milestoneNumber)}`
-        const cached = this.getCached<GitHubMilestone | null>(cacheKey)
+        const cached = this.getCached(cacheKey) as GitHubMilestone | null | undefined
         if (cached !== undefined) return cached
 
         try {
@@ -1384,11 +1382,10 @@ export class GitHubIntegration {
      * Get a cached value with a custom TTL.
      * Used for traffic endpoints which change slowly (10-min TTL).
      */
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is needed at call sites for type-safe casts
-    private getCachedWithTtl<T>(key: string, ttlMs: number): T | undefined {
+    private getCachedWithTtl(key: string, ttlMs: number): unknown {
         const entry = this.apiCache.get(key)
         if (entry && Date.now() - entry.timestamp < ttlMs) {
-            return entry.data as T
+            return entry.data
         }
         if (entry) {
             this.apiCache.delete(key)
@@ -1406,7 +1403,9 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `repostats:${owner}:${repo}`
-        const cached = this.getCachedWithTtl<RepoStats>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        const cached = this.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
+            | RepoStats
+            | undefined
         if (cached) return cached
 
         try {
@@ -1445,7 +1444,9 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `traffic:${owner}:${repo}`
-        const cached = this.getCachedWithTtl<TrafficData>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        const cached = this.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
+            | TrafficData
+            | undefined
         if (cached) return cached
 
         try {
@@ -1493,7 +1494,9 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `referrers:${owner}:${repo}`
-        const cached = this.getCachedWithTtl<TrafficReferrer[]>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        const cached = this.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
+            | TrafficReferrer[]
+            | undefined
         if (cached) return cached.slice(0, limit)
 
         try {
@@ -1527,7 +1530,9 @@ export class GitHubIntegration {
         }
 
         const cacheKey = `paths:${owner}:${repo}`
-        const cached = this.getCachedWithTtl<PopularPath[]>(cacheKey, TRAFFIC_CACHE_TTL_MS)
+        const cached = this.getCachedWithTtl(cacheKey, TRAFFIC_CACHE_TTL_MS) as
+            | PopularPath[]
+            | undefined
         if (cached) return cached.slice(0, limit)
 
         try {

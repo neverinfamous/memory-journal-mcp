@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { McpLogger, mcpLogger } from '../../src/utils/McpLogger.js'
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 describe('McpLogger', () => {
     let mcpLog: McpLogger
@@ -118,8 +119,7 @@ describe('McpLogger', () => {
             const mockServer = {
                 sendLoggingMessage: vi.fn(),
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            mcpLog.setServer(mockServer as any)
+            mcpLog.setServer(mockServer as unknown as McpServer)
 
             mcpLog.log('info', 'test', { message: 'via MCP' })
 
@@ -138,8 +138,7 @@ describe('McpLogger', () => {
                     throw new Error('Transport error')
                 }),
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            mcpLog.setServer(mockServer as any)
+            mcpLog.setServer(mockServer as unknown as McpServer)
 
             // Should not throw
             mcpLog.log('error', 'test', { message: 'fallback test' })
