@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`session-summary` Prompt** — New workflow prompt that creates a session summary journal entry. Fetches recent entries for context and guides the agent to create a `retrospective` entry tagged `session-summary` capturing accomplishments, pending items, and next-session context. Invoked by the user when ready (e.g., `/session-summary` in Cursor). Replaces the unreliable automatic session-end behavior. Prompt count: 15 → 16.
 
+### Documentation
+
+- **Test Counts Updated** — Updated the `README.md` and `DOCKER_README.md` test count badges and the testing breakdown table to reflect the combined total of Vitest unit/integration tests and Playwright E2E tests (785 total tests).
+
 ### Removed
 
 - **Automatic Session End Behavior** — Removed `## Session End` section from server instructions (`ServerInstructions.ts`, `server-instructions.md`). Agents cannot reliably detect when a thread/session ends. Replaced by the user-invoked `session-summary` prompt.

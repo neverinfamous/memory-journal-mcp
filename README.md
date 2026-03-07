@@ -13,7 +13,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 ![Coverage](https://img.shields.io/badge/Coverage-94%11-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-730_passed-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-785_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -414,7 +414,7 @@ When GitHub tools cannot auto-detect repository information:
 
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions with two mechanisms:
+Memory Journal bridges AI sessions with a three-step cycle:
 
 1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
 2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
@@ -465,7 +465,7 @@ flowchart TB
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 42 Tools"]
         Resources["📡 22 Resources"]
-        Prompts["💬 15 Prompts"]
+        Prompts["💬 16 Prompts"]
     end
 
     subgraph Storage["Persistence Layer"]
@@ -492,7 +492,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (42)      │  │ Resources (22)  │  │ Prompts (15)│  │
+│  │ Tools (42)      │  │ Resources (22)  │  │ Prompts (16)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
@@ -537,11 +537,11 @@ npm run bench
 
 ### Testing
 
-**777 tests** across two test frameworks:
+**785 tests** across two test frameworks:
 
 | Suite                     | Tests | Command            | Covers                                                                |
 | ------------------------- | ----- | ------------------ | --------------------------------------------------------------------- |
-| Vitest (unit/integration) | 730   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
+| Vitest (unit/integration) | 738   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
 | Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler |
 
 ```bash

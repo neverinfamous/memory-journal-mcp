@@ -11,7 +11,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 ![Coverage](https://img.shields.io/badge/Coverage-94%11-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-730_passed-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-785_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -248,7 +248,7 @@ When GitHub tools cannot auto-detect repository information:
 
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions with two mechanisms:
+Memory Journal bridges AI sessions with a three-step cycle:
 
 1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
 2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
