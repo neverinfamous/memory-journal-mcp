@@ -107,8 +107,8 @@ export function getTools(
     config?: ToolHandlerConfig,
     teamDb?: SqliteAdapter
 ): object[] {
-    const context: ToolContext = { db, teamDb, vectorManager, github, config }
-    const allTools = getAllToolDefinitions(context)
+    // Ensure tool map is built / up-to-date (shared cache with callTool)
+    ensureToolCache(db, vectorManager, github, config, teamDb)
 
     const mapTool = (t: ToolDefinition): object => ({
         name: t.name,
@@ -120,19 +120,28 @@ export function getTools(
     })
 
     if (filterConfig) {
-        return allTools.filter((t) => filterConfig.enabledTools.has(t.name)).map(mapTool)
+        // Filtered lists are not cached — filter sets vary per call
+        return Array.from((toolMapCache ?? EMPTY_TOOL_MAP).values())
+            .filter((t) => filterConfig.enabledTools.has(t.name))
+            .map(mapTool)
     }
 
-    return allTools.map(mapTool)
+    // Return cached mapped output for unfiltered calls
+    mappedToolsCache ??= Array.from((toolMapCache ?? EMPTY_TOOL_MAP).values()).map(mapTool)
+    return mappedToolsCache
 }
 
 /**
- * Cached tool map for O(1) lookup in callTool.
- * Built lazily on first callTool invocation. Invalidates when any
+ * Cached tool map for O(1) lookup in callTool and getTools.
+ * Built lazily on first invocation. Invalidates when any
  * context parameter changes (happens in tests with different mocks;
  * in production, all instances are stable).
  */
 let toolMapCache: Map<string, ToolDefinition> | null = null
+/** Cached mapped tool output for unfiltered getTools calls */
+let mappedToolsCache: object[] | null = null
+/** Typed empty map for safe fallback (narrowing guard, never actually used) */
+const EMPTY_TOOL_MAP = new Map<string, ToolDefinition>()
 let cachedContextRefs: {
     db: SqliteAdapter
     github?: GitHubIntegration
@@ -140,6 +149,34 @@ let cachedContextRefs: {
     config?: ToolHandlerConfig
     teamDb?: SqliteAdapter
 } | null = null
+
+/**
+ * Ensure the tool definition cache is populated and valid for the given context.
+ * Shared by getTools() and callTool() to avoid redundant getAllToolDefinitions() calls.
+ */
+function ensureToolCache(
+    db: SqliteAdapter,
+    vectorManager?: VectorSearchManager,
+    github?: GitHubIntegration,
+    config?: ToolHandlerConfig,
+    teamDb?: SqliteAdapter
+): void {
+    if (
+        toolMapCache &&
+        cachedContextRefs?.db === db &&
+        cachedContextRefs.github === github &&
+        cachedContextRefs.vectorManager === vectorManager &&
+        cachedContextRefs.config === config &&
+        cachedContextRefs.teamDb === teamDb
+    ) {
+        return // Cache is valid
+    }
+
+    const context: ToolContext = { db, teamDb, vectorManager, github, config }
+    toolMapCache = new Map(getAllToolDefinitions(context).map((t) => [t.name, t]))
+    mappedToolsCache = null // Invalidate mapped cache when definitions change
+    cachedContextRefs = { db, github, vectorManager, config, teamDb }
+}
 
 /**
  * Call a tool by name
@@ -154,25 +191,23 @@ export function callTool(
     progress?: ProgressContext,
     teamDb?: SqliteAdapter
 ): Promise<unknown> {
-    const context: ToolContext = { db, teamDb, vectorManager, github, config, progress }
+    ensureToolCache(db, vectorManager, github, config, teamDb)
 
-    // Build tool map cache on first invocation or when context changes
-    if (
-        !toolMapCache ||
-        cachedContextRefs?.db !== db ||
-        cachedContextRefs.github !== github ||
-        cachedContextRefs.vectorManager !== vectorManager ||
-        cachedContextRefs.config !== config ||
-        cachedContextRefs.teamDb !== teamDb
-    ) {
-        toolMapCache = new Map(getAllToolDefinitions(context).map((t) => [t.name, t]))
-        cachedContextRefs = { db, github, vectorManager, config, teamDb }
-    }
-
-    const tool = toolMapCache.get(name)
+    const tool = (toolMapCache ?? EMPTY_TOOL_MAP).get(name)
 
     if (!tool) {
         return Promise.reject(new Error(`Unknown tool: ${name}`))
+    }
+
+    // When progress context is provided, rebuild the handler with it.
+    // This is rare (only MCP server calls with progress tokens, not benchmarked).
+    if (progress) {
+        const context: ToolContext = { db, teamDb, vectorManager, github, config, progress }
+        const freshTools = getAllToolDefinitions(context)
+        const freshTool = freshTools.find((t) => t.name === name)
+        if (freshTool) {
+            return Promise.resolve(freshTool.handler(args))
+        }
     }
 
     return Promise.resolve(tool.handler(args))

@@ -17,6 +17,7 @@ const {
     mockCreateIndex,
     mockInsertItem,
     mockDeleteItem,
+    mockUpsertItem,
     mockQueryItems,
     mockListItems,
     mockGetIndexStats,
@@ -26,6 +27,7 @@ const {
     mockCreateIndex: vi.fn(),
     mockInsertItem: vi.fn(),
     mockDeleteItem: vi.fn(),
+    mockUpsertItem: vi.fn(),
     mockQueryItems: vi.fn(),
     mockListItems: vi.fn(),
     mockGetIndexStats: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock('vectra', () => ({
             createIndex: mockCreateIndex,
             insertItem: mockInsertItem,
             deleteItem: mockDeleteItem,
+            upsertItem: mockUpsertItem,
             queryItems: mockQueryItems,
             listItems: mockListItems,
             getIndexStats: mockGetIndexStats,
@@ -148,17 +151,15 @@ describe('VectorSearchManager', () => {
     // ========================================================================
 
     describe('addEntry', () => {
-        it('should upsert entry (delete+insert)', async () => {
+        it('should upsert entry via upsertItem', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(1) })
-            mockDeleteItem.mockResolvedValue(undefined)
-            mockInsertItem.mockResolvedValue(undefined)
+            mockUpsertItem.mockResolvedValue(undefined)
 
             const result = await vm.addEntry(42, 'Some content')
             expect(result).toBe(true)
 
-            expect(mockDeleteItem).toHaveBeenCalledWith('42')
-            expect(mockInsertItem).toHaveBeenCalledWith(
+            expect(mockUpsertItem).toHaveBeenCalledWith(
                 expect.objectContaining({
                     id: '42',
                     metadata: expect.objectContaining({ entryId: 42 }),

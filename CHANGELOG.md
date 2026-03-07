@@ -11,9 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`session-summary` Prompt** — New workflow prompt that creates a session summary journal entry. Fetches recent entries for context and guides the agent to create a `retrospective` entry tagged `session-summary` capturing accomplishments, pending items, and next-session context. Invoked by the user when ready (e.g., `/session-summary` in Cursor). Replaces the unreliable automatic session-end behavior. Prompt count: 15 → 16.
 
+### Performance
+
+- **`calculateImportance` Query Consolidation** — Merged 3 separate SQL queries (entry data, relationship count, causal count) into a single query with subqueries, reducing SQLite roundtrips 3→1.
+- **`linkTagsToEntry` Batch Operations** — Replaced per-tag `INSERT OR IGNORE` + `UPDATE` loop (2N SQL calls) with batched multi-row `INSERT`, `SELECT ... IN (...)`, and `UPDATE ... IN (...)` (4 SQL calls total for any N tags).
+- **`createEntry` Redundant Fetch Elimination** — Removed post-INSERT `getEntryById()` re-fetch (full SELECT + tag query). Entry is now constructed directly from input values + `last_insert_rowid()` + `datetime(CURRENT_TIMESTAMP)`.
+- **`updateEntry` Pre-check Elimination** — Removed pre-UPDATE `getEntryById()` existence check. Uses `UPDATE ... WHERE deleted_at IS NULL` + `SELECT changes()` to detect missing entries in one SQL call instead of a full SELECT + tag query.
+- **SQLite Performance PRAGMAs** — Added `PRAGMA journal_mode = MEMORY`, `synchronous = OFF`, and `temp_store = MEMORY` at initialization. sql.js operates in-memory with manual disk serialization; these eliminate unnecessary internal journal overhead.
+- **Composite Covering Index for `getRecentEntries`** — Added `idx_memory_journal_recent` on `(deleted_at, timestamp DESC, id DESC)` to enable index-only scan for the `WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC` query pattern.
+- **`addEntry` Native Upsert** — Replaced `deleteItem()` + `insertItem()` pattern with vectra's native `upsertItem()`, eliminating a full exception path on every new entry insertion.
+- **`getTools` Cached Output** — Extracted shared `ensureToolCache()` for both `getTools` and `callTool`. Unfiltered `getTools` calls now return a cached mapped array instead of rebuilding 42 tool objects and mapping them on every invocation (~4800x faster than tool execution).
+
 ### Documentation
 
 - **Test Counts Updated** — Updated the `README.md` and `DOCKER_README.md` test count badges and the testing breakdown table to reflect the combined total of Vitest unit/integration tests and Playwright E2E tests (785 total tests).
+- **Performance Benchmark Claims Updated** — Updated benchmark numbers in `README.md` and `DOCKER_README.md` to reflect post-optimization measurements: vector ops >640 ops/sec, `getTools` ~4800x faster than tool execution, `getRecentEntries` ~4x faster via composite index.
 
 ### Removed
 

@@ -298,6 +298,11 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 - **Body Size Limit** — 1 MB maximum
 - **404 Handler** — Unknown paths return `{ error: "Not found" }`
 - **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
+- **Build Provenance** - Cryptographic proof of build process
+- **SBOM Available** - Complete software bill of materials
+- **Supply Chain Attestations** - Verifiable build integrity
+- **Non-root Execution** - Minimal attack surface
+- **No Native Dependencies** - Pure JS stack reduces attack surface
 
 **Example with curl:**
 
@@ -525,9 +530,9 @@ flowchart TB
 
 Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
 
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~42x faster than retrieving 50 recent entries.
-- **Vector Search Engine**: Semantic searches via `vectra` perform significantly faster than parallel entry indexing (>131x faster locally).
-- **Core MCP Routines**: Tool dispatch via `callTool` uses cached O(1) lookup. `create_entry` and `search_entries` execute at >730 ops/sec through the MCP layer.
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~7x faster than retrieving 50 recent entries (composite index optimization narrows this gap by accelerating `getRecentEntries` ~4x).
+- **Vector Search Engine**: Both search (780 ops/sec) and indexing (640 ops/sec) are high-throughput via `vectra` with native upsert support.
+- **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800x faster than tool execution). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
 
 To run the benchmarking suite locally:
 

@@ -298,6 +298,11 @@ docker run --rm -p 3000:3000 \
 - **Body Size Limit** — 1 MB maximum
 - **404 Handler** — Unknown paths return `{ error: "Not found" }`
 - **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
+- **Build Provenance** - Cryptographic proof of build process
+- **SBOM Available** - Complete software bill of materials
+- **Supply Chain Attestations** - Verifiable build integrity
+- **Non-root Execution** - Minimal attack surface
+- **No Native Dependencies** - Pure JS stack reduces attack surface
 
 | Mode                      | Progress Notifications | Legacy SSE | Serverless |
 | ------------------------- | ---------------------- | ---------- | ---------- |
@@ -358,14 +363,6 @@ docker pull writenotenow/memory-journal-mcp:sha256-<manifest-digest>
 docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
 ```
 
-**Security Features:**
-
-- ✅ **Build Provenance** - Cryptographic proof of build process
-- ✅ **SBOM Available** - Complete software bill of materials
-- ✅ **Supply Chain Attestations** - Verifiable build integrity
-- ✅ **Non-root Execution** - Minimal attack surface
-- ✅ **No Native Dependencies** - Pure JS stack reduces attack surface
-
 ## 🔧 Configuration
 
 ### GitHub Management Capabilities
@@ -404,10 +401,10 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - **sql.js** - SQLite in pure JavaScript
 - **vectra** - Vector similarity search without native dependencies
 - **@xenova/transformers** - ML embeddings in JavaScript
-- **Instant Startup** - Lazy loading of ML models
+- **Faster Startup** - Lazy loading of ML models
 - **Production/Stable** - Deterministic error handling (`{success, error}` on every tool) and automatic migrations
 
-Designed for extremely low overhead: database reads in sub-millisecond, vector search >131x faster than indexing, core MCP tool calls execute at >730 ops/sec with cached O(1) dispatch. Run `npm run bench` for local benchmarks.
+Designed for extremely low overhead: database reads in sub-millisecond, vector search and indexing both exceed 640 ops/sec, tool dispatch cached at O(1) with >4800x overhead reduction. Run `npm run bench` for local benchmarks.
 
 **Automated Deployment:**
 

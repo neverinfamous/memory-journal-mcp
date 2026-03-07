@@ -85,6 +85,13 @@ export class SqliteAdapter {
         // Required for ON DELETE CASCADE in entry_tags, relationships, embeddings
         this.db.run('PRAGMA foreign_keys = ON')
 
+        // Performance pragmas: sql.js operates entirely in-memory; the database
+        // file is only read at open and written by flushSave(). No need for
+        // journal or fsync overhead.
+        this.db.run('PRAGMA journal_mode = MEMORY')
+        this.db.run('PRAGMA synchronous = OFF')
+        this.db.run('PRAGMA temp_store = MEMORY')
+
         this.initialized = true
 
         logger.info('Database opened', { module: 'SqliteAdapter', dbPath: this.dbPath })
@@ -371,9 +378,12 @@ export class SqliteAdapter {
             ]
         )
 
-        // Get the inserted ID
-        const result = db.exec('SELECT last_insert_rowid() as id')
+        // Get the inserted ID and server-generated timestamp in one query
+        const result = db.exec(
+            'SELECT last_insert_rowid() as id, datetime(CURRENT_TIMESTAMP) as ts'
+        )
         const entryId = result[0]?.values[0]?.[0] as number
+        const timestamp = result[0]?.values[0]?.[1] as string
 
         // Create tags and link them
         if (tags.length > 0) {
@@ -388,11 +398,28 @@ export class SqliteAdapter {
             entityId: entryId,
         })
 
-        const entry = this.getEntryById(entryId)
-        if (!entry) {
-            throw new Error(`Failed to retrieve created entry with ID ${entryId}`)
+        // Build entry directly from known values — avoids a redundant SELECT + tag query
+        return {
+            id: entryId,
+            entryType,
+            content,
+            timestamp,
+            isPersonal,
+            significanceType,
+            autoContext,
+            deletedAt: null,
+            tags: [...tags],
+            projectNumber: projectNumber ?? null,
+            projectOwner: projectOwner ?? null,
+            issueNumber: issueNumber ?? null,
+            issueUrl: issueUrl ?? null,
+            prNumber: prNumber ?? null,
+            prUrl: prUrl ?? null,
+            prStatus: prStatus ?? null,
+            workflowRunId: workflowRunId ?? null,
+            workflowName: workflowName ?? null,
+            workflowStatus: workflowStatus ?? null,
         }
-        return entry
     }
 
     /**
@@ -455,40 +482,36 @@ export class SqliteAdapter {
         const db = this.ensureDb()
         const round2 = (n: number): number => Math.round(n * 100) / 100
 
-        // Get entry data
-        const entryResult = db.exec(
-            `SELECT significance_type, timestamp FROM memory_journal WHERE id = ? AND deleted_at IS NULL`,
-            [entryId]
+        // Single consolidated query: entry data + relationship counts via subqueries
+        const result = db.exec(
+            `SELECT
+                m.significance_type,
+                m.timestamp,
+                (SELECT COUNT(*) FROM relationships
+                 WHERE from_entry_id = ? OR to_entry_id = ?) AS rel_count,
+                (SELECT COUNT(*) FROM relationships
+                 WHERE (from_entry_id = ? OR to_entry_id = ?)
+                 AND relationship_type IN ('blocked_by', 'resolved', 'caused')) AS causal_count
+            FROM memory_journal m
+            WHERE m.id = ? AND m.deleted_at IS NULL`,
+            [entryId, entryId, entryId, entryId, entryId]
         )
-        if (entryResult.length === 0 || entryResult[0]?.values.length === 0) {
+        if (result.length === 0 || result[0]?.values.length === 0) {
             return {
                 score: 0,
                 breakdown: { significance: 0, relationships: 0, causal: 0, recency: 0 },
             }
         }
 
-        const significanceType = entryResult[0]?.values[0]?.[0] as string | null
-        const timestamp = entryResult[0]?.values[0]?.[1] as string
+        const row = result[0]?.values[0] ?? []
+        const significanceType = row[0] as string | null
+        const timestamp = row[1] as string
+        const relCount = (row[2] as number) ?? 0
+        const causalCount = (row[3] as number) ?? 0
 
         // Significance weight: 1.0 if set, else 0.0
         const significanceRaw = significanceType ? 1.0 : 0.0
-
-        // Relationship count (total relationships involving this entry)
-        const relResult = db.exec(
-            `SELECT COUNT(*) FROM relationships WHERE from_entry_id = ? OR to_entry_id = ?`,
-            [entryId, entryId]
-        )
-        const relCount = (relResult[0]?.values[0]?.[0] as number) ?? 0
         const relationshipsRaw = Math.min(relCount / 5, 1.0)
-
-        // Causal relationships count
-        const causalResult = db.exec(
-            `SELECT COUNT(*) FROM relationships
-             WHERE (from_entry_id = ? OR to_entry_id = ?)
-             AND relationship_type IN ('blocked_by', 'resolved', 'caused')`,
-            [entryId, entryId]
-        )
-        const causalCount = (causalResult[0]?.values[0]?.[0] as number) ?? 0
         const causalRaw = Math.min(causalCount / 3, 1.0)
 
         // Recency weight: decays over 90 days
@@ -578,8 +601,6 @@ export class SqliteAdapter {
         }
     ): JournalEntry | null {
         const db = this.ensureDb()
-        const entry = this.getEntryById(id)
-        if (!entry) return null
 
         const setClause: string[] = []
         const params: unknown[] = []
@@ -599,7 +620,21 @@ export class SqliteAdapter {
 
         if (setClause.length > 0) {
             params.push(id)
-            db.run(`UPDATE memory_journal SET ${setClause.join(', ')} WHERE id = ?`, params)
+            db.run(
+                `UPDATE memory_journal SET ${setClause.join(', ')} WHERE id = ? AND deleted_at IS NULL`,
+                params
+            )
+            // Check if any row was actually updated (entry exists and is active)
+            const changesResult = db.exec('SELECT changes()')
+            const rowsModified = (changesResult[0]?.values[0]?.[0] as number) ?? 0
+            if (rowsModified === 0) return null
+        } else {
+            // No column updates — still need to verify entry exists for tag updates / return value
+            const exists = db.exec(
+                'SELECT 1 FROM memory_journal WHERE id = ? AND deleted_at IS NULL',
+                [id]
+            )
+            if (exists.length === 0 || exists[0]?.values.length === 0) return null
         }
 
         // Update tags if provided
@@ -782,16 +817,25 @@ export class SqliteAdapter {
 
         const tagIds: number[] = []
         for (const row of result[0]?.values ?? []) {
-            const tagId = row[0] as number
-            tagIds.push(tagId)
-            // Link tag to entry
-            db.run('INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [
-                entryId,
-                tagId,
-            ])
-            // Increment usage
-            db.run('UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?', [tagId])
+            tagIds.push(row[0] as number)
         }
+
+        if (tagIds.length === 0) return
+
+        // Batch: link all tags to entry in one INSERT
+        const linkPlaceholders = tagIds.map(() => '(?, ?)').join(', ')
+        const linkParams = tagIds.flatMap((tagId) => [entryId, tagId])
+        db.run(
+            `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${linkPlaceholders}`,
+            linkParams
+        )
+
+        // Batch: increment usage counts in one UPDATE
+        const updatePlaceholders = tagIds.map(() => '?').join(', ')
+        db.run(
+            `UPDATE tags SET usage_count = usage_count + 1 WHERE id IN (${updatePlaceholders})`,
+            tagIds
+        )
     }
 
     /**

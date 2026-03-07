@@ -83,6 +83,9 @@ CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON entry_tags(entry_id);
 CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON entry_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_from ON relationships(from_entry_id);
 CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id);
+
+-- Composite covering index for getRecentEntries (WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC)
+CREATE INDEX IF NOT EXISTS idx_memory_journal_recent ON memory_journal(deleted_at, timestamp DESC, id DESC);
 `
 
 /**

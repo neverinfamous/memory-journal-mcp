@@ -140,18 +140,11 @@ export class VectorSearchManager {
         }
 
         try {
-            // Delete existing item first to support upsert behavior
-            try {
-                await this.index.deleteItem(String(entryId))
-            } catch {
-                // Item may not exist, ignore
-            }
-
             // Generate embedding
             const embedding = await this.generateEmbedding(content)
 
-            // Add to vectra index with entry ID as metadata
-            await this.index.insertItem({
+            // Upsert to vectra index (replaces if exists, inserts if new)
+            await this.index.upsertItem({
                 id: String(entryId),
                 vector: embedding,
                 metadata: { entryId, contentPreview: content.slice(0, 100) },
