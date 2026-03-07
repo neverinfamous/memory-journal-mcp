@@ -363,10 +363,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
 
         // Build Zod schema from prompt.arguments definitions
-        const zodShape: Record<string, z.ZodType> = {}
-        if (promptDef.arguments) {
+        // Only create argsSchema when there are actual arguments; passing an empty
+        // shape causes the SDK to wrap it in z.object({}) which rejects undefined
+        // when the client omits arguments (e.g. session-summary with no args).
+        let argsSchema: Record<string, z.ZodType> | undefined
+        if (promptDef.arguments && promptDef.arguments.length > 0) {
+            argsSchema = {}
             for (const arg of promptDef.arguments) {
-                zodShape[arg.name] =
+                argsSchema[arg.name] =
                     arg.required === true
                         ? z.string().describe(arg.description)
                         : z.string().optional().describe(arg.description)
@@ -377,7 +381,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             promptDef.name,
             {
                 description: promptDef.description ?? '',
-                argsSchema: zodShape,
+                ...(argsSchema ? { argsSchema } : {}),
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {

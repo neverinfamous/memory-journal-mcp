@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`export_entries` Filter Bypass** — Handler was calling `db.getRecentEntries(limit)` and ignoring all parsed filter parameters (`start_date`, `end_date`, `entry_types`, `tags`). Now correctly uses `db.searchByDateRange()` for date/tag filters and post-filters by `entry_types`.
 - **GitHub Error Consistency** — All GitHub tool error responses (`get_github_issue`, `get_github_pr`, `get_github_context`, `get_repo_insights`, `resolveOwnerRepo`, `resolveOwner`) now include `success: false` field, matching the `{success: false, error}` pattern used by all other tools.
 - **`get_vector_index_stats` Missing `success` Field** — Handler now returns `success: true/false` in all response paths for schema consistency.
+- **No-Argument Prompts Failing with MCP `-32602`** — Prompts with no arguments (e.g., `session-summary`, `confirm-briefing`, `prepare-standup`) failed when the client called `prompts/get` without `arguments`. The registration code passed an empty `argsSchema: {}` to `registerPrompt`, which the SDK wrapped in `z.object({})` and attempted to validate against `undefined`. Now omits `argsSchema` entirely for argumentless prompts so the SDK skips validation.
 
 ### Improved
 
