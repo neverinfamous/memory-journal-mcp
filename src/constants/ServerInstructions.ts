@@ -68,19 +68,6 @@ const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 - **Search before**: major decisions, referencing prior work, understanding project context
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
-## Session End
-
-When a conversation or task is wrapping up (user says "thanks," final deliverable complete, no more work planned):
-
-1. Create a journal entry summarizing the session:
-   - **What was accomplished** (key changes, decisions, files modified)
-   - **What's unfinished or blocked** (pending items, open questions)
-   - **Context for next session** (relevant entry IDs, branch names, PR numbers)
-2. Use \`entry_type: "retrospective"\` and tag with \`session-summary\`
-3. This is opt-out — ALWAYS create the entry, even for short/trivial sessions, unless the user explicitly says to skip it
-
-> If your client has hooks configured for session-end journaling (e.g., Cursor \`sessionEnd\` hook), this is handled automatically. Otherwise, follow the steps above.
-
 ## Rule & Skill Suggestions
 
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
@@ -407,3 +394,4 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * @deprecated Use generateInstructions() instead for dynamic content
  */
 export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
+

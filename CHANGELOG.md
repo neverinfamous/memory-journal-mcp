@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`session-summary` Prompt** — New workflow prompt that creates a session summary journal entry. Fetches recent entries for context and guides the agent to create a `retrospective` entry tagged `session-summary` capturing accomplishments, pending items, and next-session context. Invoked by the user when ready (e.g., `/session-summary` in Cursor). Replaces the unreliable automatic session-end behavior. Prompt count: 15 → 16.
+
+### Removed
+
+- **Automatic Session End Behavior** — Removed `## Session End` section from server instructions (`ServerInstructions.ts`, `server-instructions.md`). Agents cannot reliably detect when a thread/session ends. Replaced by the user-invoked `session-summary` prompt.
+- **`hooks/` Directory** — Deleted the entire hooks directory (`hooks/cursor/`, `hooks/kiro/`, `hooks/kilo-code/`, `hooks/README.md`). All hook files were session-end related. Session start is handled by server instructions.
+
 ### Security
 
 - **Docker Compose Network Isolation (L-1)** — Added custom `mcp-net` bridge network to both services. Prevents MCP containers from accessing or being accessed by unrelated containers on the default Docker bridge.

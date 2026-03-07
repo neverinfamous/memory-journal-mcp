@@ -21,7 +21,7 @@
 
 ### Key Benefits
 
-**42 MCP Tools** · **15 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**42 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -33,8 +33,7 @@
 - ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running containers
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
-- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
-- 🔧 **IDE Hooks** — ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks))
+- 🔄 **Session continuity** — on-demand session summaries via the `session-summary` prompt flow into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
@@ -53,7 +52,7 @@
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
 - **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
 
-**Flow:** AI Session Start → Read `memory://briefing` → Journal Operations (Create, Search, Link) → Triple Search + GitHub Integration → Outputs (Standups, Knowledge Graphs, Timelines) → Session End (auto-summary → next briefing)
+**Flow:** AI Session Start → Read `memory://briefing` → Journal Operations (Create, Search, Link) → Triple Search + GitHub Integration → Outputs (Standups, Knowledge Graphs, Timelines) → Use `session-summary` prompt when ready to capture session context
 
 ### Tool Filtering
 
@@ -92,7 +91,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **15 Workflow Prompts**
+### 🎯 **16 Workflow Prompts**
 
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
@@ -109,6 +108,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `actions-failure-digest` - CI/CD failure analysis
 - `project-milestone-tracker` - Milestone progress tracking
 - `confirm-briefing` - Acknowledge session context to user
+- `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -248,15 +248,11 @@ When GitHub tools cannot auto-detect repository information:
 
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
+Memory Journal bridges AI sessions with two mechanisms:
 
-1. Session starts → agent reads `memory://briefing` and shows you a project context summary
-2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
+2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
 3. Next session's briefing includes the previous summary — context flows seamlessly
-
-**Cursor users:** Copy the [`memory-journal.mdc`](https://github.com/neverinfamous/memory-journal-mcp/blob/main/hooks/cursor/memory-journal.mdc) rule to `.cursor/rules/` for the most reliable session management. Optional audit hooks for Cursor, Kiro, and Kilo Code are available in the [hooks/](https://github.com/neverinfamous/memory-journal-mcp/tree/main/hooks) directory.
-
-**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
 
 ### HTTP/SSE Transport (Remote Access)
 

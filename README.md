@@ -28,7 +28,7 @@
 
 ### Key Benefits
 
-**42 MCP Tools** · **15 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**42 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -40,8 +40,7 @@
 - ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running HTTP deployments
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
-- 🔄 **Session continuity** — automatic end-of-session summaries flow into the next session's briefing
-- 🔧 **IDE Hooks** — ready-to-use session-end configs for Cursor, Kiro, and Kilo Code ([setup →](hooks/))
+- 🔄 **Session continuity** — on-demand session summaries via the `session-summary` prompt flow into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
@@ -103,17 +102,11 @@ flowchart TB
         Timeline["Project Timelines"]
     end
 
-    subgraph SessionEnd["🔄 Session End"]
-        Summary["Session Summary Entry<br/>(retrospective + session-summary tag)"]
-    end
-
     Session --> Core
     Core --> Search
     Core <--> GitHub
     Search --> Outputs
     GitHub --> Outputs
-    Core --> SessionEnd
-    SessionEnd -.->|"next session"| Briefing
 ```
 
 ---
@@ -157,7 +150,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **15 Workflow Prompts**
+### 🎯 **16 Workflow Prompts**
 
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
@@ -174,6 +167,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `actions-failure-digest` - CI/CD failure analysis
 - `project-milestone-tracker` - Milestone progress tracking
 - `confirm-briefing` - Acknowledge session context to user
+- `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -420,25 +414,11 @@ When GitHub tools cannot auto-detect repository information:
 
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions automatically — the agent reads project context at session start and captures a summary at session end.
+Memory Journal bridges AI sessions with two mechanisms:
 
-**How it works:**
-
-1. Session starts → agent reads `memory://briefing` and shows you a project context summary
-2. Session ends → agent creates a `retrospective` entry tagged `session-summary`
+1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
+2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
 3. Next session's briefing includes the previous summary — context flows seamlessly
-
-**Setup by IDE:** Ready-to-use rules and hooks in [`hooks/`](hooks/):
-
-| Client         | Primary (agent behavior)                                                                      | Optional (audit/logging)                                                                   |
-| -------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Cursor**     | Copy [`hooks/cursor/memory-journal.mdc`](hooks/cursor/memory-journal.mdc) to `.cursor/rules/` | Copy [`hooks/cursor/hooks.json`](hooks/cursor/hooks.json) + `session-end.sh` to `.cursor/` |
-| **Kiro (AWS)** | Server instructions (automatic)                                                               | Copy [`hooks/kiro/session-end.md`](hooks/kiro/session-end.md) to `.kiro/hooks/`            |
-| **Kilo Code**  | Server instructions (automatic)                                                               | Import [`hooks/kilo-code/session-end-mode.json`](hooks/kilo-code/session-end-mode.json)    |
-
-**No rules or hooks?** The built-in server instructions handle both session start and end in any MCP client. The Cursor rule improves reliability by giving the agent explicit always-on instructions. This is **opt-out**: tell the agent "skip the summary" to disable session-end entries.
-
-See [`hooks/README.md`](hooks/README.md) for detailed setup instructions.
 
 ## 🔧 Configuration
 

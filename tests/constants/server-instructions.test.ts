@@ -100,7 +100,7 @@ describe('generateInstructions', () => {
             expect(result).not.toContain('## GitHub Integration')
         })
 
-        it('should include Session End section', () => {
+        it('should not include Session End section (replaced by session-summary prompt)', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
                 TEST_RESOURCES,
@@ -108,10 +108,7 @@ describe('generateInstructions', () => {
                 undefined,
                 'essential'
             )
-            expect(result).toContain('Session End')
-            expect(result).toContain('session-summary')
-            expect(result).toContain('retrospective')
-            expect(result).toContain('opt-out')
+            expect(result).not.toContain('Session End')
         })
 
         it('should include Rule & Skill Suggestions section', () => {
