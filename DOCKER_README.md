@@ -416,7 +416,7 @@ Designed for extremely low overhead: database reads in sub-millisecond, vector s
 
 **Available Tags:**
 
-- `5.1.0` - Specific version (recommended for production)
+- `5.1.1` - Specific version (recommended for production)
 - `5.1` - Latest patch in 5.1.x series
 - `5` - Latest minor in 5.x series
 - `latest` - Always the newest version

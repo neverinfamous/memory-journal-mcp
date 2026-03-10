@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-03-10
+
 ### Changed
 
 - **Dependency Updates**
@@ -1356,7 +1358,8 @@ npm install -g memory-journal-mcp
 - SQLite FTS5 full-text search
 - Optional FAISS semantic search
 
-[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...HEAD
+[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.1...HEAD
+[5.1.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...v5.1.1
 [5.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.1...v5.1.0
 [5.0.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.5.0...v5.0.0
