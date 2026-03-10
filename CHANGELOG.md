@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency Updates**
+  - `@types/node`: 25.3.5 → 25.4.0 (minor)
+  - `express-rate-limit`: 8.3.0 → 8.3.1 (patch)
+  - `simple-git`: 3.32.3 → 3.33.0 (minor)
+  - `typescript-eslint`: 8.56.1 → 8.57.0 (minor)
+  - `tar` override: 7.5.10 → 7.5.11 (patch) — npm + Docker layers
+  - `axios` override: 1.13.5 → 1.13.6 (patch)
+  - `tmp` override: 0.2.4 → 0.2.5 (patch)
+  - GitHub Actions: `docker/scout-action`, `docker/setup-buildx-action`, `docker/metadata-action`, `docker/login-action`, `aquasecurity/trivy-action`
+
 ## [5.1.0] - 2026-03-07
 
 ### Added
