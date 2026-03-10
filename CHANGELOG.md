@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.1.1] - 2026-03-10
+
+### Changed
+
+- **Dependency Updates**
+  - `@types/node`: 25.3.5 → 25.4.0 (minor)
+  - `express-rate-limit`: 8.3.0 → 8.3.1 (patch)
+  - `simple-git`: 3.32.3 → 3.33.0 (minor)
+  - `typescript-eslint`: 8.56.1 → 8.57.0 (minor)
+  - `tar` override: 7.5.10 → 7.5.11 (patch) — npm + Docker layers
+  - `axios` override: 1.13.5 → 1.13.6 (patch)
+  - `tmp` override: 0.2.4 → 0.2.5 (patch)
+  - GitHub Actions: `docker/scout-action`, `docker/setup-buildx-action`, `docker/metadata-action`, `docker/login-action`, `aquasecurity/trivy-action`
+
 ## [5.1.0] - 2026-03-07
 
 ### Added
@@ -1344,7 +1358,8 @@ npm install -g memory-journal-mcp
 - SQLite FTS5 full-text search
 - Optional FAISS semantic search
 
-[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...HEAD
+[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.1...HEAD
+[5.1.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...v5.1.1
 [5.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.1...v5.1.0
 [5.0.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.0...v5.0.1
 [5.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.5.0...v5.0.0

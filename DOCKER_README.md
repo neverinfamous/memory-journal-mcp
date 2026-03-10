@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 7, 2026**
+**Last Updated March 10, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -416,7 +416,7 @@ Designed for extremely low overhead: database reads in sub-millisecond, vector s
 
 **Available Tags:**
 
-- `5.1.0` - Specific version (recommended for production)
+- `5.1.1` - Specific version (recommended for production)
 - `5.1` - Latest patch in 5.1.x series
 - `5` - Latest minor in 5.x series
 - `latest` - Always the newest version

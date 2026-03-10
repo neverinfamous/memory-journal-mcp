@@ -23,13 +23,13 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/diff && \
     rm diff-8.0.3.tgz
 
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.10
+# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.11
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.10 && \
+    npm pack tar@7.5.11 && \
     rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.10.tgz && \
+    tar -xzf tar-7.5.11.tgz && \
     mv package node_modules/tar && \
-    rm tar-7.5.10.tgz
+    rm tar-7.5.11.tgz
 
 # Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.4
 RUN cd /usr/local/lib/node_modules/npm && \
@@ -79,13 +79,13 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/diff && \
     rm diff-8.0.3.tgz
 
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.10
+# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.11
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.10 && \
+    npm pack tar@7.5.11 && \
     rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.10.tgz && \
+    tar -xzf tar-7.5.11.tgz && \
     mv package node_modules/tar && \
-    rm tar-7.5.10.tgz
+    rm tar-7.5.11.tgz
 
 # Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.4
 RUN cd /usr/local/lib/node_modules/npm && \
@@ -129,6 +129,6 @@ ENTRYPOINT ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="5.1.0"
+LABEL version="5.1.1"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"
