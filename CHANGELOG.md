@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tar` override: 7.5.10 → 7.5.11 (patch) — npm + Docker layers
   - `axios` override: 1.13.5 → 1.13.6 (patch)
   - `tmp` override: 0.2.4 → 0.2.5 (patch)
-  - GitHub Actions: `docker/scout-action`, `docker/setup-buildx-action`, `docker/metadata-action`, `docker/login-action`, `aquasecurity/trivy-action`
+  - GitHub Actions: `docker/setup-buildx-action` (v3 → v4), `docker/metadata-action` (v5 → v6), `docker/login-action` (v3 → v4), `aquasecurity/trivy-action` (0.34.1 → 0.35.0), `docker/scout-action` (v1.20.1 reverted to v1.18.2 — upstream 403 on asset download)
 
 ## [5.1.0] - 2026-03-07
 
