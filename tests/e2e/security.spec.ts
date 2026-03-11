@@ -42,7 +42,7 @@ test.describe('HTTP Transport Security & Limits', () => {
         const headers = response.headers()
         expect(headers['x-content-type-options']).toBe('nosniff')
         expect(headers['x-frame-options']).toBe('DENY')
-        expect(headers['cache-control']).toBe('no-store')
+        expect(headers['cache-control']).toBe('no-store, no-cache, must-revalidate')
         expect(headers['content-security-policy']).toBe(
             "default-src 'none'; frame-ancestors 'none'"
         )
@@ -69,7 +69,9 @@ test.describe('HTTP Transport Security & Limits', () => {
         expect(headers['access-control-expose-headers']).toContain('mcp-session-id')
     })
 
-    test('should include HSTS header when X-Forwarded-Proto is https', async ({ request }) => {
+    test('should NOT include HSTS header without enableHSTS config', async ({ request }) => {
+        // HSTS is now config-driven (enableHSTS: true), not header-sniffed.
+        // Without explicit config, X-Forwarded-Proto alone should NOT trigger HSTS.
         const response = await request.get('/health', {
             headers: {
                 'X-Forwarded-Proto': 'https',
@@ -78,7 +80,7 @@ test.describe('HTTP Transport Security & Limits', () => {
 
         expect(response.status()).toBe(200)
         const headers = response.headers()
-        expect(headers['strict-transport-security']).toBe('max-age=31536000; includeSubDomains')
+        expect(headers['strict-transport-security']).toBeUndefined()
     })
 
     test('should NOT include HSTS header without X-Forwarded-Proto', async ({ request }) => {

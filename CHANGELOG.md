@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **HTTP Transport Modularized** — Split monolithic `src/transports/http.ts` (638 lines) into `src/transports/http/` directory with focused modules:
+  - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types
+  - `security.ts` — Client IP extraction, built-in rate limiting, CORS (wildcard subdomain support), security headers
+  - `handlers.ts` — Health check, root info, bearer token auth middleware
+  - `server.ts` — `HttpTransport` class with dual-protocol support (Streamable HTTP + Legacy SSE)
+  - `index.ts` — Barrel re-export
+- **CORS Configuration** — `corsOrigin: string` changed to `corsOrigins: string[]` for multi-origin support. CLI `--cors-origin` accepts comma-separated values. Wildcard subdomain patterns supported (e.g., `*.example.com`).
+- **HSTS Configuration** — HSTS is now config-driven via `enableHSTS: true` instead of auto-detecting from `X-Forwarded-Proto` header.
+- **Cache-Control Header** — Strengthened from `no-store` to `no-store, no-cache, must-revalidate`.
+
+### Security
+
+- **Built-in Rate Limiting** — Replaced `express-rate-limit` dependency with zero-dependency implementation. Health endpoint bypass, `Retry-After` header on 429, periodic cleanup with `.unref()`.
+- **Server Timeouts** — Added HTTP request (120s), keep-alive (65s), and headers (66s) timeouts to mitigate DoS attacks.
+- **CORS Enhancements** — `Access-Control-Max-Age: 86400`, `Vary: Origin` for specific origin matching, `corsAllowCredentials` option.
+- **Trust Proxy** — `trustProxy` config option for correct `X-Forwarded-For` client IP extraction behind reverse proxies.
+- **Max Body Size** — Configurable `maxBodySize` (default: 1MB) to prevent large request body attacks.
+
+### Removed
+
+- **`express-rate-limit` Dependency** — Replaced by built-in rate limiter.
+
 ## [5.1.1] - 2026-03-10
 
 ### Changed

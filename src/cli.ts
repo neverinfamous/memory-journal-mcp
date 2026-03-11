@@ -103,7 +103,9 @@ program
                           : undefined,
                     autoRebuildIndex:
                         options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
-                    corsOrigin: options.corsOrigin,
+                    corsOrigins: options.corsOrigin
+                        ? options.corsOrigin.split(',').map((s) => s.trim())
+                        : undefined,
                     authToken: options.authToken,
                     scheduler: {
                         backupIntervalMinutes: parseInt(options.backupInterval, 10),

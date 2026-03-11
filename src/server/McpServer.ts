@@ -24,7 +24,7 @@ import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
 import { Scheduler, type SchedulerOptions } from './Scheduler.js'
-import { HttpTransport } from '../transports/http.js'
+import { HttpTransport } from '../transports/http/index.js'
 import pkg from '../../package.json' with { type: 'json' }
 
 export interface ServerOptions {
@@ -37,7 +37,7 @@ export interface ServerOptions {
     defaultProjectNumber?: number
     autoRebuildIndex?: boolean
     statelessHttp?: boolean
-    corsOrigin?: string
+    corsOrigins?: string[]
     authToken?: string
     scheduler?: SchedulerOptions
 }
@@ -435,13 +435,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // HTTP transport
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
-        const corsOrigin = options.corsOrigin ?? process.env['MCP_CORS_ORIGIN'] ?? '*'
+        const corsRaw = process.env['MCP_CORS_ORIGIN'] ?? '*'
+        const corsOrigins = options.corsOrigins ?? corsRaw.split(',').map((s) => s.trim())
         const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
 
         const httpTransport = new HttpTransport({
             port,
             host,
-            corsOrigin,
+            corsOrigins,
             stateless: options.statelessHttp === true,
             authToken,
         })

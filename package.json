@@ -58,7 +58,6 @@
         "@xenova/transformers": "^2.17.2",
         "commander": "^14.0.3",
         "express": "^5.2.1",
-        "express-rate-limit": "^8.3.1",
         "simple-git": "^3.33.0",
         "sql.js": "^1.14.1",
         "vectra": "^0.12.3",
