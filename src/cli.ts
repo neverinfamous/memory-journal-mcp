@@ -1,11 +1,25 @@
-/**
- * Memory Journal MCP Server - CLI Entry Point
- */
-
 import { Command } from 'commander'
+import * as fs from 'node:fs'
 import { createServer } from './server/McpServer.js'
 import { logger } from './utils/logger.js'
 import pkg from '../package.json' with { type: 'json' }
+
+// Smart Database Resolution: Check root, then test-server, then default to root
+function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
+    if (envPath) return envPath
+    const rootPath = `./${defaultName}`
+    const testPath = `./test-server/${testName}`
+    if (fs.existsSync(rootPath)) return rootPath
+    if (fs.existsSync(testPath)) return testPath
+    return rootPath // fallback to creating root if neither exist
+}
+
+const defaultDbPath = resolveDbPath(
+    process.env['DB_PATH'],
+    'memory_journal.db',
+    'test-memory-journal.db'
+)
+const defaultTeamDbPath = process.env['TEAM_DB_PATH'] ? process.env['TEAM_DB_PATH'] : undefined
 
 const program = new Command()
 
@@ -20,12 +34,12 @@ program
     .option(
         '--db <path>',
         'Database path (env: DB_PATH)',
-        process.env['DB_PATH'] ?? './memory_journal.db'
+        defaultDbPath
     )
     .option(
         '--team-db <path>',
         'Team database path (env: TEAM_DB_PATH)',
-        process.env['TEAM_DB_PATH'] ?? undefined
+        defaultTeamDbPath
     )
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')

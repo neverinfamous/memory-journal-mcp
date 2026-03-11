@@ -658,7 +658,7 @@ describe('SqliteAdapter', () => {
     describe('backup edge cases', () => {
         it('should return empty array when backups directory does not exist', () => {
             const fs = require('node:fs')
-            const isolatedDir = './test-isolation-dir'
+            const isolatedDir = './test-server/test-isolation-dir'
             if (!fs.existsSync(isolatedDir)) {
                 fs.mkdirSync(isolatedDir, { recursive: true })
             }
