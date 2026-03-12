@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sanitizeAuthor } from '../../utils/security-utils.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema } from './schemas.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
 
 // ============================================================================
 // Author Detection
@@ -69,11 +69,11 @@ const TeamCreateEntrySchemaMcp = z.object({
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.string().optional(),
-    project_number: z.number().optional(),
+    project_number: relaxedNumber().optional(),
     project_owner: z.string().optional(),
-    issue_number: z.number().optional(),
+    issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
-    pr_number: z.number().optional(),
+    pr_number: relaxedNumber().optional(),
     pr_url: z.string().optional(),
     pr_status: z.string().optional(),
     author: z.string().optional(),
@@ -83,10 +83,22 @@ const TeamGetRecentSchema = z.object({
     limit: z.number().max(500).optional().default(10),
 })
 
+/** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
+const TeamGetRecentSchemaMcp = z.object({
+    limit: relaxedNumber().optional().default(10),
+})
+
 const TeamSearchSchema = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
     limit: z.number().max(500).optional().default(10),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
+const TeamSearchSchemaMcp = z.object({
+    query: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    limit: relaxedNumber().optional().default(10),
 })
 
 // ============================================================================
@@ -192,7 +204,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Recent Team Entries',
             description: 'Get recent entries from the team database. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamGetRecentSchema,
+            inputSchema: TeamGetRecentSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {
@@ -227,7 +239,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Search entries in the team database by text and/or tags. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamSearchSchema,
+            inputSchema: TeamSearchSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {

@@ -24,7 +24,9 @@ import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
 import { Scheduler, type SchedulerOptions } from './Scheduler.js'
-import { HttpTransport } from '../transports/http.js'
+import { HttpTransport } from '../transports/http/index.js'
+import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
+import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
 import pkg from '../../package.json' with { type: 'json' }
 
 export interface ServerOptions {
@@ -37,9 +39,18 @@ export interface ServerOptions {
     defaultProjectNumber?: number
     autoRebuildIndex?: boolean
     statelessHttp?: boolean
-    corsOrigin?: string
+    corsOrigins?: string[]
     authToken?: string
     scheduler?: SchedulerOptions
+    sandboxMode?: SandboxMode
+    // OAuth 2.1 options
+    oauthEnabled?: boolean
+    oauthIssuer?: string
+    oauthAudience?: string
+    oauthJwksUri?: string
+    oauthClockTolerance?: number
+    // Briefing configuration
+    briefingConfig?: BriefingConfig
 }
 
 /**
@@ -47,6 +58,15 @@ export interface ServerOptions {
  */
 export async function createServer(options: ServerOptions): Promise<void> {
     const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
+
+    // Configure sandbox mode for Code Mode
+    if (options.sandboxMode) {
+        setDefaultSandboxMode(options.sandboxMode)
+        logger.info('Code Mode sandbox configured', {
+            module: 'McpServer',
+            sandboxMode: options.sandboxMode,
+        })
+    }
 
     // Initialize database (async for sql.js)
     const db = new SqliteAdapter(dbPath)
@@ -295,7 +315,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         filterConfig,
                         github,
                         scheduler,
-                        teamDb
+                        teamDb,
+                        options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -331,7 +352,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         filterConfig,
                         github,
                         scheduler,
-                        teamDb
+                        teamDb,
+                        options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -435,15 +457,21 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // HTTP transport
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
-        const corsOrigin = options.corsOrigin ?? process.env['MCP_CORS_ORIGIN'] ?? '*'
+        const corsRaw = process.env['MCP_CORS_ORIGIN'] ?? '*'
+        const corsOrigins = options.corsOrigins ?? corsRaw.split(',').map((s) => s.trim())
         const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
 
         const httpTransport = new HttpTransport({
             port,
             host,
-            corsOrigin,
+            corsOrigins,
             stateless: options.statelessHttp === true,
             authToken,
+            oauthEnabled: options.oauthEnabled,
+            oauthIssuer: options.oauthIssuer,
+            oauthAudience: options.oauthAudience,
+            oauthJwksUri: options.oauthJwksUri,
+            oauthClockTolerance: options.oauthClockTolerance,
         })
 
         await httpTransport.start(server, scheduler)

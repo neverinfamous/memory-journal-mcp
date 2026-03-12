@@ -1,5 +1,5 @@
 /**
- * Memory Journal MCP Server - HTTP Transport
+ * memory-journal-mcp — HTTP Transport Server
  *
  * Dual-protocol HTTP transport:
  * - `/mcp` — Streamable HTTP transport (MCP 2025-03-26)
@@ -9,39 +9,42 @@
  * - Stateful (default): Multi-session management with SSE streaming
  * - Stateless (opt-in): Lightweight serverless-compatible mode
  *
- * Security: headers, CORS, rate limiting, body size enforcement.
+ * Security utilities and handlers in ./security.ts and ./handlers.ts.
+ * Config types and constants in ./types.ts.
  */
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { randomUUID, timingSafeEqual } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import express from 'express'
-import type { Express, Request, Response } from 'express'
-import rateLimit from 'express-rate-limit'
-import { logger } from '../utils/logger.js'
-import type { Scheduler } from '../server/Scheduler.js'
-import pkg from '../../package.json' with { type: 'json' }
+import type { Express, Request, Response, RequestHandler } from 'express'
+import { logger } from '../../utils/logger.js'
+import type { Scheduler } from '../../server/Scheduler.js'
+import type { HttpTransportConfig, RateLimitEntry } from './types.js'
+import {
+    DEFAULT_MAX_BODY_BYTES,
+    HTTP_REQUEST_TIMEOUT_MS,
+    HTTP_KEEP_ALIVE_TIMEOUT_MS,
+    HTTP_HEADERS_TIMEOUT_MS,
+    SESSION_TIMEOUT_MS,
+    SESSION_SWEEP_INTERVAL_MS,
+} from './types.js'
+import { setSecurityHeaders, setCorsHeaders, checkRateLimit } from './security.js'
+import { handleHealthCheck, handleRootInfo, createAuthMiddleware } from './handlers.js'
+import {
+    createTokenValidator,
+    createOAuthResourceServer,
+    createAuthMiddleware as createOAuthMiddleware,
+    oauthErrorHandler,
+    SUPPORTED_SCOPES,
+} from '../../auth/index.js'
 
-/** Session timeout for stateful HTTP mode (30 minutes) */
-const SESSION_TIMEOUT_MS = 30 * 60 * 1000
-
-/** Session timeout sweep interval (5 minutes) */
-const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000
-
-/**
- * HTTP transport configuration
- */
-export interface HttpTransportConfig {
-    port: number
-    host: string
-    corsOrigin: string
-    stateless: boolean
-    authToken?: string
-}
+// =============================================================================
+// HTTP Transport
+// =============================================================================
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -60,8 +63,15 @@ export class HttpTransport {
     private httpServer: ReturnType<Express['listen']> | null = null
     private sessionSweepTimer: ReturnType<typeof setInterval> | null = null
 
+    // Rate limiting state
+    private readonly rateLimitMap = new Map<string, RateLimitEntry>()
+    private rateLimitCleanupTimer: ReturnType<typeof setInterval> | null = null
+
     constructor(config: HttpTransportConfig) {
-        this.config = config
+        this.config = {
+            ...config,
+            enableRateLimit: config.enableRateLimit ?? true,
+        }
         this.app = express()
     }
 
@@ -69,13 +79,13 @@ export class HttpTransport {
      * Initialize and start the HTTP transport
      */
     async start(server: McpServer, scheduler: Scheduler | null): Promise<void> {
-        const { port, host, corsOrigin, authToken } = this.config
+        const { port, host, authToken, corsOrigins } = this.config
 
-        if (corsOrigin === '*') {
+        if (!corsOrigins || corsOrigins.includes('*')) {
             logger.warning(
                 'CORS origin is set to "*" (all origins). ' +
                     'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
-                { module: 'HTTP' }
+                { module: 'HTTP' },
             )
         }
 
@@ -83,114 +93,130 @@ export class HttpTransport {
             logger.warning(
                 'No authentication configured for HTTP transport. ' +
                     'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
-                { module: 'HTTP' }
+                { module: 'HTTP' },
             )
         }
 
         // Security headers middleware
         this.app.use((req: Request, res: Response, next: () => void) => {
-            res.setHeader('X-Content-Type-Options', 'nosniff')
-            res.setHeader('X-Frame-Options', 'DENY')
-            res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
-            res.setHeader('Cache-Control', 'no-store')
-            res.setHeader('Referrer-Policy', 'no-referrer')
-            res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-            // HSTS — only emit when behind a TLS-terminating reverse proxy
-            if (req.headers?.['x-forwarded-proto'] === 'https') {
-                res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
-            }
+            setSecurityHeaders(res, this.config)
+            setCorsHeaders(req, res, this.config)
             next()
         })
 
-        // CORS middleware
+        // Handle OPTIONS preflight
         this.app.use((req: Request, res: Response, next: () => void) => {
-            res.setHeader('Access-Control-Allow-Origin', corsOrigin)
-            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-            res.setHeader(
-                'Access-Control-Allow-Headers',
-                'Content-Type, Accept, Authorization, mcp-session-id, Last-Event-ID, mcp-protocol-version'
-            )
-            res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
-
             if (req.method === 'OPTIONS') {
                 res.status(204).end()
                 return
             }
-
             next()
         })
 
         // JSON body parser with size limit (DoS prevention)
-        this.app.use(express.json({ limit: '1mb' }))
+        const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
+        this.app.use(express.json({ limit: maxBody }) as unknown as RequestHandler)
 
-        // Rate limiting (100 requests/minute per IP)
-        const limiter = rateLimit({
-            windowMs: 60 * 1000,
-            limit: 100,
-            standardHeaders: 'draft-8',
-            legacyHeaders: false,
-            message: { error: 'Too many requests, please try again later' },
-        })
-        this.app.use(limiter)
-        logger.info('Rate limiting enabled: 100 requests/minute per IP', {
-            module: 'HTTP',
-        })
-
-        // Bearer token authentication (when configured)
-        if (authToken) {
+        // Built-in rate limiting (replaces express-rate-limit)
+        if (this.config.enableRateLimit !== false) {
             this.app.use((req: Request, res: Response, next: () => void) => {
+                // Health check bypasses rate limiting
                 if (req.path === '/health') {
                     next()
                     return
                 }
 
-                const header = req.headers.authorization
-                const expected = Buffer.from(`Bearer ${authToken}`)
-                const received = Buffer.from(header ?? '')
-                if (expected.length !== received.length || !timingSafeEqual(expected, received)) {
-                    res.status(401).json({ error: 'Unauthorized' })
+                const result = checkRateLimit(req, this.config, this.rateLimitMap)
+                if (!result.allowed) {
+                    if (result.retryAfterSeconds !== undefined) {
+                        res.setHeader('Retry-After', String(result.retryAfterSeconds))
+                    }
+                    res.status(429).json({
+                        error: 'Too Many Requests',
+                        retryAfter: result.retryAfterSeconds,
+                    })
                     return
                 }
+
                 next()
             })
-            logger.info('Bearer token authentication enabled', { module: 'HTTP' })
+
+            // Periodic cleanup of expired entries
+            this.rateLimitCleanupTimer = setInterval(() => {
+                const now = Date.now()
+                for (const [ip, entry] of this.rateLimitMap) {
+                    if (now > entry.resetTime) {
+                        this.rateLimitMap.delete(ip)
+                    }
+                }
+            }, 60_000)
+            // Don't block process exit
+            this.rateLimitCleanupTimer.unref()
+
+            logger.info('Rate limiting enabled: 100 requests/minute per IP', {
+                module: 'HTTP',
+            })
         }
 
-        // Health check endpoint (before /mcp routes)
-        this.app.get('/health', (_req: Request, res: Response): void => {
-            res.status(200).json({
-                status: 'healthy',
-                timestamp: new Date().toISOString(),
+        // Authentication middleware
+        if (
+            this.config.oauthEnabled &&
+            this.config.oauthIssuer &&
+            this.config.oauthAudience
+        ) {
+            // OAuth 2.1 authentication
+            const jwksUri =
+                this.config.oauthJwksUri ??
+                `${this.config.oauthIssuer}/.well-known/jwks.json`
+
+            const tokenValidator = createTokenValidator({
+                jwksUri,
+                issuer: this.config.oauthIssuer,
+                audience: this.config.oauthAudience,
+                clockTolerance: this.config.oauthClockTolerance ?? 60,
             })
-        })
+
+            const resourceServer = createOAuthResourceServer({
+                resource: `http://${host}:${String(port)}`,
+                authorizationServers: [this.config.oauthIssuer],
+                scopesSupported: [...SUPPORTED_SCOPES],
+            })
+
+            // Register RFC 9728 metadata endpoint
+            this.app.get(
+                resourceServer.getWellKnownPath(),
+                resourceServer.getMetadataHandler()
+            )
+
+            // Apply OAuth middleware
+            this.app.use(
+                createOAuthMiddleware({
+                    tokenValidator,
+                    resourceServer,
+                    publicPaths: ['/health', '/', '/.well-known/*'],
+                })
+            )
+
+            // OAuth error handler
+            this.app.use(oauthErrorHandler)
+
+            logger.info('OAuth 2.1 authentication enabled', {
+                module: 'HTTP',
+                issuer: this.config.oauthIssuer,
+                audience: this.config.oauthAudience,
+            })
+        } else if (authToken) {
+            // Simple bearer token authentication (non-OAuth)
+            this.app.use(createAuthMiddleware(authToken))
+        }
+
+        // Health check endpoint
+        this.app.get('/health', handleHealthCheck)
 
         // Root info endpoint
-        this.app.get('/', (_req: Request, res: Response): void => {
-            res.status(200).json({
-                name: 'memory-journal-mcp',
-                version: pkg.version,
-                description: 'Project context management for AI-assisted development',
-                endpoints: {
-                    'POST /mcp': 'JSON-RPC requests (Streamable HTTP, MCP 2025-03-26)',
-                    'GET /mcp': 'SSE stream for server-to-client notifications',
-                    'DELETE /mcp': 'Session termination',
-                    'GET /sse': 'Legacy SSE connection (MCP 2024-11-05)',
-                    'POST /messages': 'Legacy SSE message endpoint',
-                    'GET /health': 'Health check',
-                },
-                documentation: 'https://github.com/neverinfamous/memory-journal-mcp',
-            })
-        })
+        this.app.get('/', handleRootInfo)
 
-        // OPTIONS handler for /mcp — MUST be before other /mcp routes
-        this.app.all('/mcp', (req: Request, res: Response, next: () => void) => {
-            if (req.method === 'OPTIONS') {
-                res.status(204).end()
-                return
-            }
-            next()
-        })
-
+        // Set up MCP endpoints based on mode
         if (this.config.stateless) {
             await this.setupStateless(server)
         } else {
@@ -205,14 +231,21 @@ export class HttpTransport {
 
         // Start HTTP server
         this.httpServer = this.app.listen(port, host, () => {
+            // Set HTTP server timeouts to prevent slowloris-style DoS attacks
+            if (this.httpServer) {
+                this.httpServer.setTimeout(HTTP_REQUEST_TIMEOUT_MS)
+                this.httpServer.keepAliveTimeout = HTTP_KEEP_ALIVE_TIMEOUT_MS
+                this.httpServer.headersTimeout = HTTP_HEADERS_TIMEOUT_MS
+            }
+
             logger.info(
                 `MCP server started on HTTP (${this.config.stateless ? 'stateless' : 'stateful'})`,
                 {
                     module: 'HTTP',
                     port,
                     host,
-                    endpoint: `http://${host}:${port}/mcp`,
-                }
+                    endpoint: `http://${host}:${String(port)}/mcp`,
+                },
             )
         })
 
@@ -231,6 +264,12 @@ export class HttpTransport {
         logger.info('Shutting down HTTP server...', { module: 'HTTP' })
 
         scheduler?.stop()
+
+        // Stop rate limit cleanup timer
+        if (this.rateLimitCleanupTimer) {
+            clearInterval(this.rateLimitCleanupTimer)
+            this.rateLimitCleanupTimer = null
+        }
 
         // Close all Streamable HTTP transports
         for (const [sessionId, transport] of this.transports) {
@@ -281,12 +320,18 @@ export class HttpTransport {
     }
 
     // =========================================================================
+    // Session  Activity Tracking
+    // =========================================================================
+
+    /** Update the last-activity timestamp for a session */
+    private touchSession(sid: string): void {
+        this.sessionLastActivity.set(sid, Date.now())
+    }
+
+    // =========================================================================
     // Stateless Mode
     // =========================================================================
 
-    /**
-     * Setup stateless transport (single transport, no session management)
-     */
     private async setupStateless(server: McpServer): Promise<void> {
         const statelessTransport = new StreamableHTTPServerTransport({
             sessionIdGenerator: undefined,
@@ -301,7 +346,7 @@ export class HttpTransport {
             void statelessTransport.handleRequest(
                 req as unknown as IncomingMessage,
                 res as unknown as ServerResponse,
-                req.body as unknown
+                req.body as unknown,
             )
         })
 
@@ -327,14 +372,6 @@ export class HttpTransport {
     // Stateful Mode
     // =========================================================================
 
-    /** Update the last-activity timestamp for a session */
-    private touchSession(sid: string): void {
-        this.sessionLastActivity.set(sid, Date.now())
-    }
-
-    /**
-     * Setup stateful transport (multi-session, SSE streaming)
-     */
     private setupStateful(server: McpServer): void {
         // Start session timeout sweep (runs every 5 minutes)
         this.sessionSweepTimer = setInterval(() => {
@@ -439,7 +476,7 @@ export class HttpTransport {
                         await newTransport.handleRequest(
                             req as unknown as IncomingMessage,
                             res as unknown as ServerResponse,
-                            req.body as unknown
+                            req.body as unknown,
                         )
                         return
                     } else {
@@ -460,7 +497,7 @@ export class HttpTransport {
                         await httpTransport.handleRequest(
                             req as unknown as IncomingMessage,
                             res as unknown as ServerResponse,
-                            req.body as unknown
+                            req.body as unknown,
                         )
                     }
                 } catch (error) {
@@ -504,7 +541,7 @@ export class HttpTransport {
             if (httpTransport !== undefined) {
                 void httpTransport.handleRequest(
                     req as unknown as IncomingMessage,
-                    res as unknown as ServerResponse
+                    res as unknown as ServerResponse,
                 )
             }
         })
@@ -527,7 +564,7 @@ export class HttpTransport {
             if (httpTransport !== undefined) {
                 void httpTransport.handleRequest(
                     req as unknown as IncomingMessage,
-                    res as unknown as ServerResponse
+                    res as unknown as ServerResponse,
                 )
             }
         })
@@ -537,10 +574,6 @@ export class HttpTransport {
     // Legacy SSE (MCP 2024-11-05)
     // =========================================================================
 
-    /**
-     * Setup Legacy SSE endpoints for backward compatibility.
-     * Stateful mode only.
-     */
     private setupLegacySSE(server: McpServer): void {
         // GET /sse — Open Legacy SSE connection
         this.app.get('/sse', (req: Request, res: Response): void => {
@@ -549,7 +582,7 @@ export class HttpTransport {
             // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
             const sseTransport = new SSEServerTransport(
                 '/messages',
-                res as unknown as ServerResponse
+                res as unknown as ServerResponse,
             )
 
             // Store transport by session ID after start
@@ -567,12 +600,12 @@ export class HttpTransport {
                     // SDK McpServer only supports one active transport — close first
                     try {
                         await server.connect(
-                            sseTransport as unknown as Parameters<typeof server.connect>[0]
+                            sseTransport as unknown as Parameters<typeof server.connect>[0],
                         )
                     } catch {
                         await server.close()
                         await server.connect(
-                            sseTransport as unknown as Parameters<typeof server.connect>[0]
+                            sseTransport as unknown as Parameters<typeof server.connect>[0],
                         )
                     }
                     // Note: server.connect() auto-calls start() on SSEServerTransport
@@ -630,7 +663,7 @@ export class HttpTransport {
             void transport.handlePostMessage(
                 req as unknown as IncomingMessage,
                 res as unknown as ServerResponse,
-                req.body as unknown
+                req.body as unknown,
             )
         })
     }

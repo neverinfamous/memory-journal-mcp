@@ -15,6 +15,7 @@ export type ToolGroup =
     | 'github' // Reserved for future GitHub-specific tools
     | 'backup' // Backup: backup_journal, list_backups, restore_backup
     | 'team' // Team: team_create_entry, team_get_recent, team_search
+    | 'codemode' // Code Mode: mj_execute_code (sandboxed JS execution)
 
 /**
  * Meta-group identifiers for common multi-group selections

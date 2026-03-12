@@ -9,8 +9,7 @@
      - **AntiGravity**: Tools are `mcp_{name}_{tool}` (e.g., `mcp_memory-journal-mcp_create_entry`). Server name = `memory-journal-mcp`.
      - **Cursor**: Tools are `user-{name}-{tool}` (e.g., `user-memory-journal-mcp-create_entry`). Server name = `user-memory-journal-mcp`.
      - **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly (e.g., `memory-journal-mcp`). Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method above if unsure.
-2. **Show the `userMessage` to the user** (it contains a formatted summary of project context)
-3. Proceed with the user's request
+2. Proceed with the user's request
 
 ## Behaviors
 
@@ -22,9 +21,36 @@
 
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
 
-- **Offer to create a rule or skill** — always ask the user first, never create silently
-- Examples: coding conventions, testing patterns, deployment steps, project-specific commands
-- Frame it as: "I noticed you always [pattern]. Would you like me to save this as a rule/skill so future agents follow it automatically?"
+**Suggest adding a rule** when you observe:
+- Naming conventions, formatting preferences, or coding standards
+- Testing patterns or verification steps the user always follows
+- Project-specific commands, workflows, or deployment steps
+- Error handling patterns or logging conventions
+
+**Suggest adding a skill** when you build:
+- Reusable multi-step processes (e.g., deployment, release, audit workflows)
+- Project-specific templates or scaffolds
+- Complex integrations or tool chains the user may repeat
+
+**Suggest refining existing rules/skills** when you notice:
+- A rule conflict or ambiguity causing inconsistent behavior
+- An outdated pattern that no longer matches the codebase
+- Missing edge cases or exceptions to an existing rule
+- A skill that could be extended with new steps
+
+## Copilot Review Patterns
+
+When the user has GitHub Copilot code review enabled:
+
+**Learn from reviews** — After a PR is merged or reviewed, use `get_copilot_reviews(pr_number)` to read Copilot's findings. If patterns emerge (e.g., repeated null check warnings, missing error handling), suggest adding a rule or updating existing rules. Create journal entries tagged `copilot-finding` and link to the PR via `pr_number`.
+
+**Pre-emptive checking** — Before creating or modifying code, search journal entries with tag `copilot-finding` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.
+
+**How to act:**
+- The briefing shows **Rules** and **Skills** paths — use these to locate the files
+- **Always ask the user first** — never create or modify rules/skills silently
+- Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
+- For skills, explain the workflow it would automate and what triggers it
 
 ## Quick Access
 
@@ -35,6 +61,26 @@ When you notice the user consistently applies patterns, preferences, or workflow
 | Health/time     | `memory://health`           |
 | Semantic search | `semantic_search(query)`    |
 | Full context    | `get-context-bundle` prompt |
+
+## Code Mode (Token-Efficient Multi-Step Operations)
+
+For multi-step workflows (3+ operations), prefer `mj_execute_code` over individual tool calls.
+This executes JavaScript in a sandboxed environment with all tools available as `mj.*` API:
+
+| Group         | Namespace              | Example                                           |
+|---------------|------------------------|---------------------------------------------------|
+| Core          | `mj.core.*`           | `mj.core.createEntry("Implemented feature X")`    |
+| Search        | `mj.search.*`         | `mj.search.searchEntries("performance")`          |
+| Analytics     | `mj.analytics.*`      | `mj.analytics.getStatistics()`                    |
+| Relationships | `mj.relationships.*`  | `mj.relationships.linkEntries(1, 2, "implements")`|
+| Export        | `mj.export.*`         | `mj.export.exportEntries("json")`                 |
+| Admin         | `mj.admin.*`          | `mj.admin.rebuildVectorIndex()`                   |
+| GitHub        | `mj.github.*`         | `mj.github.getGithubIssues({ state: "open" })`   |
+| Backup        | `mj.backup.*`         | `mj.backup.backupJournal()`                       |
+| Team          | `mj.team.*`           | `mj.team.teamCreateEntry("Team update")`          |
+
+**Features**: Positional args (`createEntry("note")`), aliases (`mj.core.create`), `mj.help()` for discovery.
+**Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
 
 <!-- SECTION:GITHUB -->
 
@@ -182,6 +228,12 @@ Milestone resources:
 | Tool             | Required Parameters | Notes                                                                                                     |
 | ---------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
 | `export_entries` | none                | Optional `format` (json/markdown), `limit` (default 100), `tags`, `start_date`, `end_date`, `entry_types` |
+
+### Code Mode
+
+| Tool                | Required Parameters | Optional Parameters                                     |
+| ------------------- | ------------------- | ------------------------------------------------------- |
+| `mj_execute_code`   | `code` (string)     | `timeout` (ms, max 30000), `readonly` (bool, default false) |
 
 ## Entry Types
 

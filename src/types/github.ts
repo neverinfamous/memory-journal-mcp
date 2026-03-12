@@ -70,6 +70,42 @@ export interface GitHubWorkflowRun {
 }
 
 /**
+ * GitHub PR review
+ */
+export interface GitHubReview {
+    id: number
+    author: string
+    state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING'
+    body: string | null
+    submittedAt: string
+    isCopilot: boolean
+}
+
+/**
+ * GitHub PR review comment (file-level)
+ */
+export interface GitHubReviewComment {
+    id: number
+    author: string
+    body: string
+    path: string
+    line: number | null
+    side: 'LEFT' | 'RIGHT'
+    createdAt: string
+    isCopilot: boolean
+}
+
+/**
+ * Copilot review summary for a PR
+ */
+export interface CopilotReviewSummary {
+    prNumber: number
+    state: 'approved' | 'changes_requested' | 'commented' | 'none'
+    commentCount: number
+    comments: GitHubReviewComment[]
+}
+
+/**
  * Auto-captured project context
  */
 export interface ProjectContext {

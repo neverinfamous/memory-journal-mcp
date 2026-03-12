@@ -12,6 +12,45 @@ import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
 import type { Scheduler } from '../../server/Scheduler.js'
 
 /**
+ * Configuration for the memory://briefing resource.
+ * All values have sensible defaults — users opt-in via env vars or CLI flags.
+ */
+export interface BriefingConfig {
+    /** Number of recent journal entries to include (default: 3) */
+    entryCount: number
+    /** Include team DB entries in briefing preview (default: false) */
+    includeTeam: boolean
+    /** Number of open issues to list with titles; 0 = count only (default: 0) */
+    issueCount: number
+    /** Number of PRs to list with titles; 0 = count only (default: 0) */
+    prCount: number
+    /** Show PR status breakdown (open/merged/closed) instead of simple count (default: false) */
+    prStatusBreakdown: boolean
+    /** Path to the user's rules file (e.g., .gemini/GEMINI.md) for awareness in briefing */
+    rulesFilePath?: string
+    /** Path to the user's skills directory for awareness in briefing */
+    skillsDirPath?: string
+    /** Number of recent workflow runs to list; 0 = latest-only status (default: 0) */
+    workflowCount: number
+    /** Show workflow run status breakdown (passing/failing/pending) (default: false) */
+    workflowStatusBreakdown: boolean
+    /** Aggregate Copilot review state across recent PRs in briefing (default: false) */
+    copilotReviews: boolean
+}
+
+/** Default briefing configuration — preserves pre-existing behavior */
+export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
+    entryCount: 3,
+    includeTeam: false,
+    issueCount: 0,
+    prCount: 0,
+    prStatusBreakdown: false,
+    workflowCount: 0,
+    workflowStatusBreakdown: false,
+    copilotReviews: false,
+}
+
+/**
  * Resource context for handlers that need extended access
  */
 export interface ResourceContext {
@@ -21,6 +60,7 @@ export interface ResourceContext {
     filterConfig?: ToolFilterConfig | null
     github?: GitHubIntegration | null
     scheduler?: Scheduler | null
+    briefingConfig?: BriefingConfig
 }
 
 /**

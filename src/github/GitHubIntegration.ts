@@ -13,7 +13,10 @@ import type {
     GitHubIssue,
     GitHubMilestone,
     GitHubPullRequest,
+    GitHubReview,
+    GitHubReviewComment,
     GitHubWorkflowRun,
+    CopilotReviewSummary,
     ProjectContext,
     KanbanBoard,
     KanbanColumn,
@@ -268,11 +271,13 @@ export class GitHubIntegration {
         if (cached) return cached
 
         try {
+            // Over-fetch by 2× because GitHub REST API includes PRs in the
+            // issues endpoint. After filtering PRs out we slice to `limit`.
             const response = await this.octokit.issues.listForRepo({
                 owner,
                 repo,
                 state,
-                per_page: limit,
+                per_page: Math.min(limit * 2, 100),
                 sort: 'updated',
                 direction: 'desc',
             })
@@ -280,6 +285,7 @@ export class GitHubIntegration {
             // Filter out pull requests (GitHub API includes PRs in issues)
             const result = response.data
                 .filter((issue) => !issue.pull_request)
+                .slice(0, limit)
                 .map((issue) => ({
                     number: issue.number,
                     title: issue.title,
@@ -571,6 +577,147 @@ export class GitHubIntegration {
                 error: error instanceof Error ? error.message : String(error),
             })
             return null
+        }
+    }
+
+    // ========================================================================
+    // PR Reviews & Copilot Integration
+    // ========================================================================
+
+    /** Known Copilot bot login patterns */
+    private static readonly COPILOT_BOT_PATTERNS = [
+        'copilot-pull-request-reviewer[bot]',
+        'github-copilot[bot]',
+        'copilot[bot]',
+    ]
+
+    /** Check if an author login matches a Copilot bot */
+    private static isCopilotAuthor(login: string): boolean {
+        const lower = login.toLowerCase()
+        return GitHubIntegration.COPILOT_BOT_PATTERNS.some((p) => lower === p || lower.includes('copilot'))
+    }
+
+    /**
+     * Get all reviews for a PR
+     */
+    async getReviews(
+        owner: string,
+        repo: string,
+        prNumber: number
+    ): Promise<GitHubReview[]> {
+        if (!this.octokit) return []
+
+        const cacheKey = `reviews:${owner}:${repo}:${String(prNumber)}`
+        const cached = this.getCached(cacheKey) as GitHubReview[] | undefined
+        if (cached) return cached
+
+        try {
+            const response = await this.octokit.rest.pulls.listReviews({
+                owner,
+                repo,
+                pull_number: prNumber,
+                per_page: 100,
+            })
+
+            const reviews: GitHubReview[] = response.data.map((r) => ({
+                id: r.id,
+                author: r.user?.login ?? 'unknown',
+                state: r.state as GitHubReview['state'],
+                body: r.body ?? null,
+                submittedAt: r.submitted_at ?? r.commit_id ?? new Date().toISOString(),
+                isCopilot: GitHubIntegration.isCopilotAuthor(r.user?.login ?? ''),
+            }))
+
+            this.setCache(cacheKey, reviews)
+            return reviews
+        } catch (error) {
+            logger.error('Failed to get PR reviews', {
+                module: 'GitHub',
+                entityId: prNumber,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
+        }
+    }
+
+    /**
+     * Get review comments (file-level) for a PR
+     */
+    async getReviewComments(
+        owner: string,
+        repo: string,
+        prNumber: number
+    ): Promise<GitHubReviewComment[]> {
+        if (!this.octokit) return []
+
+        const cacheKey = `review-comments:${owner}:${repo}:${String(prNumber)}`
+        const cached = this.getCached(cacheKey) as GitHubReviewComment[] | undefined
+        if (cached) return cached
+
+        try {
+            const response = await this.octokit.rest.pulls.listReviewComments({
+                owner,
+                repo,
+                pull_number: prNumber,
+                per_page: 100,
+            })
+
+            const comments: GitHubReviewComment[] = response.data.map((c) => ({
+                id: c.id,
+                author: c.user?.login ?? 'unknown',
+                body: c.body,
+                path: c.path,
+                line: c.line ?? c.original_line ?? null,
+                side: c.side ?? 'RIGHT',
+                createdAt: c.created_at,
+                isCopilot: GitHubIntegration.isCopilotAuthor(c.user?.login ?? ''),
+            }))
+
+            this.setCache(cacheKey, comments)
+            return comments
+        } catch (error) {
+            logger.error('Failed to get review comments', {
+                module: 'GitHub',
+                entityId: prNumber,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
+        }
+    }
+
+    /**
+     * Get Copilot's review summary for a PR
+     */
+    async getCopilotReviewSummary(
+        owner: string,
+        repo: string,
+        prNumber: number
+    ): Promise<CopilotReviewSummary> {
+        const [reviews, comments] = await Promise.all([
+            this.getReviews(owner, repo, prNumber),
+            this.getReviewComments(owner, repo, prNumber),
+        ])
+
+        const copilotReviews = reviews.filter((r) => r.isCopilot)
+        const copilotComments = comments.filter((c) => c.isCopilot)
+
+        // Determine overall state from Copilot's reviews
+        let state: CopilotReviewSummary['state'] = 'none'
+        if (copilotReviews.length > 0) {
+            // Use the latest Copilot review state
+            const latest = copilotReviews[copilotReviews.length - 1]
+            if (latest !== undefined) {
+                if (latest.state === 'APPROVED') state = 'approved'
+                else if (latest.state === 'CHANGES_REQUESTED') state = 'changes_requested'
+                else if (latest.state === 'COMMENTED') state = 'commented'
+            }
+        }
+
+        return {
+            prNumber,
+            state,
+            commentCount: copilotComments.length,
+            comments: copilotComments,
         }
     }
 

@@ -461,7 +461,7 @@ describe('McpServer', () => {
             await createServer({
                 transport: 'http',
                 dbPath: './test-server.db',
-                corsOrigin: 'https://example.com',
+                corsOrigins: ['https://example.com'],
             })
 
             expect(mockRegisterTool).toHaveBeenCalled()
@@ -683,26 +683,40 @@ describe('McpServer', () => {
             )
         })
 
-        it('should handle OPTIONS preflight explicitly', async () => {
+        it('should handle OPTIONS preflight via middleware', async () => {
+            const middlewareFns: Function[] = []
+            const { default: expressMod } = await import('express')
+            const app = expressMod()
+            ;(app.use as ReturnType<typeof vi.fn>).mockImplementation((...args: unknown[]) => {
+                if (args.length === 1 && typeof args[0] === 'function') {
+                    middlewareFns.push(args[0] as Function)
+                }
+            })
+
             await createServer({
                 transport: 'http',
                 dbPath: './test-server.db',
             })
 
-            const allHandler = mockHandlers.all['/mcp']
-            expect(allHandler).toBeDefined()
+            // Find the OPTIONS middleware
+            let optionsMwFound = false
+            for (const mw of middlewareFns) {
+                const mockResOptions = { status: vi.fn().mockReturnThis(), end: vi.fn(), setHeader: vi.fn() }
+                const nextFn = vi.fn()
+                mw({ method: 'OPTIONS', headers: {} }, mockResOptions, nextFn)
+                if (mockResOptions.status.mock.calls.some((c: unknown[]) => c[0] === 204)) {
+                    optionsMwFound = true
+                    expect(nextFn).not.toHaveBeenCalled()
 
-            const mockReqOptions = { method: 'OPTIONS' }
-            const mockResOptions = { status: vi.fn().mockReturnThis(), end: vi.fn() }
-            const nextFn = vi.fn()
-
-            if (allHandler) await allHandler(mockReqOptions, mockResOptions, nextFn)
-            expect(mockResOptions.status).toHaveBeenCalledWith(204)
-            expect(nextFn).not.toHaveBeenCalled()
-
-            const mockReqGet = { method: 'GET' }
-            if (allHandler) await allHandler(mockReqGet, mockResOptions, nextFn)
-            expect(nextFn).toHaveBeenCalled()
+                    // Also verify non-OPTIONS calls next
+                    const mockRes2 = { status: vi.fn().mockReturnThis(), end: vi.fn(), setHeader: vi.fn() }
+                    const nextFn2 = vi.fn()
+                    mw({ method: 'GET', headers: {} }, mockRes2, nextFn2)
+                    expect(nextFn2).toHaveBeenCalled()
+                    break
+                }
+            }
+            expect(optionsMwFound).toBe(true)
         })
 
         it('should invoke security headers middleware', async () => {
@@ -732,7 +746,7 @@ describe('McpServer', () => {
                     end: vi.fn(),
                 }
                 const nextFn = vi.fn()
-                mw({}, mockRes, nextFn)
+                mw({ headers: {} }, mockRes, nextFn)
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
                 if (headerNames.includes('X-Content-Type-Options')) {
@@ -762,10 +776,10 @@ describe('McpServer', () => {
                 transport: 'http',
                 dbPath: './test-server.db',
                 statelessHttp: true,
-                corsOrigin: 'https://test.example.com',
+                corsOrigins: ['https://test.example.com'],
             })
 
-            // Find the CORS middleware (sets Access-Control-Allow-Origin)
+            // Find the security+CORS middleware (sets Access-Control-Allow-Origin)
             let corsMiddlewareFound = false
             for (const mw of middlewareFns) {
                 const mockRes = {
@@ -774,24 +788,37 @@ describe('McpServer', () => {
                     end: vi.fn(),
                 }
 
-                // Test with OPTIONS request
-                const mockReqOptions = { method: 'OPTIONS' }
                 const noopNext = vi.fn()
-                mw(mockReqOptions, mockRes, noopNext)
+                mw({ method: 'GET', headers: { origin: 'https://test.example.com' } }, mockRes, noopNext)
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
-                if (headerNames.includes('Access-Control-Allow-Origin')) {
+                if (headerNames.includes('Access-Control-Allow-Methods')) {
                     corsMiddlewareFound = true
-                    expect(headerNames).toContain('Access-Control-Allow-Methods')
                     expect(headerNames).toContain('Access-Control-Allow-Headers')
                     expect(headerNames).toContain('Access-Control-Expose-Headers')
-                    // OPTIONS should return 204
-                    expect(mockRes.status).toHaveBeenCalledWith(204)
-                    expect(mockRes.end).toHaveBeenCalled()
+                    expect(noopNext).toHaveBeenCalled()
                     break
                 }
             }
             expect(corsMiddlewareFound).toBe(true)
+
+            // Find OPTIONS middleware (returns 204)
+            let optionsMwFound = false
+            for (const mw of middlewareFns) {
+                const mockRes2 = {
+                    setHeader: vi.fn(),
+                    status: vi.fn().mockReturnThis(),
+                    end: vi.fn(),
+                }
+                const nextFn = vi.fn()
+                mw({ method: 'OPTIONS', headers: {} }, mockRes2, nextFn)
+                if (mockRes2.status.mock.calls.some((c: unknown[]) => c[0] === 204)) {
+                    optionsMwFound = true
+                    expect(nextFn).not.toHaveBeenCalled()
+                    break
+                }
+            }
+            expect(optionsMwFound).toBe(true)
 
             // Test CORS middleware with non-OPTIONS request (calls next)
             for (const mw of middlewareFns) {
@@ -801,10 +828,10 @@ describe('McpServer', () => {
                     end: vi.fn(),
                 }
                 const nextFn = vi.fn()
-                mw({ method: 'POST' }, mockRes, nextFn)
+                mw({ method: 'POST', headers: { origin: 'https://test.example.com' } }, mockRes, nextFn)
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
-                if (headerNames.includes('Access-Control-Allow-Origin')) {
+                if (headerNames.includes('Access-Control-Allow-Methods')) {
                     expect(nextFn).toHaveBeenCalled()
                     break
                 }

@@ -60,6 +60,19 @@ export const SIGNIFICANCE_TYPES = [
 export const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
 export const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'
 
+/**
+ * Relaxed number schema for MCP SDK inputSchema registration.
+ *
+ * Uses `z.any()` so the SDK's Zod validation accepts any value (including
+ * strings like `"abc"`). The handler's strict schema (`z.number()`) then
+ * rejects invalid values and produces structured `{success: false, error}`
+ * responses via `formatHandlerError()`.
+ *
+ * Without this, `z.number()` rejects strings at the SDK level with raw
+ * MCP `-32602` errors that bypass the handler's try-catch.
+ */
+export const relaxedNumber = (): z.ZodAny => z.any()
+
 // ============================================================================
 // Cross-Group Output Schemas
 // ============================================================================

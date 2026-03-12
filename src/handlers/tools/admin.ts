@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { ENTRY_TYPES, EntryOutputSchema } from './schemas.js'
+import { ENTRY_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
 
 // ============================================================================
 // Input Schemas
@@ -24,7 +24,7 @@ const UpdateEntrySchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const UpdateEntrySchemaMcp = z.object({
-    entry_id: z.number(),
+    entry_id: relaxedNumber(),
     content: z.string().optional(),
     entry_type: z.string().optional(),
     is_personal: z.boolean().optional(),
@@ -33,6 +33,12 @@ const UpdateEntrySchemaMcp = z.object({
 
 const DeleteEntrySchema = z.object({
     entry_id: z.number(),
+    permanent: z.boolean().optional().default(false),
+})
+
+/** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
+const DeleteEntrySchemaMcp = z.object({
+    entry_id: relaxedNumber(),
     permanent: z.boolean().optional().default(false),
 })
 
@@ -124,7 +130,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             title: 'Delete Entry',
             description: 'Delete a journal entry (soft delete with timestamp)',
             group: 'admin',
-            inputSchema: DeleteEntrySchema,
+            inputSchema: DeleteEntrySchemaMcp,
             outputSchema: DeleteEntryOutputSchema,
             annotations: { readOnlyHint: false, destructiveHint: true },
             handler: (params: unknown) => {
@@ -253,7 +259,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             title: 'Add Entry to Vector Index',
             description: 'Add a specific entry to the semantic search vector index',
             group: 'admin',
-            inputSchema: z.object({ entry_id: z.number() }),
+            inputSchema: z.object({ entry_id: relaxedNumber() }),
             outputSchema: AddToVectorIndexOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: true },
             handler: async (params: unknown) => {

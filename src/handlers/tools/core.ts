@@ -17,6 +17,7 @@ import {
     EntriesListOutputSchema,
     RelationshipOutputSchema,
     ImportanceBreakdownSchema,
+    relaxedNumber,
     TagOutputSchema,
 } from './schemas.js'
 
@@ -53,14 +54,14 @@ const CreateEntrySchemaMcp = z.object({
     is_personal: z.boolean().optional().default(true),
     significance_type: z.string().optional(),
     auto_context: z.boolean().optional().default(true),
-    project_number: z.number().optional(),
+    project_number: relaxedNumber().optional(),
     project_owner: z.string().optional(),
-    issue_number: z.number().optional(),
+    issue_number: relaxedNumber().optional(),
     issue_url: z.string().optional(),
-    pr_number: z.number().optional(),
+    pr_number: relaxedNumber().optional(),
     pr_url: z.string().optional(),
     pr_status: z.string().optional(),
-    workflow_run_id: z.number().optional(),
+    workflow_run_id: relaxedNumber().optional(),
     workflow_name: z.string().optional(),
     workflow_status: z.string().optional(),
     share_with_team: z.boolean().optional().default(false),
@@ -71,6 +72,12 @@ const GetEntryByIdSchema = z.object({
     include_relationships: z.boolean().optional().default(true),
 })
 
+/** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
+const GetEntryByIdSchemaMcp = z.object({
+    entry_id: relaxedNumber(),
+    include_relationships: z.boolean().optional().default(true),
+})
+
 const GetRecentEntriesSchema = z.object({
     limit: z.number().max(500).optional().default(5),
     is_personal: z.boolean().optional(),
@@ -78,7 +85,7 @@ const GetRecentEntriesSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const GetRecentEntriesSchemaMcp = z.object({
-    limit: z.number().optional().default(5),
+    limit: relaxedNumber().optional().default(5),
     is_personal: z.boolean().optional(),
 })
 
@@ -253,7 +260,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Entry by ID',
             description: 'Get a specific journal entry by ID with full details',
             group: 'core',
-            inputSchema: GetEntryByIdSchema,
+            inputSchema: GetEntryByIdSchemaMcp,
             outputSchema: EntryByIdOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (params: unknown) => {

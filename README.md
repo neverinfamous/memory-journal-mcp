@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 10, 2026**
+**Last Updated March 11, 2026**
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -28,7 +28,7 @@
 
 ### Key Benefits
 
-**42 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**44 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -41,8 +41,9 @@
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
 - 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
+- ⚡ **Code Mode** — execute complex, multi-step operations in a secure JavaScript sandbox. Exposes all 43 capabilities via `mj.*` API, reducing token overhead by up to 90%
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
-- ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
+- ✅ **Deterministic error handling** — every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
 ---
 
@@ -113,20 +114,23 @@ flowchart TB
 
 ### Tool Filtering
 
+> [!IMPORTANT]
+> All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
+
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
-| Filter               | Tools | Use Case                |
-| -------------------- | ----- | ----------------------- |
-| `full`               | 42    | All tools (default)     |
-| `starter`            | ~10   | Core + search only      |
-| `essential`          | ~6    | Minimal footprint       |
-| `readonly`           | ~15   | Disable all mutations   |
-| `-github`            | 27    | Exclude a group         |
-| `-github,-analytics` | 25    | Exclude multiple groups |
+| Filter               | Tools | Use Case                 |
+| -------------------- | ----- | ------------------------ |
+| `full`               | 43    | All tools (default)      |
+| `starter`            | ~10   | Core + search + codemode |
+| `essential`          | ~6    | Minimal footprint        |
+| `readonly`           | ~15   | Disable all mutations    |
+| `-github`            | 28    | Exclude a group          |
+| `-github,-analytics` | 26    | Exclude multiple groups  |
 
 **Filter Syntax:** `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`, `codemode`
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
@@ -134,17 +138,18 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **42 MCP Tools** (9 Groups)
+### 🛠️ **44 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                     |
 | --------------- | ----- | ------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                         |
 | `core`          | 6     | Entry CRUD, tags, test                                                          |
 | `search`        | 4     | Text search, date range, semantic, vector stats                                 |
 | `analytics`     | 2     | Statistics, cross-project insights                                              |
 | `relationships` | 2     | Link entries, visualize graphs                                                  |
 | `export`        | 1     | JSON/Markdown export                                                            |
 | `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                         |
-| `github`        | 15    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle** |
+| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews** |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                  |
 | `team`          | 3     | Team create, get recent, search (requires `TEAM_DB_PATH`)                       |
 
@@ -203,46 +208,55 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ---
 
+## Code Mode: Maximum Efficiency
+
+Code Mode (`mj_execute_code`) dramatically reduces token usage (70–90%) and is included by default in all presets.
+
+Code executes in a **sandboxed VM context** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+
+- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
+- **Rate limiting** — 60 executions per minute per client
+- **Hard timeouts** — configurable execution limit (default 30s)
+- **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`, `mj.analytics.getStatistics()`)
+
+### ⚡ Code Mode Only (Maximum Token Savings)
+
+Run with **only Code Mode enabled** — a single tool that provides access to all 44 tools' worth of capability through the `mj.*` API:
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "memory-journal-mcp",
+      "args": ["--tool-filter", "codemode"]
+    }
+  }
+}
+```
+
+This exposes just `mj_execute_code`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all 10 tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist.
+
+#### Disabling Code Mode
+
+If you prefer individual tool calls, exclude codemode:
+
+```json
+{
+  "args": ["--tool-filter", "starter,-codemode"]
+}
+```
+
+---
+
 ## 🚀 Quick Start
 
 ### Option 1: npm (Recommended)
-
-**Step 1: Install the package**
 
 ```bash
 npm install -g memory-journal-mcp
 ```
 
-**Step 2: Add to ~/.cursor/mcp.json**
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "memory-journal-mcp"
-    }
-  }
-}
-```
-
-**Step 3: Restart Cursor**
-
-Restart Cursor or your MCP client, then start journaling!
-
-### Option 2: npx (No Installation)
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "npx",
-      "args": ["-y", "memory-journal-mcp"]
-    }
-  }
-}
-```
-
-### Option 3: From Source
+### Option 2: From Source
 
 ```bash
 git clone https://github.com/neverinfamous/memory-journal-mcp.git
@@ -251,18 +265,38 @@ npm install
 npm run build
 ```
 
+### Add to MCP Config
+
+Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
+
 ```json
 {
   "mcpServers": {
     "memory-journal-mcp": {
-      "command": "node",
-      "args": ["dist/cli.js", "--default-project", "1"]
+      "command": "memory-journal-mcp",
+      "env": {
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "GITHUB_REPO_PATH": "/path/to/your/git/repo"
+      }
     }
   }
 }
 ```
 
-### Option 4: HTTP/SSE Transport (Remote Access)
+**Variants** (modify the config above):
+
+| Variant | Change |
+|---------|--------|
+| **Minimal (no GitHub)** | Remove the `env` block entirely |
+| **npx (no install)** | Replace `"command"` with `"npx"` and add `"args": ["-y", "memory-journal-mcp"]` |
+| **From source** | Replace `"command"` with `"node"` and add `"args": ["dist/cli.js"]` |
+| **Code Mode only** | Add `"args": ["--tool-filter", "codemode"]` (single tool, all capabilities) |
+| **Docker** | Replace `"command"` with `"docker"` and use `run -i --rm -v ./data:/app/data writenotenow/memory-journal-mcp:latest` as args |
+| **Team collaboration** | Add `"TEAM_DB_PATH": "./team.db"` to `env` |
+
+Restart your MCP client and start journaling!
+
+### Option 3: HTTP/SSE Transport (Remote Access)
 
 For remote access or web-based clients, run the server in HTTP mode:
 
@@ -278,24 +312,27 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 
 **Endpoints:**
 
-| Endpoint         | Description                                      | Mode     |
-| ---------------- | ------------------------------------------------ | -------- |
-| `GET /`          | Server info and available endpoints              | Both     |
-| `POST /mcp`      | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
-| `GET /mcp`       | SSE stream for server-to-client notifications    | Stateful |
-| `DELETE /mcp`    | Session termination                              | Stateful |
-| `GET /sse`       | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
-| `POST /messages` | Legacy SSE message endpoint                      | Stateful |
-| `GET /health`    | Health check (`{ status, timestamp }`)           | Both     |
+| Endpoint                                   | Description                                      | Mode     |
+| ------------------------------------------ | ------------------------------------------------ | -------- |
+| `GET /`                                    | Server info and available endpoints              | Both     |
+| `POST /mcp`                                | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
+| `GET /mcp`                                 | SSE stream for server-to-client notifications    | Stateful |
+| `DELETE /mcp`                              | Session termination                              | Stateful |
+| `GET /sse`                                 | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
+| `POST /messages`                           | Legacy SSE message endpoint                      | Stateful |
+| `GET /health`                              | Health check (`{ status, timestamp }`)           | Both     |
+| `GET /.well-known/oauth-protected-resource`| RFC 9728 Protected Resource Metadata             | Both     |
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
 **Security Features:**
 
-- **6 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`
-- **Rate Limiting** — 100 requests/minute per IP (429 on excess)
-- **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`)
-- **Body Size Limit** — 1 MB maximum
+- **OAuth 2.1 Authentication** — RFC 9728/8414 compliant with JWT validation, JWKS caching, and granular scope enforcement (opt-in via `--oauth-enabled`)
+- **7 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (opt-in)
+- **Rate Limiting** — 100 requests/minute per IP with built-in sliding window (429 on excess)
+- **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`). Supports comma-separated multiple origins and wildcard subdomains (e.g., `*.example.com`)
+- **Body Size Limit** — 1 MB maximum (configurable)
+- **Server Timeouts** — Request (120s), keep-alive (65s), and headers (66s) timeouts for DoS mitigation
 - **404 Handler** — Unknown paths return `{ error: "Not found" }`
 - **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
 - **Build Provenance** - Cryptographic proof of build process
@@ -362,23 +399,7 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 
 ### GitHub Integration Configuration
 
-The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect the repository from your git context. However, MCP clients may run the server from a different directory than your project.
-
-**To enable GitHub auto-detection**, add `GITHUB_REPO_PATH` to your config:
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "memory-journal-mcp",
-      "env": {
-        "GITHUB_TOKEN": "ghp_your_token_here",
-        "GITHUB_REPO_PATH": "/path/to/your/git/repo"
-      }
-    }
-  }
-}
-```
+The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `GITHUB_REPO_PATH` is configured (shown in the Quick Start config above).
 
 | Environment Variable     | Description                                                             |
 | ------------------------ | ----------------------------------------------------------------------- |
@@ -390,6 +411,20 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues  |
 | `AUTO_REBUILD_INDEX`     | Set to `true` to rebuild vector index on server startup                 |
 | `MCP_HOST`               | Server bind host (`0.0.0.0` for containers, default: `localhost`)       |
+| `OAUTH_ENABLED`          | Set to `true` to enable OAuth 2.1 authentication (HTTP only)           |
+| `OAUTH_ISSUER`           | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)         |
+| `OAUTH_AUDIENCE`         | Expected JWT audience claim                                             |
+| `OAUTH_JWKS_URI`         | JWKS endpoint for token signature verification                          |
+| `BRIEFING_ENTRY_COUNT`   | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)    |
+| `BRIEFING_INCLUDE_TEAM`  | Include team DB entries in briefing (`true`/`false`; default: `false`)   |
+| `BRIEFING_ISSUE_COUNT`   | Issues to list in briefing; `0` = count only (default: `0`)             |
+| `BRIEFING_PR_COUNT`      | PRs to list in briefing; `0` = count only (default: `0`)                |
+| `BRIEFING_PR_STATUS`     | Show PR status breakdown (open/merged/closed; default: `false`)         |
+| `BRIEFING_WORKFLOW_COUNT`| Workflow runs to list in briefing; `0` = status only (default: `0`)     |
+| `BRIEFING_WORKFLOW_STATUS`| Show workflow status breakdown in briefing (default: `false`)          |
+| `BRIEFING_COPILOT_REVIEWS`| Aggregate Copilot review state in briefing (default: `false`)         |
+| `RULES_FILE_PATH`        | Path to user rules file for agent awareness (CLI: `--rules-file`)       |
+| `SKILLS_DIR_PATH`        | Path to skills directory for agent awareness (CLI: `--skills-dir`)      |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
 
@@ -410,6 +445,47 @@ When GitHub tools cannot auto-detect repository information:
   "instruction": "Please provide owner and repo parameters"
 }
 ```
+
+### 🔐 OAuth 2.1 Authentication
+
+For production deployments, enable OAuth 2.1 authentication on the HTTP transport:
+
+| Component                   | Status | Description                                      |
+| --------------------------- | ------ | ------------------------------------------------ |
+| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
+| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
+| Token Validation            | ✅     | JWT validation with JWKS support                 |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+| HTTP Transport              | ✅     | Streamable HTTP with OAuth middleware            |
+
+**Supported Scopes:**
+
+| Scope   | Tool Groups                                        |
+| ------- | -------------------------------------------------- |
+| `read`  | core, search, analytics, relationships, export     |
+| `write` | github, team (+ all read groups)                   |
+| `admin` | admin, backup, codemode (+ all write/read groups)  |
+
+**Quick Start:**
+
+```bash
+memory-journal-mcp --transport http --port 3000 \
+  --oauth-enabled \
+  --oauth-issuer https://auth.example.com/realms/mcp \
+  --oauth-audience memory-journal-mcp \
+  --oauth-jwks-uri https://auth.example.com/realms/mcp/protocol/openid-connect/certs
+```
+
+Or via environment variables:
+
+```bash
+export OAUTH_ENABLED=true
+export OAUTH_ISSUER=https://auth.example.com/realms/mcp
+export OAUTH_AUDIENCE=memory-journal-mcp
+memory-journal-mcp --transport http --port 3000
+```
+
+> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN` environment variable, or runs without authentication.
 
 ### 🔄 Session Management
 
@@ -462,7 +538,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 42 Tools"]
+        Tools["🛠️ 44 Tools"]
         Resources["📡 22 Resources"]
         Prompts["💬 16 Prompts"]
     end
@@ -491,7 +567,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (42)      │  │ Resources (22)  │  │ Prompts (16)│  │
+│  │ Tools (43)      │  │ Resources (22)  │  │ Prompts (16)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
@@ -536,12 +612,12 @@ npm run bench
 
 ### Testing
 
-**785 tests** across two test frameworks:
+**887 tests** across two test frameworks:
 
-| Suite                     | Tests | Command            | Covers                                                                |
-| ------------------------- | ----- | ------------------ | --------------------------------------------------------------------- |
-| Vitest (unit/integration) | 738   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
-| Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler |
+| Suite                     | Tests | Command            | Covers                                                                          |
+| ------------------------- | ----- | ------------------ | ------------------------------------------------------------------------------- |
+| Vitest (unit/integration) | 840   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
+| Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
 
 ```bash
 npm test          # Unit + integration tests
@@ -550,12 +626,12 @@ npm run test:e2e  # End-to-end HTTP/SSE transport tests
 
 ### Security
 
-- **Deterministic error handling** - Every tool returns structured `{success, error}` responses with actionable context — no raw exceptions, no silent failures, no misleading messages
+- **Deterministic error handling** - Every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses with actionable context — no raw exceptions, no silent failures, no misleading messages
 - **Local-first** - All data stored locally, no external API calls (except optional GitHub)
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated
 - **MCP 2025-11-25 annotations** - Behavioral hints (`readOnlyHint`, `destructiveHint`, etc.)
-- **HTTP transport hardening** - 6 security headers (`X-Content-Type-Options`, `X-Frame-Options`, `CSP`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`), configurable CORS, 1MB body limit, rate limiting (100 req/min), 30-min session timeout, 404 handler, cross-protocol guard
+- **HTTP transport hardening** - 7 security headers, configurable multi-origin CORS, 1MB body limit, built-in rate limiting (100 req/min), server timeouts, HSTS (opt-in), 30-min session timeout, 404 handler, cross-protocol guard
 - **Token scrubbing** - GitHub tokens and credentials automatically redacted from error logs
 
 ### Data & Privacy

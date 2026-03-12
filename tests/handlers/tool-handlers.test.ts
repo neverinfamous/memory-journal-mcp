@@ -56,6 +56,9 @@ describe('Tool Handlers', () => {
             const tools = getTools(db, null)
             for (const t of tools) {
                 const tool = t as { name: string; outputSchema?: object }
+                // mj_execute_code omits outputSchema (z.unknown() in JSON Schema
+                // causes structuredContent processing failures in MCP clients)
+                if (tool.name === 'mj_execute_code') continue
                 expect(tool.outputSchema).toBeDefined()
             }
         })

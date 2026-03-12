@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema } from './schemas.js'
+import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema, relaxedNumber } from './schemas.js'
 
 // ============================================================================
 // Output Schemas
@@ -145,7 +145,7 @@ const CrossProjectInsightsInputSchema = z.object({
 const CrossProjectInsightsInputSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-    min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+    min_entries: relaxedNumber().optional().default(3).describe('Minimum entries to include project'),
 })
 
 // ============================================================================

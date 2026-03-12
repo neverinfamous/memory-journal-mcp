@@ -12,6 +12,17 @@ import type { ProgressContext } from '../utils/progress-utils.js'
 
 // Re-export sub-module types
 export type { ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig } from './filtering.js'
+export { ErrorCategory } from './error-types.js'
+export type { ErrorResponse, ErrorContext } from './error-types.js'
+export {
+    MemoryJournalMcpError,
+    ConnectionError,
+    QueryError,
+    ValidationError,
+    ResourceNotFoundError,
+    ConfigurationError,
+    PermissionError,
+} from './errors.js'
 export type {
     EntryType,
     SignificanceType,
@@ -29,6 +40,9 @@ export type {
     GitHubPullRequest,
     GitHubMilestone,
     GitHubWorkflowRun,
+    GitHubReview,
+    GitHubReviewComment,
+    CopilotReviewSummary,
     ProjectContext,
     RepoStats,
     TrafficData,

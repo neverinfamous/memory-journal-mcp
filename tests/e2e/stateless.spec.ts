@@ -24,7 +24,7 @@ async function startStatelessServer(): Promise<void> {
             '--port',
             String(STATELESS_PORT),
             '--db',
-            './test-e2e-stateless.db',
+            './test-server/test-e2e-stateless.db',
             '--stateless',
         ],
         {

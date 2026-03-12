@@ -134,7 +134,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 - **Prettier** — Run `npx prettier --write .` for formatting
 - **Type safety** — Avoid `any`; use proper types and Zod schemas
 - **Modularity** — Keep files under ~500 lines; split into sub-modules when approaching the limit
-- **Error handling** — Use `formatHandlerError()` for structured `{success, error}` responses in tool handlers
+- **Error handling** — Use `formatHandlerErrorResponse()` for structured `{success, error, code, category, suggestion, recoverable}` responses in tool handlers
 
 ### Database Changes
 
@@ -213,19 +213,27 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 
 ```
 src/
-├── cli.ts                  # CLI entry point (Commander)
-├── McpServer.ts            # MCP server setup (tools, resources, prompts)
+├── cli.ts                      # CLI entry point (Commander)
+├── index.ts                    # Library entry point
+├── auth/                       # OAuth 2.1 authentication
+├── codemode/                   # Sandboxed JS execution engine
+├── constants/                  # Server instructions (source + generated)
 ├── database/
-│   ├── SqliteAdapter.ts    # SQLite operations via sql.js
-│   └── schema.ts           # DDL + input types
+│   ├── SqliteAdapter.ts        # SQLite operations via sql.js
+│   └── schema.ts               # DDL + migrations
+├── filtering/                  # Tool filtering system
+├── github/                     # GitHub API integration
 ├── handlers/
-│   ├── tools/              # 42 tool handlers (9 groups)
-│   ├── resources/          # 22 resource handlers
-│   └── prompts/            # 15 prompt handlers
-├── transports/
-│   └── http.ts             # HTTP/SSE transport layer
-├── types/                  # TypeScript type definitions
-└── utils/                  # Shared utilities
+│   ├── tools/                  # 44 tool handlers (10 groups)
+│   ├── resources/              # 22 resource handlers
+│   └── prompts/                # 15 prompt handlers
+├── server/
+│   ├── McpServer.ts            # MCP server setup
+│   └── Scheduler.ts            # Recurring task scheduler
+├── transports/                 # HTTP/SSE transport
+├── types/                      # TypeScript type definitions
+├── utils/                      # Logger, error helpers, progress
+└── vector/                     # Semantic search (vectra)
 ```
 
 ## 🤝 Community

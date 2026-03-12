@@ -117,9 +117,7 @@ vi.mock('express', () => {
     }
 })
 
-vi.mock('express-rate-limit', () => ({
-    default: vi.fn().mockReturnValue(vi.fn()),
-}))
+
 
 vi.mock('../../src/utils/logger.js', () => ({
     logger: {
@@ -134,7 +132,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 // Import after mocks
 // ============================================================================
 
-import { HttpTransport, type HttpTransportConfig } from '../../src/transports/http.js'
+import { HttpTransport, type HttpTransportConfig } from '../../src/transports/http/index.js'
 
 // ============================================================================
 // Helpers
@@ -148,6 +146,8 @@ function mockReq(overrides: Partial<Record<string, unknown>> = {}): Record<strin
         query: {},
         body: {},
         on: vi.fn(),
+        ip: '127.0.0.1',
+        socket: { remoteAddress: '127.0.0.1' },
         ...overrides,
     }
 }
@@ -192,7 +192,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: false,
             }
             const transport = new HttpTransport(config)
@@ -209,7 +209,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -224,7 +224,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -270,7 +270,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -291,20 +291,19 @@ describe('HttpTransport', () => {
             expect(headerNames).toContain('Cache-Control')
         })
 
-        it('should set HSTS when x-forwarded-proto is https', async () => {
+        it('should set HSTS when enableHSTS is true', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
+                enableHSTS: true,
             }
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
             const securityMw = mockMiddlewares[0]
-            const req = mockReq({
-                headers: { 'x-forwarded-proto': 'https' },
-            })
+            const req = mockReq()
             const res = mockRes()
             securityMw!(req, res, () => {})
 
@@ -317,7 +316,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -338,7 +337,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -364,7 +363,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -385,7 +384,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -401,40 +400,43 @@ describe('HttpTransport', () => {
             )
         })
 
-        it('should return 204 for OPTIONS /mcp', async () => {
+        it('should return 204 for OPTIONS via middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
-            const handler = mockRoutes['all']!['/mcp']
-            expect(handler).toBeDefined()
+            // OPTIONS is handled by the second middleware (after security+CORS)
+            const optionsMw = mockMiddlewares[1]
+            expect(optionsMw).toBeDefined()
 
             const req = mockReq({ method: 'OPTIONS' })
             const res = mockRes()
-            handler!(req, res, () => {})
+            const next = vi.fn()
+            optionsMw!(req, res, next)
             expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(204)
+            expect(next).not.toHaveBeenCalled()
         })
 
-        it('should pass non-OPTIONS /mcp to next', async () => {
+        it('should pass non-OPTIONS requests through OPTIONS middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
-            const handler = mockRoutes['all']!['/mcp']
+            const optionsMw = mockMiddlewares[1]
             const req = mockReq({ method: 'POST' })
             const res = mockRes()
             let nextCalled = false
-            handler!(req, res, () => {
+            optionsMw!(req, res, () => {
                 nextCalled = true
             })
             expect(nextCalled).toBe(true)
@@ -444,7 +446,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -469,7 +471,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -487,7 +489,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -511,7 +513,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
@@ -534,7 +536,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -571,7 +573,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
-                corsOrigin: 'http://localhost',
+                corsOrigins: ['http://localhost'],
                 stateless: true,
                 authToken: 'secret-token',
             }

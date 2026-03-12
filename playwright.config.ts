@@ -19,7 +19,12 @@ export default defineConfig({
     ],
     webServer: {
         command:
-            'node dist/cli.js --transport http --port 3100 --db ./test-e2e.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2',
+            'node dist/cli.js --transport http --port 3100 --db ./test-server/test-e2e.db --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2',
+        env: {
+            ...process.env,
+            // Prevent 429s during E2E runs with many client connections
+            MCP_RATE_LIMIT_MAX: '10000',
+        },
         url: 'http://localhost:3100/health',
         reuseExistingServer: !process.env.CI,
         timeout: 15000,

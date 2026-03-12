@@ -13,6 +13,7 @@ import {
     DATE_FORMAT_MESSAGE,
     EntryOutputSchema,
     EntriesListOutputSchema,
+    relaxedNumber,
 } from './schemas.js'
 
 // ============================================================================
@@ -34,13 +35,13 @@ const SearchEntriesSchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const SearchEntriesSchemaMcp = z.object({
     query: z.string().optional(),
-    limit: z.number().optional().default(10),
+    limit: relaxedNumber().optional().default(10),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional(),
-    issue_number: z.number().optional(),
-    pr_number: z.number().optional(),
+    project_number: relaxedNumber().optional(),
+    issue_number: relaxedNumber().optional(),
+    pr_number: relaxedNumber().optional(),
     pr_status: z.string().optional(),
-    workflow_run_id: z.number().optional(),
+    workflow_run_id: relaxedNumber().optional(),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -64,11 +65,11 @@ const SearchByDateRangeSchemaMcp = z.object({
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     is_personal: z.boolean().optional(),
-    project_number: z.number().optional(),
-    issue_number: z.number().optional(),
-    pr_number: z.number().optional(),
-    workflow_run_id: z.number().optional(),
-    limit: z.number().optional().default(500),
+    project_number: relaxedNumber().optional(),
+    issue_number: relaxedNumber().optional(),
+    pr_number: relaxedNumber().optional(),
+    workflow_run_id: relaxedNumber().optional(),
+    limit: relaxedNumber().optional().default(500),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -87,8 +88,8 @@ const SemanticSearchSchema = z.object({
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const SemanticSearchSchemaMcp = z.object({
     query: z.string(),
-    limit: z.number().optional().default(10),
-    similarity_threshold: z.number().optional().default(0.25),
+    limit: relaxedNumber().optional().default(10),
+    similarity_threshold: relaxedNumber().optional().default(0.25),
     is_personal: z.boolean().optional(),
     hint_on_empty: z
         .boolean()

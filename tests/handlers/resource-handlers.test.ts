@@ -121,7 +121,7 @@ describe('Resource Handlers', () => {
             const result = await readResource('memory://instructions', db, undefined, null)
 
             const text = result.data as string
-            expect(text).toContain('Active Tools (42)')
+            expect(text).toContain('Active Tools (44)')
         })
 
         it('should read memory://recent', async () => {

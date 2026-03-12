@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 42 tools are categorized here for filtering support.
+ * All 44 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -51,9 +51,11 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'update_github_milestone',
         'delete_github_milestone',
         'get_repo_insights',
+        'get_copilot_reviews',
     ],
     backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
     team: ['team_create_entry', 'team_get_recent', 'team_search'],
+    codemode: ['mj_execute_code'],
 }
 
 /**
@@ -72,6 +74,7 @@ export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
         'github',
         'backup',
         'team',
+        'codemode',
     ],
     readonly: ['core', 'search', 'analytics', 'relationships', 'export'],
 }

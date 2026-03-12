@@ -5,6 +5,8 @@
  */
 
 import type { Tag } from '../../types/index.js'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { getAllToolNames } from '../../filtering/ToolFilter.js'
 import { generateInstructions, type InstructionLevel } from '../../constants/ServerInstructions.js'
 import { getPrompts } from '../prompts/index.js'
@@ -17,6 +19,7 @@ import {
     ICON_ANALYTICS,
 } from '../../constants/icons.js'
 import pkg from '../../../package.json' with { type: 'json' }
+import { DEFAULT_BRIEFING_CONFIG } from './shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { execQuery, transformEntryRow } from './shared.js'
 
@@ -48,8 +51,10 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                 sessionInit: true,
             },
             handler: async (_uri: string, context: ResourceContext) => {
-                // Get latest 3 entries (compact)
-                const recentEntries = context.db.getRecentEntries(3)
+                const config = context.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+
+                // Get latest entries (configurable count)
+                const recentEntries = context.db.getRecentEntries(config.entryCount)
                 const latestEntries = recentEntries.map((e) => ({
                     id: e.id,
                     timestamp: e.timestamp,
@@ -71,6 +76,22 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                         clones14d?: number
                         views14d?: number
                     }
+                    openIssueList?: { number: number; title: string }[]
+                    openPrList?: { number: number; title: string; state: string }[]
+                    prStatusSummary?: { open: number; merged: number; closed: number }
+                    workflowSummary?: {
+                        passing: number
+                        failing: number
+                        pending: number
+                        cancelled: number
+                        runs?: { name: string; conclusion: string }[]
+                    }
+                    copilotReviews?: {
+                        reviewed: number
+                        approved: number
+                        changesRequested: number
+                        totalComments: number
+                    }
                 } | null = null
 
                 if (context.github) {
@@ -80,15 +101,34 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                         const repo = repoInfo.repo
 
                         if (owner && repo) {
-                            // Get CI status (based on latest run only)
+                            // Get CI status
                             let ciStatus:
                                 | 'passing'
                                 | 'failing'
                                 | 'pending'
                                 | 'cancelled'
                                 | 'unknown' = 'unknown'
+                            let workflowSummary:
+                                | {
+                                      passing: number
+                                      failing: number
+                                      pending: number
+                                      cancelled: number
+                                      runs?: { name: string; conclusion: string }[]
+                                  }
+                                | undefined = undefined
                             try {
-                                const runs = await context.github.getWorkflowRuns(owner, repo, 1)
+                                // Fetch more runs when workflow details are configured
+                                const runLimit = Math.max(
+                                    1,
+                                    config.workflowCount,
+                                    config.workflowStatusBreakdown ? 10 : 1
+                                )
+                                const runs = await context.github.getWorkflowRuns(
+                                    owner,
+                                    repo,
+                                    runLimit
+                                )
                                 if (runs.length > 0) {
                                     const latestRun = runs[0]
                                     if (!latestRun) {
@@ -110,29 +150,115 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                                                 ciStatus = 'unknown'
                                         }
                                     }
+
+                                    // Build workflow summary if configured
+                                    if (
+                                        config.workflowStatusBreakdown ||
+                                        config.workflowCount > 0
+                                    ) {
+                                        const counts = {
+                                            passing: 0,
+                                            failing: 0,
+                                            pending: 0,
+                                            cancelled: 0,
+                                        }
+                                        for (const run of runs) {
+                                            if (run.status !== 'completed') {
+                                                counts.pending++
+                                            } else {
+                                                switch (run.conclusion) {
+                                                    case 'success':
+                                                        counts.passing++
+                                                        break
+                                                    case 'failure':
+                                                        counts.failing++
+                                                        break
+                                                    case 'cancelled':
+                                                        counts.cancelled++
+                                                        break
+                                                    default:
+                                                        break
+                                                }
+                                            }
+                                        }
+                                        workflowSummary = {
+                                            ...counts,
+                                            ...(config.workflowCount > 0
+                                                ? {
+                                                      runs: runs
+                                                          .slice(0, config.workflowCount)
+                                                          .map((r) => ({
+                                                              name: r.name,
+                                                              conclusion:
+                                                                  r.status !== 'completed'
+                                                                      ? 'pending'
+                                                                      : (r.conclusion ?? 'unknown'),
+                                                          })),
+                                                  }
+                                                : {}),
+                                        }
+                                    }
                                 }
                             } catch {
                                 // CI status unavailable
                             }
 
-                            // Get issue/PR counts
+                            // Get issue/PR counts (and optionally titles)
                             let openIssues = 0
                             let openPRs = 0
+                            let openIssueList:
+                                | { number: number; title: string }[]
+                                | undefined = undefined
+                            let openPrList:
+                                | { number: number; title: string; state: string }[]
+                                | undefined = undefined
                             try {
+                                // Fetch enough issues for both count and optional listing
+                                const issueLimit = Math.max(1, config.issueCount || 1)
                                 const issues = await context.github.getIssues(
                                     owner,
                                     repo,
                                     'open',
-                                    1
+                                    issueLimit
                                 )
                                 openIssues = issues.length > 0 ? issues.length : 0
+
+                                // Build issue title list if configured
+                                if (config.issueCount > 0 && issues.length > 0) {
+                                    openIssueList = issues
+                                        .slice(0, config.issueCount)
+                                        .map((i) => ({ number: i.number, title: i.title }))
+                                }
+
+                                // Fetch PRs — need 'all' state for status breakdown
+                                const prState = config.prStatusBreakdown ? 'all' as const : 'open' as const
+                                const prLimit = config.prStatusBreakdown
+                                    ? Math.max(20, config.prCount)
+                                    : Math.max(1, config.prCount || 1)
                                 const prs = await context.github.getPullRequests(
                                     owner,
                                     repo,
-                                    'open',
-                                    1
+                                    prState,
+                                    prLimit
                                 )
-                                openPRs = prs.length > 0 ? prs.length : 0
+
+                                if (config.prStatusBreakdown) {
+                                    // Count by status
+                                    openPRs = prs.filter((p) => p.state === 'OPEN').length
+                                } else {
+                                    openPRs = prs.length > 0 ? prs.length : 0
+                                }
+
+                                // Build PR title list if configured
+                                if (config.prCount > 0 && prs.length > 0) {
+                                    openPrList = prs
+                                        .slice(0, config.prCount)
+                                        .map((p) => ({
+                                            number: p.number,
+                                            title: p.title,
+                                            state: p.state,
+                                        }))
+                                }
                             } catch {
                                 // Counts unavailable
                             }
@@ -206,6 +332,47 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                                 openPRs,
                                 milestones,
                                 insights,
+                                openIssueList,
+                                openPrList,
+                                ...(config.prStatusBreakdown && openPrList
+                                    ? {
+                                          prStatusSummary: {
+                                              open: openPrList.filter((p) => p.state === 'OPEN').length +
+                                                  (openPRs - (openPrList?.filter((p) => p.state === 'OPEN').length ?? 0)),
+                                              merged: openPrList.filter((p) => p.state === 'MERGED').length,
+                                              closed: openPrList.filter((p) => p.state === 'CLOSED').length,
+                                          },
+                                      }
+                                    : {}),
+                                ...(workflowSummary ? { workflowSummary } : {}),
+                                ...await (async () => {
+                                    if (!config.copilotReviews || !context.github) return {}
+                                    try {
+                                        // Aggregate Copilot reviews across recent PRs
+                                        const recentPrs = await context.github.getPullRequests(owner, repo, 'all', 10)
+                                        let reviewed = 0
+                                        let approved = 0
+                                        let changesRequested = 0
+                                        let totalComments = 0
+                                        for (const pr of recentPrs.slice(0, 5)) {
+                                            const summary = await context.github.getCopilotReviewSummary(owner, repo, pr.number)
+                                            if (summary.state !== 'none') {
+                                                reviewed++
+                                                if (summary.state === 'approved') approved++
+                                                else if (summary.state === 'changes_requested') changesRequested++
+                                                totalComments += summary.commentCount
+                                            }
+                                        }
+                                        if (reviewed > 0) {
+                                            return {
+                                                copilotReviews: { reviewed, approved, changesRequested, totalComments },
+                                            }
+                                        }
+                                        return {}
+                                    } catch {
+                                        return {}
+                                    }
+                                })(),
                             }
                         }
                     } catch {
@@ -221,6 +388,9 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                 let teamContext:
                     | { totalEntries: number; latestPreview: string | null }
                     | undefined = undefined
+                let teamLatestEntries:
+                    | { id: number; timestamp: string; type: string; preview: string }[]
+                    | undefined = undefined
                 if (context.teamDb) {
                     try {
                         const teamStats = context.teamDb.getStatistics('week')
@@ -232,8 +402,69 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                             totalEntries: teamStats.totalEntries ?? 0,
                             latestPreview: teamLatest,
                         }
+
+                        // Include team entries in briefing if configured
+                        if (config.includeTeam) {
+                            const teamEntries = context.teamDb.getRecentEntries(config.entryCount)
+                            teamLatestEntries = teamEntries.map((e) => ({
+                                id: e.id,
+                                timestamp: e.timestamp,
+                                type: e.entryType,
+                                preview:
+                                    e.content.slice(0, 80) +
+                                    (e.content.length > 80 ? '...' : ''),
+                            }))
+                        }
                     } catch {
                         // Team DB unavailable
+                    }
+                }
+
+                // Rules file & skills directory metadata (if configured)
+                let rulesFile:
+                    | { path: string; name: string; sizeKB: number; lastModified: string }
+                    | undefined = undefined
+                let skillsDir:
+                    | { path: string; count: number; names: string[] }
+                    | undefined = undefined
+
+                if (config.rulesFilePath) {
+                    try {
+                        const stat = fs.statSync(config.rulesFilePath)
+                        const now = Date.now()
+                        const ageMs = now - stat.mtimeMs
+                        const ageHours = Math.floor(ageMs / 3_600_000)
+                        const ageDays = Math.floor(ageMs / 86_400_000)
+                        const agoStr =
+                            ageDays > 0
+                                ? `${String(ageDays)}d ago`
+                                : ageHours > 0
+                                  ? `${String(ageHours)}h ago`
+                                  : 'just now'
+                        rulesFile = {
+                            path: config.rulesFilePath,
+                            name: path.basename(config.rulesFilePath),
+                            sizeKB: Math.round(stat.size / 1024),
+                            lastModified: agoStr,
+                        }
+                    } catch {
+                        // Rules file not found or inaccessible
+                    }
+                }
+
+                if (config.skillsDirPath) {
+                    try {
+                        const entries = fs.readdirSync(config.skillsDirPath, {
+                            withFileTypes: true,
+                        })
+                        const skillDirs = entries.filter((e) => e.isDirectory())
+                        skillsDir = {
+                            path: config.skillsDirPath,
+                            count: skillDirs.length,
+                            names: skillDirs.map((d) => d.name),
+                        }
+                    } catch {
+                        // Skills directory not found or inaccessible
                     }
                 }
 
@@ -271,6 +502,69 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
+                // Build issue/PR rows for userMessage
+                let issuesRow = ''
+                let prsRow = ''
+                if (github) {
+                    // Issues row — always show count, optionally list titles
+                    if (github.openIssueList && github.openIssueList.length > 0) {
+                        const titles = github.openIssueList
+                            .map((i) => `#${String(i.number)} ${i.title}`)
+                            .join(' · ')
+                        issuesRow = `\n| **Issues** | ${String(github.openIssues)} open: ${titles} |`
+                    } else {
+                        issuesRow = `\n| **Issues** | ${String(github.openIssues)} open |`
+                    }
+
+                    // PRs row — status breakdown or simple count
+                    if (github.prStatusSummary) {
+                        const s = github.prStatusSummary
+                        const parts: string[] = []
+                        if (s.open > 0) parts.push(`${String(s.open)} open`)
+                        if (s.merged > 0) parts.push(`${String(s.merged)} merged`)
+                        if (s.closed > 0) parts.push(`${String(s.closed)} closed`)
+                        prsRow = `\n| **PRs** | ${parts.join(' · ') || '0'} |`
+                    } else if (github.openPrList && github.openPrList.length > 0) {
+                        const titles = github.openPrList
+                            .map((p) => `#${String(p.number)} ${p.title}`)
+                            .join(' · ')
+                        prsRow = `\n| **PRs** | ${String(github.openPRs)} open: ${titles} |`
+                    } else {
+                        prsRow = `\n| **PRs** | ${String(github.openPRs)} open |`
+                    }
+                }
+
+                // Build enhanced CI display
+                let ciDisplay = ciStatus as string
+                if (github?.workflowSummary) {
+                    const ws = github.workflowSummary
+                    if (ws.runs && ws.runs.length > 0) {
+                        // Show named runs: ✅ build · ❌ deploy · ✅ lint
+                        const icons: Record<string, string> = {
+                            success: '✅',
+                            failure: '❌',
+                            pending: '⏳',
+                            cancelled: '⛔',
+                            unknown: '❓',
+                        }
+                        ciDisplay = ws.runs
+                            .map(
+                                (r) =>
+                                    `${icons[r.conclusion] ?? '❓'} ${r.name}`
+                            )
+                            .join(' · ')
+                    } else {
+                        // Status breakdown only: 3 passing · 1 failing
+                        const parts: string[] = []
+                        if (ws.passing > 0) parts.push(`${String(ws.passing)} passing`)
+                        if (ws.failing > 0) parts.push(`${String(ws.failing)} failing`)
+                        if (ws.pending > 0) parts.push(`${String(ws.pending)} pending`)
+                        if (ws.cancelled > 0)
+                            parts.push(`${String(ws.cancelled)} cancelled`)
+                        ciDisplay = parts.join(' · ') || ciStatus
+                    }
+                }
+
                 return {
                     data: {
                         version: pkg.version,
@@ -281,6 +575,9 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                         },
                         github,
                         teamContext,
+                        ...(teamLatestEntries ? { teamLatestEntries } : {}),
+                        ...(rulesFile ? { rulesFile } : {}),
+                        ...(skillsDir ? { skillsDir } : {}),
                         behaviors: {
                             create: 'implementations, decisions, bug-fixes, milestones',
                             search: 'before decisions, referencing prior work',
@@ -302,17 +599,14 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                             repoInsights: 'memory://github/insights',
                             contextBundle: 'get-context-bundle prompt',
                         },
-                        // IMPORTANT: Agent should relay this message to the user
                         userMessage: `📋 **Session Context Loaded**
 | Context | Value |
 |---------|-------|
 | **Project** | ${repoName} |
 | **Branch** | ${branchName} |
-| **CI Status** | ${ciStatus} |
+| **CI** | ${ciDisplay} |
 | **Journal** | ${totalEntries} entries |${teamContext ? `\n| **Team DB** | ${teamContext.totalEntries} entries |` : ''}
-| **Latest** | ${latestPreview} |${milestoneRow}${insightsRow}
-
-I have project memory access and will create entries for significant work.`,
+| **Latest** | ${latestPreview} |${issuesRow}${prsRow}${milestoneRow}${insightsRow}${github?.copilotReviews ? `\n| **Copilot** | ${String(github.copilotReviews.reviewed)} reviewed · ${String(github.copilotReviews.approved)} approved${github.copilotReviews.changesRequested > 0 ? ` · ${String(github.copilotReviews.changesRequested)} changes requested` : ''}${github.copilotReviews.totalComments > 0 ? ` (${String(github.copilotReviews.totalComments)} comments)` : ''} |` : ''}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`,
                         // Note for clients that don't auto-inject ServerInstructions
                         clientNote:
                             'For complete tool reference and field notes, read memory://instructions.',
