@@ -117,9 +117,9 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
                             await server.connect(newTransport)
                         }
                         await newTransport.handleRequest(
-                            req as unknown as IncomingMessage,
-                            res as unknown as ServerResponse,
-                            req.body as unknown,
+                            req as IncomingMessage,
+                            res as ServerResponse,
+                            req.body,
                         )
                         return
                     } else {
@@ -138,9 +138,9 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
                     // Handle request with existing transport
                     if (httpTransport !== undefined) {
                         await httpTransport.handleRequest(
-                            req as unknown as IncomingMessage,
-                            res as unknown as ServerResponse,
-                            req.body as unknown,
+                            req as IncomingMessage,
+                            res as ServerResponse,
+                            req.body,
                         )
                     }
                 } catch (error) {
@@ -183,8 +183,8 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
             const httpTransport = ctx.transports.get(sessionId)
             if (httpTransport !== undefined) {
                 void httpTransport.handleRequest(
-                    req as unknown as IncomingMessage,
-                    res as unknown as ServerResponse,
+                    req as IncomingMessage,
+                    res as ServerResponse,
                 )
             }
         })
@@ -206,10 +206,11 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
             const httpTransport = ctx.transports.get(sessionId)
             if (httpTransport !== undefined) {
                 void httpTransport.handleRequest(
-                    req as unknown as IncomingMessage,
-                    res as unknown as ServerResponse,
+                    req as IncomingMessage,
+                    res as ServerResponse,
                 )
             }
         })
     return sessionSweepTimer;
 }
+

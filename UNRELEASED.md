@@ -60,6 +60,8 @@
   - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
   - **GitHub Integration** — Split monolithic `src/github/github-integration.ts` (1707 lines) into `src/github/github-integration/` containing focused modules (`auth.ts`, `repos.ts`, `issues.ts`, `pull-requests.ts`, `search.ts`, `copilot.ts`, `index.ts`).
   - **Core Resources** — Split monolithic `src/handlers/resources/core.ts` (823 lines) into `src/handlers/resources/core/` containing `briefing.ts`, `instructions.ts`, `stats.ts`, and `index.ts`.
+  - **Briefing Resource** — Split monolithic `src/handlers/resources/core/briefing.ts` (560 lines) into `src/handlers/resources/core/briefing/` containing focused builders (`github.ts`, `team.ts`, `system.ts`, `formatter.ts`, `types.ts`) and `index.ts`.
+- **Test Directory Renamed** — Renamed `src/auth/__tests__` to `src/auth/tests` to comply with the project's strict kebab-case naming standard.
 - **HTTP Transport Modularized** — Continued splitting `src/transports/http.ts` and `src/transports/http/server.ts` into a fully modularized directory:
   - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types
   - `security.ts` — Client IP extraction, built-in rate limiting, CORS (wildcard subdomain support), security headers

@@ -110,7 +110,7 @@ export class HttpTransport {
 
         // JSON body parser with size limit (DoS prevention)
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
-        this.app.use(express.json({ limit: maxBody }) as unknown as RequestHandler)
+        this.app.use(express.json({ limit: maxBody }) as RequestHandler)
 
         // Built-in rate limiting (replaces express-rate-limit)
         if (this.config.enableRateLimit !== false) {

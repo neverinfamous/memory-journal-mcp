@@ -16,9 +16,9 @@ export async function setupStateless(app: Express, server: McpServer): Promise<v
     // POST /mcp — all requests go to the same transport
     app.post('/mcp', (req: Request, res: Response): void => {
             void statelessTransport.handleRequest(
-                req as unknown as IncomingMessage,
-                res as unknown as ServerResponse,
-                req.body as unknown,
+                req as IncomingMessage,
+                res as ServerResponse,
+                req.body,
             )
         })
 

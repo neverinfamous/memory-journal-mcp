@@ -12,7 +12,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, server: McpSe
             // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
             const sseTransport = new SSEServerTransport(
                 '/messages',
-                res as unknown as ServerResponse,
+                res as ServerResponse,
             )
 
             // Store transport by session ID after start
@@ -30,12 +30,12 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, server: McpSe
                     // SDK McpServer only supports one active transport — close first
                     try {
                         await server.connect(
-                            sseTransport as unknown as Parameters<typeof server.connect>[0],
+                            sseTransport as Parameters<typeof server.connect>[0],
                         )
                     } catch {
                         await server.close()
                         await server.connect(
-                            sseTransport as unknown as Parameters<typeof server.connect>[0],
+                            sseTransport as Parameters<typeof server.connect>[0],
                         )
                     }
                     // Note: server.connect() auto-calls start() on SSEServerTransport
@@ -91,9 +91,9 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, server: McpSe
             ctx.touchSession(sessionId)
 
             void transport.handlePostMessage(
-                req as unknown as IncomingMessage,
-                res as unknown as ServerResponse,
-                req.body as unknown,
+                req as IncomingMessage,
+                res as ServerResponse,
+                req.body,
             )
         })
 }
