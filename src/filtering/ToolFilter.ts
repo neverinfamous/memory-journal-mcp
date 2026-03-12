@@ -54,6 +54,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     ],
     backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
     team: ['team_create_entry', 'team_get_recent', 'team_search'],
+    codemode: ['mj_execute_code'],
 }
 
 /**
@@ -72,6 +73,7 @@ export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
         'github',
         'backup',
         'team',
+        'codemode',
     ],
     readonly: ['core', 'search', 'analytics', 'relationships', 'export'],
 }

@@ -31,6 +31,7 @@ import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team.js'
+import { getCodeModeTools } from './codemode.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -87,6 +88,11 @@ function getToolIcon(
             iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/account-group.svg',
             title: 'Team',
             description: 'Team collaboration',
+        },
+        codemode: {
+            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/code-braces.svg',
+            title: 'Code Mode',
+            description: 'Sandboxed code execution',
         },
     }
     return iconMap[group]
@@ -227,5 +233,6 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         ...getGitHubTools(context),
         ...getBackupTools(context),
         ...getTeamTools(context),
+        ...getCodeModeTools(context),
     ]
 }

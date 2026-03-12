@@ -507,7 +507,7 @@ describe('generateInstructions', () => {
     describe('tool count consistency', () => {
         it('should have 42 tools across all groups', () => {
             const allToolNames = getAllToolNames()
-            expect(allToolNames.length).toBe(42)
+            expect(allToolNames.length).toBe(43)
         })
 
         it('should show correct active tool count for all tools', () => {

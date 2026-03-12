@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Code Mode (`mj_execute_code`)** — Sandboxed JavaScript execution for multi-step workflows with 70-90% token reduction
+  - 9 new files in `src/codemode/`: types, security manager, VM sandbox, worker-thread sandbox, worker script, sandbox factory, API bridge, API constants, barrel
+  - `src/handlers/tools/codemode.ts` — Tool handler with security validation, rate limiting, and API bridge construction
+  - `mj.*` namespaced API exposes all 42 tools across 9 groups (core, search, analytics, relationships, export, admin, github, backup, team)
+  - Positional argument support, method aliases, per-group `help()` for discoverability
+  - Production sandbox: `node:worker_threads` with V8 isolate boundary, `node:vm` secondary isolation, MessagePort RPC bridge
+  - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (20 req/min), result size (1MB)
+  - `--sandbox-mode <mode>` CLI flag: `worker` (production, default) or `vm` (lightweight)
+  - Tool count: 42 → 43 tools, tool groups: 9 → 10
+
 ### Changed
 
 - **HTTP Transport Modularized** — Split monolithic `src/transports/http.ts` (638 lines) into `src/transports/http/` directory with focused modules:

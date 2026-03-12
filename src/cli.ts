@@ -66,6 +66,11 @@ program
         'Vector index rebuild interval in minutes, HTTP only (0 = disabled)',
         '0'
     )
+    .option(
+        '--sandbox-mode <mode>',
+        'Code Mode sandbox: "worker" (production, default) or "vm" (lightweight)',
+        'worker'
+    )
     .action(
         async (options: {
             transport: string
@@ -84,6 +89,7 @@ program
             keepBackups: string
             vacuumInterval: string
             rebuildIndexInterval: string
+            sandboxMode: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -127,6 +133,7 @@ program
                         vacuumIntervalMinutes: parseInt(options.vacuumInterval, 10),
                         rebuildIndexIntervalMinutes: parseInt(options.rebuildIndexInterval, 10),
                     },
+                    sandboxMode: options.sandboxMode as 'vm' | 'worker',
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

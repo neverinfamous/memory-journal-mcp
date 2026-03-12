@@ -21,7 +21,7 @@
 
 ### Key Benefits
 
-**42 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**43 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -35,6 +35,7 @@
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
 - 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
+- ⚡ **Code Mode** — execute complex, multi-step operations in a secure JavaScript sandbox. Exposes all 43 capabilities via `mj.*` API, reducing token overhead by up to 90%
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
 **Ask Agent naturally:**
@@ -56,29 +57,33 @@
 
 ### Tool Filtering
 
+> [!IMPORTANT]
+> All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter.
+
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
 | Filter               | Tools | Use Case                |
 | -------------------- | ----- | ----------------------- |
-| `full`               | 42    | All tools (default)     |
-| `starter`            | ~10   | Core + search only      |
+| `full`               | 43    | All tools (default)     |
+| `starter`            | ~10   | Core + search + codemode |
 | `essential`          | ~6    | Minimal footprint       |
 | `readonly`           | ~15   | Disable all mutations   |
-| `-github`            | 27    | Exclude a group         |
-| `-github,-analytics` | 25    | Exclude multiple groups |
+| `-github`            | 28    | Exclude a group         |
+| `-github,-analytics` | 26    | Exclude multiple groups |
 
 **Filter Syntax:** `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`, `codemode`
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
 ## 📋 Core Capabilities
 
-### 🛠️ 42 MCP Tools (9 Groups)
+### 🛠️ 43 MCP Tools (10 Groups)
 
 | Group           | Tools | Description                                                                     |
 | --------------- | ----- | ------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                          |
 | `core`          | 6     | Entry CRUD, tags, test                                                          |
 | `search`        | 4     | Text search, date range, semantic, vector stats                                 |
 | `analytics`     | 2     | Statistics, cross-project insights                                              |

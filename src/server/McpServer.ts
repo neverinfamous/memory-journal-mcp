@@ -25,6 +25,7 @@ import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/ServerInstructions.js'
 import { Scheduler, type SchedulerOptions } from './Scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
+import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
 import pkg from '../../package.json' with { type: 'json' }
 
 export interface ServerOptions {
@@ -40,6 +41,7 @@ export interface ServerOptions {
     corsOrigins?: string[]
     authToken?: string
     scheduler?: SchedulerOptions
+    sandboxMode?: SandboxMode
 }
 
 /**
@@ -47,6 +49,15 @@ export interface ServerOptions {
  */
 export async function createServer(options: ServerOptions): Promise<void> {
     const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
+
+    // Configure sandbox mode for Code Mode
+    if (options.sandboxMode) {
+        setDefaultSandboxMode(options.sandboxMode)
+        logger.info('Code Mode sandbox configured', {
+            module: 'McpServer',
+            sandboxMode: options.sandboxMode,
+        })
+    }
 
     // Initialize database (async for sql.js)
     const db = new SqliteAdapter(dbPath)

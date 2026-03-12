@@ -28,7 +28,7 @@
 
 ### Key Benefits
 
-**42 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **9 Tool Groups** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**43 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -41,6 +41,7 @@
 - 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
 - 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
 - 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
+- ⚡ **Code Mode** — execute complex, multi-step operations in a secure JavaScript sandbox. Exposes all 43 capabilities via `mj.*` API, reducing token overhead by up to 90%
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
@@ -113,20 +114,23 @@ flowchart TB
 
 ### Tool Filtering
 
+> [!IMPORTANT]
+> All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
+
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
 | Filter               | Tools | Use Case                |
 | -------------------- | ----- | ----------------------- |
-| `full`               | 42    | All tools (default)     |
-| `starter`            | ~10   | Core + search only      |
+| `full`               | 43    | All tools (default)     |
+| `starter`            | ~10   | Core + search + codemode |
 | `essential`          | ~6    | Minimal footprint       |
 | `readonly`           | ~15   | Disable all mutations   |
-| `-github`            | 27    | Exclude a group         |
-| `-github,-analytics` | 25    | Exclude multiple groups |
+| `-github`            | 28    | Exclude a group         |
+| `-github,-analytics` | 26    | Exclude multiple groups |
 
 **Filter Syntax:** `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`, `codemode`
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
@@ -134,10 +138,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **42 MCP Tools** (9 Groups)
+### 🛠️ **43 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                     |
 | --------------- | ----- | ------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                          |
 | `core`          | 6     | Entry CRUD, tags, test                                                          |
 | `search`        | 4     | Text search, date range, semantic, vector stats                                 |
 | `analytics`     | 2     | Statistics, cross-project insights                                              |
@@ -200,6 +205,46 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://kanban/{project_number}` - GitHub Project Kanban board
 - `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
 - `memory://milestones/{number}` - Milestone detail with completion progress
+
+---
+
+## Code Mode: Maximum Efficiency
+
+Code Mode (`mj_execute_code`) dramatically reduces token usage (70–90%) and is included by default in all presets.
+
+Code executes in a **sandboxed VM context** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+
+- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
+- **Rate limiting** — 60 executions per minute per client
+- **Hard timeouts** — configurable execution limit (default 30s)
+- **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`, `mj.analytics.getStatistics()`)
+
+### ⚡ Code Mode Only (Maximum Token Savings)
+
+Run with **only Code Mode enabled** — a single tool that provides access to all 43 tools' worth of capability through the `mj.*` API:
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "memory-journal-mcp",
+      "args": ["--tool-filter", "codemode"]
+    }
+  }
+}
+```
+
+This exposes just `mj_execute_code`. The agent writes JavaScript against the typed `mj.*` SDK — composing operations across all 10 tool groups and returning exactly the data it needs — in one execution. This mirrors the [Code Mode pattern](https://blog.cloudflare.com/code-mode-mcp/) pioneered by Cloudflare for their entire API: fixed token cost regardless of how many capabilities exist.
+
+#### Disabling Code Mode
+
+If you prefer individual tool calls, exclude codemode:
+
+```json
+{
+  "args": ["--tool-filter", "starter,-codemode"]
+}
+```
 
 ---
 
@@ -463,7 +508,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 42 Tools"]
+        Tools["🛠️ 43 Tools"]
         Resources["📡 22 Resources"]
         Prompts["💬 16 Prompts"]
     end
@@ -492,7 +537,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (42)      │  │ Resources (22)  │  │ Prompts (16)│  │
+│  │ Tools (43)      │  │ Resources (22)  │  │ Prompts (16)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
@@ -537,12 +582,12 @@ npm run bench
 
 ### Testing
 
-**785 tests** across two test frameworks:
+**887 tests** across two test frameworks:
 
-| Suite                     | Tests | Command            | Covers                                                                |
-| ------------------------- | ----- | ------------------ | --------------------------------------------------------------------- |
-| Vitest (unit/integration) | 738   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search |
-| Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler |
+| Suite                     | Tests | Command            | Covers                                                                         |
+| ------------------------- | ----- | ------------------ | ------------------------------------------------------------------------------ |
+| Vitest (unit/integration) | 840   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
+| Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler          |
 
 ```bash
 npm test          # Unit + integration tests

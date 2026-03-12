@@ -88,6 +88,27 @@ When you notice the user consistently applies patterns, preferences, or workflow
 | Health/time     | \`memory://health\`           |
 | Semantic search | \`semantic_search(query)\`    |
 | Full context    | \`get-context-bundle\` prompt |
+
+## Code Mode (Token-Efficient Multi-Step Operations)
+
+For multi-step workflows (3+ operations), prefer \`mj_execute_code\` over individual tool calls.
+This executes JavaScript in a sandboxed environment with all 42 tools available as \`mj.*\` API:
+
+| Group         | Namespace              | Example                                           |
+|---------------|------------------------|---------------------------------------------------|
+| Core          | \`mj.core.*\`           | \`mj.core.createEntry("Implemented feature X")\`    |
+| Search        | \`mj.search.*\`         | \`mj.search.searchEntries("performance")\`          |
+| Analytics     | \`mj.analytics.*\`      | \`mj.analytics.getStatistics()\`                    |
+| Relationships | \`mj.relationships.*\`  | \`mj.relationships.linkEntries(1, 2, "implements")\`|
+| Export        | \`mj.export.*\`         | \`mj.export.exportEntries("json")\`                 |
+| Admin         | \`mj.admin.*\`          | \`mj.admin.rebuildVectorIndex()\`                   |
+| GitHub        | \`mj.github.*\`         | \`mj.github.getGithubIssues({ state: "open" })\`   |
+| Backup        | \`mj.backup.*\`         | \`mj.backup.backupJournal()\`                       |
+| Team          | \`mj.team.*\`           | \`mj.team.teamCreateEntry("Team update")\`          |
+
+**Features**: Positional args (\`createEntry("note")\`), aliases (\`mj.core.create\`), \`mj.help()\` for discovery.
+**Returns**: Last expression value. Errors return \`{ success: false, error: "..." }\`.
+
 `
 
 /**
@@ -244,6 +265,13 @@ Milestone resources:
 | Tool             | Required Parameters | Notes                                                                                                     |
 | ---------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
 | \`export_entries\` | none                | Optional \`format\` (json/markdown), \`limit\` (default 100), \`tags\`, \`start_date\`, \`end_date\`, \`entry_types\` |
+
+### Code Mode
+
+| Tool                | Required Parameters | Optional Parameters                                     |
+| ------------------- | ------------------- | ------------------------------------------------------- |
+| \`mj_execute_code\`   | \`code\` (string)     | \`timeout\` (ms, max 30000), \`readonly\` (bool, default false) |
+
 
 ## Entry Types
 
