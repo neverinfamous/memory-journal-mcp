@@ -87,7 +87,7 @@ export class VectorSearchManager {
             // Create or load vectra index (dynamic import avoids 0.9s cold-start)
             const { LocalIndex } = await import('vectra')
             if (!fs.existsSync(this.indexPath)) {
-                fs.mkdirSync(this.indexPath, { recursive: true })
+                await fs.promises.mkdir(this.indexPath, { recursive: true })
             }
 
             this.index = new LocalIndex(this.indexPath)
@@ -273,8 +273,8 @@ export class VectorSearchManager {
             })
             // Delete and recreate the vectra index directory
             if (fs.existsSync(this.indexPath)) {
-                fs.rmSync(this.indexPath, { recursive: true, force: true })
-                fs.mkdirSync(this.indexPath, { recursive: true })
+                await fs.promises.rm(this.indexPath, { recursive: true, force: true })
+                await fs.promises.mkdir(this.indexPath, { recursive: true })
             }
             const { LocalIndex: LI } = await import('vectra')
             this.index = new LI(this.indexPath)

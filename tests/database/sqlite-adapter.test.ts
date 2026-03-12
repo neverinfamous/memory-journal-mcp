@@ -484,8 +484,8 @@ describe('WasmSqliteAdapter', () => {
     // ========================================================================
 
     describe('backup operations', () => {
-        it('should export to backup file', () => {
-            const backup = db.exportToFile('test-backup')
+        it('should export to backup file', async () => {
+            const backup = await db.exportToFile('test-backup')
 
             expect(backup.filename).toContain('test-backup')
             expect(backup.sizeBytes).toBeGreaterThan(0)
@@ -497,8 +497,8 @@ describe('WasmSqliteAdapter', () => {
             }
         })
 
-        it('should list backup files', () => {
-            const backup = db.exportToFile('list-test')
+        it('should list backup files', async () => {
+            const backup = await db.exportToFile('list-test')
             const backups = db.listBackups()
 
             expect(backups.length).toBeGreaterThan(0)
@@ -511,7 +511,7 @@ describe('WasmSqliteAdapter', () => {
             }
         })
 
-        it('should delete old backups keeping only keepCount', () => {
+        it('should delete old backups keeping only keepCount', async () => {
             const fs = require('node:fs')
 
             // Clean up any pre-existing backups from other tests
@@ -521,9 +521,9 @@ describe('WasmSqliteAdapter', () => {
             }
 
             // Create 3 backups
-            const b1 = db.exportToFile('cleanup-1')
-            const b2 = db.exportToFile('cleanup-2')
-            const b3 = db.exportToFile('cleanup-3')
+            const b1 = await db.exportToFile('cleanup-1')
+            const b2 = await db.exportToFile('cleanup-2')
+            const b3 = await db.exportToFile('cleanup-3')
 
             // Keep only 1 newest
             db.deleteOldBackups(1)
@@ -543,7 +543,7 @@ describe('WasmSqliteAdapter', () => {
             // Create an entry and backup
             db.createEntry({ content: 'Before restore test' })
             const countBefore = db.getActiveEntryCount()
-            const backup = db.exportToFile('restore-test')
+            const backup = await db.exportToFile('restore-test')
 
             // Create more entries after backup
             db.createEntry({ content: 'After backup 1' })

@@ -165,7 +165,7 @@ export class NativeSqliteAdapter implements IDatabaseAdapter {
         return this.connection.getBackupsDir()
     }
 
-    exportToFile(backupName?: string): { filename: string; path: string; sizeBytes: number } {
+    async exportToFile(backupName?: string): Promise<{ filename: string; path: string; sizeBytes: number }> {
         return this.backupMgr.exportToFile(backupName)
     }
 

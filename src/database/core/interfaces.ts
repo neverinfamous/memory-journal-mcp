@@ -147,7 +147,7 @@ export interface IDatabaseAdapter {
 
     // Backup Manager
     getBackupsDir(): string
-    exportToFile(backupName?: string): { filename: string; path: string; sizeBytes: number }
+    exportToFile(backupName?: string): Promise<{ filename: string; path: string; sizeBytes: number }>
     listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[]
     deleteOldBackups(keepCount: number): { deleted: string[]; kept: number }
     restoreFromFile(filename: string): Promise<{

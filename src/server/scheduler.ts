@@ -220,7 +220,7 @@ export class Scheduler {
      * Backup job: export database to file, then cleanup old backups.
      */
     private async runBackup(): Promise<void> {
-        const result = this.db.exportToFile()
+        const result = await this.db.exportToFile()
         logger.info('Scheduled backup created', {
             module: 'Scheduler',
             operation: 'backup',

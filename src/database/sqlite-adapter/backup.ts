@@ -8,7 +8,7 @@ import type { IDatabaseConnection } from '../core/interfaces.js'
 export class BackupManager {
     constructor(private ctx: IDatabaseConnection) {}
 
-    exportToFile(backupName?: string): { filename: string; path: string; sizeBytes: number } {
+    async exportToFile(backupName?: string): Promise<{ filename: string; path: string; sizeBytes: number }> {
         const backupsDir = this.ctx.getBackupsDir()
 
         if (backupName) {
@@ -16,7 +16,7 @@ export class BackupManager {
         }
 
         if (!fs.existsSync(backupsDir)) {
-            fs.mkdirSync(backupsDir, { recursive: true })
+            await fs.promises.mkdir(backupsDir, { recursive: true })
         }
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
@@ -37,14 +37,14 @@ export class BackupManager {
                     // ignore checkpoint errors
                 }
             }
-            fs.copyFileSync(this.ctx.getDbPath(), backupPath)
+            await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
         } else {
             const data = rawDb.export()
             const buffer = Buffer.from(data)
-            fs.writeFileSync(backupPath, buffer)
+            await fs.promises.writeFile(backupPath, buffer)
         }
 
-        const stats = fs.statSync(backupPath)
+        const stats = await fs.promises.stat(backupPath)
 
         logger.info('Backup created', {
             module: 'SqliteAdapter',
@@ -134,7 +134,7 @@ export class BackupManager {
         const currentCountResult = this.ctx.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
         const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
 
-        this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
+        await this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
 
         const rawDb = this.ctx.getRawDb() as { export?: () => Uint8Array }
         const isNative = typeof rawDb.export !== 'function'
@@ -144,7 +144,7 @@ export class BackupManager {
 
         if (isNative) {
             // Native better-sqlite3 connection
-            fs.copyFileSync(backupPath, this.ctx.getDbPath())
+            await fs.promises.copyFile(backupPath, this.ctx.getDbPath())
             
             // Re-initialize the native connection via dynamic import to avoid static dependency
             const DatabaseAdapter = (await import('better-sqlite3').then((m) => m.default)) as new (
@@ -154,7 +154,7 @@ export class BackupManager {
             this.ctx.setDbAndInitialized(newDb)
         } else {
             // WASM sql.js connection
-            const backupBuffer = fs.readFileSync(backupPath)
+            const backupBuffer = await fs.promises.readFile(backupPath)
             const initSqlJs = await import('sql.js').then((m) => m.default)
             const SQL = await initSqlJs()
             const newDb = new SQL.Database(backupBuffer)

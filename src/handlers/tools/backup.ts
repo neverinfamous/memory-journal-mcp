@@ -86,14 +86,14 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             }),
             outputSchema: BackupResultOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: true },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const input = z
                         .object({
                             name: z.string().optional(),
                         })
                         .parse(params)
-                    const result = db.exportToFile(input.name)
+                    const result = await db.exportToFile(input.name)
                     return {
                         success: true,
                         message: `Backup created successfully`,
