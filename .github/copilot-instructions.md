@@ -6,6 +6,18 @@ Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing
 
 **Stack**: TypeScript, Vitest, Zod schemas, sql.js (SQLite), vectra (vector search), @octokit/rest (GitHub API).
 
+## Session Context
+
+Before starting work on this project, read `memory://briefing` from the `memory-journal-mcp` server for real-time context:
+- **Recent journal entries** — what was just worked on by the development agent
+- **GitHub status** — open issues, PRs, CI status, milestones
+- **Workflow runs** — recent CI/CD results
+- **Copilot review summaries** — your own recent review findings
+
+For detailed session handoff context, search for entries tagged `session-summary` — these contain end-of-session notes from the development agent.
+
+If you find issues during code review, use `create_entry` with tag `copilot-finding` to record them for the development agent to see in their next session briefing.
+
 ## Coding Standards
 
 ### Naming
