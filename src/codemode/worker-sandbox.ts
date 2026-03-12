@@ -37,9 +37,6 @@ function getWorkerScriptPath(): string {
 // Worker Sandbox
 // =============================================================================
 
-/** Type alias for group API record */
-type GroupApiRecord = Record<string, (...args: unknown[]) => Promise<unknown>>
-
 /**
  * Worker-thread sandbox for secure code execution.
  * Each execution spawns a fresh worker for clean state.
@@ -59,16 +56,37 @@ export class WorkerSandbox {
      */
     async execute(
         code: string,
-        apiBindings: Record<string, GroupApiRecord>,
+        apiBindings: Record<string, unknown>,
     ): Promise<SandboxResult> {
         const startTime = performance.now()
         const startRss = process.memoryUsage.rss()
 
         return new Promise<SandboxResult>((resolve) => {
-            // Build serializable method list (just names, not functions)
+            // Serialize bindings: group objects → method name arrays,
+            // top-level functions → collected under '_topLevel'
             const methodList: Record<string, string[]> = {}
-            for (const [group, methods] of Object.entries(apiBindings)) {
-                methodList[group] = Object.keys(methods).filter((k) => k !== 'help')
+            const topLevel: string[] = []
+
+            for (const [key, value] of Object.entries(apiBindings)) {
+                if (typeof value === 'function') {
+                    topLevel.push(key)
+                } else if (typeof value === 'object' && value !== null) {
+                    const methods: string[] = []
+                    for (const [methodName, methodValue] of Object.entries(
+                        value as Record<string, unknown>,
+                    )) {
+                        if (typeof methodValue === 'function') {
+                            methods.push(methodName)
+                        }
+                    }
+                    if (methods.length > 0) {
+                        methodList[key] = methods
+                    }
+                }
+            }
+
+            if (topLevel.length > 0) {
+                methodList['_topLevel'] = topLevel
             }
 
             // Create MessageChannel for RPC
@@ -85,13 +103,11 @@ export class WorkerSandbox {
                     code,
                     methodList,
                     timeoutMs: this.options.timeoutMs,
+                    rpcPort: workerPort,
                 },
                 transferList: [workerPort],
                 resourceLimits,
             })
-
-            // Send the RPC port to the worker
-            worker.postMessage({ type: 'init', port: workerPort }, [workerPort])
 
             // Hard timeout — terminate worker if it runs too long
             const timeoutHandle = setTimeout(() => {
@@ -100,29 +116,26 @@ export class WorkerSandbox {
                 })
             }, this.options.timeoutMs + 1000) // +1s grace for cleanup
 
-            // Handle RPC requests from the worker
-            hostPort.on('message', (msg: RpcRequest | { type: 'result'; result: SandboxResult }) => {
-                if ('type' in msg && msg.type === 'result') {
-                    // Worker completed — forward result
-                    clearTimeout(timeoutHandle)
-                    hostPort.close()
+            // Handle RPC requests from the worker (via MessageChannel)
+            hostPort.on('message', (msg: RpcRequest) => {
+                void handleRpcRequest(msg, apiBindings, hostPort)
+            })
 
-                    const endTime = performance.now()
-                    const endRss = process.memoryUsage.rss()
-                    const result = msg.result
-                    result.metrics = {
-                        wallTimeMs: Math.round(endTime - startTime),
-                        cpuTimeMs: result.metrics.cpuTimeMs,
-                        memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
-                    }
+            // Handle worker completion (results sent via parentPort)
+            worker.on('message', (msg: SandboxResult) => {
+                clearTimeout(timeoutHandle)
+                hostPort.close()
 
-                    resolve(result)
-                    return
+                const endTime = performance.now()
+                const endRss = process.memoryUsage.rss()
+                const result = msg
+                result.metrics = {
+                    wallTimeMs: Math.round(endTime - startTime),
+                    cpuTimeMs: result.metrics.cpuTimeMs,
+                    memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
                 }
 
-                // RPC request — execute tool on main thread
-                const rpcReq = msg as RpcRequest
-                void handleRpcRequest(rpcReq, apiBindings, hostPort)
+                resolve(result)
             })
 
             // Handle worker errors and exit
@@ -178,27 +191,28 @@ export class WorkerSandbox {
  */
 async function handleRpcRequest(
     req: RpcRequest,
-    apiBindings: Record<string, GroupApiRecord>,
+    apiBindings: Record<string, unknown>,
     hostPort: MessagePort,
 ): Promise<void> {
     const response: RpcResponse = { id: req.id }
 
     try {
-        const groupApi = apiBindings[req.group]
-        if (!groupApi) {
-            response.error = `Unknown API group: ${req.group}`
-            hostPort.postMessage(response)
-            return
+        // _topLevel methods are direct keys on apiBindings
+        let target: unknown
+        if (req.group === '_topLevel') {
+            target = apiBindings[req.method]
+        } else {
+            const groupApi = apiBindings[req.group]
+            if (groupApi !== undefined && groupApi !== null && typeof groupApi === 'object') {
+                target = (groupApi as Record<string, unknown>)[req.method]
+            }
         }
 
-        const method = groupApi[req.method]
-        if (!method) {
+        if (typeof target === 'function') {
+            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...req.args)
+        } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
-            hostPort.postMessage(response)
-            return
         }
-
-        response.result = await method(...req.args)
     } catch (err) {
         response.error = err instanceof Error ? err.message : String(err)
     }
@@ -229,7 +243,7 @@ export class WorkerSandboxPool {
      */
     async execute(
         code: string,
-        apiBindings: Record<string, GroupApiRecord>,
+        apiBindings: Record<string, unknown>,
     ): Promise<SandboxResult> {
         if (this.activeCount >= this.options.maxInstances) {
             return {

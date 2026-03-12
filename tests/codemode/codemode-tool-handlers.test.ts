@@ -46,13 +46,13 @@ describe('mj_execute_code Tool Handler', () => {
             expect(names).toContain('mj_execute_code')
         })
 
-        it('should have inputSchema and outputSchema', () => {
+        it('should have inputSchema (no outputSchema — uses text response path)', () => {
             const tools = getTools(db, null)
             const codeTool = tools.find(
                 (t) => (t as { name: string }).name === 'mj_execute_code',
-            ) as { inputSchema: object; outputSchema: object } | undefined
+            ) as { inputSchema: object; outputSchema?: object } | undefined
             expect(codeTool?.inputSchema).toBeDefined()
-            expect(codeTool?.outputSchema).toBeDefined()
+            expect(codeTool?.outputSchema).toBeUndefined()
         })
 
         it('should have correct description mentioning sandbox and API', () => {

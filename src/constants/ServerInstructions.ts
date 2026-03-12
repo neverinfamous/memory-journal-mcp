@@ -108,7 +108,6 @@ This executes JavaScript in a sandboxed environment with all 42 tools available 
 
 **Features**: Positional args (\`createEntry("note")\`), aliases (\`mj.core.create\`), \`mj.help()\` for discovery.
 **Returns**: Last expression value. Errors return \`{ success: false, error: "..." }\`.
-
 `
 
 /**
@@ -272,7 +271,6 @@ Milestone resources:
 | ------------------- | ------------------- | ------------------------------------------------------- |
 | \`mj_execute_code\`   | \`code\` (string)     | \`timeout\` (ms, max 30000), \`readonly\` (bool, default false) |
 
-
 ## Entry Types
 
 Valid values for \`entry_type\` parameter:
@@ -418,3 +416,4 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * @deprecated Use generateInstructions() instead for dynamic content
  */
 export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
+

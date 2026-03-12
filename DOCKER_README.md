@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 10, 2026**
+**Last Updated March 11, 2026**
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
@@ -62,14 +62,14 @@
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
-| Filter               | Tools | Use Case                |
-| -------------------- | ----- | ----------------------- |
-| `full`               | 43    | All tools (default)     |
+| Filter               | Tools | Use Case                 |
+| -------------------- | ----- | ------------------------ |
+| `full`               | 43    | All tools (default)      |
 | `starter`            | ~10   | Core + search + codemode |
-| `essential`          | ~6    | Minimal footprint       |
-| `readonly`           | ~15   | Disable all mutations   |
-| `-github`            | 28    | Exclude a group         |
-| `-github,-analytics` | 26    | Exclude multiple groups |
+| `essential`          | ~6    | Minimal footprint        |
+| `readonly`           | ~15   | Disable all mutations    |
+| `-github`            | 28    | Exclude a group          |
+| `-github,-analytics` | 26    | Exclude multiple groups  |
 
 **Filter Syntax:** `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -83,7 +83,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Group           | Tools | Description                                                                     |
 | --------------- | ----- | ------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                          |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                         |
 | `core`          | 6     | Entry CRUD, tags, test                                                          |
 | `search`        | 4     | Text search, date range, semantic, vector stats                                 |
 | `analytics`     | 2     | Statistics, cross-project insights                                              |

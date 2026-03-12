@@ -19,9 +19,10 @@ interface WorkerInit {
     code: string
     methodList: Record<string, string[]>
     timeoutMs: number
+    rpcPort: MessagePort
 }
 
-const { code, methodList, timeoutMs } = workerData as WorkerInit
+const { code, methodList, timeoutMs, rpcPort: workerRpcPort } = workerData as WorkerInit
 
 // =============================================================================
 // RPC Client (Worker Side)
@@ -65,6 +66,14 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
     const api: Record<string, unknown> = {}
 
     for (const [group, methodNames] of Object.entries(methods)) {
+        // _topLevel methods go directly on the api object (mj.createEntry, etc.)
+        if (group === '_topLevel') {
+            for (const methodName of methodNames) {
+                api[methodName] = (...args: unknown[]) => rpcCall('_topLevel', methodName, args)
+            }
+            continue
+        }
+
         const groupProxy: Record<string, (...args: unknown[]) => Promise<unknown>> = {}
 
         for (const methodName of methodNames) {
@@ -83,7 +92,7 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
 
     // Top-level help()
     api['help'] = () => {
-        const groups = Object.keys(methods)
+        const groups = Object.keys(methods).filter((g) => g !== '_topLevel')
         let totalMethods = 0
         for (const group of groups) {
             totalMethods += methods[group]?.length ?? 0
@@ -110,38 +119,30 @@ async function executeCode(): Promise<SandboxResult> {
         const mjApi = buildApiProxy(methodList)
 
         // Build sandbox context with nulled dangerous globals
+        // Built-ins (JSON, Math, Promise, etc.) inherit from the worker's global scope
         const sandbox: Record<string, unknown> = {
             mj: mjApi,
             console: {
                 log: (...args: unknown[]) => args,
                 warn: (...args: unknown[]) => args,
                 error: (...args: unknown[]) => args,
+                info: (...args: unknown[]) => args,
+                debug: (...args: unknown[]) => args,
             },
-            JSON,
-            Math,
-            Date,
-            Array,
-            Object,
-            String,
-            Number,
-            Boolean,
-            RegExp,
-            Map,
-            Set,
-            Promise,
             // Nulled globals
-            process: undefined,
-            require: undefined,
-            global: undefined,
-            globalThis: undefined,
             setTimeout: undefined,
             setInterval: undefined,
             setImmediate: undefined,
+            process: undefined,
+            require: undefined,
+            __dirname: undefined,
+            __filename: undefined,
+            global: undefined,
+            globalThis: undefined,
         }
 
         const context = vm.createContext(sandbox, {
             name: 'codemode-worker-sandbox',
-            microtaskMode: 'afterEvaluate',
         })
 
         const wrappedCode = `(async () => { ${code} })()`
@@ -184,31 +185,30 @@ async function executeCode(): Promise<SandboxResult> {
 }
 
 // =============================================================================
-// Message Handling
+// Startup — Port from workerData, execute immediately
 // =============================================================================
 
-if (parentPort) {
-    parentPort.on('message', (msg: { type: string; port?: MessagePort }) => {
-        if (msg.type === 'init' && msg.port) {
-            rpcPort = msg.port
+// Initialize RPC port from workerData (transferred via constructor)
+rpcPort = workerRpcPort
+rpcPort.ref() // Keep event loop alive while RPC is active
 
-            // Listen for RPC responses from the main thread
-            rpcPort.on('message', (response: RpcResponse) => {
-                const pending = pendingRpcRequests.get(response.id)
-                if (pending) {
-                    pendingRpcRequests.delete(response.id)
-                    if (response.error) {
-                        pending.reject(new Error(response.error))
-                    } else {
-                        pending.resolve(response.result)
-                    }
-                }
-            })
-
-            // Execute code and send result back to the host
-            void executeCode().then((result) => {
-                rpcPort?.postMessage({ type: 'result', result })
-            })
+// Listen for RPC responses from the main thread
+rpcPort.on('message', (response: RpcResponse) => {
+    const pending = pendingRpcRequests.get(response.id)
+    if (pending) {
+        pendingRpcRequests.delete(response.id)
+        if (response.error) {
+            pending.reject(new Error(response.error))
+        } else {
+            pending.resolve(response.result)
         }
-    })
-}
+    }
+})
+
+// Execute code and send result back to the host via parentPort
+void executeCode().then((result) => {
+    // Close the RPC port before sending result (allows worker to exit)
+    rpcPort?.unref()
+    rpcPort?.close()
+    parentPort?.postMessage(result)
+})

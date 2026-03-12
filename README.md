@@ -1,6 +1,6 @@
 # Memory Journal MCP Server
 
-**Last Updated March 10, 2026**
+**Last Updated March 11, 2026**
 
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
@@ -119,14 +119,14 @@ flowchart TB
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
-| Filter               | Tools | Use Case                |
-| -------------------- | ----- | ----------------------- |
-| `full`               | 43    | All tools (default)     |
+| Filter               | Tools | Use Case                 |
+| -------------------- | ----- | ------------------------ |
+| `full`               | 43    | All tools (default)      |
 | `starter`            | ~10   | Core + search + codemode |
-| `essential`          | ~6    | Minimal footprint       |
-| `readonly`           | ~15   | Disable all mutations   |
-| `-github`            | 28    | Exclude a group         |
-| `-github,-analytics` | 26    | Exclude multiple groups |
+| `essential`          | ~6    | Minimal footprint        |
+| `readonly`           | ~15   | Disable all mutations    |
+| `-github`            | 28    | Exclude a group          |
+| `-github,-analytics` | 26    | Exclude multiple groups  |
 
 **Filter Syntax:** `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -142,7 +142,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Group           | Tools | Description                                                                     |
 | --------------- | ----- | ------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                          |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                         |
 | `core`          | 6     | Entry CRUD, tags, test                                                          |
 | `search`        | 4     | Text search, date range, semantic, vector stats                                 |
 | `analytics`     | 2     | Statistics, cross-project insights                                              |
@@ -584,10 +584,10 @@ npm run bench
 
 **887 tests** across two test frameworks:
 
-| Suite                     | Tests | Command            | Covers                                                                         |
-| ------------------------- | ----- | ------------------ | ------------------------------------------------------------------------------ |
+| Suite                     | Tests | Command            | Covers                                                                          |
+| ------------------------- | ----- | ------------------ | ------------------------------------------------------------------------------- |
 | Vitest (unit/integration) | 840   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
-| Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler          |
+| Playwright (e2e)          | 47    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
 
 ```bash
 npm test          # Unit + integration tests

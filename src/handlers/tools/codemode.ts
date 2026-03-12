@@ -40,18 +40,9 @@ const ExecuteCodeSchemaMcp = z.object({
     readonly: z.boolean().optional().default(false).describe('Restrict to read-only operations'),
 })
 
-const ExecuteCodeOutputSchema = z.object({
-    success: z.boolean(),
-    result: z.unknown().optional(),
-    error: z.string().optional(),
-    metrics: z
-        .object({
-            wallTimeMs: z.number(),
-            cpuTimeMs: z.number(),
-            memoryUsedMb: z.number(),
-        })
-        .optional(),
-})
+// No outputSchema — Code Mode returns dynamic result types (z.unknown()) which
+// produces a bare {} JSON Schema. Clients that process structuredContent crash
+// when iterating properties of {}. Using the plain text JSON response path instead.
 
 // =============================================================================
 // Singleton State
@@ -110,7 +101,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 'Use mj.help() for method listing. Returns the last expression value.',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,
-            outputSchema: ExecuteCodeOutputSchema,
             annotations: {
                 readOnlyHint: false,
                 idempotentHint: false,

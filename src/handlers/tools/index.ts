@@ -120,7 +120,9 @@ export function getTools(
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema,
-        outputSchema: t.outputSchema,
+        // Only include outputSchema when defined — undefined values in the
+        // tools/list response break clients that process the JSON Schema field
+        ...(t.outputSchema !== undefined ? { outputSchema: t.outputSchema } : {}),
         annotations: t.annotations,
         icons: getToolIcon(t.group),
     })
