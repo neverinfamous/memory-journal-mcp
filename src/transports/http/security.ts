@@ -114,10 +114,14 @@ export function matchesCorsOrigin(origin: string, pattern: string): boolean {
 
 /**
  * Set CORS headers based on configuration.
- * When credentials are enabled, the origin must be validated against a whitelist.
- * Returns the unmodified origin string if it matches a pattern to satisfy
- * CodeQL js/cors-misconfiguration-for-credentials heuristics (it views URL
- * parsing as a dynamic computation that bypasses whitelist sanitization).
+ *
+ * Uses the `origin in whitelist` pattern from CodeQL's documented safe example
+ * for js/cors-misconfiguration-for-credentials. CodeQL only recognizes specific
+ * sanitizer expressions (object property lookup via `in`, `Set.has()`, etc.) —
+ * `Array.some()` with a callback is NOT recognized as a sanitizer.
+ *
+ * Wildcard subdomain patterns (`*.example.com`) are not supported when
+ * `corsAllowCredentials` is true. For credentialed CORS, list explicit origins.
  */
 export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): void {
     const corsOrigins = config.corsOrigins ?? ['*']
@@ -126,13 +130,23 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
 
     if (isWildcard) {
         res.setHeader('Access-Control-Allow-Origin', '*')
-    } else if (origin && corsOrigins.some((pattern) => matchesCorsOrigin(origin, pattern))) {
-        res.setHeader('Access-Control-Allow-Origin', origin)
-        res.setHeader('Vary', 'Origin')
-        
-        // Only set credentials if configured explicitly
-        if (config.corsAllowCredentials) {
-            res.setHeader('Access-Control-Allow-Credentials', 'true')
+    } else if (origin) {
+        // Build whitelist record — CodeQL recognizes `origin in whitelist` as a sanitizer
+        const whitelist: Record<string, true> = {}
+        for (const allowed of corsOrigins) {
+            whitelist[allowed] = true
+        }
+
+        if (origin in whitelist) {
+            res.setHeader('Access-Control-Allow-Origin', origin)
+            res.setHeader('Vary', 'Origin')
+            if (config.corsAllowCredentials) {
+                res.setHeader('Access-Control-Allow-Credentials', 'true')
+            }
+        } else if (corsOrigins.some((p) => matchesCorsOrigin(origin, p))) {
+            // Wildcard subdomain match — no credentials on this path
+            res.setHeader('Access-Control-Allow-Origin', origin)
+            res.setHeader('Vary', 'Origin')
         }
     }
 
