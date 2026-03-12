@@ -706,9 +706,11 @@ export class GitHubIntegration {
         if (copilotReviews.length > 0) {
             // Use the latest Copilot review state
             const latest = copilotReviews[copilotReviews.length - 1]
-            if (latest.state === 'APPROVED') state = 'approved'
-            else if (latest.state === 'CHANGES_REQUESTED') state = 'changes_requested'
-            else if (latest.state === 'COMMENTED') state = 'commented'
+            if (latest !== undefined) {
+                if (latest.state === 'APPROVED') state = 'approved'
+                else if (latest.state === 'CHANGES_REQUESTED') state = 'changes_requested'
+                else if (latest.state === 'COMMENTED') state = 'commented'
+            }
         }
 
         return {
