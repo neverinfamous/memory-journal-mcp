@@ -1,7 +1,6 @@
-import { ResourceNotFoundError } from '../../types/errors.js'
 import type { Relationship, RelationshipType } from '../../types/index.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
-import type { EntriesManager } from './entries.js'
+import type { EntriesManager } from './entries/index.js'
 
 export class RelationshipsManager {
     constructor(private ctx: IDatabaseConnection, private entries: EntriesManager) {}
@@ -14,14 +13,8 @@ export class RelationshipsManager {
     ): Relationship {
         const db = this.ctx
 
-        const fromEntry = this.entries.getEntryById(fromEntryId)
-        if (!fromEntry) {
-            throw new ResourceNotFoundError('Entry', String(fromEntryId))
-        }
-        const toEntry = this.entries.getEntryById(toEntryId)
-        if (!toEntry) {
-            throw new ResourceNotFoundError('Entry', String(toEntryId))
-        }
+        this.entries.getEntryById(fromEntryId)
+        this.entries.getEntryById(toEntryId)
 
         db.run(
             `

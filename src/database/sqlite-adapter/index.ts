@@ -11,7 +11,7 @@ import type { IDatabaseAdapter, QueryResult } from '../core/interfaces.js'
 
 import { NativeConnectionManager } from './native-connection.js'
 import { TagsManager } from './tags.js'
-import { EntriesManager } from './entries.js'
+import { EntriesManager } from './entries/index.js'
 import { RelationshipsManager } from './relationships.js'
 import { BackupManager } from './backup.js'
 import * as fs from 'node:fs'
@@ -67,7 +67,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     getRecentEntries(limit?: number, isPersonal?: boolean): JournalEntry[] {
-        return this.entriesMgr.getRecentEntries(limit, isPersonal)
+        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal)
     }
 
     getEntriesPage(offset: number, limit: number): JournalEntry[] {

@@ -1,12 +1,20 @@
 import type { InternalResourceDef } from '../shared.js'
-import { getBriefingResource } from './briefing/index.js'
-import { getInstructionsResource } from './instructions.js'
-import { getStatsResources } from './stats.js'
+import { briefingResource } from './briefing.js'
+import { instructionsResource } from './instructions.js'
+import { healthResource } from './health.js'
+import { recentResource, significantResource, tagsResource, statisticsResource } from './utilities.js'
 
+/**
+ * Get core resource definitions
+ */
 export function getCoreResourceDefinitions(): InternalResourceDef[] {
     return [
-        getBriefingResource(),
-        getInstructionsResource(),
-        ...getStatsResources()
+        briefingResource,
+        instructionsResource,
+        recentResource,
+        significantResource,
+        tagsResource,
+        statisticsResource,
+        healthResource,
     ]
 }
