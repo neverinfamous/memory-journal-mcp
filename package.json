@@ -82,6 +82,7 @@
         "axios": "^1.13.6",
         "brace-expansion": "^2.0.2",
         "glob": "^11.1.0",
+        "zod": "$zod",
         "minimatch": "10.2.4",
         "tar": "7.5.11",
         "tmp": "^0.2.5"
