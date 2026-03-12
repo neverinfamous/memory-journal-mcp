@@ -113,23 +113,53 @@ export function matchesCorsOrigin(origin: string, pattern: string): boolean {
 }
 
 /**
+ * Validate and normalize a request origin against the CORS whitelist.
+ * Parses via URL to reject malformed origins, "null", and non-HTTP schemes.
+ * Returns the normalized origin string if allowed, or null if rejected.
+ */
+function getAllowedCorsOrigin(req: Request, corsOrigins: string[]): string | null {
+    const originHeader = req.headers?.origin
+    if (!originHeader) return null
+    if (originHeader === 'null') return null
+
+    let url: URL
+    try {
+        url = new URL(originHeader)
+    } catch {
+        return null
+    }
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return null
+    }
+
+    const normalizedOrigin = `${url.protocol}//${url.host}`
+    const isAllowed = corsOrigins.some((pattern) => matchesCorsOrigin(normalizedOrigin, pattern))
+    return isAllowed ? normalizedOrigin : null
+}
+
+/**
  * Set CORS headers based on configuration.
+ * When credentials are enabled, the origin is validated and normalized
+ * via URL parsing to prevent CORS misconfiguration attacks.
  */
 export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): void {
     const corsOrigins = config.corsOrigins ?? ['*']
     const isWildcard = corsOrigins.includes('*')
-    const origin = req.headers?.origin
 
     if (isWildcard) {
         res.setHeader('Access-Control-Allow-Origin', '*')
-    } else if (origin && corsOrigins.some((pattern) => matchesCorsOrigin(origin, pattern))) {
-        res.setHeader('Access-Control-Allow-Origin', origin)
+        // Never set Allow-Credentials with wildcard origin
+    } else {
+        const allowedOrigin = getAllowedCorsOrigin(req, corsOrigins)
+        if (!allowedOrigin) {
+            return
+        }
+        res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
         res.setHeader('Vary', 'Origin')
         if (config.corsAllowCredentials) {
             res.setHeader('Access-Control-Allow-Credentials', 'true')
         }
-    } else {
-        return
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
@@ -140,3 +170,4 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
     res.setHeader('Access-Control-Max-Age', '86400')
 }
+
