@@ -17,9 +17,9 @@ import type {
     ToolContext,
     ToolHandlerConfig,
 } from '../../types/index.js'
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
-import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
-import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
+import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { GitHubIntegration } from '../../github/github-integration.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
 import { getCoreTools } from './core.js'

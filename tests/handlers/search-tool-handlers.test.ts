@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 
 describe('Search Tool Handlers - Coverage', () => {
     let db: SqliteAdapter

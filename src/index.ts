@@ -5,7 +5,7 @@
  */
 
 // Server
-export { createServer, SqliteAdapter } from './server/McpServer.js'
+export { createServer, SqliteAdapter } from './server/mcp-server.js'
 
 // Types
 export type {
@@ -47,7 +47,7 @@ export {
     getToolFilterFromEnv,
     calculateTokenSavings,
     getFilterSummary,
-} from './filtering/ToolFilter.js'
+} from './filtering/tool-filter.js'
 
 // Logger
 export { logger } from './utils/logger.js'

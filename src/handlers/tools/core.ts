@@ -353,7 +353,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'List Tags',
             description: 'List all available tags',
             group: 'core',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: TagsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (_params: unknown) => {

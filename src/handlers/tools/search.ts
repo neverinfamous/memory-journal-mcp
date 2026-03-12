@@ -308,7 +308,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Vector Index Stats',
             description: 'Get statistics about the semantic search vector index',
             group: 'search',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: VectorStatsOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: async (_params: unknown) => {

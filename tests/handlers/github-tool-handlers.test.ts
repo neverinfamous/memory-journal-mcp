@@ -7,8 +7,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
-import type { GitHubIntegration } from '../../src/github/GitHubIntegration.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
+import type { GitHubIntegration } from '../../src/github/github-integration.js'
 
 /**
  * Creates a mock GitHubIntegration with controllable method responses.

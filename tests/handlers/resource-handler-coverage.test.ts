@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 
 describe('Resource Handler Coverage', () => {
     let db: SqliteAdapter

@@ -12,7 +12,7 @@ import type { LocalIndex } from 'vectra'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { logger } from '../utils/logger.js'
-import type { SqliteAdapter } from '../database/SqliteAdapter.js'
+import type { SqliteAdapter } from '../database/sqlite-adapter.js'
 import type { JournalEntry } from '../types/index.js'
 import { sendProgress, type ProgressContext } from '../utils/progress-utils.js'
 

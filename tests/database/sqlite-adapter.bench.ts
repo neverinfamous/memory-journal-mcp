@@ -1,5 +1,5 @@
 import { bench, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 

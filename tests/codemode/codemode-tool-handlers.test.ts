@@ -14,7 +14,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getTools, callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 
 describe('mj_execute_code Tool Handler', () => {
     let db: SqliteAdapter

@@ -9,21 +9,21 @@ import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
-import { SqliteAdapter } from '../database/SqliteAdapter.js'
-import { VectorSearchManager } from '../vector/VectorSearchManager.js'
-import { GitHubIntegration } from '../github/GitHubIntegration.js'
+import { SqliteAdapter } from '../database/sqlite-adapter.js'
+import { VectorSearchManager } from '../vector/vector-search-manager.js'
+import { GitHubIntegration } from '../github/github-integration.js'
 import { logger } from '../utils/logger.js'
 import {
     parseToolFilter,
     getToolFilterFromEnv,
     getFilterSummary,
     type ToolFilterConfig,
-} from '../filtering/ToolFilter.js'
+} from '../filtering/tool-filter.js'
 import { getTools, callTool } from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
-import { generateInstructions } from '../constants/ServerInstructions.js'
-import { Scheduler, type SchedulerOptions } from './Scheduler.js'
+import { generateInstructions } from '../constants/server-instructions.js'
+import { Scheduler, type SchedulerOptions } from './scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
 import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
 import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'

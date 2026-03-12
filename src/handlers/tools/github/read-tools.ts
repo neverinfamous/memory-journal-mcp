@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import type { GitHubIntegration } from '../../../github/GitHubIntegration.js'
+import type { GitHubIntegration } from '../../../github/github-integration.js'
 import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import {
     GitHubIssuesListOutputSchema,
@@ -305,7 +305,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).',
             group: 'github',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: GitHubContextOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (_params: unknown) => {

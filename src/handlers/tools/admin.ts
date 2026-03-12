@@ -236,7 +236,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             title: 'Rebuild Vector Index',
             description: 'Rebuild the semantic search vector index from all existing entries',
             group: 'admin',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false },
             handler: async (_params: unknown) => {

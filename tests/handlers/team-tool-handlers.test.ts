@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 
 describe('Team Tool Handlers', () => {
     let personalDb: SqliteAdapter

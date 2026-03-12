@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { Scheduler, type SchedulerOptions } from '../../src/server/Scheduler.js'
+import { Scheduler, type SchedulerOptions } from '../../src/server/scheduler.js'
 
 // Mock logger
 vi.mock('../../src/utils/logger.js', () => ({

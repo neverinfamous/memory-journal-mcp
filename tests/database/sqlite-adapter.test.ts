@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 import type { RelationshipType } from '../../src/types/index.js'
 
 describe('SqliteAdapter', () => {

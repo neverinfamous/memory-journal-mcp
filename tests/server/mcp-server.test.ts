@@ -122,7 +122,7 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
     isInitializeRequest: vi.fn().mockReturnValue(false),
 }))
 
-vi.mock('../../src/database/SqliteAdapter.js', () => ({
+vi.mock('../../src/database/sqlite-adapter.js', () => ({
     SqliteAdapter: function () {
         return {
             initialize: mockDbInitialize,
@@ -156,7 +156,7 @@ vi.mock('../../src/database/SqliteAdapter.js', () => ({
     },
 }))
 
-vi.mock('../../src/vector/VectorSearchManager.js', () => ({
+vi.mock('../../src/vector/vector-search-manager.js', () => ({
     VectorSearchManager: function () {
         return {
             initialize: mockVectorInitialize,
@@ -173,7 +173,7 @@ vi.mock('../../src/vector/VectorSearchManager.js', () => ({
     },
 }))
 
-vi.mock('../../src/github/GitHubIntegration.js', () => ({
+vi.mock('../../src/github/github-integration.js', () => ({
     GitHubIntegration: function () {
         return {
             isApiAvailable: mockGitHubIsApiAvailable,
@@ -250,7 +250,7 @@ vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
 // Import after mocks
 // ============================================================================
 
-import { createServer, type ServerOptions } from '../../src/server/McpServer.js'
+import { createServer, type ServerOptions } from '../../src/server/mcp-server.js'
 
 describe('McpServer', () => {
     beforeEach(() => {

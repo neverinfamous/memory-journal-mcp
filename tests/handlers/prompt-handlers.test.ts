@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 
 describe('Prompt Handlers', () => {
     let db: SqliteAdapter

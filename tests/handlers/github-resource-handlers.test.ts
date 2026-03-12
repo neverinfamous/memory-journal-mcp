@@ -6,8 +6,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
-import type { GitHubIntegration } from '../../src/github/GitHubIntegration.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
+import type { GitHubIntegration } from '../../src/github/github-integration.js'
 
 /**
  * Creates a minimal mock GitHubIntegration with sensible defaults.

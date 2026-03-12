@@ -7,8 +7,8 @@
 import type { Tag } from '../../types/index.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { getAllToolNames } from '../../filtering/ToolFilter.js'
-import { generateInstructions, type InstructionLevel } from '../../constants/ServerInstructions.js'
+import { getAllToolNames } from '../../filtering/tool-filter.js'
+import { generateInstructions, type InstructionLevel } from '../../constants/server-instructions.js'
 import { getPrompts } from '../prompts/index.js'
 import {
     ICON_BRIEFING,

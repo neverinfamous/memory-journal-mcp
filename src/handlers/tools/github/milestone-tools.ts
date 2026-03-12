@@ -7,7 +7,7 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import type { GitHubIntegration } from '../../../github/GitHubIntegration.js'
+import type { GitHubIntegration } from '../../../github/github-integration.js'
 import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import {
     GitHubMilestonesListOutputSchema,

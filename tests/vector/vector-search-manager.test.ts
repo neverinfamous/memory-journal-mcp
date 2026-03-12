@@ -67,8 +67,8 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 
 // Import AFTER mocks are set up
-import { VectorSearchManager } from '../../src/vector/VectorSearchManager.js'
-import type { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+import type { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 
 /**
  * Helper to make the VectorSearchManager think it's initialized

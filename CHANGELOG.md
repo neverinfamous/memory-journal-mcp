@@ -5,7 +5,14 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.1...HEAD)
+
+### Changed
+
+- **Code Quality Audit Fixes**
+  - Renamed 7 `PascalCase` files to kebab-case to match workspace standards (`sqlite-adapter.ts`, `tool-filter.ts`, `github-integration.ts`, `mcp-server.ts`, `mcp-logger.ts`, `vector-search-manager.ts`, `server-instructions.ts`, `scheduler.ts`) and updated 27 import references across the codebase
+  - Eliminated `eslint-disable-next-line` pragmas where possible (e.g. `no-control-regex` solved natively in `security-utils.ts`)
+  - Strictified `z.object({})` Zod schemas by appending `.strict()` for safer payload validation on empty schemas (`admin.ts`, `backup.ts`, `core.ts`, `search.ts`, `read-tools.ts`)
 
 ### Added
 
@@ -82,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`express-rate-limit` Dependency** — Replaced by built-in rate limiter.
 
-## [5.1.1] - 2026-03-10
+## [5.1.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...v5.1.1) - 2026-03-10
 
 ### Changed
 
@@ -96,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tmp` override: 0.2.4 → 0.2.5 (patch)
   - GitHub Actions: `docker/setup-buildx-action` (v3 → v4), `docker/metadata-action` (v5 → v6), `docker/login-action` (v3 → v4), `aquasecurity/trivy-action` (0.34.1 → 0.35.0), `docker/scout-action` (v1.20.1 reverted to v1.18.2 — upstream 403 on asset download)
 
-## [5.1.0] - 2026-03-07
+## [5.1.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.1...v5.1.0) - 2026-03-07
 
 ### Added
 
@@ -161,7 +168,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependency Updates**
   - `eslint`: 10.0.2 → 10.0.3 (patch)
 
-## [5.0.1] - 2026-03-06
+## [5.0.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.0...v5.0.1) - 2026-03-06
 
 ### Security
 
@@ -172,7 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependency Updates**
   - `tar` override: 7.5.9 → 7.5.10 (patch) — npm + Docker layers
 
-## [5.0.0] - 2026-03-06
+## [5.0.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.5.0...v5.0.0) - 2026-03-06
 
 ### Added
 
@@ -303,7 +310,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CodeQL `actions` Language Coverage** — Added `actions` to the CodeQL workflow language matrix to replace coverage previously provided by the Default Setup. The workflow now scans both `javascript-typescript` and `actions`.
 - **Trivy Action Update** — Updated `aquasecurity/trivy-action` 0.34.0 → 0.34.1 in `security-update.yml` (bundles Trivy scanner 0.69.2)
 
-## [4.5.0] - 2026-03-02
+## [4.5.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.2...v4.5.0) - 2026-03-02
 
 ### Fixed
 
@@ -385,13 +392,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Unused `cors` Dependency** — Removed `cors` and `@types/cors` packages. CORS is handled by custom middleware in `McpServer.ts`.
 
-## [4.4.2] - 2026-02-27
+## [4.4.2](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.0...v4.4.2) - 2026-02-27
 
 ### Security
 
 - **CVE-2026-27903 + CVE-2026-27904 (minimatch)** — Manually patched npm's bundled `minimatch` → `10.2.3` in Dockerfile to fix HIGH severity ReDoS and algorithmic complexity vulnerabilities (CVSS 7.5). The v4.4.1 npm override only affected project dependencies; Docker Scout detected the vulnerable copy inside npm's own bundled packages. Also added npm override.
 
-## [4.4.0] - 2026-02-27
+## [4.4.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.1...v4.4.0) - 2026-02-27
 
 ### Added
 
@@ -494,7 +501,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dockerfile Healthcheck** — Replaced no-op `console.log` healthcheck with `process.exit(0)` validation. Added documentation for HTTP-mode override using `curl`.
 - **Legacy Cleanup** — Removed leftover Python `__pycache__` directories from `src/` subtree
 
-## [4.3.1] - 2026-02-05
+## [4.3.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.0...v4.3.1) - 2026-02-05
 
 ### Changed
 
@@ -517,7 +524,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CVE-2026-25210 (libexpat)** — Same patch fixes MEDIUM severity integer overflow information disclosure/data integrity issue.
 - **CVE-2026-23950 + CVE-2026-24842 (tar)** — Manually patched npm's bundled `tar` → `7.5.7` in Dockerfile to fix HIGH severity vulnerabilities (path traversal, CVSS 8.2). Also added npm override for project dependencies.
 
-## [4.3.0] - 2026-01-18
+## [4.3.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.2.0...v4.3.0) - 2026-01-18
 
 ### Added
 
@@ -559,7 +566,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added missing types: `clarifies` (-.->) and `response_to` (<-->)
   - Standardized `implements` to use `==>` (was `-.->`) for consistency
 
-## [4.2.0] - 2026-01-17
+## [4.2.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.1.0...v4.2.0) - 2026-01-17
 
 ### Added
 
@@ -628,7 +635,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added proper handling for `cancelled` conclusion alongside `success` and `failure`
   - CI status type now includes `passing | failing | pending | cancelled | unknown`
 
-## [4.1.0] - 2026-01-17
+## [4.1.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v4.0.0...v4.1.0) - 2026-01-17
 
 ### Added
 
@@ -711,7 +718,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `releases/` directory and security scanning configs
   - Organized into logical sections with clear documentation
 
-## [4.0.0] - 2026-01-16
+## [4.0.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.5...v4.0.0) - 2026-01-16
 
 ### Added
 
@@ -832,19 +839,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Virtual Entry IDs** — Documented in Resources.md that `memory://actions/recent` returns virtual entries with negative IDs (negated workflow run IDs) to distinguish from database entries.
 - **Resource Annotations Note** — Added note in Resources.md that MCP 2025-11-25 annotations (e.g., `lastModified`) may not be visible in all clients due to SDK/client limitations.
 
-## [3.1.5] - 2026-01-11
+## [3.1.5](https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.4...v3.1.5) - 2026-01-11
 
 ### Security
 
 - **Remove protobufjs CLI** — Eliminates CVE-2019-10790 (taffydb), CVE-2025-54798 (tmp), CVE-2025-5889 (brace-expansion). CLI folder not needed at runtime.
 
-## [3.1.4] - 2026-01-11
+## [3.1.4](https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.3...v3.1.4) - 2026-01-11
 
 ### Fixed
 
 - **Docker npm Upgrade** — Added `npm install -g npm@latest` to production stage (was only in builder stage). Fixes CVE-2025-64756 (glob) and CVE-2025-64118 (tar) in final Docker image.
 
-## [3.1.3] - 2026-01-11
+## [3.1.3](https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.2...v3.1.3) - 2026-01-11
 
 ### Security
 
@@ -854,14 +861,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - protobufjs cli cleanup fixes CVE-2025-54798 (tmp) and CVE-2025-5889 (brace-expansion)
 - **Reduced CVE Allowlist** — Only truly unfixable CVEs remain (zlib with no upstream fix, taffydb unmaintained)
 
-## [3.1.2] - 2026-01-11
+## [3.1.2](https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.1...v3.1.2) - 2026-01-11
 
 ### Fixed
 
 - **CI Build Pipeline** — Added `.npmrc` with `legacy-peer-deps=true` to resolve `npm ci` failures from optional peer dependency conflicts (vectra's zod@^3.23.8 vs zod@^4.x)
 - **Docker Workflow Gating** — Added `preflight-check` job to docker-publish.yml; tag pushes now run lint/typecheck/build before Docker deployment
 
-## [3.1.1] - 2026-01-11
+## [3.1.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.0...v3.1.1) - 2026-01-11
 
 ### Security
 
@@ -874,7 +881,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **CI Build** — Regenerated `package-lock.json` to fix lock file desync with MCP SDK peer dependencies
 
-## [3.1.0] - 2026-01-11
+## [3.1.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v3.0.0...v3.1.0) - 2026-01-11
 
 ### Added
 
@@ -912,7 +919,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `vectra` 0.9.0 → 0.11.1 (minor) — Updated `queryItems` call to new API signature with BM25 hybrid search support
   - `zod` 4.2.1 → 4.3.5 (minor)
 
-## [3.0.0] - 2025-12-28
+## [3.0.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v2.2.0...v3.0.0) - 2025-12-28
 
 ### 🎉 Complete TypeScript Rewrite
 
@@ -994,7 +1001,7 @@ npm install -g memory-journal-mcp
 - **SQL injection prevention** - Parameterized queries throughout
 - **Content size limits** - Configurable per field
 
-## [2.2.0] - 2025-12-08
+## [2.2.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v2.1.0...v2.2.0) - 2025-12-08
 
 ### Added - Tool Filtering for Token Efficiency
 
@@ -1042,7 +1049,7 @@ npm install -g memory-journal-mcp
 - **Logging**: Info/warning messages logged to stderr for debugging
 - **Type safety**: Maintains Pyright strict compliance
 
-## [2.1.0] - 2025-11-26
+## [2.1.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.1...v2.1.0) - 2025-11-26
 
 ### Added - Actions Visual Graph Resource
 
@@ -1188,7 +1195,7 @@ npm install -g memory-journal-mcp
   - `/123-` or `/123/` patterns
 - **Backward Compatibility** - All new fields are optional; existing databases migrate seamlessly
 
-## [2.0.1] - 2025-10-28
+## [2.0.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.0...v2.0.1) - 2025-10-28
 
 ### Fixed - Windows Platform Support
 
@@ -1224,7 +1231,7 @@ npm install -g memory-journal-mcp
 - Updated Architecture.md with v2.0.1 technical improvements
 - Added token scope requirements and MCP configuration examples
 
-## [2.0.0] - 2025-10-28
+## [2.0.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.2...v2.0.0) - 2025-10-28
 
 ### Added - Git-Based Team Collaboration
 
@@ -1304,7 +1311,7 @@ npm install -g memory-journal-mcp
 - Added REFACTORING_SUMMARY.md with detailed technical breakdown
 - Updated all README files with v2.0.0 highlights
 
-## [1.2.2] - 2025-10-26
+## [1.2.2](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.1...v1.2.2) - 2025-10-26
 
 ### Security
 
@@ -1319,7 +1326,7 @@ npm install -g memory-journal-mcp
   - **Severity**: Medium (limited to Git remote URL parsing in local repository context)
   - **Reference**: [CWE-20: Improper Input Validation](https://cwe.mitre.org/data/definitions/20.html)
 
-## [1.2.1] - 2025-10-26
+## [1.2.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.0...v1.2.1) - 2025-10-26
 
 ### Fixed
 
@@ -1334,7 +1341,7 @@ npm install -g memory-journal-mcp
 - Improved initialization progress messages with step-by-step feedback (Step X/3)
 - Added explicit stderr flushing for real-time progress updates
 
-## [1.2.0] - 2025-10-26
+## [1.2.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.3...v1.2.0) - 2025-10-26
 
 ### Added - Phase 3: Organization Support
 
@@ -1376,25 +1383,25 @@ npm install -g memory-journal-mcp
   - Version numbers like "v1.2.0" work properly
   - Implemented `escape_fts5_query()` function with quote wrapping
 
-## [1.1.3] - 2025-10-04
+## [1.1.3](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.2...v1.1.3) - 2025-10-04
 
 ### Fixed
 
 - **Migration Logic** - Fixed schema migration check to properly handle fresh database installations
 
-## [1.1.2] - 2025-10-04
+## [1.1.2](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.1...v1.1.2) - 2025-10-04
 
 ### Security
 
 - **CVE-2025-8869** - Mitigated pip symbolic link vulnerability by upgrading to pip >=25.0
 
-## [1.1.1] - 2025-10-04
+## [1.1.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.0...v1.1.1) - 2025-10-04
 
 ### Fixed
 
 - **F-String Syntax** - Fixed Python syntax error preventing builds on clean environments
 
-## [1.1.0] - 2025-10-04
+## [1.1.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v1.0.2...v1.1.0) - 2025-10-04
 
 ### Added
 
@@ -1422,7 +1429,7 @@ npm install -g memory-journal-mcp
 - Enhanced README with feature overview
 - Added Docker Hub README
 
-## [1.0.2] - 2025-09-15
+## [1.0.2](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v1.0.2) - 2025-09-15
 
 ### Initial Beta Release
 
@@ -1434,35 +1441,3 @@ npm install -g memory-journal-mcp
 - SQLite FTS5 full-text search
 - Optional FAISS semantic search
 
-[Unreleased]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.1...HEAD
-[5.1.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...v5.1.1
-[5.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.1...v5.1.0
-[5.0.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.0...v5.0.1
-[5.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.5.0...v5.0.0
-[4.5.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.2...v4.5.0
-[4.4.2]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.4.0...v4.4.2
-[4.4.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.1...v4.4.0
-[4.3.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.3.0...v4.3.1
-[4.3.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.2.0...v4.3.0
-[4.2.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.1.0...v4.2.0
-[4.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v4.0.0...v4.1.0
-[4.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.5...v4.0.0
-[3.1.5]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.4...v3.1.5
-[3.1.4]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.3...v3.1.4
-[3.1.3]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.2...v3.1.3
-[3.1.2]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.1...v3.1.2
-[3.1.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.1.0...v3.1.1
-[3.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v3.0.0...v3.1.0
-[3.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.2.0...v3.0.0
-[2.2.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.1.0...v2.2.0
-[2.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.1...v2.1.0
-[2.0.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v2.0.0...v2.0.1
-[2.0.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.2...v2.0.0
-[1.2.2]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.1...v1.2.2
-[1.2.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.3...v1.2.0
-[1.1.3]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.2...v1.1.3
-[1.1.2]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/neverinfamous/memory-journal-mcp/compare/v1.0.2...v1.1.0
-[1.0.2]: https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v1.0.2

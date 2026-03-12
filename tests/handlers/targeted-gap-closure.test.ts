@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
 
 describe('Targeted Gap Closure', () => {
     let db: SqliteAdapter

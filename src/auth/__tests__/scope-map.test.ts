@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { getRequiredScope, getToolScopeMap } from '../scope-map.js'
-import { TOOL_GROUPS } from '../../filtering/ToolFilter.js'
+import { TOOL_GROUPS } from '../../filtering/tool-filter.js'
 import { TOOL_GROUP_SCOPES } from '../scopes.js'
 import type { ToolGroup } from '../../types/index.js'
 

@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { generateInstructions } from '../../src/constants/ServerInstructions.js'
-import { TOOL_GROUPS, getAllToolNames } from '../../src/filtering/ToolFilter.js'
+import { generateInstructions } from '../../src/constants/server-instructions.js'
+import { TOOL_GROUPS, getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 /** Full tool set based on TOOL_GROUPS for realistic testing */
 const ALL_TOOLS = new Set(getAllToolNames())

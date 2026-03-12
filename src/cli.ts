@@ -1,6 +1,6 @@
 import { Command } from 'commander'
 import * as fs from 'node:fs'
-import { createServer } from './server/McpServer.js'
+import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
 import pkg from '../package.json' with { type: 'json' }
 

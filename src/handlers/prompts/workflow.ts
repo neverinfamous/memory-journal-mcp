@@ -6,7 +6,7 @@
  * session-summary
  */
 
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
 

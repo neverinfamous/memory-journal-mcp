@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { McpLogger, mcpLogger } from '../../src/utils/McpLogger.js'
+import { McpLogger, mcpLogger } from '../../src/utils/mcp-logger.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 
 describe('McpLogger', () => {

@@ -111,7 +111,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             title: 'List Journal Backups',
             description: 'List all available backup files with their sizes and creation dates',
             group: 'backup',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: BackupsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
             handler: (_params: unknown) => {

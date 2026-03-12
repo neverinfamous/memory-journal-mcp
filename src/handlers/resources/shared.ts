@@ -4,12 +4,12 @@
  * Shared types, helpers, and utilities used by all resource group modules.
  */
 
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
-import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
-import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
+import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon } from '../../types/index.js'
-import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
-import type { Scheduler } from '../../server/Scheduler.js'
+import type { GitHubIntegration } from '../../github/github-integration.js'
+import type { Scheduler } from '../../server/scheduler.js'
 
 /**
  * Configuration for the memory://briefing resource.

@@ -22,7 +22,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler } from 'express'
 import { logger } from '../../utils/logger.js'
-import type { Scheduler } from '../../server/Scheduler.js'
+import type { Scheduler } from '../../server/scheduler.js'
 import type { HttpTransportConfig, RateLimitEntry } from './types.js'
 import {
     DEFAULT_MAX_BODY_BYTES,

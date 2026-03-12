@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { GitHubIntegration } from '../../src/github/GitHubIntegration.js'
+import { GitHubIntegration } from '../../src/github/github-integration.js'
 
 // ============================================================================
 // Module mocks
