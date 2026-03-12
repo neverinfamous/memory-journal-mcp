@@ -4,11 +4,11 @@
   - Renamed 7 `PascalCase` files to kebab-case to match workspace standards (`sqlite-adapter.ts`, `tool-filter.ts`, `github-integration.ts`, `mcp-server.ts`, `mcp-logger.ts`, `vector-search-manager.ts`, `server-instructions.ts`, `scheduler.ts`) and updated 27 import references across the codebase
   - Converted 13 bare `throw new Error(...)` statements to typed error classes (`ConfigurationError`, `ResourceNotFoundError`, `ConnectionError`, `QueryError`, `ValidationError`) for consistent error handling and standard structured error responses (`vector-search-manager.ts`, `sqlite-adapter.ts`, `handlers/resources/index.ts`, `handlers/prompts/index.ts`, `authorization-server-discovery.ts`, `sandbox-factory.ts`)
   - Renamed `src/types/sql.js.d.ts` to `sql-js.d.ts` to ensure strict compliance with kebab-case naming standard
-  - Eliminated `eslint-disable-next-line` pragmas where possible (e.g. `no-control-regex` solved natively in `security-utils.ts`)
+  - Eliminated `eslint-disable-next-line` pragmas where possible (e.g. `no-control-regex` solved natively in `security-utils.ts`, `no-explicit-any` removed in `backup.ts`)
   - Strictified `z.object({})` Zod schemas by appending `.strict()` for safer payload validation on empty schemas (`admin.ts`, `backup.ts`, `core.ts`, `search.ts`, `read-tools.ts`)
 ### Fixed
 
-- Replaced `as unknown` type assertions in `wasm-connection.ts` and auth test mocks with properly mapped `QueryResult` types and `Object.create(Type.prototype)` mock instantiation.
+- Replaced `as unknown` type assertions with strict types where appropriate (`wasm-connection.ts`, `backup.ts`) and auth test mocks with properly mapped `QueryResult` types and `Object.create(Type.prototype)` mock instantiation.
 - Resolved native driver (better-sqlite3) `datatype mismatch` and `more than one statement` exceptions by strictly enforcing `IDatabaseConnection`'s `exec` implementation in analytical routes.
 - Abstracted `rawDb.exec` within the `relationships` tool group to an integrated adapter `executeRawQuery` to prevent query injection bypasses.
 - Secured native snapshot backups by switching from blocked in-memory blob exports to transactional file-system copies with `wal_checkpoint(TRUNCATE)`.

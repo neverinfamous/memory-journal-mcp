@@ -136,19 +136,22 @@ export class BackupManager {
 
         this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
 
+        const rawDb = this.ctx.getRawDb() as { export?: () => Uint8Array }
+        const isNative = typeof rawDb.export !== 'function'
+
         // Close old DB via manager
         this.ctx.closeDbBeforeRestore()
 
-        const rawDb = this.ctx.getRawDb() as { export?: () => Uint8Array }
-        if (typeof rawDb.export !== 'function') {
+        if (isNative) {
             // Native better-sqlite3 connection
             fs.copyFileSync(backupPath, this.ctx.getDbPath())
             
             // Re-initialize the native connection via dynamic import to avoid static dependency
-            const DatabaseAdapter = await import('better-sqlite3').then((m) => m.default)
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-            const newDb = new (DatabaseAdapter as any)(this.ctx.getDbPath())
-            this.ctx.setDbAndInitialized(newDb as unknown)
+            const DatabaseAdapter = (await import('better-sqlite3').then((m) => m.default)) as new (
+                path: string
+            ) => unknown
+            const newDb = new DatabaseAdapter(this.ctx.getDbPath())
+            this.ctx.setDbAndInitialized(newDb)
         } else {
             // WASM sql.js connection
             const backupBuffer = fs.readFileSync(backupPath)
