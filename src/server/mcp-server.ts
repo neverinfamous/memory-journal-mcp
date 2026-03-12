@@ -71,14 +71,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 
     // Initialize database
-    const db = DatabaseAdapterFactory.create(dbPath, useNativeSqlite)
+    const db = await DatabaseAdapterFactory.create(dbPath, useNativeSqlite)
     await db.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath, useNativeSqlite })
 
     // Initialize team database if configured
     let teamDb: IDatabaseAdapter | undefined
     if (teamDbPath) {
-        teamDb = DatabaseAdapterFactory.create(teamDbPath, useNativeSqlite)
+        teamDb = await DatabaseAdapterFactory.create(teamDbPath, useNativeSqlite)
         await teamDb.initialize()
         teamDb.applyTeamSchema()
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })

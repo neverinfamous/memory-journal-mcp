@@ -50,7 +50,8 @@ export class RelationshipsManager {
         const db = this.ctx
         const result = db.exec(
             `
-            SELECT * FROM relationships
+            SELECT id, from_entry_id, to_entry_id, relationship_type, description, created_at
+            FROM relationships
             WHERE from_entry_id = ? OR to_entry_id = ?
         `,
             [entryId, entryId]

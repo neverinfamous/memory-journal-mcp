@@ -67,6 +67,9 @@
 - **Performance Optimization (I/O)** — Refactored synchronous `fs.mkdirSync` and `fs.rmSync` in `VectorSearchManager` to asynchronous `fs.promises` equivalents for non-blocking directory operations during index initialization and rebuilding.
 - **Performance Optimization (Build)** — Disabled generating `.map` source maps in production build (disabled `sourceMap` in `tsconfig.json`), saving approx 1-2MB in the final compiled bundle.
 - **Performance Optimization (Memory)** — Refactored unbounded `SELECT * FROM memory_journal` queries across core handlers (`entries.ts`, `templates.ts`, `github.ts`, `core.ts`, `stats.ts`, `graph.ts`, `workflow.ts`) to use explicit `ENTRY_COLUMNS` projections, reducing I/O latency and WASM memory overhead.
+- **Performance Optimization (Bundle)** — `WasmSqliteAdapter` initialization is now strictly loaded via a dynamic `await import` block inside `DatabaseAdapterFactory.create`. This keeps the heavy WASM binaries fully isolated from the top-level bundle payload on native platforms. 
+- **Performance Optimization (Database)** — Unbounded `SELECT * FROM relationships` wildcard lookups have been restricted to strict `id, from_entry_id, to_entry_id, relationship_type, description, created_at` column mappings.
+- **Performance Optimization (Sandbox)** — Capped Code Mode Result serialization using strict buffer tracking logic to prevent `JSON.stringify` from creating maximum V8 strings that blow through native application memory.
 - **GitHub API Caching** — Implemented a bounded (max 100 items), TTL-aware LRU cache strategy in `GitHubClient` to prevent memory leaks on long-running instances.
 - **Core Handlers Modularized**:
   - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
