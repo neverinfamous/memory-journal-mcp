@@ -13,6 +13,7 @@
 - Resolved native driver (better-sqlite3) `datatype mismatch` and `more than one statement` exceptions by strictly enforcing `IDatabaseConnection`'s `exec` implementation in analytical routes.
 - Abstracted `rawDb.exec` within the `relationships` tool group to an integrated adapter `executeRawQuery` to prevent query injection bypasses.
 - Secured native snapshot backups by switching from blocked in-memory blob exports to transactional file-system copies with `wal_checkpoint(TRUNCATE)`.
+- Fixed empty-array query result assertions across analytics, team, prompts, and resource handlers caused by SQLite native driver mismatching original `sql.js` row-wrapping (`rawDb.exec()`) structures natively by safely standardizing `executeRawQuery` mapping.
 
 ### Added
 

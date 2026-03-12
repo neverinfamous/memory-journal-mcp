@@ -156,22 +156,19 @@ export class NativeConnectionManager implements IDatabaseConnection {
     exec(sql: string, params?: unknown[]): QueryResult[] {
         const db = this.ensureDb()
         
+        // Use regex to detect true mutations that should return an empty set
+        const isMutation = /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store))./i.test(sql)
+
         // For multiple statements separated by semicolon where they just want it to run
-        if (!params || params.length === 0) {
-            // Check if it's a mutation. better-sqlite3 `.all()` fails on INSERT/UPDATE/DELETE.
-            const isMutation = /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store))./i.test(sql);
-            
-            if (isMutation && sql.includes(';')) {
-                // For PRAGMAs or multi-line mutations
-                db.exec(sql)
-                return []
-            }
+        if (isMutation && sql.includes(';')) {
+            db.exec(sql)
+            return []
         }
 
         const stmt = db.prepare(sql)
-        
-        // Handle queries that don't return data (INSERT, UPDATE, DELETE when handled via prepare)
-        if (!stmt.reader) {
+
+        if (isMutation || !stmt.reader) {
+            // It's a mutation, don't try to read rows back
             if (params && params.length > 0) {
                 stmt.run(...params)
             } else {
@@ -180,14 +177,12 @@ export class NativeConnectionManager implements IDatabaseConnection {
             return []
         }
 
+        // It's a SELECT/PRAGMA with a reader
         const rows = (params && params.length > 0)
             ? stmt.all(...params) as Record<string, unknown>[]
             : stmt.all() as Record<string, unknown>[]
 
         if (rows.length === 0) {
-            // Still need to return the column definitions if possible, but better-sqlite3 
-            // doesn't expose columns for empty sets easily without `columns()`.
-            // We'll safely return empty for sql.js compatibility (it usually returns an empty array too)
             return []
         }
 

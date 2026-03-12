@@ -182,8 +182,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                         prStatus: input.pr_status,
                     })
 
-                    const rawDb = teamDb.getRawDb() as { run: (sql: string, params?: unknown[]) => void }
-                    rawDb.run('UPDATE memory_journal SET author = ? WHERE id = ?', [
+                    teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
                         author,
                         entry.id,
                     ])
@@ -217,9 +216,8 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     const entries = teamDb.getRecentEntries(limit)
 
                     // Enrich entries with author column
-                    const rawDb = teamDb.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
                     const enriched = entries.map((e) => {
-                        const authorResult = rawDb.exec(
+                        const authorResult = teamDb.executeRawQuery(
                             'SELECT author FROM memory_journal WHERE id = ?',
                             [e.id]
                         )
@@ -266,9 +264,8 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Enrich with author
-                    const rawDb = teamDb.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
                     const enriched = entries.map((e) => {
-                        const authorResult = rawDb.exec(
+                        const authorResult = teamDb.executeRawQuery(
                             'SELECT author FROM memory_journal WHERE id = ?',
                             [e.id]
                         )

@@ -20,10 +20,10 @@ function enrichWithAuthor<T extends { id: number }>(
     entries: T[],
     context: ResourceContext
 ): (T & { author: string | null })[] {
-    if (!context.teamDb) return entries.map((e: T) => ({ ...e, author: null }))
-    const rawDb = context.teamDb.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
+    const teamDb = context.teamDb
+    if (!teamDb) return entries.map((e: T) => ({ ...e, author: null }))
     return entries.map((e: T) => {
-        const authorResult = rawDb.exec('SELECT author FROM memory_journal WHERE id = ?', [e.id])
+        const authorResult = teamDb.executeRawQuery('SELECT author FROM memory_journal WHERE id = ?', [e.id])
         const author = (authorResult[0]?.values[0]?.[0] as string) ?? null
         return { ...e, author }
     })
@@ -97,12 +97,11 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 const stats = context.teamDb.getStatistics('week')
-                const rawDb = context.teamDb.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
 
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []
                 try {
-                    const authorResult = rawDb.exec(
+                    const authorResult = context.teamDb.executeRawQuery(
                         `SELECT COALESCE(author, 'unknown') as author, COUNT(*) as count
                          FROM memory_journal
                          WHERE deleted_at IS NULL

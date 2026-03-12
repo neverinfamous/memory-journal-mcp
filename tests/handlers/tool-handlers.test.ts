@@ -204,10 +204,18 @@ describe('Tool Handlers', () => {
 
     describe('callTool - search_by_date_range', () => {
         it('should search by date range', async () => {
-            const today = new Date().toISOString().split('T')[0]!
+            const today = new Date()
+            const tomorrow = new Date(today)
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            const todayStr = today.toISOString().split('T')[0]!
+            const tomorrowStr = tomorrow.toISOString().split('T')[0]!
+            
+            // Ensure an entry exists today
+            await callTool('create_entry', { content: 'Date range test entry' }, db)
+            
             const result = (await callTool(
                 'search_by_date_range',
-                { start_date: today, end_date: today },
+                { start_date: todayStr, end_date: tomorrowStr },
                 db
             )) as { entries: unknown[]; count: number }
 

@@ -193,11 +193,6 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
 
-                    const rawDb = db.getRawDb() as {
-                        exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[]
-                    }
-
-
                     // Build WHERE clause
                     let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
                     const sqlParams: unknown[] = []
@@ -212,7 +207,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Get active projects with stats
-                    const projectsResult = rawDb.exec(
+                    const projectsResult = db.executeRawQuery(
                         `
                         SELECT project_number, COUNT(*) as entry_count,
                                MIN(DATE(timestamp)) as first_entry,
@@ -251,7 +246,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const projectTags: Record<number, { name: string; count: number }[]> = {}
                     for (const proj of projects) {
                         const projNum = proj['project_number'] as number
-                        const tagsResult = rawDb.exec(
+                        const tagsResult = db.executeRawQuery(
                             `
                             SELECT t.name, COUNT(*) as count
                             FROM tags t
@@ -276,7 +271,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const cutoffDate = new Date(Date.now() - 7 * 86400000)
                         .toISOString()
                         .split('T')[0]
-                    const inactiveResult = rawDb.exec(
+                    const inactiveResult = db.executeRawQuery(
                         `
                         SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
                         FROM memory_journal

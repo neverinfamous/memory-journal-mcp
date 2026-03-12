@@ -45,8 +45,7 @@ export function execQuery(
     sql: string,
     params: unknown[] = []
 ): Record<string, unknown>[] {
-    const rawDb = db.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
-    const result = rawDb.exec(sql, params)
+    const result = db.executeRawQuery(sql, params)
     if (result.length === 0) return []
 
     const columns = result[0]?.columns ?? []
