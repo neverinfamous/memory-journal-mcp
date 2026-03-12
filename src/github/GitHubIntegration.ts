@@ -668,7 +668,7 @@ export class GitHubIntegration {
                 body: c.body,
                 path: c.path,
                 line: c.line ?? c.original_line ?? null,
-                side: c.side!,
+                side: c.side ?? 'RIGHT',
                 createdAt: c.created_at,
                 isCopilot: GitHubIntegration.isCopilotAuthor(c.user?.login ?? ''),
             }))
