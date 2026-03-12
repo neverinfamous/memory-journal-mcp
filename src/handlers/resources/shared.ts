@@ -36,6 +36,7 @@ export interface BriefingConfig {
     workflowStatusBreakdown: boolean
     /** Aggregate Copilot review state across recent PRs in briefing (default: false) */
     copilotReviews: boolean
+}
 
 /** Default briefing configuration — preserves pre-existing behavior */
 export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
