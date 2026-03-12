@@ -10,9 +10,10 @@
 import { z } from 'zod'
 import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { sanitizeAuthor } from '../../utils/security-utils.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import { ErrorResponseFields } from './error-response-fields.js'
 
 // ============================================================================
 // Author Detection
@@ -114,14 +115,14 @@ const TeamCreateOutputSchema = z.object({
     entry: TeamEntryOutputSchema.optional(),
     author: z.string().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const TeamEntriesListOutputSchema = z.object({
     entries: z.array(TeamEntryOutputSchema).optional(),
     count: z.number().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Constants
@@ -195,7 +196,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                         author,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -229,7 +230,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
 
                     return { entries: enriched, count: enriched.length }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -278,7 +279,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
 
                     return { entries: enriched, count: enriched.length }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

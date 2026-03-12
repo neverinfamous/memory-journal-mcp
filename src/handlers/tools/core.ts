@@ -8,8 +8,9 @@
 import { z } from 'zod'
 import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { sanitizeAuthor } from '../../utils/security-utils.js'
+import { ErrorResponseFields } from './error-response-fields.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -112,7 +113,7 @@ const CreateEntryOutputSchema = z.object({
     sharedWithTeam: z.boolean().optional(),
     author: z.string().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const EntryByIdOutputSchema = z.object({
     entry: EntryOutputSchema.optional(),
@@ -120,18 +121,18 @@ const EntryByIdOutputSchema = z.object({
     importance: z.number().nullable().optional(),
     importanceBreakdown: ImportanceBreakdownSchema.optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const TestSimpleOutputSchema = z.object({
     message: z.string(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const TagsListOutputSchema = z.object({
     tags: z.array(TagOutputSchema).optional(),
     count: z.number().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Helpers
@@ -251,7 +252,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         ...(sharedWithTeam ? { sharedWithTeam: true, author } : {}),
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -282,7 +283,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     }
                     return result
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -300,7 +301,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const entries = db.getRecentEntries(limit, is_personal)
                     return { entries, count: entries.length }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -326,7 +327,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
 
                     return { success: true, entry }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -343,7 +344,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const { message } = TestSimpleSchema.parse(params)
                     return { message: `Test response: ${message}` }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -361,7 +362,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                     return { tags, count: tags.length }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

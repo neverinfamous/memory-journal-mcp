@@ -145,14 +145,14 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 ## Phase 12b: Structured Error Response Verification
 
 > [!IMPORTANT]
-> All 44 tools now use deterministic error handling via `formatHandlerError()` in `src/utils/error-helpers.ts`. Each handler is wrapped in a `try/catch` block that catches all errors (including Zod validation) and returns structured `{ success: false, error }` responses. This phase verifies that no tool produces raw MCP error frames.
+> All 44 tools now use deterministic error handling via `formatHandlerErrorResponse()` in `src/utils/error-helpers.ts`. Each handler is wrapped in a `try/catch` block that catches all errors (including Zod validation) and returns enriched structured responses. This phase verifies that no tool produces raw MCP error frames.
 
 ### Structured Error Response Pattern
 
-All tools return errors as structured objects via `formatHandlerError()` (never thrown). A thrown error propagates as a raw MCP error, which is unhelpful to clients. The expected pattern:
+All tools return errors as structured objects via `formatHandlerErrorResponse()` (never thrown). A thrown error propagates as a raw MCP error, which is unhelpful to clients. The expected pattern:
 
 ```json
-{ "success": false, "error": "Human-readable error message" }
+{ "success": false, "error": "Human-readable error message", "code": "VALIDATION_ERROR", "category": "validation", "recoverable": false, "suggestion": "Check input parameters against the tool schema" }
 ```
 
 #### Handler Error vs MCP Error — How to Distinguish
@@ -161,8 +161,8 @@ There are two kinds of error responses. Only one is correct:
 
 | Type                 | Source                                                             | What you see                                                                                                          | Verdict            |
 | -------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| **Handler error** ✅ | Handler catches error and returns `{success: false, error: "..."}` | Parseable JSON object with `success` and `error` fields                                                               | Correct            |
-| **MCP error** ❌     | Uncaught throw propagates to MCP framework                         | Raw text error string, often prefixed with `Error:`, wrapped in an `isError: true` content block — no `success` field | Bug — report as ❌ |
+| **Handler error** ✅ | Handler catches error and returns enriched `ErrorResponse` | Parseable JSON object with `success`, `error`, `code`, `category`, `recoverable` fields                               | Correct            |
+| **MCP error** ❌     | Uncaught throw propagates to MCP framework                  | Raw text error string, often prefixed with `Error:`, wrapped in an `isError: true` content block — no `success` field | Bug — report as ❌ |
 
 **Concrete examples:**
 

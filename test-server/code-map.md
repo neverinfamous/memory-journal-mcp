@@ -43,8 +43,8 @@ src/
 │   └── ToolFilter.ts               # ToolFilter class — parse/apply --tool-filter expressions
 │
 ├── utils/
-│   ├── error-helpers.ts            # formatHandlerError(), formatHandlerErrorResponse(),
-│   │                               #   formatZodError() (see § Error Handling)
+│   ├── error-helpers.ts            # formatHandlerErrorResponse(), formatZodError()
+│   │                               #   (see § Error Handling)
 │   ├── logger.ts                   # Logger class (structured JSON, severity filtering)
 │   ├── McpLogger.ts                # MCP protocol logging integration
 │   ├── progress-utils.ts           # MCP progress notification helpers
@@ -127,6 +127,7 @@ src/
 |------|---------|
 | `index.ts` | `createToolDefinitions(ctx)` — assembles all tools, applies ToolContext |
 | `schemas.ts` | Shared Zod schemas, constants (`ENTRY_TYPES`, `SIGNIFICANCE_TYPES`, `DATE_FORMAT_REGEX`), `relaxedNumber()` helper for MCP input schemas |
+| `error-response-fields.ts` | Shared `ErrorResponseFields` Zod fragment — extended into all output schemas for `formatHandlerErrorResponse()` compatibility |
 | `github/schemas.ts` | GitHub-specific Zod schemas |
 | `github/helpers.ts` | GitHub tool shared helpers |
 | `github/mutation-tools.ts` | (Placeholder for future mutation tools) |
@@ -197,15 +198,13 @@ try {
   // ... domain logic ...
   return { success: true, ... };
 } catch (err) {
-  return formatHandlerError(err);            // backward-compatible: {success, error}
-  // or: return formatHandlerErrorResponse(err); // enriched: {success, error, code, category, suggestion, recoverable}
+  return formatHandlerErrorResponse(err); // enriched: {success, error, code, category, suggestion, recoverable}
 }
 ```
 
 | Function | Purpose |
 |----------|---------|
-| `formatHandlerError(err)` | Returns `{success: false, error: "..."}` — backward-compatible, used by existing handlers |
-| `formatHandlerErrorResponse(err)` | Returns enriched `ErrorResponse` with `code`, `category`, `suggestion`, `recoverable` — for future handler migration |
+| `formatHandlerErrorResponse(err)` | Returns enriched `ErrorResponse` with `code`, `category`, `suggestion`, `recoverable` — used by all handlers |
 | `formatZodError(err)` | Extracts human-readable messages from Zod validation errors |
 
 ---
@@ -227,7 +226,7 @@ try {
 
 | Pattern | Description |
 |---------|-------------|
-| **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerErrorResponse()`. Handlers currently use `formatHandlerError()` — enriched formatter available for future migration. |
+| **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerErrorResponse()`. All handlers use enriched formatter. Output schemas include `ErrorResponseFields` for validation compatibility. |
 | **Single Adapter** | No adapter abstraction — `SqliteAdapter` (sql.js WASM) used directly. No native backend. |
 | **ToolContext** | All tool handlers receive `ToolContext` (db, teamDb?, vectorManager?, github?, config?, progress?). |
 | **GitHub Integration** | `GitHubIntegration` (Octokit-based) — issues, PRs, milestones, projects V2, kanban, traffic. |

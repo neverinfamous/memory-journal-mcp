@@ -6,8 +6,9 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { ENTRY_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import { ErrorResponseFields } from './error-response-fields.js'
 
 // ============================================================================
 // Input Schemas
@@ -50,14 +51,14 @@ const UpdateEntryOutputSchema = z.object({
     success: z.boolean().optional(),
     entry: EntryOutputSchema.optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const DeleteEntryOutputSchema = z.object({
     success: z.boolean().optional(),
     entryId: z.number().optional(),
     permanent: z.boolean().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const MergeTagsOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -67,19 +68,19 @@ const MergeTagsOutputSchema = z.object({
     sourceDeleted: z.boolean().optional(),
     message: z.string().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const RebuildVectorIndexOutputSchema = z.object({
     success: z.boolean().optional(),
     entriesIndexed: z.number().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const AddToVectorIndexOutputSchema = z.object({
     success: z.boolean().optional(),
     entryId: z.number().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -121,7 +122,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
 
                     return { success: true, entry }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -156,7 +157,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
 
                     return { success, entryId: entry_id, permanent }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -208,7 +209,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                 } catch (error) {
                     // Zod or domain error
                     if (error instanceof z.ZodError) {
-                        return formatHandlerError(error)
+                        return formatHandlerErrorResponse(error)
                     }
                     // Domain error from db.mergeTags — try to preserve schema shape
                     try {
@@ -225,7 +226,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: error instanceof Error ? error.message : 'Unknown error',
                         }
                     } catch {
-                        return formatHandlerError(error)
+                        return formatHandlerErrorResponse(error)
                     }
                 }
             },
@@ -250,7 +251,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     const indexed = await vectorManager.rebuildIndex(db, progress)
                     return { success: true, entriesIndexed: indexed }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -283,7 +284,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     const success = await vectorManager.addEntry(entry_id, entry.content)
                     return { success, entryId: entry_id }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

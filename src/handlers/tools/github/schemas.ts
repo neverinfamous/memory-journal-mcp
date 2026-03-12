@@ -3,6 +3,7 @@
  */
 
 import { z } from 'zod'
+import { ErrorResponseFields } from '../error-response-fields.js'
 
 // ============================================================================
 // Issue Schemas
@@ -20,7 +21,7 @@ export const GitHubIssueOutputSchema = z.object({
         })
         .nullable()
         .optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const GitHubIssueDetailsOutputSchema = GitHubIssueOutputSchema.extend({
     body: z.string().nullable(),
@@ -42,7 +43,7 @@ export const GitHubIssuesListOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const GitHubIssueResultOutputSchema = z.object({
     issue: GitHubIssueDetailsOutputSchema.optional(),
@@ -53,7 +54,7 @@ export const GitHubIssueResultOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // PR Schemas
@@ -64,7 +65,7 @@ export const GitHubPullRequestOutputSchema = z.object({
     title: z.string(),
     url: z.string(),
     state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const GitHubPRDetailsOutputSchema = GitHubPullRequestOutputSchema.extend({
     body: z.string().nullable(),
@@ -91,7 +92,7 @@ export const GitHubPRsListOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const GitHubPRResultOutputSchema = z.object({
     pullRequest: GitHubPRDetailsOutputSchema.optional(),
@@ -102,7 +103,7 @@ export const GitHubPRResultOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Context Schema
@@ -118,7 +119,7 @@ export const GitHubContextOutputSchema = z.object({
     issueCount: z.number().optional(),
     prCount: z.number().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Kanban Schemas
@@ -164,7 +165,7 @@ export const KanbanBoardOutputSchema = z.object({
     requiresUserInput: z.boolean().optional(),
     hint: z.string().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const MoveKanbanItemOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -175,7 +176,7 @@ export const MoveKanbanItemOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     hint: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Issue Lifecycle Schemas
@@ -213,7 +214,7 @@ export const CreateGitHubIssueWithEntryOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const CloseGitHubIssueWithEntryOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -244,7 +245,7 @@ export const CloseGitHubIssueWithEntryOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Milestone Schemas
@@ -263,7 +264,7 @@ export const GitHubMilestoneOutputSchema = z.object({
     createdAt: z.string(),
     updatedAt: z.string(),
     creator: z.string().nullable(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const GitHubMilestonesListOutputSchema = z.object({
     owner: z.string().optional(),
@@ -275,7 +276,7 @@ export const GitHubMilestonesListOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const GitHubMilestoneResultOutputSchema = z.object({
     milestone: GitHubMilestoneOutputSchema.optional(),
@@ -286,7 +287,7 @@ export const GitHubMilestoneResultOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const CreateMilestoneOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -295,7 +296,7 @@ export const CreateMilestoneOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const UpdateMilestoneOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -304,7 +305,7 @@ export const UpdateMilestoneOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const DeleteMilestoneOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -313,7 +314,7 @@ export const DeleteMilestoneOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Insights Schema
@@ -366,7 +367,7 @@ export const RepoInsightsOutputSchema = z.object({
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Copilot Review Schema
@@ -376,7 +377,7 @@ export const CopilotReviewCommentOutputSchema = z.object({
     body: z.string(),
     path: z.string(),
     line: z.number().nullable(),
-})
+}).extend(ErrorResponseFields.shape)
 
 export const CopilotReviewsOutputSchema = z.object({
     prNumber: z.number().optional(),
@@ -390,4 +391,4 @@ export const CopilotReviewsOutputSchema = z.object({
     success: z.boolean().optional(),
     error: z.string().optional(),
     requiresUserInput: z.boolean().optional(),
-})
+}).extend(ErrorResponseFields.shape)

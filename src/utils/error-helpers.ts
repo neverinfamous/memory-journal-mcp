@@ -24,9 +24,12 @@ export function formatZodError(error: ZodError): string {
 }
 
 /**
- * Format any caught error into a structured handler error response.
+ * Format any caught error into an enriched ErrorResponse.
  *
- * Handles ZodError (validation) and general errors (runtime).
+ * Returns structured error information including code, category,
+ * suggestion, and recoverable flag. Handles MemoryJournalMcpError
+ * (full context), ZodError (validation), and raw errors (internal).
+ *
  * Use as the single catch block for all tool handlers:
  *
  * ```typescript
@@ -36,28 +39,10 @@ export function formatZodError(error: ZodError): string {
  *     // ... domain logic ...
  *     return { success: true, ... };
  *   } catch (err) {
- *     return formatHandlerError(err);
+ *     return formatHandlerErrorResponse(err);
  *   }
  * }
  * ```
- */
-export function formatHandlerError(err: unknown): {
-    success: false
-    error: string
-} {
-    if (err instanceof ZodError) {
-        return { success: false, error: formatZodError(err) }
-    }
-    const message = err instanceof Error ? err.message : String(err)
-    return { success: false, error: message }
-}
-
-/**
- * Format any caught error into an enriched ErrorResponse.
- *
- * Returns structured error information including code, category,
- * suggestion, and recoverable flag. Handles MemoryJournalMcpError
- * (full context), ZodError (validation), and raw errors (internal).
  */
 export function formatHandlerErrorResponse(err: unknown): ErrorResponse {
     // MemoryJournalMcpError and subclasses (OAuthError, SecurityError, etc.)

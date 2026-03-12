@@ -6,8 +6,9 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
+import { ErrorResponseFields } from './error-response-fields.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -55,7 +56,7 @@ const ExportEntriesOutputSchema = z.object({
     content: z.string().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -126,7 +127,7 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 2, 2, 'Export complete')
                     return { format: 'json', entries }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

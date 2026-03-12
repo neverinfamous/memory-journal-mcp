@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import type { GitHubIntegration } from '../../../github/GitHubIntegration.js'
-import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import {
     GitHubMilestonesListOutputSchema,
     GitHubMilestoneResultOutputSchema,
@@ -129,7 +129,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         detectedRepo: resolved.detectedRepo,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -191,7 +191,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         detectedRepo: resolved.detectedRepo,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -251,7 +251,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         message: `Created milestone #${String(milestone.number)}: ${milestone.title}`,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -323,7 +323,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         message: `Updated milestone #${String(milestone.number)}: ${milestone.title}`,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -385,7 +385,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         message: `Deleted milestone #${String(input.milestone_number)}`,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

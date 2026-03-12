@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import { KanbanBoardOutputSchema, MoveKanbanItemOutputSchema } from './schemas.js'
 import { resolveOwner } from './helpers.js'
 
@@ -54,7 +54,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
 
                     return board
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -127,7 +127,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         error: result.error,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

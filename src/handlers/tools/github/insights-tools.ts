@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import { RepoInsightsOutputSchema } from './schemas.js'
 
 // ============================================================================
@@ -111,7 +111,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
 
                     return result
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

@@ -13,6 +13,7 @@
  */
 
 import { z } from 'zod'
+import { ErrorResponseFields } from './error-response-fields.js'
 
 // ============================================================================
 // Shared Constants
@@ -66,7 +67,7 @@ export const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'
  * Uses `z.any()` so the SDK's Zod validation accepts any value (including
  * strings like `"abc"`). The handler's strict schema (`z.number()`) then
  * rejects invalid values and produces structured `{success: false, error}`
- * responses via `formatHandlerError()`.
+ * responses via `formatHandlerErrorResponse()`.
  *
  * Without this, `z.number()` rejects strings at the SDK level with raw
  * MCP `-32602` errors that bypass the handler's try-catch.
@@ -102,7 +103,7 @@ export const EntryOutputSchema = z.object({
     workflowName: z.string().nullable().optional(),
     workflowStatus: z.string().nullable().optional(),
     source: z.enum(['personal', 'team']).optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 /**
  * Schema for list of entries with count.
@@ -113,7 +114,7 @@ export const EntriesListOutputSchema = z.object({
     count: z.number().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 /**
  * Schema for a relationship between entries.
@@ -125,7 +126,7 @@ export const RelationshipOutputSchema = z.object({
     relationshipType: z.string(),
     description: z.string().nullable().optional(),
     createdAt: z.string(),
-})
+}).extend(ErrorResponseFields.shape)
 
 /**
  * Importance score breakdown schema.
@@ -143,4 +144,4 @@ export const ImportanceBreakdownSchema = z.object({
 export const TagOutputSchema = z.object({
     name: z.string(),
     count: z.number().nullable(),
-})
+}).extend(ErrorResponseFields.shape)

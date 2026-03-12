@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import type { GitHubIntegration } from '../../../github/GitHubIntegration.js'
-import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import {
     GitHubIssuesListOutputSchema,
     GitHubIssueResultOutputSchema,
@@ -128,7 +128,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         count: issues.length,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -189,7 +189,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         count: pullRequests.length,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -242,7 +242,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         detectedRepo: resolved.detectedRepo,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -295,7 +295,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         detectedRepo: resolved.detectedRepo,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -326,7 +326,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         prCount: ctx.pullRequests.length,
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },

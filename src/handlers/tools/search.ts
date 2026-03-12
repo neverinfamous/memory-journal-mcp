@@ -6,7 +6,8 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
+import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { ErrorResponseFields } from './error-response-fields.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -113,7 +114,7 @@ const SemanticSearchOutputSchema = z.object({
     hint: z.string().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 const VectorStatsOutputSchema = z.object({
     available: z.boolean(),
@@ -122,7 +123,7 @@ const VectorStatsOutputSchema = z.object({
     modelName: z.string().optional(),
     dimensions: z.number().optional(),
     success: z.boolean().optional(),
-})
+}).extend(ErrorResponseFields.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -185,7 +186,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     return { entries: personalEntries, count: personalEntries.length }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -236,7 +237,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     return { entries: personalEntries, count: personalEntries.length }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -298,7 +299,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                               : {}),
                     }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
@@ -322,7 +323,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     const stats = await vectorManager.getStats()
                     return { success: true, available: true, ...stats }
                 } catch (err) {
-                    return formatHandlerError(err)
+                    return formatHandlerErrorResponse(err)
                 }
             },
         },
