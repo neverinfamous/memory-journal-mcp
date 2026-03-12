@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Configurable Briefing (`memory://briefing`)** — 5 new env vars / CLI flags to customize the session briefing
+  - `BRIEFING_ENTRY_COUNT` / `--briefing-entries` — Number of journal entries (default: 3)
+  - `BRIEFING_INCLUDE_TEAM` / `--briefing-include-team` — Include team DB entries in briefing
+  - `BRIEFING_ISSUE_COUNT` / `--briefing-issues` — Number of issues to list with titles (0 = count only)
+  - `BRIEFING_PR_COUNT` / `--briefing-prs` — Number of PRs to list with titles (0 = count only)
+  - `BRIEFING_PR_STATUS` / `--briefing-pr-status` — Show PR status breakdown (open/merged/closed)
+  - Issues and PRs row now always displayed in the `userMessage` table when GitHub is available
+  - `RULES_FILE_PATH` / `--rules-file` — Path to user rules file; shown in briefing with size and last-modified age
+  - `SKILLS_DIR_PATH` / `--skills-dir` — Path to skills directory; shown in briefing with skill count
+  - Expanded `## Rule & Skill Suggestions` in server instructions with guidance for adding, updating, and refining rules and skills
+  - `BRIEFING_WORKFLOW_COUNT` / `--briefing-workflows` — Number of recent workflow runs to list with names and status icons
+  - `BRIEFING_WORKFLOW_STATUS` / `--briefing-workflow-status` — Show workflow run status breakdown (passing/failing/pending/cancelled)
+  - CI Status row in briefing enhanced to show named runs (✅ build · ❌ deploy) or aggregated counts
+  - `get_copilot_reviews` tool — Fetch Copilot's code review findings for any PR (state, file-level comments with paths/lines)
+  - `BRIEFING_COPILOT_REVIEWS` / `--briefing-copilot` — Aggregate Copilot review state across recent PRs in briefing
+  - Copilot review patterns in server instructions (learn from reviews, pre-emptive checking, `copilot-finding` tag)
+
 - **OAuth 2.1 Authentication Module** — Full RFC-compliant OAuth 2.0 authentication and authorization for the HTTP transport
   - 10 new files in `src/auth/`: types, errors, scopes, token-validator, oauth-resource-server, authorization-server-discovery, scope-map, auth-context, middleware, barrel
   - RFC 9728 Protected Resource Metadata endpoint (`/.well-known/oauth-protected-resource`)
@@ -24,12 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code Mode (`mj_execute_code`)** — Sandboxed JavaScript execution for multi-step workflows with 70-90% token reduction
   - 9 new files in `src/codemode/`: types, security manager, VM sandbox, worker-thread sandbox, worker script, sandbox factory, API bridge, API constants, barrel
   - `src/handlers/tools/codemode.ts` — Tool handler with security validation, rate limiting, and API bridge construction
-  - `mj.*` namespaced API exposes all 42 tools across 9 groups (core, search, analytics, relationships, export, admin, github, backup, team)
+  - `mj.*` namespaced API exposes all 44 tools across 10 groups (core, search, analytics, relationships, export, admin, github, backup, team, codemode)
   - Positional argument support, method aliases, per-group `help()` for discoverability
   - Production sandbox: `node:worker_threads` with V8 isolate boundary, `node:vm` secondary isolation, MessagePort RPC bridge
   - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (20 req/min), result size (1MB)
   - `--sandbox-mode <mode>` CLI flag: `worker` (production, default) or `vm` (lightweight)
-  - Tool count: 42 → 43 tools, tool groups: 9 → 10
+  - Tool count: 42 → 44 tools, tool groups: 9 → 10
 
 ### Changed
 

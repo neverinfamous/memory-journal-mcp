@@ -80,6 +80,51 @@ program
         'OAuth clock tolerance in seconds (default: 60)',
         '60'
     )
+    // Briefing configuration
+    .option(
+        '--briefing-entries <count>',
+        'Number of journal entries in briefing (env: BRIEFING_ENTRY_COUNT)',
+        '3'
+    )
+    .option(
+        '--briefing-include-team',
+        'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'
+    )
+    .option(
+        '--briefing-issues <count>',
+        'Number of issues to list in briefing; 0 = count only (env: BRIEFING_ISSUE_COUNT)',
+        '0'
+    )
+    .option(
+        '--briefing-prs <count>',
+        'Number of PRs to list in briefing; 0 = count only (env: BRIEFING_PR_COUNT)',
+        '0'
+    )
+    .option(
+        '--briefing-pr-status',
+        'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'
+    )
+    .option(
+        '--rules-file <path>',
+        'Path to user rules file for awareness in briefing (env: RULES_FILE_PATH)'
+    )
+    .option(
+        '--skills-dir <path>',
+        'Path to skills directory for awareness in briefing (env: SKILLS_DIR_PATH)'
+    )
+    .option(
+        '--briefing-workflows <count>',
+        'Number of workflow runs to list in briefing; 0 = status only (env: BRIEFING_WORKFLOW_COUNT)',
+        '0'
+    )
+    .option(
+        '--briefing-workflow-status',
+        'Show workflow run status breakdown in briefing (env: BRIEFING_WORKFLOW_STATUS)'
+    )
+    .option(
+        '--briefing-copilot',
+        'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT_REVIEWS)'
+    )
     .action(
         async (options: {
             transport: string
@@ -104,6 +149,16 @@ program
             oauthAudience?: string
             oauthJwksUri?: string
             oauthClockTolerance: string
+            briefingEntries: string
+            briefingIncludeTeam?: boolean
+            briefingIssues: string
+            briefingPrs: string
+            briefingPrStatus?: boolean
+            rulesFile?: string
+            skillsDir?: string
+            briefingWorkflows: string
+            briefingWorkflowStatus?: boolean
+            briefingCopilot?: boolean
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -155,6 +210,41 @@ program
                     oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
                     oauthClockTolerance: parseInt(options.oauthClockTolerance, 10),
+                    // Briefing configuration
+                    briefingConfig: {
+                        entryCount: parseInt(
+                            process.env['BRIEFING_ENTRY_COUNT'] ?? options.briefingEntries,
+                            10
+                        ),
+                        includeTeam:
+                            options.briefingIncludeTeam ??
+                            process.env['BRIEFING_INCLUDE_TEAM'] === 'true',
+                        issueCount: parseInt(
+                            process.env['BRIEFING_ISSUE_COUNT'] ?? options.briefingIssues,
+                            10
+                        ),
+                        prCount: parseInt(
+                            process.env['BRIEFING_PR_COUNT'] ?? options.briefingPrs,
+                            10
+                        ),
+                        prStatusBreakdown:
+                            options.briefingPrStatus ??
+                            process.env['BRIEFING_PR_STATUS'] === 'true',
+                        rulesFilePath:
+                            options.rulesFile ?? process.env['RULES_FILE_PATH'] ?? undefined,
+                        skillsDirPath:
+                            options.skillsDir ?? process.env['SKILLS_DIR_PATH'] ?? undefined,
+                        workflowCount: parseInt(
+                            process.env['BRIEFING_WORKFLOW_COUNT'] ?? options.briefingWorkflows,
+                            10
+                        ),
+                        workflowStatusBreakdown:
+                            options.briefingWorkflowStatus ??
+                            process.env['BRIEFING_WORKFLOW_STATUS'] === 'true',
+                        copilotReviews:
+                            options.briefingCopilot ??
+                            process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
+                    },
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

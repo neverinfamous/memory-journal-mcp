@@ -367,3 +367,27 @@ export const RepoInsightsOutputSchema = z.object({
     requiresUserInput: z.boolean().optional(),
     instruction: z.string().optional(),
 })
+
+// ============================================================================
+// Copilot Review Schema
+// ============================================================================
+
+export const CopilotReviewCommentOutputSchema = z.object({
+    body: z.string(),
+    path: z.string(),
+    line: z.number().nullable(),
+})
+
+export const CopilotReviewsOutputSchema = z.object({
+    prNumber: z.number().optional(),
+    state: z.enum(['approved', 'changes_requested', 'commented', 'none']).optional(),
+    commentCount: z.number().optional(),
+    comments: z.array(CopilotReviewCommentOutputSchema).optional(),
+    owner: z.string().optional(),
+    repo: z.string().optional(),
+    detectedOwner: z.string().nullable().optional(),
+    detectedRepo: z.string().nullable().optional(),
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    requiresUserInput: z.boolean().optional(),
+})

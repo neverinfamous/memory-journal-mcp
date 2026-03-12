@@ -26,6 +26,7 @@ import { generateInstructions } from '../constants/ServerInstructions.js'
 import { Scheduler, type SchedulerOptions } from './Scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
 import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
+import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
 import pkg from '../../package.json' with { type: 'json' }
 
 export interface ServerOptions {
@@ -48,6 +49,8 @@ export interface ServerOptions {
     oauthAudience?: string
     oauthJwksUri?: string
     oauthClockTolerance?: number
+    // Briefing configuration
+    briefingConfig?: BriefingConfig
 }
 
 /**
@@ -312,7 +315,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         filterConfig,
                         github,
                         scheduler,
-                        teamDb
+                        teamDb,
+                        options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
                     )
                     const dataStr =
                         typeof result.data === 'string'
@@ -348,7 +352,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         filterConfig,
                         github,
                         scheduler,
-                        teamDb
+                        teamDb,
+                        options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
                     )
                     const dataStr =
                         typeof result.data === 'string'

@@ -10,6 +10,7 @@ import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
 import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
 import type { Scheduler } from '../../server/Scheduler.js'
 import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { BriefingConfig } from './shared.js'
 
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
@@ -87,10 +88,11 @@ export async function readResource(
     filterConfig?: ToolFilterConfig | null,
     github?: GitHubIntegration | null,
     scheduler?: Scheduler | null,
-    teamDb?: SqliteAdapter
+    teamDb?: SqliteAdapter,
+    briefingConfig?: BriefingConfig
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     const resources = getAllResourceDefinitions()
-    const context = { db, teamDb, vectorManager, filterConfig, github, scheduler }
+    const context = { db, teamDb, vectorManager, filterConfig, github, scheduler, briefingConfig }
 
     // Strip query parameters for matching, but pass full URI to handler
     const baseUri = getBaseUri(uri)

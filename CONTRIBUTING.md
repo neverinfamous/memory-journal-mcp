@@ -219,7 +219,7 @@ src/
 │   ├── SqliteAdapter.ts    # SQLite operations via sql.js
 │   └── schema.ts           # DDL + input types
 ├── handlers/
-│   ├── tools/              # 42 tool handlers (9 groups)
+│   ├── tools/              # 44 tool handlers (10 groups)
 │   ├── resources/          # 22 resource handlers
 │   └── prompts/            # 15 prompt handlers
 ├── transports/

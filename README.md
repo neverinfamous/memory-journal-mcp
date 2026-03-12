@@ -28,7 +28,7 @@
 
 ### Key Benefits
 
-**43 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**44 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
@@ -138,7 +138,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **43 MCP Tools** (10 Groups)
+### 🛠️ **44 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                     |
 | --------------- | ----- | ------------------------------------------------------------------------------- |
@@ -149,7 +149,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `relationships` | 2     | Link entries, visualize graphs                                                  |
 | `export`        | 1     | JSON/Markdown export                                                            |
 | `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                         |
-| `github`        | 15    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle** |
+| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews** |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                  |
 | `team`          | 3     | Team create, get recent, search (requires `TEAM_DB_PATH`)                       |
 
@@ -221,7 +221,7 @@ Code executes in a **sandboxed VM context** with multiple layers of security. Al
 
 ### ⚡ Code Mode Only (Maximum Token Savings)
 
-Run with **only Code Mode enabled** — a single tool that provides access to all 43 tools' worth of capability through the `mj.*` API:
+Run with **only Code Mode enabled** — a single tool that provides access to all 44 tools' worth of capability through the `mj.*` API:
 
 ```json
 {
@@ -252,42 +252,11 @@ If you prefer individual tool calls, exclude codemode:
 
 ### Option 1: npm (Recommended)
 
-**Step 1: Install the package**
-
 ```bash
 npm install -g memory-journal-mcp
 ```
 
-**Step 2: Add to ~/.cursor/mcp.json**
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "memory-journal-mcp"
-    }
-  }
-}
-```
-
-**Step 3: Restart Cursor**
-
-Restart Cursor or your MCP client, then start journaling!
-
-### Option 2: npx (No Installation)
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "npx",
-      "args": ["-y", "memory-journal-mcp"]
-    }
-  }
-}
-```
-
-### Option 3: From Source
+### Option 2: From Source
 
 ```bash
 git clone https://github.com/neverinfamous/memory-journal-mcp.git
@@ -296,18 +265,38 @@ npm install
 npm run build
 ```
 
+### Add to MCP Config
+
+Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
+
 ```json
 {
   "mcpServers": {
     "memory-journal-mcp": {
-      "command": "node",
-      "args": ["dist/cli.js", "--default-project", "1"]
+      "command": "memory-journal-mcp",
+      "env": {
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "GITHUB_REPO_PATH": "/path/to/your/git/repo"
+      }
     }
   }
 }
 ```
 
-### Option 4: HTTP/SSE Transport (Remote Access)
+**Variants** (modify the config above):
+
+| Variant | Change |
+|---------|--------|
+| **Minimal (no GitHub)** | Remove the `env` block entirely |
+| **npx (no install)** | Replace `"command"` with `"npx"` and add `"args": ["-y", "memory-journal-mcp"]` |
+| **From source** | Replace `"command"` with `"node"` and add `"args": ["dist/cli.js"]` |
+| **Code Mode only** | Add `"args": ["--tool-filter", "codemode"]` (single tool, all capabilities) |
+| **Docker** | Replace `"command"` with `"docker"` and use `run -i --rm -v ./data:/app/data writenotenow/memory-journal-mcp:latest` as args |
+| **Team collaboration** | Add `"TEAM_DB_PATH": "./team.db"` to `env` |
+
+Restart your MCP client and start journaling!
+
+### Option 3: HTTP/SSE Transport (Remote Access)
 
 For remote access or web-based clients, run the server in HTTP mode:
 
@@ -410,23 +399,7 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 
 ### GitHub Integration Configuration
 
-The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect the repository from your git context. However, MCP clients may run the server from a different directory than your project.
-
-**To enable GitHub auto-detection**, add `GITHUB_REPO_PATH` to your config:
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "memory-journal-mcp",
-      "env": {
-        "GITHUB_TOKEN": "ghp_your_token_here",
-        "GITHUB_REPO_PATH": "/path/to/your/git/repo"
-      }
-    }
-  }
-}
-```
+The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `GITHUB_REPO_PATH` is configured (shown in the Quick Start config above).
 
 | Environment Variable     | Description                                                             |
 | ------------------------ | ----------------------------------------------------------------------- |
@@ -442,6 +415,16 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 | `OAUTH_ISSUER`           | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)         |
 | `OAUTH_AUDIENCE`         | Expected JWT audience claim                                             |
 | `OAUTH_JWKS_URI`         | JWKS endpoint for token signature verification                          |
+| `BRIEFING_ENTRY_COUNT`   | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)    |
+| `BRIEFING_INCLUDE_TEAM`  | Include team DB entries in briefing (`true`/`false`; default: `false`)   |
+| `BRIEFING_ISSUE_COUNT`   | Issues to list in briefing; `0` = count only (default: `0`)             |
+| `BRIEFING_PR_COUNT`      | PRs to list in briefing; `0` = count only (default: `0`)                |
+| `BRIEFING_PR_STATUS`     | Show PR status breakdown (open/merged/closed; default: `false`)         |
+| `BRIEFING_WORKFLOW_COUNT`| Workflow runs to list in briefing; `0` = status only (default: `0`)     |
+| `BRIEFING_WORKFLOW_STATUS`| Show workflow status breakdown in briefing (default: `false`)          |
+| `BRIEFING_COPILOT_REVIEWS`| Aggregate Copilot review state in briefing (default: `false`)         |
+| `RULES_FILE_PATH`        | Path to user rules file for agent awareness (CLI: `--rules-file`)       |
+| `SKILLS_DIR_PATH`        | Path to skills directory for agent awareness (CLI: `--skills-dir`)      |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
 
@@ -555,7 +538,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 43 Tools"]
+        Tools["🛠️ 44 Tools"]
         Resources["📡 22 Resources"]
         Prompts["💬 16 Prompts"]
     end
