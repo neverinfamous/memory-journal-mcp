@@ -7,7 +7,7 @@ import type {
     ImportanceResult,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
-import type { IDatabaseAdapter } from '../core/interfaces.js'
+import type { IDatabaseAdapter, QueryResult } from '../core/interfaces.js'
 
 import { WasmConnectionManager } from './wasm-connection.js'
 import { TagsManager } from './tags.js'
@@ -238,5 +238,9 @@ export class WasmSqliteAdapter implements IDatabaseAdapter {
 
     getRawDb(): unknown {
         return this.connection.getRawDb()
+    }
+
+    executeRawQuery(sql: string, params?: unknown[]): QueryResult[] {
+        return this.connection.exec(sql, params)
     }
 }

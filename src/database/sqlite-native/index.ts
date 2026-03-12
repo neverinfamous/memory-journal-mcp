@@ -7,7 +7,7 @@ import type {
     ImportanceResult,
 } from '../../types/index.js'
 import type { CreateEntryInput } from '../core/schema.js'
-import type { IDatabaseAdapter } from '../core/interfaces.js'
+import type { IDatabaseAdapter, QueryResult } from '../core/interfaces.js'
 
 import { NativeConnectionManager } from './native-connection.js'
 import { TagsManager } from '../sqlite-adapter/tags.js'
@@ -235,5 +235,9 @@ export class NativeSqliteAdapter implements IDatabaseAdapter {
 
     getRawDb(): unknown {
         return this.connection.getRawDb()
+    }
+
+    executeRawQuery(sql: string, params?: unknown[]): QueryResult[] {
+        return this.connection.exec(sql, params)
     }
 }

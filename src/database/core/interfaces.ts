@@ -172,4 +172,5 @@ export interface IDatabaseAdapter {
     }
 
     getRawDb(): unknown
+    executeRawQuery(sql: string, params?: unknown[]): QueryResult[]
 }

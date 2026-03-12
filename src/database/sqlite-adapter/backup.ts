@@ -26,18 +26,23 @@ export class BackupManager {
         const filename = `${sanitizedName}.db`
         const backupPath = path.join(backupsDir, filename)
 
-        const rawDb = this.ctx.getRawDb() as { export?: () => Uint8Array }
+        const rawDb = this.ctx.getRawDb() as { export?: () => Uint8Array, pragma?: (s: string) => void }
         
-        // better-sqlite3 handles backups natively via the SQLite backup API
-        // which isn't currently surfaced in this adapter, so we throw for native connections
-        // Note: memory-journal backups are designed for sql.js memory dumps
         if (typeof rawDb.export !== 'function') {
-            throw new Error('Database adapter does not support in-memory exports (use Native SQLite file-system backups directly)')
+            // Native better-sqlite3 connection
+            if (typeof rawDb.pragma === 'function') {
+                try {
+                    rawDb.pragma('wal_checkpoint(TRUNCATE)')
+                } catch {
+                    // ignore checkpoint errors
+                }
+            }
+            fs.copyFileSync(this.ctx.getDbPath(), backupPath)
+        } else {
+            const data = rawDb.export()
+            const buffer = Buffer.from(data)
+            fs.writeFileSync(backupPath, buffer)
         }
-        
-        const data = rawDb.export()
-        const buffer = Buffer.from(data)
-        fs.writeFileSync(backupPath, buffer)
 
         const stats = fs.statSync(backupPath)
 
@@ -134,11 +139,24 @@ export class BackupManager {
         // Close old DB via manager
         this.ctx.closeDbBeforeRestore()
 
-        const backupBuffer = fs.readFileSync(backupPath)
-        const initSqlJs = await import('sql.js').then((m) => m.default)
-        const SQL = await initSqlJs()
-        const newDb = new SQL.Database(backupBuffer)
-        this.ctx.setDbAndInitialized(newDb)
+        const rawDb = this.ctx.getRawDb() as { export?: () => Uint8Array }
+        if (typeof rawDb.export !== 'function') {
+            // Native better-sqlite3 connection
+            fs.copyFileSync(backupPath, this.ctx.getDbPath())
+            
+            // Re-initialize the native connection via dynamic import to avoid static dependency
+            const DatabaseAdapter = await import('better-sqlite3').then((m) => m.default)
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+            const newDb = new (DatabaseAdapter as any)(this.ctx.getDbPath())
+            this.ctx.setDbAndInitialized(newDb as unknown)
+        } else {
+            // WASM sql.js connection
+            const backupBuffer = fs.readFileSync(backupPath)
+            const initSqlJs = await import('sql.js').then((m) => m.default)
+            const SQL = await initSqlJs()
+            const newDb = new SQL.Database(backupBuffer)
+            this.ctx.setDbAndInitialized(newDb)
+        }
 
         const newCountResult = this.ctx.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
         const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0

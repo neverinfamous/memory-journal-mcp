@@ -497,15 +497,15 @@ export class EntriesManager {
                 entriesByType[row[0] as string] = row[1] as number
             }
         } else {
-            const combinedResult = db.exec(`
-                SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL;
+            const totalResult = db.exec('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL')
+            const typeResult = db.exec(`
                 SELECT entry_type, COUNT(*) as count
                 FROM memory_journal
                 WHERE deleted_at IS NULL
                 GROUP BY entry_type
             `)
-            totalEntries = (combinedResult[0]?.values[0]?.[0] as number) ?? 0
-            for (const row of combinedResult[1]?.values ?? []) {
+            totalEntries = (totalResult[0]?.values[0]?.[0] as number) ?? 0
+            for (const row of typeResult[0]?.values ?? []) {
                 entriesByType[row[0] as string] = row[1] as number
             }
         }
@@ -536,14 +536,14 @@ export class EntriesManager {
                 significantCount: v[2] as number,
             }))
 
-        const relResult = db.exec(`
-            SELECT COUNT(*) FROM relationships;
+        const relCountResult = db.exec('SELECT COUNT(*) FROM relationships')
+        const relTypeResult = db.exec(`
             SELECT relationship_type, COUNT(*) as count
             FROM relationships
             WHERE relationship_type IN ('blocked_by', 'resolved', 'caused')
             GROUP BY relationship_type
         `)
-        const totalRelationships = (relResult[0]?.values[0]?.[0] as number) ?? 0
+        const totalRelationships = (relCountResult[0]?.values[0]?.[0] as number) ?? 0
         const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
 
         const currentPeriod = entriesByPeriod[0]?.period ?? ''
@@ -556,7 +556,7 @@ export class EntriesManager {
                 : null
 
         const causalMetrics = { blocked_by: 0, resolved: 0, caused: 0 }
-        for (const row of relResult[1]?.values ?? []) {
+        for (const row of relTypeResult[0]?.values ?? []) {
             const relType = row[0] as 'blocked_by' | 'resolved' | 'caused'
             causalMetrics[relType] = row[1] as number
         }

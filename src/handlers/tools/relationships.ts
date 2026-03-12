@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolContext, RelationshipType } from '../../types/
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorResponseFields } from './error-response-fields.js'
+import type { QueryResult } from '../../database/core/interfaces.js'
 
 // ============================================================================
 // Input Schemas
@@ -176,11 +177,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(params)
-
-                    const rawDb = db.getRawDb() as {
-                        exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[]
-                    }
-                    let entriesResult
+                    let entriesResult: QueryResult[]
 
                     if (input.entry_id !== undefined) {
                         const entry = db.getEntryById(input.entry_id)
@@ -195,7 +192,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        entriesResult = rawDb.exec(
+                        entriesResult = db.executeRawQuery(
                             `
                             WITH RECURSIVE connected_entries(id, distance) AS (
                                 SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
@@ -220,7 +217,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         )
                     } else if (input.tags && input.tags.length > 0) {
                         const placeholders = input.tags.map(() => '?').join(',')
-                        entriesResult = rawDb.exec(
+                        entriesResult = db.executeRawQuery(
                             `
                             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                             FROM memory_journal mj
@@ -235,7 +232,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             [...input.tags, input.limit]
                         )
                     } else {
-                        entriesResult = rawDb.exec(
+                        entriesResult = db.executeRawQuery(
                             `
                             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                             FROM memory_journal mj
@@ -287,7 +284,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const entryIds = Object.keys(entries).map(Number)
                     const placeholders = entryIds.map(() => '?').join(',')
 
-                    const relsResult = rawDb.exec(
+                    const relsResult = db.executeRawQuery(
                         `
                         SELECT from_entry_id, to_entry_id, relationship_type
                         FROM relationships
