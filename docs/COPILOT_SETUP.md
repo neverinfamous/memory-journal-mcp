@@ -28,7 +28,7 @@ Add to your workspace `.vscode/mcp.json`:
       "command": "npx",
       "args": ["-y", "memory-journal-mcp"],
       "env": {
-        "JOURNAL_DB_PATH": "./memory-journal.db",
+        "DB_PATH": "./memory-journal.db",
         "GITHUB_TOKEN": "${env:GITHUB_TOKEN}",
         "GITHUB_REPO_PATH": "."
       }
@@ -67,6 +67,6 @@ Then use `get_copilot_reviews(pr_number)` to fetch Copilot's findings for any PR
 
 When connecting memory-journal-mcp to Copilot:
 
-- Use **read-only OAuth scopes** (`read:journal`, `read:github`) if OAuth is enabled
+- Use **read-only OAuth scopes** (e.g., a `read`-level scope) and follow the principle of least privilege if OAuth is enabled
 - The journal database may contain project decisions, architecture notes, and code patterns — share only what's appropriate
 - Copilot's access follows your GitHub repository permissions

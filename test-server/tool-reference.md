@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **44 tools** organized by 11 tool groups.
+Complete reference of all **44 tools** organized by 10 tool groups.
 
 > Every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures.
 >

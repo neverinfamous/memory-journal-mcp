@@ -104,7 +104,7 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.analytics.getCrossProjectInsights()',
     ],
     relationships: [
-        'mj.relationships.linkEntries({ source_id: 1, target_id: 2, relationship_type: "implements" })',
+        'mj.relationships.linkEntries({ from_entry_id: 1, to_entry_id: 2, relationship_type: "implements" })',
         'mj.relationships.visualizeRelationships({ entry_id: 1 })',
     ],
     export: [
@@ -164,7 +164,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     // Analytics (no positional — uses empty params)
 
     // Relationships
-    linkEntries: ['source_id', 'target_id', 'relationship_type'],
+    linkEntries: ['from_entry_id', 'to_entry_id', 'relationship_type'],
     visualizeRelationships: 'entry_id',
 
     // Export
@@ -190,7 +190,7 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
 
     // Backup
     restoreBackup: 'filename',
-    cleanupBackups: 'keep',
+    cleanupBackups: 'keep_count',
 
     // Team
     teamCreateEntry: 'content',

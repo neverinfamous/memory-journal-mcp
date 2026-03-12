@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mj.*` namespaced API exposes all 44 tools across 10 groups (core, search, analytics, relationships, export, admin, github, backup, team, codemode)
   - Positional argument support, method aliases, per-group `help()` for discoverability
   - Production sandbox: `node:worker_threads` with V8 isolate boundary, `node:vm` secondary isolation, MessagePort RPC bridge
-  - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (20 req/min), result size (1MB)
+  - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (60 executions/min), result size (10MB)
   - `--sandbox-mode <mode>` CLI flag: `worker` (production, default) or `vm` (lightweight)
   - Tool count: 42 → 44 tools, tool groups: 9 → 10
 

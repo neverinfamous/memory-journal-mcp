@@ -36,7 +36,7 @@ test.describe('Payload Contracts: Backup', () => {
 
     test('cleanup_backups returns cleanup result', async () => {
         const payload = await callToolAndParse(client, 'cleanup_backups', {
-            keep: 5,
+            keep_count: 5,
         })
         expectSuccess(payload)
         expect(typeof payload).toBe('object')
