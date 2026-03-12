@@ -95,7 +95,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             name: 'mj_execute_code',
             title: 'Execute Code (Code Mode)',
             description:
-                'Execute JavaScript in a sandboxed environment with access to all 42 journal tools via the `mj.*` API. ' +
+                'Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. ' +
                 'Enables multi-step workflows in a single call, reducing token usage by 70-90%. ' +
                 'API groups: mj.core.*, mj.search.*, mj.analytics.*, mj.relationships.*, ' +
                 'mj.export.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +

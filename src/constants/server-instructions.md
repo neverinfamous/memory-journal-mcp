@@ -65,7 +65,7 @@ When the user has GitHub Copilot code review enabled:
 ## Code Mode (Token-Efficient Multi-Step Operations)
 
 For multi-step workflows (3+ operations), prefer `mj_execute_code` over individual tool calls.
-This executes JavaScript in a sandboxed environment with all 44 tools available as `mj.*` API:
+This executes JavaScript in a sandboxed environment with all tools available as `mj.*` API:
 
 | Group         | Namespace              | Example                                           |
 |---------------|------------------------|---------------------------------------------------|
