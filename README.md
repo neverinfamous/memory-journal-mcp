@@ -43,7 +43,7 @@
 - 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
 - ⚡ **Code Mode** — execute complex, multi-step operations in a secure JavaScript sandbox. Exposes all 43 capabilities via `mj.*` API, reducing token overhead by up to 90%
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
-- ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
+- ✅ **Deterministic error handling** — every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
 ---
 
@@ -626,7 +626,7 @@ npm run test:e2e  # End-to-end HTTP/SSE transport tests
 
 ### Security
 
-- **Deterministic error handling** - Every tool returns structured `{success, error}` responses with actionable context — no raw exceptions, no silent failures, no misleading messages
+- **Deterministic error handling** - Every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses with actionable context — no raw exceptions, no silent failures, no misleading messages
 - **Local-first** - All data stored locally, no external API calls (except optional GitHub)
 - **Input validation** - Zod schemas, content size limits, SQL injection prevention
 - **Path traversal protection** - Backup filenames validated

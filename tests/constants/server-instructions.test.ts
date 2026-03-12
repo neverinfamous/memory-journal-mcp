@@ -120,7 +120,7 @@ describe('generateInstructions', () => {
                 'essential'
             )
             expect(result).toContain('Rule & Skill Suggestions')
-            expect(result).toContain('always ask the user first')
+            expect(result).toContain('Always ask the user first')
         })
     })
 

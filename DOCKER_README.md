@@ -36,7 +36,7 @@
 - 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
 - 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
 - ⚡ **Code Mode** — execute complex, multi-step operations in a secure JavaScript sandbox. Exposes all 43 capabilities via `mj.*` API, reducing token overhead by up to 90%
-- ✅ **Deterministic error handling** — every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
+- ✅ **Deterministic error handling** — every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
 
 **Ask Agent naturally:**
 
@@ -437,7 +437,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - **vectra** - Vector similarity search without native dependencies
 - **@xenova/transformers** - ML embeddings in JavaScript
 - **Faster Startup** - Lazy loading of ML models
-- **Production/Stable** - Deterministic error handling (`{success, error}` on every tool) and automatic migrations
+- **Production/Stable** - Deterministic error handling (`{success, error, code, category, suggestion, recoverable}` on every tool) and automatic migrations
 
 Designed for extremely low overhead: database reads in sub-millisecond, vector search and indexing both exceed 640 ops/sec, tool dispatch cached at O(1) with >4800x overhead reduction. Run `npm run bench` for local benchmarks.
 

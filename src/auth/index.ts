@@ -6,7 +6,20 @@
 
 // Types
 export type * from './types.js'
-export * from './errors.js'
+// Error classes
+export {
+    AUTH_ERROR_CODES,
+    OAuthError,
+    TokenMissingError,
+    InvalidTokenError,
+    TokenExpiredError,
+    InvalidSignatureError,
+    InsufficientScopeError,
+    AuthServerDiscoveryError,
+    JwksFetchError,
+    ClientRegistrationError,
+    isOAuthError,
+} from './errors.js'
 
 // Scopes
 export * from './scopes.js'

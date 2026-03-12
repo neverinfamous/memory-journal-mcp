@@ -1,24 +1,21 @@
-/**
- * Security Utilities for Memory Journal MCP Server
- *
- * Centralized security validation following MCP Security Patterns.
- * Uses typed errors for consistent error handling across the codebase.
- */
+import { MemoryJournalMcpError } from '../types/errors.js'
+import { ErrorCategory } from '../types/error-types.js'
 
 // ============================================================================
 // Typed Security Errors
 // ============================================================================
 
 /**
- * Base class for security-related errors
+ * Base class for security-related errors.
+ * Extends MemoryJournalMcpError with VALIDATION category.
  */
-export class SecurityError extends Error {
-    readonly code: string
-
+export class SecurityError extends MemoryJournalMcpError {
     constructor(message: string, code: string) {
-        super(message)
+        super(message, code, ErrorCategory.VALIDATION, {
+            suggestion: 'Check input for security violations',
+            recoverable: false,
+        })
         this.name = 'SecurityError'
-        this.code = code
     }
 }
 

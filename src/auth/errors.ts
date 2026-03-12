@@ -2,8 +2,12 @@
  * memory-journal-mcp — OAuth Error Classes
  *
  * Module-prefixed error classes for OAuth 2.0 authentication
- * and authorization failures.
+ * and authorization failures. Extends MemoryJournalMcpError
+ * for harmonized error handling across the MCP ecosystem.
  */
+
+import { MemoryJournalMcpError } from '../types/errors.js'
+import { ErrorCategory } from '../types/error-types.js'
 
 // =============================================================================
 // Error Codes
@@ -28,20 +32,15 @@ export const AUTH_ERROR_CODES = {
 // =============================================================================
 
 /**
- * Base class for OAuth-related errors
+ * Base class for OAuth-related errors.
+ * Extends MemoryJournalMcpError with OAuth-specific properties.
  */
-export class OAuthError extends Error {
-    /** Module-prefixed error code */
-    readonly code: string
-
+export class OAuthError extends MemoryJournalMcpError {
     /** HTTP status code for this error */
     readonly httpStatus: number
 
     /** WWW-Authenticate header value */
     readonly wwwAuthenticate?: string | undefined
-
-    /** Structured error details */
-    readonly details?: Record<string, unknown> | undefined
 
     constructor(
         message: string,
@@ -50,11 +49,18 @@ export class OAuthError extends Error {
         details?: Record<string, unknown>,
         wwwAuthenticate?: string
     ) {
-        super(message)
+        const category =
+            httpStatus === 403 ? ErrorCategory.AUTHORIZATION : ErrorCategory.AUTHENTICATION
+        super(message, code, category, {
+            suggestion:
+                httpStatus === 403
+                    ? 'Request a token with the required scopes'
+                    : 'Provide a valid OAuth 2.0 bearer token',
+            recoverable: httpStatus !== 500,
+            details,
+        })
         this.name = 'OAuthError'
-        this.code = code
         this.httpStatus = httpStatus
-        this.details = details
         this.wwwAuthenticate = wwwAuthenticate
     }
 }
@@ -153,10 +159,15 @@ export class InsufficientScopeError extends OAuthError {
  */
 export class AuthServerDiscoveryError extends OAuthError {
     constructor(serverUrl: string, cause?: Error) {
-        super('Failed to discover authorization server metadata: ' + serverUrl, AUTH_ERROR_CODES.DISCOVERY_FAILED, 500, {
-            serverUrl,
-            cause: cause?.message,
-        })
+        super(
+            'Failed to discover authorization server metadata: ' + serverUrl,
+            AUTH_ERROR_CODES.DISCOVERY_FAILED,
+            500,
+            {
+                serverUrl,
+                cause: cause?.message,
+            }
+        )
         this.name = 'AuthServerDiscoveryError'
     }
 }
@@ -196,7 +207,8 @@ export function isOAuthError(error: unknown): error is OAuthError {
 }
 
 /**
- * Get WWW-Authenticate header for an OAuth error
+ * Get WWW-Authenticate header for an OAuth error.
+ * @deprecated Use error.wwwAuthenticate property directly instead
  */
 export function getWWWAuthenticateHeader(error: OAuthError, realm = 'memory-journal-mcp'): string {
     return error.wwwAuthenticate ?? `Bearer realm="${realm}"`
