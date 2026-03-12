@@ -81,7 +81,9 @@ export class CodeModeSandbox {
     async execute(
         code: string,
         bindings: Record<string, unknown>,
+        timeoutMs?: number,
     ): Promise<SandboxResult> {
+        const effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         const startTime = performance.now()
         const startRss = process.memoryUsage().rss
 
@@ -121,7 +123,7 @@ export class CodeModeSandbox {
 
             // Execute with timeout
             const resultPromise = script.runInContext(context, {
-                timeout: this.options.timeoutMs,
+                timeout: effectiveTimeout,
             }) as Promise<unknown>
 
             const result = await resultPromise
@@ -189,6 +191,7 @@ export class SandboxPool {
     async execute(
         code: string,
         bindings: Record<string, unknown>,
+        timeoutMs?: number,
     ): Promise<SandboxResult> {
         if (this.activeCount >= this.options.maxInstances) {
             return {
@@ -201,7 +204,7 @@ export class SandboxPool {
         this.activeCount++
         try {
             const sandbox = new CodeModeSandbox(this.sandboxOptions)
-            return await sandbox.execute(code, bindings)
+            return await sandbox.execute(code, bindings, timeoutMs)
         } finally {
             this.activeCount--
         }

@@ -108,7 +108,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { code, readonly: readonlyMode } = ExecuteCodeSchema.parse(params)
+                    const { code, timeout, readonly: readonlyMode } = ExecuteCodeSchema.parse(params)
 
                     // Security validation
                     const security = getSecurityManager()
@@ -145,7 +145,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
-                    return pool.execute(code, bindings).then((result) => {
+                    return pool.execute(code, bindings, timeout).then((result) => {
                         // Validate result size
                         if (result.success && result.result !== undefined) {
                             const sizeCheck = security.validateResultSize(result.result)

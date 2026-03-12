@@ -18,12 +18,12 @@ export type SandboxMode = 'vm' | 'worker'
 
 /** Common sandbox interface */
 export interface ISandbox {
-    execute(code: string, bindings: Record<string, unknown>): Promise<SandboxResult>
+    execute(code: string, bindings: Record<string, unknown>, timeoutMs?: number): Promise<SandboxResult>
 }
 
 /** Common pool interface */
 export interface ISandboxPool {
-    execute(code: string, bindings: Record<string, unknown>): Promise<SandboxResult>
+    execute(code: string, bindings: Record<string, unknown>, timeoutMs?: number): Promise<SandboxResult>
     getActiveCount(): number
     readonly poolId: string
 }

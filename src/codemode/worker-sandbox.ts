@@ -57,7 +57,9 @@ export class WorkerSandbox {
     async execute(
         code: string,
         apiBindings: Record<string, unknown>,
+        timeoutMs?: number,
     ): Promise<SandboxResult> {
+        const effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         const startTime = performance.now()
         const startRss = process.memoryUsage.rss()
 
@@ -102,7 +104,7 @@ export class WorkerSandbox {
                 workerData: {
                     code,
                     methodList,
-                    timeoutMs: this.options.timeoutMs,
+                    timeoutMs: effectiveTimeout,
                     rpcPort: workerPort,
                 },
                 transferList: [workerPort],
@@ -114,7 +116,7 @@ export class WorkerSandbox {
                 worker.terminate().catch(() => {
                     // Worker already dead
                 })
-            }, this.options.timeoutMs + 1000) // +1s grace for cleanup
+            }, effectiveTimeout + 1000) // +1s grace for cleanup
 
             // Handle RPC requests from the worker (via MessageChannel)
             hostPort.on('message', (msg: RpcRequest) => {
@@ -244,6 +246,7 @@ export class WorkerSandboxPool {
     async execute(
         code: string,
         apiBindings: Record<string, unknown>,
+        timeoutMs?: number,
     ): Promise<SandboxResult> {
         if (this.activeCount >= this.options.maxInstances) {
             return {
@@ -256,7 +259,7 @@ export class WorkerSandboxPool {
         this.activeCount++
         try {
             const sandbox = new WorkerSandbox(this.sandboxOptions)
-            return await sandbox.execute(code, apiBindings)
+            return await sandbox.execute(code, apiBindings, timeoutMs)
         } finally {
             this.activeCount--
         }

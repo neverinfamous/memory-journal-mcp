@@ -323,20 +323,22 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 
 **Endpoints:**
 
-| Endpoint         | Description                                      | Mode     |
-| ---------------- | ------------------------------------------------ | -------- |
-| `GET /`          | Server info and available endpoints              | Both     |
-| `POST /mcp`      | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
-| `GET /mcp`       | SSE stream for server-to-client notifications    | Stateful |
-| `DELETE /mcp`    | Session termination                              | Stateful |
-| `GET /sse`       | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
-| `POST /messages` | Legacy SSE message endpoint                      | Stateful |
-| `GET /health`    | Health check (`{ status, timestamp }`)           | Both     |
+| Endpoint                                   | Description                                      | Mode     |
+| ------------------------------------------ | ------------------------------------------------ | -------- |
+| `GET /`                                    | Server info and available endpoints              | Both     |
+| `POST /mcp`                                | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
+| `GET /mcp`                                 | SSE stream for server-to-client notifications    | Stateful |
+| `DELETE /mcp`                              | Session termination                              | Stateful |
+| `GET /sse`                                 | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
+| `POST /messages`                           | Legacy SSE message endpoint                      | Stateful |
+| `GET /health`                              | Health check (`{ status, timestamp }`)           | Both     |
+| `GET /.well-known/oauth-protected-resource`| RFC 9728 Protected Resource Metadata             | Both     |
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
 **Security Features:**
 
+- **OAuth 2.1 Authentication** — RFC 9728/8414 compliant with JWT validation, JWKS caching, and granular scope enforcement (opt-in via `--oauth-enabled`)
 - **7 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (opt-in)
 - **Rate Limiting** — 100 requests/minute per IP with built-in sliding window (429 on excess)
 - **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`). Supports comma-separated multiple origins and wildcard subdomains (e.g., `*.example.com`)
@@ -436,6 +438,10 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) can auto-detect t
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues  |
 | `AUTO_REBUILD_INDEX`     | Set to `true` to rebuild vector index on server startup                 |
 | `MCP_HOST`               | Server bind host (`0.0.0.0` for containers, default: `localhost`)       |
+| `OAUTH_ENABLED`          | Set to `true` to enable OAuth 2.1 authentication (HTTP only)           |
+| `OAUTH_ISSUER`           | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)         |
+| `OAUTH_AUDIENCE`         | Expected JWT audience claim                                             |
+| `OAUTH_JWKS_URI`         | JWKS endpoint for token signature verification                          |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
 
@@ -456,6 +462,47 @@ When GitHub tools cannot auto-detect repository information:
   "instruction": "Please provide owner and repo parameters"
 }
 ```
+
+### 🔐 OAuth 2.1 Authentication
+
+For production deployments, enable OAuth 2.1 authentication on the HTTP transport:
+
+| Component                   | Status | Description                                      |
+| --------------------------- | ------ | ------------------------------------------------ |
+| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
+| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
+| Token Validation            | ✅     | JWT validation with JWKS support                 |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+| HTTP Transport              | ✅     | Streamable HTTP with OAuth middleware            |
+
+**Supported Scopes:**
+
+| Scope   | Tool Groups                                        |
+| ------- | -------------------------------------------------- |
+| `read`  | core, search, analytics, relationships, export     |
+| `write` | github, team (+ all read groups)                   |
+| `admin` | admin, backup, codemode (+ all write/read groups)  |
+
+**Quick Start:**
+
+```bash
+memory-journal-mcp --transport http --port 3000 \
+  --oauth-enabled \
+  --oauth-issuer https://auth.example.com/realms/mcp \
+  --oauth-audience memory-journal-mcp \
+  --oauth-jwks-uri https://auth.example.com/realms/mcp/protocol/openid-connect/certs
+```
+
+Or via environment variables:
+
+```bash
+export OAUTH_ENABLED=true
+export OAUTH_ISSUER=https://auth.example.com/realms/mcp
+export OAUTH_AUDIENCE=memory-journal-mcp
+memory-journal-mcp --transport http --port 3000
+```
+
+> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN` environment variable, or runs without authentication.
 
 ### 🔄 Session Management
 

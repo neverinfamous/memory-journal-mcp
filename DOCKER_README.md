@@ -232,6 +232,10 @@ To enable GitHub tools (`get_github_issues`, `get_github_prs`, etc.), add enviro
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues  |
 | `AUTO_REBUILD_INDEX`     | Set to `true` to rebuild vector index on server startup                 |
 | `MCP_HOST`               | Server bind host (`0.0.0.0` for containers, default: `localhost`)       |
+| `OAUTH_ENABLED`          | Set to `true` to enable OAuth 2.1 authentication (HTTP only)           |
+| `OAUTH_ISSUER`           | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)         |
+| `OAUTH_AUDIENCE`         | Expected JWT audience claim                                             |
+| `OAUTH_JWKS_URI`         | JWKS endpoint for token signature verification                          |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 
@@ -283,20 +287,22 @@ docker run --rm -p 3000:3000 \
 
 **Endpoints:**
 
-| Endpoint         | Description                                      | Mode     |
-| ---------------- | ------------------------------------------------ | -------- |
-| `GET /`          | Server info and available endpoints              | Both     |
-| `POST /mcp`      | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
-| `GET /mcp`       | SSE stream for server-to-client notifications    | Stateful |
-| `DELETE /mcp`    | Session termination                              | Stateful |
-| `GET /sse`       | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
-| `POST /messages` | Legacy SSE message endpoint                      | Stateful |
-| `GET /health`    | Health check (`{ status, timestamp }`)           | Both     |
+| Endpoint                                   | Description                                      | Mode     |
+| ------------------------------------------ | ------------------------------------------------ | -------- |
+| `GET /`                                    | Server info and available endpoints              | Both     |
+| `POST /mcp`                                | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
+| `GET /mcp`                                 | SSE stream for server-to-client notifications    | Stateful |
+| `DELETE /mcp`                              | Session termination                              | Stateful |
+| `GET /sse`                                 | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
+| `POST /messages`                           | Legacy SSE message endpoint                      | Stateful |
+| `GET /health`                              | Health check (`{ status, timestamp }`)           | Both     |
+| `GET /.well-known/oauth-protected-resource`| RFC 9728 Protected Resource Metadata             | Both     |
 
 **Session Management:** In stateful mode, include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
 **Security Features:**
 
+- **OAuth 2.1 Authentication** — RFC 9728/8414 compliant with JWT validation, JWKS caching, and granular scope enforcement (opt-in via `--oauth-enabled`)
 - **7 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (opt-in)
 - **Rate Limiting** — 100 requests/minute per IP with built-in sliding window (429 on excess)
 - **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`). Supports comma-separated multiple origins and wildcard subdomains (e.g., `*.example.com`)
@@ -350,6 +356,31 @@ curl -X POST http://localhost:3000/mcp \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 ```
+
+## 🔐 OAuth 2.1 Authentication
+
+For production deployments, enable OAuth 2.1 on the HTTP transport:
+
+| Component                   | Status | Description                                      |
+| --------------------------- | ------ | ------------------------------------------------ |
+| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
+| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
+| Token Validation            | ✅     | JWT validation with JWKS support                 |
+| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+
+**Scopes:** `read` (core, search, analytics, relationships, export) · `write` (github, team + read) · `admin` (admin, backup, codemode + all)
+
+```bash
+docker run --rm -p 3000:3000 \
+  -v ./data:/app/data \
+  -e OAUTH_ENABLED=true \
+  -e OAUTH_ISSUER=https://auth.example.com/realms/mcp \
+  -e OAUTH_AUDIENCE=memory-journal-mcp \
+  writenotenow/memory-journal-mcp:latest \
+  --transport http --port 3000 --server-host 0.0.0.0
+```
+
+> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN`, or runs without authentication.
 
 ## ️ Supply Chain Security
 
