@@ -9,6 +9,7 @@
 
 import type { AuthorizationServerMetadata, AuthServerDiscoveryConfig } from './types.js'
 import { AuthServerDiscoveryError } from './errors.js'
+import { ConfigurationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
 
 // =============================================================================
@@ -82,7 +83,7 @@ export class AuthorizationServerDiscovery {
             clearTimeout(timeoutId)
 
             if (!response.ok) {
-                throw new Error(`HTTP ${String(response.status)}: ${response.statusText}`)
+                throw new ConfigurationError(`HTTP ${String(response.status)}: ${response.statusText}`)
             }
 
             const metadata = (await response.json()) as AuthorizationServerMetadata
@@ -101,6 +102,10 @@ export class AuthorizationServerDiscovery {
 
             return metadata
         } catch (error) {
+            if (error instanceof AuthServerDiscoveryError) {
+                throw error
+            }
+
             const cause = error instanceof Error ? error : new Error(String(error))
 
             logger.error(`Failed to discover authorization server: ${this.authServerUrl}`, {
@@ -118,11 +123,11 @@ export class AuthorizationServerDiscovery {
      */
     private validateMetadata(metadata: AuthorizationServerMetadata): void {
         if (!metadata.issuer) {
-            throw new Error('Missing required field: issuer')
+            throw new ConfigurationError('Missing required field: issuer')
         }
 
         if (!metadata.token_endpoint) {
-            throw new Error('Missing required field: token_endpoint')
+            throw new ConfigurationError('Missing required field: token_endpoint')
         }
 
         // Validate issuer matches the expected URL
@@ -142,7 +147,7 @@ export class AuthorizationServerDiscovery {
      */
     getMetadata(): AuthorizationServerMetadata {
         if (!this.cachedMetadata) {
-            throw new Error(
+            throw new ConfigurationError(
                 'Authorization server metadata not yet discovered. Call discover() first.'
             )
         }
@@ -158,7 +163,7 @@ export class AuthorizationServerDiscovery {
         const metadata = this.getMetadata()
 
         if (!metadata.jwks_uri) {
-            throw new Error('Authorization server does not provide jwks_uri')
+            throw new ConfigurationError('Authorization server does not provide jwks_uri')
         }
 
         return metadata.jwks_uri

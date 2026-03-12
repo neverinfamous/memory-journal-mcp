@@ -92,7 +92,7 @@ describe('Prompt Handlers - Coverage', () => {
 
     describe('getPrompt', () => {
         it('should throw for unknown prompt name', () => {
-            expect(() => getPrompt('nonexistent_prompt', {}, db)).toThrow('Unknown prompt')
+            expect(() => getPrompt('nonexistent_prompt', {}, db)).toThrow('Prompt not found: nonexistent_prompt')
         })
 
         it('should return messages for a valid prompt', () => {

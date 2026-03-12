@@ -51,13 +51,13 @@ describe('Resource Handler Coverage', () => {
 
         it('should throw for unknown resource URI', async () => {
             await expect(readResource('memory://nonexistent-resource-xyz', db)).rejects.toThrow(
-                'Unknown resource'
+                'Resource not found: memory://nonexistent-resource-xyz'
             )
         })
 
         it('should throw for non-memory URI schemes', async () => {
             await expect(readResource('https://example.com/unknown', db)).rejects.toThrow(
-                'Unknown resource'
+                'Resource not found: https://example.com/unknown'
             )
         })
     })

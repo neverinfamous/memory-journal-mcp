@@ -24,6 +24,12 @@ import type {
     ImportanceBreakdown,
     ImportanceResult,
 } from '../types/index.js'
+import {
+    ConnectionError,
+    QueryError,
+    ValidationError,
+    ResourceNotFoundError,
+} from '../types/errors.js'
 import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from './schema.js'
 export type { CreateEntryInput } from './schema.js'
 import type { CreateEntryInput } from './schema.js'
@@ -318,7 +324,7 @@ export class SqliteAdapter {
      */
     private ensureDb(): Database {
         if (!this.db) {
-            throw new Error('Database not initialized. Call initialize() first.')
+            throw new ConnectionError('Database not initialized. Call initialize() first.')
         }
         return this.db
     }
@@ -907,7 +913,7 @@ export class SqliteAdapter {
         const sourceTagId = sourceResult[0]?.values[0]?.[0] as number | undefined
 
         if (sourceTagId === undefined) {
-            throw new Error(`Source tag not found: ${sourceTag}`)
+            throw new ResourceNotFoundError('Tag', sourceTag)
         }
 
         // Get or create target tag
@@ -916,7 +922,7 @@ export class SqliteAdapter {
         const targetTagId = targetResult[0]?.values[0]?.[0] as number | undefined
 
         if (targetTagId === undefined) {
-            throw new Error(`Failed to get or create target tag: ${targetTag}`)
+            throw new QueryError(`Failed to get or create target tag: ${targetTag}`)
         }
 
         // Get entries linked to source tag
@@ -986,11 +992,11 @@ export class SqliteAdapter {
         // P154: Pre-check both entries exist before creating relationship
         const fromEntry = this.getEntryById(fromEntryId)
         if (!fromEntry) {
-            throw new Error(`Source entry ${String(fromEntryId)} not found`)
+            throw new ResourceNotFoundError('Entry', String(fromEntryId))
         }
         const toEntry = this.getEntryById(toEntryId)
         if (!toEntry) {
-            throw new Error(`Target entry ${String(toEntryId)} not found`)
+            throw new ResourceNotFoundError('Entry', String(toEntryId))
         }
 
         db.run(
@@ -1338,7 +1344,7 @@ export class SqliteAdapter {
         const backups = this.listBackups() // Already sorted newest-first
 
         if (keepCount < 1 || Number.isNaN(keepCount)) {
-            throw new Error('keepCount must be at least 1')
+            throw new ValidationError('keepCount must be at least 1')
         }
 
         const toKeep = backups.slice(0, keepCount)
@@ -1380,7 +1386,7 @@ export class SqliteAdapter {
         const backupPath = path.join(backupsDir, filename)
 
         if (!fs.existsSync(backupPath)) {
-            throw new Error(`Backup file not found: ${filename}`)
+            throw new ResourceNotFoundError('Backup', filename)
         }
 
         // Get current entry count for comparison

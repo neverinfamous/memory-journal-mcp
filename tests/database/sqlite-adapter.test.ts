@@ -386,7 +386,7 @@ describe('SqliteAdapter', () => {
 
         it('should throw when merging nonexistent source tag', () => {
             expect(() => db.mergeTags('nonexistent-tag-xyz', 'any-target')).toThrow(
-                'Source tag not found'
+                'Tag not found: nonexistent-tag-xyz'
             )
         })
     })
@@ -683,7 +683,7 @@ describe('SqliteAdapter', () => {
 
         it('should throw when restoring from non-existent backup file', async () => {
             await expect(db.restoreFromFile('nonexistent-backup.db')).rejects.toThrow(
-                'Backup file not found'
+                'Backup not found: nonexistent-backup.db'
             )
         })
     })

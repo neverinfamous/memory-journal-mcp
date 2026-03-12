@@ -22,6 +22,7 @@ import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
 import { getTeamResourceDefinitions } from './team.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
+import { ResourceNotFoundError } from '../../types/errors.js'
 
 /**
  * Get all resource definitions for MCP list
@@ -123,7 +124,7 @@ export async function readResource(
         }
     }
 
-    throw new Error(`Unknown resource: ${uri}`)
+    throw new ResourceNotFoundError('Resource', uri)
 }
 
 /**

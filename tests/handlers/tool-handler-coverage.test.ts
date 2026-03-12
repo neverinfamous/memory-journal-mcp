@@ -159,9 +159,9 @@ describe('Tool Handler Coverage', () => {
                 db
             )) as { success: boolean; error: string }
 
-            // mergeTags throws "Source tag not found" for nonexistent source
+            // mergeTags throws "Tag not found" for nonexistent source
             expect(result.success).toBe(false)
-            expect(result.error).toContain('Source tag not found')
+            expect(result.error).toContain('Tag not found: nonexistent_src_xyz')
         })
     })
 

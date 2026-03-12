@@ -9,6 +9,7 @@ import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
 import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getGitHubPromptDefinitions } from './github.js'
+import { ResourceNotFoundError } from '../../types/errors.js'
 
 /**
  * Message format for MCP prompts
@@ -83,7 +84,7 @@ export function getPrompt(
     const prompt = prompts.find((p) => p.name === name)
 
     if (!prompt) {
-        throw new Error(`Unknown prompt: ${name}`)
+        throw new ResourceNotFoundError('Prompt', name)
     }
 
     return prompt.handler(args, db)

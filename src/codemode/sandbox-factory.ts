@@ -8,6 +8,7 @@
 import { CodeModeSandbox, SandboxPool } from './sandbox.js'
 import { WorkerSandbox, WorkerSandboxPool } from './worker-sandbox.js'
 import type { SandboxOptions, PoolOptions, SandboxResult } from './types.js'
+import { ConfigurationError } from '../types/errors.js'
 
 // =============================================================================
 // Types
@@ -82,7 +83,7 @@ export function createSandbox(
         case 'worker':
             return new WorkerSandbox(options)
         default:
-            throw new Error(`Unknown sandbox mode: ${String(resolvedMode)}`)
+            throw new ConfigurationError(`Unknown sandbox mode: ${String(resolvedMode)}`)
     }
 }
 
@@ -102,7 +103,7 @@ export function createSandboxPool(
         case 'worker':
             return new WorkerSandboxPool(sandboxOptions, poolOptions)
         default:
-            throw new Error(`Unknown sandbox mode: ${String(resolvedMode)}`)
+            throw new ConfigurationError(`Unknown sandbox mode: ${String(resolvedMode)}`)
     }
 }
 
@@ -132,6 +133,6 @@ export function getSandboxModeInfo(mode?: SandboxMode): SandboxModeInfo {
                 isolation: 'Process-level V8 isolate with resource limits and MessagePort RPC',
             }
         default:
-            throw new Error(`Unknown sandbox mode: ${String(resolvedMode)}`)
+            throw new ConfigurationError(`Unknown sandbox mode: ${String(resolvedMode)}`)
     }
 }

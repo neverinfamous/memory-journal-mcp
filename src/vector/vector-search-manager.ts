@@ -15,6 +15,7 @@ import { logger } from '../utils/logger.js'
 import type { SqliteAdapter } from '../database/sqlite-adapter.js'
 import type { JournalEntry } from '../types/index.js'
 import { sendProgress, type ProgressContext } from '../utils/progress-utils.js'
+import { ConfigurationError } from '../types/errors.js'
 
 /** Default model for embeddings (same as Python version) */
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2'
@@ -117,7 +118,7 @@ export class VectorSearchManager {
      */
     async generateEmbedding(text: string): Promise<number[]> {
         if (!this.embedder) {
-            throw new Error('Vector search not initialized')
+            throw new ConfigurationError('Vector search not initialized')
         }
 
         // Generate embedding using feature-extraction pipeline

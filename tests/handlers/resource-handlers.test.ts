@@ -275,7 +275,7 @@ describe('Resource Handlers', () => {
     describe('readResource - error cases', () => {
         it('should throw for unknown resource', async () => {
             await expect(readResource('memory://nonexistent', db)).rejects.toThrow(
-                'Unknown resource'
+                'Resource not found: memory://nonexistent'
             )
         })
     })
