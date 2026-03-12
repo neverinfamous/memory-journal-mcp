@@ -9,28 +9,25 @@ import type {
 import type { CreateEntryInput } from '../core/schema.js'
 import type { IDatabaseAdapter, QueryResult } from '../core/interfaces.js'
 
-import { WasmConnectionManager } from './wasm-connection.js'
+import { NativeConnectionManager } from './native-connection.js'
 import { TagsManager } from './tags.js'
 import { EntriesManager } from './entries.js'
 import { RelationshipsManager } from './relationships.js'
 import { BackupManager } from './backup.js'
 import * as fs from 'node:fs'
 
-export type { CreateEntryInput }
-
 /**
- * SQLite Database Adapter for Memory Journal using sql.js
- * (Facade over sub-modules representing the monolithic class)
+ * SQLite Database Adapter for Memory Journal using better-sqlite3 native driver
  */
-export class WasmSqliteAdapter implements IDatabaseAdapter {
-    private connection: WasmConnectionManager
+export class DatabaseAdapter implements IDatabaseAdapter {
+    private connection: NativeConnectionManager
     private tagsMgr: TagsManager
     private entriesMgr: EntriesManager
     private relationshipsMgr: RelationshipsManager
     private backupMgr: BackupManager
 
     constructor(dbPath: string) {
-        this.connection = new WasmConnectionManager(dbPath)
+        this.connection = new NativeConnectionManager(dbPath)
         this.tagsMgr = new TagsManager(this.connection)
         this.entriesMgr = new EntriesManager(this.connection, this.tagsMgr)
         this.relationshipsMgr = new RelationshipsManager(this.connection, this.entriesMgr)

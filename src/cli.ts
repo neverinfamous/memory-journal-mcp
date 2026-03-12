@@ -37,15 +37,6 @@ program
         defaultDbPath
     )
     .option(
-        '--sqlite-native',
-        'Use native better-sqlite3 driver instead of WASM sql.js (default: true)',
-        true
-    )
-    .option(
-        '--no-sqlite-native',
-        'Use WASM sql.js driver instead of better-sqlite3'
-    )
-    .option(
         '--team-db <path>',
         'Team database path (env: TEAM_DB_PATH)',
         defaultTeamDbPath
@@ -141,7 +132,6 @@ program
             serverHost?: string
             stateless?: boolean
             db: string
-            sqliteNative: boolean
             teamDb?: string
             toolFilter?: string
             defaultProject: string
@@ -182,7 +172,6 @@ program
                 transport: options.transport,
                 stateless: options.stateless ?? false,
                 db: options.db,
-                useNativeSqlite: options.sqliteNative,
                 ...(options.teamDb ? { teamDb: options.teamDb } : {}),
                 ...(host ? { host } : {}),
             })
@@ -194,7 +183,6 @@ program
                     host,
                     statelessHttp: options.stateless === true,
                     dbPath: options.db,
-                    useNativeSqlite: options.sqliteNative,
                     teamDbPath: options.teamDb,
                     toolFilter: options.toolFilter,
                     defaultProjectNumber: options.defaultProject

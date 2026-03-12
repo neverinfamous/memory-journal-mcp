@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { GitHubIntegration } from '../../src/github/github-integration.js'
 
 /**
@@ -155,11 +155,11 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
 }
 
 describe('GitHub Tool Handlers', () => {
-    let db: WasmSqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-gh-tools.db'
 
     beforeAll(async () => {
-        db = new WasmSqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
 

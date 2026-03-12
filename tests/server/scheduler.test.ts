@@ -16,7 +16,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 }))
 
 /**
- * Creates a mock WasmSqliteAdapter with the methods used by Scheduler.
+ * Creates a mock DatabaseAdapter with the methods used by Scheduler.
  */
 function createMockDb() {
     return {

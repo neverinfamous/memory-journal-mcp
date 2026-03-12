@@ -11,18 +11,18 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Targeted Gap Closure', () => {
-    let db: WasmSqliteAdapter
-    let teamDb: WasmSqliteAdapter
+    let db: DatabaseAdapter
+    let teamDb: DatabaseAdapter
     const testDbPath = './test-gaps.db'
     const teamDbPath = './test-gaps-team.db'
 
     beforeAll(async () => {
-        db = new WasmSqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
-        teamDb = new WasmSqliteAdapter(teamDbPath)
+        teamDb = new DatabaseAdapter(teamDbPath)
         await teamDb.initialize()
 
         db.createEntry({

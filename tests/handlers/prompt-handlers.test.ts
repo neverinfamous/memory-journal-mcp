@@ -6,14 +6,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
-import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Prompt Handlers', () => {
-    let db: WasmSqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-prompts.db'
 
     beforeAll(async () => {
-        db = new WasmSqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
         // Seed some data for prompts that read from the DB
         db.createEntry({ content: 'Test entry for prompts', tags: ['test-tag'] })

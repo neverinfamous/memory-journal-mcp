@@ -35,7 +35,6 @@ export interface ServerOptions {
     port?: number
     host?: string
     dbPath: string
-    useNativeSqlite: boolean
     teamDbPath?: string
     toolFilter?: string
     defaultProjectNumber?: number
@@ -59,7 +58,7 @@ export interface ServerOptions {
  * Create and start the MCP server
  */
 export async function createServer(options: ServerOptions): Promise<void> {
-    const { transport, dbPath, useNativeSqlite, teamDbPath, toolFilter, defaultProjectNumber } = options
+    const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
 
     // Configure sandbox mode for Code Mode
     if (options.sandboxMode) {
@@ -71,14 +70,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 
     // Initialize database
-    const db = await DatabaseAdapterFactory.create(dbPath, useNativeSqlite)
+    const db = await DatabaseAdapterFactory.create(dbPath)
     await db.initialize()
-    logger.info('Database initialized', { module: 'McpServer', dbPath, useNativeSqlite })
+    logger.info('Database initialized', { module: 'McpServer', dbPath })
 
     // Initialize team database if configured
     let teamDb: IDatabaseAdapter | undefined
     if (teamDbPath) {
-        teamDb = await DatabaseAdapterFactory.create(teamDbPath, useNativeSqlite)
+        teamDb = await DatabaseAdapterFactory.create(teamDbPath)
         await teamDb.initialize()
         teamDb.applyTeamSchema()
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })

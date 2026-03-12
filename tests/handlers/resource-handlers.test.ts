@@ -6,14 +6,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getResources, readResource } from '../../src/handlers/resources/index.js'
-import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Resource Handlers', () => {
-    let db: WasmSqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-resources.db'
 
     beforeAll(async () => {
-        db = new WasmSqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
 
         // Seed test data

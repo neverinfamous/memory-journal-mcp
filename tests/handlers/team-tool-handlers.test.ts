@@ -7,19 +7,19 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Team Tool Handlers', () => {
-    let personalDb: WasmSqliteAdapter
-    let teamDb: WasmSqliteAdapter
+    let personalDb: DatabaseAdapter
+    let teamDb: DatabaseAdapter
     const personalDbPath = './test-team-tools-personal.db'
     const teamDbPath = './test-team-tools-team.db'
 
     beforeAll(async () => {
-        personalDb = new WasmSqliteAdapter(personalDbPath)
+        personalDb = new DatabaseAdapter(personalDbPath)
         await personalDb.initialize()
 
-        teamDb = new WasmSqliteAdapter(teamDbPath)
+        teamDb = new DatabaseAdapter(teamDbPath)
         await teamDb.initialize()
         teamDb.applyTeamSchema()
     })

@@ -7,14 +7,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getTools, callTool } from '../../src/handlers/tools/index.js'
-import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Tool Handlers', () => {
-    let db: WasmSqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-tools.db'
 
     beforeAll(async () => {
-        db = new WasmSqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
 
