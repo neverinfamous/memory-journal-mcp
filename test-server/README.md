@@ -17,7 +17,7 @@
 | Convention | Rule |
 |------------|------|
 | **Reporting** | ❌ Fail, ⚠️ Issue, 📦 Payload. ✅ inline only, omit from final summary. |
-| **Error testing** | Must return `{success: false, error: "..."}`, NOT raw MCP error exceptions. |
+| **Error testing** | Must return `{success: false, error: "...", code, category, suggestion, recoverable}`, NOT raw MCP error exceptions. |
 | **Error items in checklists** | Marked with 🔴 prefix |
 | **Post-test** | Clean up test databases/data → plan fixes → implement → lint+typecheck → changelog → commit (no push) |
 

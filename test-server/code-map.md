@@ -25,7 +25,9 @@ src/
 ├── types/
 │   ├── index.ts                    # Barrel — ToolDefinition, ResourceDefinition, PromptDefinition,
 │   │                               #   ServerConfig, HealthStatus, ToolContext, ToolAnnotations,
-│   │                               #   ResourceAnnotations, McpIcon, DEFAULT_CONFIG
+│   │                               #   ResourceAnnotations, McpIcon, DEFAULT_CONFIG, error exports
+│   ├── error-types.ts              # ErrorCategory enum, ErrorResponse, ErrorContext interfaces
+│   ├── errors.ts                   # MemoryJournalMcpError base + 6 subclasses (see § Error Handling)
 │   ├── entities.ts                 # EntryType, SignificanceType, RelationshipType, JournalEntry,
 │   │                               #   Tag, Relationship, Embedding, ImportanceBreakdown
 │   ├── filtering.ts                # ToolGroup, MetaGroup, ToolFilterRule, ToolFilterConfig
@@ -41,11 +43,13 @@ src/
 │   └── ToolFilter.ts               # ToolFilter class — parse/apply --tool-filter expressions
 │
 ├── utils/
-│   ├── error-helpers.ts            # formatHandlerError(), formatZodError() (see § Error Handling)
+│   ├── error-helpers.ts            # formatHandlerError(), formatHandlerErrorResponse(),
+│   │                               #   formatZodError() (see § Error Handling)
 │   ├── logger.ts                   # Logger class (structured JSON, severity filtering)
 │   ├── McpLogger.ts                # MCP protocol logging integration
 │   ├── progress-utils.ts           # MCP progress notification helpers
-│   └── security-utils.ts           # SQL sanitization, path traversal prevention
+│   └── security-utils.ts           # SecurityError (extends MemoryJournalMcpError), SQL sanitization,
+│                                   #   path traversal prevention
 │
 ├── github/
 │   └── GitHubIntegration.ts        # GitHub API client (Octokit) — issues, PRs, milestones,
@@ -80,7 +84,7 @@ src/
 │
 ├── auth/                            # OAuth 2.1 authentication (10 files)
 │   ├── types.ts                    # OAuth types, token claims, auth context
-│   ├── errors.ts                   # OAuthError class, error response formatting
+│   ├── errors.ts                   # OAuthError (extends MemoryJournalMcpError), AUTH_ error codes
 │   ├── scopes.ts                   # Scope constants, hierarchy, tool-group-to-scope mapping
 │   ├── token-validator.ts          # JWT validation via jose (JWKS caching, issuer/audience)
 │   ├── oauth-resource-server.ts    # RFC 9728 protected resource metadata endpoint
@@ -157,7 +161,34 @@ src/
 
 ## Error Handling
 
-memory-journal-mcp uses a **flat error handling pattern** — no error class hierarchy. All handlers catch and format via two helpers in `src/utils/error-helpers.ts`:
+memory-journal-mcp uses a **harmonized error handling hierarchy** matching the standard across db-mcp, postgres-mcp, and mysql-mcp.
+
+### Error Class Hierarchy
+
+```
+Error
+ └── MemoryJournalMcpError          (src/types/errors.ts — base: code, category, suggestion, recoverable, toResponse())
+     ├── ConnectionError             (CONNECTION_FAILED, category: connection)
+     ├── QueryError                  (QUERY_FAILED, category: query)
+     ├── ValidationError             (VALIDATION_FAILED, category: validation)
+     ├── ResourceNotFoundError       (RESOURCE_NOT_FOUND, category: resource)
+     ├── ConfigurationError          (CONFIGURATION_ERROR, category: configuration)
+     ├── PermissionError             (PERMISSION_DENIED, category: permission)
+     ├── OAuthError                  (src/auth/errors.ts — adds httpStatus, wwwAuthenticate)
+     │   ├── TokenMissingError       (AUTH_TOKEN_MISSING, category: authentication)
+     │   ├── InvalidTokenError       (AUTH_TOKEN_INVALID, category: authentication)
+     │   ├── TokenExpiredError       (AUTH_TOKEN_EXPIRED, category: authentication)
+     │   ├── InvalidSignatureError   (AUTH_SIGNATURE_INVALID, category: authentication)
+     │   ├── InsufficientScopeError  (AUTH_SCOPE_DENIED, category: authorization)
+     │   ├── AuthServerDiscoveryError(AUTH_DISCOVERY_FAILED, category: authentication)
+     │   ├── JwksFetchError          (AUTH_JWKS_FETCH_FAILED, category: authentication)
+     │   └── ClientRegistrationError (AUTH_REGISTRATION_FAILED, category: authentication)
+     └── SecurityError               (src/utils/security-utils.ts — category: validation)
+         ├── InvalidDateFormatError  (INVALID_DATE_FORMAT)
+         └── PathTraversalError      (PATH_TRAVERSAL)
+```
+
+### Error Formatting Functions (`src/utils/error-helpers.ts`)
 
 ```typescript
 // In every tool handler:
@@ -166,16 +197,16 @@ try {
   // ... domain logic ...
   return { success: true, ... };
 } catch (err) {
-  return formatHandlerError(err);
+  return formatHandlerError(err);            // backward-compatible: {success, error}
+  // or: return formatHandlerErrorResponse(err); // enriched: {success, error, code, category, suggestion, recoverable}
 }
 ```
 
 | Function | Purpose |
 |----------|---------|
-| `formatHandlerError(err)` | Returns `{success: false, error: "..."}` — handles both ZodError and general errors |
+| `formatHandlerError(err)` | Returns `{success: false, error: "..."}` — backward-compatible, used by existing handlers |
+| `formatHandlerErrorResponse(err)` | Returns enriched `ErrorResponse` with `code`, `category`, `suggestion`, `recoverable` — for future handler migration |
 | `formatZodError(err)` | Extracts human-readable messages from Zod validation errors |
-
-> **No custom error classes.** All errors are plain `Error` instances caught at handler boundaries.
 
 ---
 
@@ -196,7 +227,7 @@ try {
 
 | Pattern | Description |
 |---------|-------------|
-| **Flat Error Handling** | No error class hierarchy — all handlers use `formatHandlerError()` for `{success: false}`. |
+| **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerErrorResponse()`. Handlers currently use `formatHandlerError()` — enriched formatter available for future migration. |
 | **Single Adapter** | No adapter abstraction — `SqliteAdapter` (sql.js WASM) used directly. No native backend. |
 | **ToolContext** | All tool handlers receive `ToolContext` (db, teamDb?, vectorManager?, github?, config?, progress?). |
 | **GitHub Integration** | `GitHubIntegration` (Octokit-based) — issues, PRs, milestones, projects V2, kanban, traffic. |
