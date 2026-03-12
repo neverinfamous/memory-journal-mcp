@@ -118,15 +118,14 @@ Update version references in:
 
 **Verify no version references were missed.** Search for the OLD version number across the project (excluding `node_modules`, `CHANGELOG.md`, `releases/`, and `package-lock.json`). If any matches appear, update them.
 
-## Step 8: Update CHANGELOG and Create Release Notes
+## Step 8: Update Unreleased Log and Create Release Notes
 
-1. Add dependency updates to `CHANGELOG.md` under `## [Unreleased]`:
+1. Add dependency updates to `UNRELEASED.md`:
    - Under `### Security` for CVE/advisory fixes
    - Under `### Changed` → `**Dependency Updates**` for routine version bumps
    - **Do NOT create duplicate section headers** — check if sections already exist first
-2. Convert `## [Unreleased]` → `## [X.Y.Z] - YYYY-MM-DD` and add a fresh empty `## [Unreleased]` above it.
-3. Update reference link definitions at the bottom of `CHANGELOG.md`.
-4. Create `releases/vX.Y.Z.md` with condensed highlights:
+2. Run `node scripts/compile-changelog.js` to automatically compile `UNRELEASED.md` into `CHANGELOG.md`.
+3. Create `releases/vX.Y.Z.md` with condensed highlights:
    - Highlights (top 3-5 bullet points)
    - Categorized sections (Security, Changed)
    - Footer with compare link and install commands (`npm install memory-journal-mcp@X.Y.Z`)
