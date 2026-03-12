@@ -293,6 +293,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 | **Code Mode only** | Add `"args": ["--tool-filter", "codemode"]` (single tool, all capabilities) |
 | **Docker** | Replace `"command"` with `"docker"` and use `run -i --rm -v ./data:/app/data writenotenow/memory-journal-mcp:latest` as args |
 | **Team collaboration** | Add `"TEAM_DB_PATH": "./team.db"` to `env` |
+| **Force WASM Fallback** | Add `"args": ["--no-sqlite-native"]` to disable the native SQLite engine |
 
 Restart your MCP client and start journaling!
 

@@ -203,6 +203,7 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 | **Minimal (no GitHub)** | Remove the `-e GITHUB_TOKEN`, `-e GITHUB_REPO_PATH`, repo volume mount, and `env` block |
 | **Team collaboration** | Add `-e`, `"TEAM_DB_PATH=/app/data/team.db"` to `args` |
 | **Code Mode only** | Add `"--tool-filter"`, `"codemode"` to `args` (single tool, all capabilities) |
+| **Force WASM Fallback** | Add `"--no-sqlite-native"` to `args` to disable the native engine |
 | **Briefing config** | Add `-e`, `"BRIEFING_ENTRY_COUNT=5"` to `args` (see env var table below) |
 | **Local build** | Replace `writenotenow/memory-journal-mcp:latest` with your local image name |
 
