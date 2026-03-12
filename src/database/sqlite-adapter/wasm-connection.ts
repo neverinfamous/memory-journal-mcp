@@ -1,4 +1,4 @@
-import initSqlJs, { type Database, type SqlValue } from 'sql.js'
+import initSqlJs, { type Database, type SqlValue, type QueryExecResult } from 'sql.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
@@ -153,10 +153,18 @@ export class WasmConnectionManager implements IDatabaseConnection {
 
     exec(sql: string, params?: unknown[]): QueryResult[] {
         const db = this.ensureDb()
+        let rawResults: QueryExecResult[]
+        
         if (params && params.length > 0) {
-            return db.exec(sql, params as SqlValue[]) as unknown as QueryResult[]
+            rawResults = db.exec(sql, params as SqlValue[])
+        } else {
+            rawResults = db.exec(sql)
         }
-        return db.exec(sql) as unknown as QueryResult[]
+
+        return rawResults.map((r) => ({
+            columns: r.columns,
+            values: r.values,
+        }))
     }
 
     run(sql: string, params?: unknown[]): void {

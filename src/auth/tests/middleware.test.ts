@@ -240,9 +240,8 @@ describe('oauthErrorHandler', () => {
 // =============================================================================
 
 describe('createAuthenticatedContext', () => {
-    const mockValidator = {
-        validate: vi.fn(),
-    } as unknown as TokenValidator
+    const mockValidator = Object.create(TokenValidator.prototype) as TokenValidator
+    mockValidator.validate = vi.fn()
 
     beforeEach(() => {
         vi.clearAllMocks()
@@ -286,9 +285,8 @@ describe('createAuthenticatedContext', () => {
 // =============================================================================
 
 describe('validateAuth', () => {
-    const mockValidator = {
-        validate: vi.fn(),
-    } as unknown as TokenValidator
+    const mockValidator = Object.create(TokenValidator.prototype) as TokenValidator
+    mockValidator.validate = vi.fn()
 
     beforeEach(() => {
         vi.clearAllMocks()

@@ -6,6 +6,7 @@
   - Renamed `src/types/sql.js.d.ts` to `sql-js.d.ts` to ensure strict compliance with kebab-case naming standard
   - Eliminated `eslint-disable-next-line` pragmas where possible (e.g. `no-control-regex` solved natively in `security-utils.ts`)
   - Strictified `z.object({})` Zod schemas by appending `.strict()` for safer payload validation on empty schemas (`admin.ts`, `backup.ts`, `core.ts`, `search.ts`, `read-tools.ts`)
+  - Replaced loose `as unknown` type assertions in `wasm-connection.ts` and auth test mocks with explicit mapping and `Object.create` prototype instantiation
 
 ### Added
 
