@@ -182,8 +182,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                         prStatus: input.pr_status,
                     })
 
-                    // Write author to the dedicated column
-                    const rawDb = teamDb.getRawDb()
+                    const rawDb = teamDb.getRawDb() as { run: (sql: string, params?: unknown[]) => void }
                     rawDb.run('UPDATE memory_journal SET author = ? WHERE id = ?', [
                         author,
                         entry.id,
@@ -218,7 +217,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     const entries = teamDb.getRecentEntries(limit)
 
                     // Enrich entries with author column
-                    const rawDb = teamDb.getRawDb()
+                    const rawDb = teamDb.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
                     const enriched = entries.map((e) => {
                         const authorResult = rawDb.exec(
                             'SELECT author FROM memory_journal WHERE id = ?',
@@ -262,12 +261,12 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     if (tags && tags.length > 0) {
                         entries = entries.filter((e) => {
                             const entryTags = teamDb.getTagsForEntry(e.id)
-                            return tags.some((t) => entryTags.includes(t))
+                            return tags.some((t: string) => entryTags.includes(t))
                         })
                     }
 
                     // Enrich with author
-                    const rawDb = teamDb.getRawDb()
+                    const rawDb = teamDb.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
                     const enriched = entries.map((e) => {
                         const authorResult = rawDb.exec(
                             'SELECT author FROM memory_journal WHERE id = ?',

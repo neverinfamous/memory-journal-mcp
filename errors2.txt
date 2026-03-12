@@ -1,0 +1,17 @@
+src/database/sqlite-adapter/backup.ts(12,15): error TS6133: 'db' is declared but its value is never read.
+src/database/sqlite-adapter/entries.ts(13,39): error TS2307: Cannot find module '../schema.js' or its corresponding type declarations.
+src/database/sqlite-adapter/entries.ts(14,40): error TS2307: Cannot find module './connection.js' or its corresponding type declarations.
+src/database/sqlite-native/native-connection.ts(14,13): error TS6133: 'saveTimer' is declared but its value is never read.
+src/database/sqlite-native/native-connection.ts(15,29): error TS6133: 'SAVE_DEBOUNCE_MS' is declared but its value is never read.
+src/handlers/prompts/index.ts(49,20): error TS18046: 'rawDb' is of type 'unknown'.
+src/handlers/prompts/workflow.ts(276,38): error TS18046: 'stats' is of type 'unknown'.
+src/handlers/resources/core.ts(63,58): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/handlers/resources/core.ts(414,66): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/handlers/resources/core/briefing/index.ts(29,54): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/handlers/resources/core/briefing/team.ts(24,56): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/handlers/resources/index.ts(12,15): error TS2724: '"../../database/sqlite-adapter/index.js"' has no exported member named 'SqliteAdapter'. Did you mean 'WasmSqliteAdapter'?
+src/handlers/resources/shared.ts(7,15): error TS2724: '"../../database/sqlite-adapter/index.js"' has no exported member named 'SqliteAdapter'. Did you mean 'WasmSqliteAdapter'?
+src/handlers/tools/analytics.ts(178,30): error TS2698: Spread types may only be created from object types.
+src/handlers/tools/team.ts(187,21): error TS18046: 'rawDb' is of type 'unknown'.
+src/server/scheduler.ts(253,9): error TS18046: 'rawDb' is of type 'unknown'.
+src/vector/vector-search-manager.ts(15,15): error TS2724: '"../database/sqlite-adapter/index.js"' has no exported member named 'SqliteAdapter'. Did you mean 'WasmSqliteAdapter'?

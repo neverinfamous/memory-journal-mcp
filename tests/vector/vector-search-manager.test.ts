@@ -68,7 +68,7 @@ vi.mock('node:fs', async (importOriginal) => {
 
 // Import AFTER mocks are set up
 import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
-import type { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import type { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 /**
  * Helper to make the VectorSearchManager think it's initialized
@@ -294,7 +294,7 @@ describe('VectorSearchManager', () => {
                 ]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as WasmSqliteAdapter)
             expect(indexed).toBe(2)
             expect(mockInsertItem).toHaveBeenCalledTimes(2)
         })
@@ -316,7 +316,7 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Active entry' }]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as WasmSqliteAdapter)
             expect(indexed).toBe(1)
             expect(mockDeleteItem).toHaveBeenCalledWith('999')
         })
@@ -327,7 +327,7 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as WasmSqliteAdapter)
             expect(indexed).toBe(0)
         })
 
@@ -346,7 +346,7 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Entry' }]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as WasmSqliteAdapter)
             expect(indexed).toBe(1)
         })
 
@@ -367,7 +367,7 @@ describe('VectorSearchManager', () => {
                 ]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as SqliteAdapter)
+            const indexed = await vm.rebuildIndex(mockDb as unknown as WasmSqliteAdapter)
             // Only 1 should be indexed (the other failed)
             expect(indexed).toBe(1)
         })

@@ -123,7 +123,7 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
 }))
 
 vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
-    SqliteAdapter: function () {
+    WasmSqliteAdapter: function () {
         return {
             initialize: mockDbInitialize,
             getRecentEntries: mockDbGetRecentEntries,

@@ -1,19 +1,12 @@
-import initSqlJs, { type Database } from 'sql.js'
+import initSqlJs, { type Database, type SqlValue } from 'sql.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { ConnectionError } from '../../types/errors.js'
-import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from '../schema.js'
+import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from '../core/schema.js'
+import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 
-export interface DatabaseContext {
-    ensureDb(): Database
-    scheduleSave(): void
-    flushSave(): void
-    getBackupsDir(): string
-    getDbPath(): string
-}
-
-export class ConnectionManager implements DatabaseContext {
+export class WasmConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
     private readonly dbPath: string
     private initialized = false
@@ -32,9 +25,9 @@ export class ConnectionManager implements DatabaseContext {
         let dbBuffer: Buffer | null = null
         if (fs.existsSync(this.dbPath)) {
             try {
-                dbBuffer = fs.readFileSync(this.dbPath)
-            } catch {
-                // File doesn't exist or can't be read, create new
+                dbBuffer = await fs.promises.readFile(this.dbPath)
+            } catch (error) {
+                logger.warning('Failed to read existing DB file', { module: 'WasmConnectionManager', error: String(error) })
             }
         }
 
@@ -44,7 +37,7 @@ export class ConnectionManager implements DatabaseContext {
             this.db = new SQL.Database()
             const dir = path.dirname(this.dbPath)
             if (dir && !fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true })
+                await fs.promises.mkdir(dir, { recursive: true })
             }
         }
 
@@ -56,7 +49,7 @@ export class ConnectionManager implements DatabaseContext {
         this.db.run('PRAGMA temp_store = MEMORY')
 
         this.initialized = true
-        logger.info('Database opened', { module: 'ConnectionManager', dbPath: this.dbPath })
+        logger.info('WASM Database opened', { module: 'WasmConnectionManager', dbPath: this.dbPath })
         this.flushSave()
     }
 
@@ -98,7 +91,7 @@ export class ConnectionManager implements DatabaseContext {
             const name = String(row[0])
             if (!SAFE_IDENTIFIER_RE.test(name)) {
                 logger.warning('Skipping trigger with unsafe name during migration', {
-                    module: 'ConnectionManager',
+                    module: 'WasmConnectionManager',
                     triggerName: name,
                 })
                 continue
@@ -111,7 +104,7 @@ export class ConnectionManager implements DatabaseContext {
         if (changes.length > 0) {
             this.flushSave()
             logger.info('Schema migrated', {
-                module: 'ConnectionManager',
+                module: 'WasmConnectionManager',
                 dbPath: this.dbPath,
                 changes,
             })
@@ -151,10 +144,27 @@ export class ConnectionManager implements DatabaseContext {
         if (added.length > 0) {
             this.flushSave()
             logger.info('Team schema migrated', {
-                module: 'ConnectionManager',
+                module: 'WasmConnectionManager',
                 dbPath: this.dbPath,
                 columnsAdded: added,
             })
+        }
+    }
+
+    exec(sql: string, params?: unknown[]): QueryResult[] {
+        const db = this.ensureDb()
+        if (params && params.length > 0) {
+            return db.exec(sql, params as SqlValue[]) as unknown as QueryResult[]
+        }
+        return db.exec(sql) as unknown as QueryResult[]
+    }
+
+    run(sql: string, params?: unknown[]): void {
+        const db = this.ensureDb()
+        if (params && params.length > 0) {
+            db.run(sql, params as SqlValue[])
+        } else {
+            db.run(sql)
         }
     }
 
@@ -164,7 +174,7 @@ export class ConnectionManager implements DatabaseContext {
         }
         this.saveTimer = setTimeout(() => {
             this.flushSave()
-        }, ConnectionManager.SAVE_DEBOUNCE_MS)
+        }, WasmConnectionManager.SAVE_DEBOUNCE_MS)
     }
 
     flushSave(): void {
@@ -173,9 +183,23 @@ export class ConnectionManager implements DatabaseContext {
             this.saveTimer = null
         }
         if (!this.db) return
-        const data = this.db.export()
-        const buffer = Buffer.from(data)
-        fs.writeFileSync(this.dbPath, buffer)
+        
+        try {
+            const data = this.db.export()
+            const buffer = Buffer.from(data)
+            
+            fs.promises.writeFile(this.dbPath, buffer).catch((err: unknown) => {
+                logger.error('Failed to flush WASM save to disk', {
+                    module: 'WasmConnectionManager',
+                    error: String(err)
+                })
+            })
+        } catch (error: unknown) {
+            logger.error('Failed to export WASM db', {
+                module: 'WasmConnectionManager',
+                error: String(error)
+            })
+        }
     }
 
     close(): void {
@@ -184,17 +208,17 @@ export class ConnectionManager implements DatabaseContext {
             this.db.close()
             this.db = null
         }
-        logger.info('Database closed', { module: 'ConnectionManager' })
+        logger.info('WASM Database closed', { module: 'WasmConnectionManager' })
     }
 
-    ensureDb(): Database {
+    private ensureDb(): Database {
         if (!this.db) {
             throw new ConnectionError('Database not initialized. Call initialize() first.')
         }
         return this.db
     }
 
-    getRawDb(): Database {
+    getRawDb(): unknown {
         return this.ensureDb()
     }
 
@@ -212,8 +236,8 @@ export class ConnectionManager implements DatabaseContext {
         this.initialized = false
     }
 
-    setDbAndInitialized(db: Database): void {
-        this.db = db
+    setDbAndInitialized(db: unknown): void {
+        this.db = db as Database
         this.db.run('PRAGMA foreign_keys = ON')
         this.initialized = true
         this.flushSave()

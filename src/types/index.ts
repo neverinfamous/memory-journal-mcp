@@ -5,7 +5,7 @@
  * that depend on external imports (SqliteAdapter, VectorSearchManager, etc.).
  */
 
-import type { SqliteAdapter } from '../database/sqlite-adapter/index.js'
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
 import type { ProgressContext } from '../utils/progress-utils.js'
@@ -156,9 +156,9 @@ export interface ToolHandlerConfig {
  */
 export interface ToolContext {
     /** Database adapter */
-    db: SqliteAdapter
+    db: IDatabaseAdapter
     /** Team database adapter (optional, requires TEAM_DB_PATH) */
-    teamDb?: SqliteAdapter
+    teamDb?: IDatabaseAdapter
     /** Vector search manager (optional) */
     vectorManager?: VectorSearchManager
     /** GitHub integration (optional) */

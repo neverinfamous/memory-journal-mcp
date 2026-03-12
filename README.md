@@ -339,7 +339,7 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 - **SBOM Available** - Complete software bill of materials
 - **Supply Chain Attestations** - Verifiable build integrity
 - **Non-root Execution** - Minimal attack surface
-- **No Native Dependencies** - Pure JS stack reduces attack surface
+- **No Native Dependencies (Optional)** - Pure JS fallback reduces attack surface when native builds fail
 
 **Example with curl:**
 
@@ -571,10 +571,10 @@ flowchart TB
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
-│ Pure JS Stack (No Native Dependencies)                      │
+│ Dual-Backend Architecture (Native SQLite & WASM Fallback)   │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ sql.js          │  │ vectra          │  │ transformers│  │
-│  │ (SQLite)        │  │ (Vector Index)  │  │ (Embeddings)│  │
+│  │ better-sqlite3  │  │ vectra          │  │ transformers│  │
+│  │ or sql.js       │  │ (Vector Index)  │  │ (Embeddings)│  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
 │ SQLite Database with Hybrid Search                          │
@@ -591,7 +591,7 @@ flowchart TB
 ### Performance & Portability
 
 - **TypeScript + Pure JS Stack** - No native compilation, works everywhere
-- **sql.js** - SQLite in pure JavaScript with disk sync
+- **Dual-Backend SQLite** - Uses `better-sqlite3` for native high-performance disk access with a zero-compilation `sql.js` WASM fallback
 - **vectra** - Vector similarity search without native dependencies
 - **@xenova/transformers** - ML embeddings in JavaScript
 - **Lazy loading** - ML models load on first use, not startup

@@ -60,12 +60,15 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
 
                 // Get latest entries (configurable count)
                 const recentEntries = context.db.getRecentEntries(config.entryCount)
-                const latestEntries = recentEntries.map((e) => ({
-                    id: e.id,
-                    timestamp: e.timestamp,
-                    type: e.entryType,
-                    preview: e.content.slice(0, 80) + (e.content.length > 80 ? '...' : ''),
-                }))
+                const latestEntries = recentEntries.map((e) => {
+                    const content = e.content ?? ''
+                    return {
+                        id: e.id,
+                        timestamp: e.timestamp,
+                        type: e.entryType,
+                        preview: content.slice(0, 80) + (content.length > 80 ? '...' : ''),
+                    }
+                })
 
                 // Get compact GitHub status if available
                 let github: {
@@ -387,7 +390,7 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
 
                 // Get entry count for context
                 const stats = context.db.getStatistics('week')
-                const totalEntries = stats.totalEntries ?? 0
+                const totalEntries = (stats as { totalEntries?: number }).totalEntries ?? 0
 
                 // Team DB context (if configured)
                 let teamContext:
@@ -400,25 +403,28 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
                     try {
                         const teamStats = context.teamDb.getStatistics('week')
                         const teamRecent = context.teamDb.getRecentEntries(1)
-                        const teamLatest = teamRecent[0]
-                            ? `#${teamRecent[0].id}: ${teamRecent[0].content.slice(0, 60)}${teamRecent[0].content.length > 60 ? '...' : ''}`
+                        const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
+                        const teamContent = teamLatestEntry ? ((teamLatestEntry['content'] as string | undefined) ?? '') : ''
+                        const teamLatest = teamLatestEntry
+                            ? `#${String(teamLatestEntry['id'])}: ${teamContent.slice(0, 60)}${teamContent.length > 60 ? '...' : ''}`
                             : null
                         teamContext = {
-                            totalEntries: teamStats.totalEntries ?? 0,
+                            totalEntries: (teamStats as { totalEntries?: number }).totalEntries ?? 0,
                             latestPreview: teamLatest,
                         }
 
                         // Include team entries in briefing if configured
                         if (config.includeTeam) {
                             const teamEntries = context.teamDb.getRecentEntries(config.entryCount)
-                            teamLatestEntries = teamEntries.map((e) => ({
-                                id: e.id,
-                                timestamp: e.timestamp,
-                                type: e.entryType,
-                                preview:
-                                    e.content.slice(0, 80) +
-                                    (e.content.length > 80 ? '...' : ''),
-                            }))
+                            teamLatestEntries = teamEntries.map((e) => {
+                                const content = e.content ?? ''
+                                return {
+                                    id: e.id,
+                                    timestamp: e.timestamp,
+                                    type: e.entryType,
+                                    preview: content.slice(0, 80) + (content.length > 80 ? '...' : ''),
+                                }
+                            })
                         }
                     } catch {
                         // Team DB unavailable

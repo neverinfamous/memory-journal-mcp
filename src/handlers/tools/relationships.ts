@@ -177,7 +177,9 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = VisualizeInputSchema.parse(params)
 
-                    const rawDb = db.getRawDb()
+                    const rawDb = db.getRawDb() as {
+                        exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[]
+                    }
                     let entriesResult
 
                     if (input.entry_id !== undefined) {

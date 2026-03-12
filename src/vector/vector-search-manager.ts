@@ -12,7 +12,7 @@ import type { LocalIndex } from 'vectra'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { logger } from '../utils/logger.js'
-import type { SqliteAdapter } from '../database/sqlite-adapter/index.js'
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { JournalEntry } from '../types/index.js'
 import { sendProgress, type ProgressContext } from '../utils/progress-utils.js'
 import { ConfigurationError } from '../types/errors.js'
@@ -200,7 +200,7 @@ export class VectorSearchManager {
                 .filter((r) => r.score >= similarityThreshold)
                 .slice(0, limit)
                 .map((r) => ({
-                    entryId: (r.item.metadata as { entryId: number }).entryId,
+                    entryId: r.item.metadata['entryId'] as number,
                     score: r.score,
                 }))
 
@@ -235,7 +235,7 @@ export class VectorSearchManager {
      * @param db - Database adapter
      * @param progress - Optional progress context for notifications
      */
-    async rebuildIndex(db: SqliteAdapter, progress?: ProgressContext): Promise<number> {
+    async rebuildIndex(db: IDatabaseAdapter, progress?: ProgressContext): Promise<number> {
         if (!this.initialized) {
             await this.initialize()
         }
@@ -297,7 +297,7 @@ export class VectorSearchManager {
 
                 // Parallel embedding generation
                 const embeddings = await Promise.all(
-                    batch.map(async (entry) => {
+                    batch.map(async (entry: JournalEntry) => {
                         try {
                             return { entry, embedding: await this.generateEmbedding(entry.content) }
                         } catch {

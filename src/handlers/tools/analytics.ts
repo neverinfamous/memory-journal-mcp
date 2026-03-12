@@ -175,7 +175,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         end_date,
                         project_breakdown
                     )
-                    return { ...stats, groupBy: group_by }
+                    return { ...(stats as object), groupBy: group_by }
                 } catch (err) {
                     return formatHandlerErrorResponse(err)
                 }
@@ -193,7 +193,10 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
 
-                    const rawDb = db.getRawDb()
+                    const rawDb = db.getRawDb() as {
+                        exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[]
+                    }
+
 
                     // Build WHERE clause
                     let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
@@ -236,9 +239,9 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const columns = projectsResult[0].columns
-                    const projects = projectsResult[0].values.map((row) => {
+                    const projects = projectsResult[0].values.map((row: unknown[]) => {
                         const obj: Record<string, unknown> = {}
-                        columns.forEach((col, i) => {
+                        columns.forEach((col: string, i: number) => {
                             obj[col] = row[i]
                         })
                         return obj
@@ -262,7 +265,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             [projNum]
                         )
                         if (tagsResult[0]) {
-                            projectTags[projNum] = tagsResult[0].values.map((row) => ({
+                            projectTags[projNum] = tagsResult[0].values.map((row: unknown[]) => ({
                                 name: row[0] as string,
                                 count: row[1] as number,
                             }))
@@ -285,18 +288,18 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     const inactiveProjects =
-                        inactiveResult[0]?.values.map((row) => ({
+                        inactiveResult[0]?.values.map((row: unknown[]) => ({
                             project_number: row[0] as number,
                             last_entry_date: row[1] as string,
                         })) ?? []
 
                     // Calculate time distribution
                     const totalEntries = projects.reduce(
-                        (sum, p) => sum + (p['entry_count'] as number),
+                        (sum: number, p: Record<string, unknown>) => sum + (p['entry_count'] as number),
                         0
                     )
-                    const distribution = projects.slice(0, 5).map((p) => ({
-                        project_number: p['project_number'],
+                    const distribution = projects.slice(0, 5).map((p: Record<string, unknown>) => ({
+                        project_number: p['project_number'] as number,
                         percentage: (((p['entry_count'] as number) / totalEntries) * 100).toFixed(
                             1
                         ),

@@ -1,0 +1,7 @@
+src/handlers/resources/core.ts(390,38): error TS18046: 'stats' is of type 'unknown'.
+src/handlers/resources/core.ts(407,43): error TS18046: 'teamStats' is of type 'unknown'.
+src/handlers/resources/core/briefing/index.ts(36,34): error TS2571: Object is of type 'unknown'.
+src/handlers/resources/core/briefing/team.ts(18,27): error TS18046: 'teamStats' is of type 'unknown'.
+src/handlers/resources/shared.ts(105,20): error TS18046: 'rawDb' is of type 'unknown'.
+src/handlers/resources/team.ts(105,42): error TS18046: 'rawDb' is of type 'unknown'.
+src/handlers/resources/team.ts(125,25): error TS2698: Spread types may only be created from object types.

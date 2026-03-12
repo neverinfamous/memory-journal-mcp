@@ -6,7 +6,7 @@
  * Uses setInterval for simplicity — no external dependencies.
  */
 
-import type { SqliteAdapter } from '../database/sqlite-adapter/index.js'
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { logger } from '../utils/logger.js'
 
@@ -69,12 +69,12 @@ interface JobTimer {
  */
 export class Scheduler {
     private readonly options: SchedulerOptions
-    private readonly db: SqliteAdapter
+    private readonly db: IDatabaseAdapter
     private readonly vectorManager: VectorSearchManager | null
     private readonly timers: JobTimer[] = []
     private started = false
 
-    constructor(options: SchedulerOptions, db: SqliteAdapter, vectorManager?: VectorSearchManager) {
+    constructor(options: SchedulerOptions, db: IDatabaseAdapter, vectorManager?: VectorSearchManager) {
         this.options = options
         this.db = db
         this.vectorManager = vectorManager ?? null
@@ -118,7 +118,7 @@ export class Scheduler {
         }
 
         if (this.timers.length > 0) {
-            const summary = this.timers.map((t) => `${t.name} (${String(t.intervalMinutes)}min)`)
+            const summary = this.timers.map((t: JobTimer) => `${t.name} (${String(t.intervalMinutes)}min)`)
             logger.info(`Scheduler started: ${summary.join(', ')}`, { module: 'Scheduler' })
         } else {
             logger.info('Scheduler started with no jobs enabled', { module: 'Scheduler' })
@@ -148,7 +148,7 @@ export class Scheduler {
     getStatus(): SchedulerStatus {
         return {
             active: this.started,
-            jobs: this.timers.map((t) => ({
+            jobs: this.timers.map((t: JobTimer) => ({
                 name: t.name,
                 enabled: true,
                 intervalMinutes: t.intervalMinutes,
@@ -249,7 +249,7 @@ export class Scheduler {
      * A full VACUUM on sql.js only compacts the in-memory representation.
      */
     private async runVacuumOptimize(): Promise<void> {
-        const rawDb = this.db.getRawDb()
+        const rawDb = this.db.getRawDb() as { run: (sql: string, params?: unknown[]) => void }
         rawDb.run('PRAGMA optimize')
         this.db.flushSave()
         logger.info('Scheduled database optimize completed', {

@@ -1,20 +1,20 @@
 /**
- * SqliteAdapter Tests
+ * WasmSqliteAdapter Tests
  *
  * Functional tests for database adapter methods not covered by
  * tests/security/sql-injection.test.ts.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { RelationshipType } from '../../src/types/index.js'
 
-describe('SqliteAdapter', () => {
-    let db: SqliteAdapter
+describe('WasmSqliteAdapter', () => {
+    let db: WasmSqliteAdapter
     const testDbPath = './test-adapter.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new WasmSqliteAdapter(testDbPath)
         await db.initialize()
     })
 
@@ -41,7 +41,7 @@ describe('SqliteAdapter', () => {
         })
 
         it('should throw when accessing uninitalized db', async () => {
-            const uninit = new SqliteAdapter('./uninit-test.db')
+            const uninit = new WasmSqliteAdapter('./uninit-test.db')
             expect(() => uninit.getActiveEntryCount()).toThrow('Database not initialized')
         })
     })
@@ -577,7 +577,7 @@ describe('SqliteAdapter', () => {
 
     describe('close', () => {
         it('should close without error', () => {
-            const tempDb = new SqliteAdapter('./test-close.db')
+            const tempDb = new WasmSqliteAdapter('./test-close.db')
             // Close without init should not throw
             tempDb.close()
         })
@@ -664,7 +664,7 @@ describe('SqliteAdapter', () => {
             }
 
             // Use a fresh adapter in a unique directory so its 'backups' dir doesn't exist
-            const tempDb = new SqliteAdapter(`${isolatedDir}/test-no-backups.db`)
+            const tempDb = new WasmSqliteAdapter(`${isolatedDir}/test-no-backups.db`)
             tempDb.initialize()
 
             const backups = tempDb.listBackups()

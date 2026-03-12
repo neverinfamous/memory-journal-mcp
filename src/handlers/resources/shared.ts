@@ -4,7 +4,7 @@
  * Shared types, helpers, and utilities used by all resource group modules.
  */
 
-import type { SqliteAdapter } from '../../database/sqlite-adapter/index.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon } from '../../types/index.js'
@@ -54,8 +54,8 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
  * Resource context for handlers that need extended access
  */
 export interface ResourceContext {
-    db: SqliteAdapter
-    teamDb?: SqliteAdapter
+    db: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter
     vectorManager?: VectorSearchManager
     filterConfig?: ToolFilterConfig | null
     github?: GitHubIntegration | null
@@ -97,11 +97,11 @@ export interface InternalResourceDef {
  * Execute a raw SQL query on the database
  */
 export function execQuery(
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     sql: string,
     params: unknown[] = []
 ): Record<string, unknown>[] {
-    const rawDb = db.getRawDb()
+    const rawDb = db.getRawDb() as { exec: (sql: string, params?: unknown[]) => { columns: string[]; values: unknown[][] }[] }
     const result = rawDb.exec(sql, params)
     if (result.length === 0) return []
 

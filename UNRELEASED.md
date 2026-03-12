@@ -9,6 +9,7 @@
 
 ### Added
 
+- **Dual-Backend SQLite Architecture** — Migrated from a pure WASM (`sql.js`) persistence model to a dual-backend architecture. Introduces `better-sqlite3` as the native disk-backed driver to eliminate event-loop-blocking memory serialization, while retaining the modernized `sql.js` adapter as a zero-compilation WASM fallback. Both backends seamlessly support the exact same `IDatabaseConnection` interfaces and return structures. Added `--sqlite-native` CLI flag (enabled by default).
 - **Harmonized Error Types (`error-types.ts`)** — New `ErrorCategory` enum (9 categories: validation, connection, query, permission, config, resource, authentication, authorization, internal), `ErrorResponse` interface, and `ErrorContext` interface. Part of the harmonized error handling standard across db-mcp, postgres-mcp, mysql-mcp, and memory-journal-mcp
 - **`MemoryJournalMcpError` Base Class (`errors.ts`)** — Enriched base error class with `category`, `code`, `suggestion`, `recoverable`, `details`, and `cause` properties. Includes `toResponse()` method returning structured `ErrorResponse`. 6 subclasses: `ConnectionError`, `QueryError`, `ValidationError`, `ResourceNotFoundError`, `ConfigurationError`, `PermissionError`
 - **`OAuthError` Extends `MemoryJournalMcpError`** — OAuth errors now inherit full error handling infrastructure (category, suggestion, toResponse()). Auto-categorizes as AUTHENTICATION (401) or AUTHORIZATION (403) based on httpStatus. Deprecated standalone `getWWWAuthenticateHeader()` utility; removed from barrel export

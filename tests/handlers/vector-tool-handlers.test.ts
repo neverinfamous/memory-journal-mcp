@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
 
 /**
@@ -32,12 +32,12 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
 }
 
 describe('Vector Tool Handlers', () => {
-    let db: SqliteAdapter
+    let db: WasmSqliteAdapter
     const testDbPath = './test-vector-tools.db'
     let entryId: number
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new WasmSqliteAdapter(testDbPath)
         await db.initialize()
         // Create an entry for testing
         const entry = db.createEntry({

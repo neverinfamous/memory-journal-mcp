@@ -5,7 +5,8 @@
  */
 
 // Server
-export { createServer, SqliteAdapter } from './server/mcp-server.js'
+export { createServer } from './server/mcp-server.js'
+export type { SqliteAdapter } from './server/mcp-server.js'
 
 // Types
 export type {

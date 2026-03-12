@@ -14,14 +14,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getTools, callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('mj_execute_code Tool Handler', () => {
-    let db: SqliteAdapter
+    let db: WasmSqliteAdapter
     const testDbPath = './test-codemode-handler.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new WasmSqliteAdapter(testDbPath)
         await db.initialize()
     })
 

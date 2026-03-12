@@ -10,23 +10,28 @@ export function getTeamContext(
     try {
         const teamStats = context.teamDb.getStatistics('week')
         const teamRecent = context.teamDb.getRecentEntries(1)
-        const teamLatest = teamRecent[0]
-            ? `#${teamRecent[0].id}: ${teamRecent[0].content.slice(0, 60)}${teamRecent[0].content.length > 60 ? '...' : ''}`
+        const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
+        const teamContent = teamLatestEntry ? ((teamLatestEntry['content'] as string | undefined) ?? '') : ''
+        const teamLatest = teamLatestEntry
+            ? `#${String(teamLatestEntry['id'])}: ${teamContent.slice(0, 60)}${teamContent.length > 60 ? '...' : ''}`
             : null
 
         const teamContext = {
-            totalEntries: teamStats.totalEntries ?? 0,
+            totalEntries: (teamStats as { totalEntries?: number }).totalEntries ?? 0,
             latestPreview: teamLatest,
         }
 
         if (config.includeTeam) {
             const teamEntries = context.teamDb.getRecentEntries(config.entryCount)
-            const teamLatestEntries = teamEntries.map((e) => ({
-                id: e.id,
-                timestamp: e.timestamp,
-                type: e.entryType,
-                preview: e.content.slice(0, 80) + (e.content.length > 80 ? '...' : ''),
-            }))
+            const teamLatestEntries = teamEntries.map((e) => {
+                const content = e.content ?? ''
+                return {
+                    id: e.id,
+                    timestamp: e.timestamp,
+                    type: e.entryType,
+                    preview: content.slice(0, 80) + (content.length > 80 ? '...' : ''),
+                }
+            })
             return { teamContext, teamLatestEntries }
         }
 

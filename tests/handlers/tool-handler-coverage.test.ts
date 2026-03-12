@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
 
 function createMockVector(overrides: Partial<Record<string, unknown>> = {}): VectorSearchManager {
@@ -33,15 +33,15 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
 }
 
 describe('Tool Handler Coverage', () => {
-    let db: SqliteAdapter
-    let teamDb: SqliteAdapter
+    let db: WasmSqliteAdapter
+    let teamDb: WasmSqliteAdapter
     const testDbPath = './test-tool-cov.db'
     const teamDbPath = './test-tool-team-cov.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new WasmSqliteAdapter(testDbPath)
         await db.initialize()
-        teamDb = new SqliteAdapter(teamDbPath)
+        teamDb = new WasmSqliteAdapter(teamDbPath)
         await teamDb.initialize()
     })
 

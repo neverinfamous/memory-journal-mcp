@@ -10,8 +10,8 @@ import type {
     ImportanceBreakdown,
     ImportanceResult,
 } from '../../types/index.js'
-import type { CreateEntryInput } from '../schema.js'
-import type { ConnectionManager } from './connection.js'
+import type { CreateEntryInput } from '../core/schema.js'
+import type { IDatabaseConnection } from '../core/interfaces.js'
 import type { TagsManager } from './tags.js'
 
 const ENTRY_COLUMNS =
@@ -32,10 +32,10 @@ export class EntriesManager {
         recency: 0.15,
     } as const
 
-    constructor(private ctx: ConnectionManager, private tagsMgr: TagsManager) {}
+    constructor(private ctx: IDatabaseConnection, private tagsMgr: TagsManager) {}
 
     createEntry(input: CreateEntryInput): JournalEntry {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const {
             content,
             entryType = 'personal_reflection',
@@ -122,7 +122,7 @@ export class EntriesManager {
     }
 
     getEntryById(id: number): JournalEntry | null {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const result = db.exec(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ? AND deleted_at IS NULL`, [id])
 
         if (result.length === 0 || result[0]?.values.length === 0) return null
@@ -135,7 +135,7 @@ export class EntriesManager {
     }
 
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const result = db.exec(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ?`, [id])
 
         if (result.length === 0 || result[0]?.values.length === 0) return null
@@ -148,7 +148,7 @@ export class EntriesManager {
     }
 
     calculateImportance(entryId: number): ImportanceResult {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const round2 = (n: number): number => Math.round(n * 100) / 100
 
         const result = db.exec(
@@ -206,7 +206,7 @@ export class EntriesManager {
     }
 
     getRecentEntries(limit = 10, isPersonal?: boolean): JournalEntry[] {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         let sql = `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NULL`
         const params: unknown[] = []
 
@@ -225,7 +225,7 @@ export class EntriesManager {
     }
 
     getEntriesPage(offset: number, limit: number): JournalEntry[] {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const result = db.exec(
             `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NULL ORDER BY id ASC LIMIT ? OFFSET ?`,
             [limit, offset]
@@ -236,7 +236,7 @@ export class EntriesManager {
     }
 
     getActiveEntryCount(): number {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const result = db.exec(`SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL`)
         return (result[0]?.values[0]?.[0] as number) ?? 0
     }
@@ -250,7 +250,7 @@ export class EntriesManager {
             isPersonal?: boolean
         }
     ): JournalEntry | null {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
 
         const setClause: string[] = []
         const params: unknown[] = []
@@ -302,7 +302,7 @@ export class EntriesManager {
     }
 
     deleteEntry(id: number, permanent = false): boolean {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
 
         const entry = permanent ? this.getEntryByIdIncludeDeleted(id) : this.getEntryById(id)
         if (!entry) return false
@@ -327,7 +327,7 @@ export class EntriesManager {
             prNumber?: number
         } = {}
     ): JournalEntry[] {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const { limit = 10, isPersonal, projectNumber, issueNumber, prNumber } = options
 
         let sql = `
@@ -376,7 +376,7 @@ export class EntriesManager {
             limit?: number
         } = {}
     ): JournalEntry[] {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const { entryType, tags, isPersonal, projectNumber, issueNumber, prNumber, workflowRunId } =
             options
 
@@ -466,7 +466,7 @@ export class EntriesManager {
         // Optional project breakdown (v5.1.0)
         projectBreakdown?: { project_number: number; entry_count: number }[]
     } {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
 
         let dateFilter = ''
         const dateParams: unknown[] = []

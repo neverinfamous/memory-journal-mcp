@@ -4,7 +4,7 @@
  * SQL DDL for initialization and input types for the database adapter.
  */
 
-import type { EntryType, SignificanceType } from '../types/index.js'
+import type { EntryType, SignificanceType } from '../../types/index.js'
 
 /**
  * SQL schema for database initialization.

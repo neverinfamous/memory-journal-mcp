@@ -9,14 +9,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Resource Handler Coverage', () => {
-    let db: SqliteAdapter
+    let db: WasmSqliteAdapter
     const testDbPath = './test-resource-coverage.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new WasmSqliteAdapter(testDbPath)
         await db.initialize()
 
         // Create entries with project/issue/PR links for template tests

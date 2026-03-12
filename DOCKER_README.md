@@ -312,7 +312,7 @@ docker run --rm -p 3000:3000 \
 - **SBOM Available** - Complete software bill of materials
 - **Supply Chain Attestations** - Verifiable build integrity
 - **Non-root Execution** - Minimal attack surface
-- **No Native Dependencies** - Pure JS stack reduces attack surface
+- **No Native Dependencies (Optional)** - Pure JS fallback reduces attack surface when native builds fail
 
 | Mode                      | Progress Notifications | Legacy SSE | Serverless |
 | ------------------------- | ---------------------- | ---------- | ---------- |
@@ -432,8 +432,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 **TypeScript Image Benefits:**
 
 - **Node.js 24 on Alpine Linux** - Minimal footprint (~150MB compressed)
-- **Pure JS Stack** - No native compilation, identical features on all platforms
-- **sql.js** - SQLite in pure JavaScript
+- **Dual-Backend Architecture** - Native `better-sqlite3` performance with pure JS `sql.js` fallback
 - **vectra** - Vector similarity search without native dependencies
 - **@xenova/transformers** - ML embeddings in JavaScript
 - **Faster Startup** - Lazy loading of ML models

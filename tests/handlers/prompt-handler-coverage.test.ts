@@ -9,15 +9,15 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { WasmSqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { execQuery, getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
 
 describe('Prompt Handlers - Coverage', () => {
-    let db: SqliteAdapter
+    let db: WasmSqliteAdapter
     const testDbPath = './test-prompts-cov.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new WasmSqliteAdapter(testDbPath)
         await db.initialize()
         // Seed entries for query tests
         db.createEntry({ content: 'Prompt test entry 1', tags: ['prompt-test'] })

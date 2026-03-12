@@ -1,10 +1,10 @@
 import { ResourceNotFoundError } from '../../types/errors.js'
 import type { Relationship, RelationshipType } from '../../types/index.js'
-import type { ConnectionManager } from './connection.js'
+import type { IDatabaseConnection } from '../core/interfaces.js'
 import type { EntriesManager } from './entries.js'
 
 export class RelationshipsManager {
-    constructor(private ctx: ConnectionManager, private entries: EntriesManager) {}
+    constructor(private ctx: IDatabaseConnection, private entries: EntriesManager) {}
 
     linkEntries(
         fromEntryId: number,
@@ -12,7 +12,7 @@ export class RelationshipsManager {
         relationshipType: RelationshipType,
         description?: string
     ): Relationship {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
 
         const fromEntry = this.entries.getEntryById(fromEntryId)
         if (!fromEntry) {
@@ -47,7 +47,7 @@ export class RelationshipsManager {
     }
 
     getRelationships(entryId: number): Relationship[] {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const result = db.exec(
             `
             SELECT * FROM relationships

@@ -9,7 +9,7 @@ import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
-import type { SqliteAdapter } from '../../database/sqlite-adapter/index.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { BriefingConfig } from './shared.js'
 
 // Re-export shared types
@@ -84,12 +84,12 @@ function getBaseUri(uri: string): string {
  */
 export async function readResource(
     uri: string,
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     vectorManager?: VectorSearchManager,
     filterConfig?: ToolFilterConfig | null,
     github?: GitHubIntegration | null,
     scheduler?: Scheduler | null,
-    teamDb?: SqliteAdapter,
+    teamDb?: IDatabaseAdapter,
     briefingConfig?: BriefingConfig
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     const resources = getAllResourceDefinitions()

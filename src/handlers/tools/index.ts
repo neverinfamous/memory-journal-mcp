@@ -17,7 +17,7 @@ import type {
     ToolContext,
     ToolHandlerConfig,
 } from '../../types/index.js'
-import type { SqliteAdapter } from '../../database/sqlite-adapter/index.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { ProgressContext } from '../../utils/progress-utils.js'
@@ -106,12 +106,12 @@ function getToolIcon(
  * Get all tool definitions, optionally filtered by config
  */
 export function getTools(
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     filterConfig: ToolFilterConfig | null,
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
-    teamDb?: SqliteAdapter
+    teamDb?: IDatabaseAdapter
 ): object[] {
     // Ensure tool map is built / up-to-date (shared cache with callTool)
     ensureToolCache(db, vectorManager, github, config, teamDb)
@@ -151,11 +151,11 @@ let mappedToolsCache: object[] | null = null
 /** Typed empty map for safe fallback (narrowing guard, never actually used) */
 const EMPTY_TOOL_MAP = new Map<string, ToolDefinition>()
 let cachedContextRefs: {
-    db: SqliteAdapter
+    db: IDatabaseAdapter
     github?: GitHubIntegration
     vectorManager?: VectorSearchManager
     config?: ToolHandlerConfig
-    teamDb?: SqliteAdapter
+    teamDb?: IDatabaseAdapter
 } | null = null
 
 /**
@@ -163,11 +163,11 @@ let cachedContextRefs: {
  * Shared by getTools() and callTool() to avoid redundant getAllToolDefinitions() calls.
  */
 function ensureToolCache(
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
-    teamDb?: SqliteAdapter
+    teamDb?: IDatabaseAdapter
 ): void {
     if (
         toolMapCache &&
@@ -192,12 +192,12 @@ function ensureToolCache(
 export function callTool(
     name: string,
     args: Record<string, unknown>,
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
     progress?: ProgressContext,
-    teamDb?: SqliteAdapter
+    teamDb?: IDatabaseAdapter
 ): Promise<unknown> {
     ensureToolCache(db, vectorManager, github, config, teamDb)
 

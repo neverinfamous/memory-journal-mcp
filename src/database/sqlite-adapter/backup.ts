@@ -3,13 +3,12 @@ import * as path from 'node:path'
 import { logger } from '../../utils/logger.js'
 import { assertNoPathTraversal } from '../../utils/security-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
-import type { ConnectionManager } from './connection.js'
+import type { IDatabaseConnection } from '../core/interfaces.js'
 
 export class BackupManager {
-    constructor(private ctx: ConnectionManager) {}
+    constructor(private ctx: IDatabaseConnection) {}
 
     exportToFile(backupName?: string): { filename: string; path: string; sizeBytes: number } {
-        const db = this.ctx.ensureDb()
         const backupsDir = this.ctx.getBackupsDir()
 
         if (backupName) {
@@ -27,7 +26,16 @@ export class BackupManager {
         const filename = `${sanitizedName}.db`
         const backupPath = path.join(backupsDir, filename)
 
-        const data = db.export()
+        const rawDb = this.ctx.getRawDb() as { export?: () => Uint8Array }
+        
+        // better-sqlite3 handles backups natively via the SQLite backup API
+        // which isn't currently surfaced in this adapter, so we throw for native connections
+        // Note: memory-journal backups are designed for sql.js memory dumps
+        if (typeof rawDb.export !== 'function') {
+            throw new Error('Database adapter does not support in-memory exports (use Native SQLite file-system backups directly)')
+        }
+        
+        const data = rawDb.export()
         const buffer = Buffer.from(data)
         fs.writeFileSync(backupPath, buffer)
 
@@ -118,8 +126,7 @@ export class BackupManager {
             throw new ResourceNotFoundError('Backup', filename)
         }
 
-        const db = this.ctx.ensureDb()
-        const currentCountResult = db.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
+        const currentCountResult = this.ctx.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
         const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
@@ -133,7 +140,7 @@ export class BackupManager {
         const newDb = new SQL.Database(backupBuffer)
         this.ctx.setDbAndInitialized(newDb)
 
-        const newCountResult = this.ctx.ensureDb().exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
+        const newCountResult = this.ctx.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
         const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         logger.info('Database restored from backup', {

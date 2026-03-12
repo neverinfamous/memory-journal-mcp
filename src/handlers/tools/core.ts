@@ -234,7 +234,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status,
                             })
-                            const rawTeamDb = teamDb.getRawDb()
+                            const rawTeamDb = teamDb.getRawDb() as { run: (sql: string, params?: unknown[]) => void }
                             rawTeamDb.run('UPDATE memory_journal SET author = ? WHERE id = ?', [
                                 author,
                                 teamEntry.id,

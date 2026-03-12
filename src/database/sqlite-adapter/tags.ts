@@ -1,14 +1,14 @@
 import { logger } from '../../utils/logger.js'
 import { ResourceNotFoundError, QueryError } from '../../types/errors.js'
 import type { Tag } from '../../types/index.js'
-import type { ConnectionManager } from './connection.js'
+import type { IDatabaseConnection } from '../core/interfaces.js'
 
 export class TagsManager {
-    constructor(private ctx: ConnectionManager) {}
+    constructor(private ctx: IDatabaseConnection) {}
 
     linkTagsToEntry(entryId: number, tagNames: string[]): void {
         if (tagNames.length === 0) return
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
 
         const insertPlaceholders = tagNames.map(() => '(?, 0)').join(', ')
         db.run(`INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`, tagNames)
@@ -31,7 +31,7 @@ export class TagsManager {
     }
 
     getTagsForEntry(entryId: number): string[] {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const result = db.exec(
             `
             SELECT t.name FROM tags t
@@ -48,7 +48,7 @@ export class TagsManager {
         const tagMap = new Map<number, string[]>()
         if (ids.length === 0) return tagMap
 
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const placeholders = ids.map(() => '?').join(', ')
         const result = db.exec(
             `SELECT et.entry_id, t.name
@@ -72,14 +72,14 @@ export class TagsManager {
     }
 
     listTags(): Tag[] {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const result = db.exec('SELECT id, name, COALESCE(usage_count, 0) as usage_count FROM tags WHERE COALESCE(usage_count, 0) > 0 ORDER BY usage_count DESC')
         if (result.length === 0) return []
         return (result[0]?.values ?? []).map((v) => ({ id: v[0] as number, name: v[1] as string, usageCount: v[2] as number }))
     }
 
     mergeTags(sourceTag: string, targetTag: string): { entriesUpdated: number; sourceDeleted: boolean } {
-        const db = this.ctx.ensureDb()
+        const db = this.ctx
         const sourceResult = db.exec('SELECT id FROM tags WHERE name = ?', [sourceTag])
         const sourceTagId = sourceResult[0]?.values[0]?.[0] as number | undefined
         if (sourceTagId === undefined) throw new ResourceNotFoundError('Tag', sourceTag)

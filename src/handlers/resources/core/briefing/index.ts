@@ -26,14 +26,17 @@ export function getBriefingResource(): InternalResourceDef {
 
             // Get latest entries (configurable count)
             const recentEntries = context.db.getRecentEntries(config.entryCount)
-            const latestEntries = recentEntries.map((e) => ({
-                id: e.id,
-                timestamp: e.timestamp,
-                type: e.entryType,
-                preview: e.content.slice(0, 80) + (e.content.length > 80 ? '...' : ''),
-            }))
+            const latestEntries = recentEntries.map((e) => {
+                const content = e.content ?? ''
+                return {
+                    id: e.id,
+                    timestamp: e.timestamp,
+                    type: e.entryType,
+                    preview: content.slice(0, 80) + (content.length > 80 ? '...' : ''),
+                }
+            })
 
-            const totalEntries = context.db.getStatistics('week').totalEntries ?? 0
+            const totalEntries = (context.db.getStatistics('week') as { totalEntries?: number }).totalEntries ?? 0
 
             const github = await getGitHubContext(context, config)
             const team = getTeamContext(context, config)

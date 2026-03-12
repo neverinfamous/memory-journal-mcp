@@ -9,7 +9,8 @@ import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
-import { SqliteAdapter } from '../database/sqlite-adapter/index.js'
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
+import { DatabaseAdapterFactory } from '../database/adapter-factory.js'
 import { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { GitHubIntegration } from '../github/github-integration/index.js'
 import { logger } from '../utils/logger.js'
@@ -34,6 +35,7 @@ export interface ServerOptions {
     port?: number
     host?: string
     dbPath: string
+    useNativeSqlite: boolean
     teamDbPath?: string
     toolFilter?: string
     defaultProjectNumber?: number
@@ -57,7 +59,7 @@ export interface ServerOptions {
  * Create and start the MCP server
  */
 export async function createServer(options: ServerOptions): Promise<void> {
-    const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
+    const { transport, dbPath, useNativeSqlite, teamDbPath, toolFilter, defaultProjectNumber } = options
 
     // Configure sandbox mode for Code Mode
     if (options.sandboxMode) {
@@ -68,15 +70,15 @@ export async function createServer(options: ServerOptions): Promise<void> {
         })
     }
 
-    // Initialize database (async for sql.js)
-    const db = new SqliteAdapter(dbPath)
+    // Initialize database
+    const db = DatabaseAdapterFactory.create(dbPath, useNativeSqlite)
     await db.initialize()
-    logger.info('Database initialized', { module: 'McpServer', dbPath })
+    logger.info('Database initialized', { module: 'McpServer', dbPath, useNativeSqlite })
 
     // Initialize team database if configured
-    let teamDb: SqliteAdapter | undefined
+    let teamDb: IDatabaseAdapter | undefined
     if (teamDbPath) {
-        teamDb = new SqliteAdapter(teamDbPath)
+        teamDb = DatabaseAdapterFactory.create(teamDbPath, useNativeSqlite)
         await teamDb.initialize()
         teamDb.applyTeamSchema()
         logger.info('Team database initialized', { module: 'McpServer', teamDbPath })
@@ -488,4 +490,4 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 }
 
-export { SqliteAdapter }
+export type { IDatabaseAdapter as SqliteAdapter }
