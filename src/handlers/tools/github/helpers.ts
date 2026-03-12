@@ -3,7 +3,7 @@
  */
 
 import type { ToolContext } from '../../../types/index.js'
-import type { GitHubIntegration } from '../../../github/github-integration.js'
+import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 
 /**
  * Resolve owner (owner-only, no repo required)

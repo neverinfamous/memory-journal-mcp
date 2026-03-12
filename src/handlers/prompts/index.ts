@@ -5,7 +5,7 @@
  * Exports all MCP prompts for workflow guidance.
  */
 
-import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
+import type { SqliteAdapter } from '../../database/sqlite-adapter/index.js'
 import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getGitHubPromptDefinitions } from './github.js'

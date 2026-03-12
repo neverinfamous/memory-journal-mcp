@@ -9,9 +9,9 @@ import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
-import { SqliteAdapter } from '../database/sqlite-adapter.js'
+import { SqliteAdapter } from '../database/sqlite-adapter/index.js'
 import { VectorSearchManager } from '../vector/vector-search-manager.js'
-import { GitHubIntegration } from '../github/github-integration.js'
+import { GitHubIntegration } from '../github/github-integration/index.js'
 import { logger } from '../utils/logger.js'
 import {
     parseToolFilter,

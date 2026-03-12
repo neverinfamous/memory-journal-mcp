@@ -5,7 +5,7 @@
  * pr-retrospective, actions-failure-digest, project-milestone-tracker
  */
 
-import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
+import type { SqliteAdapter } from '../../database/sqlite-adapter/index.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
 

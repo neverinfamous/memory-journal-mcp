@@ -5,9 +5,9 @@
  * that depend on external imports (SqliteAdapter, VectorSearchManager, etc.).
  */
 
-import type { SqliteAdapter } from '../database/sqlite-adapter.js'
+import type { SqliteAdapter } from '../database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
-import type { GitHubIntegration } from '../github/github-integration.js'
+import type { GitHubIntegration } from '../github/github-integration/index.js'
 import type { ProgressContext } from '../utils/progress-utils.js'
 
 // Re-export sub-module types

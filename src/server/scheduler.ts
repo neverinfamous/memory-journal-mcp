@@ -6,7 +6,7 @@
  * Uses setInterval for simplicity — no external dependencies.
  */
 
-import type { SqliteAdapter } from '../database/sqlite-adapter.js'
+import type { SqliteAdapter } from '../database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { logger } from '../utils/logger.js'
 

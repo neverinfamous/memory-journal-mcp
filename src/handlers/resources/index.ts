@@ -7,16 +7,16 @@
 
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
-import type { GitHubIntegration } from '../../github/github-integration.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
-import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
+import type { SqliteAdapter } from '../../database/sqlite-adapter/index.js'
 import type { BriefingConfig } from './shared.js'
 
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
 
 // Import sub-module definitions
-import { getCoreResourceDefinitions } from './core.js'
+import { getCoreResourceDefinitions } from './core/index.js'
 import { getGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'

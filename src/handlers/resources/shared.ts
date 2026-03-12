@@ -4,11 +4,11 @@
  * Shared types, helpers, and utilities used by all resource group modules.
  */
 
-import type { SqliteAdapter } from '../../database/sqlite-adapter.js'
+import type { SqliteAdapter } from '../../database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon } from '../../types/index.js'
-import type { GitHubIntegration } from '../../github/github-integration.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 
 /**
