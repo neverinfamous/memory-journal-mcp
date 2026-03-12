@@ -1,0 +1,4 @@
+
+> memory-journal-mcp@5.1.1 typecheck
+> tsc --noEmit
+

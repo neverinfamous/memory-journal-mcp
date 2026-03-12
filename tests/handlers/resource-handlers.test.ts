@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getResources, readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Resource Handlers', () => {
     let db: SqliteAdapter

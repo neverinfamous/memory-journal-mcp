@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { GitHubIntegration } from '../../src/github/github-integration.js'
+import { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
 // ============================================================================
 // Module mocks
@@ -67,9 +67,9 @@ function injectMocks(
     octokit: ReturnType<typeof createOctokitMock>,
     graphqlFn?: ReturnType<typeof vi.fn>
 ) {
-    const inst = gh as unknown as { octokit: typeof octokit; graphqlWithAuth?: typeof graphqlFn }
-    inst.octokit = octokit
-    if (graphqlFn) inst.graphqlWithAuth = graphqlFn
+    const inst = gh as any
+    inst.client.octokit = octokit
+    if (graphqlFn) inst.client.graphqlWithAuth = graphqlFn
 }
 
 describe('GitHubIntegration', () => {
@@ -244,7 +244,7 @@ describe('GitHubIntegration', () => {
 
         it('should return empty when no octokit', async () => {
             injectMocks(gh, null as unknown as ReturnType<typeof createOctokitMock>)
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const issues = await gh.getIssues('o', 'r')
             expect(issues).toEqual([])
         })
@@ -336,7 +336,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return null when no octokit', async () => {
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const result = await gh.createIssue('o', 'r', 'No API')
             expect(result).toBeNull()
         })
@@ -407,7 +407,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return empty when no octokit', async () => {
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const prs = await gh.getPullRequests('o', 'r')
             expect(prs).toEqual([])
         })
@@ -481,7 +481,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return empty when no octokit', async () => {
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const runs = await gh.getWorkflowRuns('o', 'r')
             expect(runs).toEqual([])
         })
@@ -546,7 +546,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return empty when no octokit', async () => {
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const ms = await gh.getMilestones('o', 'r')
             expect(ms).toEqual([])
         })
@@ -607,7 +607,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return null when no octokit', async () => {
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const ms = await gh.createMilestone('o', 'r', 'v2.0')
             expect(ms).toBeNull()
         })
@@ -637,7 +637,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return null when no octokit', async () => {
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const ms = await gh.updateMilestone('o', 'r', 1, { title: 'x' })
             expect(ms).toBeNull()
         })
@@ -658,7 +658,7 @@ describe('GitHubIntegration', () => {
         })
 
         it('should return error when no octokit', async () => {
-            ;(gh as unknown as { octokit: null }).octokit = null
+            ;(gh as any).client.octokit = null
             const result = await gh.deleteMilestone('o', 'r', 1)
             expect(result.success).toBe(false)
         })

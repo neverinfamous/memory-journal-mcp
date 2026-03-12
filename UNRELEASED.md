@@ -56,11 +56,15 @@
 
 ### Changed
 
-- **HTTP Transport Modularized** — Split monolithic `src/transports/http.ts` (638 lines) into `src/transports/http/` directory with focused modules:
+- **Core Handlers Modularized**:
+  - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
+  - **GitHub Integration** — Split monolithic `src/github/github-integration.ts` (1707 lines) into `src/github/github-integration/` containing focused modules (`auth.ts`, `repos.ts`, `issues.ts`, `pull-requests.ts`, `search.ts`, `copilot.ts`, `index.ts`).
+  - **Core Resources** — Split monolithic `src/handlers/resources/core.ts` (823 lines) into `src/handlers/resources/core/` containing `briefing.ts`, `instructions.ts`, `stats.ts`, and `index.ts`.
+- **HTTP Transport Modularized** — Continued splitting `src/transports/http.ts` and `src/transports/http/server.ts` into a fully modularized directory:
   - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types
   - `security.ts` — Client IP extraction, built-in rate limiting, CORS (wildcard subdomain support), security headers
   - `handlers.ts` — Health check, root info, bearer token auth middleware
-  - `server.ts` — `HttpTransport` class with dual-protocol support (Streamable HTTP + Legacy SSE)
+  - `server/` — Split `server.ts` into `stateless.ts`, `stateful.ts`, `legacy-sse.ts`, and `index.ts`
   - `index.ts` — Barrel re-export
 - **CORS Configuration** — `corsOrigin: string` changed to `corsOrigins: string[]` for multi-origin support. CLI `--cors-origin` accepts comma-separated values. Wildcard subdomain patterns supported (e.g., `*.example.com`).
 - **HSTS Configuration** — HSTS is now config-driven via `enableHSTS: true` instead of auto-detecting from `X-Forwarded-Proto` header.

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { execQuery, getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
 
 describe('Prompt Handlers - Coverage', () => {

@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
 
 /**

@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter.js'
+import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { GitHubIntegration } from '../../src/github/github-integration.js'
 
 /**

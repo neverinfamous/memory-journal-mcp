@@ -122,7 +122,7 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
     isInitializeRequest: vi.fn().mockReturnValue(false),
 }))
 
-vi.mock('../../src/database/sqlite-adapter.js', () => ({
+vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
     SqliteAdapter: function () {
         return {
             initialize: mockDbInitialize,
