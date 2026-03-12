@@ -143,10 +143,6 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
             if (config.corsAllowCredentials) {
                 res.setHeader('Access-Control-Allow-Credentials', 'true')
             }
-        } else if (corsOrigins.some((p) => matchesCorsOrigin(origin, p))) {
-            // Wildcard subdomain match — no credentials on this path
-            res.setHeader('Access-Control-Allow-Origin', origin)
-            res.setHeader('Vary', 'Origin')
         }
     }
 
