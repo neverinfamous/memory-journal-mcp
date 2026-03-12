@@ -42,6 +42,12 @@ export interface ServerOptions {
     authToken?: string
     scheduler?: SchedulerOptions
     sandboxMode?: SandboxMode
+    // OAuth 2.1 options
+    oauthEnabled?: boolean
+    oauthIssuer?: string
+    oauthAudience?: string
+    oauthJwksUri?: string
+    oauthClockTolerance?: number
 }
 
 /**
@@ -456,6 +462,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
             corsOrigins,
             stateless: options.statelessHttp === true,
             authToken,
+            oauthEnabled: options.oauthEnabled,
+            oauthIssuer: options.oauthIssuer,
+            oauthAudience: options.oauthAudience,
+            oauthJwksUri: options.oauthJwksUri,
+            oauthClockTolerance: options.oauthClockTolerance,
         })
 
         await httpTransport.start(server, scheduler)

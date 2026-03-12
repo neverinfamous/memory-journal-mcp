@@ -97,4 +97,23 @@ export interface HttpTransportConfig {
 
     /** Maximum request body size in bytes (default: 1MB) */
     maxBodySize?: number
+
+    // =================
+    // OAuth 2.1 Config
+    // =================
+
+    /** Enable OAuth 2.1 authentication (default: false) */
+    oauthEnabled?: boolean
+
+    /** OAuth issuer URL (authorization server) */
+    oauthIssuer?: string
+
+    /** Expected OAuth audience (client ID) */
+    oauthAudience?: string
+
+    /** JWKS URI for key discovery (auto-discovered if not set) */
+    oauthJwksUri?: string
+
+    /** Clock tolerance in seconds for token validation (default: 60) */
+    oauthClockTolerance?: number
 }

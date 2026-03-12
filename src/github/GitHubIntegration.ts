@@ -268,11 +268,13 @@ export class GitHubIntegration {
         if (cached) return cached
 
         try {
+            // Over-fetch by 2× because GitHub REST API includes PRs in the
+            // issues endpoint. After filtering PRs out we slice to `limit`.
             const response = await this.octokit.issues.listForRepo({
                 owner,
                 repo,
                 state,
-                per_page: limit,
+                per_page: Math.min(limit * 2, 100),
                 sort: 'updated',
                 direction: 'desc',
             })
@@ -280,6 +282,7 @@ export class GitHubIntegration {
             // Filter out pull requests (GitHub API includes PRs in issues)
             const result = response.data
                 .filter((issue) => !issue.pull_request)
+                .slice(0, limit)
                 .map((issue) => ({
                     number: issue.number,
                     title: issue.title,

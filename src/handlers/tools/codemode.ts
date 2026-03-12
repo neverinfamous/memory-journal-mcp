@@ -10,6 +10,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { relaxedNumber } from './schemas.js'
 import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
@@ -36,7 +37,7 @@ const ExecuteCodeSchema = z.object({
 /** Relaxed schema for MCP registration */
 const ExecuteCodeSchemaMcp = z.object({
     code: z.string().describe('JavaScript code to execute in the sandbox'),
-    timeout: z.number().optional().default(30000).describe('Execution timeout in ms (max 30000)'),
+    timeout: relaxedNumber().optional().default(30000).describe('Execution timeout in ms (max 30000)'),
     readonly: z.boolean().optional().default(false).describe('Restrict to read-only operations'),
 })
 

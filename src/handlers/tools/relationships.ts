@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext, RelationshipType } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { RelationshipOutputSchema } from './schemas.js'
+import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
 
 // ============================================================================
 // Input Schemas
@@ -35,8 +35,8 @@ const LinkEntriesSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const LinkEntriesSchemaMcp = z.object({
-    from_entry_id: z.number(),
-    to_entry_id: z.number(),
+    from_entry_id: relaxedNumber(),
+    to_entry_id: relaxedNumber(),
     relationship_type: z.string().optional().default('references'),
     description: z.string().optional(),
 })
@@ -53,13 +53,12 @@ const VisualizeInputSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const VisualizeInputSchemaMcp = z.object({
-    entry_id: z
-        .number()
+    entry_id: relaxedNumber()
         .optional()
         .describe('Specific entry ID to visualize (shows connected entries)'),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),
-    depth: z.number().optional().default(2).describe('Relationship traversal depth'),
-    limit: z.number().optional().default(20).describe('Maximum entries to include'),
+    depth: relaxedNumber().optional().default(2).describe('Relationship traversal depth'),
+    limit: relaxedNumber().optional().default(20).describe('Maximum entries to include'),
 })
 
 // ============================================================================

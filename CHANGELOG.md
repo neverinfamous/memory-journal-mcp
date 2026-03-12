@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OAuth 2.1 Authentication Module** — Full RFC-compliant OAuth 2.0 authentication and authorization for the HTTP transport
+  - 10 new files in `src/auth/`: types, errors, scopes, token-validator, oauth-resource-server, authorization-server-discovery, scope-map, auth-context, middleware, barrel
+  - RFC 9728 Protected Resource Metadata endpoint (`/.well-known/oauth-protected-resource`)
+  - RFC 8414 Authorization Server Metadata discovery with caching
+  - JWT validation via `jose` library with JWKS caching and issuer/audience verification
+  - 10 tool groups mapped to 3 OAuth scopes: `read` (core, search, analytics, relationships, export), `write` (github, team), `admin` (admin, backup, codemode)
+  - `AsyncLocalStorage`-based per-request auth context threading
+  - Express middleware for token extraction, validation, and scope enforcement
+  - Transport-agnostic utilities: `createAuthenticatedContext`, `validateAuth`, `formatOAuthError`
+  - 5 new CLI flags: `--oauth-enabled`, `--oauth-issuer`, `--oauth-audience`, `--oauth-jwks-uri`, `--oauth-clock-tolerance`
+  - Environment variable support: `OAUTH_ENABLED`, `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URI`
+
 - **Code Mode (`mj_execute_code`)** — Sandboxed JavaScript execution for multi-step workflows with 70-90% token reduction
   - 9 new files in `src/codemode/`: types, security manager, VM sandbox, worker-thread sandbox, worker script, sandbox factory, API bridge, API constants, barrel
   - `src/handlers/tools/codemode.ts` — Tool handler with security validation, rate limiting, and API bridge construction
@@ -113,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Improved
 
 - **Zod Boundary Leak Prevention** — Created separate relaxed MCP schemas (without `min`/`max` constraints) for 7 tools so boundary violations reach the handler for structured `{success: false, error}` responses instead of leaking as raw MCP `-32602` error frames. Affected tools: `get_recent_entries`, `create_entry`, `create_entry_minimal`, `search_entries`, `search_by_date_range`, `semantic_search`, `export_entries`, `cleanup_backups`, `visualize_relationships`.
+- **Numeric Coercion in MCP Schemas** — Replaced all `z.number()` / `z.coerce.number()` with `relaxedNumber()` (`z.any()`) in relaxed MCP input schemas across 10 tool files. Non-numeric values (e.g., `limit: "abc"`) now pass SDK-level Zod validation and are caught by handler strict schemas as structured `{success: false, error}` responses instead of raw MCP `-32602` errors. New shared helper: `relaxedNumber()` in `schemas.ts`. Added 4 new relaxed schemas: `GetEntryByIdSchemaMcp`, `DeleteEntrySchemaMcp`, `TeamGetRecentSchemaMcp`, `TeamSearchSchemaMcp`.
 
 ### Changed
 

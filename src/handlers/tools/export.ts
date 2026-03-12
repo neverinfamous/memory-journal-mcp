@@ -13,6 +13,7 @@ import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
     EntryOutputSchema,
+    relaxedNumber,
 } from './schemas.js'
 
 // ============================================================================
@@ -41,7 +42,7 @@ const ExportEntriesSchemaMcp = z.object({
     end_date: z.string().optional(),
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
-    limit: z.number().optional().default(100).describe('Maximum entries to export (default: 100)'),
+    limit: relaxedNumber().optional().default(100).describe('Maximum entries to export (default: 100)'),
 })
 
 // ============================================================================

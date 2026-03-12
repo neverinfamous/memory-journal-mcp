@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
+import { relaxedNumber } from './schemas.js'
 
 // ============================================================================
 // Output Schemas
@@ -208,8 +209,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                 'Delete old backup files, keeping only the most recent N backups. Use list_backups to preview before cleanup.',
             group: 'backup',
             inputSchema: z.object({
-                keep_count: z
-                    .number()
+                keep_count: relaxedNumber()
                     .default(5)
                     .describe('Number of most recent backups to keep (default: 5)'),
             }),

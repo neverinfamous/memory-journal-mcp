@@ -71,6 +71,15 @@ program
         'Code Mode sandbox: "worker" (production, default) or "vm" (lightweight)',
         'worker'
     )
+    .option('--oauth-enabled', 'Enable OAuth 2.1 authentication (env: OAUTH_ENABLED)')
+    .option('--oauth-issuer <url>', 'OAuth issuer URL (env: OAUTH_ISSUER)')
+    .option('--oauth-audience <audience>', 'OAuth audience (env: OAUTH_AUDIENCE)')
+    .option('--oauth-jwks-uri <uri>', 'OAuth JWKS URI (env: OAUTH_JWKS_URI)')
+    .option(
+        '--oauth-clock-tolerance <seconds>',
+        'OAuth clock tolerance in seconds (default: 60)',
+        '60'
+    )
     .action(
         async (options: {
             transport: string
@@ -90,6 +99,11 @@ program
             vacuumInterval: string
             rebuildIndexInterval: string
             sandboxMode: string
+            oauthEnabled?: boolean
+            oauthIssuer?: string
+            oauthAudience?: string
+            oauthJwksUri?: string
+            oauthClockTolerance: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -134,6 +148,13 @@ program
                         rebuildIndexIntervalMinutes: parseInt(options.rebuildIndexInterval, 10),
                     },
                     sandboxMode: options.sandboxMode as 'vm' | 'worker',
+                    // OAuth 2.1
+                    oauthEnabled:
+                        options.oauthEnabled ?? process.env['OAUTH_ENABLED'] === 'true',
+                    oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],
+                    oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
+                    oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
+                    oauthClockTolerance: parseInt(options.oauthClockTolerance, 10),
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

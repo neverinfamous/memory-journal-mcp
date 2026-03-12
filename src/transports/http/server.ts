@@ -34,6 +34,13 @@ import {
 } from './types.js'
 import { setSecurityHeaders, setCorsHeaders, checkRateLimit } from './security.js'
 import { handleHealthCheck, handleRootInfo, createAuthMiddleware } from './handlers.js'
+import {
+    createTokenValidator,
+    createOAuthResourceServer,
+    createAuthMiddleware as createOAuthMiddleware,
+    oauthErrorHandler,
+    SUPPORTED_SCOPES,
+} from '../../auth/index.js'
 
 // =============================================================================
 // HTTP Transport
@@ -151,8 +158,55 @@ export class HttpTransport {
             })
         }
 
-        // Bearer token authentication (when configured)
-        if (authToken) {
+        // Authentication middleware
+        if (
+            this.config.oauthEnabled &&
+            this.config.oauthIssuer &&
+            this.config.oauthAudience
+        ) {
+            // OAuth 2.1 authentication
+            const jwksUri =
+                this.config.oauthJwksUri ??
+                `${this.config.oauthIssuer}/.well-known/jwks.json`
+
+            const tokenValidator = createTokenValidator({
+                jwksUri,
+                issuer: this.config.oauthIssuer,
+                audience: this.config.oauthAudience,
+                clockTolerance: this.config.oauthClockTolerance ?? 60,
+            })
+
+            const resourceServer = createOAuthResourceServer({
+                resource: `http://${host}:${String(port)}`,
+                authorizationServers: [this.config.oauthIssuer],
+                scopesSupported: [...SUPPORTED_SCOPES],
+            })
+
+            // Register RFC 9728 metadata endpoint
+            this.app.get(
+                resourceServer.getWellKnownPath(),
+                resourceServer.getMetadataHandler()
+            )
+
+            // Apply OAuth middleware
+            this.app.use(
+                createOAuthMiddleware({
+                    tokenValidator,
+                    resourceServer,
+                    publicPaths: ['/health', '/', '/.well-known/*'],
+                })
+            )
+
+            // OAuth error handler
+            this.app.use(oauthErrorHandler)
+
+            logger.info('OAuth 2.1 authentication enabled', {
+                module: 'HTTP',
+                issuer: this.config.oauthIssuer,
+                audience: this.config.oauthAudience,
+            })
+        } else if (authToken) {
+            // Simple bearer token authentication (non-OAuth)
             this.app.use(createAuthMiddleware(authToken))
         }
 
