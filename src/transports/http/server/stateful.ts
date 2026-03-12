@@ -17,8 +17,7 @@ export interface StatefulContext {
 }
 
 export function setupStateful(ctx: StatefulContext, app: Express, server: McpServer): ReturnType<typeof setInterval> {
-    let sessionSweepTimer: ReturnType<typeof setInterval> | null = null;
-        sessionSweepTimer = setInterval(() => {
+    const sessionSweepTimer = setInterval(() => {
             const now = Date.now()
             for (const [sid, lastActivity] of ctx.sessionLastActivity) {
                 const idleMs = now - lastActivity
@@ -212,5 +211,5 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
                 )
             }
         })
-    return sessionSweepTimer!;
+    return sessionSweepTimer;
 }

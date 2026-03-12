@@ -13,8 +13,8 @@
  * Config types and constants in ./types.ts.
  */
 
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler } from 'express'
