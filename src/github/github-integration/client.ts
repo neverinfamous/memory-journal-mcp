@@ -62,6 +62,9 @@ export class GitHubClient {
     getCached(key: string): unknown {
         const entry = this.apiCache.get(key)
         if (entry && Date.now() - entry.timestamp < CACHE_TTL_MS) {
+            // Map iteration order is insertion order: delete and re-set to make it newest (LRU)
+            this.apiCache.delete(key)
+            this.apiCache.set(key, entry)
             return entry.data
         }
         if (entry) {
@@ -73,6 +76,9 @@ export class GitHubClient {
     getCachedWithTtl(key: string, ttlMs: number): unknown {
         const entry = this.apiCache.get(key)
         if (entry && Date.now() - entry.timestamp < ttlMs) {
+            // Map iteration order is insertion order: delete and re-set to make it newest (LRU)
+            this.apiCache.delete(key)
+            this.apiCache.set(key, entry)
             return entry.data
         }
         if (entry) {
@@ -82,7 +88,16 @@ export class GitHubClient {
     }
 
     setCache(key: string, data: unknown): void {
+        this.apiCache.delete(key) // Ensure it is inserted at the end of iteration order
         this.apiCache.set(key, { data, timestamp: Date.now() })
+
+        // Prevent unbounded memory growth (Max 100 items)
+        if (this.apiCache.size > 100) {
+            const oldestKey = this.apiCache.keys().next().value
+            if (oldestKey !== undefined) {
+                this.apiCache.delete(oldestKey)
+            }
+        }
     }
 
     invalidateCache(prefix: string): void {

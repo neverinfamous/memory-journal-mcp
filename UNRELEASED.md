@@ -56,6 +56,8 @@
 
 ### Changed
 
+- **Performance Optimization (I/O & Memory)** — Refactored unbounded `SELECT * FROM memory_journal` queries across core handlers (`entries.ts`, `templates.ts`, `github.ts`, `core.ts`, `stats.ts`, `graph.ts`, `workflow.ts`) to use explicit `ENTRY_COLUMNS` projections, reducing I/O latency and WASM memory overhead.
+- **GitHub API Caching** — Implemented a bounded (max 100 items), TTL-aware LRU cache strategy in `GitHubClient` to prevent memory leaks on long-running instances.
 - **Core Handlers Modularized**:
   - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
   - **GitHub Integration** — Split monolithic `src/github/github-integration.ts` (1707 lines) into `src/github/github-integration/` containing focused modules (`auth.ts`, `repos.ts`, `issues.ts`, `pull-requests.ts`, `search.ts`, `copilot.ts`, `index.ts`).

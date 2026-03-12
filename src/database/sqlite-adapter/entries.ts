@@ -14,6 +14,16 @@ import type { CreateEntryInput } from '../schema.js'
 import type { ConnectionManager } from './connection.js'
 import type { TagsManager } from './tags.js'
 
+const ENTRY_COLUMNS =
+    'id, entry_type, content, timestamp, is_personal, significance_type, auto_context, deleted_at, ' +
+    'project_number, project_owner, issue_number, issue_url, pr_number, pr_url, pr_status, ' +
+    'workflow_run_id, workflow_name, workflow_status'
+
+const ALIASED_ENTRY_COLUMNS =
+    'm.id, m.entry_type, m.content, m.timestamp, m.is_personal, m.significance_type, m.auto_context, m.deleted_at, ' +
+    'm.project_number, m.project_owner, m.issue_number, m.issue_url, m.pr_number, m.pr_url, m.pr_status, ' +
+    'm.workflow_run_id, m.workflow_name, m.workflow_status'
+
 export class EntriesManager {
     static readonly IMPORTANCE_WEIGHTS = {
         significance: 0.3,
@@ -113,7 +123,7 @@ export class EntriesManager {
 
     getEntryById(id: number): JournalEntry | null {
         const db = this.ctx.ensureDb()
-        const result = db.exec(`SELECT * FROM memory_journal WHERE id = ? AND deleted_at IS NULL`, [id])
+        const result = db.exec(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ? AND deleted_at IS NULL`, [id])
 
         if (result.length === 0 || result[0]?.values.length === 0) return null
 
@@ -126,7 +136,7 @@ export class EntriesManager {
 
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null {
         const db = this.ctx.ensureDb()
-        const result = db.exec(`SELECT * FROM memory_journal WHERE id = ?`, [id])
+        const result = db.exec(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ?`, [id])
 
         if (result.length === 0 || result[0]?.values.length === 0) return null
 
@@ -197,7 +207,7 @@ export class EntriesManager {
 
     getRecentEntries(limit = 10, isPersonal?: boolean): JournalEntry[] {
         const db = this.ctx.ensureDb()
-        let sql = `SELECT * FROM memory_journal WHERE deleted_at IS NULL`
+        let sql = `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NULL`
         const params: unknown[] = []
 
         if (isPersonal !== undefined) {
@@ -217,7 +227,7 @@ export class EntriesManager {
     getEntriesPage(offset: number, limit: number): JournalEntry[] {
         const db = this.ctx.ensureDb()
         const result = db.exec(
-            `SELECT * FROM memory_journal WHERE deleted_at IS NULL ORDER BY id ASC LIMIT ? OFFSET ?`,
+            `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE deleted_at IS NULL ORDER BY id ASC LIMIT ? OFFSET ?`,
             [limit, offset]
         )
         if (result.length === 0) return []
@@ -321,7 +331,7 @@ export class EntriesManager {
         const { limit = 10, isPersonal, projectNumber, issueNumber, prNumber } = options
 
         let sql = `
-            SELECT * FROM memory_journal
+            SELECT ${ENTRY_COLUMNS} FROM memory_journal
             WHERE deleted_at IS NULL AND content LIKE ? ESCAPE '\\'
         `
         const params: unknown[] = [`%${sanitizeSearchQuery(query)}%`]
@@ -375,7 +385,7 @@ export class EntriesManager {
 
         if (tags && tags.length > 0) {
             sql = `
-                SELECT DISTINCT m.* FROM memory_journal m
+                SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS} FROM memory_journal m
                 JOIN entry_tags et ON m.id = et.entry_id
                 JOIN tags t ON et.tag_id = t.id
                 WHERE m.deleted_at IS NULL
@@ -386,7 +396,7 @@ export class EntriesManager {
             params.push(...tags)
         } else {
             sql = `
-                SELECT * FROM memory_journal m
+                SELECT ${ALIASED_ENTRY_COLUMNS} FROM memory_journal m
                 WHERE m.deleted_at IS NULL
                 AND m.timestamp >= ? AND m.timestamp <= ?
             `
