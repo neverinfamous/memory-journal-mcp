@@ -113,25 +113,16 @@ export function matchesCorsOrigin(origin: string, pattern: string): boolean {
 }
 
 /**
- * Validate a request origin against the CORS whitelist.
- * Returns { origin, isExactMatch } where:
- * - origin: the validated origin string to use in the header
- * - isExactMatch: true if the origin matched an exact (non-wildcard) pattern
- *
- * For exact matches, returns the whitelist pattern itself (not user input)
- * to break taint tracking. For wildcard matches, returns the normalized origin.
+ * Validate and normalize a request origin for wildcard subdomain matching.
+ * Parses via URL to reject malformed origins, "null", and non-HTTP schemes.
+ * Returns the normalized origin if it matches a wildcard pattern, or null.
  */
-function getAllowedCorsOrigin(
-    req: Request,
-    corsOrigins: string[],
-): { origin: string; isExactMatch: boolean } | null {
-    const originHeader = req.headers?.origin
-    if (!originHeader) return null
-    if (originHeader === 'null') return null
+function validateWildcardOrigin(origin: string, corsOrigins: string[]): string | null {
+    if (origin === 'null') return null
 
     let url: URL
     try {
-        url = new URL(originHeader)
+        url = new URL(origin)
     } catch {
         return null
     }
@@ -141,51 +132,15 @@ function getAllowedCorsOrigin(
     }
 
     const normalizedOrigin = `${url.protocol}//${url.host}`
-
-    for (const pattern of corsOrigins) {
-        if (matchesCorsOrigin(normalizedOrigin, pattern)) {
-            if (!pattern.startsWith('*.')) {
-                // Exact match: return the whitelist value (untainted by user input)
-                return { origin: pattern, isExactMatch: true }
-            }
-            // Wildcard subdomain match: must echo the specific origin
-            return { origin: normalizedOrigin, isExactMatch: false }
-        }
-    }
-
-    return null
+    const wildcardPatterns = corsOrigins.filter((p) => p.startsWith('*.'))
+    const isAllowed = wildcardPatterns.some((pattern) => matchesCorsOrigin(normalizedOrigin, pattern))
+    return isAllowed ? normalizedOrigin : null
 }
 
 /**
- * Set CORS headers based on configuration.
- * When credentials are enabled, the origin is validated and normalized
- * via URL parsing to prevent CORS misconfiguration attacks.
- *
- * For exact whitelist matches, the header value comes directly from the
- * config (not user input). For wildcard subdomain matches, credentials
- * are not set to prevent tainted origin + credentials combinations.
+ * Set common CORS response headers (methods, allowed headers, etc).
  */
-export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): void {
-    const corsOrigins = config.corsOrigins ?? ['*']
-    const isWildcard = corsOrigins.includes('*')
-
-    if (isWildcard) {
-        res.setHeader('Access-Control-Allow-Origin', '*')
-        // Never set Allow-Credentials with wildcard origin
-    } else {
-        const match = getAllowedCorsOrigin(req, corsOrigins)
-        if (!match) {
-            return
-        }
-        res.setHeader('Access-Control-Allow-Origin', match.origin)
-        res.setHeader('Vary', 'Origin')
-        // Only set credentials for exact whitelist matches (not wildcard-derived origins)
-        // This ensures the Allow-Origin value is never tainted by user input when credentials are enabled
-        if (config.corsAllowCredentials && match.isExactMatch) {
-            res.setHeader('Access-Control-Allow-Credentials', 'true')
-        }
-    }
-
+function setCorsCommonHeaders(res: Response): void {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
     res.setHeader(
         'Access-Control-Allow-Headers',
@@ -194,4 +149,57 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
     res.setHeader('Access-Control-Max-Age', '86400')
 }
+
+/**
+ * Set CORS headers based on configuration.
+ *
+ * Uses two fully separated code paths to prevent CORS misconfiguration:
+ * - **Exact match**: Origin value comes from the config whitelist (not user input).
+ *   Credentials are safe to send because the value is server-controlled.
+ * - **Wildcard subdomain match**: Origin is URL-validated and normalized from the request.
+ *   Credentials are NEVER sent on this path to prevent credential leaks.
+ */
+export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): void {
+    const corsOrigins = config.corsOrigins ?? ['*']
+
+    if (corsOrigins.includes('*')) {
+        // Wildcard: allow all origins, never send credentials
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        setCorsCommonHeaders(res)
+        return
+    }
+
+    const origin = req.headers?.origin
+
+    // Path 1: Exact whitelist match
+    // The result of Array.find() comes from the corsOrigins config array (untainted).
+    // Credentials are safe because the Access-Control-Allow-Origin value is server-controlled.
+    const exactPatterns = corsOrigins.filter((p) => !p.startsWith('*.'))
+    const exactMatch = exactPatterns.find((pattern) => pattern === origin)
+    if (exactMatch) {
+        res.setHeader('Access-Control-Allow-Origin', exactMatch)
+        res.setHeader('Vary', 'Origin')
+        if (config.corsAllowCredentials) {
+            res.setHeader('Access-Control-Allow-Credentials', 'true')
+        }
+        setCorsCommonHeaders(res)
+        return
+    }
+
+    // Path 2: Wildcard subdomain match (e.g., *.example.com)
+    // The origin value is derived from the request (URL-parsed and validated).
+    // Credentials are NEVER sent on this path — the origin is user-influenced.
+    if (origin) {
+        const validatedOrigin = validateWildcardOrigin(origin, corsOrigins)
+        if (validatedOrigin) {
+            res.setHeader('Access-Control-Allow-Origin', validatedOrigin)
+            res.setHeader('Vary', 'Origin')
+            setCorsCommonHeaders(res)
+            return
+        }
+    }
+
+    // No match — don't set any CORS headers
+}
+
 
