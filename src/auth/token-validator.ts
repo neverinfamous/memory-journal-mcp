@@ -38,7 +38,14 @@ export class TokenValidator {
         this.clockTolerance = config.clockTolerance ?? 60
         this.jwksCacheTtl = config.jwksCacheTtl ?? 3600
 
-        logger.info(`Token Validator initialized for issuer: ${this.issuer}`, {
+        const issuerHost = (() => {
+            try {
+                return new URL(this.issuer).hostname
+            } catch {
+                return '[configured]'
+            }
+        })()
+        logger.info(`Token Validator initialized for issuer: ${issuerHost}`, {
             module: 'AUTH',
             operation: 'init',
         })
@@ -89,7 +96,14 @@ export class TokenValidator {
             return this.jwks
         }
 
-        logger.info(`Fetching JWKS from: ${this.jwksUri}`, {
+        const jwksHost = (() => {
+            try {
+                return new URL(this.jwksUri).hostname
+            } catch {
+                return '[configured]'
+            }
+        })()
+        logger.info(`Fetching JWKS from: ${jwksHost}`, {
             module: 'AUTH',
             operation: 'jwks-fetch',
         })
@@ -112,7 +126,7 @@ export class TokenValidator {
         } catch (error) {
             const cause = error instanceof Error ? error : new Error(String(error))
 
-            logger.error(`Failed to fetch JWKS: ${this.jwksUri}`, {
+            logger.error('Failed to fetch JWKS', {
                 module: 'AUTH',
                 operation: 'jwks-fetch',
                 error: cause.message,

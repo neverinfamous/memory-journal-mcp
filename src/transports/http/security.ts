@@ -113,11 +113,18 @@ export function matchesCorsOrigin(origin: string, pattern: string): boolean {
 }
 
 /**
- * Validate and normalize a request origin against the CORS whitelist.
- * Parses via URL to reject malformed origins, "null", and non-HTTP schemes.
- * Returns the normalized origin string if allowed, or null if rejected.
+ * Validate a request origin against the CORS whitelist.
+ * Returns { origin, isExactMatch } where:
+ * - origin: the validated origin string to use in the header
+ * - isExactMatch: true if the origin matched an exact (non-wildcard) pattern
+ *
+ * For exact matches, returns the whitelist pattern itself (not user input)
+ * to break taint tracking. For wildcard matches, returns the normalized origin.
  */
-function getAllowedCorsOrigin(req: Request, corsOrigins: string[]): string | null {
+function getAllowedCorsOrigin(
+    req: Request,
+    corsOrigins: string[],
+): { origin: string; isExactMatch: boolean } | null {
     const originHeader = req.headers?.origin
     if (!originHeader) return null
     if (originHeader === 'null') return null
@@ -134,14 +141,29 @@ function getAllowedCorsOrigin(req: Request, corsOrigins: string[]): string | nul
     }
 
     const normalizedOrigin = `${url.protocol}//${url.host}`
-    const isAllowed = corsOrigins.some((pattern) => matchesCorsOrigin(normalizedOrigin, pattern))
-    return isAllowed ? normalizedOrigin : null
+
+    for (const pattern of corsOrigins) {
+        if (matchesCorsOrigin(normalizedOrigin, pattern)) {
+            if (!pattern.startsWith('*.')) {
+                // Exact match: return the whitelist value (untainted by user input)
+                return { origin: pattern, isExactMatch: true }
+            }
+            // Wildcard subdomain match: must echo the specific origin
+            return { origin: normalizedOrigin, isExactMatch: false }
+        }
+    }
+
+    return null
 }
 
 /**
  * Set CORS headers based on configuration.
  * When credentials are enabled, the origin is validated and normalized
  * via URL parsing to prevent CORS misconfiguration attacks.
+ *
+ * For exact whitelist matches, the header value comes directly from the
+ * config (not user input). For wildcard subdomain matches, credentials
+ * are not set to prevent tainted origin + credentials combinations.
  */
 export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): void {
     const corsOrigins = config.corsOrigins ?? ['*']
@@ -151,13 +173,15 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
         res.setHeader('Access-Control-Allow-Origin', '*')
         // Never set Allow-Credentials with wildcard origin
     } else {
-        const allowedOrigin = getAllowedCorsOrigin(req, corsOrigins)
-        if (!allowedOrigin) {
+        const match = getAllowedCorsOrigin(req, corsOrigins)
+        if (!match) {
             return
         }
-        res.setHeader('Access-Control-Allow-Origin', allowedOrigin)
+        res.setHeader('Access-Control-Allow-Origin', match.origin)
         res.setHeader('Vary', 'Origin')
-        if (config.corsAllowCredentials) {
+        // Only set credentials for exact whitelist matches (not wildcard-derived origins)
+        // This ensures the Allow-Origin value is never tainted by user input when credentials are enabled
+        if (config.corsAllowCredentials && match.isExactMatch) {
             res.setHeader('Access-Control-Allow-Credentials', 'true')
         }
     }
