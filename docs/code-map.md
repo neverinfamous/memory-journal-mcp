@@ -20,8 +20,7 @@ src/
 │   ├── core/
 │   │   ├── interfaces.ts           # IDatabaseAdapter, IDatabaseConnection interfaces
 │   │   ├── schema.ts               # DDL schema definitions (CREATE TABLE, FTS5 virtual table, sync triggers)
-│   │   ├── entry-columns.ts        # ENTRY_COLUMNS projection constant
-│   │   └── index.ts                # Barrel
+│   │   └── entry-columns.ts        # ENTRY_COLUMNS projection constant
 │   └── sqlite-adapter/
 │       ├── native-connection.ts    # NativeConnectionManager (better-sqlite3 + sqlite-vec extension)
 │       ├── entries/
@@ -142,7 +141,7 @@ src/
 | **relationships** | `relationships.ts` | 2 | `link_entries`, `visualize_relationships` |
 | **export** | `export.ts` | 1 | `export_entries` |
 | **admin** | `admin.ts` | 5 | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index` |
-| **backup** | `backup.ts` | 4 | `create_backup`, `list_backups`, `restore_backup`, `cleanup_backups` |
+| **backup** | `backup.ts` | 4 | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
 | **team** | `team.ts` | 3 | `team_create_entry`, `team_get_recent`, `team_search` |
 | **github** | `github.ts` → `github/` | 16 | See sub-handlers below |
 | | `github/read-tools.ts` | 5 | `get_github_issues`, `get_github_issue`, `get_github_prs`, `get_github_pr`, `get_github_context` |
@@ -190,8 +189,8 @@ src/
 | File | Prompts |
 |------|---------|
 | `index.ts` | Barrel + prompt assembly |
-| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `session-summary` |
-| `github.ts` | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`, `confirm-briefing` |
+| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary` |
+| `github.ts` | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker` |
 
 ---
 

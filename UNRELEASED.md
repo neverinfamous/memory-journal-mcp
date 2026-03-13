@@ -1,6 +1,6 @@
 ### Changed
 
-- **Code Map Audit Fixes** — Corrected handler→tool mapping table: swapped `update_entry`/`delete_entry` from core to admin, and `test_simple`/`list_tags` from admin to core to match actual source files. Fixed GitHub sub-handler tool counts (`issue-tools.ts` 4→2, `kanban-tools.ts` 1→2, removed non-existent `add_project_item`). Added missing `src/index.ts` to directory tree.
+- **Code Map Audit Fixes** — Corrected handler→tool mapping table: swapped `update_entry`/`delete_entry` from core to admin, and `test_simple`/`list_tags` from admin to core to match actual source files. Fixed GitHub sub-handler tool counts (`issue-tools.ts` 4→2, `kanban-tools.ts` 1→2, removed non-existent `add_project_item`). Added missing `src/index.ts` to directory tree. Fixed backup tool name `create_backup`→`backup_journal`. Moved `confirm-briefing` prompt from `github.ts` to `workflow.ts` listing (workflow: 9→10, github: 7→6). Removed phantom `database/core/index.ts` barrel from directory tree.
 
 - **README/DOCKER_README Audit Fixes** — Fixed tool filter `full` count (43→44) to match `tool-reference.md` source of truth. Fixed coverage badge URL encoding (`%78`→`%25`) and updated stale badge values (coverage 74%, tests 910). Updated stack diagram tool count (43→44). Corrected MCP annotations date reference (2025-11-25→2025-03-26) in README Security section.
 
