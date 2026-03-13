@@ -1,5 +1,20 @@
 ### Changed
 
+- **Code Quality Audit Fixes (Round 5)**
+  - Extracted `resolveGitHubRepo()` + `isResourceError()` guard helper into `resources/shared.ts`, eliminating ~60 lines of duplicated GitHub availability checks across 4 resource handlers and the briefing section
+  - Added debug logging to 4 silent `catch {}` blocks in `vector-search-manager.ts` (`removeEntry`, `rebuildIndex` deletion/embedding, `getStats`) for improved troubleshooting
+  - Extracted 5 inline API limits into named constants (`RESOURCE_ISSUE_LIMIT`, `RESOURCE_PR_LIMIT`, `RESOURCE_WORKFLOW_LIMIT`, `RESOURCE_STATUS_MILESTONE_LIMIT`, `RESOURCE_MILESTONE_LIMIT`) in `resources/github.ts`
+  - Parallelized 6 serial GitHub API calls in `github/status` resource handler using `Promise.allSettled()` for reduced latency
+
+### Changed
+
+- **Code Quality Audit Fixes (Round 4)**
+  - Added debug logging to 8 silent `catch {}` blocks across `github-section.ts`, `resources/github.ts`, `core.ts`, and `backup.ts` for improved debuggability
+  - Wrapped `github/milestones` and `milestones/{number}` resource handler returns in `{ data, annotations }` structure for consistency with other GitHub resource handlers
+  - Parallelized sequential `getCopilotReviewSummary()` API calls in `fetchCopilotReviews()` using `Promise.all()` for faster briefing generation
+
+### Changed
+
 - **Code Quality Audit Fixes (Round 3)**
   - Extracted duplicated `resolveIssueUrl()` logic from `core.ts` and `team.ts` into shared `utils/github-helpers.ts`
   - Replaced magic numbers with named constants: `INACTIVE_THRESHOLD_DAYS`, `MS_PER_DAY`, `MAX_TAGS_PER_PROJECT` in `analytics.ts`; `MERMAID_CONTENT_PREVIEW_LENGTH` in `relationships.ts`; `DEDUP_KEY_LENGTH` in `search.ts`; `LATEST_ENTRY_PREVIEW_LENGTH` in `server-instructions.ts`

@@ -12,6 +12,7 @@ import { resolveAuthor } from '../../utils/security-utils.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { resolveIssueUrl } from '../../utils/github-helpers.js'
 import { ErrorResponseFields } from './error-response-fields.js'
+import { logger } from '../../utils/logger.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
@@ -211,8 +212,12 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             ])
                             teamDb.flushSave()
                             sharedWithTeam = true
-                        } catch {
-                            // Team share failed — entry still saved to personal DB
+                        } catch (error) {
+                            logger.debug('Failed to share entry with team DB', {
+                                module: 'TOOL',
+                                operation: 'create-entry',
+                                error,
+                            })
                         }
                     }
 

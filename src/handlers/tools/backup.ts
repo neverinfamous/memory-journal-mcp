@@ -10,6 +10,7 @@ import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { relaxedNumber } from './schemas.js'
 import { ErrorResponseFields } from './error-response-fields.js'
+import { logger } from '../../utils/logger.js'
 
 // ============================================================================
 // Output Schemas
@@ -176,8 +177,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                                     message: 'Restore complete',
                                 },
                             })
-                        } catch {
-                            // Best-effort notification
+                        } catch (error) {
+                            logger.debug('Failed to send restore progress notification', {
+                                module: 'TOOL',
+                                operation: 'restore-backup',
+                                error,
+                            })
                         }
                     }
 

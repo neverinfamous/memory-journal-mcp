@@ -7,6 +7,8 @@
 
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { BriefingConfig } from '../../shared.js'
+import { resolveGitHubRepo, isResourceError } from '../../shared.js'
+import { logger } from '../../../../utils/logger.js'
 
 /**
  * Shape of the assembled GitHub context for the briefing.
@@ -53,10 +55,9 @@ export async function buildGitHubSection(
     if (!github) return null
 
     try {
-        const repoInfo = await github.getRepoInfo()
-        const owner = repoInfo.owner
-        const repo = repoInfo.repo
-        if (!owner || !repo) return null
+        const resolved = await resolveGitHubRepo(github)
+        if (isResourceError(resolved)) return null
+        const { owner, repo } = resolved
 
         const ciStatus = await fetchCiStatus(github, owner, repo, config)
         const { openIssues, openIssueList, openPRs, openPrList } =
@@ -70,7 +71,7 @@ export async function buildGitHubSection(
 
         return {
             repo: `${owner}/${repo}`,
-            branch: repoInfo.branch ?? null,
+            branch: resolved.branch,
             ci: ciStatus.status,
             openIssues,
             openPRs,
@@ -92,7 +93,12 @@ export async function buildGitHubSection(
             ...(workflowSummary ? { workflowSummary } : {}),
             ...(copilotReviews ? { copilotReviews } : {}),
         }
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to build GitHub briefing section', {
+            module: 'BRIEFING',
+            operation: 'github-section',
+            error,
+        })
         return null
     }
 }
@@ -291,8 +297,12 @@ async function fetchCopilotReviews(
         let changesRequested = 0
         let totalComments = 0
 
-        for (const pr of recentPrs.slice(0, 5)) {
-            const summary = await github.getCopilotReviewSummary(owner, repo, pr.number)
+        const summaries = await Promise.all(
+            recentPrs.slice(0, 5).map((pr) =>
+                github.getCopilotReviewSummary(owner, repo, pr.number)
+            )
+        )
+        for (const summary of summaries) {
             if (summary.state !== 'none') {
                 reviewed++
                 if (summary.state === 'approved') approved++
@@ -302,7 +312,12 @@ async function fetchCopilotReviews(
         }
 
         return reviewed > 0 ? { reviewed, approved, changesRequested, totalComments } : undefined
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to fetch Copilot reviews', {
+            module: 'BRIEFING',
+            operation: 'copilot-reviews',
+            error,
+        })
         return undefined
     }
 }

@@ -223,8 +223,12 @@ export class VectorSearchManager {
         try {
             await this.index.deleteItem(String(entryId))
             return true
-        } catch {
-            // Item might not exist in index
+        } catch (error) {
+            logger.debug('Vector removeEntry failed (item may not exist)', {
+                module: 'VectorSearch',
+                entityId: entryId,
+                error: error instanceof Error ? error.message : String(error),
+            })
             return false
         }
     }
@@ -256,8 +260,12 @@ export class VectorSearchManager {
             for (const item of indexItems) {
                 try {
                     await this.index.deleteItem(item.id)
-                } catch {
-                    // Ignore individual deletion errors
+                } catch (delError) {
+                    logger.debug('Failed to delete individual vector item during rebuild', {
+                        module: 'VectorSearch',
+                        entityId: item.id,
+                        error: delError instanceof Error ? delError.message : String(delError),
+                    })
                 }
             }
             if (indexItems.length > 0) {
@@ -300,7 +308,12 @@ export class VectorSearchManager {
                     batch.map(async (entry: JournalEntry) => {
                         try {
                             return { entry, embedding: await this.generateEmbedding(entry.content) }
-                        } catch {
+                        } catch (embError) {
+                            logger.debug('Failed to generate embedding for entry', {
+                                module: 'VectorSearch',
+                                entityId: entry.id,
+                                error: embError instanceof Error ? embError.message : String(embError),
+                            })
                             return { entry, embedding: null }
                         }
                     })
@@ -372,7 +385,11 @@ export class VectorSearchManager {
                 modelName: this.modelName,
                 dimensions: EMBEDDING_DIMENSIONS,
             }
-        } catch {
+        } catch (error) {
+            logger.debug('Failed to get vector index stats', {
+                module: 'VectorSearch',
+                error: error instanceof Error ? error.message : String(error),
+            })
             return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS }
         }
     }

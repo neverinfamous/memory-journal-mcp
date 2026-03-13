@@ -11,6 +11,68 @@ import type { McpIcon } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 
+// ============================================================================
+// GitHub Resource Guard
+// ============================================================================
+
+/** Successful result from resolveGitHubRepo */
+export interface GitHubRepoResolved {
+    owner: string
+    repo: string
+    branch: string | null
+    lastModified: string
+}
+
+/**
+ * Resolve GitHub owner/repo or return a ResourceResult error.
+ *
+ * Encapsulates the three-step guard pattern used by all GitHub resource
+ * handlers: check github integration → getRepoInfo → validate owner/repo.
+ *
+ * @returns Resolved repo info, or a ResourceResult error to return directly
+ */
+export async function resolveGitHubRepo(
+    github: GitHubIntegration | null | undefined
+): Promise<GitHubRepoResolved | ResourceResult> {
+    const lastModified = new Date().toISOString()
+
+    if (!github) {
+        return {
+            data: {
+                error: 'GitHub integration not available',
+                hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+            },
+            annotations: { lastModified },
+        }
+    }
+
+    const repoInfo = await github.getRepoInfo()
+    const owner = repoInfo.owner
+    const repo = repoInfo.repo
+
+    if (!owner || !repo) {
+        return {
+            data: {
+                error: 'Could not detect repository',
+                hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                ...(repoInfo.branch ? { branch: repoInfo.branch } : {}),
+            },
+            annotations: { lastModified },
+        }
+    }
+
+    return { owner, repo, branch: repoInfo.branch ?? null, lastModified }
+}
+
+/**
+ * Type guard: returns true if the result is a ResourceResult error.
+ */
+export function isResourceError(
+    result: GitHubRepoResolved | ResourceResult
+): result is ResourceResult {
+    return 'data' in result
+}
+
 /**
  * Configuration for the memory://briefing resource.
  * All values have sensible defaults — users opt-in via env vars or CLI flags.
