@@ -24,24 +24,29 @@
 
 ## 🎯 What This Does
 
-### Key Benefits
+### What Sets Us Apart
 
 **44 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
-- 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
-- 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
-- 🔗 **Knowledge graphs** - 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization
-- 🔍 **Triple search** - full-text, semantic (AI-powered via `@huggingface/transformers`), and date range
-- 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
-- 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
-- 🗄️ **Backup & restore** your journal data with one command
-- ⏰ **Automated maintenance** — scheduled backups, database optimization, and vector index rebuilds for long-running HTTP deployments
-- 🌐 **Dual HTTP transport** — Streamable HTTP (`/mcp`) for modern clients + legacy SSE (`/sse`) for backward compatibility, with stateless mode for serverless deployments
-- 👥 **Team collaboration** — separate public team database with author attribution, cross-DB search, and dedicated team tools
-- 🔄 **Session continuity** — a quick `/session-summary` captures your progress and feeds it into the next session's briefing
-- ⚡ **Code Mode** — execute complex, multi-step operations in a secure JavaScript sandbox. Exposes all 43 capabilities via `mj.*` API, reducing token overhead by up to 90%
-- 💡 **Rule & skill suggestions** — agents offer to codify your recurring patterns with your approval
-- ✅ **Deterministic error handling** — every tool returns structured `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions, no silent failures. Agents get actionable context instead of cryptic stack traces
+| Feature | Description |
+| --- | --- |
+| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments — no manual copy-pasting between sessions |
+| **GitHub Integration** | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers) |
+| **Knowledge Graphs** | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization |
+| **Triple Search** | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server |
+| **Code Mode** | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 44 capabilities via `mj.*` API |
+| **Configurable Briefing** | 11 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, and rules/skills awareness |
+| **Session Continuity** | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads |
+| **Reports & Analytics** | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data |
+| **Team Collaboration** | Separate public team database with author attribution, cross-DB search, and dedicated team tools |
+| **Backup & Restore** | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net |
+| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration |
+| **HTTP Streaming Transport** | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless |
+| **Production-Ready Security** | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution |
+| **Structured Error Handling** | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals |
+| **Rule & Skill Suggestions** | Agents offer to codify your recurring patterns into reusable rules and skills with your approval |
+| **Strict TypeScript** | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas |
+| **MCP 2025-03-26 Compliant** | Full protocol support with tool safety annotations, resource priorities, and progress notifications |
 
 ---
 
@@ -291,7 +296,6 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 | **Code Mode only** | Add `"args": ["--tool-filter", "codemode"]` (single tool, all capabilities) |
 | **Docker** | Replace `"command"` with `"docker"` and use `run -i --rm -v ./data:/app/data writenotenow/memory-journal-mcp:latest` as args |
 | **Team collaboration** | Add `"TEAM_DB_PATH": "./team.db"` to `env` |
-| **Force WASM Fallback** | Add `"args": ["--no-sqlite-native"]` to disable the native SQLite engine |
 
 Restart your MCP client and start journaling!
 
@@ -338,7 +342,6 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 - **SBOM Available** - Complete software bill of materials
 - **Supply Chain Attestations** - Verifiable build integrity
 - **Non-root Execution** - Minimal attack surface
-- **No Native Dependencies (Optional)** - Pure JS fallback reduces attack surface when native builds fail
 
 **Example with curl:**
 
@@ -570,10 +573,10 @@ flowchart TB
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
-│ Dual-Backend Architecture (Native SQLite & WASM Fallback)   │
+│ Native SQLite Engine                                        │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
 │  │ better-sqlite3  │  │ sqlite-vec      │  │ transformers│  │
-│  │ (Native SQLite)  │  │ (Vector Index)  │  │ (Embeddings)│  │
+│  │ (High-Perf I/O) │  │ (Vector Index)  │  │ (Embeddings)│  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
 │ SQLite Database with Hybrid Search                          │
@@ -589,8 +592,7 @@ flowchart TB
 
 ### Performance & Portability
 
-- **TypeScript + Pure JS Stack** - No native compilation, works everywhere
-- **Dual-Backend SQLite** - Uses `better-sqlite3` for native high-performance disk access with a zero-compilation `sql.js` WASM fallback
+- **TypeScript + Native SQLite** - High-performance `better-sqlite3` with synchronous I/O
 - **sqlite-vec** - Vector similarity search via SQLite extension
 - **@huggingface/transformers** - ML embeddings in JavaScript
 - **Lazy loading** - ML models load on first use, not startup
