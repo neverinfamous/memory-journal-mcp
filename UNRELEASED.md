@@ -10,6 +10,12 @@
 
 ### Changed
 
+- **Unified Audit Fixes**
+  - SHA-pinned `actions/checkout` in `auto-release.yml` to commit SHA, matching all other workflows
+  - Removed manually-maintained `LABEL version` from `Dockerfile` — Docker tags and OCI metadata already convey version info without drift risk
+
+
+
 - **Pass 2 Testing Fixes**
   - Improved `link_entries` error message when source or target entry doesn't exist — now returns `"One or both entries not found (from: X, to: Y)"` instead of raw SQLite `"FOREIGN KEY constraint failed"` error
   - `add_to_vector_index` now returns `error: "Failed to generate or store embedding"` when the vector operation fails, instead of `success: false` with no explanation
