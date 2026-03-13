@@ -14,6 +14,10 @@ import { z } from 'zod'
  *   export const MyOutputSchema = z.object({ ... }).extend(ErrorResponseFields.shape);
  */
 export const ErrorResponseFields = z.object({
+    error: z
+        .string()
+        .optional()
+        .describe('Human-readable error message'),
     code: z
         .string()
         .optional()

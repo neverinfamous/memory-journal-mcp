@@ -36,7 +36,10 @@ import {
     oauthErrorHandler,
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
-
+import {
+    hostHeaderValidation,
+    localhostHostValidation,
+} from '@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js'
 import { setupStateless } from './stateless.js'
 import { setupStateful } from './stateful.js'
 import { setupLegacySSE } from './legacy-sse.js'
@@ -90,6 +93,22 @@ export class HttpTransport {
                     'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
                 { module: 'HTTP' },
             )
+        }
+
+        // DNS rebinding protection (CVE-2025-66414)
+        // Applied when no auth is configured — defense-in-depth for local HTTP servers.
+        // When OAuth or bearer auth is active, auth already prevents unauthorized access.
+        if (!this.config.oauthEnabled && !authToken) {
+            const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+            this.app.use(
+                isLocalhost
+                    ? localhostHostValidation()
+                    : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
+            )
+            logger.info('DNS rebinding protection enabled (host header validation)', {
+                module: 'HTTP',
+                allowedHosts: isLocalhost ? ['localhost', '127.0.0.1', '[::1]'] : [host],
+            })
         }
 
         // Security headers middleware

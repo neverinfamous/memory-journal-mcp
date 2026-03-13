@@ -1,4 +1,20 @@
+### Added
+
+- **Test Coverage Improvement (73% → 87%)** — Added 10 new test files with 320+ tests, restoring coverage lost after unreleased changes:
+  - **Briefing resources**: `briefing-context-section.test.ts`, `briefing-user-message.test.ts`, `briefing-github-section.test.ts` — covers all 4 context builders, the user message formatter, and GitHub section aggregation
+  - **HTTP transport**: `http-stateful.test.ts`, `http-legacy-sse.test.ts`, `http-security.test.ts` — covers session sweep, POST/GET/DELETE /mcp routes, SSE lifecycle, rate limiting, CORS, and security headers
+  - **GitHub integration**: `pull-requests.test.ts` — covers all 5 PullRequestsManager methods including Copilot bot detection
+  - **Tool handlers**: `copilot-tools.test.ts`, `export-tools.test.ts` — covers get_copilot_reviews and export_entries handlers
+  - **Utilities**: `github-helpers.test.ts` — covers resolveIssueUrl with all branch paths
+  - Fixed existing test breakages from `hostHeaderValidation` middleware injection (middleware indices, mock response `.json()` method, `TokenValidator` import)
+
 ### Changed
+
+
+- **MCP Builder Compliance Audit Fixes**
+  - Added `error` field to `ErrorResponseFields` mixin — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions
+  - Added DNS rebinding protection (`hostHeaderValidation()`) to HTTP transport — applies MCP SDK middleware when no auth is configured as defense-in-depth against CVE-2025-66414
+  - SHA-pinned all GitHub Actions across 6 workflow files (`lint-and-test.yml`, `codeql.yml`, `publish-npm.yml`, `secrets-scanning.yml`, `security-update.yml`, `docker-publish.yml`) to prevent supply chain injection via force-pushed tags
 
 - **Performance Audit Fixes (Round 4)**
   - Enabled tsup `splitting: true` — shared code between `cli.js` and `index.js` is now extracted into a common chunk, reducing total dist size from 875 KB to 455 KB (~48% reduction, ~420 KB saved)
