@@ -8,6 +8,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
+import { logger } from '../../../../utils/logger.js'
 
 // ============================================================================
 // Journal Context
@@ -35,8 +36,7 @@ export function buildJournalContext(context: ResourceContext, config: BriefingCo
         }
     })
 
-    const stats = context.db.getStatistics('week')
-    const totalEntries = (stats as { totalEntries?: number }).totalEntries ?? 0
+    const totalEntries = context.db.getActiveEntryCount()
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
     return { totalEntries, latestEntries, lastModified }
@@ -61,7 +61,7 @@ export function buildTeamContext(
     if (!context.teamDb) return undefined
 
     try {
-        const teamStats = context.teamDb.getStatistics('week')
+        const teamTotalEntries = context.teamDb.getActiveEntryCount()
         const teamRecent = context.teamDb.getRecentEntries(1)
         const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
         const teamContent = teamLatestEntry
@@ -71,7 +71,7 @@ export function buildTeamContext(
             ? `#${String(teamLatestEntry['id'])}: ${teamContent.slice(0, TEAM_PREVIEW_LENGTH)}${teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''}`
             : null
         const teamInfo = {
-            totalEntries: (teamStats as { totalEntries?: number }).totalEntries ?? 0,
+            totalEntries: teamTotalEntries,
             latestPreview: teamLatest,
         }
 
@@ -95,7 +95,8 @@ export function buildTeamContext(
         }
 
         return { teamInfo, teamLatestEntries }
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to build team context', { module: 'BRIEFING', operation: 'team-context', error: error instanceof Error ? error.message : String(error) })
         return undefined
     }
 }
@@ -142,7 +143,8 @@ export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile
             sizeKB: Math.round(stat.size / 1024),
             lastModified: agoStr,
         }
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to read rules file', { module: 'BRIEFING', operation: 'rules-file', error: error instanceof Error ? error.message : String(error) })
         return undefined
     }
 }
@@ -158,7 +160,8 @@ export function buildSkillsDirInfo(skillsDirPath: string | undefined): SkillsDir
             count: skillDirs.length,
             names: skillDirs.map((d) => d.name),
         }
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to read skills directory', { module: 'BRIEFING', operation: 'skills-dir', error: error instanceof Error ? error.message : String(error) })
         return undefined
     }
 }

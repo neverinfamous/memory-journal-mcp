@@ -89,6 +89,7 @@ export interface IDatabaseAdapter {
     createEntry(input: CreateEntryInput): JournalEntry
     getEntryById(id: number): JournalEntry | null
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null
+    getEntriesByIds(ids: number[]): Map<number, JournalEntry>
     calculateImportance(entryId: number): ImportanceResult
     getRecentEntries(limit?: number, isPersonal?: boolean): JournalEntry[]
     getEntriesPage(offset: number, limit: number): JournalEntry[]

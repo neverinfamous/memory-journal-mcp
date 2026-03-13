@@ -1,11 +1,11 @@
 /**
  * Memory Journal MCP Server - Vector Search Manager
  *
- * Semantic search using @xenova/transformers for embeddings
+ * Semantic search using @huggingface/transformers for embeddings
  * and vectra for vector indexing.
  */
 
-// @xenova/transformers is loaded lazily via dynamic import() in initialize()
+// @huggingface/transformers is loaded lazily via dynamic import() in initialize()
 // to avoid 1.5s cold-start penalty from eagerly loading the module.
 // vectra is also loaded lazily via dynamic import() to avoid 0.9s cold-start penalty.
 import type { LocalIndex } from 'vectra'
@@ -78,9 +78,9 @@ export class VectorSearchManager {
             // Load embedding model (downloads on first use, ~23MB)
             // Dynamic import avoids 1.5s cold-start penalty from eagerly loading the module
             logger.info(`Loading embedding model: ${this.modelName}`, { module: 'VectorSearch' })
-            const { pipeline } = await import('@xenova/transformers')
+            const { pipeline } = await import('@huggingface/transformers')
             this.embedder = await pipeline('feature-extraction', this.modelName, {
-                quantized: true, // Use quantized model for faster inference
+                dtype: 'q8', // Quantized int8 for faster inference and smaller model size
             })
             logger.info('Embedding model loaded', { module: 'VectorSearch' })
 
@@ -253,41 +253,23 @@ export class VectorSearchManager {
         // Step 1: Get total entry count for progress reporting
         const totalEntries = db.getActiveEntryCount()
 
-        // Step 2: Clean up existing index — delete all items for clean re-index
-        // (No orphan detection needed since everything is re-inserted from scratch)
+        // Step 2: Clean-wipe existing index directory and recreate from scratch.
+        // This is O(1) vs the old per-item sequential deletion which was O(n).
         try {
-            const indexItems = await this.index.listItems()
-            for (const item of indexItems) {
-                try {
-                    await this.index.deleteItem(item.id)
-                } catch (delError) {
-                    logger.debug('Failed to delete individual vector item during rebuild', {
-                        module: 'VectorSearch',
-                        entityId: item.id,
-                        error: delError instanceof Error ? delError.message : String(delError),
-                    })
-                }
-            }
-            if (indexItems.length > 0) {
-                logger.info(`Cleared ${String(indexItems.length)} items from vector index`, {
-                    module: 'VectorSearch',
-                })
-            }
-        } catch (indexError) {
-            // Index files are corrupted — recreate from scratch
-            logger.warning('Vector index corrupted, recreating...', {
-                module: 'VectorSearch',
-                error: indexError instanceof Error ? indexError.message : String(indexError),
-            })
-            // Delete and recreate the vectra index directory
             if (fs.existsSync(this.indexPath)) {
                 await fs.promises.rm(this.indexPath, { recursive: true, force: true })
-                await fs.promises.mkdir(this.indexPath, { recursive: true })
             }
+            await fs.promises.mkdir(this.indexPath, { recursive: true })
             const { LocalIndex: LI } = await import('vectra')
             this.index = new LI(this.indexPath)
             await this.index.createIndex()
-            logger.info('Recreated vector index after corruption', { module: 'VectorSearch' })
+            logger.info('Cleared and recreated vector index for rebuild', { module: 'VectorSearch' })
+        } catch (cleanError) {
+            logger.error('Failed to recreate vector index directory', {
+                module: 'VectorSearch',
+                error: cleanError instanceof Error ? cleanError.message : String(cleanError),
+            })
+            throw cleanError
         }
 
         // Step 4: Re-index all entries using paginated fetch

@@ -33,7 +33,7 @@
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
 - 🔗 **Knowledge graphs** - 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization
-- 🔍 **Triple search** - full-text, semantic (AI-powered via `@xenova/transformers`), and date range
+- 🔍 **Triple search** - full-text, semantic (AI-powered via `@huggingface/transformers`), and date range
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
@@ -594,7 +594,7 @@ flowchart TB
 - **TypeScript + Pure JS Stack** - No native compilation, works everywhere
 - **Dual-Backend SQLite** - Uses `better-sqlite3` for native high-performance disk access with a zero-compilation `sql.js` WASM fallback
 - **vectra** - Vector similarity search without native dependencies
-- **@xenova/transformers** - ML embeddings in JavaScript
+- **@huggingface/transformers** - ML embeddings in JavaScript
 - **Lazy loading** - ML models load on first use, not startup
 
 ### Performance Benchmarks

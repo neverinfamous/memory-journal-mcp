@@ -6,7 +6,7 @@ export const DatabaseAdapterFactory = {
     /**
      * Creates and returns the SQLite database adapter
      */
-    async create(dbPath: string): Promise<IDatabaseAdapter> {
+    create(dbPath: string): Promise<IDatabaseAdapter> {
         logger.info('Initializing SQLite database backend', { module: 'DatabaseAdapterFactory', dbPath })
         return Promise.resolve(new DatabaseAdapter(dbPath))
     }

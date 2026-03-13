@@ -144,7 +144,7 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 - ✅ **No external services**: All processing happens locally
 - ✅ **No telemetry**: No data sent to external servers
 - ✅ **Full data ownership**: SQLite database stays on your machine
-- ✅ **Semantic search**: ML model runs locally via `@xenova/transformers`
+- ✅ **Semantic search**: ML model runs locally via `@huggingface/transformers`
 
 ### **Context Security**
 

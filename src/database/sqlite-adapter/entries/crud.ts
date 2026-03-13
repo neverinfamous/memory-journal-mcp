@@ -72,6 +72,39 @@ export function getEntryById(context: EntriesSharedContext, id: number): Journal
     return rowToEntry(tagsMgr, row)
 }
 
+export function getEntriesByIds(context: EntriesSharedContext, ids: number[]): Map<number, JournalEntry> {
+    const result = new Map<number, JournalEntry>()
+    if (ids.length === 0) return result
+
+    const { db, tagsMgr } = context
+    const placeholders = ids.map(() => '?').join(', ')
+    const stmt = db.prepare(
+        `SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id IN (${placeholders}) AND deleted_at IS NULL`
+    )
+    const rows = stmt.all(ids)
+
+    if (rows.length === 0) return result
+
+    const entries = rows.map((r) => {
+        const p = r as Partial<JournalEntry>
+        return {
+            ...p,
+            isPersonal: Boolean(p.isPersonal),
+            tags: [],
+        } as JournalEntry
+    })
+
+    const entryIds = entries.map((e) => e.id)
+    const tagsMap = tagsMgr.batchGetTagsForEntries(entryIds)
+
+    for (const entry of entries) {
+        entry.tags = tagsMap.get(entry.id) ?? []
+        result.set(entry.id, entry)
+    }
+
+    return result
+}
+
 export function getEntryByIdIncludeDeleted(context: EntriesSharedContext, id: number): JournalEntry | null {
     const { db, tagsMgr } = context
     const stmt = db.prepare(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ?`)

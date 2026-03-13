@@ -11,6 +11,9 @@ import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-co
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
 
+/** Milliseconds in one day */
+const MS_PER_DAY = 86_400_000
+
 /**
  * Get workflow prompt definitions
  */
@@ -51,7 +54,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             arguments: [],
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const today = new Date().toISOString().split('T')[0] ?? ''
-                const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0] ?? ''
+                const yesterday = new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
                 const entries = db.searchByDateRange(yesterday, today)
 
@@ -83,7 +86,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 const days = parseInt(args['days'] ?? '14', 10)
                 const endDate = new Date().toISOString().split('T')[0] ?? ''
                 const startDate =
-                    new Date(Date.now() - days * 86400000).toISOString().split('T')[0] ?? ''
+                    new Date(Date.now() - days * MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
                 const entries = db.searchByDateRange(startDate, endDate)
 
@@ -116,7 +119,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const endDate = new Date().toISOString().split('T')[0] ?? ''
                 const startDate =
-                    new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0] ?? ''
+                    new Date(Date.now() - 7 * MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
                 const entries = db.searchByDateRange(startDate, endDate)
 

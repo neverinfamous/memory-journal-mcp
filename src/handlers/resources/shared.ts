@@ -21,6 +21,8 @@ export interface GitHubRepoResolved {
     repo: string
     branch: string | null
     lastModified: string
+    /** Narrowed non-null reference — safe to use without `!` after guard */
+    github: GitHubIntegration
 }
 
 /**
@@ -61,7 +63,7 @@ export async function resolveGitHubRepo(
         }
     }
 
-    return { owner, repo, branch: repoInfo.branch ?? null, lastModified }
+    return { owner, repo, branch: repoInfo.branch ?? null, lastModified, github }
 }
 
 /**
@@ -201,4 +203,13 @@ export function transformEntryRow(row: Record<string, unknown>): Record<string, 
         workflowName: row['workflow_name'] ?? null,
         workflowStatus: row['workflow_status'] ?? null,
     }
+}
+
+/**
+ * Calculate milestone completion percentage from open/closed issue counts.
+ * Shared helper to avoid duplicated logic across resource handlers.
+ */
+export function milestoneCompletionPct(openIssues: number, closedIssues: number): number {
+    const total = openIssues + closedIssues
+    return total > 0 ? Math.round((closedIssues / total) * 100) : 0
 }

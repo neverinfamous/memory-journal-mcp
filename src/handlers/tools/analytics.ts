@@ -232,7 +232,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             total_entries: 0,
                             projects: [],
                             inactive_projects: [],
-                            inactiveThresholdDays: 7,
+                            inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                             time_distribution: [],
                             message: `No projects found with at least ${String(input.min_entries)} entries`,
                         }
@@ -319,7 +319,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             top_tags: projectTags[p['project_number'] as number] ?? [],
                         })),
                         inactive_projects: inactiveProjects,
-                        inactiveThresholdDays: 7,
+                        inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                         time_distribution: distribution,
                     }
                 } catch (err) {

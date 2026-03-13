@@ -6,7 +6,7 @@
 
 import { ICON_GITHUB, ICON_ANALYTICS, ICON_MILESTONE } from '../../constants/icons.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
-import { resolveGitHubRepo, isResourceError } from './shared.js'
+import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from './shared.js'
 import { logger } from '../../utils/logger.js'
 
 // ============================================================================
@@ -44,17 +44,17 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const resolved = await resolveGitHubRepo(context.github)
                 if (isResourceError(resolved)) return resolved
-                const { owner, repo, branch, lastModified } = resolved
+                const { owner, repo, branch, lastModified, github } = resolved
 
                 // Parallelize independent API calls for performance
                 const [commitResult, issuesResult, prsResult, workflowsResult, kanbanResult, milestoneResult] =
                     await Promise.allSettled([
-                        context.github!.getRepoContext(),
-                        context.github!.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT),
-                        context.github!.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT),
-                        context.github!.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT),
-                        context.github!.getProjectKanban(owner, 1, repo),
-                        context.github!.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT),
+                        github.getRepoContext(),
+                        github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT),
+                        github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT),
+                        github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT),
+                        github.getProjectKanban(owner, 1, repo),
+                        github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT),
                     ])
 
                 // Extract results with safe defaults
@@ -145,8 +145,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     | null = null
                 if (milestoneResult.status === 'fulfilled' && milestoneResult.value.length > 0) {
                     milestoneSummary = milestoneResult.value.map((ms) => {
-                        const total = ms.openIssues + ms.closedIssues
-                        const pct = total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                        const pct = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
                         return {
                             number: ms.number,
                             title: ms.title,
@@ -204,13 +203,13 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const resolved = await resolveGitHubRepo(context.github)
                 if (isResourceError(resolved)) return resolved
-                const { owner, repo, lastModified } = resolved
+                const { owner, repo, lastModified, github } = resolved
 
-                const stats = await context.github!.getRepoStats(owner, repo)
+                const stats = await github.getRepoStats(owner, repo)
 
                 let traffic: { clones14d: number; views14d: number } | null = null
                 try {
-                    const trafficData = await context.github!.getTrafficData(owner, repo)
+                    const trafficData = await github.getTrafficData(owner, repo)
                     if (trafficData) {
                         traffic = {
                             clones14d: trafficData.clones.total,
@@ -252,13 +251,11 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const resolved = await resolveGitHubRepo(context.github)
                 if (isResourceError(resolved)) return resolved
-                const { owner, repo, lastModified } = resolved
+                const { owner, repo, lastModified, github } = resolved
 
-                const milestones = await context.github!.getMilestones(owner, repo, 'open', RESOURCE_MILESTONE_LIMIT)
+                const milestones = await github.getMilestones(owner, repo, 'open', RESOURCE_MILESTONE_LIMIT)
                 const milestonesWithProgress = milestones.map((ms) => {
-                    const total = ms.openIssues + ms.closedIssues
-                    const completionPercentage =
-                        total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                    const completionPercentage = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
                     return { ...ms, completionPercentage }
                 })
 
@@ -299,9 +296,9 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
 
                 const resolved = await resolveGitHubRepo(context.github)
                 if (isResourceError(resolved)) return resolved
-                const { owner, repo } = resolved
+                const { owner, repo, github } = resolved
 
-                const milestone = await context.github!.getMilestone(owner, repo, milestoneNumber)
+                const milestone = await github.getMilestone(owner, repo, milestoneNumber)
                 if (!milestone) {
                     return {
                         data: { error: `Milestone #${String(milestoneNumber)} not found` },
@@ -309,9 +306,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const total = milestone.openIssues + milestone.closedIssues
-                const completionPercentage =
-                    total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+                const completionPercentage = milestoneCompletionPct(milestone.openIssues, milestone.closedIssues)
 
                 return {
                     data: {

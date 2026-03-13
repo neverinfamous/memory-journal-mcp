@@ -269,9 +269,13 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.similarity_threshold ?? 0.25
                     )
 
+                    // Batch-fetch all entries in a single query (instead of N+1 getEntryById calls)
+                    const entryIds = results.map((r) => r.entryId)
+                    const entriesMap = db.getEntriesByIds(entryIds)
+
                     const entries = results
                         .map((r) => {
-                            const entry = db.getEntryById(r.entryId)
+                            const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
                             return {
                                 ...entry,
@@ -334,6 +338,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 // Helpers
 // ============================================================================
 
+/** Number of leading characters used as deduplication key */
+const DEDUP_KEY_LENGTH = 200
+
 interface EntryWithSource {
     content: string
     timestamp: string
@@ -358,7 +365,6 @@ function mergeAndDedup(
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     )
 
-    const DEDUP_KEY_LENGTH = 200
     for (const entry of all) {
         // Deduplicate by content (same entry shared to team)
         const key = entry.content.slice(0, DEDUP_KEY_LENGTH)

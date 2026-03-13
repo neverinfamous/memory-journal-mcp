@@ -7,7 +7,7 @@
 
 import type { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import type { BriefingConfig } from '../../shared.js'
-import { resolveGitHubRepo, isResourceError } from '../../shared.js'
+import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 
 /**
@@ -59,11 +59,14 @@ export async function buildGitHubSection(
         if (isResourceError(resolved)) return null
         const { owner, repo } = resolved
 
-        const ciStatus = await fetchCiStatus(github, owner, repo, config)
-        const { openIssues, openIssueList, openPRs, openPrList } =
-            await fetchIssuesAndPrs(github, owner, repo, config)
-        const milestones = await fetchMilestones(github, owner, repo)
-        const insights = await fetchInsights(github, owner, repo)
+        // Parallel fetch — all four calls are independent and each has its own error handling
+        const [ciStatus, issuesAndPrs, milestones, insights] = await Promise.all([
+            fetchCiStatus(github, owner, repo, config),
+            fetchIssuesAndPrs(github, owner, repo, config),
+            fetchMilestones(github, owner, repo),
+            fetchInsights(github, owner, repo),
+        ])
+        const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
         const copilotReviews = config.copilotReviews
             ? await fetchCopilotReviews(github, owner, repo)
@@ -182,7 +185,8 @@ async function fetchCiStatus(
         }
 
         return { status, workflowSummary }
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to fetch CI status', { module: 'BRIEFING', operation: 'ci-status', error: error instanceof Error ? error.message : String(error) })
         return { status: 'unknown' }
     }
 }
@@ -229,7 +233,8 @@ async function fetchIssuesAndPrs(
                 : undefined
 
         return { openIssues, openPRs, openIssueList, openPrList }
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to fetch issues and PRs', { module: 'BRIEFING', operation: 'issues-prs', error: error instanceof Error ? error.message : String(error) })
         return { openIssues: 0, openPRs: 0 }
     }
 }
@@ -242,15 +247,15 @@ async function fetchMilestones(
     try {
         const msList = await github.getMilestones(owner, repo, 'open', 3)
         return msList.map((m) => {
-            const total = m.closedIssues + m.openIssues
-            const pct = total > 0 ? Math.round((m.closedIssues / total) * 100) : 0
+            const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
             return {
                 title: m.title,
                 progress: `${String(pct)}%`,
                 dueOn: m.dueOn,
             }
         })
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to fetch milestones', { module: 'BRIEFING', operation: 'milestones', error: error instanceof Error ? error.message : String(error) })
         return []
     }
 }
@@ -275,12 +280,13 @@ async function fetchInsights(
                 result.clones14d = trafficData.clones.total
                 result.views14d = trafficData.views.total
             }
-        } catch {
-            // Traffic data unavailable (requires push access)
+        } catch (error) {
+            logger.debug('Traffic data unavailable (requires push access)', { module: 'BRIEFING', operation: 'traffic', error: error instanceof Error ? error.message : String(error) })
         }
 
         return result
-    } catch {
+    } catch (error) {
+        logger.debug('Failed to fetch repo insights', { module: 'BRIEFING', operation: 'insights', error: error instanceof Error ? error.message : String(error) })
         return undefined
     }
 }

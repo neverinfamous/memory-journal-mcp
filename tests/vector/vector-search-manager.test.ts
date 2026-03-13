@@ -1,7 +1,7 @@
 /**
  * VectorSearchManager Tests
  *
- * Tests VectorSearchManager with mocked @xenova/transformers pipeline
+ * Tests VectorSearchManager with mocked @huggingface/transformers pipeline
  * and vectra LocalIndex. No real model loading or file I/O needed.
  */
 
@@ -52,7 +52,7 @@ vi.mock('vectra', () => ({
     },
 }))
 
-vi.mock('@xenova/transformers', () => ({
+vi.mock('@huggingface/transformers', () => ({
     pipeline: vi.fn().mockResolvedValue(mockEmbedderFn),
 }))
 
@@ -63,6 +63,11 @@ vi.mock('node:fs', async (importOriginal) => {
         existsSync: vi.fn().mockReturnValue(true),
         mkdirSync: vi.fn(),
         rmSync: vi.fn(),
+        promises: {
+            ...(real['promises'] as Record<string, unknown>),
+            rm: vi.fn().mockResolvedValue(undefined),
+            mkdir: vi.fn().mockResolvedValue(undefined),
+        },
     }
 })
 
@@ -299,16 +304,10 @@ describe('VectorSearchManager', () => {
             expect(mockInsertItem).toHaveBeenCalledTimes(2)
         })
 
-        it('should handle orphan cleanup', async () => {
+        it('should wipe and recreate index directory instead of per-item deletion', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
-
-            mockListItems
-                .mockResolvedValueOnce([{ id: '999' }])
-                .mockResolvedValueOnce([])
-                .mockResolvedValueOnce([])
-
-            mockDeleteItem.mockResolvedValue(undefined)
+            mockListItems.mockResolvedValue([])
             mockInsertItem.mockResolvedValue(undefined)
 
             const mockDb = {
@@ -318,7 +317,11 @@ describe('VectorSearchManager', () => {
 
             const indexed = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
             expect(indexed).toBe(1)
-            expect(mockDeleteItem).toHaveBeenCalledWith('999')
+            // Should NOT call deleteItem (old per-item approach)
+            expect(mockDeleteItem).not.toHaveBeenCalled()
+            // Should recreate the index via createIndex
+            // (called once during init + once during rebuild)
+            expect(mockCreateIndex).toHaveBeenCalled()
         })
 
         it('should return 0 when index not available', async () => {
@@ -331,14 +334,10 @@ describe('VectorSearchManager', () => {
             expect(indexed).toBe(0)
         })
 
-        it('should recover from corrupted index', async () => {
+        it('should still rebuild successfully after directory wipe', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
-
-            // First listItems call throws (corrupted index)
-            mockListItems.mockRejectedValueOnce(new Error('Corrupted index'))
-            // After recreation, listItems returns empty
-            mockListItems.mockResolvedValueOnce([])
+            mockListItems.mockResolvedValue([])
             mockInsertItem.mockResolvedValue(undefined)
 
             const mockDb = {
@@ -379,7 +378,7 @@ describe('VectorSearchManager', () => {
 
     describe('initialize error', () => {
         it('should rethrow pipeline errors', async () => {
-            const { pipeline: pipelineMock } = await import('@xenova/transformers')
+            const { pipeline: pipelineMock } = await import('@huggingface/transformers')
             ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
                 new Error('Model not found')
             )

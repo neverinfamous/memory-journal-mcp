@@ -1,5 +1,38 @@
 ### Changed
 
+- **Build Tooling** — Replaced `tsc` with `tsup` (esbuild) for production builds. Output reduced from 372 files (1.04 MB) to 6 files (875 KB) with tree-shaking. Build speed: ~9s vs 19s. Type checking remains as a separate `npm run typecheck` step (`tsc --noEmit`).
+- **ML Embedding Library** — Migrated from `@xenova/transformers` v2 (archived, unmaintained) to `@huggingface/transformers` v3.8.1 (official Hugging Face org, actively maintained). API change: `quantized: true` → `dtype: 'q8'`. Same `Xenova/all-MiniLM-L6-v2` model, same embedding quality. Updated README, SECURITY, and DOCKER_README references.
+
+- **Performance Audit Fixes (Round 2)**
+  - Replaced N+1 `getEntryById` calls in `semantic_search` handler with batch `getEntriesByIds()` — single `WHERE id IN(…)` query + `batchGetTagsForEntries` instead of N separate lookups
+  - Replaced per-item sequential `deleteItem()` loop in `rebuildIndex()` with O(1) directory wipe + recreate — eliminates O(n) serial file I/O during vector index rebuilds
+  - Parallelized 4 independent GitHub API calls (`fetchCiStatus`, `fetchIssuesAndPrs`, `fetchMilestones`, `fetchInsights`) in briefing resource using `Promise.all()` — reduces cold-load latency from additive to max of the 4 calls
+
+- **Performance Audit Fixes**
+  - Replaced `getStatistics('week')` with `getActiveEntryCount()` in `buildJournalContext()` and `buildTeamContext()` — briefing only needs `totalEntries`, not the full stat breakdown (~5× fewer queries per session start)
+  - Replaced N+1 exist-check loop in `mergeTags()` with bulk pre-fetch + batch `INSERT OR IGNORE` — O(1) vs O(N) queries during tag merge operations
+
+### Changed
+
+- **Code Quality Audit Fixes (Round 8)**
+  - Extracted `milestoneCompletionPct()` helper into `resources/shared.ts`, replacing 4 inline duplicate calculations across `resources/github.ts` (×3) and `briefing/github-section.ts` (×1)
+  - Added `logger.debug()` to 8 empty `catch {}` blocks in `briefing/context-section.ts` (team context, rules file, skills dir) and `briefing/github-section.ts` (CI status, issues/PRs, milestones, traffic, insights) for improved troubleshooting
+
+### Changed
+
+- **Code Quality Audit Fixes (Round 7)**
+  - Replaced two remaining `inactiveThresholdDays: 7` literals with `INACTIVE_THRESHOLD_DAYS` constant in `analytics.ts`
+  - Hoisted `DEDUP_KEY_LENGTH` from local function scope to module-level named constant in `search.ts`
+  - Removed misleading `async` keyword from `DatabaseAdapterFactory.create()` in `adapter-factory.ts` (synchronous constructor wrapped in `Promise.resolve()`)
+
+### Changed
+
+- **Code Quality Audit Fixes (Round 6)**
+  - Eliminated 10 `@typescript-eslint/no-non-null-assertion` lint errors in `resources/github.ts` by threading the narrowed `github` instance through `GitHubRepoResolved` from `resolveGitHubRepo()` — downstream handlers now destructure `github` instead of using `context.github!`
+  - Extracted `MS_PER_DAY` constant in `prompts/workflow.ts`, replacing 3 inline `86400000` magic values
+
+### Changed
+
 - **Code Quality Audit Fixes (Round 5)**
   - Extracted `resolveGitHubRepo()` + `isResourceError()` guard helper into `resources/shared.ts`, eliminating ~60 lines of duplicated GitHub availability checks across 4 resource handlers and the briefing section
   - Added debug logging to 4 silent `catch {}` blocks in `vector-search-manager.ts` (`removeEntry`, `rebuildIndex` deletion/embedding, `getStats`) for improved troubleshooting

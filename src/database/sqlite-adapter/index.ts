@@ -62,6 +62,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.getEntryByIdIncludeDeleted(id)
     }
 
+    getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
+        return this.entriesMgr.getEntriesByIds(ids)
+    }
+
     calculateImportance(entryId: number): ImportanceResult {
         return this.entriesMgr.calculateImportance(entryId)
     }

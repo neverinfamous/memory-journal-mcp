@@ -26,7 +26,7 @@
 - 🧠 **Dynamic Context Management** - AI agents automatically query your project history and create entries at the right moments
 - 📝 **Auto-capture Git/GitHub context** (commits, branches, issues, milestones, PRs, projects)
 - 🔗 **Knowledge graphs** - 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization
-- 🔍 **Triple search** - full-text, semantic (AI-powered via `@xenova/transformers`), and date range
+- 🔍 **Triple search** - full-text, semantic (AI-powered via `@huggingface/transformers`), and date range
 - 📊 **Generate reports** (standups, retrospectives, PR summaries, status)
 - 📈 **Track repository insights** — stars, forks, clones, views, top referrers, and popular paths (14-day rolling)
 - 🗄️ **Backup & restore** your journal data with one command
@@ -435,7 +435,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - **Node.js 24 on Alpine Linux** - Minimal footprint (~150MB compressed)
 - **Dual-Backend Architecture** - Native `better-sqlite3` performance with pure JS `sql.js` fallback
 - **vectra** - Vector similarity search without native dependencies
-- **@xenova/transformers** - ML embeddings in JavaScript
+- **@huggingface/transformers** - ML embeddings in JavaScript
 - **Faster Startup** - Lazy loading of ML models
 - **Production/Stable** - Deterministic error handling (`{success, error, code, category, suggestion, recoverable}` on every tool) and automatic migrations
 

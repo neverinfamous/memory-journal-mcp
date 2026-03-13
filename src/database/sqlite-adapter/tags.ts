@@ -91,14 +91,26 @@ export class TagsManager {
 
         const entriesResult = db.exec('SELECT entry_id FROM entry_tags WHERE tag_id = ?', [sourceTagId])
         const entryIds = entriesResult[0]?.values.map((v) => v[0] as number) ?? []
-        let entriesUpdated = 0
+        // Pre-fetch entries already linked to targetTag in one query (O(1) vs O(N))
+        const existingResult = db.exec(
+            'SELECT entry_id FROM entry_tags WHERE tag_id = ?',
+            [targetTagId]
+        )
+        const existingEntryIds = new Set(
+            (existingResult[0]?.values ?? []).map((v) => v[0] as number)
+        )
 
-        for (const entryId of entryIds) {
-            const existing = db.exec('SELECT 1 FROM entry_tags WHERE entry_id = ? AND tag_id = ?', [entryId, targetTagId])
-            if (existing[0]?.values.length === 0 || !existing[0]) {
-                db.run('INSERT INTO entry_tags (entry_id, tag_id) VALUES (?, ?)', [entryId, targetTagId])
-                entriesUpdated++
-            }
+        // Filter to only entries that need linking
+        const newEntryIds = entryIds.filter((id) => !existingEntryIds.has(id))
+        const entriesUpdated = newEntryIds.length
+
+        if (newEntryIds.length > 0) {
+            const placeholders = newEntryIds.map(() => '(?, ?)').join(', ')
+            const params = newEntryIds.flatMap((entryId) => [entryId, targetTagId])
+            db.run(
+                `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${placeholders}`,
+                params
+            )
         }
 
         if (entriesUpdated > 0) {
