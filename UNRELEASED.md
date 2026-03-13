@@ -1,5 +1,15 @@
 ### Changed
 
+- **Code Quality Audit Fixes (Round 3)**
+  - Extracted duplicated `resolveIssueUrl()` logic from `core.ts` and `team.ts` into shared `utils/github-helpers.ts`
+  - Replaced magic numbers with named constants: `INACTIVE_THRESHOLD_DAYS`, `MS_PER_DAY`, `MAX_TAGS_PER_PROJECT` in `analytics.ts`; `MERMAID_CONTENT_PREVIEW_LENGTH` in `relationships.ts`; `DEDUP_KEY_LENGTH` in `search.ts`; `LATEST_ENTRY_PREVIEW_LENGTH` in `server-instructions.ts`
+  - Fixed N+1 tag query in `team_search` with batch `SELECT ... WHERE entry_id IN (...)` query
+  - Consolidated 4 serial `SELECT COUNT(*)` queries in `getHealthStatus()` into a single subquery
+  - Moved `scheduler` declaration before `handleResourceRead` closure to eliminate temporal hazard
+  - Removed unused `_resources` parameter and `ResourceDefinition` type from `generateInstructions()`
+  - Split `auth/middleware.ts` (519 lines) by extracting transport-agnostic auth functions to `auth/transport-agnostic.ts`
+
+
 - **Code Quality Audit Fixes (Round 2)**
   - Extracted `ToolRegistration` interface for typed `getTools()` return, eliminating ~10 unsafe `as` casts in `mcp-server.ts` tool registration
   - Added typed `pragma(command: string)` method to `IDatabaseAdapter` and `IDatabaseConnection` interfaces, eliminating unsafe `getRawDb() as { pragma/run }` casts in `scheduler.ts` and `backup.ts`

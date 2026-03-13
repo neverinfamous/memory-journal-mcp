@@ -10,6 +10,11 @@ import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 
+// Named constants (magic value extraction)
+const INACTIVE_THRESHOLD_DAYS = 7
+const MS_PER_DAY = 86_400_000
+const MAX_TAGS_PER_PROJECT = 5
+
 // ============================================================================
 // Output Schemas
 // ============================================================================
@@ -265,7 +270,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                                 const projNum = row[0] as number
                                 const tagEntry = { name: row[1] as string, count: row[2] as number }
                                 const existing = projectTags[projNum] ?? []
-                                if (existing.length < 5) {
+                                if (existing.length < MAX_TAGS_PER_PROJECT) {
                                     existing.push(tagEntry)
                                     projectTags[projNum] = existing
                                 }
@@ -273,8 +278,8 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Find inactive projects (last entry > 7 days ago)
-                    const cutoffDate = new Date(Date.now() - 7 * 86400000)
+                    // Find inactive projects (last entry > threshold days ago)
+                    const cutoffDate = new Date(Date.now() - INACTIVE_THRESHOLD_DAYS * MS_PER_DAY)
                         .toISOString()
                         .split('T')[0]
                     const inactiveResult = db.executeRawQuery(

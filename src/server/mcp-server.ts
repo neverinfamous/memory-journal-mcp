@@ -142,13 +142,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber }, teamDb)
     const allToolNames = new Set(allTools.map((t) => t.name))
 
-    // Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
+    // Generate dynamic instructions based on enabled tools, prompts, and latest entry
     const instructions = generateInstructions(
         filterConfig?.enabledTools ?? allToolNames,
-        resources.map((r) => {
-            const res = r as { uri: string; name: string; description?: string }
-            return { uri: res.uri, name: res.name, description: res.description }
-        }),
         prompts.map((p) => {
             const prompt = p as { name: string; description?: string }
             return { name: prompt.name, description: prompt.description }
@@ -271,6 +267,27 @@ export async function createServer(options: ServerOptions): Promise<void> {
             }
         )
     }
+
+    // Initialize scheduler (HTTP/SSE only) — must be before handleResourceRead
+    // which captures scheduler in its closure.
+    let scheduler: Scheduler | null = null
+    if (options.scheduler) {
+        const hasAnyJob =
+            options.scheduler.backupIntervalMinutes > 0 ||
+            options.scheduler.vacuumIntervalMinutes > 0 ||
+            options.scheduler.rebuildIndexIntervalMinutes > 0
+
+        if (hasAnyJob && transport === 'stdio') {
+            logger.warning(
+                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
+                    'Use HTTP/SSE transport for automated scheduling.',
+                { module: 'Scheduler' }
+            )
+        } else if (hasAnyJob) {
+            scheduler = new Scheduler(options.scheduler, db, vectorManager)
+        }
+    }
+
     // Resource read handler shared by template and static branches (D2 fix)
     const handleResourceRead = async (uri: URL, mimeType: string): Promise<{
         contents: { uri: string; mimeType: string; text: string; annotations?: Record<string, unknown> }[]
@@ -387,24 +404,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
         )
     }
 
-    // Initialize scheduler (HTTP/SSE only)
-    let scheduler: Scheduler | null = null
-    if (options.scheduler) {
-        const hasAnyJob =
-            options.scheduler.backupIntervalMinutes > 0 ||
-            options.scheduler.vacuumIntervalMinutes > 0 ||
-            options.scheduler.rebuildIndexIntervalMinutes > 0
-
-        if (hasAnyJob && transport === 'stdio') {
-            logger.warning(
-                'Scheduler options ignored for stdio transport (session is ephemeral). ' +
-                    'Use HTTP/SSE transport for automated scheduling.',
-                { module: 'Scheduler' }
-            )
-        } else if (hasAnyJob) {
-            scheduler = new Scheduler(options.scheduler, db, vectorManager)
-        }
-    }
 
     // Start server based on transport
     if (transport === 'stdio') {

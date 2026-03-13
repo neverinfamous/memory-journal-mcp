@@ -197,15 +197,20 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             // File may not exist on disk yet
         }
 
-        const entryResult = this.connection.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
-        const deletedResult = this.connection.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NOT NULL')
-        const relResult = this.connection.exec('SELECT COUNT(*) FROM relationships')
-        const tagResult = this.connection.exec('SELECT COUNT(*) FROM tags')
+        // Combined health counts in a single query (batch instead of 4 serial queries)
+        const countsResult = this.connection.exec(`
+            SELECT
+                (SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL) AS entry_count,
+                (SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NOT NULL) AS deleted_count,
+                (SELECT COUNT(*) FROM relationships) AS rel_count,
+                (SELECT COUNT(*) FROM tags) AS tag_count
+        `)
 
-        const entryCount = (entryResult[0]?.values[0]?.[0] as number) ?? 0
-        const deletedEntryCount = (deletedResult[0]?.values[0]?.[0] as number) ?? 0
-        const relationshipCount = (relResult[0]?.values[0]?.[0] as number) ?? 0
-        const tagCount = (tagResult[0]?.values[0]?.[0] as number) ?? 0
+        const row = countsResult[0]?.values[0]
+        const entryCount = (row?.[0] as number) ?? 0
+        const deletedEntryCount = (row?.[1] as number) ?? 0
+        const relationshipCount = (row?.[2] as number) ?? 0
+        const tagCount = (row?.[3] as number) ?? 0
 
         const backups = this.listBackups()
         const lastBackup = backups[0] ?? null

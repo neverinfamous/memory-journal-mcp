@@ -358,9 +358,10 @@ function mergeAndDedup(
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     )
 
+    const DEDUP_KEY_LENGTH = 200
     for (const entry of all) {
         // Deduplicate by content (same entry shared to team)
-        const key = entry.content.slice(0, 200)
+        const key = entry.content.slice(0, DEDUP_KEY_LENGTH)
         if (!seen.has(key)) {
             seen.add(key)
             merged.push(entry)

@@ -10,6 +10,7 @@ import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { resolveAuthor } from '../../utils/security-utils.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
+import { resolveIssueUrl } from '../../utils/github-helpers.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 import {
     ENTRY_TYPES,
@@ -157,13 +158,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const input = CreateEntrySchema.parse(params)
 
                     // Auto-populate issueUrl if issue_number provided without issueUrl
-                    let resolvedIssueUrl = input.issue_url
-                    if (input.issue_number !== undefined && !input.issue_url && github) {
-                        const cachedRepo = github.getCachedRepoInfo()
-                        if (cachedRepo?.owner && cachedRepo?.repo) {
-                            resolvedIssueUrl = `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(input.issue_number)}`
-                        }
-                    }
+                    const resolvedIssueUrl = resolveIssueUrl(github, input.issue_number, input.issue_url)
 
                     const entry = db.createEntry({
                         content: input.content,

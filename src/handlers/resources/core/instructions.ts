@@ -15,7 +15,7 @@ export const instructionsResource: InternalResourceDef = {
         audience: ['assistant'],
         priority: 0.95,
     },
-    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+    handler: (_uri: string, context: ResourceContext): ResourceResult => {
         const level: InstructionLevel = 'full'
 
         const allToolNames = new Set(getAllToolNames())
@@ -26,16 +26,8 @@ export const instructionsResource: InternalResourceDef = {
             return { name: prompt.name, description: prompt.description }
         })
 
-        // Deferred import to avoid circular dependency (core → index → core)
-        const { getResources } = await import('../index.js')
-        const resources = getResources().map((r) => {
-            const res = r as { uri: string; name: string; description?: string }
-            return { uri: res.uri, name: res.name, description: res.description }
-        })
-
         const instructions = generateInstructions(
             enabledTools,
-            resources,
             prompts,
             undefined,
             level

@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { resolveAuthor } from '../../utils/security-utils.js'
+import { resolveIssueUrl } from '../../utils/github-helpers.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 
@@ -154,13 +155,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     const author = input.author ?? resolveAuthor()
 
                     // Auto-populate issueUrl if issue_number provided
-                    let resolvedIssueUrl = input.issue_url
-                    if (input.issue_number !== undefined && !input.issue_url && github) {
-                        const cachedRepo = github.getCachedRepoInfo()
-                        if (cachedRepo?.owner && cachedRepo?.repo) {
-                            resolvedIssueUrl = `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(input.issue_number)}`
-                        }
-                    }
+                    const resolvedIssueUrl = resolveIssueUrl(github, input.issue_number, input.issue_url)
 
                     const entry = teamDb.createEntry({
                         content: input.content,
@@ -248,12 +243,30 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                         entries = teamDb.getRecentEntries(limit)
                     }
 
-                    // Filter by tags if provided
+                    // Filter by tags if provided (batch query instead of N+1)
                     if (tags && tags.length > 0) {
-                        entries = entries.filter((e) => {
-                            const entryTags = teamDb.getTagsForEntry(e.id)
-                            return tags.some((t: string) => entryTags.includes(t))
-                        })
+                        const entryIds = entries.map((e) => e.id)
+                        if (entryIds.length > 0) {
+                            const placeholders = entryIds.map(() => '?').join(',')
+                            const tagResult = teamDb.executeRawQuery(
+                                `SELECT et.entry_id, t.name FROM tags t JOIN entry_tags et ON t.id = et.tag_id WHERE et.entry_id IN (${placeholders})`,
+                                entryIds
+                            )
+                            const entryTagMap = new Map<number, string[]>()
+                            if (tagResult[0]) {
+                                for (const row of tagResult[0].values) {
+                                    const entryId = row[0] as number
+                                    const tagName = row[1] as string
+                                    const existing = entryTagMap.get(entryId) ?? []
+                                    existing.push(tagName)
+                                    entryTagMap.set(entryId, existing)
+                                }
+                            }
+                            entries = entries.filter((e) => {
+                                const entryTags = entryTagMap.get(e.id) ?? []
+                                return tags.some((t: string) => entryTags.includes(t))
+                            })
+                        }
                     }
 
                     // Batch-fetch authors (single query instead of N+1)

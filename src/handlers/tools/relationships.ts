@@ -297,11 +297,12 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const relationships = relsResult[0]?.values ?? []
 
                     // Generate Mermaid diagram
+                    const MERMAID_CONTENT_PREVIEW_LENGTH = 40
                     let mermaid = '```mermaid\\ngraph TD\\n'
 
                     for (const [idStr, entry] of Object.entries(entries)) {
-                        let contentPreview = entry.content.slice(0, 40).replace(/\\n/g, ' ')
-                        if (entry.content.length > 40) contentPreview += '...'
+                        let contentPreview = entry.content.slice(0, MERMAID_CONTENT_PREVIEW_LENGTH).replace(/\\n/g, ' ')
+                        if (entry.content.length > MERMAID_CONTENT_PREVIEW_LENGTH) contentPreview += '...'
                         contentPreview = contentPreview
                             .replace(/"/g, "'")
                             .replace(/\[/g, '(')

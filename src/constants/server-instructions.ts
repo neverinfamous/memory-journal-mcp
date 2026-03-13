@@ -376,7 +376,6 @@ Valid values for \`entry_type\` parameter:
  */
 export function generateInstructions(
     enabledTools: Set<string>,
-    _resources: ResourceDefinition[],
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     level: InstructionLevel = 'standard'
@@ -384,9 +383,10 @@ export function generateInstructions(
     let instructions = ESSENTIAL_INSTRUCTIONS
 
     // Add latest entry snapshot for immediate context (compact format)
+    const LATEST_ENTRY_PREVIEW_LENGTH = 120
     if (latestEntry) {
-        const preview = latestEntry.content.slice(0, 120)
-        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
+        const preview = latestEntry.content.slice(0, LATEST_ENTRY_PREVIEW_LENGTH)
+        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > LATEST_ENTRY_PREVIEW_LENGTH ? '...' : ''}\n`
     }
 
     // Standard and full levels include GitHub patterns

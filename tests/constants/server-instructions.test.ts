@@ -15,15 +15,14 @@ const ALL_TOOLS = new Set(getAllToolNames())
 /** Minimal tool set for basic testing */
 const TEST_TOOLS = new Set(['create_entry', 'search_entries', 'backup_journal'])
 
-/** Minimal resources for testing */
-const TEST_RESOURCES = [{ uri: 'memory://health', name: 'health', description: 'Health check' }]
+
 
 /** Minimal prompts for testing */
 const TEST_PROMPTS = [{ name: 'test-prompt', description: 'A test prompt' }]
 
 /** Helper to generate full-level instructions with all tools */
 function fullInstructions(): string {
-    return generateInstructions(ALL_TOOLS, TEST_RESOURCES, TEST_PROMPTS, undefined, 'full')
+    return generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'full')
 }
 
 describe('generateInstructions', () => {
@@ -31,7 +30,6 @@ describe('generateInstructions', () => {
         it('should return non-empty string', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -42,7 +40,6 @@ describe('generateInstructions', () => {
         it('should include core behaviors', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -54,7 +51,6 @@ describe('generateInstructions', () => {
         it('should include Quick Access table', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -68,7 +64,6 @@ describe('generateInstructions', () => {
         it('should include all three Behaviors bullets', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -81,7 +76,6 @@ describe('generateInstructions', () => {
         it('should not include tool parameter reference', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -92,7 +86,6 @@ describe('generateInstructions', () => {
         it('should not include GitHub Integration heading', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -103,7 +96,6 @@ describe('generateInstructions', () => {
         it('should not include Session End section (replaced by session-summary prompt)', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -114,7 +106,6 @@ describe('generateInstructions', () => {
         it('should include Rule & Skill Suggestions section', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'essential'
@@ -128,7 +119,6 @@ describe('generateInstructions', () => {
         it('should include GitHub instructions', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'standard'
@@ -139,7 +129,6 @@ describe('generateInstructions', () => {
         it('should include GitHub integration patterns', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'standard'
@@ -155,7 +144,6 @@ describe('generateInstructions', () => {
         it('should not include tool parameter reference', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 undefined,
                 'standard'
@@ -528,7 +516,6 @@ describe('generateInstructions', () => {
         it('should include latest entry when provided', () => {
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 {
                     id: 42,
@@ -547,7 +534,6 @@ describe('generateInstructions', () => {
             const longContent = 'A'.repeat(200)
             const result = generateInstructions(
                 TEST_TOOLS,
-                TEST_RESOURCES,
                 TEST_PROMPTS,
                 {
                     id: 1,
@@ -563,7 +549,7 @@ describe('generateInstructions', () => {
 
     describe('default level', () => {
         it('should default to standard level', () => {
-            const result = generateInstructions(TEST_TOOLS, TEST_RESOURCES, TEST_PROMPTS)
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS)
             // Standard includes GitHub but not tool parameter reference
             expect(result).toContain('GitHub')
             expect(result).not.toContain('Tool Parameter Reference')
