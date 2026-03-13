@@ -1,5 +1,7 @@
 ### Changed
 
+- **Copilot Instructions Path Fixes** — Updated `.github/copilot-instructions.md` architecture tree to reflect kebab-case renames (`server-instructions.ts`, `sqlite-adapter/`, `tool-filter.ts`, `github-integration/`, `mcp-server.ts`, `scheduler.ts`, `http/`) and moved reference file paths (`test-server/` → `docs/`). Updated descriptions to reflect better-sqlite3 native-only architecture and modularized directory structures.
+
 - **Code Quality Audit Fixes (Round 9)**
   - Consolidated 4 duplicate `resolveOwnerRepo` implementations (in `milestone-tools.ts`, `read-tools.ts`, `copilot-tools.ts`, and inlined in `insights-tools.ts`) into the single shared helper in `helpers.ts` with optional `entityLabel` parameter
   - Extracted resource and prompt registration from `mcp-server.ts` (457 lines) into new `server/registration.ts` module, reducing the main server file to ~375 lines
@@ -134,6 +136,8 @@
 - **Code Mode `timeout` Parameter Ignored** — The `timeout` parameter on `mj_execute_code` was parsed by the Zod schema but never forwarded to the sandbox pool. All executions used the default 30s timeout regardless of the user-specified value. Added per-call `timeoutMs` override to `ISandbox`, `ISandboxPool`, and all sandbox/pool implementations (`WorkerSandbox`, `WorkerSandboxPool`, `CodeModeSandbox`, `SandboxPool`). Handler now destructures `timeout` and passes it to `pool.execute()`.
 
 ### Added
+
+- **Agentic Workflows (GitHub Copilot)** — 4 new workflow scripts for automated repo maintenance using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot): `dependency-maintenance.md` (weekly npm + Docker dep updates, patch version bump, PR creation), `docs-drift-detector.md` (PR-triggered documentation accuracy audit), `ci-health-monitor.md` (weekly CI deprecation and action version check), `agentics-maintenance.yml` (daily expired entity cleanup). Includes `.github/workflows/README.md` with workflow map diagram and editing guidelines.
 
 - **WASM SQLite Fallback Removed** — Removed the `sql.js` WASM fallback adapter to simplify the architecture, test matrix, and dependency footprint. The server now runs exclusively on the high-performance native `better-sqlite3` driver. `--sqlite-native` and `--sqlite-wasm` flags have been removed.
 - **Harmonized Error Types (`error-types.ts`)** — New `ErrorCategory` enum (9 categories: validation, connection, query, permission, config, resource, authentication, authorization, internal), `ErrorResponse` interface, and `ErrorContext` interface. Part of the harmonized error handling standard across db-mcp, postgres-mcp, mysql-mcp, and memory-journal-mcp
