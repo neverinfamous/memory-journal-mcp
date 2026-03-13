@@ -10,7 +10,8 @@ import type { GitHubIntegration } from '../../../github/github-integration/index
  */
 export async function resolveOwner(
     context: ToolContext,
-    inputOwner?: string
+    inputOwner?: string,
+    entityLabel?: string
 ): Promise<
     | {
           owner: string
@@ -40,8 +41,9 @@ export async function resolveOwner(
                 error: 'STOP: Could not auto-detect repository owner. DO NOT GUESS. You MUST ask the user to provide the GitHub owner.',
                 requiresUserInput: true,
                 detectedOwner,
-                instruction:
-                    'Ask the user: "What GitHub username or organization owns this project?"',
+                instruction: entityLabel
+                    ? `Ask the user: "${entityLabel}"`
+                    : 'Ask the user: "What GitHub username or organization owns this project?"',
             },
         }
     }
@@ -54,7 +56,8 @@ export async function resolveOwner(
  */
 export async function resolveOwnerRepo(
     context: ToolContext,
-    input: { owner?: string; repo?: string }
+    input: { owner?: string; repo?: string },
+    entityLabel?: string
 ): Promise<
     | {
           owner: string
@@ -83,9 +86,15 @@ export async function resolveOwnerRepo(
             error: true,
             response: {
                 success: false,
-                error: 'STOP: Could not auto-detect repository. DO NOT GUESS.',
+                error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
                 requiresUserInput: true,
-                detected: { owner, repo },
+                detectedOwner,
+                detectedRepo,
+                ...(entityLabel
+                    ? {
+                          instruction: `Ask the user: "What GitHub repository ${entityLabel}? Please provide the owner and repo name (e.g., owner/repo)."`,
+                      }
+                    : {}),
             },
         }
     }

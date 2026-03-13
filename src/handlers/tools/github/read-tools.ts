@@ -6,7 +6,6 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import {
     GitHubIssuesListOutputSchema,
@@ -15,55 +14,7 @@ import {
     GitHubPRResultOutputSchema,
     GitHubContextOutputSchema,
 } from './schemas.js'
-
-// ============================================================================
-// Helper: owner/repo resolution with "STOP" pattern
-// ============================================================================
-
-async function resolveOwnerRepo(
-    context: ToolContext,
-    input: { owner?: string; repo?: string },
-    entityLabel: string
-): Promise<
-    | {
-          owner: string
-          repo: string
-          detectedOwner: string | null
-          detectedRepo: string | null
-          github: GitHubIntegration
-      }
-    | { error: true; response: Record<string, unknown> }
-> {
-    if (!context.github) {
-        return {
-            error: true,
-            response: { success: false, error: 'GitHub integration not available' },
-        }
-    }
-
-    const repoInfo = await context.github.getRepoInfo()
-    const detectedOwner = repoInfo.owner
-    const detectedRepo = repoInfo.repo
-
-    const owner = input.owner ?? detectedOwner ?? undefined
-    const repo = input.repo ?? detectedRepo ?? undefined
-
-    if (!owner || !repo) {
-        return {
-            error: true,
-            response: {
-                success: false,
-                error: `STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.`,
-                requiresUserInput: true,
-                detectedOwner,
-                detectedRepo,
-                instruction: `Ask the user: "What GitHub repository ${entityLabel}? Please provide the owner and repo name (e.g., owner/repo)."`,
-            },
-        }
-    }
-
-    return { owner, repo, detectedOwner, detectedRepo, github: context.github }
-}
+import { resolveOwnerRepo } from './helpers.js'
 
 // ============================================================================
 // Tool Definitions

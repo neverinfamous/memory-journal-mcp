@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
 import { RepoInsightsOutputSchema } from './schemas.js'
+import { resolveOwnerRepo } from './helpers.js'
 
 // ============================================================================
 // Tool Definitions
@@ -53,23 +54,15 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                         })
                         .parse(params)
 
-                    if (!context.github) {
-                        return { success: false, error: 'GitHub integration not available' }
-                    }
+                    const resolved = await resolveOwnerRepo(
+                        context,
+                        input,
+                        'should I get insights for'
+                    )
+                    if ('error' in resolved) return resolved.response
 
-                    const repoInfo = await context.github.getRepoInfo()
-                    const owner = input.owner ?? repoInfo.owner ?? undefined
-                    const repo = input.repo ?? repoInfo.repo ?? undefined
-
-                    if (!owner || !repo) {
-                        return {
-                            success: false,
-                            error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
-                            requiresUserInput: true,
-                            instruction:
-                                'Ask the user: "What GitHub repository should I get insights for? Please provide the owner and repo name (e.g., owner/repo)."',
-                        }
-                    }
+                    const owner = resolved.owner
+                    const repo = resolved.repo
 
                     const section = input.sections
                     const result: Partial<z.infer<typeof RepoInsightsOutputSchema>> = {
@@ -79,7 +72,7 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (section === 'stars' || section === 'all') {
-                        const stats = await context.github.getRepoStats(owner, repo)
+                        const stats = await resolved.github.getRepoStats(owner, repo)
                         if (stats) {
                             result.stars = stats.stars
                             result.forks = stats.forks
@@ -93,19 +86,19 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     if (section === 'traffic' || section === 'all') {
-                        const traffic = await context.github.getTrafficData(owner, repo)
+                        const traffic = await resolved.github.getTrafficData(owner, repo)
                         if (traffic) {
                             result.traffic = traffic
                         }
                     }
 
                     if (section === 'referrers' || section === 'all') {
-                        const referrers = await context.github.getTopReferrers(owner, repo, 5)
+                        const referrers = await resolved.github.getTopReferrers(owner, repo, 5)
                         result.referrers = referrers
                     }
 
                     if (section === 'paths' || section === 'all') {
-                        const paths = await context.github.getPopularPaths(owner, repo, 5)
+                        const paths = await resolved.github.getPopularPaths(owner, repo, 5)
                         result.paths = paths
                     }
 

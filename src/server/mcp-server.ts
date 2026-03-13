@@ -4,10 +4,10 @@
  * MCP server implementation with tools, resources, and prompts.
  */
 
-import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { z } from 'zod'
+import type { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { DatabaseAdapterFactory } from '../database/adapter-factory.js'
@@ -22,12 +22,19 @@ import {
 } from '../filtering/tool-filter.js'
 import { getTools, callTool } from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
-import { getPrompts, getPrompt } from '../handlers/prompts/index.js'
+import { getPrompts } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/server-instructions.js'
 import { Scheduler, type SchedulerOptions } from './scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
 import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
 import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
+import {
+    registerResources,
+    registerPrompts,
+    type ResourceDefinition,
+    type PromptDefinition,
+    type ResourceReadHandler,
+} from './registration.js'
 import pkg from '../../package.json' with { type: 'json' }
 
 export interface ServerOptions {
@@ -319,90 +326,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 
     // Register resources (reusing resources from instruction generation)
-    for (const resource of resources) {
-        const resDef = resource as {
-            uri: string
-            name: string
-            description?: string
-            mimeType?: string
-            icons?: { src: string; mimeType?: string; sizes?: string[] }[]
-        }
-        const mimeType = resDef.mimeType ?? 'application/json'
-        const meta = {
-            description: resDef.description ?? '',
-            mimeType,
-            ...(resDef.icons ? { icons: resDef.icons } : {}),
-        }
-
-        // Check if this is a template URI (contains {variable} patterns)
-        const isTemplate = resDef.uri.includes('{')
-
-        if (isTemplate) {
-            const template = new ResourceTemplate(
-                resDef.uri,
-                { list: undefined }
-            )
-            server.registerResource(
-                resDef.name,
-                template,
-                meta,
-                async (uri: URL, _variables: Variables) => handleResourceRead(uri, mimeType)
-            )
-        } else {
-            server.registerResource(
-                resDef.name,
-                resDef.uri,
-                meta,
-                async (uri: URL) => handleResourceRead(uri, mimeType)
-            )
-        }
-    }
+    registerResources(
+        server,
+        resources as ResourceDefinition[],
+        handleResourceRead as ResourceReadHandler
+    )
 
     // Register prompts (reusing prompts from instruction generation)
-    for (const prompt of prompts) {
-        const promptDef = prompt as {
-            name: string
-            description?: string
-            arguments?: { name: string; description: string; required?: boolean }[]
-            icons?: { src: string; mimeType?: string; sizes?: string[] }[] // MCP 2025-11-25
-        }
-
-        // Build Zod schema from prompt.arguments definitions
-        // Only create argsSchema when there are actual arguments; passing an empty
-        // shape causes the SDK to wrap it in z.object({}) which rejects undefined
-        // when the client omits arguments (e.g. session-summary with no args).
-        let argsSchema: Record<string, z.ZodType> | undefined
-        if (promptDef.arguments && promptDef.arguments.length > 0) {
-            argsSchema = {}
-            for (const arg of promptDef.arguments) {
-                argsSchema[arg.name] =
-                    arg.required === true
-                        ? z.string().describe(arg.description)
-                        : z.string().optional().describe(arg.description)
-            }
-        }
-
-        server.registerPrompt(
-            promptDef.name,
-            {
-                description: promptDef.description ?? '',
-                ...(argsSchema ? { argsSchema } : {}),
-                ...(promptDef.icons ? { icons: promptDef.icons } : {}),
-            },
-            (providedArgs) => {
-                const args = providedArgs as Record<string, string>
-                const promptResult = getPrompt(promptDef.name, args, db)
-                // Map to MCP SDK expected format
-                const result = {
-                    messages: promptResult.messages.map((m) => ({
-                        role: m.role as 'user' | 'assistant',
-                        content: m.content as { type: 'text'; text: string },
-                    })),
-                }
-                return Promise.resolve(result)
-            }
-        )
-    }
+    registerPrompts(server, prompts as PromptDefinition[], db)
 
 
     // Start server based on transport
