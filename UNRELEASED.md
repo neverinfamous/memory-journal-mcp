@@ -2,11 +2,7 @@
 
 - **Test Artifact Consolidation** — Consolidated scattered test output directories (`coverage/`, `test-results/`, `test-server/*.db*`, `test-server/backups/`, `backups/`) into a single `.test-output/` directory with `coverage/` (vitest), `playwright/` (Playwright results), and `e2e/` (E2E databases and scheduler backups). Moved `code-map.md`, `test-tools.md`, and `tool-reference.md` from `test-server/` to `docs/`. Updated `.gitignore` and `.dockerignore` to use single `.test-output/` entry. No source code changes needed — the backup system auto-adapts via `dirname(dbPath)` path derivation.
 
-### Changed
-
 - **Vector Search Backend** — Replaced `vectra` with `sqlite-vec` for vector search. Embeddings now stored in the main SQLite database via a `vec0` virtual table (`vec_embeddings`), eliminating the separate `.vectra_index/` directory and 86 transitive dependencies (460→376 packages). KNN search uses SQL `WHERE embedding MATCH ? ORDER BY distance LIMIT ?` queries directly. `removeEntry()` and `getStats()` are now synchronous (better-sqlite3 is synchronous). NativeConnectionManager loads the sqlite-vec extension on init with a race-condition guard for concurrent close during async import.
-
-### Changed
 
 - **Build Tooling** — Replaced `tsc` with `tsup` (esbuild) for production builds. Output reduced from 372 files (1.04 MB) to 6 files (875 KB) with tree-shaking. Build speed: ~9s vs 19s. Type checking remains as a separate `npm run typecheck` step (`tsc --noEmit`).
 - **ML Embedding Library** — Migrated from `@xenova/transformers` v2 (archived, unmaintained) to `@huggingface/transformers` v3.8.1 (official Hugging Face org, actively maintained). API change: `quantized: true` → `dtype: 'q8'`. Same `Xenova/all-MiniLM-L6-v2` model, same embedding quality. Updated README, SECURITY, and DOCKER_README references.
@@ -20,26 +16,18 @@
   - Replaced `getStatistics('week')` with `getActiveEntryCount()` in `buildJournalContext()` and `buildTeamContext()` — briefing only needs `totalEntries`, not the full stat breakdown (~5× fewer queries per session start)
   - Replaced N+1 exist-check loop in `mergeTags()` with bulk pre-fetch + batch `INSERT OR IGNORE` — O(1) vs O(N) queries during tag merge operations
 
-### Changed
-
 - **Code Quality Audit Fixes (Round 8)**
   - Extracted `milestoneCompletionPct()` helper into `resources/shared.ts`, replacing 4 inline duplicate calculations across `resources/github.ts` (×3) and `briefing/github-section.ts` (×1)
   - Added `logger.debug()` to 8 empty `catch {}` blocks in `briefing/context-section.ts` (team context, rules file, skills dir) and `briefing/github-section.ts` (CI status, issues/PRs, milestones, traffic, insights) for improved troubleshooting
-
-### Changed
 
 - **Code Quality Audit Fixes (Round 7)**
   - Replaced two remaining `inactiveThresholdDays: 7` literals with `INACTIVE_THRESHOLD_DAYS` constant in `analytics.ts`
   - Hoisted `DEDUP_KEY_LENGTH` from local function scope to module-level named constant in `search.ts`
   - Removed misleading `async` keyword from `DatabaseAdapterFactory.create()` in `adapter-factory.ts` (synchronous constructor wrapped in `Promise.resolve()`)
 
-### Changed
-
 - **Code Quality Audit Fixes (Round 6)**
   - Eliminated 10 `@typescript-eslint/no-non-null-assertion` lint errors in `resources/github.ts` by threading the narrowed `github` instance through `GitHubRepoResolved` from `resolveGitHubRepo()` — downstream handlers now destructure `github` instead of using `context.github!`
   - Extracted `MS_PER_DAY` constant in `prompts/workflow.ts`, replacing 3 inline `86400000` magic values
-
-### Changed
 
 - **Code Quality Audit Fixes (Round 5)**
   - Extracted `resolveGitHubRepo()` + `isResourceError()` guard helper into `resources/shared.ts`, eliminating ~60 lines of duplicated GitHub availability checks across 4 resource handlers and the briefing section
@@ -47,14 +35,10 @@
   - Extracted 5 inline API limits into named constants (`RESOURCE_ISSUE_LIMIT`, `RESOURCE_PR_LIMIT`, `RESOURCE_WORKFLOW_LIMIT`, `RESOURCE_STATUS_MILESTONE_LIMIT`, `RESOURCE_MILESTONE_LIMIT`) in `resources/github.ts`
   - Parallelized 6 serial GitHub API calls in `github/status` resource handler using `Promise.allSettled()` for reduced latency
 
-### Changed
-
 - **Code Quality Audit Fixes (Round 4)**
   - Added debug logging to 8 silent `catch {}` blocks across `github-section.ts`, `resources/github.ts`, `core.ts`, and `backup.ts` for improved debuggability
   - Wrapped `github/milestones` and `milestones/{number}` resource handler returns in `{ data, annotations }` structure for consistency with other GitHub resource handlers
   - Parallelized sequential `getCopilotReviewSummary()` API calls in `fetchCopilotReviews()` using `Promise.all()` for faster briefing generation
-
-### Changed
 
 - **Code Quality Audit Fixes (Round 3)**
   - Extracted duplicated `resolveIssueUrl()` logic from `core.ts` and `team.ts` into shared `utils/github-helpers.ts`
@@ -64,7 +48,6 @@
   - Moved `scheduler` declaration before `handleResourceRead` closure to eliminate temporal hazard
   - Removed unused `_resources` parameter and `ResourceDefinition` type from `generateInstructions()`
   - Split `auth/middleware.ts` (519 lines) by extracting transport-agnostic auth functions to `auth/transport-agnostic.ts`
-
 
 - **Code Quality Audit Fixes (Round 2)**
   - Extracted `ToolRegistration` interface for typed `getTools()` return, eliminating ~10 unsafe `as` casts in `mcp-server.ts` tool registration
@@ -89,6 +72,31 @@
   - Split 603-line `briefing.ts` into `briefing/` directory: `github-section.ts`, `context-section.ts`, `user-message.ts`, `index.ts` (all under 260 lines)
   - Replaced N+1 author queries in `team.ts` with single batch `SELECT ... WHERE id IN (...)` via `batchFetchAuthors()` helper
   - Replaced N+1 per-project tag queries in `analytics.ts` with single batch query grouped by `project_number`
+
+  - **Performance Optimization (I/O)** — Refactored blocking synchronous file system operations (`fs.writeFileSync`, `fs.readFileSync`, `fs.mkdirSync`, `fs.copyFileSync`, `fs.statSync`) in `BackupManager` to asynchronous `fs.promises` equivalents to prevent freezing the Node.js event pool during journal backups.
+
+- **Performance Optimization (I/O)** — Refactored synchronous `fs.mkdirSync` and `fs.rmSync` in `VectorSearchManager` to asynchronous `fs.promises` equivalents for non-blocking directory operations during index initialization and rebuilding.
+- **Performance Optimization (Build)** — Disabled generating `.map` source maps in production build (disabled `sourceMap` in `tsconfig.json`), saving approx 1-2MB in the final compiled bundle.
+- **Performance Optimization (Memory)** — Refactored unbounded `SELECT * FROM memory_journal` queries across core handlers (`entries.ts`, `templates.ts`, `github.ts`, `core.ts`, `stats.ts`, `graph.ts`, `workflow.ts`) to use explicit `ENTRY_COLUMNS` projections, reducing I/O latency and WASM memory overhead.
+- **Performance Optimization (Bundle)** — `WasmSqliteAdapter` initialization is now strictly loaded via a dynamic `await import` block inside `DatabaseAdapterFactory.create`. This keeps the heavy WASM binaries fully isolated from the top-level bundle payload on native platforms.
+- **Performance Optimization (Database)** — Unbounded `SELECT * FROM relationships` wildcard lookups have been restricted to strict `id, from_entry_id, to_entry_id, relationship_type, description, created_at` column mappings.
+- **Performance Optimization (Sandbox)** — Capped Code Mode Result serialization using strict buffer tracking logic to prevent `JSON.stringify` from creating maximum V8 strings that blow through native application memory.
+- **GitHub API Caching** — Implemented a bounded (max 100 items), TTL-aware LRU cache strategy in `GitHubClient` to prevent memory leaks on long-running instances.
+- **Core Handlers Modularized**:
+  - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
+  - **GitHub Integration** — Split monolithic `src/github/github-integration.ts` (1707 lines) into `src/github/github-integration/` containing focused modules (`auth.ts`, `repos.ts`, `issues.ts`, `pull-requests.ts`, `search.ts`, `copilot.ts`, `index.ts`).
+  - **Core Resources** — Split monolithic `src/handlers/resources/core.ts` (823 lines) into `src/handlers/resources/core/` containing `briefing.ts`, `instructions.ts`, `stats.ts`, and `index.ts`.
+  - **Briefing Resource** — Split monolithic `src/handlers/resources/core/briefing.ts` (603 lines) into `src/handlers/resources/core/briefing/` containing focused builders (`github-section.ts`, `context-section.ts`, `user-message.ts`) and `index.ts`.
+- **Test Directory Renamed** — Renamed `src/auth/__tests__` to `src/auth/tests` to comply with the project's strict kebab-case naming standard.
+- **HTTP Transport Modularized** — Continued splitting `src/transports/http.ts` and `src/transports/http/server.ts` into a fully modularized directory:
+  - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types
+  - `security.ts` — Client IP extraction, built-in rate limiting, CORS (wildcard subdomain support), security headers
+  - `handlers.ts` — Health check, root info, bearer token auth middleware
+  - `server/` — Split `server.ts` into `stateless.ts`, `stateful.ts`, `legacy-sse.ts`, and `index.ts`
+  - `index.ts` — Barrel re-export
+- **CORS Configuration** — `corsOrigin: string` changed to `corsOrigins: string[]` for multi-origin support. CLI `--cors-origin` accepts comma-separated values. Wildcard subdomain patterns supported (e.g., `*.example.com`).
+- **HSTS Configuration** — HSTS is now config-driven via `enableHSTS: true` instead of auto-detecting from `X-Forwarded-Proto` header.
+- **Cache-Control Header** — Strengthened from `no-store` to `no-store, no-cache, must-revalidate`.
 
 ### Fixed
 
@@ -146,32 +154,6 @@
   - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (60 executions/min), result size (10MB)
   - `--sandbox-mode <mode>` CLI flag: `worker` (production, default) or `vm` (lightweight)
   - Tool count: 42 → 44 tools, tool groups: 9 → 10
-
-### Changed
-
-- **Performance Optimization (I/O)** — Refactored blocking synchronous file system operations (`fs.writeFileSync`, `fs.readFileSync`, `fs.mkdirSync`, `fs.copyFileSync`, `fs.statSync`) in `BackupManager` to asynchronous `fs.promises` equivalents to prevent freezing the Node.js event pool during journal backups.
-- **Performance Optimization (I/O)** — Refactored synchronous `fs.mkdirSync` and `fs.rmSync` in `VectorSearchManager` to asynchronous `fs.promises` equivalents for non-blocking directory operations during index initialization and rebuilding.
-- **Performance Optimization (Build)** — Disabled generating `.map` source maps in production build (disabled `sourceMap` in `tsconfig.json`), saving approx 1-2MB in the final compiled bundle.
-- **Performance Optimization (Memory)** — Refactored unbounded `SELECT * FROM memory_journal` queries across core handlers (`entries.ts`, `templates.ts`, `github.ts`, `core.ts`, `stats.ts`, `graph.ts`, `workflow.ts`) to use explicit `ENTRY_COLUMNS` projections, reducing I/O latency and WASM memory overhead.
-- **Performance Optimization (Bundle)** — `WasmSqliteAdapter` initialization is now strictly loaded via a dynamic `await import` block inside `DatabaseAdapterFactory.create`. This keeps the heavy WASM binaries fully isolated from the top-level bundle payload on native platforms. 
-- **Performance Optimization (Database)** — Unbounded `SELECT * FROM relationships` wildcard lookups have been restricted to strict `id, from_entry_id, to_entry_id, relationship_type, description, created_at` column mappings.
-- **Performance Optimization (Sandbox)** — Capped Code Mode Result serialization using strict buffer tracking logic to prevent `JSON.stringify` from creating maximum V8 strings that blow through native application memory.
-- **GitHub API Caching** — Implemented a bounded (max 100 items), TTL-aware LRU cache strategy in `GitHubClient` to prevent memory leaks on long-running instances.
-- **Core Handlers Modularized**:
-  - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
-  - **GitHub Integration** — Split monolithic `src/github/github-integration.ts` (1707 lines) into `src/github/github-integration/` containing focused modules (`auth.ts`, `repos.ts`, `issues.ts`, `pull-requests.ts`, `search.ts`, `copilot.ts`, `index.ts`).
-  - **Core Resources** — Split monolithic `src/handlers/resources/core.ts` (823 lines) into `src/handlers/resources/core/` containing `briefing.ts`, `instructions.ts`, `stats.ts`, and `index.ts`.
-  - **Briefing Resource** — Split monolithic `src/handlers/resources/core/briefing.ts` (603 lines) into `src/handlers/resources/core/briefing/` containing focused builders (`github-section.ts`, `context-section.ts`, `user-message.ts`) and `index.ts`.
-- **Test Directory Renamed** — Renamed `src/auth/__tests__` to `src/auth/tests` to comply with the project's strict kebab-case naming standard.
-- **HTTP Transport Modularized** — Continued splitting `src/transports/http.ts` and `src/transports/http/server.ts` into a fully modularized directory:
-  - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types
-  - `security.ts` — Client IP extraction, built-in rate limiting, CORS (wildcard subdomain support), security headers
-  - `handlers.ts` — Health check, root info, bearer token auth middleware
-  - `server/` — Split `server.ts` into `stateless.ts`, `stateful.ts`, `legacy-sse.ts`, and `index.ts`
-  - `index.ts` — Barrel re-export
-- **CORS Configuration** — `corsOrigin: string` changed to `corsOrigins: string[]` for multi-origin support. CLI `--cors-origin` accepts comma-separated values. Wildcard subdomain patterns supported (e.g., `*.example.com`).
-- **HSTS Configuration** — HSTS is now config-driven via `enableHSTS: true` instead of auto-detecting from `X-Forwarded-Proto` header.
-- **Cache-Control Header** — Strengthened from `no-store` to `no-store, no-cache, must-revalidate`.
 
 ### Fixed
 
