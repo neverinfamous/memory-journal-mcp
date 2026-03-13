@@ -1,5 +1,9 @@
 ### Changed
 
+- **Performance Audit Fixes (Round 4)**
+  - Enabled tsup `splitting: true` — shared code between `cli.js` and `index.js` is now extracted into a common chunk, reducing total dist size from 875 KB to 455 KB (~48% reduction, ~420 KB saved)
+  - Migrated `TagsManager` and `RelationshipsManager` from legacy `exec()` (which translated rows to `{ columns, values }` arrays) to direct `db.prepare()` calls, matching the pattern already used by `EntriesManager`. Eliminates row-format translation overhead and the manual `rowToObject` helper. Uses native `result.lastInsertRowid` instead of `SELECT last_insert_rowid()` query.
+
 - **Code Quality Audit Fixes (Round 10)**
   - Extracted `MAX_CONTENT_LENGTH = 50_000` constant into `schemas.ts`, replacing 4 inline `max(50000)` literals in `core.ts` and `team.ts`
   - Extracted `DATE_MIN_SENTINEL` / `DATE_MAX_SENTINEL` constants into `schemas.ts`, replacing 3 inline `'1970-01-01'` / `'2999-12-31'` literals in `export.ts`
