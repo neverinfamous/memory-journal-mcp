@@ -58,6 +58,20 @@
 
 **Flow:** AI Session Start → Read `memory://briefing` → Journal Operations (Create, Search, Link) → Triple Search + GitHub Integration → Outputs (Standups, Knowledge Graphs, Timelines) → Use `session-summary` prompt when ready to capture session context
 
+## Rule
+
+### Session Initialization
+
+When starting a session with this server, the agent **must** read the `memory://briefing` resource before processing the user's request. The briefing contains a `userMessage` property with project context that should be presented to the user at the start of each session.
+
+**Steps:**
+
+1. Use the `read_resource` tool to fetch `memory://briefing`
+2. Parse the JSON response and present the `userMessage` content to the user
+3. Proceed with the user's request
+
+---
+
 ### Tool Filtering
 
 > [!IMPORTANT]

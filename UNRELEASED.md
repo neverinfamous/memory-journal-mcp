@@ -1,6 +1,13 @@
 ### Changed
 
+- **README/DOCKER_README Session Initialization Rule** — Added a `## Rule` section with explicit instructions for AI agents to read `memory://briefing` before processing user requests. This supplements the MCP `instructions` field (which not all clients surface) by providing a README-level directive that clients like Claude Desktop and Cursor parse directly, making briefing initialization 100% reliable across all MCP clients.
+
 - **README "What Sets Us Apart" Table** — Converted the 14-bullet "Key Benefits" list into a 17-row feature table matching db-mcp's "What Sets Us Apart" format. Added rows for Configurable Briefing, OAuth 2.1 + Access Control, HTTP Streaming Transport, Production-Ready Security, Strict TypeScript, and MCP 2025-03-26 compliance. Removed all WASM/Dual-Backend/sql.js references (variant rows, stack diagram, Technical Highlights, security bullets) to reflect the native-only `better-sqlite3` architecture. Applied same changes to `DOCKER_README.md`.
+
+- **Performance Audit Fixes (Round 3)**
+  - Pre-compiled `IS_MUTATION_RE` regex as module-level constant in `native-connection.ts` — eliminates repeated regex compilation on every `exec()` call
+  - Replaced `new Date()` object allocation in `mergeAndDedup` sort comparator with `localeCompare()` in `search.ts` — ISO 8601 timestamps sort lexicographically without parsing
+  - Moved `fetchCopilotReviews` into main `Promise.all` block in `github-section.ts` — runs in parallel with 4 other GitHub API calls instead of sequentially after them
 
 - **Test Artifact Consolidation** — Consolidated scattered test output directories (`coverage/`, `test-results/`, `test-server/*.db*`, `test-server/backups/`, `backups/`) into a single `.test-output/` directory with `coverage/` (vitest), `playwright/` (Playwright results), and `e2e/` (E2E databases and scheduler backups). Moved `code-map.md`, `test-tools.md`, and `tool-reference.md` from `test-server/` to `docs/`. Updated `.gitignore` and `.dockerignore` to use single `.test-output/` entry. No source code changes needed — the backup system auto-adapts via `dirname(dbPath)` path derivation.
 

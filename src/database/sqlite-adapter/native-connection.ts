@@ -8,6 +8,12 @@ import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from '../core/schema.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 
 /**
+ * Pre-compiled regex to detect SQL mutation statements.
+ * Hoisted to module scope to avoid recompilation on every exec() call.
+ */
+const IS_MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store))./i
+
+/**
  * Shared migration columns required by both personal and team schemas.
  * Adding a new column here ensures it is applied in both migrateSchema() and applyTeamSchema().
  */
@@ -173,8 +179,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
     exec(sql: string, params?: unknown[]): QueryResult[] {
         const db = this.ensureDb()
         
-        // Use regex to detect true mutations that should return an empty set
-        const isMutation = /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store))./i.test(sql)
+        // Use pre-compiled regex to detect true mutations that should return an empty set
+        const isMutation = IS_MUTATION_RE.test(sql)
 
         // For multiple statements separated by semicolon where they just want it to run
         if (isMutation && sql.includes(';')) {

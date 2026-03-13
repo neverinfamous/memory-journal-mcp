@@ -59,18 +59,18 @@ export async function buildGitHubSection(
         if (isResourceError(resolved)) return null
         const { owner, repo } = resolved
 
-        // Parallel fetch — all four calls are independent and each has its own error handling
-        const [ciStatus, issuesAndPrs, milestones, insights] = await Promise.all([
+        // Parallel fetch — all calls are independent and each has its own error handling
+        const [ciStatus, issuesAndPrs, milestones, insights, copilotReviews] = await Promise.all([
             fetchCiStatus(github, owner, repo, config),
             fetchIssuesAndPrs(github, owner, repo, config),
             fetchMilestones(github, owner, repo),
             fetchInsights(github, owner, repo),
+            config.copilotReviews
+                ? fetchCopilotReviews(github, owner, repo)
+                : Promise.resolve(undefined),
         ])
         const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
-        const copilotReviews = config.copilotReviews
-            ? await fetchCopilotReviews(github, owner, repo)
-            : undefined
 
         return {
             repo: `${owner}/${repo}`,

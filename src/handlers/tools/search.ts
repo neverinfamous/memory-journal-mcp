@@ -360,9 +360,9 @@ function mergeAndDedup(
     const seen = new Set<string>()
     const merged: EntryWithSource[] = []
 
-    // Concat and sort by timestamp descending
+    // Concat and sort by timestamp descending (ISO 8601 sorts lexicographically)
     const all = [...personal, ...team].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        (a, b) => b.timestamp.localeCompare(a.timestamp)
     )
 
     for (const entry of all) {
