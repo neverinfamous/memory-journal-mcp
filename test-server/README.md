@@ -35,11 +35,11 @@ The server initializes its database locations using **Smart Path Resolution**:
 
 ### Automated Test Artifacts
 
-When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test suites will natively generate and drop isolated database artifacts directly into this `test-server/` directory instead of the project root. 
-- `test-e2e.db`
-- `test-e2e-auth.db`
-- `test-e2e-stateless.db`
-- `test-isolation-dir/`
+When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test suites generate isolated database artifacts into the `.test-output/` directory (gitignored):
+- `.test-output/e2e/test-e2e.db`
+- `.test-output/e2e/test-e2e-auth.db`
+- `.test-output/e2e/test-e2e-stateless.db`
+- `.test-output/e2e/test-isolation-dir/`
 
 **You do NOT need to maintain a copy of your real journal database here.** The test prompts and automated suites are designed for "from-scratch" database workflows.
 
@@ -57,7 +57,7 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 
 ### SQLite database locked
 
-The `memory-journal-mcp` uses `sql.js` (pure JS SQLite). Lock errors are rare but can occur if multiple processes access the same `.db` file:
+The `memory-journal-mcp` uses `better-sqlite3` (native SQLite) in WAL mode. Lock errors are uncommon but can occur if multiple processes access the same `.db` file:
 
 1. Stop all MCP server instances accessing the database
 2. Delete any `*.db-journal` or `*.db-wal` files alongside the database

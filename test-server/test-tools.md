@@ -14,7 +14,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately.
-3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `CHANGELOG.md` (no duplicate headers), and commit without pushing.
+3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
 5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
 
@@ -197,7 +197,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ---
 
-## Phase 5: GitHub Integration (15 tools)
+## Phase 5: GitHub Integration (16 tools)
 
 ### 5.1 Read-Only Tools
 
