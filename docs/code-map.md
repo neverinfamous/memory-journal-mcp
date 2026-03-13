@@ -9,6 +9,7 @@
 ```
 src/
 ├── cli.ts                          # CLI entry point (arg parsing, --db, --transport, --tool-filter)
+├── index.ts                        # Package entry point (barrel re-export)
 │
 ├── server/
 │   ├── mcp-server.ts               # McpServer setup, tool/resource/prompt wiring, scheduler init
@@ -135,18 +136,18 @@ src/
 
 | Group | Handler File(s) | Tools | Key Tools |
 |-------|----------------|-------|-----------:|
-| **core** | `core.ts` | 6 | `create_entry`, `create_entry_minimal`, `get_recent_entries`, `update_entry`, `delete_entry`, `get_entry_by_id` |
+| **core** | `core.ts` | 6 | `create_entry`, `create_entry_minimal`, `get_recent_entries`, `get_entry_by_id`, `test_simple`, `list_tags` |
 | **search** | `search.ts` | 4 | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats` |
 | **analytics** | `analytics.ts` | 2 | `get_statistics`, `get_cross_project_insights` |
 | **relationships** | `relationships.ts` | 2 | `link_entries`, `visualize_relationships` |
 | **export** | `export.ts` | 1 | `export_entries` |
-| **admin** | `admin.ts` | 5 | `rebuild_vector_index`, `add_to_vector_index`, `list_tags`, `merge_tags`, `test_simple` |
+| **admin** | `admin.ts` | 5 | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index` |
 | **backup** | `backup.ts` | 4 | `create_backup`, `list_backups`, `restore_backup`, `cleanup_backups` |
 | **team** | `team.ts` | 3 | `team_create_entry`, `team_get_recent`, `team_search` |
 | **github** | `github.ts` → `github/` | 16 | See sub-handlers below |
 | | `github/read-tools.ts` | 5 | `get_github_issues`, `get_github_issue`, `get_github_prs`, `get_github_pr`, `get_github_context` |
-| | `github/issue-tools.ts` | 4 | `create_github_issue_with_entry`, `close_github_issue_with_entry`, `add_project_item`, `move_kanban_item` |
-| | `github/kanban-tools.ts` | 1 | `get_kanban_board` |
+| | `github/issue-tools.ts` | 2 | `create_github_issue_with_entry`, `close_github_issue_with_entry` |
+| | `github/kanban-tools.ts` | 2 | `get_kanban_board`, `move_kanban_item` |
 | | `github/milestone-tools.ts` | 5 | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` |
 | | `github/insights-tools.ts` | 1 | `get_repo_insights` |
 | | `github/copilot-tools.ts` | 1 | `get_copilot_reviews` |
