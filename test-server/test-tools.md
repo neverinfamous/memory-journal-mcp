@@ -40,7 +40,7 @@ These entries ensure every FTS5 query pattern in Phase 3.1 returns actual result
 | # | Tool | Params | Enables Tests |
 |---|------|--------|---------------|
 | S1 | `create_entry` | `content: "Redesigned the authentication architecture for the OAuth 2.1 module"`, `entry_type: "technical_note"`, `tags: ["architecture", "auth"]` | `architecture`, `auth*`, `"authentication architecture"` phrase |
-| S2 | `create_entry` | `content: "Improved error handling in the database adapter layer with typed error classes"`, `entry_type: "bug_fix"`, `significance_type: "minor_improvement"`, `tags: ["error-handling", "database"]` | `"error handling"` phrase, `significance_type` filter |
+| S2 | `create_entry` | `content: "Improved error handling in the database adapter layer with typed error classes"`, `entry_type: "bug_fix"`, `significance_type: "lesson_learned"`, `tags: ["error-handling", "database"]` | `"error handling"` phrase, `significance_type` filter |
 | S3 | `create_entry` | `content: "Deploy new release candidate to the CDN edge network"`, `entry_type: "feature_implementation"`, `tags: ["deploy", "release"]`, `is_personal: false` | `deploy NOT staging`, `deploy OR release` |
 | S4 | `create_entry` | `content: "Released v5.0 with breaking API changes and migration guide"`, `entry_type: "milestone"`, `significance_type: "breakthrough"`, `tags: ["release"]` | `deploy OR release` (via "release"), semantic search for "release" |
 | S5 | `create_entry` | `content: "Deploy to staging environment failed — rollback initiated"`, `entry_type: "bug_fix"`, `tags: ["deploy", "staging"]` | `deploy NOT staging` (negative match — verifies NOT exclusion) |
