@@ -266,7 +266,7 @@ export class Scheduler {
             return
         }
 
-        const count = await this.vectorManager.rebuildIndex(this.db)
+        const { indexed: count } = await this.vectorManager.rebuildIndex(this.db)
         logger.info(`Scheduled vector index rebuild: ${String(count)} entries indexed`, {
             module: 'Scheduler',
             operation: 'rebuild-index',

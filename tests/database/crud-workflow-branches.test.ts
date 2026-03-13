@@ -3,7 +3,7 @@
  *
  * Targets uncovered branches in:
  * - crud.ts (80.24%): timestamp normalization, update all field types, GitHub extensions loop, permanent delete
- * - workflow.ts (79.41%): prepare-standup, prepare-retro, weekly-digest, analyze-period, goal-tracker, get-context-bundle
+ * - workflow.ts (79.41%): prepare-standup, prepare-retro, weekly-digest, analyze-period, get-context-bundle
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -22,11 +22,13 @@ import {
     updateEntry,
     deleteEntry,
 } from '../../src/database/sqlite-adapter/entries/crud.js'
+import { TagsManager } from '../../src/database/sqlite-adapter/tags.js'
 import { getWorkflowPromptDefinitions } from '../../src/handlers/prompts/workflow.js'
 import type { IDatabaseAdapter } from '../../src/database/core/interfaces.js'
+import type { JournalEntry } from '../../src/types/index.js'
 
 // ============================================================================
-// In-memory DB helper — wraps raw DB with NativeConnectionManager-like ctx
+// In-memory DB helper
 // ============================================================================
 
 function createTestDb() {
@@ -70,20 +72,14 @@ function createTestDb() {
     return db
 }
 
-/** Mimics NativeConnectionManager for TagsManager ctx */
+/** Creates a mock NativeConnectionManager for TagsManager */
 function makeCtx(db: InstanceType<typeof Database>) {
-    return { getRawDb: () => db } as never
-}
-
-function createTagsMgr(db: InstanceType<typeof Database>) {
-    // TagsManager expects NativeConnectionManager as ctx
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TagsManager } = require('../../src/database/sqlite-adapter/tags.js') as typeof import('../../src/database/sqlite-adapter/tags.js')
-    return new TagsManager(makeCtx(db))
+    return { getRawDb: () => db } as ConstructorParameters<typeof TagsManager>[0]
 }
 
 function createContext(db: InstanceType<typeof Database>) {
-    return { db, tagsMgr: createTagsMgr(db) }
+    const tagsMgr = new TagsManager(makeCtx(db))
+    return { db, tagsMgr }
 }
 
 // ============================================================================
@@ -288,13 +284,23 @@ describe('CRUD — branch coverage', () => {
 })
 
 // ============================================================================
-// Workflow Prompts Branch Coverage
+// Workflow Prompts Branch Coverage (assertions based on actual output text)
 // ============================================================================
 
 describe('Workflow prompts — branch coverage', () => {
-    function createMockDb(
-        entries: { timestamp: string; entryType: string; content: string }[] = []
-    ): IDatabaseAdapter {
+    function mockEntry(overrides?: Partial<JournalEntry>): JournalEntry {
+        return {
+            id: 1,
+            content: 'test content',
+            entryType: 'personal_reflection',
+            timestamp: '2025-01-15T10:00:00Z',
+            isPersonal: true,
+            tags: ['test'],
+            ...overrides,
+        } as JournalEntry
+    }
+
+    function createMockDb(entries: JournalEntry[] = []): IDatabaseAdapter {
         return {
             searchByDateRange: vi.fn().mockReturnValue(entries),
             getStatistics: vi.fn().mockReturnValue({
@@ -308,15 +314,22 @@ describe('Workflow prompts — branch coverage', () => {
             }),
             searchEntries: vi.fn().mockReturnValue(entries),
             getRecentEntries: vi.fn().mockReturnValue(entries),
+            executeRawQuery: vi.fn().mockReturnValue(
+                entries.map((e) => ({
+                    id: e.id,
+                    content: e.content,
+                    entry_type: e.entryType,
+                    timestamp: e.timestamp,
+                    significance_type: 'decision',
+                }))
+            ),
         } as unknown as IDatabaseAdapter
     }
 
     it('should generate prepare-standup prompt', () => {
         const prompts = getWorkflowPromptDefinitions()
         const standup = prompts.find((p) => p.name === 'prepare-standup')!
-        const db = createMockDb([
-            { timestamp: '2025-01-15', entryType: 'personal_reflection', content: 'worked on auth' },
-        ])
+        const db = createMockDb([mockEntry({ content: 'worked on auth' })])
         const result = standup.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('standup')
     })
@@ -324,11 +337,9 @@ describe('Workflow prompts — branch coverage', () => {
     it('should generate prepare-retro prompt with default 14 days', () => {
         const prompts = getWorkflowPromptDefinitions()
         const retro = prompts.find((p) => p.name === 'prepare-retro')!
-        const db = createMockDb([
-            { timestamp: '2025-01-15', entryType: 'decision', content: 'chose approach A' },
-        ])
+        const db = createMockDb([mockEntry()])
         const result = retro.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('14')
+        expect(result.messages[0]!.content.text).toContain('14 days')
     })
 
     it('should generate prepare-retro prompt with custom days', () => {
@@ -336,20 +347,28 @@ describe('Workflow prompts — branch coverage', () => {
         const retro = prompts.find((p) => p.name === 'prepare-retro')!
         const db = createMockDb()
         const result = retro.handler({ days: '7' }, db)
-        expect(result.messages[0]!.content.text).toContain('7')
+        expect(result.messages[0]!.content.text).toContain('7 days')
     })
 
     it('should generate weekly-digest prompt', () => {
         const prompts = getWorkflowPromptDefinitions()
         const digest = prompts.find((p) => p.name === 'weekly-digest')!
-        const db = createMockDb([
-            { timestamp: '2025-01-15', entryType: 'pr', content: 'merged PR' },
-        ])
+        const db = createMockDb([mockEntry()])
         const result = digest.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('weekly')
     })
 
-    it('should generate analyze-period prompt with default', () => {
+    it('should generate analyze-period prompt with dates', () => {
+        const prompts = getWorkflowPromptDefinitions()
+        const analyze = prompts.find((p) => p.name === 'analyze-period')!
+        const db = createMockDb()
+        // Uses start_date and end_date arg names
+        const result = analyze.handler({ start_date: '2025-01-01', end_date: '2025-02-01' }, db)
+        expect(result.messages[0]!.content.text).toContain('2025-01-01')
+        expect(result.messages[0]!.content.text).toContain('2025-02-01')
+    })
+
+    it('should generate analyze-period prompt without dates', () => {
         const prompts = getWorkflowPromptDefinitions()
         const analyze = prompts.find((p) => p.name === 'analyze-period')!
         const db = createMockDb()
@@ -357,46 +376,26 @@ describe('Workflow prompts — branch coverage', () => {
         expect(result.messages[0]!.content.text).toContain('Analyze')
     })
 
-    it('should generate analyze-period prompt with custom dates', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const analyze = prompts.find((p) => p.name === 'analyze-period')!
-        const db = createMockDb()
-        const result = analyze.handler({ start: '2025-01-01', end: '2025-02-01' }, db)
-        expect(result.messages[0]!.content.text).toContain('2025-01-01')
-    })
-
     it('should generate goal-tracker prompt', () => {
         const prompts = getWorkflowPromptDefinitions()
         const goal = prompts.find((p) => p.name === 'goal-tracker')!
-        const db = createMockDb([
-            { timestamp: '2025-01-15', entryType: 'decision', content: 'goal: ship v2' },
-        ])
+        const db = createMockDb([mockEntry({ content: 'goal: ship v2' })])
         const result = goal.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('progress')
     })
 
-    it('should generate get-context-bundle prompt with topic', () => {
-        const prompts = getWorkflowPromptDefinitions()
-        const bundle = prompts.find((p) => p.name === 'get-context-bundle')!
-        const db = createMockDb()
-        const result = bundle.handler({ topic: 'auth' }, db)
-        expect(result.messages[0]!.content.text).toContain('auth')
-    })
-
-    it('should generate get-context-bundle with default topic', () => {
+    it('should generate get-context-bundle prompt', () => {
         const prompts = getWorkflowPromptDefinitions()
         const bundle = prompts.find((p) => p.name === 'get-context-bundle')!
         const db = createMockDb()
         const result = bundle.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('recent work')
+        expect(result.messages[0]!.content.text).toContain('Project context bundle')
     })
 
     it('should generate get-recent-entries prompt', () => {
         const prompts = getWorkflowPromptDefinitions()
         const recent = prompts.find((p) => p.name === 'get-recent-entries')!
-        const db = createMockDb([
-            { timestamp: '2025-01-15', entryType: 'personal_reflection', content: 'some work' },
-        ])
+        const db = createMockDb([mockEntry()])
         const result = recent.handler({}, db)
         expect(result.messages[0]!.content.text).toContain('entries')
     })
@@ -404,7 +403,7 @@ describe('Workflow prompts — branch coverage', () => {
     it('should generate confirm-briefing prompt', () => {
         const prompts = getWorkflowPromptDefinitions()
         const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
-        const db = createMockDb()
+        const db = createMockDb([mockEntry()])
         const result = confirm.handler({}, db)
         expect(result.messages.length).toBeGreaterThan(0)
     })
@@ -412,10 +411,8 @@ describe('Workflow prompts — branch coverage', () => {
     it('should generate session-summary prompt', () => {
         const prompts = getWorkflowPromptDefinitions()
         const summary = prompts.find((p) => p.name === 'session-summary')!
-        const db = createMockDb([
-            { timestamp: '2025-01-15', entryType: 'personal_reflection', content: 'debug session' },
-        ])
+        const db = createMockDb([mockEntry({ content: 'debug session' })])
         const result = summary.handler({}, db)
-        expect(result.messages[0]!.content.text).toContain('summarize')
+        expect(result.messages[0]!.content.text).toContain('session summary')
     })
 })

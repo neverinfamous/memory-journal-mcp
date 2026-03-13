@@ -93,7 +93,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | -------------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
 | `test_simple`                    | `TestSimpleOutputSchema`                 | `message` string                                             |
 | `export_entries`                 | `ExportEntriesOutputSchema`              | `format`, `entries` (JSON) or `content` (markdown)           |
-| `rebuild_vector_index`           | `RebuildVectorIndexOutputSchema`         | `success`, `entriesIndexed`                                  |
+| `rebuild_vector_index`           | `RebuildVectorIndexOutputSchema`         | `success`, `entriesIndexed`, optional `failedEntries`        |
 | `add_to_vector_index`            | `AddToVectorIndexOutputSchema`           | `success`, `entryId`                                         |
 | `move_kanban_item`               | `MoveKanbanItemOutputSchema`             | `success`, `itemId`, `newStatus`, `projectNumber`, `message` |
 | `create_github_issue_with_entry` | `CreateGitHubIssueWithEntryOutputSchema` | `success`, `issue`, `journalEntry`, optional `project`       |

@@ -56,7 +56,7 @@ describe('VectorSearchManager — branch coverage', () => {
         }
 
         const result = await manager.rebuildIndex(mockDbAdapter as never)
-        expect(result).toBe(0)
+        expect(result).toEqual({ indexed: 0, failed: 0 })
     })
 
     it('should return stats with zero values when no db', async () => {
@@ -106,6 +106,6 @@ describe('VectorSearchManager — branch coverage', () => {
 
         const result = await manager.rebuildIndex(mockDbAdapter as never)
         expect(initSpy).toHaveBeenCalled()
-        expect(result).toBe(0)
+        expect(result).toEqual({ indexed: 0, failed: 0 })
     })
 })

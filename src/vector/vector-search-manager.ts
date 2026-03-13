@@ -238,13 +238,13 @@ export class VectorSearchManager {
      * @param db - Database adapter
      * @param progress - Optional progress context for notifications
      */
-    async rebuildIndex(db: IDatabaseAdapter, progress?: ProgressContext): Promise<number> {
+    async rebuildIndex(db: IDatabaseAdapter, progress?: ProgressContext): Promise<{ indexed: number; failed: number }> {
         if (!this.initialized) {
             await this.initialize()
         }
 
         if (!this.db) {
-            return 0
+            return { indexed: 0, failed: 0 }
         }
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
@@ -267,6 +267,7 @@ export class VectorSearchManager {
         )
 
         let indexed = 0
+        let failed = 0
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
             const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
 
@@ -285,7 +286,7 @@ export class VectorSearchManager {
                                 entityId: entry.id,
                                 error: embError instanceof Error ? embError.message : String(embError),
                             })
-                            return { entry, embedding: null }
+                            return { entry, embedding: null as number[] | null }
                         }
                     })
                 )
@@ -298,12 +299,15 @@ export class VectorSearchManager {
                             insertStmt.run(entry.id, vec)
                             indexed++
                         } catch (error) {
+                            failed++
                             logger.error('Failed to insert entry into vector index', {
                                 module: 'VectorSearch',
                                 entityId: entry.id,
                                 error: error instanceof Error ? error.message : String(error),
                             })
                         }
+                    } else {
+                        failed++
                     }
                 }
 
@@ -322,10 +326,16 @@ export class VectorSearchManager {
         // Final progress
         await sendProgress(progress, indexed, totalEntries, 'Vector index rebuild complete')
 
-        logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
-            module: 'VectorSearch',
-        })
-        return indexed
+        if (failed > 0) {
+            logger.warning(`Vector index rebuild: ${String(indexed)} indexed, ${String(failed)} failed`, {
+                module: 'VectorSearch',
+            })
+        } else {
+            logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
+                module: 'VectorSearch',
+            })
+        }
+        return { indexed, failed }
     }
 
     /**

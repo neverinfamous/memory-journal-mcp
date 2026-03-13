@@ -20,6 +20,10 @@
   - Improved `link_entries` error message when source or target entry doesn't exist — now returns `"One or both entries not found (from: X, to: Y)"` instead of raw SQLite `"FOREIGN KEY constraint failed"` error
   - `add_to_vector_index` now returns `error: "Failed to generate or store embedding"` when the vector operation fails, instead of `success: false` with no explanation
 
+- **Pass 1 Retest Fixes**
+  - `rebuild_vector_index` now returns `failedEntries` count and sets `success: false` with `error: "All entries failed to generate embeddings"` when every entry fails — previously returned `success: true, entriesIndexed: 0` with no indication of failure
+  - Added `getRecent` alias for `getRecentEntries` in Code Mode (`mj.core.getRecent()`) — agents commonly try this natural camelCase abbreviation
+
 - **MCP Builder Compliance Audit Fixes**
   - Added `error` field to `ErrorResponseFields` mixin — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions
   - Added DNS rebinding protection (`hostHeaderValidation()`) to HTTP transport — applies MCP SDK middleware when no auth is configured as defense-in-depth against CVE-2025-66414

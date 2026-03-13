@@ -22,6 +22,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         create: 'createEntry',
         get: 'getEntryById',
         recent: 'getRecentEntries',
+        getRecent: 'getRecentEntries',
         quick: 'createEntryMinimal',
         tags: 'listTags',
     },

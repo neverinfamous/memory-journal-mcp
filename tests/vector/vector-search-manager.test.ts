@@ -297,8 +297,9 @@ describe('VectorSearchManager', () => {
                 ]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
-            expect(indexed).toBe(2)
+            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            expect(result.indexed).toBe(2)
+            expect(result.failed).toBe(0)
             // DELETE to clear + 2 INSERTs
             expect(mockRun).toHaveBeenCalledTimes(3)
         })
@@ -313,8 +314,8 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Active entry' }]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
-            expect(indexed).toBe(1)
+            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            expect(result.indexed).toBe(1)
 
             // First call should be DELETE FROM vec_embeddings
             expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM vec_embeddings')
@@ -326,8 +327,9 @@ describe('VectorSearchManager', () => {
                 getEntriesPage: vi.fn().mockReturnValue([]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
-            expect(indexed).toBe(0)
+            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            expect(result.indexed).toBe(0)
+            expect(result.failed).toBe(0)
         })
 
         it('should skip entries with embedding failures', async () => {
@@ -346,9 +348,10 @@ describe('VectorSearchManager', () => {
                 ]),
             }
 
-            const indexed = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
             // Only 1 should be indexed (the other failed)
-            expect(indexed).toBe(1)
+            expect(result.indexed).toBe(1)
+            expect(result.failed).toBe(1)
         })
     })
 

@@ -98,7 +98,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     if (options.autoRebuildIndex) {
         logger.info('Auto-rebuilding vector index on startup...', { module: 'McpServer' })
         await vectorManager.initialize()
-        const count = await vectorManager.rebuildIndex(db)
+        const { indexed: count } = await vectorManager.rebuildIndex(db)
         logger.info('Vector index rebuilt on startup', {
             module: 'McpServer',
             entriesIndexed: count,

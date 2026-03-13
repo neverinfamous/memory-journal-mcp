@@ -74,6 +74,7 @@ const MergeTagsOutputSchema = z.object({
 const RebuildVectorIndexOutputSchema = z.object({
     success: z.boolean().optional(),
     entriesIndexed: z.number().optional(),
+    failedEntries: z.number().optional(),
     error: z.string().optional(),
 }).extend(ErrorResponseFields.shape)
 
@@ -249,8 +250,14 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                         }
                     }
-                    const indexed = await vectorManager.rebuildIndex(db, progress)
-                    return { success: true, entriesIndexed: indexed }
+                    const { indexed, failed } = await vectorManager.rebuildIndex(db, progress)
+                    const success = indexed > 0 || failed === 0
+                    return {
+                        success,
+                        entriesIndexed: indexed,
+                        ...(failed > 0 ? { failedEntries: failed } : {}),
+                        ...(!success ? { error: 'All entries failed to generate embeddings' } : {}),
+                    }
                 } catch (err) {
                     return formatHandlerErrorResponse(err)
                 }
