@@ -1,9 +1,20 @@
+import type { Database } from 'better-sqlite3'
 import type { Relationship, RelationshipType } from '../../types/index.js'
-import type { IDatabaseConnection } from '../core/interfaces.js'
+import type { NativeConnectionManager } from './native-connection.js'
 import type { EntriesManager } from './entries/index.js'
 
 export class RelationshipsManager {
-    constructor(private ctx: IDatabaseConnection, private entries: EntriesManager) {}
+    private ctx: NativeConnectionManager
+    private entries: EntriesManager
+
+    constructor(ctx: NativeConnectionManager, entries: EntriesManager) {
+        this.ctx = ctx
+        this.entries = entries
+    }
+
+    private get db(): Database {
+        return this.ctx.getRawDb() as Database
+    }
 
     linkEntries(
         fromEntryId: number,
@@ -11,21 +22,19 @@ export class RelationshipsManager {
         relationshipType: RelationshipType,
         description?: string
     ): Relationship {
-        const db = this.ctx
+        const db = this.db
 
         this.entries.getEntryById(fromEntryId)
         this.entries.getEntryById(toEntryId)
 
-        db.run(
-            `
-            INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type, description)
-            VALUES (?, ?, ?, ?)
-        `,
-            [fromEntryId, toEntryId, relationshipType, description ?? null]
-        )
+        const result = db
+            .prepare(
+                `INSERT INTO relationships (from_entry_id, to_entry_id, relationship_type, description)
+                 VALUES (?, ?, ?, ?)`
+            )
+            .run(fromEntryId, toEntryId, relationshipType, description ?? null)
 
-        const result = db.exec('SELECT last_insert_rowid() as id')
-        const id = result[0]?.values[0]?.[0] as number
+        const id = result.lastInsertRowid as number
 
         this.ctx.scheduleSave()
 
@@ -40,37 +49,22 @@ export class RelationshipsManager {
     }
 
     getRelationships(entryId: number): Relationship[] {
-        const db = this.ctx
-        const result = db.exec(
-            `
-            SELECT id, from_entry_id, to_entry_id, relationship_type, description, created_at
-            FROM relationships
-            WHERE from_entry_id = ? OR to_entry_id = ?
-        `,
-            [entryId, entryId]
-        )
+        const rows = this.db
+            .prepare(
+                `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
+                        relationship_type as relationshipType, description, created_at as createdAt
+                 FROM relationships
+                 WHERE from_entry_id = ? OR to_entry_id = ?`
+            )
+            .all(entryId, entryId) as {
+            id: number
+            fromEntryId: number
+            toEntryId: number
+            relationshipType: RelationshipType
+            description: string | null
+            createdAt: string
+        }[]
 
-        if (result.length === 0) return []
-
-        const columns = result[0]?.columns ?? []
-        return (result[0]?.values ?? []).map((values: unknown[]) => {
-            const row = this.rowToObject(columns, values)
-            return {
-                id: row['id'] as number,
-                fromEntryId: row['from_entry_id'] as number,
-                toEntryId: row['to_entry_id'] as number,
-                relationshipType: row['relationship_type'] as RelationshipType,
-                description: row['description'] as string | null,
-                createdAt: row['created_at'] as string,
-            }
-        })
-    }
-
-    private rowToObject(columns: string[], values: unknown[]): Record<string, unknown> {
-        const obj: Record<string, unknown> = {}
-        columns.forEach((col, i) => {
-            obj[col] = values[i]
-        })
-        return obj
+        return rows
     }
 }
