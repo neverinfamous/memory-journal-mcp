@@ -98,6 +98,8 @@ export interface CreateEntryInput {
     isPersonal?: boolean
     significanceType?: SignificanceType
     autoContext?: string
+    /** Optional ISO 8601 timestamp override (defaults to current time) */
+    timestamp?: string
     projectNumber?: number
     projectOwner?: string
     issueNumber?: number

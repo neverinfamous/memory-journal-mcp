@@ -242,28 +242,34 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         return obj
                     })
 
-                    // Get top tags per project
+                    // Get top tags per project (batch query instead of N+1)
                     const projectTags: Record<number, { name: string; count: number }[]> = {}
-                    for (const proj of projects) {
-                        const projNum = proj['project_number'] as number
-                        const tagsResult = db.executeRawQuery(
+                    const projectNumbers = projects.map((p) => p['project_number'] as number)
+                    if (projectNumbers.length > 0) {
+                        const tagPlaceholders = projectNumbers.map(() => '?').join(',')
+                        const allTagsResult = db.executeRawQuery(
                             `
-                            SELECT t.name, COUNT(*) as count
+                            SELECT m.project_number, t.name, COUNT(*) as count
                             FROM tags t
                             JOIN entry_tags et ON t.id = et.tag_id
                             JOIN memory_journal m ON et.entry_id = m.id
-                            WHERE m.project_number = ? AND m.deleted_at IS NULL
-                            GROUP BY t.name
-                            ORDER BY count DESC
-                            LIMIT 5
-                        `,
-                            [projNum]
+                            WHERE m.project_number IN (${tagPlaceholders}) AND m.deleted_at IS NULL
+                            GROUP BY m.project_number, t.name
+                            ORDER BY m.project_number, count DESC
+                            `,
+                            projectNumbers
                         )
-                        if (tagsResult[0]) {
-                            projectTags[projNum] = tagsResult[0].values.map((row: unknown[]) => ({
-                                name: row[0] as string,
-                                count: row[1] as number,
-                            }))
+                        if (allTagsResult[0]) {
+                            // Partition rows by project_number, keeping top 5 per project
+                            for (const row of allTagsResult[0].values) {
+                                const projNum = row[0] as number
+                                const tagEntry = { name: row[1] as string, count: row[2] as number }
+                                const existing = projectTags[projNum] ?? []
+                                if (existing.length < 5) {
+                                    existing.push(tagEntry)
+                                    projectTags[projNum] = existing
+                                }
+                            }
                         }
                     }
 

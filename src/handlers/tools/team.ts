@@ -8,41 +8,13 @@
  */
 
 import { z } from 'zod'
-import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
-import { sanitizeAuthor } from '../../utils/security-utils.js'
+import { resolveAuthor } from '../../utils/security-utils.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 
-// ============================================================================
-// Author Detection
-// ============================================================================
 
-/**
- * Resolve the author name for team entries.
- * Priority: TEAM_AUTHOR env > git config user.name > 'unknown'
- */
-function resolveAuthor(): string {
-    // 1. Explicit env var
-    const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return sanitizeAuthor(envAuthor)
-
-    // 2. Git config
-    try {
-        const gitUser = execFileSync('git', ['config', 'user.name'], {
-            encoding: 'utf-8',
-            timeout: 3000,
-        })
-            .trim()
-            .replace(/"/g, '')
-        if (gitUser) return sanitizeAuthor(gitUser)
-    } catch {
-        // Git not available or not configured
-    }
-
-    return 'unknown'
-}
 
 // ============================================================================
 // Input Schemas
@@ -131,6 +103,30 @@ const TeamEntriesListOutputSchema = z.object({
 const TEAM_DB_NOT_CONFIGURED =
     'Team database not configured. Set TEAM_DB_PATH environment variable to enable team collaboration.'
 
+/**
+ * Batch-fetch author names for a list of entry IDs.
+ * Returns a Map<entryId, author> for O(1) lookups.
+ */
+function batchFetchAuthors(
+    teamDb: NonNullable<ToolContext['teamDb']>,
+    entryIds: number[]
+): Map<number, string | null> {
+    const authorMap = new Map<number, string | null>()
+    if (entryIds.length === 0) return authorMap
+
+    const placeholders = entryIds.map(() => '?').join(',')
+    const result = teamDb.executeRawQuery(
+        `SELECT id, author FROM memory_journal WHERE id IN (${placeholders})`,
+        entryIds
+    )
+    if (result[0]) {
+        for (const row of result[0].values) {
+            authorMap.set(row[0] as number, (row[1] as string) ?? null)
+        }
+    }
+    return authorMap
+}
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -215,15 +211,12 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     const { limit } = TeamGetRecentSchema.parse(params)
                     const entries = teamDb.getRecentEntries(limit)
 
-                    // Enrich entries with author column
-                    const enriched = entries.map((e) => {
-                        const authorResult = teamDb.executeRawQuery(
-                            'SELECT author FROM memory_journal WHERE id = ?',
-                            [e.id]
-                        )
-                        const author = (authorResult[0]?.values[0]?.[0] as string) ?? null
-                        return { ...e, author }
-                    })
+                    // Batch-fetch authors (single query instead of N+1)
+                    const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
+                    const enriched = entries.map((e) => ({
+                        ...e,
+                        author: authorMap.get(e.id) ?? null,
+                    }))
 
                     return { entries: enriched, count: enriched.length }
                 } catch (err) {
@@ -263,15 +256,12 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                         })
                     }
 
-                    // Enrich with author
-                    const enriched = entries.map((e) => {
-                        const authorResult = teamDb.executeRawQuery(
-                            'SELECT author FROM memory_journal WHERE id = ?',
-                            [e.id]
-                        )
-                        const author = (authorResult[0]?.values[0]?.[0] as string) ?? null
-                        return { ...e, author }
-                    })
+                    // Batch-fetch authors (single query instead of N+1)
+                    const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
+                    const enriched = entries.map((e) => ({
+                        ...e,
+                        author: authorMap.get(e.id) ?? null,
+                    }))
 
                     return { entries: enriched, count: enriched.length }
                 } catch (err) {

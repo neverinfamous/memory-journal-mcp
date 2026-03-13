@@ -6,6 +6,13 @@
   - Renamed `src/types/sql.js.d.ts` to `sql-js.d.ts` to ensure strict compliance with kebab-case naming standard
   - Eliminated `eslint-disable-next-line` pragmas where possible (e.g. `no-control-regex` solved natively in `security-utils.ts`, `no-explicit-any` removed in `backup.ts`)
   - Strictified `z.object({})` Zod schemas by appending `.strict()` for safer payload validation on empty schemas (`admin.ts`, `backup.ts`, `core.ts`, `search.ts`, `read-tools.ts`)
+  - Consolidated duplicated `resolveAuthor` / `resolveTeamAuthor` logic from `core.ts` and `team.ts` into shared `resolveAuthor()` in `security-utils.ts`
+  - Removed `as unknown as Record<string, unknown>` type cast in `crud.ts` by adding `timestamp?: string` to `CreateEntryInput` interface
+  - Removed deprecated `SERVER_INSTRUCTIONS` constant from `server-instructions.ts` (zero consumers)
+  - Split 603-line `briefing.ts` into `briefing/` directory: `github-section.ts`, `context-section.ts`, `user-message.ts`, `index.ts` (all under 260 lines)
+  - Replaced N+1 author queries in `team.ts` with single batch `SELECT ... WHERE id IN (...)` via `batchFetchAuthors()` helper
+  - Replaced N+1 per-project tag queries in `analytics.ts` with single batch query grouped by `project_number`
+
 ### Fixed
 
 - Resolved Zod `4.3.6` dependency resolution conflict with OpenAI SDK via explicit `package.json` overrides.
@@ -77,7 +84,7 @@
   - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
   - **GitHub Integration** — Split monolithic `src/github/github-integration.ts` (1707 lines) into `src/github/github-integration/` containing focused modules (`auth.ts`, `repos.ts`, `issues.ts`, `pull-requests.ts`, `search.ts`, `copilot.ts`, `index.ts`).
   - **Core Resources** — Split monolithic `src/handlers/resources/core.ts` (823 lines) into `src/handlers/resources/core/` containing `briefing.ts`, `instructions.ts`, `stats.ts`, and `index.ts`.
-  - **Briefing Resource** — Split monolithic `src/handlers/resources/core/briefing.ts` (560 lines) into `src/handlers/resources/core/briefing/` containing focused builders (`github.ts`, `team.ts`, `system.ts`, `formatter.ts`, `types.ts`) and `index.ts`.
+  - **Briefing Resource** — Split monolithic `src/handlers/resources/core/briefing.ts` (603 lines) into `src/handlers/resources/core/briefing/` containing focused builders (`github-section.ts`, `context-section.ts`, `user-message.ts`) and `index.ts`.
 - **Test Directory Renamed** — Renamed `src/auth/__tests__` to `src/auth/tests` to comply with the project's strict kebab-case naming standard.
 - **HTTP Transport Modularized** — Continued splitting `src/transports/http.ts` and `src/transports/http/server.ts` into a fully modularized directory:
   - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types

@@ -6,10 +6,9 @@
  */
 
 import { z } from 'zod'
-import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
-import { sanitizeAuthor } from '../../utils/security-utils.js'
+import { resolveAuthor } from '../../utils/security-utils.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 import {
     ENTRY_TYPES,
@@ -134,27 +133,7 @@ const TagsListOutputSchema = z.object({
     error: z.string().optional(),
 }).extend(ErrorResponseFields.shape)
 
-// ============================================================================
-// Helpers
-// ============================================================================
 
-/** Resolve the author name for team-shared entries */
-function resolveTeamAuthor(): string {
-    const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return sanitizeAuthor(envAuthor)
-    try {
-        const gitUser = execFileSync('git', ['config', 'user.name'], {
-            encoding: 'utf-8',
-            timeout: 3000,
-        })
-            .trim()
-            .replace(/"/g, '')
-        if (gitUser) return sanitizeAuthor(gitUser)
-    } catch {
-        // Git not available
-    }
-    return 'unknown'
-}
 
 // ============================================================================
 // Tool Definitions
@@ -215,7 +194,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let author: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
-                            author = resolveTeamAuthor()
+                            author = resolveAuthor()
                             const teamEntry = teamDb.createEntry({
                                 content: input.content,
                                 entryType: input.entry_type,

@@ -5,8 +5,7 @@ import { ENTRY_COLUMNS, type EntriesSharedContext, rowToEntry, rowToObject } fro
 export function createEntry(context: EntriesSharedContext, input: CreateEntryInput): JournalEntry {
     const { db, tagsMgr } = context
 
-    const inputObj = input as unknown as Record<string, unknown>
-    let timestamp = typeof inputObj['timestamp'] === 'string' ? inputObj['timestamp'] : new Date().toISOString()
+    let timestamp = input.timestamp ?? new Date().toISOString()
     // SQLite expects standard ISO format
     if (!timestamp.includes('T')) {
         timestamp += 'T00:00:00.000Z'
