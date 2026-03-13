@@ -6,7 +6,11 @@
 
 - **README/DOCKER_README Session Initialization Rule** — Added a `## Rule` section with explicit instructions for AI agents to read `memory://briefing` before processing user requests. This supplements the MCP `instructions` field (which not all clients surface) by providing a README-level directive that clients like Claude Desktop and Cursor parse directly, making briefing initialization 100% reliable across all MCP clients.
 
-- **README "What Sets Us Apart" Table** — Converted the 14-bullet "Key Benefits" list into a 17-row feature table matching db-mcp's "What Sets Us Apart" format. Added rows for Configurable Briefing, OAuth 2.1 + Access Control, HTTP Streaming Transport, Production-Ready Security, Strict TypeScript, and MCP 2025-03-26 compliance. Removed all WASM/Dual-Backend/sql.js references (variant rows, stack diagram, Technical Highlights, security bullets) to reflect the native-only `better-sqlite3` architecture. Applied same changes to `DOCKER_README.md`.
+- **README/DOCKER_README Cross-Agent Memory** — Added **Cross-Agent Memory** feature row to both README and DOCKER_README feature tables, highlighting the IDE ↔ Copilot bridge via journal entries. Added Copilot Setup Guide link to Documentation & Resources sections.
+
+- **Wiki: Copilot Integration Page** — Created dedicated `Copilot-Integration.md` wiki page documenting the cross-agent memory bridge between IDE agents and GitHub Copilot (three usage patterns, setup for both directions, recommended workflow, security notes). Added to `_Sidebar.md` and `Home.md` navigation. Fixed stale tool counts (43→44) in `Home.md`.
+
+- **README/DOCKER_README "What Sets Us Apart" Table** — Converted the 14-bullet "Key Benefits" list into a 17-row feature table matching db-mcp's "What Sets Us Apart" format. Added rows for Configurable Briefing, OAuth 2.1 + Access Control, HTTP Streaming Transport, Production-Ready Security, Strict TypeScript, and MCP 2025-03-26 compliance. Removed all WASM/Dual-Backend/sql.js references (variant rows, stack diagram, Technical Highlights, security bullets) to reflect the native-only `better-sqlite3` architecture. Applied same changes to `DOCKER_README.md`.
 
 - **Performance Audit Fixes (Round 3)**
   - Pre-compiled `IS_MUTATION_RE` regex as module-level constant in `native-connection.ts` — eliminates repeated regex compilation on every `exec()` call

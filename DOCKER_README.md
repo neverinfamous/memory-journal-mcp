@@ -38,6 +38,7 @@
 | **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                             |
 | **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals |
 | **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                             |
+| **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, and IDE agents proactively apply past patterns ([setup guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
 | **Strict TypeScript**          | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                                                               |
 | **MCP 2025-03-26 Compliant**   | Full protocol support with tool safety annotations, resource priorities, and progress notifications                                                                                                          |
 
@@ -506,6 +507,7 @@ Update your `~/.cursor/mcp.json` to use the local build:
 ## 📚 Documentation & Resources
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
+- **[Copilot Setup Guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)** - Cross-agent memory bridge between IDE agents and GitHub Copilot
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution
 - **[Issues](https://github.com/neverinfamous/memory-journal-mcp/issues)** - Bug reports & feature requests
 
