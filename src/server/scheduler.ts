@@ -245,9 +245,9 @@ export class Scheduler {
     /**
      * Vacuum/optimize job: run PRAGMA optimize and flush to disk.
      *
-     * Note: sql.js uses an in-memory database. PRAGMA optimize updates
-     * internal statistics, and flushSave() ensures the disk file is current.
-     * A full VACUUM on sql.js only compacts the in-memory representation.
+     * PRAGMA optimize updates internal query planner statistics based on
+     * recent query patterns. For the native better-sqlite3 driver, disk
+     * writes happen automatically via WAL mode.
      */
     private runVacuumOptimize(): void {
         this.db.pragma('optimize')

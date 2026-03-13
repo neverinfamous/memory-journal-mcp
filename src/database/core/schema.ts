@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS relationships (
     FOREIGN KEY (to_entry_id) REFERENCES memory_journal(id) ON DELETE CASCADE
 );
 
--- Embeddings for vector search (stored as JSON for sql.js compatibility)
+-- Legacy embeddings table (active embeddings use sqlite-vec vec0 virtual table)
 CREATE TABLE IF NOT EXISTS embeddings (
     entry_id INTEGER PRIMARY KEY,
     embedding TEXT NOT NULL,

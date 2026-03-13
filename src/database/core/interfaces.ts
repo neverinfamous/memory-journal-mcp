@@ -15,13 +15,14 @@ export interface QueryResult {
 
 
 /**
- * Universal SQLite interface mapping the sql.js API shape so that
- * business logic (EntriesManager, TagsManager) doesn't need to change.
+ * Universal SQLite database connection interface.
+ * Business logic (EntriesManager, TagsManager) programs against this
+ * abstraction rather than the better-sqlite3 driver directly.
  */
 export interface IDatabaseConnection {
     /**
      * Executes queries that return results (SELECT, PRAGMA)
-     * Must return the sql.js shape: { columns: string[], values: unknown[][] }[]
+     * Must return the shape: { columns: string[], values: unknown[][] }[]
      */
     exec(sql: string, params?: unknown[]): QueryResult[]
 
@@ -58,7 +59,7 @@ export interface IDatabaseConnection {
     getDbPath(): string
 
     /**
-     * Provides the underlying driver (sql.js Database or better-sqlite3 Database)
+     * Provides the underlying better-sqlite3 Database instance.
      * Note: Avoid using this in business logic to prevent driver-coupling
      */
     getRawDb(): unknown

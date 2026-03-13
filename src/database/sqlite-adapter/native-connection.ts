@@ -164,7 +164,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     /**
-     * Polyfills sql.js `exec` signature: `{ columns: string[], values: unknown[][] }[]`
+     * Maps better-sqlite3 results to the legacy `{ columns: string[], values: unknown[][] }[]` shape
      * Because better-sqlite3 returns arrays of objects instantly, we map them out.
      */
     exec(sql: string, params?: unknown[]): QueryResult[] {

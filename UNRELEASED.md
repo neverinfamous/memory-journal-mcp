@@ -1,5 +1,7 @@
 ### Changed
 
+- **Stale sql.js Comment Cleanup** — Updated 8 stale comment references to sql.js across 5 source files (`scheduler.ts`, `schema.ts`, `interfaces.ts`, `native-connection.ts`, `sqlite-adapter/index.ts`) to accurately reflect the better-sqlite3 native-only architecture. Comment-only changes, zero functional impact.
+
 - **Copilot Instructions Path Fixes** — Updated `.github/copilot-instructions.md` architecture tree to reflect kebab-case renames (`server-instructions.ts`, `sqlite-adapter/`, `tool-filter.ts`, `github-integration/`, `mcp-server.ts`, `scheduler.ts`, `http/`) and moved reference file paths (`test-server/` → `docs/`). Updated descriptions to reflect better-sqlite3 native-only architecture and modularized directory structures.
 
 - **Code Quality Audit Fixes (Round 9)**

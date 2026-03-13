@@ -190,7 +190,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {
-        // Safe query execution through interface rather than direct sql.js
+        // Safe query execution through the connection interface
         const dbPath = this.connection.getDbPath()
 
         let sizeBytes = 0
