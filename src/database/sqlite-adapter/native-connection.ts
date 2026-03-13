@@ -46,15 +46,39 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
         try {
             this.db = new DatabaseAdapter(this.dbPath)
+            const db = this.db
             
             // Native-only PRAGMAs for performance and safety
-            this.db.pragma('journal_mode = WAL')
-            this.db.pragma('synchronous = NORMAL')
-            this.db.pragma('foreign_keys = ON')
-            this.db.pragma('temp_store = MEMORY')
+            db.pragma('journal_mode = WAL')
+            db.pragma('synchronous = NORMAL')
+            db.pragma('foreign_keys = ON')
+            db.pragma('temp_store = MEMORY')
+
+            // Load sqlite-vec extension for vector search
+            // Use local `db` ref to avoid race with concurrent close() during await
+            const sqliteVec = await import('sqlite-vec')
+
+            // Guard: if close() was called during the await, abort initialization
+            if (this.db === null) {
+                logger.info('Database closed during initialization, aborting', {
+                    module: 'NativeConnectionManager',
+                })
+                return
+            }
+
+            sqliteVec.load(db)
+            logger.info('sqlite-vec extension loaded', { module: 'NativeConnectionManager' })
 
             // Create base schema
-            this.db.exec(SCHEMA_SQL)
+            db.exec(SCHEMA_SQL)
+
+            // Create vector embeddings table (sqlite-vec vec0 virtual table)
+            db.exec(`
+                CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
+                    entry_id INTEGER PRIMARY KEY,
+                    embedding float[384]
+                )
+            `)
             
             // Run schema migrations
             this.migrateSchema()

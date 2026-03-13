@@ -163,7 +163,7 @@ github_auth.json
 # Data directory (runtime databases)
 data/
 
-# Vector index files (created by vectra)
+# Legacy vector index files (before sqlite-vec migration)
 .vectra_index/
 *.vectra/
 index/

@@ -233,7 +233,7 @@ src/
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions
 ├── utils/                      # Logger, error helpers, progress
-└── vector/                     # Semantic search (vectra)
+└── vector/                     # Semantic search (sqlite-vec + transformers)
 ```
 
 ## 🤝 Community

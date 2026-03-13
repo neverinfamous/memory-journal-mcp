@@ -149,9 +149,11 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
 
                     // Remove from vector index (non-critical if fails)
                     if (vectorManager) {
-                        vectorManager.removeEntry(entry_id).catch(() => {
+                        try {
+                            vectorManager.removeEntry(entry_id)
+                        } catch {
                             // Non-critical failure, entry already deleted from DB
-                        })
+                        }
                     }
 
                     return { success, entryId: entry_id, permanent }

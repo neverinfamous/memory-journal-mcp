@@ -2,15 +2,12 @@
  * Memory Journal MCP Server - Vector Search Manager
  *
  * Semantic search using @huggingface/transformers for embeddings
- * and vectra for vector indexing.
+ * and sqlite-vec for vector indexing (stored in the same SQLite database).
  */
 
 // @huggingface/transformers is loaded lazily via dynamic import() in initialize()
 // to avoid 1.5s cold-start penalty from eagerly loading the module.
-// vectra is also loaded lazily via dynamic import() to avoid 0.9s cold-start penalty.
-import type { LocalIndex } from 'vectra'
-import * as path from 'node:path'
-import * as fs from 'node:fs'
+import type { Database as BetterSqlite3Database } from 'better-sqlite3'
 import { logger } from '../utils/logger.js'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { JournalEntry } from '../types/index.js'
@@ -38,22 +35,24 @@ export interface SemanticSearchResult {
 
 /**
  * VectorSearchManager - Handles semantic search with local embeddings
+ *
+ * Stores embeddings in the same SQLite database using the sqlite-vec extension.
+ * Uses vec0 virtual tables for efficient KNN vector search via SQL.
  */
 export class VectorSearchManager {
     // Use a more flexible type since FeatureExtractionPipeline doesn't fully implement Pipeline
     private embedder:
         | ((text: string, options?: Record<string, unknown>) => Promise<unknown>)
         | null = null
-    private index: LocalIndex | null = null
-    private readonly indexPath: string
+    private db: BetterSqlite3Database | null = null
     private readonly modelName: string
     private initialized = false
     private initializing = false
 
-    constructor(dbPath: string, modelName = DEFAULT_MODEL) {
-        // Store index in same directory as database
-        const dbDir = path.dirname(dbPath)
-        this.indexPath = path.join(dbDir, '.vectra_index')
+    constructor(
+        private readonly dbAdapter: IDatabaseAdapter,
+        modelName = DEFAULT_MODEL
+    ) {
         this.modelName = modelName
     }
 
@@ -84,21 +83,9 @@ export class VectorSearchManager {
             })
             logger.info('Embedding model loaded', { module: 'VectorSearch' })
 
-            // Create or load vectra index (dynamic import avoids 0.9s cold-start)
-            const { LocalIndex } = await import('vectra')
-            if (!fs.existsSync(this.indexPath)) {
-                await fs.promises.mkdir(this.indexPath, { recursive: true })
-            }
-
-            this.index = new LocalIndex(this.indexPath)
-
-            // Check if index exists
-            if (!(await this.index.isIndexCreated())) {
-                await this.index.createIndex()
-                logger.info('Created new vector index', { module: 'VectorSearch' })
-            } else {
-                logger.info('Loaded existing vector index', { module: 'VectorSearch' })
-            }
+            // Get the raw better-sqlite3 database instance
+            // sqlite-vec extension is already loaded by NativeConnectionManager
+            this.db = this.dbAdapter.getRawDb() as BetterSqlite3Database
 
             this.initialized = true
             this.initializing = false
@@ -141,7 +128,7 @@ export class VectorSearchManager {
             await this.initialize()
         }
 
-        if (!this.index) {
+        if (!this.db) {
             return false
         }
 
@@ -149,12 +136,11 @@ export class VectorSearchManager {
             // Generate embedding
             const embedding = await this.generateEmbedding(content)
 
-            // Upsert to vectra index (replaces if exists, inserts if new)
-            await this.index.upsertItem({
-                id: String(entryId),
-                vector: embedding,
-                metadata: { entryId, contentPreview: content.slice(0, 100) },
-            })
+            // Upsert to sqlite-vec: INSERT OR REPLACE into vec0 virtual table
+            const vec = new Float32Array(embedding)
+            this.db
+                .prepare('INSERT OR REPLACE INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
+                .run(entryId, vec)
 
             logger.debug('Added entry to vector index', {
                 module: 'VectorSearch',
@@ -174,6 +160,9 @@ export class VectorSearchManager {
 
     /**
      * Perform semantic search
+     *
+     * sqlite-vec returns L2 distance (lower = more similar).
+     * We convert to a similarity score: score = 1 / (1 + distance)
      */
     async search(
         query: string,
@@ -184,25 +173,35 @@ export class VectorSearchManager {
             await this.initialize()
         }
 
-        if (!this.index) {
+        if (!this.db) {
             return []
         }
 
         try {
             // Generate query embedding
             const queryEmbedding = await this.generateEmbedding(query)
+            const queryVec = new Float32Array(queryEmbedding)
 
-            // Search vectra index (vectra 0.11.1+ requires query string for BM25 hybrid search)
-            const results = await this.index.queryItems(queryEmbedding, query, limit * 2)
+            // KNN search via sqlite-vec vec0 virtual table
+            // Returns entry_id and distance (L2), ordered by distance ascending
+            const results = this.db
+                .prepare(
+                    `SELECT entry_id, distance
+                     FROM vec_embeddings
+                     WHERE embedding MATCH ?
+                     ORDER BY distance
+                     LIMIT ?`
+                )
+                .all(queryVec, limit * 2) as { entry_id: number; distance: number }[]
 
-            // Filter by threshold and map to our format
+            // Convert L2 distance to similarity score and filter by threshold
             const filteredResults: SemanticSearchResult[] = results
+                .map((r) => ({
+                    entryId: r.entry_id,
+                    score: 1 / (1 + r.distance),
+                }))
                 .filter((r) => r.score >= similarityThreshold)
                 .slice(0, limit)
-                .map((r) => ({
-                    entryId: r.item.metadata['entryId'] as number,
-                    score: r.score,
-                }))
 
             return filteredResults
         } catch (error) {
@@ -217,11 +216,11 @@ export class VectorSearchManager {
     /**
      * Remove an entry from the vector index
      */
-    async removeEntry(entryId: number): Promise<boolean> {
-        if (!this.index) return false
+    removeEntry(entryId: number): boolean {
+        if (!this.db) return false
 
         try {
-            await this.index.deleteItem(String(entryId))
+            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(entryId)
             return true
         } catch (error) {
             logger.debug('Vector removeEntry failed (item may not exist)', {
@@ -244,7 +243,7 @@ export class VectorSearchManager {
             await this.initialize()
         }
 
-        if (!this.index) {
+        if (!this.db) {
             return 0
         }
 
@@ -253,29 +252,19 @@ export class VectorSearchManager {
         // Step 1: Get total entry count for progress reporting
         const totalEntries = db.getActiveEntryCount()
 
-        // Step 2: Clean-wipe existing index directory and recreate from scratch.
-        // This is O(1) vs the old per-item sequential deletion which was O(n).
-        try {
-            if (fs.existsSync(this.indexPath)) {
-                await fs.promises.rm(this.indexPath, { recursive: true, force: true })
-            }
-            await fs.promises.mkdir(this.indexPath, { recursive: true })
-            const { LocalIndex: LI } = await import('vectra')
-            this.index = new LI(this.indexPath)
-            await this.index.createIndex()
-            logger.info('Cleared and recreated vector index for rebuild', { module: 'VectorSearch' })
-        } catch (cleanError) {
-            logger.error('Failed to recreate vector index directory', {
-                module: 'VectorSearch',
-                error: cleanError instanceof Error ? cleanError.message : String(cleanError),
-            })
-            throw cleanError
-        }
+        // Step 2: Clear existing embeddings (O(1) operation)
+        this.db.prepare('DELETE FROM vec_embeddings').run()
+        logger.info('Cleared vec_embeddings table for rebuild', { module: 'VectorSearch' })
 
-        // Step 4: Re-index all entries using paginated fetch
+        // Step 3: Re-index all entries using paginated fetch
         // Embeddings are generated in parallel batches (CPU-bound, safe),
-        // but vectra insertions are sequential (file I/O, not concurrency-safe)
+        // then inserted into SQLite (synchronous, fast, concurrency-safe via WAL)
         await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild...')
+
+        // Prepare insert statement once for reuse
+        const insertStmt = this.db.prepare(
+            'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
+        )
 
         let indexed = 0
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
@@ -301,18 +290,12 @@ export class VectorSearchManager {
                     })
                 )
 
-                // Sequential vectra insertion (file I/O not concurrency-safe)
+                // Insert embeddings into SQLite
                 for (const { entry, embedding } of embeddings) {
                     if (embedding !== null) {
                         try {
-                            await this.index.insertItem({
-                                id: String(entry.id),
-                                vector: embedding,
-                                metadata: {
-                                    entryId: entry.id,
-                                    contentPreview: entry.content.slice(0, 100),
-                                },
-                            })
+                            const vec = new Float32Array(embedding)
+                            insertStmt.run(entry.id, vec)
                             indexed++
                         } catch (error) {
                             logger.error('Failed to insert entry into vector index', {
@@ -336,10 +319,6 @@ export class VectorSearchManager {
             }
         }
 
-        // Force index to refresh by re-listing items
-        // This ensures the internal query structures are updated and ready for search
-        await this.index.listItems()
-
         // Final progress
         await sendProgress(progress, indexed, totalEntries, 'Vector index rebuild complete')
 
@@ -351,19 +330,18 @@ export class VectorSearchManager {
 
     /**
      * Get index statistics
-     * Uses getIndexStats() which explicitly loads from disk for authoritative stats.
      */
-    async getStats(): Promise<{ itemCount: number; modelName: string; dimensions: number }> {
-        if (!this.index) {
+    getStats(): { itemCount: number; modelName: string; dimensions: number } {
+        if (!this.db) {
             return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS }
         }
 
         try {
-            // Use getIndexStats() which loads from disk for accurate count
-            // This fixes inconsistency where listItems() could return stale in-memory data
-            const stats = await this.index.getIndexStats()
+            const result = this.db
+                .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
+                .get() as { count: number } | undefined
             return {
-                itemCount: stats.items,
+                itemCount: result?.count ?? 0,
                 modelName: this.modelName,
                 dimensions: EMBEDDING_DIMENSIONS,
             }

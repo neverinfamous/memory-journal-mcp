@@ -1,7 +1,5 @@
 # Memory Journal MCP Server
 
-**Last Updated March 12, 2026**
-
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
 [![Docker Pulls](https://img.shields.io/docker/pulls/writenotenow/memory-journal-mcp)](https://hub.docker.com/r/writenotenow/memory-journal-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -434,7 +432,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 
 - **Node.js 24 on Alpine Linux** - Minimal footprint (~150MB compressed)
 - **Dual-Backend Architecture** - Native `better-sqlite3` performance with pure JS `sql.js` fallback
-- **vectra** - Vector similarity search without native dependencies
+- **sqlite-vec** - Vector similarity search via SQLite extension
 - **@huggingface/transformers** - ML embeddings in JavaScript
 - **Faster Startup** - Lazy loading of ML models
 - **Production/Stable** - Deterministic error handling (`{success, error, code, category, suggestion, recoverable}` on every tool) and automatic migrations

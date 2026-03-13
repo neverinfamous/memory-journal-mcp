@@ -284,7 +284,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         })
                         .filter((e): e is NonNullable<typeof e> => e !== null)
 
-                    const stats = await vectorManager.getStats()
+                    const stats = vectorManager.getStats()
                     const isIndexEmpty = stats.itemCount === 0
                     const includeHint = input.hint_on_empty ?? true
 
@@ -315,7 +315,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             inputSchema: z.object({}).strict(),
             outputSchema: VectorStatsOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true },
-            handler: async (_params: unknown) => {
+            handler: (_params: unknown) => {
                 try {
                     if (!vectorManager) {
                         return {
@@ -324,7 +324,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                         }
                     }
-                    const stats = await vectorManager.getStats()
+                    const stats = vectorManager.getStats()
                     return { success: true, available: true, ...stats }
                 } catch (err) {
                     return formatHandlerErrorResponse(err)

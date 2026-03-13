@@ -765,7 +765,7 @@ describe('GitHub Resource Handlers', () => {
     describe('memory://health', () => {
         it('should return health status with vector and scheduler info', async () => {
             const mockVectorManager = {
-                getStats: vi.fn().mockResolvedValue({
+                getStats: vi.fn().mockReturnValue({
                     itemCount: 50,
                     modelName: 'test-model',
                     dimensions: 384,
@@ -802,7 +802,9 @@ describe('GitHub Resource Handlers', () => {
 
         it('should handle vector manager error gracefully', async () => {
             const mockVectorManager = {
-                getStats: vi.fn().mockRejectedValue(new Error('Not initialized')),
+                getStats: vi.fn().mockImplementation(() => {
+                    throw new Error('Not initialized')
+                }),
             }
 
             const result = await readResource(

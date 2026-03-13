@@ -84,7 +84,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 
     // Initialize vector search manager (lazy loading - model loads on first use)
-    const vectorManager = new VectorSearchManager(dbPath)
+    const vectorManager = new VectorSearchManager(db)
     logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
 
     // Auto-rebuild vector index if enabled

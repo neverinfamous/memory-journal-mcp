@@ -28,8 +28,8 @@ updates:
           - 'patch'
       ml-packages:
         patterns:
-          - '@xenova/*'
-          - 'vectra*'
+          - '@huggingface/*'
+          - 'sqlite-vec*'
         update-types:
           - 'minor'
           - 'patch'

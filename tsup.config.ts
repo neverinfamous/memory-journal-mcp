@@ -15,5 +15,5 @@ export default defineConfig({
   minify: false,
   outDir: "dist",
   target: "es2022",
-  external: ["better-sqlite3", "vectra", "@huggingface/transformers"],
+  external: ["better-sqlite3", "sqlite-vec", "@huggingface/transformers"],
 });

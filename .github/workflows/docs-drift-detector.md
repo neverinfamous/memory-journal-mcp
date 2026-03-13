@@ -51,7 +51,7 @@ You are auditing documentation for the **memory-journal-mcp** project — a Type
 Check the following against the PR diff and unreleased changes:
 
 - **Feature list and tool counts** — are all features described still accurate? Were tools added or removed? Does the tool count match?
-- **Version references** — version badges, "Last Updated" dates. Are they stale?
+- **Version references** — version badges. Are they stale?
 - **Environment variables** — are all documented env vars still used in the code? Any new ones missing from docs?
 - **Install/usage instructions** — do Docker commands, CLI args, and config examples match the current codebase?
 - **Architecture/stack** — does the described tech stack match `package.json` dependencies?
@@ -80,7 +80,7 @@ Compare all documentation files for sections that should match:
 - Feature descriptions and tool counts across README.md, DOCKER_README.md
 - Error handling descriptions
 - Environment variable documentation
-- Version numbers and dates
+- Version numbers
 - Server instructions preamble vs actual `server-instructions.ts`
 
 ## Step 6: Report Findings

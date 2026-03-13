@@ -19,9 +19,9 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
         initialize: vi.fn().mockResolvedValue(undefined),
         search: vi.fn().mockResolvedValue([]),
         addEntry: vi.fn().mockResolvedValue(true),
-        removeEntry: vi.fn().mockResolvedValue(true),
+        removeEntry: vi.fn().mockReturnValue(true),
         rebuildIndex: vi.fn().mockResolvedValue(5),
-        getStats: vi.fn().mockResolvedValue({
+        getStats: vi.fn().mockReturnValue({
             itemCount: 10,
             modelName: 'Xenova/all-MiniLM-L6-v2',
             dimensions: 384,
@@ -66,7 +66,7 @@ describe('Vector Tool Handlers', () => {
         it('should return results when vector manager has matches', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([{ entryId, score: 0.85 }]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 10 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 10 }),
             })
 
             const result = (await callTool(
@@ -84,7 +84,7 @@ describe('Vector Tool Handlers', () => {
         it('should return empty with hint when index is empty', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 0 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 0 }),
             })
 
             const result = (await callTool(
@@ -101,7 +101,7 @@ describe('Vector Tool Handlers', () => {
         it('should return hint when no matches above threshold', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 10 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 10 }),
             })
 
             const result = (await callTool(
@@ -118,7 +118,7 @@ describe('Vector Tool Handlers', () => {
         it('should suppress hint when hint_on_empty is false', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 0 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 0 }),
             })
 
             const result = (await callTool(

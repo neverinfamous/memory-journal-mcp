@@ -111,8 +111,8 @@ Read the current version from `package.json`. Bump the **patch** version only (e
 Update version references in:
 - `package.json` (`"version"` field)
 - Run `npm install --package-lock-only` to sync `package-lock.json`
-- `README.md` (version badge if present, "Last Updated" date in format `Month Day, Year`)
-- `DOCKER_README.md` (version badge if present, "Last Updated" date, Available Tags table)
+- `README.md` (version badge if present)
+- `DOCKER_README.md` (version badge if present, Available Tags table)
 - `Dockerfile` (`LABEL version=` line)
 - `server.json` (top-level `version`, package `version`, and OCI `identifier` tag if present)
 

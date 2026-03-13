@@ -21,7 +21,7 @@ export const healthResource: InternalResourceDef = {
         audience: ['assistant'],
         priority: 0.9,
     },
-    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+    handler: (_uri: string, context: ResourceContext): ResourceResult => {
         const dbHealth = context.db.getHealthStatus()
 
         let vectorIndex: {
@@ -31,7 +31,7 @@ export const healthResource: InternalResourceDef = {
         } | null = null
         if (context.vectorManager) {
             try {
-                const stats = await context.vectorManager.getStats()
+                const stats = context.vectorManager.getStats()
                 vectorIndex = {
                     available: true,
                     itemCount: stats.itemCount,

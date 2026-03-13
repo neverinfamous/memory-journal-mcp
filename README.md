@@ -1,7 +1,5 @@
 # Memory Journal MCP Server
 
-**Last Updated March 11, 2026**
-
 <!-- mcp-name: io.github.neverinfamous/memory-journal-mcp -->
 
 [![GitHub](https://img.shields.io/badge/GitHub-neverinfamous/memory--journal--mcp-blue?logo=github)](https://github.com/neverinfamous/memory-journal-mcp)
@@ -574,8 +572,8 @@ flowchart TB
 ├─────────────────────────────────────────────────────────────┤
 │ Dual-Backend Architecture (Native SQLite & WASM Fallback)   │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ better-sqlite3  │  │ vectra          │  │ transformers│  │
-│  │ or sql.js       │  │ (Vector Index)  │  │ (Embeddings)│  │
+│  │ better-sqlite3  │  │ sqlite-vec      │  │ transformers│  │
+│  │ (Native SQLite)  │  │ (Vector Index)  │  │ (Embeddings)│  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
 │ SQLite Database with Hybrid Search                          │
@@ -593,7 +591,7 @@ flowchart TB
 
 - **TypeScript + Pure JS Stack** - No native compilation, works everywhere
 - **Dual-Backend SQLite** - Uses `better-sqlite3` for native high-performance disk access with a zero-compilation `sql.js` WASM fallback
-- **vectra** - Vector similarity search without native dependencies
+- **sqlite-vec** - Vector similarity search via SQLite extension
 - **@huggingface/transformers** - ML embeddings in JavaScript
 - **Lazy loading** - ML models load on first use, not startup
 
@@ -602,7 +600,7 @@ flowchart TB
 Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
 
 - **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~7x faster than retrieving 50 recent entries (composite index optimization narrows this gap by accelerating `getRecentEntries` ~4x).
-- **Vector Search Engine**: Both search (780 ops/sec) and indexing (640 ops/sec) are high-throughput via `vectra` with native upsert support.
+- **Vector Search Engine**: Both search (780 ops/sec) and indexing (640 ops/sec) are high-throughput via `sqlite-vec` with SQL-native KNN queries.
 - **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800x faster than tool execution). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
 
 To run the benchmarking suite locally:

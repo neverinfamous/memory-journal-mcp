@@ -4,7 +4,7 @@
 
 Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **44 tools** across **10 groups** (core, search, analytics, relationships, export, admin, github, backup, team, codemode), **22 resources**, and **15 prompts**.
 
-**Stack**: TypeScript, Vitest, Zod schemas, sql.js (SQLite), vectra (vector search), @octokit/rest (GitHub API).
+**Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
 ## Session Context
 
@@ -93,7 +93,7 @@ src/
 │   └── http.ts                 # HTTP/SSE transport
 ├── types/                      # Type definitions + barrel
 ├── utils/                      # Logger, error helpers, progress
-└── vector/                     # Semantic search (vectra + transformers)
+└── vector/                     # Semantic search (sqlite-vec + transformers)
 ```
 
 ## Key Reference Files
