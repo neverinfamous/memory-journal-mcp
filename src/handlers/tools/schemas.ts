@@ -57,6 +57,13 @@ export const SIGNIFICANCE_TYPES = [
     'release',
 ] as const
 
+/** Maximum content length for journal entries (chars) */
+export const MAX_CONTENT_LENGTH = 50_000
+
+/** Date sentinels for "all time" date range queries */
+export const DATE_MIN_SENTINEL = '1970-01-01'
+export const DATE_MAX_SENTINEL = '2999-12-31'
+
 /** YYYY-MM-DD date format regex */
 export const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
 export const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'

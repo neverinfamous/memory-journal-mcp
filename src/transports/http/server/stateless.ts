@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logger } from '../../../utils/logger.js'
+import { JSONRPC_SERVER_ERROR } from '../types.js'
 
 export async function setupStateless(app: Express, server: McpServer): Promise<void> {
     const statelessTransport = new StreamableHTTPServerTransport({
@@ -27,7 +28,7 @@ export async function setupStateless(app: Express, server: McpServer): Promise<v
             res.status(405).json({
                 jsonrpc: '2.0',
                 error: {
-                    code: -32000,
+                    code: JSONRPC_SERVER_ERROR,
                     message: 'SSE streaming not available in stateless mode',
                 },
                 id: null,

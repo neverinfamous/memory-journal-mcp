@@ -4,6 +4,7 @@ import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logger } from '../../../utils/logger.js'
 import type { StatefulContext } from './stateful.js'
+import { JSONRPC_SERVER_ERROR } from '../types.js'
 
 export function setupLegacySSE(ctx: StatefulContext, app: Express, server: McpServer): void {
         app.get('/sse', (req: Request, res: Response): void => {
@@ -71,7 +72,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, server: McpSe
             if (sessionId === undefined) {
                 res.status(400).json({
                     jsonrpc: '2.0',
-                    error: { code: -32000, message: 'Missing sessionId parameter' },
+                    error: { code: JSONRPC_SERVER_ERROR, message: 'Missing sessionId parameter' },
                     id: null,
                 })
                 return
@@ -81,7 +82,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, server: McpSe
             if (transport === undefined) {
                 res.status(404).json({
                     jsonrpc: '2.0',
-                    error: { code: -32000, message: 'Session not found' },
+                    error: { code: JSONRPC_SERVER_ERROR, message: 'Session not found' },
                     id: null,
                 })
                 return

@@ -12,7 +12,7 @@ import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { resolveAuthor } from '../../utils/security-utils.js'
 import { resolveIssueUrl } from '../../utils/github-helpers.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import { ENTRY_TYPES, SIGNIFICANCE_TYPES, MAX_CONTENT_LENGTH, EntryOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 
 
@@ -23,7 +23,7 @@ import { ErrorResponseFields } from './error-response-fields.js'
 
 /** Strict schema for team entry creation */
 const TeamCreateEntrySchema = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
@@ -39,7 +39,7 @@ const TeamCreateEntrySchema = z.object({
 
 /** Relaxed schema for MCP SDK */
 const TeamCreateEntrySchemaMcp = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.string().optional(),

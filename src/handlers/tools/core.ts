@@ -16,6 +16,7 @@ import { logger } from '../../utils/logger.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
+    MAX_CONTENT_LENGTH,
     EntryOutputSchema,
     EntriesListOutputSchema,
     RelationshipOutputSchema,
@@ -30,7 +31,7 @@ import {
 
 /** Strict schema — used inside handler for structured Zod errors */
 const CreateEntrySchema = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     is_personal: z.boolean().optional().default(true),
@@ -93,7 +94,7 @@ const GetRecentEntriesSchemaMcp = z.object({
 })
 
 const CreateEntryMinimalSchema = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */

@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logger } from '../../../utils/logger.js'
-import { SESSION_TIMEOUT_MS, SESSION_SWEEP_INTERVAL_MS } from '../types.js'
+import { SESSION_TIMEOUT_MS, SESSION_SWEEP_INTERVAL_MS, JSONRPC_SERVER_ERROR, JSONRPC_INTERNAL_ERROR } from '../types.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 
 export interface StatefulContext {
@@ -69,7 +69,7 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
                             res.status(400).json({
                                 jsonrpc: '2.0',
                                 error: {
-                                    code: -32000,
+                                    code: JSONRPC_SERVER_ERROR,
                                     message:
                                         'Bad Request: Session uses Legacy SSE transport, not Streamable HTTP',
                                 },
@@ -127,7 +127,7 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
                         res.status(400).json({
                             jsonrpc: '2.0',
                             error: {
-                                code: -32000,
+                                code: JSONRPC_SERVER_ERROR,
                                 message: 'Bad Request: No valid session ID provided',
                             },
                             id: null,
@@ -151,7 +151,7 @@ export function setupStateful(ctx: StatefulContext, app: Express, server: McpSer
                     if (!res.headersSent) {
                         res.status(500).json({
                             jsonrpc: '2.0',
-                            error: { code: -32603, message: 'Internal server error' },
+                            error: { code: JSONRPC_INTERNAL_ERROR, message: 'Internal server error' },
                             id: null,
                         })
                     }

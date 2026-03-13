@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express'
 import type { HttpTransportConfig, RateLimitEntry } from './types.js'
-import { DEFAULT_RATE_LIMIT_WINDOW_MS, DEFAULT_RATE_LIMIT_MAX_REQUESTS, DEFAULT_HSTS_MAX_AGE } from './types.js'
+import { DEFAULT_RATE_LIMIT_WINDOW_MS, DEFAULT_RATE_LIMIT_MAX_REQUESTS, DEFAULT_HSTS_MAX_AGE, CORS_PREFLIGHT_MAX_AGE_SECONDS } from './types.js'
 
 // =============================================================================
 // Client IP Extraction
@@ -152,5 +152,5 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
         'Content-Type, Accept, Authorization, mcp-session-id, Last-Event-ID, mcp-protocol-version',
     )
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
-    res.setHeader('Access-Control-Max-Age', '86400')
+    res.setHeader('Access-Control-Max-Age', String(CORS_PREFLIGHT_MAX_AGE_SECONDS))
 }

@@ -13,6 +13,8 @@ import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    DATE_MIN_SENTINEL,
+    DATE_MAX_SENTINEL,
     EntryOutputSchema,
     relaxedNumber,
 } from './schemas.js'
@@ -83,15 +85,15 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
                     // Apply filters — use searchByDateRange when dates/tags present
                     let entries
                     if (input.start_date || input.end_date) {
-                        const startDate = input.start_date ?? '1970-01-01'
-                        const endDate = input.end_date ?? '2999-12-31'
+                        const startDate = input.start_date ?? DATE_MIN_SENTINEL
+                        const endDate = input.end_date ?? DATE_MAX_SENTINEL
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit,
                         })
                     } else if (input.tags && input.tags.length > 0) {
                         // Tags-only filter: use a wide date range to leverage searchByDateRange
-                        entries = db.searchByDateRange('1970-01-01', '2999-12-31', {
+                        entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
                             limit,
                         })

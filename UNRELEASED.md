@@ -1,5 +1,12 @@
 ### Changed
 
+- **Code Quality Audit Fixes (Round 10)**
+  - Extracted `MAX_CONTENT_LENGTH = 50_000` constant into `schemas.ts`, replacing 4 inline `max(50000)` literals in `core.ts` and `team.ts`
+  - Extracted `DATE_MIN_SENTINEL` / `DATE_MAX_SENTINEL` constants into `schemas.ts`, replacing 3 inline `'1970-01-01'` / `'2999-12-31'` literals in `export.ts`
+  - Extracted `CORS_PREFLIGHT_MAX_AGE_SECONDS = 86_400` constant into `types.ts`, replacing inline `'86400'` in `security.ts`
+  - Extracted `JSONRPC_SERVER_ERROR = -32000` and `JSONRPC_INTERNAL_ERROR = -32603` constants into `types.ts`, replacing 6 inline literals across `stateless.ts`, `stateful.ts`, and `legacy-sse.ts`
+  - Cached `collectNonCodeModeTools()` result in `codemode.ts` using referential identity check on `ToolContext`, matching the caching pattern in `handlers/tools/index.ts`
+
 - **Stale sql.js Comment Cleanup** — Updated 8 stale comment references to sql.js across 5 source files (`scheduler.ts`, `schema.ts`, `interfaces.ts`, `native-connection.ts`, `sqlite-adapter/index.ts`) to accurately reflect the better-sqlite3 native-only architecture. Comment-only changes, zero functional impact.
 
 - **Copilot Instructions Path Fixes** — Updated `.github/copilot-instructions.md` architecture tree to reflect kebab-case renames (`server-instructions.ts`, `sqlite-adapter/`, `tool-filter.ts`, `github-integration/`, `mcp-server.ts`, `scheduler.ts`, `http/`) and moved reference file paths (`test-server/` → `docs/`). Updated descriptions to reflect better-sqlite3 native-only architecture and modularized directory structures.
