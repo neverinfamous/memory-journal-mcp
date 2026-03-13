@@ -12,7 +12,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found, including changes to `ServerInstructions.md`/`ServerInstructions.ts` or this file (`test-server/test-tools.md`).
+1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `CHANGELOG.md` (no duplicate headers), and commit without pushing.
 4. Re-test fixes with direct MCP calls.
@@ -116,7 +116,13 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 | Test                  | Command/Action                                                                                   | Expected Result                                                           |
 | --------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| FTS5 search           | `search_entries(query: "architecture")`                                                          | Returns `structuredContent` with highlighted matches                      |
+| FTS5 search           | `search_entries(query: "architecture")`                                                          | Returns entries ranked by BM25 relevance                                  |
+| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                     | Returns only entries containing the exact phrase "error handling"          |
+| FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | Matches "auth", "authentication", "authorized", etc.                      |
+| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns entries with "deploy" but not "staging"                           |
+| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | Returns entries with either term                                          |
+| FTS5 fallback         | `search_entries(query: "test's")`                                                                | Falls back to LIKE — single quotes are FTS5-unsafe, should not error      |
+| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | Falls back to LIKE — `%` is FTS5-unsafe, should not error                 |
 | Date range            | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-01-31")`                         | Returns `structuredContent` array                                         |
 | Cross-DB search       | `search_entries(query: "test")`                                                                  | Results include `source: 'personal' \| 'team'` marker on each entry       |
 | Cross-DB date         | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31")`                         | Results include `source` marker merging personal + team entries           |
@@ -525,6 +531,10 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 
 ### Search & Analytics
 
+- [ ] `search_entries` FTS5 phrase queries return exact phrase matches
+- [ ] `search_entries` FTS5 prefix queries (`auth*`) match word stems
+- [ ] `search_entries` FTS5 boolean operators (`NOT`, `OR`) filter correctly
+- [ ] `search_entries` gracefully falls back to LIKE for FTS5-unsafe queries (single quotes, `%`)
 - [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`
 - [ ] `search_by_date_range` filters work: `entry_type`, `tags`, `is_personal`, `project_number`
 - [ ] `search_by_date_range` rejects non-YYYY-MM-DD date strings with structured errors

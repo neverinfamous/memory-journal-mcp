@@ -86,6 +86,28 @@ CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id);
 
 -- Composite covering index for getRecentEntries (WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC)
 CREATE INDEX IF NOT EXISTS idx_memory_journal_recent ON memory_journal(deleted_at, timestamp DESC, id DESC);
+
+-- FTS5 full-text search index (content-sync: reads from source table, no duplicate storage)
+CREATE VIRTUAL TABLE IF NOT EXISTS fts_content USING fts5(
+    content,
+    content=memory_journal,
+    content_rowid=id,
+    tokenize='porter unicode61'
+);
+
+-- Triggers to keep FTS5 index in sync with memory_journal
+CREATE TRIGGER IF NOT EXISTS fts_content_ai AFTER INSERT ON memory_journal BEGIN
+    INSERT INTO fts_content(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS fts_content_au AFTER UPDATE OF content ON memory_journal BEGIN
+    INSERT INTO fts_content(fts_content, rowid, content) VALUES ('delete', old.id, old.content);
+    INSERT INTO fts_content(rowid, content) VALUES (new.id, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS fts_content_ad AFTER DELETE ON memory_journal BEGIN
+    INSERT INTO fts_content(fts_content, rowid, content) VALUES ('delete', old.id, old.content);
+END;
 `
 
 /**

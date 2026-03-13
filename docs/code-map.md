@@ -19,14 +19,14 @@ src/
 │   ├── adapter-factory.ts          # DatabaseAdapterFactory — creates SqliteAdapter
 │   ├── core/
 │   │   ├── interfaces.ts           # IDatabaseAdapter, IDatabaseConnection interfaces
-│   │   ├── schema.ts               # DDL schema definitions (CREATE TABLE statements)
+│   │   ├── schema.ts               # DDL schema definitions (CREATE TABLE, FTS5 virtual table, sync triggers)
 │   │   ├── entry-columns.ts        # ENTRY_COLUMNS projection constant
 │   │   └── index.ts                # Barrel
 │   └── sqlite-adapter/
 │       ├── native-connection.ts    # NativeConnectionManager (better-sqlite3 + sqlite-vec extension)
 │       ├── entries/
 │       │   ├── crud.ts             # Entry CRUD operations
-│       │   ├── search.ts           # Text search, date range queries
+│       │   ├── search.ts           # FTS5 full-text search (BM25 ranking, LIKE fallback), date range queries
 │       │   ├── statistics.ts       # Analytics queries (counts, breakdowns, trends)
 │       │   ├── importance.ts       # calculateImportance() scoring
 │       │   ├── shared.ts           # Shared entry query helpers (queryRow, queryRows)

@@ -13,7 +13,7 @@ Exhaustively test Code Mode (`mj_execute_code`) — the sandboxed JavaScript exe
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found, including changes to `ServerInstructions.md`/`ServerInstructions.ts` or this file (`test-server/test-tools-codemode.md`).
+1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-codemode.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `CHANGELOG.md` (no duplicate headers), and commit without pushing.
 4. Re-test fixes with direct MCP calls.

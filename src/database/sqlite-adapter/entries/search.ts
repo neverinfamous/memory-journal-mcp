@@ -45,16 +45,58 @@ export function searchEntries(
     }
 ): JournalEntry[] {
     const { db, tagsMgr } = context
-    let query = `
-        SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS} 
-        FROM memory_journal e
-    `
+
+    // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
+    if (queryStr.length > 0) {
+        try {
+            const { sql, params } = buildSearchQuery(queryStr, options, true)
+            const stmt = db.prepare(sql)
+            const rows = stmt.all(params)
+            return rowsToEntries(tagsMgr, rows)
+        } catch {
+            // FTS5 syntax error (e.g. unbalanced quotes, special chars) — fall back to LIKE
+        }
+    }
+
+    const { sql, params } = buildSearchQuery(queryStr, options, false)
+    const stmt = db.prepare(sql)
+    const rows = stmt.all(params)
+    return rowsToEntries(tagsMgr, rows)
+}
+
+/**
+ * Builds the SQL query and params for searchEntries.
+ * @param useFts - If true, uses FTS5 MATCH with BM25 ranking. If false, uses LIKE substring matching.
+ */
+function buildSearchQuery(
+    queryStr: string,
+    options: { limit?: number; isPersonal?: boolean; projectNumber?: number; issueNumber?: number; prNumber?: number } | undefined,
+    useFts: boolean
+): { sql: string; params: unknown[] } {
+    let query: string
+    if (useFts) {
+        query = `
+            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}
+            FROM memory_journal e
+            JOIN fts_content fts ON fts.rowid = e.id
+        `
+    } else {
+        query = `
+            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS} 
+            FROM memory_journal e
+        `
+    }
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
 
-    if (queryStr) {
-        conditions.push(`e.content LIKE '%' || ? || '%'`)
-        params.push(queryStr)
+    if (queryStr.length > 0) {
+        if (useFts) {
+            conditions.push(`fts_content MATCH ?`)
+            params.push(queryStr)
+        } else {
+            conditions.push(`e.content LIKE '%' || ? || '%'`)
+            params.push(queryStr)
+        }
     }
 
     if (options?.isPersonal !== undefined) {
@@ -81,15 +123,18 @@ export function searchEntries(
         query += ` WHERE ${conditions.join(' AND ')}`
     }
 
-    query += ` ORDER BY e.timestamp DESC, e.id DESC`
+    // FTS5: rank by relevance (BM25), then timestamp for tiebreaking
+    // LIKE/no-query: rank by timestamp only
+    if (useFts) {
+        query += ` ORDER BY rank, e.timestamp DESC, e.id DESC`
+    } else {
+        query += ` ORDER BY e.timestamp DESC, e.id DESC`
+    }
 
     query += ` LIMIT ?`
     params.push(options?.limit ?? 10)
 
-    const stmt = db.prepare(query)
-    const rows = stmt.all(params)
-
-    return rowsToEntries(tagsMgr, rows)
+    return { sql: query, params }
 }
 
 export function searchByDateRange(

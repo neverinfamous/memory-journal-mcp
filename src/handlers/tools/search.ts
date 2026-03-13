@@ -136,7 +136,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'search_entries',
             title: 'Search Entries',
             description:
-                'Search journal entries with optional filters for GitHub Projects, Issues, PRs, and Actions',
+                'Full-text search journal entries using FTS5 (supports phrases "exact match", prefix auth*, boolean NOT/OR/AND, ranked by relevance). Optional filters for GitHub Projects, Issues, PRs, and Actions.',
             group: 'search',
             inputSchema: SearchEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,

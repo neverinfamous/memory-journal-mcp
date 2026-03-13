@@ -2,14 +2,12 @@
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
  *
  * @param enabledTools - Set of enabled tool names
- * @param resources - Available resource definitions
  * @param prompts - Available prompt definitions
  * @param latestEntry - Optional latest entry for context snapshot
  * @param level - Instruction detail level (default: 'standard')
  */
 export function generateInstructions(
     enabledTools: Set<string>,
-    _resources: ResourceDefinition[],
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
     level: InstructionLevel = 'standard'

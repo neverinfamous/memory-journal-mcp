@@ -1,5 +1,5 @@
 /**
- * Generates src/constants/ServerInstructions.ts from src/constants/server-instructions.md
+ * Generates src/constants/server-instructions.ts from src/constants/server-instructions.md
  *
  * Reads the markdown source file, splits it by section delimiters,
  * escapes for template literals, and produces the full TypeScript module
@@ -16,7 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectRoot = resolve(__dirname, '..')
 
 const mdPath = resolve(projectRoot, 'src/constants/server-instructions.md')
-const tsPath = resolve(projectRoot, 'src/constants/ServerInstructions.ts')
+const tsPath = resolve(projectRoot, 'src/constants/server-instructions.ts')
 
 // Read plain markdown source
 const markdown = readFileSync(mdPath, 'utf-8')
@@ -92,7 +92,7 @@ lines.push(' * Optimized for token efficiency with tiered instruction levels.')
 lines.push(' */')
 lines.push('')
 lines.push("import type { ToolGroup } from '../types/index.js'")
-lines.push("import { TOOL_GROUPS } from '../filtering/ToolFilter.js'")
+lines.push("import { TOOL_GROUPS } from '../filtering/tool-filter.js'")
 lines.push('')
 lines.push('/**')
 lines.push(' * Resource definition for instruction generation')
@@ -168,7 +168,7 @@ const tsContent = lines.join('\n')
 writeFileSync(tsPath, tsContent, 'utf-8')
 
 process.stderr.write(
-    '✅ Generated ServerInstructions.ts (' +
+    '✅ Generated server-instructions.ts (' +
         tsContent.length.toLocaleString() +
         ' bytes) from server-instructions.md (' +
         markdown.length.toLocaleString() +

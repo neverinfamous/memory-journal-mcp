@@ -203,7 +203,7 @@ const TOOL_PARAMETER_REFERENCE = `
 
 | Tool                     | Required Parameters                   | Optional Parameters                                                                                            |
 | ------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| \`search_entries\`         | none                                  | \`query\`, \`limit\`, \`is_personal\`, \`issue_number\`, \`pr_number\`, \`pr_status\`, \`project_number\`, \`workflow_run_id\` |
+| \`search_entries\`         | none                                  | \`query\`, \`limit\`, \`is_personal\`, \`issue_number\`, \`pr_number\`, \`pr_status\`, \`project_number\`, \`workflow_run_id\`. Query uses FTS5: phrases \`"exact match"\`, prefix \`auth*\`, boolean \`NOT\`/\`OR\`/\`AND\`, ranked by BM25 relevance. |
 | \`search_by_date_range\`   | \`start_date\`, \`end_date\` (YYYY-MM-DD) | \`tags\`, \`entry_type\`, \`is_personal\`, \`issue_number\`, \`pr_number\`, \`project_number\`, \`workflow_run_id\`          |
 | \`semantic_search\`        | \`query\` (string)                      | \`limit\`, \`similarity_threshold\` (default 0.25), \`is_personal\`, \`hint_on_empty\` (bool, default true)            |
 | \`get_vector_index_stats\` | none                                  | none                                                                                                           |
@@ -335,6 +335,7 @@ Valid values for \`entry_type\` parameter:
 - **Enhanced analytics**: \`get_statistics\` returns \`decisionDensity\` (significant entries per period), \`relationshipComplexity\` (avg relationships per entry), \`activityTrend\` (period-over-period growth %), and \`causalMetrics\` (counts for blocked_by/resolved/caused).
 - **Importance scores**: \`get_entry_by_id\` returns \`importance\` (0.0-1.0) and \`importanceBreakdown\` showing weighted components: significance (30%), relationships (35%), causal (20%), recency (15%). \`memory://significant\` sorts entries by importance.
 - **\`inactiveThresholdDays\`**: \`get_cross_project_insights\` includes \`inactiveThresholdDays: 7\` in output, documenting the inactive project classification cutoff.
+- **\`search_entries\` FTS5 query syntax**: Uses FTS5 full-text search with Porter stemmer. Phrase queries: \`"error handling"\`. Prefix: \`auth*\`. Boolean: \`deploy OR release\`, \`error NOT warning\`. Word-boundary matching ("log" matches "log" but not "catalog"). Results ranked by BM25 relevance. Falls back to LIKE substring matching for queries with unbalanced quotes or special characters.
 - **GitHub metadata in entries**: Entry output includes 10 GitHub fields (\`issueNumber\`, \`issueUrl\`, \`prNumber\`, \`prUrl\`, \`prStatus\`, \`projectNumber\`, \`projectOwner\`, \`workflowRunId\`, \`workflowName\`, \`workflowStatus\`) in all tool responses.
 - **\`delete_entry\` on soft-deleted**: \`delete_entry(id, permanent: true)\` works on previously soft-deleted entries. Returns \`success: false\` for nonexistent entries.
 
@@ -369,7 +370,6 @@ Valid values for \`entry_type\` parameter:
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
  *
  * @param enabledTools - Set of enabled tool names
- * @param resources - Available resource definitions
  * @param prompts - Available prompt definitions
  * @param latestEntry - Optional latest entry for context snapshot
  * @param level - Instruction detail level (default: 'standard')
@@ -383,10 +383,9 @@ export function generateInstructions(
     let instructions = ESSENTIAL_INSTRUCTIONS
 
     // Add latest entry snapshot for immediate context (compact format)
-    const LATEST_ENTRY_PREVIEW_LENGTH = 120
     if (latestEntry) {
-        const preview = latestEntry.content.slice(0, LATEST_ENTRY_PREVIEW_LENGTH)
-        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > LATEST_ENTRY_PREVIEW_LENGTH ? '...' : ''}\n`
+        const preview = latestEntry.content.slice(0, 120)
+        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
     }
 
     // Standard and full levels include GitHub patterns
@@ -436,4 +435,10 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
 
     return activeGroups
 }
+
+/**
+ * Static instructions for backward compatibility
+ * @deprecated Use generateInstructions() instead for dynamic content
+ */
+export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
 

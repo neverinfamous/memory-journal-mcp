@@ -117,29 +117,20 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
         db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
 
-        const dropped: string[] = []
-        const triggers = db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%fts%'").all() as { name: string }[]
-        const SAFE_IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
-        
-        for (const row of triggers) {
-            const name = row.name
-            if (!SAFE_IDENTIFIER_RE.test(name)) {
-                logger.warning('Skipping trigger with unsafe name during migration', {
-                    module: 'NativeConnectionManager',
-                    triggerName: name,
-                })
-                continue
-            }
-            db.exec(`DROP TRIGGER IF EXISTS "${name}"`)
-            dropped.push(`trigger:${name}`)
+        // Populate FTS5 index for existing databases that were created before FTS5 was added.
+        // Uses FTS5's built-in 'rebuild' command for content-sync tables.
+        const ftsCount = (db.prepare('SELECT COUNT(*) as c FROM fts_content').get() as { c: number }).c
+        const entryCount = (db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }).c
+        if (ftsCount === 0 && entryCount > 0) {
+            db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
+            added.push('fts5:populated')
         }
 
-        const changes = [...added.map((c) => `column:${c}`), ...dropped]
-        if (changes.length > 0) {
+        if (added.length > 0) {
             logger.info('Schema migrated', {
                 module: 'NativeConnectionManager',
                 dbPath: this.dbPath,
-                changes,
+                changes: added.map((c) => (c.startsWith('fts5:') ? c : `column:${c}`)),
             })
         }
     }
