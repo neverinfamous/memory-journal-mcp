@@ -18,6 +18,7 @@ import {
     deleteEntry,
 } from './crud.js'
 import {
+    getRecentEntries as getRecentEntriesQuery,
     getEntriesPage,
     searchEntries,
     searchByDateRange,
@@ -77,8 +78,10 @@ export class EntriesManager {
     }
 
     getRecentEntries(limit = 10, isPersonal?: boolean): JournalEntry[] {
-        // Pass the isPersonal constraint as an option to searchEntries
-        return searchEntries(this.sharedContext, "", { limit, isPersonal })
+        if (isPersonal !== undefined) {
+            return searchEntries(this.sharedContext, '', { limit, isPersonal })
+        }
+        return getRecentEntriesQuery(this.sharedContext, limit)
     }
 
     getEntriesPage(
@@ -93,7 +96,7 @@ export class EntriesManager {
         return searchEntries(this.sharedContext, queryStr, options)
     }
 
-    searchByDateRange(startDate: string, endDate: string, options?: { entryType?: EntryType, tags?: string[], isPersonal?: boolean, limit?: number }): JournalEntry[] {
+    searchByDateRange(startDate: string, endDate: string, options?: { entryType?: EntryType, tags?: string[], isPersonal?: boolean, projectNumber?: number, issueNumber?: number, prNumber?: number, workflowRunId?: number, limit?: number }): JournalEntry[] {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
     }
 

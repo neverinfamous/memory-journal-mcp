@@ -5,13 +5,9 @@
  */
 
 import { ICON_GRAPH, ICON_GITHUB } from '../../constants/icons.js'
+import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { execQuery, transformEntryRow } from './shared.js'
-
-const ENTRY_COLUMNS =
-    'id, entry_type, content, timestamp, is_personal, significance_type, auto_context, deleted_at, ' +
-    'project_number, project_owner, issue_number, issue_url, pr_number, pr_url, pr_status, ' +
-    'workflow_run_id, workflow_name, workflow_status'
 
 /**
  * Get graph resource definitions

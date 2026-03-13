@@ -20,10 +20,6 @@ export function getEntriesPage(
 ): JournalEntry[] {
     const { db, tagsMgr } = context
 
-    // First get full count for pagination
-    const countStmt = db.prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL')
-    countStmt.get() as { count: number }
-
     const sortDir = order === 'asc' ? 'ASC' : 'DESC'
 
     const stmt = db.prepare(`
@@ -71,6 +67,16 @@ export function searchEntries(
         params.push(options.projectNumber)
     }
 
+    if (options?.issueNumber !== undefined) {
+        conditions.push(`e.issue_number = ?`)
+        params.push(options.issueNumber)
+    }
+
+    if (options?.prNumber !== undefined) {
+        conditions.push(`e.pr_number = ?`)
+        params.push(options.prNumber)
+    }
+
     if (conditions.length > 0) {
         query += ` WHERE ${conditions.join(' AND ')}`
     }
@@ -94,6 +100,10 @@ export function searchByDateRange(
         entryType?: EntryType
         tags?: string[]
         isPersonal?: boolean
+        projectNumber?: number
+        issueNumber?: number
+        prNumber?: number
+        workflowRunId?: number
         limit?: number
     }
 ): JournalEntry[] {
@@ -134,6 +144,26 @@ export function searchByDateRange(
     if (options?.isPersonal !== undefined) {
         conditions.push(`e.is_personal = ?`)
         params.push(options.isPersonal ? 1 : 0)
+    }
+
+    if (options?.projectNumber !== undefined) {
+        conditions.push(`e.project_number = ?`)
+        params.push(options.projectNumber)
+    }
+
+    if (options?.issueNumber !== undefined) {
+        conditions.push(`e.issue_number = ?`)
+        params.push(options.issueNumber)
+    }
+
+    if (options?.prNumber !== undefined) {
+        conditions.push(`e.pr_number = ?`)
+        params.push(options.prNumber)
+    }
+
+    if (options?.workflowRunId !== undefined) {
+        conditions.push(`e.workflow_run_id = ?`)
+        params.push(options.workflowRunId)
     }
 
     query += ` WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC`

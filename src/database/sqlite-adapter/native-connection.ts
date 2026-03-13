@@ -7,6 +7,26 @@ import { ConnectionError } from '../../types/errors.js'
 import { SCHEMA_SQL, TEAM_SCHEMA_SQL } from '../core/schema.js'
 import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
 
+/**
+ * Shared migration columns required by both personal and team schemas.
+ * Adding a new column here ensures it is applied in both migrateSchema() and applyTeamSchema().
+ */
+const SHARED_MIGRATION_COLUMNS: { name: string; sql: string }[] = [
+    { name: 'significance_type', sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT' },
+    { name: 'auto_context', sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT' },
+    { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
+    { name: 'project_number', sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER' },
+    { name: 'project_owner', sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT' },
+    { name: 'issue_number', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER' },
+    { name: 'issue_url', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_url TEXT' },
+    { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
+    { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
+    { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
+    { name: 'workflow_run_id', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER' },
+    { name: 'workflow_name', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT' },
+    { name: 'workflow_status', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT' },
+]
+
 export class NativeConnectionManager implements IDatabaseConnection {
     private db: Database | null = null
     private readonly dbPath: string
@@ -57,24 +77,8 @@ export class NativeConnectionManager implements IDatabaseConnection {
         const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
         const columns = new Set(tableInfo.map((row) => row.name))
 
-        const requiredColumns: { name: string; sql: string }[] = [
-            { name: 'significance_type', sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT' },
-            { name: 'auto_context', sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT' },
-            { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
-            { name: 'project_number', sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER' },
-            { name: 'project_owner', sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT' },
-            { name: 'issue_number', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER' },
-            { name: 'issue_url', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_url TEXT' },
-            { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
-            { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
-            { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
-            { name: 'workflow_run_id', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER' },
-            { name: 'workflow_name', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT' },
-            { name: 'workflow_status', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT' },
-        ]
-
         const added: string[] = []
-        for (const col of requiredColumns) {
+        for (const col of SHARED_MIGRATION_COLUMNS) {
             if (!columns.has(col.name)) {
                 db.exec(col.sql)
                 added.push(col.name)
@@ -115,25 +119,14 @@ export class NativeConnectionManager implements IDatabaseConnection {
         const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
         const columns = new Set(tableInfo.map((row) => row.name))
 
-        const requiredColumns: { name: string; sql: string }[] = [
-            { name: 'issue_number', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_number INTEGER' },
-            { name: 'issue_url', sql: 'ALTER TABLE memory_journal ADD COLUMN issue_url TEXT' },
-            { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
-            { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
-            { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
-            { name: 'workflow_run_id', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER' },
-            { name: 'workflow_name', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT' },
-            { name: 'workflow_status', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT' },
-            { name: 'project_number', sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER' },
-            { name: 'project_owner', sql: 'ALTER TABLE memory_journal ADD COLUMN project_owner TEXT' },
-            { name: 'significance_type', sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT' },
-            { name: 'auto_context', sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT' },
-            { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
+        // Shared columns + team-only author column
+        const teamColumns: { name: string; sql: string }[] = [
+            ...SHARED_MIGRATION_COLUMNS,
             { name: 'author', sql: TEAM_SCHEMA_SQL.trim() },
         ]
 
         const added: string[] = []
-        for (const col of requiredColumns) {
+        for (const col of teamColumns) {
             if (!columns.has(col.name)) {
                 db.exec(col.sql)
                 added.push(col.name)
