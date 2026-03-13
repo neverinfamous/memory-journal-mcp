@@ -8,6 +8,13 @@ const IMPORTANCE_WEIGHTS = {
     recency: 0.15,
 } as const
 
+/** Relationship count at which the relationships component reaches its maximum score (1.0) */
+const MAX_RELATIONSHIP_SCORE_AT = 5
+/** Causal relationship count at which the causal component reaches its maximum score (1.0) */
+const MAX_CAUSAL_SCORE_AT = 3
+/** Number of days after which the recency component decays to zero */
+const RECENCY_WINDOW_DAYS = 90
+
 export function calculateImportance(context: EntriesSharedContext, entryId: number): ImportanceResult {
     const { db } = context
     const round2 = (n: number): number => Math.round(n * 100) / 100
@@ -38,13 +45,13 @@ export function calculateImportance(context: EntriesSharedContext, entryId: numb
     const causalCount = (row['causal_count'] as number) ?? 0
 
     const significanceRaw = significanceType ? 1.0 : 0.0
-    const relationshipsRaw = Math.min(relCount / 5, 1.0)
-    const causalRaw = Math.min(causalCount / 3, 1.0)
+    const relationshipsRaw = Math.min(relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
+    const causalRaw = Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
 
     const entryDate = new Date(timestamp)
     const now = new Date()
     const daysSince = Math.floor((now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24))
-    const recencyRaw = Math.max(0, 1 - daysSince / 90)
+    const recencyRaw = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
     const w = IMPORTANCE_WEIGHTS
 

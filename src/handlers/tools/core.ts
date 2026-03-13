@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
 import { resolveAuthor } from '../../utils/security-utils.js'
+import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 import {
     ENTRY_TYPES,
@@ -183,11 +184,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     })
 
                     // Auto-index to vector store for semantic search (fire-and-forget)
-                    if (vectorManager) {
-                        vectorManager.addEntry(entry.id, entry.content).catch(() => {
-                            // Non-critical failure, entry already saved to DB
-                        })
-                    }
+                    autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     // Share with team if requested
                     let sharedWithTeam = false
@@ -297,11 +294,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const entry = db.createEntry({ content })
 
                     // Auto-index to vector store for semantic search (fire-and-forget)
-                    if (vectorManager) {
-                        vectorManager.addEntry(entry.id, entry.content).catch(() => {
-                            // Non-critical failure, entry already saved to DB
-                        })
-                    }
+                    autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     return { success: true, entry }
                 } catch (err) {

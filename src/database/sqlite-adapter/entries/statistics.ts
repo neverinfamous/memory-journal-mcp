@@ -1,6 +1,9 @@
 import type { EntriesSharedContext } from './shared.js'
 import { validateDateFormatPattern } from '../../../utils/security-utils.js'
 
+/** Maximum number of period rows returned in the activity timeline */
+const MAX_PERIOD_ROWS = 52
+
 export function getStatistics(
     context: EntriesSharedContext,
     groupBy: 'day' | 'week' | 'month' | 'year' = 'week',
@@ -51,7 +54,7 @@ export function getStatistics(
     WHERE deleted_at IS NULL${dateFilter}
     GROUP BY period
     ORDER BY period DESC
-    LIMIT 52`).all(...dateParams) as { period: string; total_count: number; significant_count: number }[]
+    LIMIT ${String(MAX_PERIOD_ROWS)}`).all(...dateParams) as { period: string; total_count: number; significant_count: number }[]
 
     const entriesByPeriod = periodRows.map((r) => ({
         period: r.period,

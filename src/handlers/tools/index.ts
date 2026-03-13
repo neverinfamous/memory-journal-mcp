@@ -14,6 +14,7 @@
 import type {
     ToolFilterConfig,
     ToolDefinition,
+    ToolRegistration,
     ToolContext,
     ToolHandlerConfig,
 } from '../../types/index.js'
@@ -112,11 +113,11 @@ export function getTools(
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
     teamDb?: IDatabaseAdapter
-): object[] {
+): ToolRegistration[] {
     // Ensure tool map is built / up-to-date (shared cache with callTool)
     ensureToolCache(db, vectorManager, github, config, teamDb)
 
-    const mapTool = (t: ToolDefinition): object => ({
+    const mapTool = (t: ToolDefinition): ToolRegistration => ({
         name: t.name,
         description: t.description,
         inputSchema: t.inputSchema,
@@ -147,7 +148,7 @@ export function getTools(
  */
 let toolMapCache: Map<string, ToolDefinition> | null = null
 /** Cached mapped tool output for unfiltered getTools calls */
-let mappedToolsCache: object[] | null = null
+let mappedToolsCache: ToolRegistration[] | null = null
 /** Typed empty map for safe fallback (narrowing guard, never actually used) */
 const EMPTY_TOOL_MAP = new Map<string, ToolDefinition>()
 let cachedContextRefs: {

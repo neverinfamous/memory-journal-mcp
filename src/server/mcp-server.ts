@@ -140,7 +140,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Get all tools once (unfiltered) for both instruction generation and registration
     const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber }, teamDb)
-    const allToolNames = new Set(allTools.map((t) => (t as { name: string }).name))
+    const allToolNames = new Set(allTools.map((t) => t.name))
 
     // Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
     const instructions = generateInstructions(
@@ -175,43 +175,34 @@ export async function createServer(options: ServerOptions): Promise<void> {
         ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber }, teamDb)
         : allTools
     for (const tool of tools) {
-        const toolDef = tool as {
-            name: string
-            description?: string
-            inputSchema?: z.ZodType
-            outputSchema?: z.ZodType // MCP 2025-11-25
-            annotations?: Record<string, unknown>
-            icons?: { src: string; mimeType?: string; sizes?: string[] }[] // MCP 2025-11-25
-        }
-
         // Build tool options matching MCP SDK expectations
         const toolOptions: Record<string, unknown> = {
-            description: toolDef.description ?? '',
+            description: tool.description,
         }
 
-        if (toolDef.inputSchema) {
-            toolOptions['inputSchema'] = toolDef.inputSchema
+        if (tool.inputSchema !== undefined) {
+            toolOptions['inputSchema'] = tool.inputSchema
         }
 
         // MCP 2025-11-25: Pass outputSchema for structured responses
-        if (toolDef.outputSchema) {
-            toolOptions['outputSchema'] = toolDef.outputSchema
+        if (tool.outputSchema !== undefined) {
+            toolOptions['outputSchema'] = tool.outputSchema
         }
 
-        if (toolDef.annotations) {
-            toolOptions['annotations'] = toolDef.annotations
+        if (tool.annotations !== undefined) {
+            toolOptions['annotations'] = tool.annotations
         }
 
         // MCP 2025-11-25: Pass icons for visual representation
-        if (toolDef.icons) {
-            toolOptions['icons'] = toolDef.icons
+        if (tool.icons) {
+            toolOptions['icons'] = tool.icons
         }
 
         // Capture whether this tool has outputSchema for response handling
-        const hasOutputSchema = Boolean(toolDef.outputSchema)
+        const hasOutputSchema = Boolean(tool.outputSchema)
 
         server.registerTool(
-            toolDef.name,
+            tool.name,
             toolOptions as {
                 description?: string
                 inputSchema?: z.ZodType
@@ -229,7 +220,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                             : undefined
 
                     const result = await callTool(
-                        toolDef.name,
+                        tool.name,
                         args as Record<string, unknown>,
                         db,
                         vectorManager,
@@ -280,6 +271,35 @@ export async function createServer(options: ServerOptions): Promise<void> {
             }
         )
     }
+    // Resource read handler shared by template and static branches (D2 fix)
+    const handleResourceRead = async (uri: URL, mimeType: string): Promise<{
+        contents: { uri: string; mimeType: string; text: string; annotations?: Record<string, unknown> }[]
+    }> => {
+        const result = await readResource(
+            uri.href,
+            db,
+            vectorManager,
+            filterConfig,
+            github,
+            scheduler,
+            teamDb,
+            options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+        )
+        const dataStr =
+            typeof result.data === 'string'
+                ? result.data
+                : JSON.stringify(result.data, null, 2)
+        return {
+            contents: [
+                {
+                    uri: uri.href,
+                    mimeType,
+                    text: dataStr,
+                    ...(result.annotations ? { annotations: result.annotations } : {}),
+                },
+            ],
+        }
+    }
 
     // Register resources (reusing resources from instruction generation)
     for (const resource of resources) {
@@ -288,90 +308,35 @@ export async function createServer(options: ServerOptions): Promise<void> {
             name: string
             description?: string
             mimeType?: string
-            icons?: { src: string; mimeType?: string; sizes?: string[] }[] // MCP 2025-11-25
+            icons?: { src: string; mimeType?: string; sizes?: string[] }[]
+        }
+        const mimeType = resDef.mimeType ?? 'application/json'
+        const meta = {
+            description: resDef.description ?? '',
+            mimeType,
+            ...(resDef.icons ? { icons: resDef.icons } : {}),
         }
 
         // Check if this is a template URI (contains {variable} patterns)
         const isTemplate = resDef.uri.includes('{')
 
         if (isTemplate) {
-            // Use ResourceTemplate for parametrized URIs
             const template = new ResourceTemplate(
                 resDef.uri,
-                { list: undefined } // No enumeration support needed
+                { list: undefined }
             )
             server.registerResource(
                 resDef.name,
                 template,
-                {
-                    description: resDef.description ?? '',
-                    mimeType: resDef.mimeType ?? 'application/json',
-                    ...(resDef.icons ? { icons: resDef.icons } : {}),
-                },
-                async (uri: URL, _variables: Variables) => {
-                    const result = await readResource(
-                        uri.href,
-                        db,
-                        vectorManager,
-                        filterConfig,
-                        github,
-                        scheduler,
-                        teamDb,
-                        options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
-                    )
-                    const dataStr =
-                        typeof result.data === 'string'
-                            ? result.data
-                            : JSON.stringify(result.data, null, 2)
-                    return {
-                        contents: [
-                            {
-                                uri: uri.href,
-                                mimeType: resDef.mimeType ?? 'application/json',
-                                text: dataStr,
-                                // Include MCP 2025-11-25 annotations if provided
-                                ...(result.annotations ? { annotations: result.annotations } : {}),
-                            },
-                        ],
-                    }
-                }
+                meta,
+                async (uri: URL, _variables: Variables) => handleResourceRead(uri, mimeType)
             )
         } else {
             server.registerResource(
                 resDef.name,
                 resDef.uri,
-                {
-                    description: resDef.description ?? '',
-                    mimeType: resDef.mimeType ?? 'application/json',
-                    ...(resDef.icons ? { icons: resDef.icons } : {}),
-                },
-                async (uri: URL) => {
-                    const result = await readResource(
-                        uri.href,
-                        db,
-                        vectorManager,
-                        filterConfig,
-                        github,
-                        scheduler,
-                        teamDb,
-                        options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
-                    )
-                    const dataStr =
-                        typeof result.data === 'string'
-                            ? result.data
-                            : JSON.stringify(result.data, null, 2)
-                    return {
-                        contents: [
-                            {
-                                uri: uri.href,
-                                mimeType: resDef.mimeType ?? 'application/json',
-                                text: dataStr,
-                                // Include MCP 2025-11-25 annotations if provided
-                                ...(result.annotations ? { annotations: result.annotations } : {}),
-                            },
-                        ],
-                    }
-                }
+                meta,
+                async (uri: URL) => handleResourceRead(uri, mimeType)
             )
         }
     }

@@ -101,7 +101,10 @@ export class Scheduler {
         }
 
         if (vacuumIntervalMinutes > 0) {
-            this.scheduleJob('vacuum', vacuumIntervalMinutes, () => this.runVacuumOptimize())
+            this.scheduleJob('vacuum', vacuumIntervalMinutes, () => {
+                this.runVacuumOptimize()
+                return Promise.resolve()
+            })
         }
 
         if (rebuildIndexIntervalMinutes > 0) {
@@ -237,8 +240,6 @@ export class Scheduler {
                 }
             )
         }
-
-        await Promise.resolve()
     }
 
     /**
@@ -248,16 +249,13 @@ export class Scheduler {
      * internal statistics, and flushSave() ensures the disk file is current.
      * A full VACUUM on sql.js only compacts the in-memory representation.
      */
-    private async runVacuumOptimize(): Promise<void> {
-        const rawDb = this.db.getRawDb() as { run: (sql: string, params?: unknown[]) => void }
-        rawDb.run('PRAGMA optimize')
+    private runVacuumOptimize(): void {
+        this.db.pragma('optimize')
         this.db.flushSave()
         logger.info('Scheduled database optimize completed', {
             module: 'Scheduler',
             operation: 'vacuum',
         })
-
-        await Promise.resolve()
     }
 
     /**

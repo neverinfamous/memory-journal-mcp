@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { ENTRY_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorResponseFields } from './error-response-fields.js'
 
@@ -114,10 +115,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Re-index if content changed
-                    if (input.content && vectorManager) {
-                        vectorManager.addEntry(entry.id, entry.content).catch(() => {
-                            // Non-critical failure, entry already updated in DB
-                        })
+                    if (input.content) {
+                        autoIndexEntry(vectorManager, entry.id, entry.content)
                     }
 
                     return { success: true, entry }

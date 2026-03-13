@@ -5,6 +5,9 @@ import { assertNoPathTraversal } from '../../utils/security-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import type { IDatabaseConnection } from '../core/interfaces.js'
 
+/** Maximum length for user-supplied backup names after sanitization */
+const MAX_BACKUP_NAME_LENGTH = 50
+
 export class BackupManager {
     constructor(private ctx: IDatabaseConnection) {}
 
@@ -21,19 +24,19 @@ export class BackupManager {
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
         const sanitizedName = backupName
-            ? backupName.replace(/[/\\:*?"<>|]/g, '_').slice(0, 50)
+            ? backupName.replace(/[/\\:*?"<>|]/g, '_').slice(0, MAX_BACKUP_NAME_LENGTH)
             : `backup_${timestamp}`
         const filename = `${sanitizedName}.db`
         const backupPath = path.join(backupsDir, filename)
 
-        const rawDb = this.ctx.getRawDb() as { pragma?: (s: string) => void }
-        
-        if (typeof rawDb.pragma === 'function') {
-            try {
-                rawDb.pragma('wal_checkpoint(TRUNCATE)')
-            } catch {
-                // ignore checkpoint errors
-            }
+        try {
+            this.ctx.pragma('wal_checkpoint(TRUNCATE)')
+        } catch (checkpointErr) {
+            logger.debug('WAL checkpoint skipped', {
+                module: 'SqliteAdapter',
+                operation: 'exportToFile',
+                error: checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr),
+            })
         }
         await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
 

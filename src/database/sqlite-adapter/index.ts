@@ -233,6 +233,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         }
     }
 
+    pragma(command: string): void {
+        this.connection.pragma(command)
+    }
+
     getRawDb(): unknown {
         return this.connection.getRawDb()
     }

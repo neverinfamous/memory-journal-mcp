@@ -235,6 +235,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
         return this.db
     }
 
+    pragma(command: string): void {
+        const db = this.ensureDb()
+        db.pragma(command)
+    }
+
     getRawDb(): unknown {
         return this.ensureDb()
     }

@@ -64,6 +64,12 @@ export interface IDatabaseConnection {
     getRawDb(): unknown
 
     /**
+     * Execute a PRAGMA command.
+     * Wraps the driver-specific pragma call so callers don't need getRawDb().
+     */
+    pragma(command: string): void
+
+    /**
      * Internal mechanisms for backup/restore
      */
     closeDbBeforeRestore(): void
@@ -126,7 +132,7 @@ export interface IDatabaseAdapter {
         startDate?: string,
         endDate?: string,
         projectBreakdown?: boolean
-    ): unknown
+    ): Record<string, unknown>
 
     // Tags Manager
     getTagsForEntry(entryId: number): string[]
@@ -172,5 +178,6 @@ export interface IDatabaseAdapter {
     }
 
     getRawDb(): unknown
+    pragma(command: string): void
     executeRawQuery(sql: string, params?: unknown[]): QueryResult[]
 }

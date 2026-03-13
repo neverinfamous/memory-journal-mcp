@@ -32,6 +32,7 @@ function createMockDb() {
         getRawDb: vi.fn().mockReturnValue({
             run: vi.fn(),
         }),
+        pragma: vi.fn(),
         flushSave: vi.fn(),
     }
 }
@@ -266,9 +267,8 @@ describe('Scheduler', () => {
     })
 
     describe('vacuum job', () => {
-        it('should call PRAGMA optimize and flushSave on interval', async () => {
+        it('should call pragma optimize and flushSave on interval', async () => {
             const db = createMockDb()
-            const rawDb = db.getRawDb()
 
             const scheduler = new Scheduler(
                 defaultOptions({ vacuumIntervalMinutes: 1 }),
@@ -278,7 +278,7 @@ describe('Scheduler', () => {
 
             await vi.advanceTimersByTimeAsync(60_000)
 
-            expect(rawDb.run).toHaveBeenCalledWith('PRAGMA optimize')
+            expect(db.pragma).toHaveBeenCalledWith('optimize')
             expect(db.flushSave).toHaveBeenCalledOnce()
 
             scheduler.stop()

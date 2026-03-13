@@ -144,6 +144,19 @@ export interface ToolDefinition {
 }
 
 /**
+ * Shape returned by `getTools()` for MCP SDK registration.
+ * Derived from `ToolDefinition` but excludes internal fields (group, handler).
+ */
+export interface ToolRegistration {
+    name: string
+    description: string
+    inputSchema: unknown
+    outputSchema?: unknown
+    annotations: ToolAnnotations
+    icons?: { iconUrl: string; title: string; description: string }
+}
+
+/**
  * Tool handler configuration options
  */
 export interface ToolHandlerConfig {

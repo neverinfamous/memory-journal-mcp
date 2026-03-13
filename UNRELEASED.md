@@ -1,6 +1,17 @@
 ### Changed
 
-- **Code Quality Audit Fixes**
+- **Code Quality Audit Fixes (Round 2)**
+  - Extracted `ToolRegistration` interface for typed `getTools()` return, eliminating ~10 unsafe `as` casts in `mcp-server.ts` tool registration
+  - Added typed `pragma(command: string)` method to `IDatabaseAdapter` and `IDatabaseConnection` interfaces, eliminating unsafe `getRawDb() as { pragma/run }` casts in `scheduler.ts` and `backup.ts`
+  - Typed `getStatistics()` return from `unknown` to `Record<string, unknown>` on `IDatabaseAdapter`
+  - Added `queryRow()` / `queryRows()` typed query helpers to entries shared module
+  - Extracted `autoIndexEntry()` helper into `utils/vector-index-helpers.ts`, removing 3-way fire-and-forget vector indexing duplication across `core.ts` and `admin.ts`
+  - Extracted `handleResourceRead()` helper in `mcp-server.ts`, removing ~30 lines of duplicated resource response formatting between template and static resource registration
+  - Replaced magic numbers with named constants: `MAX_RELATIONSHIP_SCORE_AT`, `MAX_CAUSAL_SCORE_AT`, `RECENCY_WINDOW_DAYS` in `importance.ts`; `MAX_PERIOD_ROWS` in `statistics.ts`; `MAX_BACKUP_NAME_LENGTH` in `backup.ts`
+  - Removed no-op `await Promise.resolve()` calls in `scheduler.ts` (`runBackup`, `runVacuumOptimize`)
+  - Added debug-level logging to previously silent WAL checkpoint error catch block in `backup.ts`
+
+- **Code Quality Audit Fixes (Round 1)**
   - Renamed 7 `PascalCase` files to kebab-case to match workspace standards (`sqlite-adapter.ts`, `tool-filter.ts`, `github-integration.ts`, `mcp-server.ts`, `mcp-logger.ts`, `vector-search-manager.ts`, `server-instructions.ts`, `scheduler.ts`) and updated 27 import references across the codebase
   - Converted 13 bare `throw new Error(...)` statements to typed error classes (`ConfigurationError`, `ResourceNotFoundError`, `ConnectionError`, `QueryError`, `ValidationError`) for consistent error handling and standard structured error responses (`vector-search-manager.ts`, `sqlite-adapter.ts`, `handlers/resources/index.ts`, `handlers/prompts/index.ts`, `authorization-server-discovery.ts`, `sandbox-factory.ts`)
   - Renamed `src/types/sql.js.d.ts` to `sql-js.d.ts` to ensure strict compliance with kebab-case naming standard
