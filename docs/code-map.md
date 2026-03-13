@@ -1,8 +1,6 @@
 # memory-journal-mcp Code Map
 
 > **Agent-optimized navigation reference.** Read this before searching the codebase. Covers directory layout, handler→tool mapping, type locations, error handling, and key constants.
->
-> Last updated: March 12, 2026
 
 ---
 
@@ -11,16 +9,31 @@
 ```
 src/
 ├── cli.ts                          # CLI entry point (arg parsing, --db, --transport, --tool-filter)
-├── index.ts                        # Barrel re-export for library consumers
 │
 ├── server/
-│   ├── McpServer.ts                # McpServer setup, tool/resource/prompt wiring, scheduler init
-│   └── Scheduler.ts                # Automated task scheduler (periodic index rebuilds, etc.)
+│   ├── mcp-server.ts               # McpServer setup, tool/resource/prompt wiring, scheduler init
+│   └── scheduler.ts                # Automated task scheduler (backups, vacuum, index rebuilds)
 │
 ├── database/
-│   ├── SqliteAdapter.ts            # Database layer (sql.js WASM) — CRUD, analytics, relationships,
-│   │                               #   causal graphs, significance scoring — 58KB single file
-│   └── schema.ts                   # DDL schema definitions (CREATE TABLE statements)
+│   ├── adapter-factory.ts          # DatabaseAdapterFactory — creates SqliteAdapter
+│   ├── core/
+│   │   ├── interfaces.ts           # IDatabaseAdapter, IDatabaseConnection interfaces
+│   │   ├── schema.ts               # DDL schema definitions (CREATE TABLE statements)
+│   │   ├── entry-columns.ts        # ENTRY_COLUMNS projection constant
+│   │   └── index.ts                # Barrel
+│   └── sqlite-adapter/
+│       ├── native-connection.ts    # NativeConnectionManager (better-sqlite3 + sqlite-vec extension)
+│       ├── entries/
+│       │   ├── crud.ts             # Entry CRUD operations
+│       │   ├── search.ts           # Text search, date range queries
+│       │   ├── statistics.ts       # Analytics queries (counts, breakdowns, trends)
+│       │   ├── importance.ts       # calculateImportance() scoring
+│       │   ├── shared.ts           # Shared entry query helpers (queryRow, queryRows)
+│       │   └── index.ts            # Barrel
+│       ├── tags.ts                 # Tag CRUD, batch linking, merge
+│       ├── relationships.ts        # Relationship queries, causal chains
+│       ├── backup.ts               # Backup/restore operations
+│       └── index.ts                # SqliteAdapter class, barrel
 │
 ├── types/
 │   ├── index.ts                    # Barrel — ToolDefinition, ResourceDefinition, PromptDefinition,
@@ -35,35 +48,50 @@ src/
 │                                   #   GitHubWorkflowRun, KanbanBoard, TrafficData, RepoStats
 │
 ├── constants/
-│   ├── ServerInstructions.ts       # Agent instructions string (26KB — system prompt)
-│   ├── server-instructions.md      # Human-readable version (21KB)
+│   ├── server-instructions.ts      # Agent instructions string (29KB — system prompt)
+│   ├── server-instructions.md      # Human-readable version (24KB)
 │   └── icons.ts                    # MCP icon definitions per tool group
 │
 ├── filtering/
-│   └── ToolFilter.ts               # ToolFilter class — parse/apply --tool-filter expressions
+│   └── tool-filter.ts              # ToolFilter class — parse/apply --tool-filter expressions
 │
 ├── utils/
 │   ├── error-helpers.ts            # formatHandlerErrorResponse(), formatZodError()
 │   │                               #   (see § Error Handling)
 │   ├── logger.ts                   # Logger class (structured JSON, severity filtering)
-│   ├── McpLogger.ts                # MCP protocol logging integration
+│   ├── mcp-logger.ts               # MCP protocol logging integration
 │   ├── progress-utils.ts           # MCP progress notification helpers
-│   └── security-utils.ts           # SecurityError (extends MemoryJournalMcpError), SQL sanitization,
-│                                   #   path traversal prevention
+│   ├── security-utils.ts           # SecurityError (extends MemoryJournalMcpError), SQL sanitization,
+│   │                               #   path traversal prevention, sanitizeAuthor()
+│   ├── github-helpers.ts           # Shared resolveIssueUrl() helper
+│   └── vector-index-helpers.ts     # autoIndexEntry() helper for fire-and-forget indexing
 │
 ├── github/
-│   └── GitHubIntegration.ts        # GitHub API client (Octokit) — issues, PRs, milestones,
-│                                   #   projects V2, kanban, traffic, workflows — 51KB single file
+│   └── github-integration/
+│       ├── client.ts               # GitHubClient — Octokit wrapper, TTL-aware LRU cache
+│       ├── repository.ts           # Repository info, context detection
+│       ├── issues.ts               # Issue queries, create/close
+│       ├── pull-requests.ts        # PR queries
+│       ├── milestones.ts           # Milestone CRUD
+│       ├── projects.ts             # Projects V2, Kanban boards, item management
+│       ├── insights.ts             # Repo stats, traffic, referrers, popular paths
+│       ├── types.ts                # Internal GitHub types
+│       └── index.ts                # GitHubIntegration class, barrel
 │
 ├── vector/
-│   └── VectorSearchManager.ts      # Semantic search (sentence-transformers/all-MiniLM-L6-v2) — 14KB
+│   └── vector-search-manager.ts    # Semantic search (sqlite-vec + @huggingface/transformers
+│                                   #   all-MiniLM-L6-v2, 384-dim) — 13KB
 │
 ├── transports/
 │   └── http/
-│       ├── server.ts               # HTTP/SSE transport (Streamable HTTP + legacy SSE)
-│       ├── handlers.ts             # Route handlers (POST /mcp, GET /sse, health, etc.)
-│       ├── security.ts             # Security headers, rate limiting, CORS, HSTS
-│       ├── types.ts                # HTTP transport types
+│       ├── handlers.ts             # Route handlers (health, root info, bearer auth middleware)
+│       ├── security.ts             # Security headers, built-in rate limiting, CORS, HSTS
+│       ├── types.ts                # HTTP transport types, constants
+│       ├── server/
+│       │   ├── stateful.ts         # Stateful HTTP transport (session management)
+│       │   ├── stateless.ts        # Stateless HTTP transport (serverless)
+│       │   ├── legacy-sse.ts       # Legacy SSE transport (MCP 2024-11-05)
+│       │   └── index.ts            # HttpTransport class, barrel
 │       └── index.ts                # Barrel
 │
 ├── handlers/
@@ -82,7 +110,7 @@ src/
 │   ├── api-constants.ts            # Method aliases, positional param maps, group prefix rules
 │   └── index.ts                    # Barrel re-export
 │
-├── auth/                            # OAuth 2.1 authentication (10 files)
+├── auth/                            # OAuth 2.1 authentication (11 files)
 │   ├── types.ts                    # OAuth types, token claims, auth context
 │   ├── errors.ts                   # OAuthError (extends MemoryJournalMcpError), AUTH_ error codes
 │   ├── scopes.ts                   # Scope constants, hierarchy, tool-group-to-scope mapping
@@ -92,6 +120,8 @@ src/
 │   ├── scope-map.ts                # Scope ↔ tool group bidirectional mapping
 │   ├── auth-context.ts             # AsyncLocalStorage-based per-request auth context
 │   ├── middleware.ts               # Express middleware for token extraction & scope enforcement
+│   ├── transport-agnostic.ts       # Transport-agnostic auth utilities (createAuthenticatedContext, etc.)
+│   ├── tests/                      # Auth unit tests
 │   └── index.ts                    # Barrel re-export
 ```
 
@@ -99,26 +129,26 @@ src/
 
 ## Handler → Tool Mapping
 
-44 tools across 11 groups.
+44 tools across 10 groups.
 
 ### Tool Handlers (`src/handlers/tools/`)
 
 | Group | Handler File(s) | Tools | Key Tools |
-|-------|----------------|-------|-----------|
-| **core** | `core.ts` | 6 | `create_entry`, `get_entries`, `update_entry`, `delete_entry`, `get_entry_by_id`, `undelete_entry` |
-| **search** | `search.ts` | 5 | `search_entries`, `search_by_tags`, `search_by_date`, `semantic_search`, `get_related` |
-| **analytics** | `analytics.ts` | 3 | `get_analytics`, `get_timeline`, `get_significance_trends` |
-| **relationships** | `relationships.ts` | 5 | `create_relationship`, `get_relationships`, `delete_relationship`, `get_causal_chain`, `detect_causal_patterns` |
-| **export** | `export.ts` | 2 | `export_entries`, `generate_summary` |
-| **admin** | `admin.ts` | 4 | `rebuild_vector_index`, `get_vector_index_stats`, `get_health_status`, `manage_scheduler` |
-| **backup** | `backup.ts` | 3 | `create_backup`, `list_backups`, `restore_backup` |
-| **team** | `team.ts` | 4 | `team_create_entry`, `team_get_entries`, `team_search`, `team_get_analytics` |
-| **github** | `github.ts` → `github/` | 11 | See sub-handlers below |
-| | `github/read-tools.ts` | 4 | `github_get_repo`, `github_get_issues`, `github_get_pull_requests`, `github_get_workflow_runs` |
-| | `github/issue-tools.ts` | 2 | `github_create_issue`, `github_update_issue` |
-| | `github/milestone-tools.ts` | 1 | `github_get_milestones` |
-| | `github/kanban-tools.ts` | 1 | `github_get_kanban` |
-| | `github/insights-tools.ts` | 2 | `github_get_traffic`, `github_get_contributors` |
+|-------|----------------|-------|-----------:|
+| **core** | `core.ts` | 6 | `create_entry`, `create_entry_minimal`, `get_recent_entries`, `update_entry`, `delete_entry`, `get_entry_by_id` |
+| **search** | `search.ts` | 4 | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats` |
+| **analytics** | `analytics.ts` | 2 | `get_statistics`, `get_cross_project_insights` |
+| **relationships** | `relationships.ts` | 2 | `link_entries`, `visualize_relationships` |
+| **export** | `export.ts` | 1 | `export_entries` |
+| **admin** | `admin.ts` | 5 | `rebuild_vector_index`, `add_to_vector_index`, `list_tags`, `merge_tags`, `test_simple` |
+| **backup** | `backup.ts` | 4 | `create_backup`, `list_backups`, `restore_backup`, `cleanup_backups` |
+| **team** | `team.ts` | 3 | `team_create_entry`, `team_get_recent`, `team_search` |
+| **github** | `github.ts` → `github/` | 16 | See sub-handlers below |
+| | `github/read-tools.ts` | 5 | `get_github_issues`, `get_github_issue`, `get_github_prs`, `get_github_pr`, `get_github_context` |
+| | `github/issue-tools.ts` | 4 | `create_github_issue_with_entry`, `close_github_issue_with_entry`, `add_project_item`, `move_kanban_item` |
+| | `github/kanban-tools.ts` | 1 | `get_kanban_board` |
+| | `github/milestone-tools.ts` | 5 | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` |
+| | `github/insights-tools.ts` | 1 | `get_repo_insights` |
 | | `github/copilot-tools.ts` | 1 | `get_copilot_reviews` |
 | **codemode** | `codemode.ts` | 1 | `mj_execute_code` (sandboxed JavaScript execution via `mj.*` API) |
 
@@ -140,12 +170,16 @@ src/
 
 | File | Resources |
 |------|-----------|
-| `core.ts` | `memory://entries`, `memory://entries/{id}`, `memory://tags`, `memory://types`, `memory://significance`, `memory://search`, `memory://dates`, `memory://recent` |
-| `graph.ts` | `memory://relationships`, `memory://causal-graph`, `memory://causal-patterns` |
-| `team.ts` | `memory://team/entries`, `memory://team/stats` |
-| `github.ts` | `memory://github/repo`, `memory://github/issues`, `memory://github/prs`, `memory://github/milestones`, `memory://github/runs`, `memory://github/kanban` |
-| `templates.ts` | `memory://templates/{name}` (workflow templates) |
-| `shared.ts` | Shared resource helpers |
+| `core/` | Core resources (briefing, instructions, health, utilities) |
+| `core/briefing/` | `memory://briefing` — modular builders (github-section, context-section, user-message) |
+| `core/instructions.ts` | `memory://instructions` |
+| `core/health.ts` | `memory://health` |
+| `core/utilities.ts` | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics` |
+| `graph.ts` | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent` |
+| `team.ts` | `memory://team/recent`, `memory://team/statistics` |
+| `github.ts` | `memory://github/status`, `memory://github/insights`, `memory://github/milestones` |
+| `templates.ts` | Template resources (`memory://projects/{N}/timeline`, `memory://issues/{N}/entries`, `memory://prs/{N}/entries`, `memory://prs/{N}/timeline`, `memory://kanban/{N}`, `memory://kanban/{N}/diagram`, `memory://milestones/{N}`) |
+| `shared.ts` | Shared resource helpers (`resolveGitHubRepo()`, `milestoneCompletionPct()`, etc.) |
 | `index.ts` | `createResourceDefinitions(ctx)` — assembles all resources |
 
 ---
@@ -154,9 +188,9 @@ src/
 
 | File | Prompts |
 |------|---------|
-| `index.ts` | `daily_review`, `weekly_summary`, `project_status` |
-| `workflow.ts` | `onboarding_setup`, `retrospective`, `goal_tracking`, `knowledge_extraction`, etc. |
-| `github.ts` | `github_project_review`, `github_issue_triage` |
+| `index.ts` | Barrel + prompt assembly |
+| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `session-summary` |
+| `github.ts` | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`, `confirm-briefing` |
 
 ---
 
@@ -213,12 +247,12 @@ try {
 
 | What | Where | Notes |
 |------|-------|-------|
-| Server instructions (agent prompt) | `src/constants/ServerInstructions.ts` | 26KB — exported as string constant |
-| Human-readable instructions | `src/constants/server-instructions.md` | 21KB markdown version |
+| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | 29KB — exported as string constant |
+| Human-readable instructions | `src/constants/server-instructions.md` | 24KB markdown version |
 | MCP icons | `src/constants/icons.ts` | Per-group icon definitions |
-| Tool filter | `src/filtering/ToolFilter.ts` | `ToolFilter` class (same pattern as db-mcp/mysql-mcp/postgres-mcp) |
+| Tool filter | `src/filtering/tool-filter.ts` | `ToolFilter` class (same pattern as db-mcp/mysql-mcp/postgres-mcp) |
 | Default config | `src/types/index.ts` | `DEFAULT_CONFIG` — dbPath, model name, semantic search toggle |
-| Security utils | `src/utils/security-utils.ts` | SQL sanitization, path traversal prevention |
+| Security utils | `src/utils/security-utils.ts` | SQL sanitization, path traversal prevention, author sanitization |
 
 ---
 
@@ -227,22 +261,22 @@ try {
 | Pattern | Description |
 |---------|-------------|
 | **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerErrorResponse()`. All handlers use enriched formatter. Output schemas include `ErrorResponseFields` for validation compatibility. |
-| **Single Adapter** | No adapter abstraction — `SqliteAdapter` (sql.js WASM) used directly. No native backend. |
+| **Native SQLite** | `better-sqlite3` for high-performance native disk access. `sqlite-vec` extension loaded for vector search. No WASM fallback. |
+| **Adapter Factory** | `DatabaseAdapterFactory.create()` in `adapter-factory.ts` instantiates `SqliteAdapter`. |
 | **ToolContext** | All tool handlers receive `ToolContext` (db, teamDb?, vectorManager?, github?, config?, progress?). |
-| **GitHub Integration** | `GitHubIntegration` (Octokit-based) — issues, PRs, milestones, projects V2, kanban, traffic. |
-| **Vector Search** | `VectorSearchManager` with sentence-transformers model (all-MiniLM-L6-v2, 384-dim). |
-| **Scheduler** | `Scheduler` for automated periodic tasks (vector index rebuilds, etc.). |
+| **GitHub Integration** | `GitHubIntegration` class in `github-integration/` directory — modularized into client, issues, PRs, milestones, projects, insights. |
+| **Vector Search** | `VectorSearchManager` with `sqlite-vec` KNN queries + `@huggingface/transformers` embeddings (all-MiniLM-L6-v2, 384-dim). Embeddings stored in `vec_embeddings` virtual table. |
+| **Scheduler** | `Scheduler` for automated periodic tasks (backups, vacuum, vector index rebuilds). |
 | **Tool Filtering** | Same `ToolFilter` pattern as database MCPs — `--tool-filter` CLI flag. |
-| **Smart Path Resolution** | DB path auto-detected: CLI flag → root `memory_journal.db` → `test-server/` fallback. |
 | **Code Mode** | Sandboxed JavaScript execution via `mj.*` API — `mj_execute_code` runs in `worker_threads` with `MessagePort` RPC bridge (port passed via `workerData`, results via `parentPort`), secondary `vm.createContext` isolation, resource limits, and hard timeouts. |
-| **OAuth 2.1** | Optional RFC-compliant OAuth 2.0 auth for HTTP transport — JWT validation, JWKS caching, scope-based access control. 10 files in `src/auth/`. |
+| **OAuth 2.1** | Optional RFC-compliant OAuth 2.0 auth for HTTP transport — JWT validation, JWKS caching, scope-based access control. 11 files in `src/auth/`. |
 
 ---
 
 ## Import Path Conventions
 
 - All imports use **`.js` extension** (ESM requirement)
-- Note: memory-journal-mcp uses **PascalCase filenames** for classes (e.g., `SqliteAdapter.ts`, `McpServer.ts`)
+- Filenames use **kebab-case** (e.g., `mcp-server.ts`, `sqlite-adapter/`, `tool-filter.ts`)
 - Types re-exported via `types/index.ts` barrel
 
 ---
@@ -254,6 +288,7 @@ try {
 | `test-server/README.md` | Agent testing orchestration doc |
 | `test-server/test-tools.md` | Pass 1: Core functionality (Phases 1-10, 44 tools + 22 resources) |
 | `test-server/test-tools2.md` | Pass 2: Validation & edge cases (Phases 11-15) |
-| `test-server/tool-reference.md` | Complete 44-tool inventory by group |
+| `test-server/test-tools-codemode.md` | Code Mode testing prompts |
+| `docs/tool-reference.md` | Complete 44-tool inventory by group |
 | `tests/` | Vitest unit tests |
 | `tests/e2e/` | Playwright E2E tests (HTTP/SSE transport) |
