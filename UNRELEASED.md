@@ -1,5 +1,9 @@
 ### Changed
 
+- **Test Artifact Consolidation** — Consolidated scattered test output directories (`coverage/`, `test-results/`, `test-server/*.db*`, `test-server/backups/`, `backups/`) into a single `.test-output/` directory with `coverage/` (vitest), `playwright/` (Playwright results), and `e2e/` (E2E databases and scheduler backups). Moved `code-map.md`, `test-tools.md`, and `tool-reference.md` from `test-server/` to `docs/`. Updated `.gitignore` and `.dockerignore` to use single `.test-output/` entry. No source code changes needed — the backup system auto-adapts via `dirname(dbPath)` path derivation.
+
+### Changed
+
 - **Vector Search Backend** — Replaced `vectra` with `sqlite-vec` for vector search. Embeddings now stored in the main SQLite database via a `vec0` virtual table (`vec_embeddings`), eliminating the separate `.vectra_index/` directory and 86 transitive dependencies (460→376 packages). KNN search uses SQL `WHERE embedding MATCH ? ORDER BY distance LIMIT ?` queries directly. `removeEntry()` and `getStats()` are now synchronous (better-sqlite3 is synchronous). NativeConnectionManager loads the sqlite-vec extension on init with a race-condition guard for concurrent close during async import.
 
 ### Changed

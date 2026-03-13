@@ -29,7 +29,7 @@ async function startAuthServer(): Promise<void> {
             '--port',
             String(AUTH_PORT),
             '--db',
-            './test-server/test-e2e-auth.db',
+            './.test-output/e2e/test-e2e-auth.db',
             '--auth-token',
             AUTH_TOKEN,
         ],

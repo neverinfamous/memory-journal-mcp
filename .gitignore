@@ -36,7 +36,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Unit test / coverage reports
-coverage/
+.test-output/
 htmlcov/
 .tox/
 .nox/
@@ -183,13 +183,6 @@ tmp/
 *.temp
 logs/
 
-# Backups
-backups/
-
-# Playwright
-/test-results/
-/playwright-report/
-
 # Dependencies
 node_modules/
-test-results.json
+
