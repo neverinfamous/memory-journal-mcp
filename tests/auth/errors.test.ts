@@ -15,9 +15,9 @@ import {
     ClientRegistrationError,
     isOAuthError,
     getWWWAuthenticateHeader,
-} from '../errors.js'
-import { MemoryJournalMcpError } from '../../types/errors.js'
-import { ErrorCategory } from '../../types/error-types.js'
+} from '../../src/auth/errors.js'
+import { MemoryJournalMcpError } from '../../src/types/errors.js'
+import { ErrorCategory } from '../../src/types/error-types.js'
 
 describe('OAuthError hierarchy', () => {
     it('should extend MemoryJournalMcpError and Error', () => {

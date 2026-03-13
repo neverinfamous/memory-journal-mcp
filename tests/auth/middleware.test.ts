@@ -15,14 +15,13 @@ import {
     createAuthenticatedContext,
     validateAuth,
     formatOAuthError,
-} from '../middleware.js'
+} from '../../src/auth/middleware.js'
 import {
     TokenMissingError,
     InvalidTokenError,
     InsufficientScopeError,
-    OAuthError,
-} from '../errors.js'
-import type { TokenValidator } from '../token-validator.js'
+} from '../../src/auth/errors.js'
+import { TokenValidator } from '../../src/auth/token-validator.js'
 
 // =============================================================================
 // extractBearerToken

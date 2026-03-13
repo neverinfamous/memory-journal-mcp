@@ -283,7 +283,11 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
                     const success = await vectorManager.addEntry(entry_id, entry.content)
-                    return { success, entryId: entry_id }
+                    return {
+                        success,
+                        entryId: entry_id,
+                        ...(success ? {} : { error: 'Failed to generate or store embedding' }),
+                    }
                 } catch (err) {
                     return formatHandlerErrorResponse(err)
                 }

@@ -6,9 +6,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { TokenValidator, createTokenValidator } from '../token-validator.js'
-import type { TokenValidatorConfig } from '../types.js'
-import { AUTH_ERROR_CODES } from '../errors.js'
+import { TokenValidator, createTokenValidator } from '../../src/auth/token-validator.js'
+import type { TokenValidatorConfig } from '../../src/auth/types.js'
+import { AUTH_ERROR_CODES } from '../../src/auth/errors.js'
 
 // Mock jose to avoid real JWKS fetching
 vi.mock('jose', () => ({

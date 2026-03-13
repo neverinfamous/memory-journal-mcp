@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
     AuthorizationServerDiscovery,
     createAuthServerDiscovery,
-} from '../authorization-server-discovery.js'
+} from '../../src/auth/authorization-server-discovery.js'
 
 describe('AuthorizationServerDiscovery', () => {
     const authServerUrl = 'https://auth.example.com'

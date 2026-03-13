@@ -266,6 +266,21 @@ describe('HttpTransport', () => {
     // ========================================================================
 
     describe('middleware behavior', () => {
+        /** Find a middleware by probing: returns the first mw whose invocation triggers the predicate. */
+        function findMiddleware(
+            predicate: (res: Record<string, unknown>) => boolean,
+        ): Function | undefined {
+            for (const mw of mockMiddlewares) {
+                const req = mockReq()
+                const res = mockRes()
+                try {
+                    mw(req, res, () => {})
+                } catch { /* hostHeaderValidation may throw */ }
+                if (predicate(res)) return mw
+            }
+            return undefined
+        }
+
         it('should set security headers on requests', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
@@ -276,8 +291,11 @@ describe('HttpTransport', () => {
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
-            // Security headers middleware is first
-            const securityMw = mockMiddlewares[0]
+            // Find middleware that sets security headers (position is dynamic due to hostHeaderValidation)
+            const securityMw = findMiddleware((res) => {
+                const calls = (res['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [string, string][]
+                return calls.some((c) => c[0] === 'X-Content-Type-Options')
+            })
             expect(securityMw).toBeDefined()
 
             const req = mockReq()
@@ -302,7 +320,13 @@ describe('HttpTransport', () => {
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
-            const securityMw = mockMiddlewares[0]
+            // Find security headers middleware by behavior
+            const securityMw = findMiddleware((res) => {
+                const calls = (res['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [string, string][]
+                return calls.some((c) => c[0] === 'Strict-Transport-Security')
+            })
+            expect(securityMw).toBeDefined()
+
             const req = mockReq()
             const res = mockRes()
             securityMw!(req, res, () => {})
@@ -322,13 +346,24 @@ describe('HttpTransport', () => {
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
-            // CORS middleware is second
-            const corsMw = mockMiddlewares[1]
-            expect(corsMw).toBeDefined()
+            // Find the OPTIONS middleware by behavior (returns 204 for OPTIONS)
+            let optionsMw: Function | undefined
+            for (const mw of mockMiddlewares) {
+                const req = mockReq({ method: 'OPTIONS' })
+                const res = mockRes()
+                try {
+                    mw(req, res, () => {})
+                } catch { /* skip */ }
+                if ((res['status'] as ReturnType<typeof vi.fn>).mock.calls.some((c: unknown[]) => c[0] === 204)) {
+                    optionsMw = mw
+                    break
+                }
+            }
+            expect(optionsMw).toBeDefined()
 
             const req = mockReq({ method: 'OPTIONS' })
             const res = mockRes()
-            corsMw!(req, res, () => {})
+            optionsMw!(req, res, () => {})
 
             expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(204)
         })
@@ -410,8 +445,18 @@ describe('HttpTransport', () => {
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
-            // OPTIONS is handled by the second middleware (after security+CORS)
-            const optionsMw = mockMiddlewares[1]
+            // Find the OPTIONS middleware by behavior (position is dynamic)
+            let optionsMw: Function | undefined
+            for (const mw of mockMiddlewares) {
+                const probe = mockRes()
+                try {
+                    mw(mockReq({ method: 'OPTIONS' }), probe, () => {})
+                } catch { /* skip */ }
+                if ((probe['status'] as ReturnType<typeof vi.fn>).mock.calls.some((c: unknown[]) => c[0] === 204)) {
+                    optionsMw = mw
+                    break
+                }
+            }
             expect(optionsMw).toBeDefined()
 
             const req = mockReq({ method: 'OPTIONS' })

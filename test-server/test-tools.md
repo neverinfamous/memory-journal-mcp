@@ -2,7 +2,7 @@
 
 Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below.
 
-**Scope:** 44 tools, 22 resources (15 static + 7 templates) — this pass covers happy paths, core error paths, and feature verification (Phases 1-10). Skip Phase 8 (prompts require manual user testing).
+**Scope:** 44 tools, 22 resources (15 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-10).
 
 **Constraints:**
 
@@ -23,6 +23,60 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 1. The server instructions are auto-injected by the MCP protocol. Confirm receipt (no need to read `memory://instructions` separately).
 2. Read `memory://briefing` to confirm context loaded (the briefing table confirms receipt).
+
+---
+
+## Phase 0: Seed Test Data
+
+> [!IMPORTANT]
+> Create these entries **before Phase 2** to ensure FTS5, filter, semantic search, and relationship tests have matching data. Each entry is mapped to the test cases it enables.
+>
+> **Do NOT skip this phase** — without it, many Phase 3 search tests will return empty results and won't validate the underlying feature.
+
+### 0.1 FTS5 Content Entries
+
+These entries ensure every FTS5 query pattern in Phase 3.1 returns actual results.
+
+| # | Tool | Params | Enables Tests |
+|---|------|--------|---------------|
+| S1 | `create_entry` | `content: "Redesigned the authentication architecture for the OAuth 2.1 module"`, `entry_type: "technical_note"`, `tags: ["architecture", "auth"]` | `architecture`, `auth*`, `"authentication architecture"` phrase |
+| S2 | `create_entry` | `content: "Improved error handling in the database adapter layer with typed error classes"`, `entry_type: "bug_fix"`, `significance_type: "minor_improvement"`, `tags: ["error-handling", "database"]` | `"error handling"` phrase, `significance_type` filter |
+| S3 | `create_entry` | `content: "Deploy new release candidate to the CDN edge network"`, `entry_type: "feature_implementation"`, `tags: ["deploy", "release"]`, `is_personal: false` | `deploy NOT staging`, `deploy OR release` |
+| S4 | `create_entry` | `content: "Released v5.0 with breaking API changes and migration guide"`, `entry_type: "milestone"`, `significance_type: "breakthrough"`, `tags: ["release"]` | `deploy OR release` (via "release"), semantic search for "release" |
+| S5 | `create_entry` | `content: "Deploy to staging environment failed — rollback initiated"`, `entry_type: "bug_fix"`, `tags: ["deploy", "staging"]` | `deploy NOT staging` (negative match — verifies NOT exclusion) |
+| S6 | `create_entry` | `content: "The test's scope was expanded to cover 100% of edge cases"`, `entry_type: "planning"`, `tags: ["testing"]` | `test's` LIKE fallback, `100%` LIKE fallback |
+
+### 0.2 Filter & GitHub-Linked Entries
+
+These entries ensure filter tests (`issue_number`, `pr_status`, `workflow_run_id`, `project_number`) return results.
+
+| # | Tool | Params | Enables Tests |
+|---|------|--------|---------------|
+| S7 | `create_entry` | `content: "Investigated performance regression in issue #44 — root cause was N+1 queries"`, `entry_type: "research"`, `issue_number: 44`, `project_number: 5`, `tags: ["performance", "investigation"]` | `issue_number: 44` filter, `project_number: 5` filter, semantic search for "performance" |
+| S8 | `create_entry` | `content: "Code review feedback from PR #67 merged — refactored authentication middleware"`, `entry_type: "code_review"`, `pr_number: 67`, `pr_status: "merged"`, `tags: ["code-review", "auth"]` | `pr_status: "merged"` filter, `pr_number` filter, `auth*` prefix |
+| S9 | `create_entry` | `content: "CI workflow run completed — all 910 tests passing across 3 test suites"`, `entry_type: "technical_note"`, `workflow_run_id: 12345`, `workflow_name: "lint-and-test"`, `workflow_status: "completed"`, `tags: ["ci", "testing"]` | `workflow_run_id` filter, workflow field persistence |
+| S10 | `create_entry` | `content: "Personal reflection on improving development velocity and reducing technical debt"`, `entry_type: "personal_reflection"`, `is_personal: true`, `tags: ["personal", "velocity"]` | `is_personal: true` filter, semantic search for "improving performance" |
+
+### 0.3 Team & Cross-DB Entries
+
+These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) returns results from both databases.
+
+| # | Tool | Params | Enables Tests |
+|---|------|--------|---------------|
+| S11 | `create_entry` | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
+| S12 | `team_create_entry` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]` | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB |
+
+### 0.4 Post-Seed Verification
+
+After creating all 12 entries, verify the seed data is searchable:
+
+| Check | Command | Expected |
+|-------|---------|----------|
+| FTS5 indexed | `search_entries(query: "architecture")` | ≥ 2 results (S1, S11) |
+| Filters work | `search_entries(issue_number: 44)` | ≥ 1 result (S7) |
+| Cross-DB merged | `search_entries(query: "architecture")` | Results include `source: 'personal'` and `source: 'team'` entries |
+| Rebuild vector index | `rebuild_vector_index` | `entriesIndexed` > 0 |
+| Semantic search | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar) |
 
 ---
 
@@ -116,13 +170,13 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 | Test                  | Command/Action                                                                                   | Expected Result                                                           |
 | --------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| FTS5 search           | `search_entries(query: "architecture")`                                                          | Returns entries ranked by BM25 relevance                                  |
-| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                     | Returns only entries containing the exact phrase "error handling"          |
-| FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | Matches "auth", "authentication", "authorized", etc.                      |
-| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns entries with "deploy" but not "staging"                           |
-| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | Returns entries with either term                                          |
-| FTS5 fallback         | `search_entries(query: "test's")`                                                                | Falls back to LIKE — single quotes are FTS5-unsafe, should not error      |
-| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | Falls back to LIKE — `%` is FTS5-unsafe, should not error                 |
+| FTS5 search           | `search_entries(query: "architecture")`                                                          | ≥ 2 results (S1, S11) ranked by BM25 relevance                           |
+| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                     | ≥ 1 result (S2) — exact phrase match only                                 |
+| FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | ≥ 2 results (S1, S8) — matches "authentication", "authorization", etc.    |
+| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns S3, S11 but NOT S5 (S5 contains "staging")                       |
+| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 3 results (S3, S4, S5) — entries with either term                      |
+| FTS5 fallback         | `search_entries(query: "test's")`                                                                | ≥ 1 result (S6) — LIKE fallback, single quotes are FTS5-unsafe            |
+| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | ≥ 1 result (S6) — LIKE fallback, `%` is FTS5-unsafe                      |
 | Date range            | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-01-31")`                         | Returns `structuredContent` array                                         |
 | Cross-DB search       | `search_entries(query: "test")`                                                                  | Results include `source: 'personal' \| 'team'` marker on each entry       |
 | Cross-DB date         | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31")`                         | Results include `source` marker merging personal + team entries           |
@@ -143,9 +197,9 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 | Test                   | Command/Action                                                     | Expected Result                                   |
 | ---------------------- | ------------------------------------------------------------------ | ------------------------------------------------- |
 | Vector index stats     | `get_vector_index_stats`                                           | Shows `itemCount`, `modelName`, `dimensions`      |
-| Rebuild index          | `rebuild_vector_index`                                             | Re-indexes all entries                            |
-| Semantic query         | `semantic_search(query: "improving performance")`                  | Returns similarity-ranked results                 |
-| Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results (higher threshold filters more)     |
+| Rebuild index          | `rebuild_vector_index`                                             | `entriesIndexed` > 0 (indexes seed entries)       |
+| Semantic query         | `semantic_search(query: "improving performance")`                  | ≥ 1 result — S7, S10 semantically similar         |
+| Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)       |
 | Personal filter        | `semantic_search(query: "test", is_personal: true)`                | Only personal entries in results                  |
 | Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Empty results, no `hint` field in response        |
 | Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Empty results with `hint` suggesting alternatives |
@@ -174,8 +228,8 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                   |
 | Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship            |
-| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: "Source entry 999999 not found"     |
-| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: "Target entry 999999 not found"     |
+| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: 999999, to: <B>)"`     |
+| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: <A>, to: 999999)"`     |
 | Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | Mermaid diagram returned                                               |
 | Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                          |
 | Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)      |
@@ -364,11 +418,80 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ---
 
-## Phase 8: Prompts (15 total) [SKIP]
+## Phase 8: Prompt Handler Verification (16 prompts)
 
-> Prompts require manual user testing and are not covered in this automated pass. See Phase 8 reference in the original test plan for full details.
+> [!NOTE]
+> Prompts return `GetPromptResult` objects with `messages` arrays. While the *workflows* prompts describe require a human to act on, the **handlers themselves** are testable via `prompts/get` MCP calls. This phase verifies response shape, argument enforcement, and content generation.
+>
+> **How to test:** Call `prompts/get` with the prompt name and arguments. The MCP client should expose this as a callable action, or use the protocol directly.
 
----
+### 8.1 Workflow Prompts (10 prompts)
+
+#### No-Argument Prompts
+
+| Prompt | Arguments | Expected Response |
+|--------|-----------|-------------------|
+| `prepare-standup` | _(none)_ | `messages` array with 1 `user` role message containing "standup" and date references |
+| `weekly-digest` | _(none)_ | `messages` array with 1 `user` role message containing "weekly digest" |
+| `goal-tracker` | _(none)_ | `messages` array with 1 `user` role message containing "goals" and "milestones" |
+| `get-context-bundle` | _(none)_ | `messages` array with 1 `user` role message containing "Project context bundle", recent entries, and statistics |
+| `confirm-briefing` | _(none)_ | `messages` array with 1 `user` role message containing "Session Context Received" and entry count |
+| `session-summary` | _(none)_ | `messages` array with 1 `user` role message containing "session summary" and instructions for entry creation |
+
+#### Required-Argument Prompts
+
+| Prompt | Arguments | Expected Response |
+|--------|-----------|-------------------|
+| `find-related` | `query: "architecture"` | `messages` array with 1 `user` role message containing `"architecture"` and matching entries (from seed data) |
+| `analyze-period` | `start_date: "2026-01-01"`, `end_date: "2026-12-31"` | `messages` array with 1 `user` role message containing date range and statistics JSON |
+
+#### Optional-Argument Prompts
+
+| Prompt | Arguments | Expected Response |
+|--------|-----------|-------------------|
+| `prepare-retro` | _(none — defaults to 14 days)_ | `messages` array with 1 `user` role message containing "retrospective" and "14 days" |
+| `prepare-retro` | `days: "7"` | `messages` array with 1 `user` role message containing "7 days" |
+| `get-recent-entries` | _(none — defaults to 10)_ | `messages` array with 1 `user` role message containing entries formatted with timestamps, types, and tags |
+| `get-recent-entries` | `limit: "3"` | `messages` array with 1 `user` role message containing at most 3 entries |
+
+### 8.2 GitHub Prompts (6 prompts)
+
+#### Required-Argument Prompts
+
+| Prompt | Arguments | Expected Response |
+|--------|-----------|-------------------|
+| `project-status-summary` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and status summary instructions |
+| `pr-summary` | `pr_number: "67"` | `messages` array with 1 `user` role message containing `"PR #67"` and journal entries for that PR (from seed S8) |
+| `code-review-prep` | `pr_number: "67"` | `messages` array with 1 `user` role message containing `"PR #67"` and review checklist instructions |
+| `pr-retrospective` | `pr_number: "67"` | `messages` array with 1 `user` role message containing `"PR #67"` and retrospective instructions |
+| `project-milestone-tracker` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and milestone entries (from seed S7) |
+
+#### No-Argument Prompts
+
+| Prompt | Arguments | Expected Response |
+|--------|-----------|-------------------|
+| `actions-failure-digest` | _(none)_ | `messages` array with 1 `user` role message containing "CI/CD failures" and workflow entries (from seed S9) |
+
+### 8.3 Error Handling
+
+| Test | Action | Expected Result |
+|------|--------|-----------------|
+| Missing required arg | `prompts/get` for `find-related` with no `query` | Structured error or empty query handled gracefully (handler uses `args['query'] ?? ''`) |
+| Missing required arg | `prompts/get` for `analyze-period` with no dates | Structured error or empty dates handled gracefully |
+| Nonexistent prompt | `prompts/get` for `nonexistent-prompt` | MCP error: prompt not found |
+| Invalid argument name | `prompts/get` for `prepare-standup` with `foo: "bar"` | Succeeds (no-argument prompt ignores extra args) |
+
+### 8.4 Response Shape Verification
+
+For **every** prompt response, verify:
+
+| Check | Expected |
+|-------|----------|
+| `messages` is an array | `Array.isArray(result.messages) === true` |
+| At least 1 message | `messages.length >= 1` |
+| Message has `role` | `messages[0].role === 'user'` |
+| Message has `content` | `messages[0].content` is object with `type: 'text'` and `text: string` |
+| Text is non-empty | `messages[0].content.text.length > 0` |
 
 ## Phase 9: Team Collaboration (3 tools + 2 resources)
 
@@ -494,14 +617,15 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 
 ## Test Execution Order
 
+0. **Phase 0**: Seed Test Data (creates entries for FTS5, filter, and semantic search tests)
 1. **Phase 1**: Infrastructure (must pass before proceeding)
-2. **Phase 2**: Entry CRUD (creates test data for later phases)
-3. **Phase 3**: Search + Analytics (requires entries from Phase 2)
-4. **Phase 4**: Relationships (links entries from Phase 2)
+2. **Phase 2**: Entry CRUD (creates additional test data + validates CRUD operations)
+3. **Phase 3**: Search + Analytics (requires entries from Phase 0 + 2)
+4. **Phase 4**: Relationships (links entries from Phase 0 + 2)
 5. **Phase 5**: GitHub Integration (tests live GitHub API including milestones + cleanup)
 6. **Phase 6**: Template Resources (happy path + error paths for invalid IDs)
 7. **Phase 7**: Admin/Backup (test last to avoid data loss)
-8. **Phase 8**: Prompts [SKIP]
+8. **Phase 8**: Prompt Handler Verification (verify `prompts/get` response shape for all 16 prompts)
 9. **Phase 9**: Team Collaboration (requires `TEAM_DB_PATH` configured)
 10. **Phase 10**: Automated Scheduler (HTTP only — manual terminal test)
 
@@ -552,13 +676,22 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 
 - [ ] Causal relationship types (`blocked_by`, `resolved`, `caused`) create correctly
 - [ ] `link_entries` with `description` persists the description
-- [ ] `link_entries` returns `success: false` for nonexistent source or target entry IDs
+- [ ] `link_entries` returns `success: false` with `"One or both entries not found (from: X, to: Y)"` for nonexistent entry IDs
 - [ ] `visualize_relationships` shows distinct arrows for causal types
 - [ ] `visualize_relationships` with `tags` filter scopes diagram correctly
 - [ ] `visualize_relationships` with `depth: 1` and `depth: 3` produce different results
 - [ ] `visualize_relationships` returns `"Entry X not found"` for nonexistent `entry_id`
 - [ ] `memory://graph/recent` uses harmonized arrows matching `visualize_relationships`
 - [ ] Reverse-direction duplicate behavior is documented (B→A when A→B exists)
+
+### Prompt Handlers (Phase 8)
+
+- [ ] All 16 prompts return valid `GetPromptResult` with `messages` array
+- [ ] Every message has `role: 'user'` and `content` with `type: 'text'` and non-empty `text`
+- [ ] Required-argument prompts (`find-related`, `analyze-period`, `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `project-milestone-tracker`) include argument values in response text
+- [ ] Optional-argument prompts (`prepare-retro`, `get-recent-entries`) apply defaults when arguments omitted
+- [ ] GitHub prompts reference seed data (S7 for project #5, S8 for PR #67, S9 for workflow entries)
+- [ ] Nonexistent prompt name returns MCP error (not crash)
 
 ### GitHub Integration
 

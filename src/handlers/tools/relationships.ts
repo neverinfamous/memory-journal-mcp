@@ -149,6 +149,8 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     })()
 
                     if (input) {
+                        const errMsg = error instanceof Error ? error.message : 'Unknown error'
+                        const isFkError = errMsg.includes('FOREIGN KEY constraint failed')
                         return {
                             success: false,
                             relationship: {
@@ -159,7 +161,9 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                                 description: input.description ?? null,
                                 createdAt: '',
                             },
-                            message: error instanceof Error ? error.message : 'Unknown error',
+                            message: isFkError
+                                ? `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`
+                                : errMsg,
                         }
                     }
                     return formatHandlerErrorResponse(error)

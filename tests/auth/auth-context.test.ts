@@ -4,14 +4,14 @@
  * Tests for AsyncLocalStorage-based per-request auth context.
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
     getAuthContext,
     setAuthContext,
     withAuthContext,
     isAuthenticated,
     getAuthenticatedScopes,
-} from '../auth-context.js'
+} from '../../src/auth/auth-context.js'
 
 describe('auth-context', () => {
     afterEach(() => {

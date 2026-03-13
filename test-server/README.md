@@ -6,7 +6,7 @@
 
 | File | Size | Purpose | When to Read |
 |------|------|---------|--------------|
-| `test-tools.md` | ~58KB | **Pass 1: Core Functionality** — Phases 1-10 covering happy paths, error paths, and feature verification for all 44 tools, 22 resources, and scheduler | Always read first |
+| `test-tools.md` | ~70KB | **Pass 1: Core Functionality** — Phases 0-10 covering seed data, happy paths, error paths, and feature verification for all 44 tools, 22 resources, 16 prompts, and scheduler | Always read first |
 | `test-tools2.md` | ~37KB | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes |
 | `test-tools-codemode.md` | ~12KB | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration | After Pass 1 completes |
 | [`tool-reference.md`](../docs/tool-reference.md) | ~8KB | **Tool Reference** — Categorized list of all 44 tools across 10 groups | Reference |

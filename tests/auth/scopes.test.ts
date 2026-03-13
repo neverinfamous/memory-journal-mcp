@@ -24,7 +24,7 @@ import {
     READ_SCOPE_GROUPS,
     WRITE_SCOPE_GROUPS,
     ADMIN_SCOPE_GROUPS,
-} from '../scopes.js'
+} from '../../src/auth/scopes.js'
 
 // =============================================================================
 // parseScopes
