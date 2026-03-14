@@ -101,7 +101,7 @@
   - `merge_tags` now wraps the entire operation in an explicit `db.transaction()` and cleans orphaned `entry_tags` rows (referencing permanently-deleted entries) before re-linking — previously failed with `FOREIGN KEY constraint failed` when both source and target tags existed with overlapping entries
   - Server instructions now specify a **briefing confirmation format** — short bullet list of key facts (entry counts, GitHub status, milestones, template resources, optional metadata) instead of tables or elaborate formatting
   - `test-tools.md` prerequisites no longer instruct agents to read `memory://briefing` separately — detailed briefing testing is deferred to Phase 1.2 to prevent duplicate reads
-  - `close_github_issue_with_entry` with `move_to_done: true` now adds a 1-second delay before querying the kanban board — works around GitHub Projects v2 API eventual consistency where a newly-added item may not yet appear on the board immediately after `addProjectItem`
+  - `close_github_issue_with_entry` with `move_to_done: true` now uses `addProjectItem` (idempotent) to resolve the item ID directly — bypasses the race condition where a newly-added item was not yet visible on the board during the immediately-following close call
 
 - **MCP Builder Compliance Audit Fixes**
   - Added `error` field to `ErrorFieldsMixin` — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions

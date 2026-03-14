@@ -84,6 +84,7 @@ export class IssuesManager {
                 title: issue.title,
                 url: issue.html_url,
                 state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
+                nodeId: issue.node_id,
                 body: issue.body ?? null,
                 labels: issue.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))),
                 assignees: issue.assignees?.map((a) => a.login) ?? [],

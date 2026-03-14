@@ -14,6 +14,7 @@ export interface RepoInfo {
  * GitHub issue details (extended)
  */
 export interface IssueDetails extends GitHubIssue {
+    nodeId: string
     body: string | null
     labels: string[]
     assignees: string[]
