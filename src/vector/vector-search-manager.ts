@@ -136,12 +136,14 @@ export class VectorSearchManager {
             // Generate embedding
             const embedding = await this.generateEmbedding(content)
 
-            // Upsert to sqlite-vec: INSERT OR REPLACE into vec0 virtual table
+            // vec0 virtual tables don't support INSERT OR REPLACE — use DELETE+INSERT
             const vec = new Float32Array(embedding)
+            const bigId = BigInt(entryId)
+            // DELETE is a no-op if entry doesn't exist
+            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(bigId)
             this.db
-                .prepare('INSERT OR REPLACE INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
-                // sqlite-vec vec0 requires BigInt primary keys through better-sqlite3 bindings
-                .run(BigInt(entryId), vec)
+                .prepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
+                .run(bigId, vec)
 
             logger.debug('Added entry to vector index', {
                 module: 'VectorSearch',

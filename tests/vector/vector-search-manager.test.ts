@@ -152,11 +152,15 @@ describe('VectorSearchManager', () => {
             const result = await vm.addEntry(42, 'Some content')
             expect(result.success).toBe(true)
 
-            // Should prepare an INSERT OR REPLACE statement
+            // Should prepare DELETE then INSERT statements
             expect(mockPrepare).toHaveBeenCalledWith(
-                'INSERT OR REPLACE INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
+                'DELETE FROM vec_embeddings WHERE entry_id = ?'
             )
-            // Should call run with entryId and a Float32Array
+            expect(mockPrepare).toHaveBeenCalledWith(
+                'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
+            )
+            // Should call run with BigInt entryId for DELETE, and BigInt + Float32Array for INSERT
+            expect(mockRun).toHaveBeenCalledWith(BigInt(42))
             expect(mockRun).toHaveBeenCalledWith(BigInt(42), expect.any(Float32Array))
         })
 

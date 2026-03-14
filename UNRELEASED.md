@@ -240,7 +240,9 @@
 
 ### Fixed
 
-- **Vector Index sqlite-vec Integer Coercion** — Fixed `"Only integers are allows for primary key values on vec_embeddings"` error by coercing entry IDs with `BigInt()` before passing to sqlite-vec's `vec0` virtual table INSERT/DELETE operations, matching the [official sqlite-vec Node.js example](https://github.com/asg017/sqlite-vec/blob/main/examples/simple-node/demo.mjs). The `vec0` virtual table requires `BigInt` primary keys through `better-sqlite3`'s native bindings — regular JavaScript `number` values are rejected. This was the root cause of all vector index failures (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`).
+- **Vector Index sqlite-vec Compatibility** — Fixed two sqlite-vec `vec0` virtual table incompatibilities that prevented all vector operations (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`):
+  1. Entry IDs must be `BigInt` through `better-sqlite3` bindings — regular JavaScript `number` values are rejected with `"Only integers are allows for primary key values"`. Fixed by coercing with `BigInt()`, matching the [official sqlite-vec Node.js example](https://github.com/asg017/sqlite-vec/blob/main/examples/simple-node/demo.mjs).
+  2. `vec0` virtual tables don't support `INSERT OR REPLACE` conflict resolution — upserts fail with `"UNIQUE constraint failed"`. Changed `addEntry()` to DELETE+INSERT pattern.
 
 - Resolved Zod `4.3.6` dependency resolution conflict with OpenAI SDK via explicit `package.json` overrides.
 - Replaced `as unknown` type assertions with strict types where appropriate (`wasm-connection.ts`, `backup.ts`) and auth test mocks with properly mapped `QueryResult` types and `Object.create(Type.prototype)` mock instantiation.
