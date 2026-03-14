@@ -7,8 +7,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
-import type { VectorSearchManager } from '../../src/vector/VectorSearchManager.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import type { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
 
 /**
  * Creates a mock VectorSearchManager.
@@ -18,10 +18,10 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
         isInitialized: vi.fn().mockReturnValue(true),
         initialize: vi.fn().mockResolvedValue(undefined),
         search: vi.fn().mockResolvedValue([]),
-        addEntry: vi.fn().mockResolvedValue(true),
-        removeEntry: vi.fn().mockResolvedValue(true),
-        rebuildIndex: vi.fn().mockResolvedValue(5),
-        getStats: vi.fn().mockResolvedValue({
+        addEntry: vi.fn().mockResolvedValue({ success: true }),
+        removeEntry: vi.fn().mockReturnValue(true),
+        rebuildIndex: vi.fn().mockResolvedValue({ indexed: 5, failed: 0, firstError: null }),
+        getStats: vi.fn().mockReturnValue({
             itemCount: 10,
             modelName: 'Xenova/all-MiniLM-L6-v2',
             dimensions: 384,
@@ -32,12 +32,12 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
 }
 
 describe('Vector Tool Handlers', () => {
-    let db: SqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-vector-tools.db'
     let entryId: number
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
         // Create an entry for testing
         const entry = db.createEntry({
@@ -66,7 +66,7 @@ describe('Vector Tool Handlers', () => {
         it('should return results when vector manager has matches', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([{ entryId, score: 0.85 }]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 10 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 10 }),
             })
 
             const result = (await callTool(
@@ -84,7 +84,7 @@ describe('Vector Tool Handlers', () => {
         it('should return empty with hint when index is empty', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 0 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 0 }),
             })
 
             const result = (await callTool(
@@ -101,7 +101,7 @@ describe('Vector Tool Handlers', () => {
         it('should return hint when no matches above threshold', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 10 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 10 }),
             })
 
             const result = (await callTool(
@@ -118,7 +118,7 @@ describe('Vector Tool Handlers', () => {
         it('should suppress hint when hint_on_empty is false', async () => {
             const vectorManager = createMockVector({
                 search: vi.fn().mockResolvedValue([]),
-                getStats: vi.fn().mockResolvedValue({ itemCount: 0 }),
+                getStats: vi.fn().mockReturnValue({ itemCount: 0 }),
             })
 
             const result = (await callTool(

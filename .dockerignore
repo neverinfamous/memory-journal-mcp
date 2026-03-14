@@ -43,6 +43,7 @@ eslint.config.js
 vitest.config.ts
 tests/
 coverage/
+.test-output/
 dist/
 
 # -----------------------------------------------------------------------------
@@ -87,6 +88,7 @@ data/
 *.db-wal
 *.sqlite
 *.sqlite3
+# Legacy vector index files (before sqlite-vec migration)
 .vectra_index/
 *.vectra/
 
@@ -97,7 +99,7 @@ temp/
 tmp/
 *.tmp
 *.temp
-backups/
+
 
 # -----------------------------------------------------------------------------
 # Logs
@@ -134,4 +136,4 @@ ENV/
 # Assets
 # -----------------------------------------------------------------------------
 social-preview.png
-test-server/
+

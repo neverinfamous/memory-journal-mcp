@@ -1,5 +1,9 @@
+import { execFileSync } from 'node:child_process'
 import { MemoryJournalMcpError } from '../types/errors.js'
 import { ErrorCategory } from '../types/error-types.js'
+
+/** Timeout for shelling out to git commands (ms) */
+const GIT_COMMAND_TIMEOUT_MS = 3000
 
 // ============================================================================
 // Typed Security Errors
@@ -164,4 +168,31 @@ export function sanitizeErrorForLogging(message: string): string {
 export function sanitizeAuthor(raw: string): string {
     // eslint-disable-next-line no-control-regex
     return raw.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 100)
+}
+
+// ============================================================================
+// Author Resolution
+// ============================================================================
+
+/**
+ * Resolve the author name for team-shared entries.
+ * Priority: TEAM_AUTHOR env → git config user.name → 'unknown'
+ *
+ * Uses sanitizeAuthor() to strip control characters and cap length.
+ */
+export function resolveAuthor(): string {
+    const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
+    if (envAuthor) return sanitizeAuthor(envAuthor)
+    try {
+        const gitUser = execFileSync('git', ['config', 'user.name'], {
+            encoding: 'utf-8',
+            timeout: GIT_COMMAND_TIMEOUT_MS,
+        })
+            .trim()
+            .replace(/"/g, '')
+        if (gitUser) return sanitizeAuthor(gitUser)
+    } catch {
+        // Git not available
+    }
+    return 'unknown'
 }

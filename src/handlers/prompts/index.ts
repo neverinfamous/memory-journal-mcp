@@ -5,10 +5,11 @@
  * Exports all MCP prompts for workflow guidance.
  */
 
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getGitHubPromptDefinitions } from './github.js'
+import { ResourceNotFoundError } from '../../types/errors.js'
 
 /**
  * Message format for MCP prompts
@@ -33,19 +34,18 @@ export interface InternalPromptDef {
         required?: boolean
     }[]
     icons?: McpIcon[]
-    handler: (args: Record<string, string>, db: SqliteAdapter) => { messages: PromptMessage[] }
+    handler: (args: Record<string, string>, db: IDatabaseAdapter) => { messages: PromptMessage[] }
 }
 
 /**
  * Execute a raw SQL query on the database
  */
 export function execQuery(
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     sql: string,
     params: unknown[] = []
 ): Record<string, unknown>[] {
-    const rawDb = db.getRawDb()
-    const result = rawDb.exec(sql, params)
+    const result = db.executeRawQuery(sql, params)
     if (result.length === 0) return []
 
     const columns = result[0]?.columns ?? []
@@ -77,13 +77,13 @@ export function getPrompts(): object[] {
 export function getPrompt(
     name: string,
     args: Record<string, string>,
-    db: SqliteAdapter
+    db: IDatabaseAdapter
 ): { messages: PromptMessage[] } {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
 
     if (!prompt) {
-        throw new Error(`Unknown prompt: ${name}`)
+        throw new ResourceNotFoundError('Prompt', name)
     }
 
     return prompt.handler(args, db)

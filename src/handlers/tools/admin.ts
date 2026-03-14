@@ -7,7 +7,9 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { ENTRY_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
 // Input Schemas
@@ -46,40 +48,51 @@ const DeleteEntrySchemaMcp = z.object({
 // Output Schemas
 // ============================================================================
 
-const UpdateEntryOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entry: EntryOutputSchema.optional(),
-    error: z.string().optional(),
-})
+const UpdateEntryOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: EntryOutputSchema.optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const DeleteEntryOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entryId: z.number().optional(),
-    permanent: z.boolean().optional(),
-    error: z.string().optional(),
-})
+const DeleteEntryOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entryId: z.number().optional(),
+        permanent: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const MergeTagsOutputSchema = z.object({
-    success: z.boolean().optional(),
-    sourceTag: z.string().optional(),
-    targetTag: z.string().optional(),
-    entriesUpdated: z.number().optional(),
-    sourceDeleted: z.boolean().optional(),
-    message: z.string().optional(),
-    error: z.string().optional(),
-})
+const MergeTagsOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        sourceTag: z.string().optional(),
+        targetTag: z.string().optional(),
+        entriesUpdated: z.number().optional(),
+        sourceDeleted: z.boolean().optional(),
+        message: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const RebuildVectorIndexOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entriesIndexed: z.number().optional(),
-    error: z.string().optional(),
-})
+const RebuildVectorIndexOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entriesIndexed: z.number().optional(),
+        failedEntries: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const AddToVectorIndexOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entryId: z.number().optional(),
-    error: z.string().optional(),
-})
+const AddToVectorIndexOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entryId: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -95,7 +108,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = UpdateEntrySchema.parse(params)
@@ -113,10 +126,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Re-index if content changed
-                    if (input.content && vectorManager) {
-                        vectorManager.addEntry(entry.id, entry.content).catch(() => {
-                            // Non-critical failure, entry already updated in DB
-                        })
+                    if (input.content) {
+                        autoIndexEntry(vectorManager, entry.id, entry.content)
                     }
 
                     return { success: true, entry }
@@ -132,7 +143,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: DeleteEntrySchemaMcp,
             outputSchema: DeleteEntryOutputSchema,
-            annotations: { readOnlyHint: false, destructiveHint: true },
+            annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, permanent } = DeleteEntrySchema.parse(params)
@@ -149,9 +160,11 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
 
                     // Remove from vector index (non-critical if fails)
                     if (vectorManager) {
-                        vectorManager.removeEntry(entry_id).catch(() => {
+                        try {
+                            vectorManager.removeEntry(entry_id)
+                        } catch {
                             // Non-critical failure, entry already deleted from DB
-                        })
+                        }
                     }
 
                     return { success, entryId: entry_id, permanent }
@@ -174,7 +187,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     .describe('Tag to merge into (will be created if not exists)'),
             }),
             outputSchema: MergeTagsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { source_tag, target_tag } = z
@@ -235,9 +248,9 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             title: 'Rebuild Vector Index',
             description: 'Rebuild the semantic search vector index from all existing entries',
             group: 'admin',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: RebuildVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (_params: unknown) => {
                 try {
                     if (!vectorManager) {
@@ -247,8 +260,19 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                         }
                     }
-                    const indexed = await vectorManager.rebuildIndex(db, progress)
-                    return { success: true, entriesIndexed: indexed }
+                    const { indexed, failed, firstError } = await vectorManager.rebuildIndex(
+                        db,
+                        progress
+                    )
+                    const success = indexed > 0 || failed === 0
+                    return {
+                        success,
+                        entriesIndexed: indexed,
+                        ...(failed > 0 ? { failedEntries: failed } : {}),
+                        ...(!success
+                            ? { error: firstError ?? 'All entries failed to generate embeddings' }
+                            : {}),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -261,7 +285,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             group: 'admin',
             inputSchema: z.object({ entry_id: relaxedNumber() }),
             outputSchema: AddToVectorIndexOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true },
+            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const { entry_id } = z.object({ entry_id: z.number() }).parse(params)
@@ -280,8 +304,14 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: `Entry ${String(entry_id)} not found`,
                         }
                     }
-                    const success = await vectorManager.addEntry(entry_id, entry.content)
-                    return { success, entryId: entry_id }
+                    const result = await vectorManager.addEntry(entry_id, entry.content)
+                    return {
+                        success: result.success,
+                        entryId: entry_id,
+                        ...(result.success
+                            ? {}
+                            : { error: result.error ?? 'Failed to generate or store embedding' }),
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

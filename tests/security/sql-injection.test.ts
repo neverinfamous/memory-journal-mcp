@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import {
     validateDateFormatPattern,
     sanitizeSearchQuery,
@@ -133,16 +133,16 @@ describe('Security Utilities', () => {
 })
 
 // ============================================================================
-// SqliteAdapter SQL Injection Tests
+// DatabaseAdapter SQL Injection Tests
 // ============================================================================
 
-describe('SqliteAdapter SQL Injection Protection', () => {
-    let db: SqliteAdapter
+describe('DatabaseAdapter SQL Injection Protection', () => {
+    let db: DatabaseAdapter
     const testDbPath = './test-security.db'
 
     beforeAll(async () => {
-        // Use temp file database for testing (SqliteAdapter always saves to disk)
-        db = new SqliteAdapter(testDbPath)
+        // Use temp file database for testing (DatabaseAdapter always saves to disk)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
 

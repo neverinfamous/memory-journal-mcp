@@ -333,6 +333,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             }
                         } else {
                             try {
+                                // Get board metadata (projectId, statusFieldId, Done option)
                                 const board = await resolved.github.getProjectKanban(
                                     resolved.owner,
                                     projectNum,
@@ -345,34 +346,36 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                                         projectNumber: projectNum,
                                     }
                                 } else {
-                                    const item = board.columns
-                                        .flatMap((c) => c.items)
-                                        .find(
-                                            (i) =>
-                                                i.type === 'ISSUE' &&
-                                                i.number === input.issue_number
-                                        )
-                                    if (!item) {
+                                    const doneOption = board.statusOptions.find(
+                                        (opt) => opt.name.toLowerCase() === 'done'
+                                    )
+                                    if (!doneOption) {
                                         kanbanResult = {
                                             moved: false,
-                                            error: 'Issue not found on project board',
+                                            error: '"Done" status column not found on board',
                                             projectNumber: projectNum,
                                         }
                                     } else {
-                                        const doneOption = board.statusOptions.find(
-                                            (opt) => opt.name.toLowerCase() === 'done'
+                                        // Use addProjectItem (idempotent) to get the item ID directly.
+                                        // This bypasses the board-scan race condition — addProjectItem
+                                        // returns the existing itemId if already added, or adds and returns it.
+                                        const addResult = await resolved.github.addProjectItem(
+                                            board.projectId,
+                                            issueDetails.nodeId
                                         )
-                                        if (!doneOption) {
+                                        if (!addResult.success || !addResult.itemId) {
                                             kanbanResult = {
                                                 moved: false,
-                                                error: '"Done" status column not found on board',
+                                                error:
+                                                    addResult.error ??
+                                                    'Failed to resolve project item ID',
                                                 projectNumber: projectNum,
                                             }
                                         } else {
                                             const moveResult =
                                                 await resolved.github.moveProjectItem(
                                                     board.projectId,
-                                                    item.id,
+                                                    addResult.itemId,
                                                     board.statusFieldId,
                                                     doneOption.id
                                                 )

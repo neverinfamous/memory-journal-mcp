@@ -1,11 +1,11 @@
 ---
-description: "Automated dependency maintenance — npm, Docker transitive deps, Alpine packages, and validation (no version bump)"
+description: 'Automated dependency maintenance — npm, Docker transitive deps, Alpine packages, and validation (no version bump)'
 private: true
 labels: [dependencies, automation, maintenance]
 
 on:
   schedule:
-    - cron: "0 14 * * 1" # Every Monday at 14:00 UTC
+    - cron: '0 14 * * 1' # Every Monday at 14:00 UTC
   workflow_dispatch:
 
 engine:
@@ -14,7 +14,7 @@ engine:
 
 runtimes:
   node:
-    version: "24"
+    version: '24'
 
 network:
   allowed:
@@ -25,14 +25,14 @@ permissions: read-all
 
 safe-outputs:
   create-pull-request:
-    title-prefix: "[deps] "
+    title-prefix: '[deps] '
     labels: [dependencies, automated]
     reviewers: [neverinfamous]
     draft: false
     max: 1
     expires: 14
     fallback-as-issue: true
-    if-no-changes: "ignore"
+    if-no-changes: 'ignore'
 
 timeout-minutes: 30
 concurrency: dependency-maintenance
@@ -109,24 +109,24 @@ Run `npm audit` one final time and capture the output. Include the result (clean
 Read the current version from `package.json`. Bump the **patch** version only (e.g., `5.1.1` → `5.1.2`). Dependency-only updates are always patch bumps. **Never bump minor or major versions** — those are reserved for the maintainer.
 
 Update version references in:
+
 - `package.json` (`"version"` field)
 - Run `npm install --package-lock-only` to sync `package-lock.json`
-- `README.md` (version badge if present, "Last Updated" date in format `Month Day, Year`)
-- `DOCKER_README.md` (version badge if present, "Last Updated" date, Available Tags table)
+- `README.md` (version badge if present)
+- `DOCKER_README.md` (version badge if present, Available Tags table)
 - `Dockerfile` (`LABEL version=` line)
 - `server.json` (top-level `version`, package `version`, and OCI `identifier` tag if present)
 
 **Verify no version references were missed.** Search for the OLD version number across the project (excluding `node_modules`, `CHANGELOG.md`, `releases/`, and `package-lock.json`). If any matches appear, update them.
 
-## Step 8: Update CHANGELOG and Create Release Notes
+## Step 8: Update Unreleased Log and Create Release Notes
 
-1. Add dependency updates to `CHANGELOG.md` under `## [Unreleased]`:
+1. Add dependency updates to `UNRELEASED.md`:
    - Under `### Security` for CVE/advisory fixes
    - Under `### Changed` → `**Dependency Updates**` for routine version bumps
    - **Do NOT create duplicate section headers** — check if sections already exist first
-2. Convert `## [Unreleased]` → `## [X.Y.Z] - YYYY-MM-DD` and add a fresh empty `## [Unreleased]` above it.
-3. Update reference link definitions at the bottom of `CHANGELOG.md`.
-4. Create `releases/vX.Y.Z.md` with condensed highlights:
+2. Run `node scripts/compile-changelog.js` to automatically compile `UNRELEASED.md` into `CHANGELOG.md`.
+3. Create `releases/vX.Y.Z.md` with condensed highlights:
    - Highlights (top 3-5 bullet points)
    - Categorized sections (Security, Changed)
    - Footer with compare link and install commands (`npm install memory-journal-mcp@X.Y.Z`)

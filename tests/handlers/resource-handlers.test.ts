@@ -6,14 +6,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getResources, readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Resource Handlers', () => {
-    let db: SqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-resources.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
 
         // Seed test data
@@ -205,13 +205,8 @@ describe('Resource Handlers', () => {
         it('should read memory://graph/recent', async () => {
             const result = await readResource('memory://graph/recent', db)
 
-            const data = result.data as {
-                format: string
-                diagram: string
-                relationshipCount?: number
-            }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('graph TD')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('graph TD')
         })
 
         it('should read memory://statistics', async () => {
@@ -275,7 +270,7 @@ describe('Resource Handlers', () => {
     describe('readResource - error cases', () => {
         it('should throw for unknown resource', async () => {
             await expect(readResource('memory://nonexistent', db)).rejects.toThrow(
-                'Unknown resource'
+                'Resource not found: memory://nonexistent'
             )
         })
     })
@@ -288,8 +283,8 @@ describe('Resource Handlers', () => {
         it('should read memory://graph/actions', async () => {
             const result = await readResource('memory://graph/actions', db)
 
-            const data = result.data as { format: string; diagram: string }
-            expect(data.format).toBe('mermaid')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('graph')
         })
 
         it('should read memory://actions/recent', async () => {
@@ -355,9 +350,8 @@ describe('Resource Handlers', () => {
                 undefined,
                 null // no github
             )
-            const data = result.data as { format: string; diagram: string; message: string }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('GitHub integration not available')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('GitHub integration not available')
         })
     })
 })

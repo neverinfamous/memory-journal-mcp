@@ -36,7 +36,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Unit test / coverage reports
-coverage/
+.test-output/
 htmlcov/
 .tox/
 .nox/
@@ -64,9 +64,6 @@ instance/
 
 # Scrapy stuff:
 .scrapy
-
-# Sphinx documentation
-docs/_build/
 
 # PyBuilder
 target/
@@ -163,7 +160,7 @@ github_auth.json
 # Data directory (runtime databases)
 data/
 
-# Vector index files (created by vectra)
+# Legacy vector index files (before sqlite-vec migration)
 .vectra_index/
 *.vectra/
 index/
@@ -183,13 +180,5 @@ tmp/
 *.temp
 logs/
 
-# Backups
-backups/
-
-# Playwright
-/test-results/
-/playwright-report/
-
 # Dependencies
 node_modules/
-test-results.json

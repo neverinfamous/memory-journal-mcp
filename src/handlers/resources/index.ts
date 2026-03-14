@@ -5,23 +5,24 @@
  * Exports all MCP resources with annotations following MCP 2025-11-25 spec.
  */
 
-import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
-import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
-import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
-import type { Scheduler } from '../../server/Scheduler.js'
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
+import type { Scheduler } from '../../server/scheduler.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { BriefingConfig } from './shared.js'
 
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
 
 // Import sub-module definitions
-import { getCoreResourceDefinitions } from './core.js'
+import { getCoreResourceDefinitions } from './core/index.js'
 import { getGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
 import { getTeamResourceDefinitions } from './team.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
+import { ResourceNotFoundError } from '../../types/errors.js'
 
 /**
  * Get all resource definitions for MCP list
@@ -83,12 +84,12 @@ function getBaseUri(uri: string): string {
  */
 export async function readResource(
     uri: string,
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     vectorManager?: VectorSearchManager,
     filterConfig?: ToolFilterConfig | null,
     github?: GitHubIntegration | null,
     scheduler?: Scheduler | null,
-    teamDb?: SqliteAdapter,
+    teamDb?: IDatabaseAdapter,
     briefingConfig?: BriefingConfig
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     const resources = getAllResourceDefinitions()
@@ -123,7 +124,7 @@ export async function readResource(
         }
     }
 
-    throw new Error(`Unknown resource: ${uri}`)
+    throw new ResourceNotFoundError('Resource', uri)
 }
 
 /**

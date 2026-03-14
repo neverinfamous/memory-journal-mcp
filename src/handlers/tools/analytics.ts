@@ -7,104 +7,121 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema, relaxedNumber } from './schemas.js'
+import {
+    DATE_FORMAT_REGEX,
+    DATE_FORMAT_MESSAGE,
+    TagOutputSchema,
+    relaxedNumber,
+} from './schemas.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
+
+// Named constants (magic value extraction)
+const INACTIVE_THRESHOLD_DAYS = 7
+const MS_PER_DAY = 86_400_000
+const MAX_TAGS_PER_PROJECT = 5
 
 // ============================================================================
 // Output Schemas
 // ============================================================================
 
-const StatisticsOutputSchema = z.object({
-    groupBy: z.string().optional(),
-    totalEntries: z.number().optional(),
-    entriesByType: z.record(z.string(), z.number()).optional(),
-    entriesByPeriod: z
-        .array(
-            z.object({
-                period: z.string(),
-                count: z.number(),
+const StatisticsOutputSchema = z
+    .object({
+        groupBy: z.string().optional(),
+        totalEntries: z.number().optional(),
+        entriesByType: z.record(z.string(), z.number()).optional(),
+        entriesByPeriod: z
+            .array(
+                z.object({
+                    period: z.string(),
+                    count: z.number(),
+                })
+            )
+            .optional(),
+        decisionDensity: z
+            .array(
+                z.object({
+                    period: z.string(),
+                    significantCount: z.number(),
+                })
+            )
+            .optional(),
+        relationshipComplexity: z
+            .object({
+                totalRelationships: z.number(),
+                avgPerEntry: z.number(),
             })
-        )
-        .optional(),
-    decisionDensity: z
-        .array(
-            z.object({
-                period: z.string(),
-                significantCount: z.number(),
+            .optional(),
+        activityTrend: z
+            .object({
+                currentPeriod: z.string(),
+                previousPeriod: z.string(),
+                growthPercent: z.number().nullable(),
             })
-        )
-        .optional(),
-    relationshipComplexity: z
-        .object({
-            totalRelationships: z.number(),
-            avgPerEntry: z.number(),
-        })
-        .optional(),
-    activityTrend: z
-        .object({
-            currentPeriod: z.string(),
-            previousPeriod: z.string(),
-            growthPercent: z.number().nullable(),
-        })
-        .optional(),
-    causalMetrics: z
-        .object({
-            blocked_by: z.number(),
-            resolved: z.number(),
-            caused: z.number(),
-        })
-        .optional(),
-    dateRange: z
-        .object({
-            startDate: z.string(),
-            endDate: z.string(),
-        })
-        .optional(),
-    projectBreakdown: z
-        .array(
-            z.object({
-                project_number: z.number(),
-                entry_count: z.number(),
+            .optional(),
+        causalMetrics: z
+            .object({
+                blocked_by: z.number(),
+                resolved: z.number(),
+                caused: z.number(),
             })
-        )
-        .optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-})
+            .optional(),
+        dateRange: z
+            .object({
+                startDate: z.string(),
+                endDate: z.string(),
+            })
+            .optional(),
+        projectBreakdown: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    entry_count: z.number(),
+                })
+            )
+            .optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const ProjectSummaryOutputSchema = z.object({
-    project_number: z.number(),
-    entry_count: z.number(),
-    first_entry: z.string(),
-    last_entry: z.string(),
-    active_days: z.number(),
-    top_tags: z.array(TagOutputSchema),
-})
+const ProjectSummaryOutputSchema = z
+    .object({
+        project_number: z.number(),
+        entry_count: z.number(),
+        first_entry: z.string(),
+        last_entry: z.string(),
+        active_days: z.number(),
+        top_tags: z.array(TagOutputSchema),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const CrossProjectInsightsOutputSchema = z.object({
-    project_count: z.number().optional(),
-    total_entries: z.number().optional(),
-    projects: z.array(ProjectSummaryOutputSchema).optional(),
-    inactive_projects: z
-        .array(
-            z.object({
-                project_number: z.number(),
-                last_entry_date: z.string(),
-            })
-        )
-        .optional(),
-    inactiveThresholdDays: z.number().optional(),
-    time_distribution: z
-        .array(
-            z.object({
-                project_number: z.number(),
-                percentage: z.string(),
-            })
-        )
-        .optional(),
-    message: z.string().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-})
+const CrossProjectInsightsOutputSchema = z
+    .object({
+        project_count: z.number().optional(),
+        total_entries: z.number().optional(),
+        projects: z.array(ProjectSummaryOutputSchema).optional(),
+        inactive_projects: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    last_entry_date: z.string(),
+                })
+            )
+            .optional(),
+        inactiveThresholdDays: z.number().optional(),
+        time_distribution: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    percentage: z.string(),
+                })
+            )
+            .optional(),
+        message: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Input Schemas
@@ -145,7 +162,10 @@ const CrossProjectInsightsInputSchema = z.object({
 const CrossProjectInsightsInputSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-    min_entries: relaxedNumber().optional().default(3).describe('Minimum entries to include project'),
+    min_entries: relaxedNumber()
+        .optional()
+        .default(3)
+        .describe('Minimum entries to include project'),
 })
 
 // ============================================================================
@@ -163,7 +183,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'analytics',
             inputSchema: GetStatisticsSchemaMcp,
             outputSchema: StatisticsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { group_by, start_date, end_date, project_breakdown } =
@@ -174,7 +194,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         end_date,
                         project_breakdown
                     )
-                    return { ...stats, groupBy: group_by }
+                    return { ...(stats as object), groupBy: group_by }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -187,12 +207,10 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
             group: 'analytics',
             inputSchema: CrossProjectInsightsInputSchemaMcp,
             outputSchema: CrossProjectInsightsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
-
-                    const rawDb = db.getRawDb()
 
                     // Build WHERE clause
                     let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
@@ -208,7 +226,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Get active projects with stats
-                    const projectsResult = rawDb.exec(
+                    const projectsResult = db.executeRawQuery(
                         `
                         SELECT project_number, COUNT(*) as entry_count,
                                MIN(DATE(timestamp)) as first_entry,
@@ -228,51 +246,57 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             total_entries: 0,
                             projects: [],
                             inactive_projects: [],
-                            inactiveThresholdDays: 7,
+                            inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                             time_distribution: [],
                             message: `No projects found with at least ${String(input.min_entries)} entries`,
                         }
                     }
 
                     const columns = projectsResult[0].columns
-                    const projects = projectsResult[0].values.map((row) => {
+                    const projects = projectsResult[0].values.map((row: unknown[]) => {
                         const obj: Record<string, unknown> = {}
-                        columns.forEach((col, i) => {
+                        columns.forEach((col: string, i: number) => {
                             obj[col] = row[i]
                         })
                         return obj
                     })
 
-                    // Get top tags per project
+                    // Get top tags per project (batch query instead of N+1)
                     const projectTags: Record<number, { name: string; count: number }[]> = {}
-                    for (const proj of projects) {
-                        const projNum = proj['project_number'] as number
-                        const tagsResult = rawDb.exec(
+                    const projectNumbers = projects.map((p) => p['project_number'] as number)
+                    if (projectNumbers.length > 0) {
+                        const tagPlaceholders = projectNumbers.map(() => '?').join(',')
+                        const allTagsResult = db.executeRawQuery(
                             `
-                            SELECT t.name, COUNT(*) as count
+                            SELECT m.project_number, t.name, COUNT(*) as count
                             FROM tags t
                             JOIN entry_tags et ON t.id = et.tag_id
                             JOIN memory_journal m ON et.entry_id = m.id
-                            WHERE m.project_number = ? AND m.deleted_at IS NULL
-                            GROUP BY t.name
-                            ORDER BY count DESC
-                            LIMIT 5
-                        `,
-                            [projNum]
+                            WHERE m.project_number IN (${tagPlaceholders}) AND m.deleted_at IS NULL
+                            GROUP BY m.project_number, t.name
+                            ORDER BY m.project_number, count DESC
+                            `,
+                            projectNumbers
                         )
-                        if (tagsResult[0]) {
-                            projectTags[projNum] = tagsResult[0].values.map((row) => ({
-                                name: row[0] as string,
-                                count: row[1] as number,
-                            }))
+                        if (allTagsResult[0]) {
+                            // Partition rows by project_number, keeping top 5 per project
+                            for (const row of allTagsResult[0].values) {
+                                const projNum = row[0] as number
+                                const tagEntry = { name: row[1] as string, count: row[2] as number }
+                                const existing = projectTags[projNum] ?? []
+                                if (existing.length < MAX_TAGS_PER_PROJECT) {
+                                    existing.push(tagEntry)
+                                    projectTags[projNum] = existing
+                                }
+                            }
                         }
                     }
 
-                    // Find inactive projects (last entry > 7 days ago)
-                    const cutoffDate = new Date(Date.now() - 7 * 86400000)
+                    // Find inactive projects (last entry > threshold days ago)
+                    const cutoffDate = new Date(Date.now() - INACTIVE_THRESHOLD_DAYS * MS_PER_DAY)
                         .toISOString()
                         .split('T')[0]
-                    const inactiveResult = rawDb.exec(
+                    const inactiveResult = db.executeRawQuery(
                         `
                         SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
                         FROM memory_journal
@@ -284,18 +308,19 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     const inactiveProjects =
-                        inactiveResult[0]?.values.map((row) => ({
+                        inactiveResult[0]?.values.map((row: unknown[]) => ({
                             project_number: row[0] as number,
                             last_entry_date: row[1] as string,
                         })) ?? []
 
                     // Calculate time distribution
                     const totalEntries = projects.reduce(
-                        (sum, p) => sum + (p['entry_count'] as number),
+                        (sum: number, p: Record<string, unknown>) =>
+                            sum + (p['entry_count'] as number),
                         0
                     )
-                    const distribution = projects.slice(0, 5).map((p) => ({
-                        project_number: p['project_number'],
+                    const distribution = projects.slice(0, 5).map((p: Record<string, unknown>) => ({
+                        project_number: p['project_number'] as number,
                         percentage: (((p['entry_count'] as number) / totalEntries) * 100).toFixed(
                             1
                         ),
@@ -309,7 +334,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             top_tags: projectTags[p['project_number'] as number] ?? [],
                         })),
                         inactive_projects: inactiveProjects,
-                        inactiveThresholdDays: 7,
+                        inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                         time_distribution: distribution,
                     }
                 } catch (err) {

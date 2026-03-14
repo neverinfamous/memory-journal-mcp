@@ -8,10 +8,13 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
+    DATE_MIN_SENTINEL,
+    DATE_MAX_SENTINEL,
     EntryOutputSchema,
     relaxedNumber,
 } from './schemas.js'
@@ -42,20 +45,25 @@ const ExportEntriesSchemaMcp = z.object({
     end_date: z.string().optional(),
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
-    limit: relaxedNumber().optional().default(100).describe('Maximum entries to export (default: 100)'),
+    limit: relaxedNumber()
+        .optional()
+        .default(100)
+        .describe('Maximum entries to export (default: 100)'),
 })
 
 // ============================================================================
 // Output Schemas
 // ============================================================================
 
-const ExportEntriesOutputSchema = z.object({
-    format: z.enum(['json', 'markdown']).optional(),
-    entries: z.array(EntryOutputSchema).optional(),
-    content: z.string().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-})
+const ExportEntriesOutputSchema = z
+    .object({
+        format: z.enum(['json', 'markdown']).optional(),
+        entries: z.array(EntryOutputSchema).optional(),
+        content: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -71,7 +79,7 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
             group: 'export',
             inputSchema: ExportEntriesSchemaMcp,
             outputSchema: ExportEntriesOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const input = ExportEntriesSchema.parse(params)
@@ -79,29 +87,36 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 0, 2, 'Fetching entries...')
 
-                    // Apply filters — use searchByDateRange when dates/tags present
+                    // When entry_types filter is active, fetch a larger batch so
+                    // post-filtering doesn't silently return empty results.
+                    const hasTypeFilter = input.entry_types && input.entry_types.length > 0
+                    const fetchLimit = hasTypeFilter ? 500 : limit
+
+                    // Apply filters — use searchByDateRange when dates/tags/types present
                     let entries
                     if (input.start_date || input.end_date) {
-                        const startDate = input.start_date ?? '1970-01-01'
-                        const endDate = input.end_date ?? '2999-12-31'
+                        const startDate = input.start_date ?? DATE_MIN_SENTINEL
+                        const endDate = input.end_date ?? DATE_MAX_SENTINEL
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
-                            limit,
+                            limit: fetchLimit,
                         })
-                    } else if (input.tags && input.tags.length > 0) {
-                        // Tags-only filter: use a wide date range to leverage searchByDateRange
-                        entries = db.searchByDateRange('1970-01-01', '2999-12-31', {
+                    } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
+                        // Tags/types filter: use a wide date range to scan the full database
+                        entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
-                            limit,
+                            limit: fetchLimit,
                         })
                     } else {
-                        entries = db.getRecentEntries(limit)
+                        entries = db.getRecentEntries(fetchLimit)
                     }
 
-                    // Post-filter by entry_types if specified
-                    if (input.entry_types && input.entry_types.length > 0) {
+                    // Post-filter by entry_types, then cap to requested limit
+                    if (hasTypeFilter) {
                         const allowedTypes = new Set(input.entry_types)
-                        entries = entries.filter((e) => allowedTypes.has(e.entryType))
+                        entries = entries
+                            .filter((e) => allowedTypes.has(e.entryType))
+                            .slice(0, limit)
                     }
 
                     await sendProgress(

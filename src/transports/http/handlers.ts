@@ -56,7 +56,7 @@ export function handleRootInfo(_req: Request, res: Response): void {
  * Bypasses /health endpoint. Uses timing-safe comparison.
  */
 export function createAuthMiddleware(
-    authToken: string,
+    authToken: string
 ): (req: Request, res: Response, next: () => void) => void {
     logger.info('Bearer token authentication enabled', { module: 'HTTP' })
 

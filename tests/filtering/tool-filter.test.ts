@@ -16,7 +16,7 @@ import {
     getToolFilterFromEnv,
     calculateTokenSavings,
     getFilterSummary,
-} from '../../src/filtering/ToolFilter.js'
+} from '../../src/filtering/tool-filter.js'
 
 // ============================================================================
 // Constants

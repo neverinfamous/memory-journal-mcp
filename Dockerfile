@@ -51,7 +51,7 @@ RUN npm ci
 RUN rm -rf node_modules/protobufjs/cli
 
 # Copy source code
-COPY tsconfig.json ./
+COPY tsconfig.json tsup.config.ts ./
 COPY src/ ./src/
 
 # Build TypeScript
@@ -129,6 +129,5 @@ ENTRYPOINT ["node", "dist/cli.js"]
 # Labels for Docker Hub
 LABEL maintainer="Adamic.tech"
 LABEL description="Memory Journal MCP Server - Project context management for AI-assisted development"
-LABEL version="5.1.1"
 LABEL org.opencontainers.image.source="https://github.com/neverinfamous/memory-journal-mcp"
 LABEL io.modelcontextprotocol.server.name="io.github.neverinfamous/memory-journal-mcp"

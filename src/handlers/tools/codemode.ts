@@ -37,7 +37,10 @@ const ExecuteCodeSchema = z.object({
 /** Relaxed schema for MCP registration */
 const ExecuteCodeSchemaMcp = z.object({
     code: z.string().describe('JavaScript code to execute in the sandbox'),
-    timeout: relaxedNumber().optional().default(30000).describe('Execution timeout in ms (max 30000)'),
+    timeout: relaxedNumber()
+        .optional()
+        .default(30000)
+        .describe('Execution timeout in ms (max 30000)'),
     readonly: z.boolean().optional().default(false).describe('Restrict to read-only operations'),
 })
 
@@ -63,16 +66,26 @@ function getSandboxPool(): ISandboxPool {
 }
 
 // =============================================================================
-// Helper: Collect Non-CodeMode Tools
+// Helper: Collect Non-CodeMode Tools (cached)
 // =============================================================================
 
 /**
+ * Cached non-codemode tool list. Invalidates when context identity changes
+ * (same approach as toolMapCache in handlers/tools/index.ts).
+ */
+let cachedNonCodeModeTools: ToolDefinition[] | null = null
+let cachedCodeModeContext: ToolContext | null = null
+
+/**
  * Collect all tool definitions except codemode (prevents recursion).
- * Imports directly from each tool group module — no circular dependency
- * since these are leaf modules with no dependency on codemode.
+ * Results are cached by referential identity of the ToolContext.
  */
 function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
-    return [
+    if (cachedNonCodeModeTools && cachedCodeModeContext === context) {
+        return cachedNonCodeModeTools
+    }
+
+    cachedNonCodeModeTools = [
         ...getCoreTools(context),
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
@@ -83,6 +96,8 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
         ...getBackupTools(context),
         ...getTeamTools(context),
     ]
+    cachedCodeModeContext = context
+    return cachedNonCodeModeTools
 }
 
 // =============================================================================
@@ -105,10 +120,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             annotations: {
                 readOnlyHint: false,
                 idempotentHint: false,
+                openWorldHint: false,
             },
             handler: (params: unknown) => {
                 try {
-                    const { code, timeout, readonly: readonlyMode } = ExecuteCodeSchema.parse(params)
+                    const {
+                        code,
+                        timeout,
+                        readonly: readonlyMode,
+                    } = ExecuteCodeSchema.parse(params)
 
                     // Security validation
                     const security = getSecurityManager()

@@ -12,18 +12,18 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Search Tool Handlers - Coverage', () => {
-    let db: SqliteAdapter
-    let teamDb: SqliteAdapter
+    let db: DatabaseAdapter
+    let teamDb: DatabaseAdapter
     const testDbPath = './test-search-cov.db'
     const teamDbPath = './test-search-team-cov.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
-        teamDb = new SqliteAdapter(teamDbPath)
+        teamDb = new DatabaseAdapter(teamDbPath)
         await teamDb.initialize()
 
         // Seed personal entries

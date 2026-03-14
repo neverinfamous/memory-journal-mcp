@@ -32,10 +32,7 @@ import {
  *   team_create_entry (team)    → teamCreateEntry
  *   backup_journal (backup)     → backupJournal
  */
-export function toolNameToMethodName(
-    toolName: string,
-    groupName: string,
-): string {
+export function toolNameToMethodName(toolName: string, groupName: string): string {
     let name = toolName
 
     // For groups not in KEEP_PREFIX_GROUPS, strip the group prefix
@@ -70,11 +67,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
         }
 
         // Primitive arg (string, number, boolean) — use positional mapping
-        if (
-            typeof arg === 'string' ||
-            typeof arg === 'number' ||
-            typeof arg === 'boolean'
-        ) {
+        if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
             const paramMapping = POSITIONAL_PARAM_MAP[methodName]
             if (typeof paramMapping === 'string') {
                 return { [paramMapping]: arg }
@@ -102,11 +95,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
         const result: Record<string, unknown> = { [paramMapping]: args[0] }
         if (args.length > 1) {
             const lastArg = args[args.length - 1]
-            if (
-                typeof lastArg === 'object' &&
-                lastArg !== null &&
-                !Array.isArray(lastArg)
-            ) {
+            if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
                 Object.assign(result, lastArg)
             }
         }
@@ -126,11 +115,7 @@ function normalizeParams(methodName: string, args: unknown[]): unknown {
     // Merge trailing options object
     if (args.length > paramMapping.length) {
         const lastArg = args[args.length - 1]
-        if (
-            typeof lastArg === 'object' &&
-            lastArg !== null &&
-            !Array.isArray(lastArg)
-        ) {
+        if (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg)) {
             Object.assign(result, lastArg)
         }
     }
@@ -149,10 +134,7 @@ type GroupApiRecord = Record<string, (...args: unknown[]) => Promise<unknown>>
  * Create a group API from tool definitions.
  * Each tool becomes a method on the group object.
  */
-function createGroupApi(
-    groupName: string,
-    tools: ToolDefinition[],
-): GroupApiRecord {
+function createGroupApi(groupName: string, tools: ToolDefinition[]): GroupApiRecord {
     const api: GroupApiRecord = {}
 
     for (const tool of tools) {
@@ -231,7 +213,10 @@ export class JournalApi {
         this.core = createGroupApi('core', this.toolsByGroup.get('core') ?? [])
         this.search = createGroupApi('search', this.toolsByGroup.get('search') ?? [])
         this.analytics = createGroupApi('analytics', this.toolsByGroup.get('analytics') ?? [])
-        this.relationships = createGroupApi('relationships', this.toolsByGroup.get('relationships') ?? [])
+        this.relationships = createGroupApi(
+            'relationships',
+            this.toolsByGroup.get('relationships') ?? []
+        )
         this.export = createGroupApi('export', this.toolsByGroup.get('export') ?? [])
         this.admin = createGroupApi('admin', this.toolsByGroup.get('admin') ?? [])
         this.github = createGroupApi('github', this.toolsByGroup.get('github') ?? [])
@@ -250,9 +235,7 @@ export class JournalApi {
      * Get method names for a group
      */
     getGroupMethods(group: ToolGroup): string[] {
-        const groupApi = this[group as keyof JournalApi] as
-            | GroupApiRecord
-            | undefined
+        const groupApi = this[group as keyof JournalApi] as GroupApiRecord | undefined
         if (!groupApi || typeof groupApi !== 'object') return []
         return Object.keys(groupApi)
             .filter((k) => k !== 'help')

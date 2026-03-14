@@ -9,6 +9,7 @@
 
 import type { AuthorizationServerMetadata, AuthServerDiscoveryConfig } from './types.js'
 import { AuthServerDiscoveryError } from './errors.js'
+import { ConfigurationError } from '../types/errors.js'
 import { logger } from '../utils/logger.js'
 
 // =============================================================================
@@ -35,10 +36,10 @@ export class AuthorizationServerDiscovery {
         this.cacheTtl = config.cacheTtl ?? 3600
         this.timeout = config.timeout ?? 5000
 
-        logger.info(
-            `Authorization Server Discovery initialized for: ${this.authServerUrl}`,
-            { module: 'AUTH', operation: 'init' }
-        )
+        logger.info(`Authorization Server Discovery initialized for: ${this.authServerUrl}`, {
+            module: 'AUTH',
+            operation: 'init',
+        })
     }
 
     /**
@@ -82,7 +83,9 @@ export class AuthorizationServerDiscovery {
             clearTimeout(timeoutId)
 
             if (!response.ok) {
-                throw new Error(`HTTP ${String(response.status)}: ${response.statusText}`)
+                throw new ConfigurationError(
+                    `HTTP ${String(response.status)}: ${response.statusText}`
+                )
             }
 
             const metadata = (await response.json()) as AuthorizationServerMetadata
@@ -101,6 +104,10 @@ export class AuthorizationServerDiscovery {
 
             return metadata
         } catch (error) {
+            if (error instanceof AuthServerDiscoveryError) {
+                throw error
+            }
+
             const cause = error instanceof Error ? error : new Error(String(error))
 
             logger.error(`Failed to discover authorization server: ${this.authServerUrl}`, {
@@ -118,21 +125,21 @@ export class AuthorizationServerDiscovery {
      */
     private validateMetadata(metadata: AuthorizationServerMetadata): void {
         if (!metadata.issuer) {
-            throw new Error('Missing required field: issuer')
+            throw new ConfigurationError('Missing required field: issuer')
         }
 
         if (!metadata.token_endpoint) {
-            throw new Error('Missing required field: token_endpoint')
+            throw new ConfigurationError('Missing required field: token_endpoint')
         }
 
         // Validate issuer matches the expected URL
         // Per RFC 8414, issuer MUST be identical to the authorization server URL
         const expectedIssuer = this.authServerUrl
         if (metadata.issuer !== expectedIssuer) {
-            logger.warning(
-                `Issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`,
-                { module: 'AUTH', operation: 'discovery-validation' }
-            )
+            logger.warning(`Issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`, {
+                module: 'AUTH',
+                operation: 'discovery-validation',
+            })
             // Note: This is a warning, not an error, as some auth servers may use different URLs
         }
     }
@@ -142,7 +149,7 @@ export class AuthorizationServerDiscovery {
      */
     getMetadata(): AuthorizationServerMetadata {
         if (!this.cachedMetadata) {
-            throw new Error(
+            throw new ConfigurationError(
                 'Authorization server metadata not yet discovered. Call discover() first.'
             )
         }
@@ -158,7 +165,7 @@ export class AuthorizationServerDiscovery {
         const metadata = this.getMetadata()
 
         if (!metadata.jwks_uri) {
-            throw new Error('Authorization server does not provide jwks_uri')
+            throw new ConfigurationError('Authorization server does not provide jwks_uri')
         }
 
         return metadata.jwks_uri

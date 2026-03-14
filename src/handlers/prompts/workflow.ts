@@ -6,9 +6,13 @@
  * session-summary
  */
 
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
+
+/** Milliseconds in one day */
+const MS_PER_DAY = 86_400_000
 
 /**
  * Get workflow prompt definitions
@@ -26,7 +30,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     required: true,
                 },
             ],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const query = args['query'] ?? ''
                 const entries = db.searchEntries(query, { limit: 5 })
 
@@ -48,9 +52,10 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             description: 'Daily standup summaries',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const today = new Date().toISOString().split('T')[0] ?? ''
-                const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0] ?? ''
+                const yesterday =
+                    new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
                 const entries = db.searchByDateRange(yesterday, today)
 
@@ -78,11 +83,11 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                     required: false,
                 },
             ],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const days = parseInt(args['days'] ?? '14', 10)
                 const endDate = new Date().toISOString().split('T')[0] ?? ''
                 const startDate =
-                    new Date(Date.now() - days * 86400000).toISOString().split('T')[0] ?? ''
+                    new Date(Date.now() - days * MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
                 const entries = db.searchByDateRange(startDate, endDate)
 
@@ -112,10 +117,10 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             description: 'Day-by-day weekly summaries',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const endDate = new Date().toISOString().split('T')[0] ?? ''
                 const startDate =
-                    new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0] ?? ''
+                    new Date(Date.now() - 7 * MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
                 const entries = db.searchByDateRange(startDate, endDate)
 
@@ -140,7 +145,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 { name: 'start_date', description: 'Start date (YYYY-MM-DD)', required: true },
                 { name: 'end_date', description: 'End date (YYYY-MM-DD)', required: true },
             ],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const startDate = args['start_date'] ?? ''
                 const endDate = args['end_date'] ?? ''
 
@@ -173,11 +178,11 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             description: 'Milestone and achievement tracking',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE significance_type IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -203,7 +208,7 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             description: 'Project context with recent entries, statistics, and GitHub status hints',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const recent = db.getRecentEntries(5)
                 const stats = db.getStatistics('week')
 
@@ -242,7 +247,7 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
             arguments: [
                 { name: 'limit', description: 'Number of entries (default: 10)', required: false },
             ],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const limit = parseInt(args['limit'] ?? '10', 10)
                 const entries = db.getRecentEntries(limit)
 
@@ -265,10 +270,10 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
                 'Acknowledge session context received from memory://briefing to inform the user',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const recent = db.getRecentEntries(3)
                 const stats = db.getStatistics('week')
-                const totalEntries = stats.totalEntries ?? 0
+                const totalEntries = (stats as { totalEntries?: number }).totalEntries ?? 0
 
                 const entrySummary =
                     recent.length > 0
@@ -317,7 +322,7 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
                 'Create a session summary entry capturing what was accomplished, pending items, and context for the next session',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const recent = db.getRecentEntries(5)
 
                 const entrySummary =

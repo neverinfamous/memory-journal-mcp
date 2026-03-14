@@ -4,12 +4,19 @@
 
 ## Session Start
 
-1. Read `memory://briefing` for project context
-   - **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
-     - **AntiGravity**: Tools are `mcp_{name}_{tool}` (e.g., `mcp_memory-journal-mcp_create_entry`). Server name = `memory-journal-mcp`.
-     - **Cursor**: Tools are `user-{name}-{tool}` (e.g., `user-memory-journal-mcp-create_entry`). Server name = `user-memory-journal-mcp`.
-     - **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly (e.g., `memory-journal-mcp`). Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method above if unsure.
-2. Proceed with the user's request
+**REQUIRED**: Before processing any user request, read `memory://briefing` and **present the `userMessage` to the user as a formatted bullet list of key facts:**
+
+- Entry counts (journal + team)
+- GitHub: repo, branch, CI status, open issues/PRs
+- Milestone progress (if any)
+- Template resources count
+- Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
+
+**Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
+
+- **AntiGravity**: Tools are `mcp_{name}_{tool}` → server name = `memory-journal-mcp`
+- **Cursor**: Tools are `user-{name}-{tool}` → server name = `user-memory-journal-mcp`
+- **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
 
 ## Behaviors
 
@@ -22,17 +29,20 @@
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
 
 **Suggest adding a rule** when you observe:
+
 - Naming conventions, formatting preferences, or coding standards
 - Testing patterns or verification steps the user always follows
 - Project-specific commands, workflows, or deployment steps
 - Error handling patterns or logging conventions
 
 **Suggest adding a skill** when you build:
+
 - Reusable multi-step processes (e.g., deployment, release, audit workflows)
 - Project-specific templates or scaffolds
 - Complex integrations or tool chains the user may repeat
 
 **Suggest refining existing rules/skills** when you notice:
+
 - A rule conflict or ambiguity causing inconsistent behavior
 - An outdated pattern that no longer matches the codebase
 - Missing edge cases or exceptions to an existing rule
@@ -47,6 +57,7 @@ When the user has GitHub Copilot code review enabled:
 **Pre-emptive checking** — Before creating or modifying code, search journal entries with tag `copilot-finding` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.
 
 **How to act:**
+
 - The briefing shows **Rules** and **Skills** paths — use these to locate the files
 - **Always ask the user first** — never create or modify rules/skills silently
 - Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
@@ -67,19 +78,20 @@ When the user has GitHub Copilot code review enabled:
 For multi-step workflows (3+ operations), prefer `mj_execute_code` over individual tool calls.
 This executes JavaScript in a sandboxed environment with all tools available as `mj.*` API:
 
-| Group         | Namespace              | Example                                           |
-|---------------|------------------------|---------------------------------------------------|
-| Core          | `mj.core.*`           | `mj.core.createEntry("Implemented feature X")`    |
-| Search        | `mj.search.*`         | `mj.search.searchEntries("performance")`          |
-| Analytics     | `mj.analytics.*`      | `mj.analytics.getStatistics()`                    |
-| Relationships | `mj.relationships.*`  | `mj.relationships.linkEntries(1, 2, "implements")`|
-| Export        | `mj.export.*`         | `mj.export.exportEntries("json")`                 |
-| Admin         | `mj.admin.*`          | `mj.admin.rebuildVectorIndex()`                   |
-| GitHub        | `mj.github.*`         | `mj.github.getGithubIssues({ state: "open" })`   |
-| Backup        | `mj.backup.*`         | `mj.backup.backupJournal()`                       |
-| Team          | `mj.team.*`           | `mj.team.teamCreateEntry("Team update")`          |
+| Group         | Namespace            | Example                                            |
+| ------------- | -------------------- | -------------------------------------------------- |
+| Core          | `mj.core.*`          | `mj.core.createEntry("Implemented feature X")`     |
+| Search        | `mj.search.*`        | `mj.search.searchEntries("performance")`           |
+| Analytics     | `mj.analytics.*`     | `mj.analytics.getStatistics()`                     |
+| Relationships | `mj.relationships.*` | `mj.relationships.linkEntries(1, 2, "implements")` |
+| Export        | `mj.export.*`        | `mj.export.exportEntries("json")`                  |
+| Admin         | `mj.admin.*`         | `mj.admin.rebuildVectorIndex()`                    |
+| GitHub        | `mj.github.*`        | `mj.github.getGithubIssues({ state: "open" })`     |
+| Backup        | `mj.backup.*`        | `mj.backup.backupJournal()`                        |
+| Team          | `mj.team.*`          | `mj.team.teamCreateEntry("Team update")`           |
 
 **Features**: Positional args (`createEntry("note")`), aliases (`mj.core.create`), `mj.help()` for discovery.
+**Readonly mode**: `readonly: true` restricts to read-only tools only. Write-only groups (e.g., `admin`) will be empty. Use `readonly: false` (default) for full access.
 **Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
 
 <!-- SECTION:GITHUB -->
@@ -139,12 +151,12 @@ Fetch `memory://health` to verify server status, database stats, and tool availa
 
 ### Search Tools
 
-| Tool                     | Required Parameters                   | Optional Parameters                                                                                            |
-| ------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `search_entries`         | none                                  | `query`, `limit`, `is_personal`, `issue_number`, `pr_number`, `pr_status`, `project_number`, `workflow_run_id` |
-| `search_by_date_range`   | `start_date`, `end_date` (YYYY-MM-DD) | `tags`, `entry_type`, `is_personal`, `issue_number`, `pr_number`, `project_number`, `workflow_run_id`          |
-| `semantic_search`        | `query` (string)                      | `limit`, `similarity_threshold` (default 0.25), `is_personal`, `hint_on_empty` (bool, default true)            |
-| `get_vector_index_stats` | none                                  | none                                                                                                           |
+| Tool                     | Required Parameters                   | Optional Parameters                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_entries`         | none                                  | `query`, `limit`, `is_personal`, `issue_number`, `pr_number`, `pr_status`, `project_number`, `workflow_run_id`. Query uses FTS5: phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by BM25 relevance. |
+| `search_by_date_range`   | `start_date`, `end_date` (YYYY-MM-DD) | `tags`, `entry_type`, `is_personal`, `issue_number`, `pr_number`, `project_number`, `workflow_run_id`                                                                                                                         |
+| `semantic_search`        | `query` (string)                      | `limit`, `similarity_threshold` (default 0.25), `is_personal`, `hint_on_empty` (bool, default true)                                                                                                                           |
+| `get_vector_index_stats` | none                                  | none                                                                                                                                                                                                                          |
 
 ### Relationship Tools
 
@@ -231,9 +243,9 @@ Milestone resources:
 
 ### Code Mode
 
-| Tool                | Required Parameters | Optional Parameters                                     |
-| ------------------- | ------------------- | ------------------------------------------------------- |
-| `mj_execute_code`   | `code` (string)     | `timeout` (ms, max 30000), `readonly` (bool, default false) |
+| Tool              | Required Parameters | Optional Parameters                                         |
+| ----------------- | ------------------- | ----------------------------------------------------------- |
+| `mj_execute_code` | `code` (string)     | `timeout` (ms, max 30000), `readonly` (bool, default false) |
 
 ## Entry Types
 
@@ -268,11 +280,12 @@ Valid values for `entry_type` parameter:
 - **`prStatus` in entries**: Reflects PR state at entry creation time, not current state. Use `get_github_pr` for live status.
 - **`restore_backup` behavior**: Restores entire database state. Any recent changes (new entries, tag merges via `merge_tags`, relationships) are reverted. A pre-restore backup is automatically created for safety.
 - **Semantic search indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use `rebuild_vector_index` or enable `AUTO_REBUILD_INDEX=true` for automatic reconciliation on server startup.
-- **`semantic_search` thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches.
+- **`semantic_search` thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches. A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The `hint_on_empty` flag (default true) only controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown.
 - **Causal relationship types**: Use `blocked_by` (A was blocked by B), `resolved` (A resolved B), `caused` (A caused B) for decision tracing and failure analysis. Visualizations use distinct arrow styles for causal types.
 - **Enhanced analytics**: `get_statistics` returns `decisionDensity` (significant entries per period), `relationshipComplexity` (avg relationships per entry), `activityTrend` (period-over-period growth %), and `causalMetrics` (counts for blocked_by/resolved/caused).
 - **Importance scores**: `get_entry_by_id` returns `importance` (0.0-1.0) and `importanceBreakdown` showing weighted components: significance (30%), relationships (35%), causal (20%), recency (15%). `memory://significant` sorts entries by importance.
 - **`inactiveThresholdDays`**: `get_cross_project_insights` includes `inactiveThresholdDays: 7` in output, documenting the inactive project classification cutoff.
+- **`search_entries` FTS5 query syntax**: Uses FTS5 full-text search with Porter stemmer. Phrase queries: `"error handling"`. Prefix: `auth*`. Boolean: `deploy OR release`, `error NOT warning`. Word-boundary matching ("log" matches "log" but not "catalog"). Results ranked by BM25 relevance. Falls back to LIKE substring matching for queries with unbalanced quotes or special characters.
 - **GitHub metadata in entries**: Entry output includes 10 GitHub fields (`issueNumber`, `issueUrl`, `prNumber`, `prUrl`, `prStatus`, `projectNumber`, `projectOwner`, `workflowRunId`, `workflowName`, `workflowStatus`) in all tool responses.
 - **`delete_entry` on soft-deleted**: `delete_entry(id, permanent: true)` works on previously soft-deleted entries. Returns `success: false` for nonexistent entries.
 

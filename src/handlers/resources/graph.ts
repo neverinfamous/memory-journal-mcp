@@ -5,6 +5,7 @@
  */
 
 import { ICON_GRAPH, ICON_GITHUB } from '../../constants/icons.js'
+import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { execQuery, transformEntryRow } from './shared.js'
 
@@ -48,12 +49,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                 }[]
 
                 if (relationships.length === 0) {
-                    return {
-                        format: 'mermaid',
-                        diagram: 'graph TD\n  NoData[No relationships found]',
-                        message:
-                            'No entry relationships exist yet. Use link_entries tool to create relationships.',
-                    }
+                    return 'graph TD\n  NoData["No relationships found — use link_entries to create relationships"]'
                 }
 
                 // Build Mermaid graph
@@ -102,12 +98,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                     )
                 }
 
-                return {
-                    format: 'mermaid',
-                    diagram: lines.join('\n'),
-                    relationshipCount: relationships.length,
-                    nodeCount: seenNodes.size,
-                }
+                return lines.join('\n')
             },
         },
         {
@@ -124,22 +115,12 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             },
             handler: async (_uri: string, context: ResourceContext) => {
                 if (!context.github) {
-                    return {
-                        format: 'mermaid',
-                        diagram: 'graph LR\n  NoGitHub[GitHub integration not available]',
-                        message:
-                            'GitHub integration not configured. Set GITHUB_TOKEN and GITHUB_REPO_PATH.',
-                    }
+                    return 'graph LR\n  NoGitHub["GitHub integration not available — set GITHUB_TOKEN and GITHUB_REPO_PATH"]'
                 }
 
                 const repoInfo = await context.github.getRepoInfo()
                 if (!repoInfo.owner || !repoInfo.repo) {
-                    return {
-                        format: 'mermaid',
-                        diagram: 'graph LR\n  NoRepo[Repository not detected]',
-                        message:
-                            'Could not detect repository. Set GITHUB_REPO_PATH in your config.',
-                    }
+                    return 'graph LR\n  NoRepo["Repository not detected — set GITHUB_REPO_PATH in your config"]'
                 }
 
                 const workflowRuns = await context.github.getWorkflowRuns(
@@ -149,11 +130,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                 )
 
                 if (workflowRuns.length === 0) {
-                    return {
-                        format: 'mermaid',
-                        diagram: 'graph LR\n  NoRuns[No workflow runs found]',
-                        message: 'No GitHub Actions workflow runs found for this repository.',
-                    }
+                    return 'graph LR\n  NoRuns["No GitHub Actions workflow runs found for this repository"]'
                 }
 
                 const lines: string[] = ['graph LR']
@@ -187,12 +164,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                     lines.push(`  ${commitId} --> ${nodeId}`)
                 }
 
-                return {
-                    format: 'mermaid',
-                    diagram: lines.join('\n'),
-                    workflowRunCount: workflowRuns.length,
-                    repository: `${repoInfo.owner}/${repoInfo.repo}`,
-                }
+                return lines.join('\n')
             },
         },
         {
@@ -239,7 +211,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE workflow_run_id IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC

@@ -7,6 +7,7 @@
  */
 
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
+import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { execQuery, transformEntryRow } from './shared.js'
 
@@ -36,7 +37,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE project_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -70,7 +71,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE issue_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -103,7 +104,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -184,7 +185,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const rows = execQuery(
                     context.db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -287,11 +288,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 if (!context.github) {
-                    return {
-                        format: 'mermaid',
-                        diagram: 'graph LR\n  NoGitHub[GitHub integration not available]',
-                        message: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
-                    }
+                    return 'graph LR\n  NoGitHub["GitHub integration not available \u2014 set GITHUB_TOKEN and GITHUB_REPO_PATH"]'
                 }
 
                 const repoInfo = await context.github.getRepoInfo()
@@ -299,20 +296,12 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const repo = repoInfo.repo ?? undefined
 
                 if (!owner) {
-                    return {
-                        format: 'mermaid',
-                        diagram: 'graph LR\n  NoOwner[Repository owner not detected]',
-                        message: 'Set GITHUB_REPO_PATH to your git repository.',
-                    }
+                    return 'graph LR\n  NoOwner["Repository owner not detected \u2014 set GITHUB_REPO_PATH"]'
                 }
 
                 const board = await context.github.getProjectKanban(owner, projectNumber, repo)
                 if (!board) {
-                    return {
-                        format: 'mermaid',
-                        diagram: `graph LR\n  NotFound[Project #${String(projectNumber)} not found]`,
-                        message: 'Ensure the project exists and has a Status field.',
-                    }
+                    return `graph LR\n  NotFound["Project #${String(projectNumber)} not found \u2014 ensure project exists with a Status field"]`
                 }
 
                 // Build Mermaid diagram with subgraphs for each column
@@ -355,19 +344,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     lines.push('  end')
                 }
 
-                return {
-                    format: 'mermaid',
-                    diagram: lines.join('\n'),
-                    projectNumber,
-                    projectTitle: board.projectTitle,
-                    columnCount: board.columns.length,
-                    totalItems: board.totalItems,
-                    legend: {
-                        '🔵': 'Issue',
-                        '🟣': 'Pull Request',
-                        '⚪': 'Draft Issue',
-                    },
-                }
+                return lines.join('\n')
             },
         },
     ]

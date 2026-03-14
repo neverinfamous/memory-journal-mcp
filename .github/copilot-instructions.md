@@ -4,11 +4,12 @@
 
 Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing persistent memory for AI agents. It has **44 tools** across **10 groups** (core, search, analytics, relationships, export, admin, github, backup, team, codemode), **22 resources**, and **15 prompts**.
 
-**Stack**: TypeScript, Vitest, Zod schemas, sql.js (SQLite), vectra (vector search), @octokit/rest (GitHub API).
+**Stack**: TypeScript, Vitest, Zod schemas, better-sqlite3 (SQLite), sqlite-vec (vector search), @huggingface/transformers (embeddings), @octokit/rest (GitHub API).
 
 ## Session Context
 
 Before starting work on this project, read `memory://briefing` from the `memory-journal-mcp` server for real-time context:
+
 - **Recent journal entries** — what was just worked on by the development agent
 - **GitHub status** — open issues, PRs, CI status, milestones
 - **Workflow runs** — recent CI/CD results
@@ -74,36 +75,38 @@ src/
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/
 │   ├── server-instructions.md  # Source for server instructions
-│   └── ServerInstructions.ts   # Auto-generated (npm run generate:instructions)
+│   └── server-instructions.ts  # Auto-generated (npm run generate:instructions)
 ├── database/
-│   ├── SqliteAdapter.ts        # SQLite operations via sql.js
-│   └── schema.ts               # DDL + migrations
+│   ├── adapter-factory.ts      # Database adapter factory
+│   ├── core/                   # Core database types and interfaces
+│   └── sqlite-adapter/         # SQLite operations via better-sqlite3
 ├── filtering/
-│   └── ToolFilter.ts           # Tool filtering (groups, meta-groups)
+│   └── tool-filter.ts          # Tool filtering (groups, meta-groups)
 ├── github/
-│   └── GitHubIntegration.ts    # GitHub API (@octokit/rest + GraphQL)
+│   └── github-integration/     # GitHub API (@octokit/rest + GraphQL)
 ├── handlers/
 │   ├── tools/                  # 44 tool handlers (10 groups)
 │   ├── resources/              # 22 resource handlers
 │   └── prompts/                # 15 prompt handlers
 ├── server/
-│   ├── McpServer.ts            # MCP server setup
-│   └── Scheduler.ts            # Recurring task scheduler
+│   ├── mcp-server.ts           # MCP server setup
+│   ├── registration.ts         # Tool/resource/prompt registration
+│   └── scheduler.ts            # Recurring task scheduler
 ├── transports/
-│   └── http.ts                 # HTTP/SSE transport
+│   └── http/                   # HTTP/SSE transport (modularized)
 ├── types/                      # Type definitions + barrel
 ├── utils/                      # Logger, error helpers, progress
-└── vector/                     # Semantic search (vectra + transformers)
+└── vector/                     # Semantic search (sqlite-vec + transformers)
 ```
 
 ## Key Reference Files
 
-| File | Purpose |
-|------|---------|
+| File                                   | Purpose                                               |
+| -------------------------------------- | ----------------------------------------------------- |
 | `src/constants/server-instructions.md` | Full tool parameter reference and behavioral guidance |
-| `test-server/code-map.md` | File → tool/handler mapping |
-| `test-server/tool-reference.md` | Categorized 44-tool inventory |
-| `CONTRIBUTING.md` | Development setup and PR guidelines |
+| `docs/code-map.md`                     | File → tool/handler mapping                           |
+| `docs/tool-reference.md`               | Categorized 44-tool inventory                         |
+| `CONTRIBUTING.md`                      | Development setup and PR guidelines                   |
 
 ## Review Checklist
 

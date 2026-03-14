@@ -9,53 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { CopilotReviewsOutputSchema } from './schemas.js'
 import { relaxedNumber } from '../schemas.js'
-
-// ============================================================================
-// Helper: owner/repo resolution (shared pattern)
-// ============================================================================
-
-async function resolveOwnerRepo(
-    context: ToolContext,
-    input: { owner?: string; repo?: string }
-): Promise<
-    | {
-          owner: string
-          repo: string
-          detectedOwner: string | null
-          detectedRepo: string | null
-          github: NonNullable<ToolContext['github']>
-      }
-    | { error: true; response: Record<string, unknown> }
-> {
-    if (!context.github) {
-        return {
-            error: true,
-            response: { success: false, error: 'GitHub integration not available' },
-        }
-    }
-
-    const repoInfo = await context.github.getRepoInfo()
-    const detectedOwner = repoInfo.owner
-    const detectedRepo = repoInfo.repo
-
-    const owner = input.owner ?? detectedOwner ?? undefined
-    const repo = input.repo ?? detectedRepo ?? undefined
-
-    if (!owner || !repo) {
-        return {
-            error: true,
-            response: {
-                success: false,
-                error: 'STOP: Could not auto-detect repository. DO NOT GUESS. Ask the user for the GitHub owner and repo.',
-                requiresUserInput: true,
-                detectedOwner,
-                detectedRepo,
-            },
-        }
-    }
-
-    return { owner, repo, detectedOwner, detectedRepo, github: context.github }
-}
+import { resolveOwnerRepo } from './helpers.js'
 
 // ============================================================================
 // Tool Definitions

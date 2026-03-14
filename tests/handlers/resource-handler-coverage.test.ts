@@ -9,14 +9,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Resource Handler Coverage', () => {
-    let db: SqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-resource-coverage.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
 
         // Create entries with project/issue/PR links for template tests
@@ -51,13 +51,13 @@ describe('Resource Handler Coverage', () => {
 
         it('should throw for unknown resource URI', async () => {
             await expect(readResource('memory://nonexistent-resource-xyz', db)).rejects.toThrow(
-                'Unknown resource'
+                'Resource not found: memory://nonexistent-resource-xyz'
             )
         })
 
         it('should throw for non-memory URI schemes', async () => {
             await expect(readResource('https://example.com/unknown', db)).rejects.toThrow(
-                'Unknown resource'
+                'Resource not found: https://example.com/unknown'
             )
         })
     })
@@ -136,9 +136,8 @@ describe('Resource Handler Coverage', () => {
 
         it('should return mermaid fallback for diagram without github', async () => {
             const result = await readResource('memory://kanban/1/diagram', db)
-            const data = result.data as { format: string; diagram: string }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('not available')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('not available')
         })
     })
 

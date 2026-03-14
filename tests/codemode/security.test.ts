@@ -133,7 +133,7 @@ describe('CodeModeSecurityManager', () => {
 
         it('should allow safe API calls', () => {
             const result = security.validateCode(
-                'const entries = await mj.core.getRecentEntries({ limit: 5 }); return entries;',
+                'const entries = await mj.core.getRecentEntries({ limit: 5 }); return entries;'
             )
             expect(result.valid).toBe(true)
         })
@@ -227,7 +227,9 @@ describe('CodeModeSecurityManager', () => {
         it('should return default config', () => {
             const config = security.getConfig()
             expect(config.maxCodeLength).toBe(DEFAULT_SECURITY_CONFIG.maxCodeLength)
-            expect(config.maxExecutionsPerMinute).toBe(DEFAULT_SECURITY_CONFIG.maxExecutionsPerMinute)
+            expect(config.maxExecutionsPerMinute).toBe(
+                DEFAULT_SECURITY_CONFIG.maxExecutionsPerMinute
+            )
             expect(config.maxResultSize).toBe(DEFAULT_SECURITY_CONFIG.maxResultSize)
             expect(config.blockedPatterns.length).toBeGreaterThan(0)
         })

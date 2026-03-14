@@ -7,8 +7,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
-import type { GitHubIntegration } from '../../src/github/GitHubIntegration.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import type { GitHubIntegration } from '../../src/github/github-integration.js'
 
 /**
  * Creates a mock GitHubIntegration with controllable method responses.
@@ -49,6 +49,7 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
             title: 'Test Issue',
             url: 'url1',
             state: 'OPEN',
+            nodeId: 'NODE_1',
             body: 'Issue body',
             labels: ['bug'],
             assignees: ['dev1'],
@@ -155,11 +156,11 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
 }
 
 describe('GitHub Tool Handlers', () => {
-    let db: SqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-gh-tools.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
 
@@ -1164,23 +1165,19 @@ describe('GitHub Tool Handlers', () => {
             expect(result.kanban?.error).toContain('not found')
         })
 
-        it('should handle issue not found on project board', async () => {
+        it('should handle addProjectItem failure during move_to_done', async () => {
             const github = createMockGitHub({
                 getProjectKanban: vi.fn().mockResolvedValue({
                     projectId: 'PVT_1',
                     projectTitle: 'Board',
                     statusFieldId: 'FIELD_1',
                     statusOptions: [{ id: 'OPT_DONE', name: 'Done' }],
-                    columns: [
-                        {
-                            status: 'Todo',
-                            items: [
-                                { id: 'PVTITEM_OTHER', title: 'Other', type: 'ISSUE', number: 99 },
-                            ],
-                        },
-                    ],
-                    totalItems: 1,
+                    columns: [],
+                    totalItems: 0,
                 }),
+                addProjectItem: vi
+                    .fn()
+                    .mockResolvedValue({ success: false, error: 'Item add failed' }),
             })
 
             const result = (await callTool(
@@ -1198,7 +1195,7 @@ describe('GitHub Tool Handlers', () => {
 
             expect(result.success).toBe(true)
             expect(result.kanban?.moved).toBe(false)
-            expect(result.kanban?.error).toContain('not found on project board')
+            expect(result.kanban?.error).toContain('Item add failed')
         })
 
         it('should handle "Done" column not found on board', async () => {

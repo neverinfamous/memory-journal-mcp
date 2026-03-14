@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -106,23 +107,27 @@ const SemanticEntryOutputSchema = EntryOutputSchema.extend({
     similarity: z.number(),
 })
 
-const SemanticSearchOutputSchema = z.object({
-    query: z.string().optional(),
-    entries: z.array(SemanticEntryOutputSchema).optional(),
-    count: z.number().optional(),
-    hint: z.string().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-})
+const SemanticSearchOutputSchema = z
+    .object({
+        query: z.string().optional(),
+        entries: z.array(SemanticEntryOutputSchema).optional(),
+        count: z.number().optional(),
+        hint: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const VectorStatsOutputSchema = z.object({
-    available: z.boolean(),
-    error: z.string().optional(),
-    itemCount: z.number().optional(),
-    modelName: z.string().optional(),
-    dimensions: z.number().optional(),
-    success: z.boolean().optional(),
-})
+const VectorStatsOutputSchema = z
+    .object({
+        available: z.boolean(),
+        error: z.string().optional(),
+        itemCount: z.number().optional(),
+        modelName: z.string().optional(),
+        dimensions: z.number().optional(),
+        success: z.boolean().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -135,11 +140,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'search_entries',
             title: 'Search Entries',
             description:
-                'Search journal entries with optional filters for GitHub Projects, Issues, PRs, and Actions',
+                'Full-text search journal entries using FTS5 (supports phrases "exact match", prefix auth*, boolean NOT/OR/AND, ranked by relevance). Optional filters for GitHub Projects, Issues, PRs, and Actions.',
             group: 'search',
             inputSchema: SearchEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = SearchEntriesSchema.parse(params)
@@ -149,12 +154,17 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.pr_number !== undefined ||
                         input.is_personal !== undefined
 
+                    // When merging across DBs, fetch more per-DB so BM25 ranking
+                    // in one DB doesn't silently drop entries before the merge.
+                    // The actual user limit is applied by mergeAndDedup.
+                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
+
                     let personalEntries
                     if (!input.query && !hasFilters) {
-                        personalEntries = db.getRecentEntries(input.limit, input.is_personal)
+                        personalEntries = db.getRecentEntries(perDbLimit, input.is_personal)
                     } else {
                         personalEntries = db.searchEntries(input.query || '', {
-                            limit: input.limit,
+                            limit: perDbLimit,
                             isPersonal: input.is_personal,
                             projectNumber: input.project_number,
                             issueNumber: input.issue_number,
@@ -163,13 +173,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Cross-database merge when team DB is available
-                    if (teamDb) {
+                    // Skip team DB when is_personal is explicitly true (team entries are never personal)
+                    if (teamDb && input.is_personal !== true) {
                         let teamEntries
                         if (!input.query && !hasFilters) {
-                            teamEntries = teamDb.getRecentEntries(input.limit)
+                            teamEntries = teamDb.getRecentEntries(perDbLimit)
                         } else {
                             teamEntries = teamDb.searchEntries(input.query || '', {
-                                limit: input.limit,
+                                limit: perDbLimit,
                                 projectNumber: input.project_number,
                                 issueNumber: input.issue_number,
                                 prNumber: input.pr_number,
@@ -196,10 +207,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: SearchByDateRangeSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
+                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
                     const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
                         tags: input.tags,
@@ -208,11 +220,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         issueNumber: input.issue_number,
                         prNumber: input.pr_number,
                         workflowRunId: input.workflow_run_id,
-                        limit: input.limit,
+                        limit: perDbLimit,
                     })
 
                     // Cross-database merge when team DB is available
-                    if (teamDb) {
+                    // Skip team DB when is_personal is explicitly true (team entries are never personal)
+                    if (teamDb && input.is_personal !== true) {
                         const teamEntries = teamDb.searchByDateRange(
                             input.start_date,
                             input.end_date,
@@ -223,7 +236,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 issueNumber: input.issue_number,
                                 prNumber: input.pr_number,
                                 workflowRunId: input.workflow_run_id,
-                                limit: input.limit,
+                                limit: perDbLimit,
                             }
                         )
                         const merged = mergeAndDedup(
@@ -247,7 +260,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             group: 'search',
             inputSchema: SemanticSearchSchemaMcp,
             outputSchema: SemanticSearchOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const input = SemanticSearchSchema.parse(params)
@@ -268,10 +281,20 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.similarity_threshold ?? 0.25
                     )
 
+                    // Batch-fetch all entries in a single query (instead of N+1 getEntryById calls)
+                    const entryIds = results.map((r) => r.entryId)
+                    const entriesMap = db.getEntriesByIds(entryIds)
+
                     const entries = results
                         .map((r) => {
-                            const entry = db.getEntryById(r.entryId)
+                            const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
+                            // Apply is_personal filter if specified
+                            if (
+                                input.is_personal !== undefined &&
+                                entry.isPersonal !== input.is_personal
+                            )
+                                return null
                             return {
                                 ...entry,
                                 similarity: Math.round(r.score * 100) / 100,
@@ -279,23 +302,33 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         })
                         .filter((e): e is NonNullable<typeof e> => e !== null)
 
-                    const stats = await vectorManager.getStats()
+                    const stats = vectorManager.getStats()
                     const isIndexEmpty = stats.itemCount === 0
                     const includeHint = input.hint_on_empty ?? true
+
+                    // Quality gate: if the best match is below this floor,
+                    // treat all results as noise and include the hint
+                    const QUALITY_FLOOR = 0.5
+                    const bestSimilarity = entries[0]?.similarity ?? 0
+                    const allNoise = entries.length > 0 && bestSimilarity < QUALITY_FLOOR
+
+                    // Build hint: quality gate hint is always shown (not gated by hint_on_empty)
+                    // because noisy results ≠ empty results. hint_on_empty only controls
+                    // the "no results" and "empty index" advisory hints.
+                    const hint =
+                        isIndexEmpty && includeHint
+                            ? 'No entries in vector index. Use rebuild_vector_index to index existing entries.'
+                            : entries.length === 0 && includeHint
+                              ? `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
+                              : allNoise
+                                ? `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`
+                                : undefined
 
                     return {
                         query: input.query,
                         entries,
                         count: entries.length,
-                        ...(includeHint && isIndexEmpty
-                            ? {
-                                  hint: 'No entries in vector index. Use rebuild_vector_index to index existing entries.',
-                              }
-                            : includeHint && entries.length === 0
-                              ? {
-                                    hint: `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`,
-                                }
-                              : {}),
+                        ...(hint !== undefined ? { hint } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -307,10 +340,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             title: 'Get Vector Index Stats',
             description: 'Get statistics about the semantic search vector index',
             group: 'search',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: VectorStatsOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
-            handler: async (_params: unknown) => {
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            handler: (_params: unknown) => {
                 try {
                     if (!vectorManager) {
                         return {
@@ -319,7 +352,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                         }
                     }
-                    const stats = await vectorManager.getStats()
+                    const stats = vectorManager.getStats()
                     return { success: true, available: true, ...stats }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -332,6 +365,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/** Number of leading characters used as deduplication key */
+const DEDUP_KEY_LENGTH = 200
 
 interface EntryWithSource {
     content: string
@@ -352,14 +388,12 @@ function mergeAndDedup(
     const seen = new Set<string>()
     const merged: EntryWithSource[] = []
 
-    // Concat and sort by timestamp descending
-    const all = [...personal, ...team].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    )
+    // Concat and sort by timestamp descending (ISO 8601 sorts lexicographically)
+    const all = [...personal, ...team].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
 
     for (const entry of all) {
         // Deduplicate by content (same entry shared to team)
-        const key = entry.content.slice(0, 200)
+        const key = entry.content.slice(0, DEDUP_KEY_LENGTH)
         if (!seen.has(key)) {
             seen.add(key)
             merged.push(entry)

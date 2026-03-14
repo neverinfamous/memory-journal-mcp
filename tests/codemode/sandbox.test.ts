@@ -76,7 +76,7 @@ describe('SandboxPool', () => {
     it('should create with custom options', () => {
         const pool = new SandboxPool(
             { timeoutMs: 5000 },
-            { maxInstances: 5, minInstances: 1, idleTimeoutMs: 30000 },
+            { maxInstances: 5, minInstances: 1, idleTimeoutMs: 30000 }
         )
         expect(pool).toBeDefined()
     })
@@ -98,7 +98,7 @@ describe('SandboxPool', () => {
         const pool = new SandboxPool()
         // UUID v4 format: 8-4-4-4-12 hex characters
         expect(pool.poolId).toMatch(
-            /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i,
+            /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
         )
     })
 })

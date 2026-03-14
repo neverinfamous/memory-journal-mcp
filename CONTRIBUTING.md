@@ -134,11 +134,11 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 - **Prettier** — Run `npx prettier --write .` for formatting
 - **Type safety** — Avoid `any`; use proper types and Zod schemas
 - **Modularity** — Keep files under ~500 lines; split into sub-modules when approaching the limit
-- **Error handling** — Use `formatHandlerErrorResponse()` for structured `{success, error, code, category, suggestion, recoverable}` responses in tool handlers
+- **Error handling** — Use `formatHandlerError()` for structured `{success, error, code, category, suggestion, recoverable}` responses in tool handlers
 
 ### Database Changes
 
-- **Schema migrations** — Update `src/database/schema.ts` for database changes
+- **Schema migrations** — Update `src/database/core/schema.ts` for database changes
 - **Backward compatibility** — Ensure existing data isn't broken; use `migrateSchema()` for column additions
 - **Performance** — Consider index implications for new queries
 - **Testing** — Verify with both empty and populated databases
@@ -219,21 +219,24 @@ src/
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/                  # Server instructions (source + generated)
 ├── database/
-│   ├── SqliteAdapter.ts        # SQLite operations via sql.js
-│   └── schema.ts               # DDL + migrations
+│   ├── adapter-factory.ts      # Adapter instantiation
+│   ├── core/                   # Interfaces, schema, entry columns
+│   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
 ├── filtering/                  # Tool filtering system
-├── github/                     # GitHub API integration
+├── github/
+│   └── github-integration/     # GitHub API integration
 ├── handlers/
 │   ├── tools/                  # 44 tool handlers (10 groups)
 │   ├── resources/              # 22 resource handlers
-│   └── prompts/                # 15 prompt handlers
+│   └── prompts/                # 16 prompt handlers
 ├── server/
-│   ├── McpServer.ts            # MCP server setup
-│   └── Scheduler.ts            # Recurring task scheduler
+│   ├── mcp-server.ts           # MCP server setup
+│   ├── registration.ts         # Tool/resource/prompt registration
+│   └── scheduler.ts            # Recurring task scheduler
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions
 ├── utils/                      # Logger, error helpers, progress
-└── vector/                     # Semantic search (vectra)
+└── vector/                     # Semantic search (sqlite-vec + transformers)
 ```
 
 ## 🤝 Community

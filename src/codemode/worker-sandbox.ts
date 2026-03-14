@@ -57,7 +57,7 @@ export class WorkerSandbox {
     async execute(
         code: string,
         apiBindings: Record<string, unknown>,
-        timeoutMs?: number,
+        timeoutMs?: number
     ): Promise<SandboxResult> {
         const effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         const startTime = performance.now()
@@ -75,7 +75,7 @@ export class WorkerSandbox {
                 } else if (typeof value === 'object' && value !== null) {
                     const methods: string[] = []
                     for (const [methodName, methodValue] of Object.entries(
-                        value as Record<string, unknown>,
+                        value as Record<string, unknown>
                     )) {
                         if (typeof methodValue === 'function') {
                             methods.push(methodName)
@@ -194,7 +194,7 @@ export class WorkerSandbox {
 async function handleRpcRequest(
     req: RpcRequest,
     apiBindings: Record<string, unknown>,
-    hostPort: MessagePort,
+    hostPort: MessagePort
 ): Promise<void> {
     const response: RpcResponse = { id: req.id }
 
@@ -211,7 +211,9 @@ async function handleRpcRequest(
         }
 
         if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...req.args)
+            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(
+                ...req.args
+            )
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
         }
@@ -246,7 +248,7 @@ export class WorkerSandboxPool {
     async execute(
         code: string,
         apiBindings: Record<string, unknown>,
-        timeoutMs?: number,
+        timeoutMs?: number
     ): Promise<SandboxResult> {
         if (this.activeCount >= this.options.maxInstances) {
             return {

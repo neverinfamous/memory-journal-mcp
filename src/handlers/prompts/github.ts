@@ -5,7 +5,8 @@
  * pr-retrospective, actions-failure-digest, project-milestone-tracker
  */
 
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
 
@@ -21,12 +22,12 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             arguments: [
                 { name: 'project_number', description: 'GitHub Project number', required: true },
             ],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const projectNumber = parseInt(args['project_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE project_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -53,12 +54,12 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             description: 'Pull request journal activity summary',
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp ASC
@@ -84,12 +85,12 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             description: 'Comprehensive PR review preparation',
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp ASC
@@ -115,12 +116,12 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             description: 'Completed PR analysis with learnings',
             icons: [ICON_PROMPT],
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE pr_number = ?
                     AND deleted_at IS NULL
                     ORDER BY timestamp ASC
@@ -146,11 +147,11 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             description: 'CI/CD failure analysis with root cause identification',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE workflow_run_id IS NOT NULL
                     AND deleted_at IS NULL
                     ORDER BY timestamp DESC
@@ -178,12 +179,12 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             arguments: [
                 { name: 'project_number', description: 'GitHub Project number', required: true },
             ],
-            handler: (args: Record<string, string>, db: SqliteAdapter) => {
+            handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const projectNumber = parseInt(args['project_number'] ?? '0', 10)
                 const entries = execQuery(
                     db,
                     `
-                    SELECT * FROM memory_journal
+                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
                     WHERE project_number = ?
                     AND significance_type IS NOT NULL
                     AND deleted_at IS NULL

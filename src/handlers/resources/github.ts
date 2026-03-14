@@ -6,6 +6,23 @@
 
 import { ICON_GITHUB, ICON_ANALYTICS, ICON_MILESTONE } from '../../constants/icons.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from './shared.js'
+import { logger } from '../../utils/logger.js'
+
+// ============================================================================
+// Resource API Limits
+// ============================================================================
+
+/** Max open issues to fetch for resource views (token efficiency) */
+const RESOURCE_ISSUE_LIMIT = 5
+/** Max open PRs to fetch for resource views (token efficiency) */
+const RESOURCE_PR_LIMIT = 5
+/** Max workflow runs to fetch for CI status */
+const RESOURCE_WORKFLOW_LIMIT = 5
+/** Max open milestones to fetch for status summary */
+const RESOURCE_STATUS_MILESTONE_LIMIT = 5
+/** Max open milestones to fetch for the milestones resource */
+const RESOURCE_MILESTONE_LIMIT = 20
 
 /**
  * Get GitHub resource definitions
@@ -25,59 +42,54 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 priority: 0.7,
             },
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const lastModified = new Date().toISOString()
+                const resolved = await resolveGitHubRepo(context.github)
+                if (isResourceError(resolved)) return resolved
+                const { owner, repo, branch, lastModified, github } = resolved
 
-                if (!context.github) {
-                    return {
-                        data: {
-                            error: 'GitHub integration not available',
-                            hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
-                        },
-                        annotations: { lastModified },
-                    }
+                // Parallelize independent API calls for performance
+                const [
+                    commitResult,
+                    issuesResult,
+                    prsResult,
+                    workflowsResult,
+                    kanbanResult,
+                    milestoneResult,
+                ] = await Promise.allSettled([
+                    github.getRepoContext(),
+                    github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT),
+                    github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT),
+                    github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT),
+                    github.getProjectKanban(owner, 1, repo),
+                    github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT),
+                ])
+
+                // Extract results with safe defaults
+                const commit =
+                    commitResult.status === 'fulfilled' ? commitResult.value.commit : null
+                if (commitResult.status === 'rejected') {
+                    logger.debug('Failed to fetch commit context', {
+                        module: 'RESOURCE',
+                        operation: 'github-status',
+                        error: commitResult.reason,
+                    })
                 }
 
-                const repoInfo = await context.github.getRepoInfo()
-                const owner = repoInfo.owner
-                const repo = repoInfo.repo
-
-                if (!owner || !repo) {
-                    return {
-                        data: {
-                            error: 'Could not detect repository',
-                            hint: 'Set GITHUB_REPO_PATH to your git repository.',
-                            branch: repoInfo.branch,
-                        },
-                        annotations: { lastModified },
-                    }
-                }
-
-                // Get current commit
-                let commit: string | null = null
-                try {
-                    const repoContext = await context.github.getRepoContext()
-                    commit = repoContext.commit
-                } catch {
-                    // Ignore
-                }
-
-                // Get open issues (limited for token efficiency)
-                const issues = await context.github.getIssues(owner, repo, 'open', 5)
+                const issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
                 const openIssues = issues.map((i) => ({
                     number: i.number,
                     title: i.title.slice(0, 50),
                 }))
 
-                // Get open PRs (limited for token efficiency)
-                const prs = await context.github.getPullRequests(owner, repo, 'open', 5)
+                const prs = prsResult.status === 'fulfilled' ? prsResult.value : []
                 const openPrs = prs.map((pr) => ({
                     number: pr.number,
                     title: pr.title.slice(0, 50),
                     state: pr.state,
                 }))
 
-                // Get CI status from latest workflow run
-                const workflowRuns = await context.github.getWorkflowRuns(owner, repo, 5)
+                // CI status from workflow runs
+                const workflowRuns =
+                    workflowsResult.status === 'fulfilled' ? workflowsResult.value : []
                 let ciStatus: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown' =
                     'unknown'
                 let latestRun: { name: string; conclusion: string | null; headSha: string } | null =
@@ -112,21 +124,22 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                // Get Kanban summary if project 1 exists
+                // Kanban summary
                 let kanbanSummary: Record<string, number> | null = null
-                try {
-                    const kanban = await context.github.getProjectKanban(owner, 1, repo)
-                    if (kanban) {
-                        kanbanSummary = {}
-                        for (const col of kanban.columns) {
-                            kanbanSummary[col.status] = col.items.length
-                        }
+                if (kanbanResult.status === 'fulfilled' && kanbanResult.value) {
+                    kanbanSummary = {}
+                    for (const col of kanbanResult.value.columns) {
+                        kanbanSummary[col.status] = col.items.length
                     }
-                } catch {
-                    // Kanban not available
+                } else if (kanbanResult.status === 'rejected') {
+                    logger.debug('Failed to fetch Kanban board', {
+                        module: 'RESOURCE',
+                        operation: 'github-status',
+                        error: kanbanResult.reason,
+                    })
                 }
 
-                // Get milestone summary
+                // Milestone summary
                 let milestoneSummary:
                     | {
                           number: number
@@ -138,31 +151,31 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                           dueOn: string | null
                       }[]
                     | null = null
-                try {
-                    const milestones = await context.github.getMilestones(owner, repo, 'open', 5)
-                    if (milestones.length > 0) {
-                        milestoneSummary = milestones.map((ms) => {
-                            const total = ms.openIssues + ms.closedIssues
-                            const pct = total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
-                            return {
-                                number: ms.number,
-                                title: ms.title,
-                                state: ms.state,
-                                openIssues: ms.openIssues,
-                                closedIssues: ms.closedIssues,
-                                completionPercentage: pct,
-                                dueOn: ms.dueOn,
-                            }
-                        })
-                    }
-                } catch {
-                    // Milestones not available
+                if (milestoneResult.status === 'fulfilled' && milestoneResult.value.length > 0) {
+                    milestoneSummary = milestoneResult.value.map((ms) => {
+                        const pct = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
+                        return {
+                            number: ms.number,
+                            title: ms.title,
+                            state: ms.state,
+                            openIssues: ms.openIssues,
+                            closedIssues: ms.closedIssues,
+                            completionPercentage: pct,
+                            dueOn: ms.dueOn,
+                        }
+                    })
+                } else if (milestoneResult.status === 'rejected') {
+                    logger.debug('Failed to fetch milestones', {
+                        module: 'RESOURCE',
+                        operation: 'github-status',
+                        error: milestoneResult.reason,
+                    })
                 }
 
                 return {
                     data: {
                         repository: `${owner}/${repo}`,
-                        branch: repoInfo.branch,
+                        branch,
                         commit: commit?.slice(0, 7) ?? null,
                         ci: {
                             status: ciStatus,
@@ -196,37 +209,15 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 priority: 0.4,
             },
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const lastModified = new Date().toISOString()
+                const resolved = await resolveGitHubRepo(context.github)
+                if (isResourceError(resolved)) return resolved
+                const { owner, repo, lastModified, github } = resolved
 
-                if (!context.github) {
-                    return {
-                        data: {
-                            error: 'GitHub integration not available',
-                            hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
-                        },
-                        annotations: { lastModified },
-                    }
-                }
-
-                const repoInfo = await context.github.getRepoInfo()
-                const owner = repoInfo.owner
-                const repo = repoInfo.repo
-
-                if (!owner || !repo) {
-                    return {
-                        data: {
-                            error: 'Could not detect repository',
-                            hint: 'Set GITHUB_REPO_PATH to your git repository.',
-                        },
-                        annotations: { lastModified },
-                    }
-                }
-
-                const stats = await context.github.getRepoStats(owner, repo)
+                const stats = await github.getRepoStats(owner, repo)
 
                 let traffic: { clones14d: number; views14d: number } | null = null
                 try {
-                    const trafficData = await context.github.getTrafficData(owner, repo)
+                    const trafficData = await github.getTrafficData(owner, repo)
                     if (trafficData) {
                         traffic = {
                             clones14d: trafficData.clones.total,
@@ -265,38 +256,33 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 audience: ['assistant'],
                 priority: 0.6,
             },
-            handler: async (_uri: string, context: ResourceContext) => {
-                if (!context.github) {
-                    return {
-                        error: 'GitHub integration not available',
-                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
-                    }
-                }
+            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+                const resolved = await resolveGitHubRepo(context.github)
+                if (isResourceError(resolved)) return resolved
+                const { owner, repo, lastModified, github } = resolved
 
-                const repoInfo = await context.github.getRepoInfo()
-                const owner = repoInfo.owner
-                const repo = repoInfo.repo
-
-                if (!owner || !repo) {
-                    return {
-                        error: 'Could not detect repository',
-                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
-                    }
-                }
-
-                const milestones = await context.github.getMilestones(owner, repo, 'open', 20)
+                const milestones = await github.getMilestones(
+                    owner,
+                    repo,
+                    'open',
+                    RESOURCE_MILESTONE_LIMIT
+                )
                 const milestonesWithProgress = milestones.map((ms) => {
-                    const total = ms.openIssues + ms.closedIssues
-                    const completionPercentage =
-                        total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                    const completionPercentage = milestoneCompletionPct(
+                        ms.openIssues,
+                        ms.closedIssues
+                    )
                     return { ...ms, completionPercentage }
                 })
 
                 return {
-                    repository: `${owner}/${repo}`,
-                    milestones: milestonesWithProgress,
-                    count: milestonesWithProgress.length,
-                    hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                    data: {
+                        repository: `${owner}/${repo}`,
+                        milestones: milestonesWithProgress,
+                        count: milestonesWithProgress.length,
+                        hint: 'Use get_github_milestones tool for state filtering. Use memory://milestones/{number} for detail.',
+                    },
+                    annotations: { lastModified },
                 }
             },
         },
@@ -312,45 +298,42 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 audience: ['assistant'],
                 priority: 0.5,
             },
-            handler: async (uri: string, context: ResourceContext) => {
+            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
+                const lastModified = new Date().toISOString()
                 const match = /memory:\/\/milestones\/(\d+)/.exec(uri)
                 const milestoneNumber = match?.[1] ? parseInt(match[1], 10) : null
 
                 if (milestoneNumber === null) {
-                    return { error: 'Invalid milestone number' }
-                }
-
-                if (!context.github) {
                     return {
-                        error: 'GitHub integration not available',
-                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                        data: { error: 'Invalid milestone number' },
+                        annotations: { lastModified },
                     }
                 }
 
-                const repoInfo = await context.github.getRepoInfo()
-                const owner = repoInfo.owner
-                const repo = repoInfo.repo
+                const resolved = await resolveGitHubRepo(context.github)
+                if (isResourceError(resolved)) return resolved
+                const { owner, repo, github } = resolved
 
-                if (!owner || !repo) {
-                    return {
-                        error: 'Could not detect repository',
-                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
-                    }
-                }
-
-                const milestone = await context.github.getMilestone(owner, repo, milestoneNumber)
+                const milestone = await github.getMilestone(owner, repo, milestoneNumber)
                 if (!milestone) {
-                    return { error: `Milestone #${String(milestoneNumber)} not found` }
+                    return {
+                        data: { error: `Milestone #${String(milestoneNumber)} not found` },
+                        annotations: { lastModified },
+                    }
                 }
 
-                const total = milestone.openIssues + milestone.closedIssues
-                const completionPercentage =
-                    total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+                const completionPercentage = milestoneCompletionPct(
+                    milestone.openIssues,
+                    milestone.closedIssues
+                )
 
                 return {
-                    repository: `${owner}/${repo}`,
-                    milestone: { ...milestone, completionPercentage },
-                    hint: 'Use get_github_issues tool to list issues associated with this milestone.',
+                    data: {
+                        repository: `${owner}/${repo}`,
+                        milestone: { ...milestone, completionPercentage },
+                        hint: 'Use get_github_issues tool to list issues associated with this milestone.',
+                    },
+                    annotations: { lastModified },
                 }
             },
         },

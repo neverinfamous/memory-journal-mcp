@@ -22,6 +22,7 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         create: 'createEntry',
         get: 'getEntryById',
         recent: 'getRecentEntries',
+        getRecent: 'getRecentEntries',
         quick: 'createEntryMinimal',
         tags: 'listTags',
     },
@@ -99,10 +100,7 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.search.searchByDateRange({ start_date: "2026-03-01", end_date: "2026-03-11" })',
         'mj.search.semanticSearch({ query: "authentication patterns" })',
     ],
-    analytics: [
-        'mj.analytics.getStatistics()',
-        'mj.analytics.getCrossProjectInsights()',
-    ],
+    analytics: ['mj.analytics.getStatistics()', 'mj.analytics.getCrossProjectInsights()'],
     relationships: [
         'mj.relationships.linkEntries({ from_entry_id: 1, to_entry_id: 2, relationship_type: "implements" })',
         'mj.relationships.visualizeRelationships({ entry_id: 1 })',
@@ -114,7 +112,9 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
     admin: [
         'mj.admin.updateEntry({ entry_id: 1, content: "Updated content" })',
         'mj.admin.deleteEntry({ entry_id: 1 })',
+        'mj.admin.mergeTags({ source_tag: "old", target_tag: "new" })',
         'mj.admin.rebuildVectorIndex()',
+        'mj.admin.addToVectorIndex({ entry_id: 1 })',
     ],
     github: [
         'mj.github.getGithubIssues({ state: "open" })',

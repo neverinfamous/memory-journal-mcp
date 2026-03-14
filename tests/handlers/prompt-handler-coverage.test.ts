@@ -9,15 +9,15 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { execQuery, getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
 
 describe('Prompt Handlers - Coverage', () => {
-    let db: SqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-prompts-cov.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
         // Seed entries for query tests
         db.createEntry({ content: 'Prompt test entry 1', tags: ['prompt-test'] })
@@ -92,7 +92,9 @@ describe('Prompt Handlers - Coverage', () => {
 
     describe('getPrompt', () => {
         it('should throw for unknown prompt name', () => {
-            expect(() => getPrompt('nonexistent_prompt', {}, db)).toThrow('Unknown prompt')
+            expect(() => getPrompt('nonexistent_prompt', {}, db)).toThrow(
+                'Prompt not found: nonexistent_prompt'
+            )
         })
 
         it('should return messages for a valid prompt', () => {

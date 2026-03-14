@@ -6,8 +6,8 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
-import type { GitHubIntegration } from '../../../github/GitHubIntegration.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { relaxedNumber } from '../schemas.js'
 import {
     GitHubIssuesListOutputSchema,
     GitHubIssueResultOutputSchema,
@@ -15,55 +15,7 @@ import {
     GitHubPRResultOutputSchema,
     GitHubContextOutputSchema,
 } from './schemas.js'
-
-// ============================================================================
-// Helper: owner/repo resolution with "STOP" pattern
-// ============================================================================
-
-async function resolveOwnerRepo(
-    context: ToolContext,
-    input: { owner?: string; repo?: string },
-    entityLabel: string
-): Promise<
-    | {
-          owner: string
-          repo: string
-          detectedOwner: string | null
-          detectedRepo: string | null
-          github: GitHubIntegration
-      }
-    | { error: true; response: Record<string, unknown> }
-> {
-    if (!context.github) {
-        return {
-            error: true,
-            response: { success: false, error: 'GitHub integration not available' },
-        }
-    }
-
-    const repoInfo = await context.github.getRepoInfo()
-    const detectedOwner = repoInfo.owner
-    const detectedRepo = repoInfo.repo
-
-    const owner = input.owner ?? detectedOwner ?? undefined
-    const repo = input.repo ?? detectedRepo ?? undefined
-
-    if (!owner || !repo) {
-        return {
-            error: true,
-            response: {
-                success: false,
-                error: `STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.`,
-                requiresUserInput: true,
-                detectedOwner,
-                detectedRepo,
-                instruction: `Ask the user: "What GitHub repository ${entityLabel}? Please provide the owner and repo name (e.g., owner/repo)."`,
-            },
-        }
-    }
-
-    return { owner, repo, detectedOwner, detectedRepo, github: context.github }
-}
+import { resolveOwnerRepo } from './helpers.js'
 
 // ============================================================================
 // Tool Definitions
@@ -91,7 +43,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
                     ),
                 state: z.string().optional().default('open'),
-                limit: z.number().optional().default(20),
+                limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubIssuesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -152,7 +104,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
                     ),
                 state: z.string().optional().default('open'),
-                limit: z.number().optional().default(20),
+                limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubPRsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -305,7 +257,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).',
             group: 'github',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: GitHubContextOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
             handler: async (_params: unknown) => {

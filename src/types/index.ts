@@ -5,9 +5,9 @@
  * that depend on external imports (SqliteAdapter, VectorSearchManager, etc.).
  */
 
-import type { SqliteAdapter } from '../database/SqliteAdapter.js'
-import type { VectorSearchManager } from '../vector/VectorSearchManager.js'
-import type { GitHubIntegration } from '../github/GitHubIntegration.js'
+import type { IDatabaseAdapter } from '../database/core/interfaces.js'
+import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import type { GitHubIntegration } from '../github/github-integration/index.js'
 import type { ProgressContext } from '../utils/progress-utils.js'
 
 // Re-export sub-module types
@@ -144,6 +144,19 @@ export interface ToolDefinition {
 }
 
 /**
+ * Shape returned by `getTools()` for MCP SDK registration.
+ * Derived from `ToolDefinition` but excludes internal fields (group, handler).
+ */
+export interface ToolRegistration {
+    name: string
+    description: string
+    inputSchema: unknown
+    outputSchema?: unknown
+    annotations: ToolAnnotations
+    icons?: { iconUrl: string; title: string; description: string }
+}
+
+/**
  * Tool handler configuration options
  */
 export interface ToolHandlerConfig {
@@ -156,9 +169,9 @@ export interface ToolHandlerConfig {
  */
 export interface ToolContext {
     /** Database adapter */
-    db: SqliteAdapter
+    db: IDatabaseAdapter
     /** Team database adapter (optional, requires TEAM_DB_PATH) */
-    teamDb?: SqliteAdapter
+    teamDb?: IDatabaseAdapter
     /** Vector search manager (optional) */
     vectorManager?: VectorSearchManager
     /** GitHub integration (optional) */
@@ -247,6 +260,9 @@ export interface ServerConfig {
 
     /** Sentence transformer model name */
     modelName: string
+
+    /** Briefing depth for AI client instructions */
+    instructionLevel?: 'essential' | 'standard' | 'full'
 }
 
 /**

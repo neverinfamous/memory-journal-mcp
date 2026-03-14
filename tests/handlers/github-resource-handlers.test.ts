@@ -6,8 +6,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
-import type { GitHubIntegration } from '../../src/github/GitHubIntegration.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import type { GitHubIntegration } from '../../src/github/github-integration.js'
 
 /**
  * Creates a minimal mock GitHubIntegration with sensible defaults.
@@ -103,11 +103,11 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
 }
 
 describe('GitHub Resource Handlers', () => {
-    let db: SqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-gh-resources.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
 
@@ -356,17 +356,11 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as {
-                format: string
-                diagram: string
-                projectNumber: number
-                totalItems: number
-            }
+            const data = result.data as string
 
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('graph LR')
-            expect(data.diagram).toContain('Done')
-            expect(data.totalItems).toBe(1)
+            expect(typeof data).toBe('string')
+            expect(data).toContain('graph LR')
+            expect(data).toContain('Done')
         })
 
         it('should show fallback when no github', async () => {
@@ -378,9 +372,8 @@ describe('GitHub Resource Handlers', () => {
                 null
             )
 
-            const data = result.data as { format: string; diagram: string }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('NoGitHub')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoGitHub')
         })
     })
 
@@ -569,15 +562,10 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as {
-                format: string
-                diagram: string
-                workflowRunCount: number
-            }
+            const data = result.data as string
 
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('graph LR')
-            expect(data.workflowRunCount).toBe(1)
+            expect(typeof data).toBe('string')
+            expect(data).toContain('graph LR')
         })
 
         it('should return fallback when no github', async () => {
@@ -589,8 +577,8 @@ describe('GitHub Resource Handlers', () => {
                 null
             )
 
-            const data = result.data as { format: string; diagram: string; message: string }
-            expect(data.diagram).toContain('NoGitHub')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoGitHub')
         })
 
         it('should return fallback when no repo detected', async () => {
@@ -606,8 +594,8 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as { diagram: string }
-            expect(data.diagram).toContain('NoRepo')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoRepo')
         })
 
         it('should return fallback when no workflow runs', async () => {
@@ -623,8 +611,8 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as { diagram: string }
-            expect(data.diagram).toContain('NoRuns')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoRuns')
         })
     })
 
@@ -765,7 +753,7 @@ describe('GitHub Resource Handlers', () => {
     describe('memory://health', () => {
         it('should return health status with vector and scheduler info', async () => {
             const mockVectorManager = {
-                getStats: vi.fn().mockResolvedValue({
+                getStats: vi.fn().mockReturnValue({
                     itemCount: 50,
                     modelName: 'test-model',
                     dimensions: 384,
@@ -802,7 +790,9 @@ describe('GitHub Resource Handlers', () => {
 
         it('should handle vector manager error gracefully', async () => {
             const mockVectorManager = {
-                getStats: vi.fn().mockRejectedValue(new Error('Not initialized')),
+                getStats: vi.fn().mockImplementation(() => {
+                    throw new Error('Not initialized')
+                }),
             }
 
             const result = await readResource(

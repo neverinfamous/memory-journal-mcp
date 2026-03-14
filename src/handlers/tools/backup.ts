@@ -9,19 +9,23 @@ import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { relaxedNumber } from './schemas.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import { logger } from '../../utils/logger.js'
 
 // ============================================================================
 // Output Schemas
 // ============================================================================
 
-const BackupResultOutputSchema = z.object({
-    success: z.boolean(),
-    message: z.string().optional(),
-    filename: z.string().optional(),
-    path: z.string().optional(),
-    sizeBytes: z.number().optional(),
-    error: z.string().optional(),
-})
+const BackupResultOutputSchema = z
+    .object({
+        success: z.boolean(),
+        message: z.string().optional(),
+        filename: z.string().optional(),
+        path: z.string().optional(),
+        sizeBytes: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 const BackupInfoSchema = z.object({
     filename: z.string(),
@@ -30,39 +34,45 @@ const BackupInfoSchema = z.object({
     createdAt: z.string(),
 })
 
-const BackupsListOutputSchema = z.object({
-    success: z.boolean().optional(),
-    backups: z.array(BackupInfoSchema).optional(),
-    total: z.number().optional(),
-    backupsDirectory: z.string().optional(),
-    hint: z.string().optional(),
-    error: z.string().optional(),
-})
+const BackupsListOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        backups: z.array(BackupInfoSchema).optional(),
+        total: z.number().optional(),
+        backupsDirectory: z.string().optional(),
+        hint: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const RestoreResultOutputSchema = z.object({
-    success: z.boolean(),
-    message: z.string().optional(),
-    restoredFrom: z.string().optional(),
-    previousEntryCount: z.number().optional(),
-    newEntryCount: z.number().optional(),
-    warning: z.string().optional(),
-    revertedChanges: z
-        .object({
-            tagMerges: z.string().optional(),
-            entries: z.string().optional(),
-        })
-        .optional(),
-    error: z.string().optional(),
-})
+const RestoreResultOutputSchema = z
+    .object({
+        success: z.boolean(),
+        message: z.string().optional(),
+        restoredFrom: z.string().optional(),
+        previousEntryCount: z.number().optional(),
+        newEntryCount: z.number().optional(),
+        warning: z.string().optional(),
+        revertedChanges: z
+            .object({
+                tagMerges: z.string().optional(),
+                entries: z.string().optional(),
+            })
+            .optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const CleanupBackupsOutputSchema = z.object({
-    success: z.boolean(),
-    deleted: z.array(z.string()).optional(),
-    deletedCount: z.number().optional(),
-    keptCount: z.number().optional(),
-    message: z.string().optional(),
-    error: z.string().optional(),
-})
+const CleanupBackupsOutputSchema = z
+    .object({
+        success: z.boolean(),
+        deleted: z.array(z.string()).optional(),
+        deletedCount: z.number().optional(),
+        keptCount: z.number().optional(),
+        message: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -84,15 +94,15 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Custom backup name (optional, defaults to timestamp)'),
             }),
             outputSchema: BackupResultOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true },
-            handler: (params: unknown) => {
+            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            handler: async (params: unknown) => {
                 try {
                     const input = z
                         .object({
                             name: z.string().optional(),
                         })
                         .parse(params)
-                    const result = db.exportToFile(input.name)
+                    const result = await db.exportToFile(input.name)
                     return {
                         success: true,
                         message: `Backup created successfully`,
@@ -110,9 +120,9 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             title: 'List Journal Backups',
             description: 'List all available backup files with their sizes and creation dates',
             group: 'backup',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: BackupsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (_params: unknown) => {
                 try {
                     const backups = db.listBackups()
@@ -145,7 +155,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Must be set to true to confirm the restore operation'),
             }),
             outputSchema: RestoreResultOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true },
+            annotations: {
+                readOnlyHint: false,
+                idempotentHint: false,
+                destructiveHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -175,8 +190,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                                     message: 'Restore complete',
                                 },
                             })
-                        } catch {
-                            // Best-effort notification
+                        } catch (error) {
+                            logger.debug('Failed to send restore progress notification', {
+                                module: 'TOOL',
+                                operation: 'restore-backup',
+                                error,
+                            })
                         }
                     }
 
@@ -214,7 +233,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Number of most recent backups to keep (default: 5)'),
             }),
             outputSchema: CleanupBackupsOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { keep_count } = z

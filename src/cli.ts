@@ -1,6 +1,6 @@
 import { Command } from 'commander'
 import * as fs from 'node:fs'
-import { createServer } from './server/McpServer.js'
+import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
 import pkg from '../package.json' with { type: 'json' }
 
@@ -31,20 +31,13 @@ program
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost)')
     .option('--stateless', 'Use stateless HTTP mode (no session management)')
-    .option(
-        '--db <path>',
-        'Database path (env: DB_PATH)',
-        defaultDbPath
-    )
-    .option(
-        '--team-db <path>',
-        'Team database path (env: TEAM_DB_PATH)',
-        defaultTeamDbPath
-    )
+    .option('--db <path>', 'Database path (env: DB_PATH)', defaultDbPath)
+    .option('--team-db <path>', 'Team database path (env: TEAM_DB_PATH)', defaultTeamDbPath)
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
     .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: *)')
+    .option('--enable-hsts', 'Enable HSTS header for HTTP transport (use when behind HTTPS)')
     .option(
         '--auth-token <token>',
         'Bearer token for HTTP transport authentication (env: MCP_AUTH_TOKEN)'
@@ -79,6 +72,11 @@ program
         '--oauth-clock-tolerance <seconds>',
         'OAuth clock tolerance in seconds (default: 60)',
         '60'
+    )
+    .option(
+        '--instruction-level <level>',
+        'Briefing depth: essential, standard, full (env: INSTRUCTION_LEVEL)',
+        'standard'
     )
     // Briefing configuration
     .option(
@@ -137,6 +135,7 @@ program
             defaultProject: string
             autoRebuildIndex?: boolean
             corsOrigin?: string
+            enableHsts?: boolean
             authToken?: string
             logLevel: string
             backupInterval: string
@@ -159,6 +158,7 @@ program
             briefingWorkflows: string
             briefingWorkflowStatus?: boolean
             briefingCopilot?: boolean
+            instructionLevel: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -195,6 +195,7 @@ program
                     corsOrigins: options.corsOrigin
                         ? options.corsOrigin.split(',').map((s) => s.trim())
                         : undefined,
+                    enableHSTS: options.enableHsts ?? process.env['MCP_ENABLE_HSTS'] === 'true',
                     authToken: options.authToken,
                     scheduler: {
                         backupIntervalMinutes: parseInt(options.backupInterval, 10),
@@ -204,8 +205,7 @@ program
                     },
                     sandboxMode: options.sandboxMode as 'vm' | 'worker',
                     // OAuth 2.1
-                    oauthEnabled:
-                        options.oauthEnabled ?? process.env['OAUTH_ENABLED'] === 'true',
+                    oauthEnabled: options.oauthEnabled ?? process.env['OAUTH_ENABLED'] === 'true',
                     oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],
                     oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
@@ -245,6 +245,12 @@ program
                             options.briefingCopilot ??
                             process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
                     },
+                    instructionLevel: (options.instructionLevel !== 'standard'
+                        ? options.instructionLevel
+                        : (process.env['INSTRUCTION_LEVEL'] ?? 'standard')) as
+                        | 'essential'
+                        | 'standard'
+                        | 'full',
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

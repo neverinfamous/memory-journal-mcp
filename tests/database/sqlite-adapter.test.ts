@@ -1,20 +1,20 @@
 /**
- * SqliteAdapter Tests
+ * DatabaseAdapter Tests
  *
  * Functional tests for database adapter methods not covered by
  * tests/security/sql-injection.test.ts.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { RelationshipType } from '../../src/types/index.js'
 
-describe('SqliteAdapter', () => {
-    let db: SqliteAdapter
+describe('DatabaseAdapter', () => {
+    let db: DatabaseAdapter
     const testDbPath = './test-adapter.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
 
@@ -41,7 +41,7 @@ describe('SqliteAdapter', () => {
         })
 
         it('should throw when accessing uninitalized db', async () => {
-            const uninit = new SqliteAdapter('./uninit-test.db')
+            const uninit = new DatabaseAdapter('./uninit-test.db')
             expect(() => uninit.getActiveEntryCount()).toThrow('Database not initialized')
         })
     })
@@ -386,7 +386,7 @@ describe('SqliteAdapter', () => {
 
         it('should throw when merging nonexistent source tag', () => {
             expect(() => db.mergeTags('nonexistent-tag-xyz', 'any-target')).toThrow(
-                'Source tag not found'
+                'Tag not found: nonexistent-tag-xyz'
             )
         })
     })
@@ -484,8 +484,8 @@ describe('SqliteAdapter', () => {
     // ========================================================================
 
     describe('backup operations', () => {
-        it('should export to backup file', () => {
-            const backup = db.exportToFile('test-backup')
+        it('should export to backup file', async () => {
+            const backup = await db.exportToFile('test-backup')
 
             expect(backup.filename).toContain('test-backup')
             expect(backup.sizeBytes).toBeGreaterThan(0)
@@ -497,8 +497,8 @@ describe('SqliteAdapter', () => {
             }
         })
 
-        it('should list backup files', () => {
-            const backup = db.exportToFile('list-test')
+        it('should list backup files', async () => {
+            const backup = await db.exportToFile('list-test')
             const backups = db.listBackups()
 
             expect(backups.length).toBeGreaterThan(0)
@@ -511,7 +511,7 @@ describe('SqliteAdapter', () => {
             }
         })
 
-        it('should delete old backups keeping only keepCount', () => {
+        it('should delete old backups keeping only keepCount', async () => {
             const fs = require('node:fs')
 
             // Clean up any pre-existing backups from other tests
@@ -521,9 +521,9 @@ describe('SqliteAdapter', () => {
             }
 
             // Create 3 backups
-            const b1 = db.exportToFile('cleanup-1')
-            const b2 = db.exportToFile('cleanup-2')
-            const b3 = db.exportToFile('cleanup-3')
+            const b1 = await db.exportToFile('cleanup-1')
+            const b2 = await db.exportToFile('cleanup-2')
+            const b3 = await db.exportToFile('cleanup-3')
 
             // Keep only 1 newest
             db.deleteOldBackups(1)
@@ -543,7 +543,7 @@ describe('SqliteAdapter', () => {
             // Create an entry and backup
             db.createEntry({ content: 'Before restore test' })
             const countBefore = db.getActiveEntryCount()
-            const backup = db.exportToFile('restore-test')
+            const backup = await db.exportToFile('restore-test')
 
             // Create more entries after backup
             db.createEntry({ content: 'After backup 1' })
@@ -577,7 +577,7 @@ describe('SqliteAdapter', () => {
 
     describe('close', () => {
         it('should close without error', () => {
-            const tempDb = new SqliteAdapter('./test-close.db')
+            const tempDb = new DatabaseAdapter('./test-close.db')
             // Close without init should not throw
             tempDb.close()
         })
@@ -664,7 +664,7 @@ describe('SqliteAdapter', () => {
             }
 
             // Use a fresh adapter in a unique directory so its 'backups' dir doesn't exist
-            const tempDb = new SqliteAdapter(`${isolatedDir}/test-no-backups.db`)
+            const tempDb = new DatabaseAdapter(`${isolatedDir}/test-no-backups.db`)
             tempDb.initialize()
 
             const backups = tempDb.listBackups()
@@ -683,7 +683,7 @@ describe('SqliteAdapter', () => {
 
         it('should throw when restoring from non-existent backup file', async () => {
             await expect(db.restoreFromFile('nonexistent-backup.db')).rejects.toThrow(
-                'Backup file not found'
+                'Backup not found: nonexistent-backup.db'
             )
         })
     })

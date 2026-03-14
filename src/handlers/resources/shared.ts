@@ -4,12 +4,76 @@
  * Shared types, helpers, and utilities used by all resource group modules.
  */
 
-import type { SqliteAdapter } from '../../database/SqliteAdapter.js'
-import type { VectorSearchManager } from '../../vector/VectorSearchManager.js'
-import type { ToolFilterConfig } from '../../filtering/ToolFilter.js'
+import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
+import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
+import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon } from '../../types/index.js'
-import type { GitHubIntegration } from '../../github/GitHubIntegration.js'
-import type { Scheduler } from '../../server/Scheduler.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
+import type { Scheduler } from '../../server/scheduler.js'
+
+// ============================================================================
+// GitHub Resource Guard
+// ============================================================================
+
+/** Successful result from resolveGitHubRepo */
+export interface GitHubRepoResolved {
+    owner: string
+    repo: string
+    branch: string | null
+    lastModified: string
+    /** Narrowed non-null reference — safe to use without `!` after guard */
+    github: GitHubIntegration
+}
+
+/**
+ * Resolve GitHub owner/repo or return a ResourceResult error.
+ *
+ * Encapsulates the three-step guard pattern used by all GitHub resource
+ * handlers: check github integration → getRepoInfo → validate owner/repo.
+ *
+ * @returns Resolved repo info, or a ResourceResult error to return directly
+ */
+export async function resolveGitHubRepo(
+    github: GitHubIntegration | null | undefined
+): Promise<GitHubRepoResolved | ResourceResult> {
+    const lastModified = new Date().toISOString()
+
+    if (!github) {
+        return {
+            data: {
+                error: 'GitHub integration not available',
+                hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+            },
+            annotations: { lastModified },
+        }
+    }
+
+    const repoInfo = await github.getRepoInfo()
+    const owner = repoInfo.owner
+    const repo = repoInfo.repo
+
+    if (!owner || !repo) {
+        return {
+            data: {
+                error: 'Could not detect repository',
+                hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                ...(repoInfo.branch ? { branch: repoInfo.branch } : {}),
+            },
+            annotations: { lastModified },
+        }
+    }
+
+    return { owner, repo, branch: repoInfo.branch ?? null, lastModified, github }
+}
+
+/**
+ * Type guard: returns true if the result is a ResourceResult error.
+ */
+export function isResourceError(
+    result: GitHubRepoResolved | ResourceResult
+): result is ResourceResult {
+    return 'data' in result
+}
 
 /**
  * Configuration for the memory://briefing resource.
@@ -54,8 +118,8 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
  * Resource context for handlers that need extended access
  */
 export interface ResourceContext {
-    db: SqliteAdapter
-    teamDb?: SqliteAdapter
+    db: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter
     vectorManager?: VectorSearchManager
     filterConfig?: ToolFilterConfig | null
     github?: GitHubIntegration | null
@@ -97,12 +161,11 @@ export interface InternalResourceDef {
  * Execute a raw SQL query on the database
  */
 export function execQuery(
-    db: SqliteAdapter,
+    db: IDatabaseAdapter,
     sql: string,
     params: unknown[] = []
 ): Record<string, unknown>[] {
-    const rawDb = db.getRawDb()
-    const result = rawDb.exec(sql, params)
+    const result = db.executeRawQuery(sql, params)
     if (result.length === 0) return []
 
     const columns = result[0]?.columns ?? []
@@ -140,4 +203,13 @@ export function transformEntryRow(row: Record<string, unknown>): Record<string, 
         workflowName: row['workflow_name'] ?? null,
         workflowStatus: row['workflow_status'] ?? null,
     }
+}
+
+/**
+ * Calculate milestone completion percentage from open/closed issue counts.
+ * Shared helper to avoid duplicated logic across resource handlers.
+ */
+export function milestoneCompletionPct(openIssues: number, closedIssues: number): number {
+    const total = openIssues + closedIssues
+    return total > 0 ? Math.round((closedIssues / total) * 100) : 0
 }

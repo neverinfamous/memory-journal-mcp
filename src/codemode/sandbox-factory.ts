@@ -8,6 +8,7 @@
 import { CodeModeSandbox, SandboxPool } from './sandbox.js'
 import { WorkerSandbox, WorkerSandboxPool } from './worker-sandbox.js'
 import type { SandboxOptions, PoolOptions, SandboxResult } from './types.js'
+import { ConfigurationError } from '../types/errors.js'
 
 // =============================================================================
 // Types
@@ -18,12 +19,20 @@ export type SandboxMode = 'vm' | 'worker'
 
 /** Common sandbox interface */
 export interface ISandbox {
-    execute(code: string, bindings: Record<string, unknown>, timeoutMs?: number): Promise<SandboxResult>
+    execute(
+        code: string,
+        bindings: Record<string, unknown>,
+        timeoutMs?: number
+    ): Promise<SandboxResult>
 }
 
 /** Common pool interface */
 export interface ISandboxPool {
-    execute(code: string, bindings: Record<string, unknown>, timeoutMs?: number): Promise<SandboxResult>
+    execute(
+        code: string,
+        bindings: Record<string, unknown>,
+        timeoutMs?: number
+    ): Promise<SandboxResult>
     getActiveCount(): number
     readonly poolId: string
 }
@@ -70,10 +79,7 @@ export function getAvailableSandboxModes(): SandboxMode[] {
 /**
  * Create a sandbox instance for the specified mode.
  */
-export function createSandbox(
-    mode?: SandboxMode,
-    options?: SandboxOptions,
-): ISandbox {
+export function createSandbox(mode?: SandboxMode, options?: SandboxOptions): ISandbox {
     const resolvedMode = mode ?? defaultMode
 
     switch (resolvedMode) {
@@ -82,7 +88,7 @@ export function createSandbox(
         case 'worker':
             return new WorkerSandbox(options)
         default:
-            throw new Error(`Unknown sandbox mode: ${String(resolvedMode)}`)
+            throw new ConfigurationError(`Unknown sandbox mode: ${String(resolvedMode)}`)
     }
 }
 
@@ -92,7 +98,7 @@ export function createSandbox(
 export function createSandboxPool(
     mode?: SandboxMode,
     sandboxOptions?: SandboxOptions,
-    poolOptions?: PoolOptions,
+    poolOptions?: PoolOptions
 ): ISandboxPool {
     const resolvedMode = mode ?? defaultMode
 
@@ -102,7 +108,7 @@ export function createSandboxPool(
         case 'worker':
             return new WorkerSandboxPool(sandboxOptions, poolOptions)
         default:
-            throw new Error(`Unknown sandbox mode: ${String(resolvedMode)}`)
+            throw new ConfigurationError(`Unknown sandbox mode: ${String(resolvedMode)}`)
     }
 }
 
@@ -120,7 +126,8 @@ export function getSandboxModeInfo(mode?: SandboxMode): SandboxModeInfo {
         case 'vm':
             return {
                 mode: 'vm',
-                description: 'VM-based sandbox using node:vm (lightweight, not a true security boundary)',
+                description:
+                    'VM-based sandbox using node:vm (lightweight, not a true security boundary)',
                 securityLevel: 'basic',
                 isolation: 'Script-level context isolation via vm.createContext',
             }
@@ -132,6 +139,6 @@ export function getSandboxModeInfo(mode?: SandboxMode): SandboxModeInfo {
                 isolation: 'Process-level V8 isolate with resource limits and MessagePort RPC',
             }
         default:
-            throw new Error(`Unknown sandbox mode: ${String(resolvedMode)}`)
+            throw new ConfigurationError(`Unknown sandbox mode: ${String(resolvedMode)}`)
     }
 }

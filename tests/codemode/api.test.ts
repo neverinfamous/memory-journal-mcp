@@ -22,7 +22,7 @@ import type { ToolDefinition } from '../../src/types/index.js'
 function createMockTool(
     name: string,
     group: string,
-    handler?: (params: unknown) => unknown,
+    handler?: (params: unknown) => unknown
 ): ToolDefinition {
     return {
         name,

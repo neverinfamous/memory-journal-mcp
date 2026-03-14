@@ -6,19 +6,19 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Team Resource Handlers', () => {
-    let personalDb: SqliteAdapter
-    let teamDb: SqliteAdapter
+    let personalDb: DatabaseAdapter
+    let teamDb: DatabaseAdapter
     const personalDbPath = './test-team-resources-personal.db'
     const teamDbPath = './test-team-resources-team.db'
 
     beforeAll(async () => {
-        personalDb = new SqliteAdapter(personalDbPath)
+        personalDb = new DatabaseAdapter(personalDbPath)
         await personalDb.initialize()
 
-        teamDb = new SqliteAdapter(teamDbPath)
+        teamDb = new DatabaseAdapter(teamDbPath)
         await teamDb.initialize()
         teamDb.applyTeamSchema()
 
@@ -30,9 +30,14 @@ describe('Team Resource Handlers', () => {
         const entry2 = teamDb.createEntry({ content: 'Team resource test beta' })
 
         // Set author on entries via raw SQL
-        const rawDb = teamDb.getRawDb()
-        rawDb.run('UPDATE memory_journal SET author = ? WHERE id = ?', ['Alice', entry1.id])
-        rawDb.run('UPDATE memory_journal SET author = ? WHERE id = ?', ['Bob', entry2.id])
+        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+            'Alice',
+            entry1.id,
+        ])
+        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+            'Bob',
+            entry2.id,
+        ])
     })
 
     afterAll(() => {

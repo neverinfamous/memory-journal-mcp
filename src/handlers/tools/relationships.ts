@@ -8,6 +8,8 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext, RelationshipType } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import type { QueryResult } from '../../database/core/interfaces.js'
 
 // ============================================================================
 // Input Schemas
@@ -65,31 +67,35 @@ const VisualizeInputSchemaMcp = z.object({
 // Output Schemas
 // ============================================================================
 
-const LinkEntriesOutputSchema = z.object({
-    success: z.boolean().optional(),
-    relationship: RelationshipOutputSchema.optional(),
-    duplicate: z.boolean().optional().describe('True if relationship already existed'),
-    message: z.string().optional().describe('Additional context about the operation'),
-    error: z.string().optional(),
-})
+const LinkEntriesOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        relationship: RelationshipOutputSchema.optional(),
+        duplicate: z.boolean().optional().describe('True if relationship already existed'),
+        message: z.string().optional().describe('Additional context about the operation'),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const VisualizationOutputSchema = z.object({
-    entry_count: z.number().optional(),
-    relationship_count: z.number().optional(),
-    root_entry: z.number().nullable().optional(),
-    depth: z.number().optional(),
-    mermaid: z.string().nullable().optional(),
-    message: z.string().optional(),
-    legend: z
-        .object({
-            blue: z.string(),
-            orange: z.string(),
-            arrows: z.record(z.string(), z.string()),
-        })
-        .optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-})
+const VisualizationOutputSchema = z
+    .object({
+        entry_count: z.number().optional(),
+        relationship_count: z.number().optional(),
+        root_entry: z.number().nullable().optional(),
+        depth: z.number().optional(),
+        mermaid: z.string().nullable().optional(),
+        message: z.string().optional(),
+        legend: z
+            .object({
+                blue: z.string(),
+                orange: z.string(),
+                arrows: z.record(z.string(), z.string()),
+            })
+            .optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -105,7 +111,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             group: 'relationships',
             inputSchema: LinkEntriesSchemaMcp,
             outputSchema: LinkEntriesOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = LinkEntriesSchema.parse(params)
@@ -147,6 +153,8 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     })()
 
                     if (input) {
+                        const errMsg = error instanceof Error ? error.message : 'Unknown error'
+                        const isFkError = errMsg.includes('FOREIGN KEY constraint failed')
                         return {
                             success: false,
                             relationship: {
@@ -157,7 +165,9 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                                 description: input.description ?? null,
                                 createdAt: '',
                             },
-                            message: error instanceof Error ? error.message : 'Unknown error',
+                            message: isFkError
+                                ? `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`
+                                : errMsg,
                         }
                     }
                     return formatHandlerError(error)
@@ -171,13 +181,11 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             group: 'relationships',
             inputSchema: VisualizeInputSchemaMcp,
             outputSchema: VisualizationOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(params)
-
-                    const rawDb = db.getRawDb()
-                    let entriesResult
+                    let entriesResult: QueryResult[]
 
                     if (input.entry_id !== undefined) {
                         const entry = db.getEntryById(input.entry_id)
@@ -192,7 +200,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        entriesResult = rawDb.exec(
+                        entriesResult = db.executeRawQuery(
                             `
                             WITH RECURSIVE connected_entries(id, distance) AS (
                                 SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
@@ -217,7 +225,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         )
                     } else if (input.tags && input.tags.length > 0) {
                         const placeholders = input.tags.map(() => '?').join(',')
-                        entriesResult = rawDb.exec(
+                        entriesResult = db.executeRawQuery(
                             `
                             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                             FROM memory_journal mj
@@ -232,7 +240,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             [...input.tags, input.limit]
                         )
                     } else {
-                        entriesResult = rawDb.exec(
+                        entriesResult = db.executeRawQuery(
                             `
                             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                             FROM memory_journal mj
@@ -284,7 +292,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const entryIds = Object.keys(entries).map(Number)
                     const placeholders = entryIds.map(() => '?').join(',')
 
-                    const relsResult = rawDb.exec(
+                    const relsResult = db.executeRawQuery(
                         `
                         SELECT from_entry_id, to_entry_id, relationship_type
                         FROM relationships
@@ -297,11 +305,15 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const relationships = relsResult[0]?.values ?? []
 
                     // Generate Mermaid diagram
+                    const MERMAID_CONTENT_PREVIEW_LENGTH = 40
                     let mermaid = '```mermaid\\ngraph TD\\n'
 
                     for (const [idStr, entry] of Object.entries(entries)) {
-                        let contentPreview = entry.content.slice(0, 40).replace(/\\n/g, ' ')
-                        if (entry.content.length > 40) contentPreview += '...'
+                        let contentPreview = entry.content
+                            .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
+                            .replace(/\\n/g, ' ')
+                        if (entry.content.length > MERMAID_CONTENT_PREVIEW_LENGTH)
+                            contentPreview += '...'
                         contentPreview = contentPreview
                             .replace(/"/g, "'")
                             .replace(/\[/g, '(')

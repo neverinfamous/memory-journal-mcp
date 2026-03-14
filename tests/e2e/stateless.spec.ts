@@ -6,60 +6,18 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { type ChildProcess, spawn } from 'node:child_process'
-import { setTimeout as delay } from 'node:timers/promises'
+import { startServer, stopServer } from './helpers.js'
 
 const STATELESS_PORT = 3102
 const STATELESS_BASE = `http://localhost:${STATELESS_PORT}`
 
-let serverProcess: ChildProcess | null = null
-
-async function startStatelessServer(): Promise<void> {
-    serverProcess = spawn(
-        'node',
-        [
-            'dist/cli.js',
-            '--transport',
-            'http',
-            '--port',
-            String(STATELESS_PORT),
-            '--db',
-            './test-server/test-e2e-stateless.db',
-            '--stateless',
-        ],
-        {
-            cwd: process.cwd(),
-            stdio: 'pipe',
-        }
-    )
-
-    const maxAttempts = 30
-    for (let i = 0; i < maxAttempts; i++) {
-        try {
-            const res = await fetch(`${STATELESS_BASE}/health`)
-            if (res.ok) return
-        } catch {
-            // Server not ready yet
-        }
-        await delay(500)
-    }
-    throw new Error('Stateless server did not start within timeout')
-}
-
-function stopStatelessServer(): void {
-    if (serverProcess) {
-        serverProcess.kill('SIGTERM')
-        serverProcess = null
-    }
-}
-
 test.describe('Stateless HTTP Mode', () => {
     test.beforeAll(async () => {
-        await startStatelessServer()
+        await startServer(STATELESS_PORT, ['--stateless'], 'stateless')
     })
 
     test.afterAll(() => {
-        stopStatelessServer()
+        stopServer(STATELESS_PORT)
     })
 
     test('POST /mcp should accept requests without session ID (stateless)', async () => {

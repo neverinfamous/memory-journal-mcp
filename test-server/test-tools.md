@@ -1,8 +1,8 @@
 # Test memory-journal-mcp — Pass 1: Core Functionality
 
-Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below.
+Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented below.**
 
-**Scope:** 44 tools, 22 resources (15 static + 7 templates) — this pass covers happy paths, core error paths, and feature verification (Phases 1-10). Skip Phase 8 (prompts require manual user testing).
+**Scope:** 44 tools, 22 resources (15 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-10).
 
 **Constraints:**
 
@@ -12,9 +12,9 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found, including changes to `ServerInstructions.md`/`ServerInstructions.ts` or this file (`test-server/test-tools.md`).
+1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately.
-3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `CHANGELOG.md` (no duplicate headers), and commit without pushing.
+3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
 5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
 
@@ -22,7 +22,61 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 > **Test Session Prerequisites**
 
 1. The server instructions are auto-injected by the MCP protocol. Confirm receipt (no need to read `memory://instructions` separately).
-2. Read `memory://briefing` to confirm context loaded (the briefing table confirms receipt).
+2. Confirm `memory://briefing` was auto-received and **present the `userMessage` to the user as a formatted bullet list of key facts as the server instructions required:**. Detailed briefing testing is below in Phase 1.2.
+
+---
+
+## Phase 0: Seed Test Data
+
+> [!IMPORTANT]
+> Create these entries **before Phase 2** to ensure FTS5, filter, semantic search, and relationship tests have matching data. Each entry is mapped to the test cases it enables.
+>
+> **Do NOT skip this phase** — without it, many Phase 3 search tests will return empty results and won't validate the underlying feature.
+
+### 0.1 FTS5 Content Entries
+
+These entries ensure every FTS5 query pattern in Phase 3.1 returns actual results.
+
+| #   | Tool           | Params                                                                                                                                                                                              | Enables Tests                                                      |
+| --- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| S1  | `create_entry` | `content: "Redesigned the authentication architecture for the OAuth 2.1 module"`, `entry_type: "technical_note"`, `tags: ["architecture", "auth"]`                                                  | `architecture`, `auth*`, `"authentication architecture"` phrase    |
+| S2  | `create_entry` | `content: "Improved error handling in the database adapter layer with typed error classes"`, `entry_type: "bug_fix"`, `significance_type: "lesson_learned"`, `tags: ["error-handling", "database"]` | `"error handling"` phrase, `significance_type` filter              |
+| S3  | `create_entry` | `content: "Deploy new release candidate to the CDN edge network"`, `entry_type: "feature_implementation"`, `tags: ["deploy", "release"]`, `is_personal: false`                                      | `deploy NOT staging`, `deploy OR release`                          |
+| S4  | `create_entry` | `content: "Released v5.0 with breaking API changes and migration guide"`, `entry_type: "milestone"`, `significance_type: "breakthrough"`, `tags: ["release"]`                                       | `deploy OR release` (via "release"), semantic search for "release" |
+| S5  | `create_entry` | `content: "Deploy to staging environment failed — rollback initiated"`, `entry_type: "bug_fix"`, `tags: ["deploy", "staging"]`                                                                      | `deploy NOT staging` (negative match — verifies NOT exclusion)     |
+| S6  | `create_entry` | `content: "The test's scope was expanded to cover 100% of edge cases"`, `entry_type: "planning"`, `tags: ["testing"]`                                                                               | `test's` LIKE fallback, `100%` LIKE fallback                       |
+
+### 0.2 Filter & GitHub-Linked Entries
+
+These entries ensure filter tests (`issue_number`, `pr_status`, `workflow_run_id`, `project_number`) return results.
+
+| #   | Tool           | Params                                                                                                                                                                                                                                     | Enables Tests                                                                            |
+| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| S7  | `create_entry` | `content: "Investigated performance regression in issue #44 — root cause was N+1 queries"`, `entry_type: "research"`, `issue_number: 44`, `project_number: 5`, `tags: ["performance", "investigation"]`                                    | `issue_number: 44` filter, `project_number: 5` filter, semantic search for "performance" |
+| S8  | `create_entry` | `content: "Code review feedback from PR #67 merged — refactored authentication middleware"`, `entry_type: "code_review"`, `pr_number: 67`, `pr_status: "merged"`, `tags: ["code-review", "auth"]`                                          | `pr_status: "merged"` filter, `pr_number` filter, `auth*` prefix                         |
+| S9  | `create_entry` | `content: "CI workflow run completed — all 910 tests passing across 3 test suites"`, `entry_type: "technical_note"`, `workflow_run_id: 12345`, `workflow_name: "lint-and-test"`, `workflow_status: "completed"`, `tags: ["ci", "testing"]` | `workflow_run_id` filter, workflow field persistence                                     |
+| S10 | `create_entry` | `content: "Personal reflection on improving development velocity and reducing technical debt"`, `entry_type: "personal_reflection"`, `is_personal: true`, `tags: ["personal", "velocity"]`                                                 | `is_personal: true` filter, semantic search for "improving performance"                  |
+
+### 0.3 Team & Cross-DB Entries
+
+These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) returns results from both databases.
+
+| #   | Tool                | Params                                                                                                                                                                                     | Enables Tests                                                                    |
+| --- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| S11 | `create_entry`      | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
+| S12 | `team_create_entry` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]`                                   | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB           |
+
+### 0.4 Post-Seed Verification
+
+After creating all 12 entries, verify the seed data is searchable:
+
+| Check                | Command                                           | Expected                                                          |
+| -------------------- | ------------------------------------------------- | ----------------------------------------------------------------- |
+| FTS5 indexed         | `search_entries(query: "architecture")`           | ≥ 2 results (S1, S11)                                             |
+| Filters work         | `search_entries(issue_number: 44)`                | ≥ 1 result (S7)                                                   |
+| Cross-DB merged      | `search_entries(query: "architecture")`           | Results include `source: 'personal'` and `source: 'team'` entries |
+| Rebuild vector index | `rebuild_vector_index`                            | `entriesIndexed` > 0                                              |
+| Semantic search      | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar)               |
 
 ---
 
@@ -41,21 +95,39 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ### 1.2 Briefing Resource
 
-| Test                             | Command/Action                  | Expected Result                                                                    |
-| -------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
-| Read briefing                    | Read `memory://briefing`        | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`          |
-| Verify `lastModified` annotation | Check resource metadata         | ISO 8601 timestamp (client-dependent — AntiGravity doesn't expose MCP annotations) |
-| Confirm `userMessage`            | Inspect briefing.userMessage    | Formatted table with project/branch/CI/journal stats                               |
-| Milestone progress row           | Inspect briefing.userMessage    | Table includes milestone progress row (e.g., "🚩 Milestones: X open")              |
-| Team DB row                      | Inspect briefing.userMessage    | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)       |
-| Template URIs                    | Check `templateResources` array | 7 template URIs listed (includes `memory://milestones/{number}`)                   |
-| Workflow summary                 | Inspect `github.workflowSummary`| Present when `BRIEFING_WORKFLOW_STATUS=true` — has `passing`, `failing`, `pending`, `cancelled` counts |
-| Workflow named runs              | Inspect `workflowSummary.runs`  | Array of `{name, conclusion}` when `BRIEFING_WORKFLOW_COUNT > 0`; CI row shows icons (✅/❌) |
-| Rules metadata                   | Inspect `rulesFile` field       | Present when `RULES_FILE_PATH` set — has `name`, `sizeKB`, `lastModified`          |
-| Skills metadata                  | Inspect `skillsDir` field       | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                    |
-| Enhanced CI row                  | Inspect briefing.userMessage    | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set |
+| Test                             | Command/Action                   | Expected Result                                                                                        |
+| -------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Read briefing                    | Read `memory://briefing`         | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`                              |
+| Verify `lastModified` annotation | Check resource metadata          | ISO 8601 timestamp (client-dependent — AntiGravity doesn't expose MCP annotations)                     |
+| Confirm `userMessage`            | Inspect briefing.userMessage     | Formatted table with project/branch/CI/journal stats                                                   |
+| Milestone progress row           | Inspect briefing.userMessage     | Table includes milestone progress row (e.g., "🚩 Milestones: X open")                                  |
+| Team DB row                      | Inspect briefing.userMessage     | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)                           |
+| Template URIs                    | Check `templateResources` array  | 7 template URIs listed (includes `memory://milestones/{number}`)                                       |
+| Workflow summary                 | Inspect `github.workflowSummary` | Present when `BRIEFING_WORKFLOW_STATUS=true` — has `passing`, `failing`, `pending`, `cancelled` counts |
+| Workflow named runs              | Inspect `workflowSummary.runs`   | Array of `{name, conclusion}` when `BRIEFING_WORKFLOW_COUNT > 0`; CI row shows icons (✅/❌)           |
+| Rules metadata                   | Inspect `rulesFile` field        | Present when `RULES_FILE_PATH` set — has `name`, `sizeKB`, `lastModified`                              |
+| Skills metadata                  | Inspect `skillsDir` field        | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                                        |
+| Enhanced CI row                  | Inspect briefing.userMessage     | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set      |
 
-### 1.3 GitHub Status Resource
+### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
+
+> [!IMPORTANT]
+> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. See `test-server/README.md` for full details and script locations.
+
+```powershell
+# Test A — Instruction levels (essential < standard < full)
+node test-server/test-instruction-levels.mjs
+
+# Test B — Tool annotations (44 tools, 28 openWorldHint=false, 16 openWorldHint=true, 0 missing)
+node test-server/test-tool-annotations.mjs
+```
+
+| Check              | Expected                                                             |
+| ------------------ | -------------------------------------------------------------------- |
+| Instruction levels | essential (~1.2K) < standard (~1.4K) < full (~6.7K tokens)           |
+| Tool annotations   | 44 tools, all with `annotations`, 28 `false` + 16 `true` = 0 missing |
+
+### 1.4 GitHub Status Resource
 
 | Test              | Command/Action                | Expected Result                                                  |
 | ----------------- | ----------------------------- | ---------------------------------------------------------------- |
@@ -116,7 +188,13 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 | Test                  | Command/Action                                                                                   | Expected Result                                                           |
 | --------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| FTS5 search           | `search_entries(query: "architecture")`                                                          | Returns `structuredContent` with highlighted matches                      |
+| FTS5 search           | `search_entries(query: "architecture")`                                                          | ≥ 2 results (S1, S11) ranked by BM25 relevance                            |
+| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                    | ≥ 1 result (S2) — exact phrase match only                                 |
+| FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | ≥ 2 results (S1, S8) — matches "authentication", "authorization", etc.    |
+| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns S3, S11 but NOT S5 (S5 contains "staging")                        |
+| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 2 results (S3, S4, S5 expected)                                         |
+| FTS5 fallback         | `search_entries(query: "test's")`                                                                | ≥ 1 result (S6) — LIKE fallback, single quotes are FTS5-unsafe            |
+| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | ≥ 1 result (S6) — LIKE fallback, `%` is FTS5-unsafe                       |
 | Date range            | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-01-31")`                         | Returns `structuredContent` array                                         |
 | Cross-DB search       | `search_entries(query: "test")`                                                                  | Results include `source: 'personal' \| 'team'` marker on each entry       |
 | Cross-DB date         | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31")`                         | Results include `source` marker merging personal + team entries           |
@@ -132,17 +210,22 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 | Date range + project  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", project_number: 5)`      | Only project #5 entries in date range                                     |
 | Inverted date range   | `search_by_date_range(start_date: "2026-12-31", end_date: "2026-01-01")`                         | Returns empty results (no validation for `start > end` — confirmed)       |
 
+> [!NOTE]
+> **Cross-DB Search Behavior:** When a team DB is present, per-DB queries fetch `limit × 2` (capped at 500) to prevent BM25 ranking in one DB from silently dropping entries before the cross-DB merge. The user's requested `limit` is applied after merging.
+>
+> **Code Mode API Group Structure:** When testing `mj_execute_code`, methods are bound to specific groups. Key mapping: `listTags` → `mj.core`, `mergeTags` → `mj.admin`, `getStatistics` → `mj.analytics`. Use `mj.help()` or `mj.<group>.help()` to discover available methods per group.
+
 ### 3.2 Semantic Search
 
-| Test                   | Command/Action                                                     | Expected Result                                   |
-| ---------------------- | ------------------------------------------------------------------ | ------------------------------------------------- |
-| Vector index stats     | `get_vector_index_stats`                                           | Shows `itemCount`, `modelName`, `dimensions`      |
-| Rebuild index          | `rebuild_vector_index`                                             | Re-indexes all entries                            |
-| Semantic query         | `semantic_search(query: "improving performance")`                  | Returns similarity-ranked results                 |
-| Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results (higher threshold filters more)     |
-| Personal filter        | `semantic_search(query: "test", is_personal: true)`                | Only personal entries in results                  |
-| Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Empty results, no `hint` field in response        |
-| Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Empty results with `hint` suggesting alternatives |
+| Test                   | Command/Action                                                     | Expected Result                                                                     |
+| ---------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Vector index stats     | `get_vector_index_stats`                                           | Shows `itemCount`, `modelName`, `dimensions`                                        |
+| Rebuild index          | `rebuild_vector_index`                                             | `entriesIndexed` > 0 (indexes seed entries)                                         |
+| Semantic query         | `semantic_search(query: "improving performance")`                  | ≥ 1 result — S7, S10 semantically similar                                           |
+| Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)                                         |
+| Personal filter        | `semantic_search(query: "test", is_personal: true)`                | Only personal entries in results                                                    |
+| Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Noise results with quality gate `hint` still shown (only advisory hints suppressed) |
+| Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Noise results with quality gate `hint` (all hints shown)                            |
 
 ### 3.3 Analytics & Index Management
 
@@ -164,34 +247,34 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ### 4.1 Basic Relationships
 
-| Test                    | Command/Action                                                                                                            | Expected Result                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                   |
-| Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship            |
-| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: "Source entry 999999 not found"     |
-| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: "Target entry 999999 not found"     |
-| Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | Mermaid diagram returned                                               |
-| Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                          |
-| Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)      |
-| Visualize nonexistent   | `visualize_relationships(entry_id: 999999)`                                                                               | Returns `message: "Entry 999999 not found"`                            |
-| Visualize by tags       | `visualize_relationships(tags: ["test"])`                                                                                 | Diagram scoped to entries with "test" tag                              |
-| Visualize depth 3       | `visualize_relationships(entry_id: <A>, depth: 3)`                                                                        | Deeper traversal than default `depth: 2`                               |
-| Visualize custom limit  | `visualize_relationships(entry_id: <A>, limit: 5)`                                                                        | Diagram limited to 5 entries                                           |
-| Graph resource          | Read `memory://graph/recent`                                                                                              | Live Mermaid diagram, arrows harmonized with `visualize_relationships` |
+| Test                    | Command/Action                                                                                                            | Expected Result                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                                         |
+| Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship                                  |
+| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: 999999, to: <B>)"` |
+| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: <A>, to: 999999)"` |
+| Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | Mermaid diagram returned (raw text, not JSON-wrapped)                                        |
+| Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                                                |
+| Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)                            |
+| Visualize nonexistent   | `visualize_relationships(entry_id: 999999)`                                                                               | Returns `message: "Entry 999999 not found"`                                                  |
+| Visualize by tags       | `visualize_relationships(tags: ["test"])`                                                                                 | Diagram scoped to entries with "test" tag                                                    |
+| Visualize depth 3       | `visualize_relationships(entry_id: <A>, depth: 3)`                                                                        | Deeper traversal than default `depth: 2`                                                     |
+| Visualize custom limit  | `visualize_relationships(entry_id: <A>, limit: 5)`                                                                        | Diagram limited to 5 entries                                                                 |
+| Graph resource          | Read `memory://graph/recent`                                                                                              | Raw Mermaid text (`text/plain` MIME), arrows harmonized with `visualize_relationships`       |
 
 ### 4.2 Causal Relationship Types
 
-| Test              | Command/Action                                                                        | Expected Result                                                            |
-| ----------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| blocked_by type   | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "blocked_by")` | Relationship created with `blocked_by` type                                |
-| resolved type     | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "resolved")`   | Relationship created with `resolved` type                                  |
-| caused type       | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "caused")`     | Relationship created with `caused` type                                    |
-| Causal viz arrows | `visualize_relationships(entry_id: <A>)`                                              | Mermaid shows `--x` (blocked_by), `==>` (resolved), `-.->` (caused) arrows |
-| Graph harmonized  | Read `memory://graph/recent`                                                          | Same arrows: `--x`, `==>`, `-.->` for causal types, `-->` for references   |
+| Test              | Command/Action                                                                        | Expected Result                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| blocked_by type   | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "blocked_by")` | Relationship created with `blocked_by` type                                           |
+| resolved type     | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "resolved")`   | Relationship created with `resolved` type                                             |
+| caused type       | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "caused")`     | Relationship created with `caused` type                                               |
+| Causal viz arrows | `visualize_relationships(entry_id: <A>)`                                              | Mermaid shows `--x` (blocked_by), `==>` (resolved), `-.->` (caused) arrows            |
+| Graph harmonized  | Read `memory://graph/recent`                                                          | Raw Mermaid `text/plain`: `--x`, `==>`, `-.->` for causal types, `-->` for references |
 
 ---
 
-## Phase 5: GitHub Integration (15 tools)
+## Phase 5: GitHub Integration (16 tools)
 
 ### 5.1 Read-Only Tools
 
@@ -212,19 +295,19 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ### 5.2 Issue Lifecycle Tools
 
-> [!CAUTION]  
+> [!CAUTION]
 > These tools **create and close real GitHub issues**. Use with awareness.
 
-| Test                          | Command/Action                                                                                                                                                                                       | Expected Result                                                                                                                                                                                                                                                                                                |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create issue + entry          | `create_github_issue_with_entry(title: "Test: Unreleased Verification", project_number: 5)`                                                                                                          | GitHub issue created + journal entry created + added to project                                                                                                                                                                                                                                                |
-| Create with milestone         | `create_github_issue_with_entry(title: "Test: Milestone", milestone_number: <N>)`                                                                                                                    | Issue assigned to milestone, verify on GitHub                                                                                                                                                                                                                                                                  |
-| Close issue + entry           | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Verified working")`                                                                                                     | Issue closed + resolution entry created                                                                                                                                                                                                                                                                        |
-| Close with move_to_done       | `close_github_issue_with_entry(issue_number: <new_issue>, move_to_done: true, project_number: 5)`                                                                                                    | Issue closed + `kanban` block in response. `kanban.moved: true` if item is still on the board; may return `kanban: { moved: false, error: "Issue not found on project board" }` due to GitHub API race condition (issue closes before status mutation fires) — this is a soft error, the issue is still closed |
-| Create with full params       | `create_github_issue_with_entry(title: "Test: Full", body: "Description", labels: ["test"], project_number: 5, initial_status: "In Progress", entry_content: "Custom journal text", tags: ["test"])` | Issue created with body/labels, project item in "In Progress", journal entry uses custom content                                                                                                                                                                                                               |
-| Close with comment            | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Done", comment: "Closing comment", tags: ["resolved"])`                                                                 | Issue closed with comment posted, entry tagged                                                                                                                                                                                                                                                                 |
-| Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                                                                    |
-| Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }`                                                  |
+| Test                          | Command/Action                                                                                                                                                                                       | Expected Result                                                                                                                                                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create issue + entry          | `create_github_issue_with_entry(title: "Test: Unreleased Verification", project_number: 5)`                                                                                                          | GitHub issue created + journal entry created + added to project                                                                                                                                                                                               |
+| Create with milestone         | `create_github_issue_with_entry(title: "Test: Milestone", milestone_number: <N>)`                                                                                                                    | Issue assigned to milestone, verify on GitHub                                                                                                                                                                                                                 |
+| Close issue + entry           | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Verified working")`                                                                                                     | Issue closed + resolution entry created                                                                                                                                                                                                                       |
+| Close with move_to_done       | `close_github_issue_with_entry(issue_number: <new_issue>, move_to_done: true, project_number: 5)`                                                                                                    | Issue closed + `kanban` block in response. `kanban.moved: true` expected — uses idempotent `addProjectItem` to resolve item ID directly (no board-scan race condition)                                                                                        |
+| Create with full params       | `create_github_issue_with_entry(title: "Test: Full", body: "Description", labels: ["test"], project_number: 5, initial_status: "In Progress", entry_content: "Custom journal text", tags: ["test"])` | Issue created with body/labels, project item in "In Progress", journal entry uses custom content                                                                                                                                                              |
+| Close with comment            | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Done", comment: "Closing comment", tags: ["resolved"])`                                                                 | Issue closed with comment posted, entry tagged                                                                                                                                                                                                                |
+| Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                   |
+| Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }` |
 
 ### 5.3 Kanban Tools
 
@@ -232,14 +315,14 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 | ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Get board           | `get_kanban_board(project_number: 5)`                                              | Returns board structure with columns/items                            |
 | Kanban resource     | Read `memory://kanban/5`                                                           | JSON board data                                                       |
-| Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Mermaid swimlane visualization                                        |
+| Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                |
 | Move item           | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
 | Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
 | Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
 
 ### 5.4 Milestone Tools
 
-> [!CAUTION]  
+> [!CAUTION]
 > These tools **create, modify, and delete real GitHub milestones**. Clean up test milestones after testing.
 
 | Test                 | Command/Action                                                                                   | Expected Result                                                                                                   |
@@ -267,11 +350,11 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ### 5.6 Copilot Review Tool
 
-| Test                  | Command/Action                                        | Expected Result                                                              |
-| --------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body`|
-| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                 |
-| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                       |
+| Test                  | Command/Action                                        | Expected Result                                                               |
+| --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body` |
+| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                  |
+| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                        |
 | No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
 
 ### 5.7 GitHub Test Cleanup
@@ -289,6 +372,9 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ## Phase 6: Template Resources
 
+> [!CAUTION]
+> Issue and PR template URIs require the `/entries` or `/timeline` suffix — they are **NOT** bare `memory://issues/{number}` or `memory://prs/{number}`. Using bare URIs will return "Resource not found". Always use the full paths shown in the table below (e.g. `memory://issues/55/entries`, `memory://prs/67/timeline`).
+
 ### 6.1 Happy Path
 
 | Template         | Test URI                       | Expected Result                                                                                                                     |
@@ -298,7 +384,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 | PR entries       | `memory://prs/67/entries`      | Entries linked to PR #67 (permanent test fixture)                                                                                   |
 | PR timeline      | `memory://prs/67/timeline`     | PR lifecycle with `prMetadata` (live state) and `timelineNote`                                                                      |
 | Kanban JSON      | `memory://kanban/5`            | Board JSON                                                                                                                          |
-| Kanban diagram   | `memory://kanban/5/diagram`    | Mermaid diagram                                                                                                                     |
+| Kanban diagram   | `memory://kanban/5/diagram`    | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                                                                              |
 | Milestone detail | `memory://milestones/<N>`      | Milestone with completion %, `openIssues` + `closedIssues` counts, and hint to use `get_github_issues` for individual issue details |
 
 ### 6.2 Template Error Paths
@@ -358,11 +444,80 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ---
 
-## Phase 8: Prompts (15 total) [SKIP]
+## Phase 8: Prompt Handler Verification (16 prompts) [DO NOT SKIP!]
 
-> Prompts require manual user testing and are not covered in this automated pass. See Phase 8 reference in the original test plan for full details.
+> [!NOTE]
+> Prompts return `GetPromptResult` objects with `messages` arrays. While the _workflows_ prompts describe require a human to act on, the **handlers themselves** are testable via `prompts/get` MCP calls. This phase verifies response shape, argument enforcement, and content generation.
+>
+> **How to test:** Call `prompts/get` with the prompt name and arguments. The MCP client should expose this as a callable action, or use the protocol directly.
 
----
+### 8.1 Workflow Prompts (10 prompts)
+
+#### No-Argument Prompts
+
+| Prompt               | Arguments | Expected Response                                                                                               |
+| -------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `prepare-standup`    | _(none)_  | `messages` array with 1 `user` role message containing "standup" and date references                            |
+| `weekly-digest`      | _(none)_  | `messages` array with 1 `user` role message containing "weekly digest"                                          |
+| `goal-tracker`       | _(none)_  | `messages` array with 1 `user` role message containing "goals" and "milestones"                                 |
+| `get-context-bundle` | _(none)_  | `messages` array with 1 `user` role message containing "Project context bundle", recent entries, and statistics |
+| `confirm-briefing`   | _(none)_  | `messages` array with 1 `user` role message containing "Session Context Received" and entry count               |
+| `session-summary`    | _(none)_  | `messages` array with 1 `user` role message containing "session summary" and instructions for entry creation    |
+
+#### Required-Argument Prompts
+
+| Prompt           | Arguments                                            | Expected Response                                                                                             |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `find-related`   | `query: "architecture"`                              | `messages` array with 1 `user` role message containing `"architecture"` and matching entries (from seed data) |
+| `analyze-period` | `start_date: "2026-01-01"`, `end_date: "2026-12-31"` | `messages` array with 1 `user` role message containing date range and statistics JSON                         |
+
+#### Optional-Argument Prompts
+
+| Prompt               | Arguments                      | Expected Response                                                                                         |
+| -------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `prepare-retro`      | _(none — defaults to 14 days)_ | `messages` array with 1 `user` role message containing "retrospective" and "14 days"                      |
+| `prepare-retro`      | `days: "7"`                    | `messages` array with 1 `user` role message containing "7 days"                                           |
+| `get-recent-entries` | _(none — defaults to 10)_      | `messages` array with 1 `user` role message containing entries formatted with timestamps, types, and tags |
+| `get-recent-entries` | `limit: "3"`                   | `messages` array with 1 `user` role message containing at most 3 entries                                  |
+
+### 8.2 GitHub Prompts (6 prompts)
+
+#### Required-Argument Prompts
+
+| Prompt                      | Arguments             | Expected Response                                                                                                |
+| --------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `project-status-summary`    | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and status summary instructions            |
+| `pr-summary`                | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and journal entries for that PR (from seed S8) |
+| `code-review-prep`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and review checklist instructions              |
+| `pr-retrospective`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and retrospective instructions                 |
+| `project-milestone-tracker` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and milestone entries (from seed S7)       |
+
+#### No-Argument Prompts
+
+| Prompt                   | Arguments | Expected Response                                                                                           |
+| ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `actions-failure-digest` | _(none)_  | `messages` array with 1 `user` role message containing "CI/CD failures" and workflow entries (from seed S9) |
+
+### 8.3 Error Handling
+
+| Test                  | Action                                                | Expected Result                                                                         |
+| --------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Missing required arg  | `prompts/get` for `find-related` with no `query`      | Structured error or empty query handled gracefully (handler uses `args['query'] ?? ''`) |
+| Missing required arg  | `prompts/get` for `analyze-period` with no dates      | Structured error or empty dates handled gracefully                                      |
+| Nonexistent prompt    | `prompts/get` for `nonexistent-prompt`                | MCP error: prompt not found                                                             |
+| Invalid argument name | `prompts/get` for `prepare-standup` with `foo: "bar"` | Succeeds (no-argument prompt ignores extra args)                                        |
+
+### 8.4 Response Shape Verification
+
+For **every** prompt response, verify:
+
+| Check                  | Expected                                                               |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `messages` is an array | `Array.isArray(result.messages) === true`                              |
+| At least 1 message     | `messages.length >= 1`                                                 |
+| Message has `role`     | `messages[0].role === 'user'`                                          |
+| Message has `content`  | `messages[0].content` is object with `type: 'text'` and `text: string` |
+| Text is non-empty      | `messages[0].content.text.length > 0`                                  |
 
 ## Phase 9: Team Collaboration (3 tools + 2 resources)
 
@@ -407,95 +562,41 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 ---
 
-## Phase 10: Automated Scheduler (HTTP Only — Manual Terminal Test)
+## Phase 10: Automated Scheduler — Run via Script [DO NOT SKIP!]
 
 > [!IMPORTANT]
-> The scheduler only activates in HTTP/SSE transport mode. Run these  tests in a separate PowerShell terminal.
-
-### 10.1 Start HTTP Server with Scheduler
+> The scheduler only activates in HTTP/SSE transport mode. Run the script below — it handles session init, health reads, and wait/verify automatically. See `test-server/README.md` for full details.
 
 ```powershell
-# Build first if needed
-cd C:\Users\chris\Desktop\memory-journal-mcp
+# Terminal 1: Start HTTP server with short scheduler intervals
 npm run build
+node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
 
-# Start with short intervals for testing (1-2 min)
-node dist/cli.js --transport http --port 3000 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
+# Terminal 2: Run scheduler test (waits 130s for jobs to fire)
+node test-server/test-scheduler.mjs
 ```
 
-**Expected logs:**
-
-- `[Scheduler] Scheduler started: backup (1min), vacuum (2min), rebuild-index (2min)`
-- `MCP server started on HTTP (stateful)`
-
-### 10.2 Initialize Session & Read Health
-
-```powershell
-# In a second terminal — initialize MCP session
-$headers = @{ "Content-Type" = "application/json"; "Accept" = "application/json, text/event-stream" }
-$body = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-$response = Invoke-WebRequest -Uri "http://localhost:3000/mcp" -Method Post -Headers $headers -Body $body
-$sessionId = $response.Headers["mcp-session-id"]
-Write-Host "Session ID: $sessionId"
-
-# Read health — scheduler should be active with 0 runCounts
-$headers["mcp-session-id"] = $sessionId
-$body = '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"memory://health"}}'
-(Invoke-WebRequest -Uri "http://localhost:3000/mcp" -Method Post -Headers $headers -Body $body).Content
-```
-
-| Check                   | Expected                          |
-| ----------------------- | --------------------------------- |
-| `scheduler.active`      | `true`                            |
-| `scheduler.jobs` length | 3 (backup, vacuum, rebuild-index) |
-| All `runCount`          | 0                                 |
-| All `lastRun`           | `null`                            |
-| All `nextRun`           | ISO timestamp ~1-2 min from now   |
-
-### 10.3 Wait for Jobs & Verify
-
-Wait 2+ minutes, then re-read `memory://health`:
-
-```powershell
-# Wait and re-read
-Start-Sleep -Seconds 130
-$body = '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"memory://health"}}'
-(Invoke-WebRequest -Uri "http://localhost:3000/mcp" -Method Post -Headers $headers -Body $body).Content
-```
-
-| Check                      | Expected                 |
-| -------------------------- | ------------------------ |
-| backup `lastResult`        | `"success"`              |
-| backup `runCount`          | ≥ 2                      |
-| vacuum `lastResult`        | `"success"`              |
-| vacuum `runCount`          | ≥ 1                      |
-| rebuild-index `lastResult` | `"success"`              |
-| rebuild-index `runCount`   | ≥ 1                      |
-| `backups.count`            | ≤ 3 (keep-backups limit) |
-
-**Expected server logs:**
-
-- `[Scheduler][backup] Scheduled backup created`
-- `[Scheduler][backup-cleanup] Backup cleanup: deleted N, kept 3`
-- `[Scheduler][vacuum] Scheduled database optimize completed`
-- `[VectorSearch] Rebuilt vector index with N entries`
-
-### 10.4 Cleanup
-
-Stop the server (Ctrl+C in the server terminal) and delete test backups if needed.
+| Check                       | Expected               |
+| --------------------------- | ---------------------- |
+| `scheduler.active`          | `true`, 3 jobs         |
+| All jobs `lastResult`       | `"success"` after wait |
+| All jobs `lastError`        | `null`                 |
+| backup `runCount`           | ≥ 2                    |
+| vacuum + rebuild `runCount` | ≥ 1 each               |
 
 ---
 
 ## Test Execution Order
 
+0. **Phase 0**: Seed Test Data (creates entries for FTS5, filter, and semantic search tests)
 1. **Phase 1**: Infrastructure (must pass before proceeding)
-2. **Phase 2**: Entry CRUD (creates test data for later phases)
-3. **Phase 3**: Search + Analytics (requires entries from Phase 2)
-4. **Phase 4**: Relationships (links entries from Phase 2)
+2. **Phase 2**: Entry CRUD (creates additional test data + validates CRUD operations)
+3. **Phase 3**: Search + Analytics (requires entries from Phase 0 + 2)
+4. **Phase 4**: Relationships (links entries from Phase 0 + 2)
 5. **Phase 5**: GitHub Integration (tests live GitHub API including milestones + cleanup)
 6. **Phase 6**: Template Resources (happy path + error paths for invalid IDs)
 7. **Phase 7**: Admin/Backup (test last to avoid data loss)
-8. **Phase 8**: Prompts [SKIP]
+8. **Phase 8**: Prompt Handler Verification (verify `prompts/get` response shape for all 16 prompts)
 9. **Phase 9**: Team Collaboration (requires `TEAM_DB_PATH` configured)
 10. **Phase 10**: Automated Scheduler (HTTP only — manual terminal test)
 
@@ -508,6 +609,8 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 - [ ] All 44 tools execute without errors on happy paths
 - [ ] All 7 template resources work with valid parameters
 - [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- [ ] Server instructions length respects `--instruction-level`: essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
+- [ ] 28 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (44 total, 0 missing)
 
 ### Entry CRUD
 
@@ -525,6 +628,10 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 
 ### Search & Analytics
 
+- [ ] `search_entries` FTS5 phrase queries return exact phrase matches
+- [ ] `search_entries` FTS5 prefix queries (`auth*`) match word stems
+- [ ] `search_entries` FTS5 boolean operators (`NOT`, `OR`) filter correctly
+- [ ] `search_entries` gracefully falls back to LIKE for FTS5-unsafe queries (single quotes, `%`)
 - [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`
 - [ ] `search_by_date_range` filters work: `entry_type`, `tags`, `is_personal`, `project_number`
 - [ ] `search_by_date_range` rejects non-YYYY-MM-DD date strings with structured errors
@@ -532,7 +639,7 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 - [ ] `search_by_date_range` merges team results with `source` marker
 - [ ] `semantic_search` with custom `similarity_threshold` affects result count
 - [ ] `semantic_search` with `is_personal` filter returns only matching entries
-- [ ] `semantic_search` with `hint_on_empty: false` omits `hint` in response
+- [ ] `semantic_search` with `hint_on_empty: false` still shows quality gate `hint` for noisy results (only suppresses advisory hints)
 - [ ] `get_statistics` returns all 4 enhanced analytics metrics
 - [ ] `get_statistics` with `group_by: "month"` and `"day"` produces correct groupings
 - [ ] `get_cross_project_insights` returns all required schema fields even when empty
@@ -542,13 +649,22 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 
 - [ ] Causal relationship types (`blocked_by`, `resolved`, `caused`) create correctly
 - [ ] `link_entries` with `description` persists the description
-- [ ] `link_entries` returns `success: false` for nonexistent source or target entry IDs
+- [ ] `link_entries` returns `success: false` with `"One or both entries not found (from: X, to: Y)"` for nonexistent entry IDs
 - [ ] `visualize_relationships` shows distinct arrows for causal types
 - [ ] `visualize_relationships` with `tags` filter scopes diagram correctly
 - [ ] `visualize_relationships` with `depth: 1` and `depth: 3` produce different results
 - [ ] `visualize_relationships` returns `"Entry X not found"` for nonexistent `entry_id`
 - [ ] `memory://graph/recent` uses harmonized arrows matching `visualize_relationships`
 - [ ] Reverse-direction duplicate behavior is documented (B→A when A→B exists)
+
+### Prompt Handlers (Phase 8)
+
+- [ ] All 16 prompts return valid `GetPromptResult` with `messages` array
+- [ ] Every message has `role: 'user'` and `content` with `type: 'text'` and non-empty `text`
+- [ ] Required-argument prompts (`find-related`, `analyze-period`, `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `project-milestone-tracker`) include argument values in response text
+- [ ] Optional-argument prompts (`prepare-retro`, `get-recent-entries`) apply defaults when arguments omitted
+- [ ] GitHub prompts reference seed data (S7 for project #5, S8 for PR #67, S9 for workflow entries)
+- [ ] Nonexistent prompt name returns MCP error (not crash)
 
 ### GitHub Integration
 

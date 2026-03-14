@@ -6,13 +6,17 @@
  */
 
 import { z } from 'zod'
-import { execFileSync } from 'node:child_process'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { sanitizeAuthor } from '../../utils/security-utils.js'
+import { resolveAuthor } from '../../utils/security-utils.js'
+import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
+import { resolveIssueUrl } from '../../utils/github-helpers.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import { logger } from '../../utils/logger.js'
 import {
     ENTRY_TYPES,
     SIGNIFICANCE_TYPES,
+    MAX_CONTENT_LENGTH,
     EntryOutputSchema,
     EntriesListOutputSchema,
     RelationshipOutputSchema,
@@ -27,7 +31,7 @@ import {
 
 /** Strict schema — used inside handler for structured Zod errors */
 const CreateEntrySchema = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     is_personal: z.boolean().optional().default(true),
@@ -90,7 +94,7 @@ const GetRecentEntriesSchemaMcp = z.object({
 })
 
 const CreateEntryMinimalSchema = z.object({
-    content: z.string().min(1).max(50000),
+    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
@@ -106,54 +110,40 @@ const TestSimpleSchema = z.object({
 // Output Schemas
 // ============================================================================
 
-const CreateEntryOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entry: EntryOutputSchema.optional(),
-    sharedWithTeam: z.boolean().optional(),
-    author: z.string().optional(),
-    error: z.string().optional(),
-})
+const CreateEntryOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: EntryOutputSchema.optional(),
+        sharedWithTeam: z.boolean().optional(),
+        author: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const EntryByIdOutputSchema = z.object({
-    entry: EntryOutputSchema.optional(),
-    relationships: z.array(RelationshipOutputSchema).optional(),
-    importance: z.number().nullable().optional(),
-    importanceBreakdown: ImportanceBreakdownSchema.optional(),
-    error: z.string().optional(),
-})
+const EntryByIdOutputSchema = z
+    .object({
+        entry: EntryOutputSchema.optional(),
+        relationships: z.array(RelationshipOutputSchema).optional(),
+        importance: z.number().nullable().optional(),
+        importanceBreakdown: ImportanceBreakdownSchema.optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const TestSimpleOutputSchema = z.object({
-    message: z.string(),
-})
+const TestSimpleOutputSchema = z
+    .object({
+        message: z.string(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const TagsListOutputSchema = z.object({
-    tags: z.array(TagOutputSchema).optional(),
-    count: z.number().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-})
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Resolve the author name for team-shared entries */
-function resolveTeamAuthor(): string {
-    const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return sanitizeAuthor(envAuthor)
-    try {
-        const gitUser = execFileSync('git', ['config', 'user.name'], {
-            encoding: 'utf-8',
-            timeout: 3000,
-        })
-            .trim()
-            .replace(/"/g, '')
-        if (gitUser) return sanitizeAuthor(gitUser)
-    } catch {
-        // Git not available
-    }
-    return 'unknown'
-}
+const TagsListOutputSchema = z
+    .object({
+        tags: z.array(TagOutputSchema).optional(),
+        count: z.number().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -170,19 +160,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
                     // Auto-populate issueUrl if issue_number provided without issueUrl
-                    let resolvedIssueUrl = input.issue_url
-                    if (input.issue_number !== undefined && !input.issue_url && github) {
-                        const cachedRepo = github.getCachedRepoInfo()
-                        if (cachedRepo?.owner && cachedRepo?.repo) {
-                            resolvedIssueUrl = `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(input.issue_number)}`
-                        }
-                    }
+                    const resolvedIssueUrl = resolveIssueUrl(
+                        github,
+                        input.issue_number,
+                        input.issue_url
+                    )
 
                     const entry = db.createEntry({
                         content: input.content,
@@ -203,18 +191,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     })
 
                     // Auto-index to vector store for semantic search (fire-and-forget)
-                    if (vectorManager) {
-                        vectorManager.addEntry(entry.id, entry.content).catch(() => {
-                            // Non-critical failure, entry already saved to DB
-                        })
-                    }
+                    autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     // Share with team if requested
                     let sharedWithTeam = false
                     let author: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
-                            author = resolveTeamAuthor()
+                            author = resolveAuthor()
                             const teamEntry = teamDb.createEntry({
                                 content: input.content,
                                 entryType: input.entry_type,
@@ -233,15 +217,18 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status,
                             })
-                            const rawTeamDb = teamDb.getRawDb()
-                            rawTeamDb.run('UPDATE memory_journal SET author = ? WHERE id = ?', [
-                                author,
-                                teamEntry.id,
-                            ])
+                            teamDb.executeRawQuery(
+                                'UPDATE memory_journal SET author = ? WHERE id = ?',
+                                [author, teamEntry.id]
+                            )
                             teamDb.flushSave()
                             sharedWithTeam = true
-                        } catch {
-                            // Team share failed — entry still saved to personal DB
+                        } catch (error) {
+                            logger.debug('Failed to share entry with team DB', {
+                                module: 'TOOL',
+                                operation: 'create-entry',
+                                error,
+                            })
                         }
                     }
 
@@ -262,7 +249,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetEntryByIdSchemaMcp,
             outputSchema: EntryByIdOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params)
@@ -293,7 +280,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { limit, is_personal } = GetRecentEntriesSchema.parse(params)
@@ -311,18 +298,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
                     const entry = db.createEntry({ content })
 
                     // Auto-index to vector store for semantic search (fire-and-forget)
-                    if (vectorManager) {
-                        vectorManager.addEntry(entry.id, entry.content).catch(() => {
-                            // Non-critical failure, entry already saved to DB
-                        })
-                    }
+                    autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     return { success: true, entry }
                 } catch (err) {
@@ -337,7 +320,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: TestSimpleSchema,
             outputSchema: TestSimpleOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { message } = TestSimpleSchema.parse(params)
@@ -352,9 +335,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             title: 'List Tags',
             description: 'List all available tags',
             group: 'core',
-            inputSchema: z.object({}),
+            inputSchema: z.object({}).strict(),
             outputSchema: TagsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (_params: unknown) => {
                 try {
                     const rawTags = db.listTags()

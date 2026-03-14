@@ -14,14 +14,14 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getTools, callTool } from '../../src/handlers/tools/index.js'
-import { SqliteAdapter } from '../../src/database/SqliteAdapter.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('mj_execute_code Tool Handler', () => {
-    let db: SqliteAdapter
+    let db: DatabaseAdapter
     const testDbPath = './test-codemode-handler.db'
 
     beforeAll(async () => {
-        db = new SqliteAdapter(testDbPath)
+        db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
 
@@ -49,7 +49,7 @@ describe('mj_execute_code Tool Handler', () => {
         it('should have inputSchema (no outputSchema — uses text response path)', () => {
             const tools = getTools(db, null)
             const codeTool = tools.find(
-                (t) => (t as { name: string }).name === 'mj_execute_code',
+                (t) => (t as { name: string }).name === 'mj_execute_code'
             ) as { inputSchema: object; outputSchema?: object } | undefined
             expect(codeTool?.inputSchema).toBeDefined()
             expect(codeTool?.outputSchema).toBeUndefined()
@@ -58,7 +58,7 @@ describe('mj_execute_code Tool Handler', () => {
         it('should have correct description mentioning sandbox and API', () => {
             const tools = getTools(db, null)
             const codeTool = tools.find(
-                (t) => (t as { name: string }).name === 'mj_execute_code',
+                (t) => (t as { name: string }).name === 'mj_execute_code'
             ) as { description: string } | undefined
             expect(codeTool?.description).toContain('sandbox')
             expect(codeTool?.description).toContain('mj.*')
@@ -67,7 +67,7 @@ describe('mj_execute_code Tool Handler', () => {
         it('should have annotations with readOnlyHint=false', () => {
             const tools = getTools(db, null)
             const codeTool = tools.find(
-                (t) => (t as { name: string }).name === 'mj_execute_code',
+                (t) => (t as { name: string }).name === 'mj_execute_code'
             ) as { annotations?: { readOnlyHint?: boolean } } | undefined
             expect(codeTool?.annotations?.readOnlyHint).toBe(false)
         })
@@ -87,7 +87,7 @@ describe('mj_execute_code Tool Handler', () => {
             const result = (await callTool(
                 'mj_execute_code',
                 { code: 'const fs = require("fs")' },
-                db,
+                db
             )) as { success: boolean; error: string }
 
             expect(result.success).toBe(false)
@@ -95,11 +95,10 @@ describe('mj_execute_code Tool Handler', () => {
         })
 
         it('should reject code with process access', async () => {
-            const result = (await callTool(
-                'mj_execute_code',
-                { code: 'process.exit(1)' },
-                db,
-            )) as { success: boolean; error: string }
+            const result = (await callTool('mj_execute_code', { code: 'process.exit(1)' }, db)) as {
+                success: boolean
+                error: string
+            }
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Security validation failed')
@@ -109,7 +108,7 @@ describe('mj_execute_code Tool Handler', () => {
             const result = (await callTool(
                 'mj_execute_code',
                 { code: 'await import("os")' },
-                db,
+                db
             )) as { success: boolean; error: string }
 
             expect(result.success).toBe(false)
@@ -120,7 +119,7 @@ describe('mj_execute_code Tool Handler', () => {
             const result = (await callTool(
                 'mj_execute_code',
                 { code: 'eval("alert(1)")' },
-                db,
+                db
             )) as { success: boolean; error: string }
 
             expect(result.success).toBe(false)
@@ -131,7 +130,7 @@ describe('mj_execute_code Tool Handler', () => {
             const result = (await callTool(
                 'mj_execute_code',
                 { code: 'new Function ("return 1")' },
-                db,
+                db
             )) as { success: boolean; error: string }
 
             expect(result.success).toBe(false)
@@ -142,7 +141,7 @@ describe('mj_execute_code Tool Handler', () => {
             const result = (await callTool(
                 'mj_execute_code',
                 { code: 'const x = {}.__proto__' },
-                db,
+                db
             )) as { success: boolean; error: string }
 
             expect(result.success).toBe(false)
@@ -153,7 +152,7 @@ describe('mj_execute_code Tool Handler', () => {
             const result = (await callTool(
                 'mj_execute_code',
                 { code: 'child_process.exec("whoami")' },
-                db,
+                db
             )) as { success: boolean; error: string }
 
             expect(result.success).toBe(false)
@@ -164,7 +163,7 @@ describe('mj_execute_code Tool Handler', () => {
             const result = (await callTool(
                 'mj_execute_code',
                 { code: 'fs.readFileSync("/etc/passwd")' },
-                db,
+                db
             )) as { success: boolean; error: string }
 
             expect(result.success).toBe(false)
@@ -178,21 +177,19 @@ describe('mj_execute_code Tool Handler', () => {
 
     describe('schema validation', () => {
         it('should reject missing code parameter', async () => {
-            const result = (await callTool(
-                'mj_execute_code',
-                {},
-                db,
-            )) as { success: boolean; error?: string }
+            const result = (await callTool('mj_execute_code', {}, db)) as {
+                success: boolean
+                error?: string
+            }
 
             expect(result.success).toBe(false)
         })
 
         it('should reject empty string code', async () => {
-            const result = (await callTool(
-                'mj_execute_code',
-                { code: '' },
-                db,
-            )) as { success: boolean; error?: string }
+            const result = (await callTool('mj_execute_code', { code: '' }, db)) as {
+                success: boolean
+                error?: string
+            }
 
             expect(result.success).toBe(false)
         })

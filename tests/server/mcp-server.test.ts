@@ -122,8 +122,8 @@ vi.mock('@modelcontextprotocol/sdk/types.js', () => ({
     isInitializeRequest: vi.fn().mockReturnValue(false),
 }))
 
-vi.mock('../../src/database/SqliteAdapter.js', () => ({
-    SqliteAdapter: function () {
+vi.mock('../../src/database/sqlite-adapter/index.js', () => ({
+    DatabaseAdapter: function () {
         return {
             initialize: mockDbInitialize,
             getRecentEntries: mockDbGetRecentEntries,
@@ -156,7 +156,7 @@ vi.mock('../../src/database/SqliteAdapter.js', () => ({
     },
 }))
 
-vi.mock('../../src/vector/VectorSearchManager.js', () => ({
+vi.mock('../../src/vector/vector-search-manager.js', () => ({
     VectorSearchManager: function () {
         return {
             initialize: mockVectorInitialize,
@@ -173,7 +173,7 @@ vi.mock('../../src/vector/VectorSearchManager.js', () => ({
     },
 }))
 
-vi.mock('../../src/github/GitHubIntegration.js', () => ({
+vi.mock('../../src/github/github-integration.js', () => ({
     GitHubIntegration: function () {
         return {
             isApiAvailable: mockGitHubIsApiAvailable,
@@ -250,7 +250,7 @@ vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
 // Import after mocks
 // ============================================================================
 
-import { createServer, type ServerOptions } from '../../src/server/McpServer.js'
+import { createServer, type ServerOptions } from '../../src/server/mcp-server.js'
 
 describe('McpServer', () => {
     beforeEach(() => {
@@ -701,17 +701,27 @@ describe('McpServer', () => {
             // Find the OPTIONS middleware
             let optionsMwFound = false
             for (const mw of middlewareFns) {
-                const mockResOptions = { status: vi.fn().mockReturnThis(), end: vi.fn(), setHeader: vi.fn() }
+                const mockResOptions = {
+                    status: vi.fn().mockReturnThis(),
+                    end: vi.fn(),
+                    setHeader: vi.fn(),
+                    json: vi.fn(),
+                }
                 const nextFn = vi.fn()
-                mw({ method: 'OPTIONS', headers: {} }, mockResOptions, nextFn)
+                mw({ method: 'OPTIONS', headers: { host: 'localhost' } }, mockResOptions, nextFn)
                 if (mockResOptions.status.mock.calls.some((c: unknown[]) => c[0] === 204)) {
                     optionsMwFound = true
                     expect(nextFn).not.toHaveBeenCalled()
 
                     // Also verify non-OPTIONS calls next
-                    const mockRes2 = { status: vi.fn().mockReturnThis(), end: vi.fn(), setHeader: vi.fn() }
+                    const mockRes2 = {
+                        status: vi.fn().mockReturnThis(),
+                        end: vi.fn(),
+                        setHeader: vi.fn(),
+                        json: vi.fn(),
+                    }
                     const nextFn2 = vi.fn()
-                    mw({ method: 'GET', headers: {} }, mockRes2, nextFn2)
+                    mw({ method: 'GET', headers: { host: 'localhost' } }, mockRes2, nextFn2)
                     expect(nextFn2).toHaveBeenCalled()
                     break
                 }
@@ -744,9 +754,10 @@ describe('McpServer', () => {
                     setHeader: vi.fn(),
                     status: vi.fn().mockReturnThis(),
                     end: vi.fn(),
+                    json: vi.fn(),
                 }
                 const nextFn = vi.fn()
-                mw({ headers: {} }, mockRes, nextFn)
+                mw({ headers: { host: 'localhost' } }, mockRes, nextFn)
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
                 if (headerNames.includes('X-Content-Type-Options')) {
@@ -786,10 +797,18 @@ describe('McpServer', () => {
                     setHeader: vi.fn(),
                     status: vi.fn().mockReturnThis(),
                     end: vi.fn(),
+                    json: vi.fn(),
                 }
 
                 const noopNext = vi.fn()
-                mw({ method: 'GET', headers: { origin: 'https://test.example.com' } }, mockRes, noopNext)
+                mw(
+                    {
+                        method: 'GET',
+                        headers: { origin: 'https://test.example.com', host: 'localhost' },
+                    },
+                    mockRes,
+                    noopNext
+                )
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
                 if (headerNames.includes('Access-Control-Allow-Methods')) {
@@ -809,9 +828,10 @@ describe('McpServer', () => {
                     setHeader: vi.fn(),
                     status: vi.fn().mockReturnThis(),
                     end: vi.fn(),
+                    json: vi.fn(),
                 }
                 const nextFn = vi.fn()
-                mw({ method: 'OPTIONS', headers: {} }, mockRes2, nextFn)
+                mw({ method: 'OPTIONS', headers: { host: 'localhost' } }, mockRes2, nextFn)
                 if (mockRes2.status.mock.calls.some((c: unknown[]) => c[0] === 204)) {
                     optionsMwFound = true
                     expect(nextFn).not.toHaveBeenCalled()
@@ -826,9 +846,17 @@ describe('McpServer', () => {
                     setHeader: vi.fn(),
                     status: vi.fn().mockReturnThis(),
                     end: vi.fn(),
+                    json: vi.fn(),
                 }
                 const nextFn = vi.fn()
-                mw({ method: 'POST', headers: { origin: 'https://test.example.com' } }, mockRes, nextFn)
+                mw(
+                    {
+                        method: 'POST',
+                        headers: { origin: 'https://test.example.com', host: 'localhost' },
+                    },
+                    mockRes,
+                    nextFn
+                )
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
                 if (headerNames.includes('Access-Control-Allow-Methods')) {

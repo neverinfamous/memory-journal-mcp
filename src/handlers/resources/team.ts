@@ -20,10 +20,13 @@ function enrichWithAuthor<T extends { id: number }>(
     entries: T[],
     context: ResourceContext
 ): (T & { author: string | null })[] {
-    if (!context.teamDb) return entries.map((e) => ({ ...e, author: null }))
-    const rawDb = context.teamDb.getRawDb()
-    return entries.map((e) => {
-        const authorResult = rawDb.exec('SELECT author FROM memory_journal WHERE id = ?', [e.id])
+    const teamDb = context.teamDb
+    if (!teamDb) return entries.map((e: T) => ({ ...e, author: null }))
+    return entries.map((e: T) => {
+        const authorResult = teamDb.executeRawQuery(
+            'SELECT author FROM memory_journal WHERE id = ?',
+            [e.id]
+        )
         const author = (authorResult[0]?.values[0]?.[0] as string) ?? null
         return { ...e, author }
     })
@@ -97,12 +100,11 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 const stats = context.teamDb.getStatistics('week')
-                const rawDb = context.teamDb.getRawDb()
 
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []
                 try {
-                    const authorResult = rawDb.exec(
+                    const authorResult = context.teamDb.executeRawQuery(
                         `SELECT COALESCE(author, 'unknown') as author, COUNT(*) as count
                          FROM memory_journal
                          WHERE deleted_at IS NULL
@@ -110,7 +112,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                          ORDER BY count DESC`
                     )
                     if (authorResult[0]) {
-                        authors = authorResult[0].values.map((row) => ({
+                        authors = authorResult[0].values.map((row: unknown[]) => ({
                             author: row[0] as string,
                             count: row[1] as number,
                         }))
@@ -122,7 +124,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 return {
                     data: {
                         configured: true,
-                        ...stats,
+                        ...(stats as object),
                         authors,
                         source: 'team',
                     },
