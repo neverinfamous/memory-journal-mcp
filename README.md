@@ -635,12 +635,12 @@ npm run bench
 
 ### Testing
 
-**910 tests** across two test frameworks:
+Extensively tested across two frameworks:
 
-| Suite                     | Tests | Command            | Covers                                                                          |
-| ------------------------- | ----- | ------------------ | ------------------------------------------------------------------------------- |
-| Vitest (unit/integration) | 839   | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
-| Playwright (e2e)          | 71    | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
+| Suite                     | Command            | Covers                                                                          |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------- |
+| Vitest (unit/integration) | `npm test`         | Database, tools, resources, handlers, security, GitHub, vector search, codemode |
+| Playwright (e2e)          | `npm run test:e2e` | HTTP/SSE transport, auth, sessions, CORS, security headers, scheduler           |
 
 ```bash
 npm test          # Unit + integration tests
