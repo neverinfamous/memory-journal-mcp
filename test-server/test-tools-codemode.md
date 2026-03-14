@@ -432,7 +432,7 @@ const withPersonal = await mj.search.searchByDateRange({
 return {
   basicCount: basic.entries.length,
   typeCount: withType.entries.length,
-  typeAllPlanning: withType.entries.every(e => e.entry_type === "planning"),
+  typeAllPlanning: withType.entries.every(e => e.entryType === "planning"),
   tagCount: withTags.entries.length,
   personalCount: withPersonal.entries.length
 };
@@ -468,7 +468,7 @@ const noHint = await mj.search.semanticSearch({
   query: "xyznonexistent",
   hint_on_empty: false
 });
-const stats = await mj.search.getVectorStats({});
+const stats = await mj.search.getVectorIndexStats({});
 return {
   basicCount: basic.entries?.length ?? 0,
   strictCount: strict.entries?.length ?? 0,

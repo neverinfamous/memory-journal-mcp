@@ -171,7 +171,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Cross-database merge when team DB is available
-                    if (teamDb) {
+                    // Skip team DB when is_personal is explicitly true (team entries are never personal)
+                    if (teamDb && input.is_personal !== true) {
                         let teamEntries
                         if (!input.query && !hasFilters) {
                             teamEntries = teamDb.getRecentEntries(perDbLimit)
@@ -223,7 +224,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     })
 
                     // Cross-database merge when team DB is available
-                    if (teamDb) {
+                    // Skip team DB when is_personal is explicitly true (team entries are never personal)
+                    if (teamDb && input.is_personal !== true) {
                         const teamEntries = teamDb.searchByDateRange(
                             input.start_date,
                             input.end_date,
@@ -287,6 +289,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
+                            // Apply is_personal filter if specified
+                            if (input.is_personal !== undefined && entry.isPersonal !== input.is_personal) return null
                             return {
                                 ...entry,
                                 similarity: Math.round(r.score * 100) / 100,
