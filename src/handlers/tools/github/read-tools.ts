@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { relaxedNumber } from '../schemas.js'
 import {
     GitHubIssuesListOutputSchema,
     GitHubIssueResultOutputSchema,
@@ -42,7 +43,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
                     ),
                 state: z.string().optional().default('open'),
-                limit: z.number().optional().default(20),
+                limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubIssuesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -103,7 +104,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         'Repository name - LEAVE EMPTY to auto-detect from git. Only specify if user explicitly provides.'
                     ),
                 state: z.string().optional().default('open'),
-                limit: z.number().optional().default(20),
+                limit: relaxedNumber().optional().default(20),
             }),
             outputSchema: GitHubPRsListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
