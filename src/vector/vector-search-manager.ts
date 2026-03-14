@@ -123,13 +123,13 @@ export class VectorSearchManager {
     /**
      * Add an entry to the vector index (upsert - replaces if exists)
      */
-    async addEntry(entryId: number, content: string): Promise<boolean> {
+    async addEntry(entryId: number, content: string): Promise<{ success: boolean; error?: string }> {
         if (!this.initialized) {
             await this.initialize()
         }
 
         if (!this.db) {
-            return false
+            return { success: false, error: 'Vector database not available' }
         }
 
         try {
@@ -147,14 +147,15 @@ export class VectorSearchManager {
                 entityId: entryId,
             })
 
-            return true
+            return { success: true }
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
             logger.error('Failed to add entry to vector index', {
                 module: 'VectorSearch',
                 entityId: entryId,
-                error: error instanceof Error ? error.message : String(error),
+                error: errorMessage,
             })
-            return false
+            return { success: false, error: errorMessage }
         }
     }
 
@@ -238,13 +239,13 @@ export class VectorSearchManager {
      * @param db - Database adapter
      * @param progress - Optional progress context for notifications
      */
-    async rebuildIndex(db: IDatabaseAdapter, progress?: ProgressContext): Promise<{ indexed: number; failed: number }> {
+    async rebuildIndex(db: IDatabaseAdapter, progress?: ProgressContext): Promise<{ indexed: number; failed: number; firstError: string | null }> {
         if (!this.initialized) {
             await this.initialize()
         }
 
         if (!this.db) {
-            return { indexed: 0, failed: 0 }
+            return { indexed: 0, failed: 0, firstError: null }
         }
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
@@ -268,6 +269,7 @@ export class VectorSearchManager {
 
         let indexed = 0
         let failed = 0
+        let firstError: string | null = null
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
             const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
 
@@ -279,20 +281,21 @@ export class VectorSearchManager {
                 const embeddings = await Promise.all(
                     batch.map(async (entry: JournalEntry) => {
                         try {
-                            return { entry, embedding: await this.generateEmbedding(entry.content) }
+                            return { entry, embedding: await this.generateEmbedding(entry.content), error: null }
                         } catch (embError) {
+                            const errorMsg = embError instanceof Error ? embError.message : String(embError)
                             logger.debug('Failed to generate embedding for entry', {
                                 module: 'VectorSearch',
                                 entityId: entry.id,
-                                error: embError instanceof Error ? embError.message : String(embError),
+                                error: errorMsg,
                             })
-                            return { entry, embedding: null as number[] | null }
+                            return { entry, embedding: null as number[] | null, error: errorMsg }
                         }
                     })
                 )
 
                 // Insert embeddings into SQLite
-                for (const { entry, embedding } of embeddings) {
+                for (const { entry, embedding, error: embError } of embeddings) {
                     if (embedding !== null) {
                         try {
                             const vec = new Float32Array(embedding)
@@ -300,14 +303,17 @@ export class VectorSearchManager {
                             indexed++
                         } catch (error) {
                             failed++
+                            const errorMsg = error instanceof Error ? error.message : String(error)
+                            firstError ??= errorMsg
                             logger.error('Failed to insert entry into vector index', {
                                 module: 'VectorSearch',
                                 entityId: entry.id,
-                                error: error instanceof Error ? error.message : String(error),
+                                error: errorMsg,
                             })
                         }
                     } else {
                         failed++
+                        if (embError !== null) firstError ??= embError
                     }
                 }
 
@@ -335,7 +341,7 @@ export class VectorSearchManager {
                 module: 'VectorSearch',
             })
         }
-        return { indexed, failed }
+        return { indexed, failed, firstError }
     }
 
     /**

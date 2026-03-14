@@ -150,7 +150,7 @@ describe('VectorSearchManager', () => {
             mockRun.mockReturnValue(undefined)
 
             const result = await vm.addEntry(42, 'Some content')
-            expect(result).toBe(true)
+            expect(result.success).toBe(true)
 
             // Should prepare an INSERT OR REPLACE statement
             expect(mockPrepare).toHaveBeenCalledWith(
@@ -165,7 +165,8 @@ describe('VectorSearchManager', () => {
             mockEmbedderFn.mockRejectedValue(new Error('Embedding failed'))
 
             const result = await vm.addEntry(99, 'Content')
-            expect(result).toBe(false)
+            expect(result.success).toBe(false)
+            expect(result.error).toBeDefined()
         })
     })
 
@@ -300,6 +301,7 @@ describe('VectorSearchManager', () => {
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
             expect(result.indexed).toBe(2)
             expect(result.failed).toBe(0)
+            expect(result.firstError).toBeNull()
             // DELETE to clear + 2 INSERTs
             expect(mockRun).toHaveBeenCalledTimes(3)
         })
@@ -352,6 +354,7 @@ describe('VectorSearchManager', () => {
             // Only 1 should be indexed (the other failed)
             expect(result.indexed).toBe(1)
             expect(result.failed).toBe(1)
+            expect(result.firstError).toBe('Embedding failed')
         })
     })
 

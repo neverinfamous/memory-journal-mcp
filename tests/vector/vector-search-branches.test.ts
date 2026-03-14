@@ -35,7 +35,7 @@ describe('VectorSearchManager — branch coverage', () => {
         Object.assign(manager, { initialized: true, db: null })
 
         const result = await manager.addEntry(1, 'test content')
-        expect(result).toBe(false)
+        expect(result).toEqual({ success: false, error: 'Vector database not available' })
     })
 
     it('should return empty results from search when no db after initialize', async () => {
@@ -56,7 +56,7 @@ describe('VectorSearchManager — branch coverage', () => {
         }
 
         const result = await manager.rebuildIndex(mockDbAdapter as never)
-        expect(result).toEqual({ indexed: 0, failed: 0 })
+        expect(result).toEqual({ indexed: 0, failed: 0, firstError: null })
     })
 
     it('should return stats with zero values when no db', async () => {
@@ -77,7 +77,7 @@ describe('VectorSearchManager — branch coverage', () => {
 
         const result = await manager.addEntry(1, 'test')
         expect(initSpy).toHaveBeenCalled()
-        expect(result).toBe(false) // no db, so returns false
+        expect(result).toEqual({ success: false, error: 'Vector database not available' }) // no db, so returns structured error
     })
 
     it('should auto-initialize when calling search on uninitialized manager', async () => {
@@ -106,6 +106,6 @@ describe('VectorSearchManager — branch coverage', () => {
 
         const result = await manager.rebuildIndex(mockDbAdapter as never)
         expect(initSpy).toHaveBeenCalled()
-        expect(result).toEqual({ indexed: 0, failed: 0 })
+        expect(result).toEqual({ indexed: 0, failed: 0, firstError: null })
     })
 })

@@ -250,13 +250,13 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                         }
                     }
-                    const { indexed, failed } = await vectorManager.rebuildIndex(db, progress)
+                    const { indexed, failed, firstError } = await vectorManager.rebuildIndex(db, progress)
                     const success = indexed > 0 || failed === 0
                     return {
                         success,
                         entriesIndexed: indexed,
                         ...(failed > 0 ? { failedEntries: failed } : {}),
-                        ...(!success ? { error: 'All entries failed to generate embeddings' } : {}),
+                        ...(!success ? { error: firstError ?? 'All entries failed to generate embeddings' } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -289,11 +289,11 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: `Entry ${String(entry_id)} not found`,
                         }
                     }
-                    const success = await vectorManager.addEntry(entry_id, entry.content)
+                    const result = await vectorManager.addEntry(entry_id, entry.content)
                     return {
-                        success,
+                        success: result.success,
                         entryId: entry_id,
-                        ...(success ? {} : { error: 'Failed to generate or store embedding' }),
+                        ...(result.success ? {} : { error: result.error ?? 'Failed to generate or store embedding' }),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

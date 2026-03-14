@@ -18,9 +18,9 @@ function createMockVector(overrides: Partial<Record<string, unknown>> = {}): Vec
         isInitialized: vi.fn().mockReturnValue(true),
         initialize: vi.fn().mockResolvedValue(undefined),
         search: vi.fn().mockResolvedValue([]),
-        addEntry: vi.fn().mockResolvedValue(true),
+        addEntry: vi.fn().mockResolvedValue({ success: true }),
         removeEntry: vi.fn().mockReturnValue(true),
-        rebuildIndex: vi.fn().mockResolvedValue({ indexed: 5, failed: 0 }),
+        rebuildIndex: vi.fn().mockResolvedValue({ indexed: 5, failed: 0, firstError: null }),
         getStats: vi.fn().mockReturnValue({
             itemCount: 10,
             modelName: 'Xenova/all-MiniLM-L6-v2',

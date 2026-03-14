@@ -89,10 +89,10 @@
 
 - **Pass 2 Testing Fixes**
   - Improved `link_entries` error message when source or target entry doesn't exist — now returns `"One or both entries not found (from: X, to: Y)"` instead of raw SQLite `"FOREIGN KEY constraint failed"` error
-  - `add_to_vector_index` now returns `error: "Failed to generate or store embedding"` when the vector operation fails, instead of `success: false` with no explanation
+  - `add_to_vector_index` now surfaces the actual error message from embedding generation/storage failures instead of a generic `"Failed to generate or store embedding"` string — enables diagnosis of model loading, ONNX runtime, or sqlite-vec issues
 
 - **Pass 1 Retest Fixes**
-  - `rebuild_vector_index` now returns `failedEntries` count and sets `success: false` with `error: "All entries failed to generate embeddings"` when every entry fails — previously returned `success: true, entriesIndexed: 0` with no indication of failure
+  - `rebuild_vector_index` now returns `failedEntries` count, `firstError` with the actual embedding error message, and sets `success: false` when every entry fails — previously returned `success: true, entriesIndexed: 0` with no indication of failure
   - Added `getRecent` alias for `getRecentEntries` in Code Mode (`mj.core.getRecent()`) — agents commonly try this natural camelCase abbreviation
 
 - **MCP Builder Compliance Audit Fixes**
