@@ -217,11 +217,11 @@
 - **Test Directory Renamed** — Renamed `src/auth/__tests__` to `src/auth/tests` to comply with the project's strict kebab-case naming standard.
 - **HTTP Transport Modularized** — Continued splitting `src/transports/http.ts` and `src/transports/http/server.ts` into a fully modularized directory:
   - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types
-  - `security.ts` — Client IP extraction, built-in rate limiting, CORS (wildcard subdomain support), security headers
+  - `security.ts` — Client IP extraction, built-in rate limiting, CORS (exact-match multi-origin), security headers
   - `handlers.ts` — Health check, root info, bearer token auth middleware
   - `server/` — Split `server.ts` into `stateless.ts`, `stateful.ts`, `legacy-sse.ts`, and `index.ts`
   - `index.ts` — Barrel re-export
-- **CORS Configuration** — `corsOrigin: string` changed to `corsOrigins: string[]` for multi-origin support. CLI `--cors-origin` accepts comma-separated values. Wildcard subdomain patterns supported (e.g., `*.example.com`).
+- **CORS Configuration** — `corsOrigin: string` changed to `corsOrigins: string[]` for multi-origin support. CLI `--cors-origin` accepts comma-separated values. Exact-match origins only (CodeQL-safe record-lookup pattern).
 - **HSTS Configuration** — HSTS is now config-driven via `enableHSTS: true` instead of auto-detecting from `X-Forwarded-Proto` header.
 - **Cache-Control Header** — Strengthened from `no-store` to `no-store, no-cache, must-revalidate`.
 
