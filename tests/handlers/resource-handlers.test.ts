@@ -205,13 +205,8 @@ describe('Resource Handlers', () => {
         it('should read memory://graph/recent', async () => {
             const result = await readResource('memory://graph/recent', db)
 
-            const data = result.data as {
-                format: string
-                diagram: string
-                relationshipCount?: number
-            }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('graph TD')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('graph TD')
         })
 
         it('should read memory://statistics', async () => {
@@ -288,8 +283,8 @@ describe('Resource Handlers', () => {
         it('should read memory://graph/actions', async () => {
             const result = await readResource('memory://graph/actions', db)
 
-            const data = result.data as { format: string; diagram: string }
-            expect(data.format).toBe('mermaid')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('graph')
         })
 
         it('should read memory://actions/recent', async () => {
@@ -355,9 +350,8 @@ describe('Resource Handlers', () => {
                 undefined,
                 null // no github
             )
-            const data = result.data as { format: string; diagram: string; message: string }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('GitHub integration not available')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('GitHub integration not available')
         })
     })
 })

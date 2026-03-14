@@ -248,6 +248,8 @@
 
 ### Fixed
 
+- **Mermaid Graph Resources Return Raw Text** — `memory://graph/recent`, `memory://graph/actions`, and `memory://kanban/{n}/diagram` now return raw Mermaid diagram strings instead of JSON envelopes (`{ format, diagram, ... }`). Output is directly pasteable into [mermaid.live](https://mermaid.live/) without `UnknownDiagramError`. The `text/plain` mimeType now correctly matches the response body.
+
 - **Vector Index sqlite-vec Compatibility** — Fixed two sqlite-vec `vec0` virtual table incompatibilities that prevented all vector operations (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`):
   1. Entry IDs must be `BigInt` through `better-sqlite3` bindings — regular JavaScript `number` values are rejected with `"Only integers are allows for primary key values"`. Fixed by coercing with `BigInt()`, matching the [official sqlite-vec Node.js example](https://github.com/asg017/sqlite-vec/blob/main/examples/simple-node/demo.mjs).
   2. `vec0` virtual tables don't support `INSERT OR REPLACE` conflict resolution — upserts fail with `"UNIQUE constraint failed"`. Changed `addEntry()` to DELETE+INSERT pattern.

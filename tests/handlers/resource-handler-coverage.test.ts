@@ -136,9 +136,8 @@ describe('Resource Handler Coverage', () => {
 
         it('should return mermaid fallback for diagram without github', async () => {
             const result = await readResource('memory://kanban/1/diagram', db)
-            const data = result.data as { format: string; diagram: string }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('not available')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('not available')
         })
     })
 

@@ -4,7 +4,7 @@
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read `memory://briefing` and present the `userMessage` to the user as a short bullet list of key facts (no tables, no elaborate formatting):
+**REQUIRED**: Before processing any user request, read `memory://briefing` and present the `userMessage` to the user as a short, formatted bullet list of key facts (no tables):
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs
@@ -13,9 +13,10 @@
 - Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
 
 **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
-  - **AntiGravity**: Tools are `mcp_{name}_{tool}` → server name = `memory-journal-mcp`
-  - **Cursor**: Tools are `user-{name}-{tool}` → server name = `user-memory-journal-mcp`
-  - **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
+
+- **AntiGravity**: Tools are `mcp_{name}_{tool}` → server name = `memory-journal-mcp`
+- **Cursor**: Tools are `user-{name}-{tool}` → server name = `user-memory-journal-mcp`
+- **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
 
 ## Behaviors
 
@@ -28,17 +29,20 @@
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
 
 **Suggest adding a rule** when you observe:
+
 - Naming conventions, formatting preferences, or coding standards
 - Testing patterns or verification steps the user always follows
 - Project-specific commands, workflows, or deployment steps
 - Error handling patterns or logging conventions
 
 **Suggest adding a skill** when you build:
+
 - Reusable multi-step processes (e.g., deployment, release, audit workflows)
 - Project-specific templates or scaffolds
 - Complex integrations or tool chains the user may repeat
 
 **Suggest refining existing rules/skills** when you notice:
+
 - A rule conflict or ambiguity causing inconsistent behavior
 - An outdated pattern that no longer matches the codebase
 - Missing edge cases or exceptions to an existing rule
@@ -53,6 +57,7 @@ When the user has GitHub Copilot code review enabled:
 **Pre-emptive checking** — Before creating or modifying code, search journal entries with tag `copilot-finding` for patterns relevant to the current work. Apply those patterns proactively to reduce review cycles.
 
 **How to act:**
+
 - The briefing shows **Rules** and **Skills** paths — use these to locate the files
 - **Always ask the user first** — never create or modify rules/skills silently
 - Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
@@ -73,17 +78,17 @@ When the user has GitHub Copilot code review enabled:
 For multi-step workflows (3+ operations), prefer `mj_execute_code` over individual tool calls.
 This executes JavaScript in a sandboxed environment with all tools available as `mj.*` API:
 
-| Group         | Namespace              | Example                                           |
-|---------------|------------------------|---------------------------------------------------|
-| Core          | `mj.core.*`           | `mj.core.createEntry("Implemented feature X")`    |
-| Search        | `mj.search.*`         | `mj.search.searchEntries("performance")`          |
-| Analytics     | `mj.analytics.*`      | `mj.analytics.getStatistics()`                    |
-| Relationships | `mj.relationships.*`  | `mj.relationships.linkEntries(1, 2, "implements")`|
-| Export        | `mj.export.*`         | `mj.export.exportEntries("json")`                 |
-| Admin         | `mj.admin.*`          | `mj.admin.rebuildVectorIndex()`                   |
-| GitHub        | `mj.github.*`         | `mj.github.getGithubIssues({ state: "open" })`   |
-| Backup        | `mj.backup.*`         | `mj.backup.backupJournal()`                       |
-| Team          | `mj.team.*`           | `mj.team.teamCreateEntry("Team update")`          |
+| Group         | Namespace            | Example                                            |
+| ------------- | -------------------- | -------------------------------------------------- |
+| Core          | `mj.core.*`          | `mj.core.createEntry("Implemented feature X")`     |
+| Search        | `mj.search.*`        | `mj.search.searchEntries("performance")`           |
+| Analytics     | `mj.analytics.*`     | `mj.analytics.getStatistics()`                     |
+| Relationships | `mj.relationships.*` | `mj.relationships.linkEntries(1, 2, "implements")` |
+| Export        | `mj.export.*`        | `mj.export.exportEntries("json")`                  |
+| Admin         | `mj.admin.*`         | `mj.admin.rebuildVectorIndex()`                    |
+| GitHub        | `mj.github.*`        | `mj.github.getGithubIssues({ state: "open" })`     |
+| Backup        | `mj.backup.*`        | `mj.backup.backupJournal()`                        |
+| Team          | `mj.team.*`          | `mj.team.teamCreateEntry("Team update")`           |
 
 **Features**: Positional args (`createEntry("note")`), aliases (`mj.core.create`), `mj.help()` for discovery.
 **Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
@@ -145,12 +150,12 @@ Fetch `memory://health` to verify server status, database stats, and tool availa
 
 ### Search Tools
 
-| Tool                     | Required Parameters                   | Optional Parameters                                                                                            |
-| ------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Tool                     | Required Parameters                   | Optional Parameters                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_entries`         | none                                  | `query`, `limit`, `is_personal`, `issue_number`, `pr_number`, `pr_status`, `project_number`, `workflow_run_id`. Query uses FTS5: phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by BM25 relevance. |
-| `search_by_date_range`   | `start_date`, `end_date` (YYYY-MM-DD) | `tags`, `entry_type`, `is_personal`, `issue_number`, `pr_number`, `project_number`, `workflow_run_id`          |
-| `semantic_search`        | `query` (string)                      | `limit`, `similarity_threshold` (default 0.25), `is_personal`, `hint_on_empty` (bool, default true)            |
-| `get_vector_index_stats` | none                                  | none                                                                                                           |
+| `search_by_date_range`   | `start_date`, `end_date` (YYYY-MM-DD) | `tags`, `entry_type`, `is_personal`, `issue_number`, `pr_number`, `project_number`, `workflow_run_id`                                                                                                                         |
+| `semantic_search`        | `query` (string)                      | `limit`, `similarity_threshold` (default 0.25), `is_personal`, `hint_on_empty` (bool, default true)                                                                                                                           |
+| `get_vector_index_stats` | none                                  | none                                                                                                                                                                                                                          |
 
 ### Relationship Tools
 
@@ -237,9 +242,9 @@ Milestone resources:
 
 ### Code Mode
 
-| Tool                | Required Parameters | Optional Parameters                                     |
-| ------------------- | ------------------- | ------------------------------------------------------- |
-| `mj_execute_code`   | `code` (string)     | `timeout` (ms, max 30000), `readonly` (bool, default false) |
+| Tool              | Required Parameters | Optional Parameters                                         |
+| ----------------- | ------------------- | ----------------------------------------------------------- |
+| `mj_execute_code` | `code` (string)     | `timeout` (ms, max 30000), `readonly` (bool, default false) |
 
 ## Entry Types
 

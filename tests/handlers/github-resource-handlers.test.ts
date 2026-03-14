@@ -356,17 +356,11 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as {
-                format: string
-                diagram: string
-                projectNumber: number
-                totalItems: number
-            }
+            const data = result.data as string
 
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('graph LR')
-            expect(data.diagram).toContain('Done')
-            expect(data.totalItems).toBe(1)
+            expect(typeof data).toBe('string')
+            expect(data).toContain('graph LR')
+            expect(data).toContain('Done')
         })
 
         it('should show fallback when no github', async () => {
@@ -378,9 +372,8 @@ describe('GitHub Resource Handlers', () => {
                 null
             )
 
-            const data = result.data as { format: string; diagram: string }
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('NoGitHub')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoGitHub')
         })
     })
 
@@ -569,15 +562,10 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as {
-                format: string
-                diagram: string
-                workflowRunCount: number
-            }
+            const data = result.data as string
 
-            expect(data.format).toBe('mermaid')
-            expect(data.diagram).toContain('graph LR')
-            expect(data.workflowRunCount).toBe(1)
+            expect(typeof data).toBe('string')
+            expect(data).toContain('graph LR')
         })
 
         it('should return fallback when no github', async () => {
@@ -589,8 +577,8 @@ describe('GitHub Resource Handlers', () => {
                 null
             )
 
-            const data = result.data as { format: string; diagram: string; message: string }
-            expect(data.diagram).toContain('NoGitHub')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoGitHub')
         })
 
         it('should return fallback when no repo detected', async () => {
@@ -606,8 +594,8 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as { diagram: string }
-            expect(data.diagram).toContain('NoRepo')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoRepo')
         })
 
         it('should return fallback when no workflow runs', async () => {
@@ -623,8 +611,8 @@ describe('GitHub Resource Handlers', () => {
                 github
             )
 
-            const data = result.data as { diagram: string }
-            expect(data.diagram).toContain('NoRuns')
+            expect(typeof result.data).toBe('string')
+            expect(result.data as string).toContain('NoRuns')
         })
     })
 

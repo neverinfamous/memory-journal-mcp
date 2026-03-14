@@ -322,8 +322,8 @@ describe('Graph resources — branch coverage', () => {
                     executeRawQuery: vi.fn().mockReturnValue([]),
                 }),
             })
-            const result = resource.handler('memory://graph/recent', context as never) as Record<string, unknown>
-            expect(result.message).toContain('No entry relationships')
+            const result = resource.handler('memory://graph/recent', context as never) as string
+            expect(result).toContain('No relationships found')
         })
 
         it('should handle unknown relationship type with default arrow', () => {
@@ -338,10 +338,9 @@ describe('Graph resources — branch coverage', () => {
                     ]),
                 }),
             })
-            const result = resource.handler('memory://graph/recent', context as never) as Record<string, unknown>
-            const diagram = result.diagram as string
-            expect(diagram).toContain('-->')
-            expect(diagram).toContain('unknown_type')
+            const result = resource.handler('memory://graph/recent', context as never) as string
+            expect(result).toContain('-->')
+            expect(result).toContain('unknown_type')
         })
     })
 
@@ -349,8 +348,8 @@ describe('Graph resources — branch coverage', () => {
         it('should return no-github message when github integration not available', async () => {
             const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
             const context = createMockContext()
-            const result = (await resource.handler('memory://graph/actions', context as never)) as Record<string, unknown>
-            expect(result.message).toContain('GitHub integration not configured')
+            const result = (await resource.handler('memory://graph/actions', context as never)) as string
+            expect(result).toContain('GitHub integration not available')
         })
 
         it('should return no-repo message when repo info missing', async () => {
@@ -360,8 +359,8 @@ describe('Graph resources — branch coverage', () => {
                     getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
                 },
             })
-            const result = (await resource.handler('memory://graph/actions', context as never)) as Record<string, unknown>
-            expect(result.message).toContain('Could not detect repository')
+            const result = (await resource.handler('memory://graph/actions', context as never)) as string
+            expect(result).toContain('Repository not detected')
         })
 
         it('should return no-runs message when no workflow runs', async () => {
@@ -372,8 +371,8 @@ describe('Graph resources — branch coverage', () => {
                     getWorkflowRuns: vi.fn().mockResolvedValue([]),
                 },
             })
-            const result = (await resource.handler('memory://graph/actions', context as never)) as Record<string, unknown>
-            expect(result.message).toContain('No GitHub Actions workflow runs')
+            const result = (await resource.handler('memory://graph/actions', context as never)) as string
+            expect(result).toContain('No GitHub Actions workflow runs')
         })
     })
 

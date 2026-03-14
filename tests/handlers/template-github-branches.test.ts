@@ -236,8 +236,8 @@ describe('Template resources — branch coverage', () => {
 
         it('should return no-github mermaid', async () => {
             const resource = resources.find((r) => r.uri === 'memory://kanban/{project_number}/diagram')!
-            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext() as never)) as Record<string, unknown>
-            expect((result.diagram as string)).toContain('NoGitHub')
+            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext() as never)) as string
+            expect(result).toContain('NoGitHub')
         })
 
         it('should return no-owner mermaid', async () => {
@@ -245,8 +245,8 @@ describe('Template resources — branch coverage', () => {
                 getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
             }
             const resource = resources.find((r) => r.uri === 'memory://kanban/{project_number}/diagram')!
-            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext({ github }) as never)) as Record<string, unknown>
-            expect((result.diagram as string)).toContain('NoOwner')
+            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext({ github }) as never)) as string
+            expect(result).toContain('NoOwner')
         })
 
         it('should return not-found mermaid', async () => {
@@ -255,8 +255,8 @@ describe('Template resources — branch coverage', () => {
                 getProjectKanban: vi.fn().mockResolvedValue(null),
             }
             const resource = resources.find((r) => r.uri === 'memory://kanban/{project_number}/diagram')!
-            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext({ github }) as never)) as Record<string, unknown>
-            expect((result.diagram as string)).toContain('NotFound')
+            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext({ github }) as never)) as string
+            expect(result).toContain('NotFound')
         })
 
         it('should render diagram with all item types', async () => {
@@ -281,13 +281,12 @@ describe('Template resources — branch coverage', () => {
                 }),
             }
             const resource = resources.find((r) => r.uri === 'memory://kanban/{project_number}/diagram')!
-            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext({ github }) as never)) as Record<string, unknown>
-            const diagram = result.diagram as string
-            expect(diagram).toContain('🔵')
-            expect(diagram).toContain('🟣')
-            expect(diagram).toContain('⚪')
-            expect(diagram).toContain('#10')
-            expect(diagram).toContain('#20')
+            const result = (await resource.handler('memory://kanban/1/diagram', createMockContext({ github }) as never)) as string
+            expect(result).toContain('🔵')
+            expect(result).toContain('🟣')
+            expect(result).toContain('⚪')
+            expect(result).toContain('#10')
+            expect(result).toContain('#20')
         })
     })
 })
