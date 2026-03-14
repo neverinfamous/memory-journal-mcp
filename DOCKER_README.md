@@ -77,7 +77,7 @@ When starting a session with this server, the agent **must** read the `memory://
 ### Tool Filtering
 
 > [!IMPORTANT]
-> All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter.
+> All shortcuts and tool groups include **Code Mode** (`mj_execute_code`) by default for token-efficient operations. To exclude it, add `-codemode` to your filter: `--tool-filter starter,-codemode`
 
 Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `--tool-filter`):
 
@@ -100,7 +100,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ 44 MCP Tools (10 Groups)
+### 🛠️ **44 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                          |
 | --------------- | ----- | ---------------------------------------------------------------------------------------------------- |
@@ -115,7 +115,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                       |
 | `team`          | 3     | Team create, get recent, search (requires `TEAM_DB_PATH`)                                            |
 
-**[Complete tools documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
+**[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
 ### 🎯 **16 Workflow Prompts**
 
@@ -441,6 +441,8 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - `create_github_milestone` / `update_github_milestone` / `delete_github_milestone` - **Milestone CRUD**
 - `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
 - `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
+
+> **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, Milestones, timeline resources, context linking). Standard GitHub mutations (create/close issues, merge PRs, manage releases) are handled directly by agents via `gh` CLI.
 
 **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
 
