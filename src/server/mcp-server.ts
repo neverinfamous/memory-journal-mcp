@@ -59,6 +59,8 @@ export interface ServerOptions {
     oauthClockTolerance?: number
     // Briefing configuration
     briefingConfig?: BriefingConfig
+    // Instruction level
+    instructionLevel?: 'essential' | 'standard' | 'full'
 }
 
 /**
@@ -156,7 +158,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             const prompt = p as { name: string; description?: string }
             return { name: prompt.name, description: prompt.description }
         }),
-        latestEntry
+        latestEntry,
+        options.instructionLevel ?? 'standard'
     )
 
     // Create MCP server with capabilities and instructions

@@ -117,6 +117,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             annotations: {
                 readOnlyHint: false,
                 idempotentHint: false,
+                openWorldHint: false,
             },
             handler: (params: unknown) => {
                 try {

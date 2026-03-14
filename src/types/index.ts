@@ -260,6 +260,9 @@ export interface ServerConfig {
 
     /** Sentence transformer model name */
     modelName: string
+
+    /** Briefing depth for AI client instructions */
+    instructionLevel?: 'essential' | 'standard' | 'full'
 }
 
 /**

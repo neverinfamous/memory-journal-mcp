@@ -144,7 +144,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamCreateEntrySchemaMcp,
             outputSchema: TeamCreateOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -196,7 +196,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamGetRecentSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
@@ -227,7 +227,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
             group: 'team',
             inputSchema: TeamSearchSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {

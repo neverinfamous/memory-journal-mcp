@@ -74,7 +74,7 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
             group: 'export',
             inputSchema: ExportEntriesSchemaMcp,
             outputSchema: ExportEntriesOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const input = ExportEntriesSchema.parse(params)

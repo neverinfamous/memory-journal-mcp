@@ -154,7 +154,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
@@ -239,7 +239,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetEntryByIdSchemaMcp,
             outputSchema: EntryByIdOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params)
@@ -270,7 +270,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: GetRecentEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { limit, is_personal } = GetRecentEntriesSchema.parse(params)
@@ -288,7 +288,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
@@ -310,7 +310,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: TestSimpleSchema,
             outputSchema: TestSimpleOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
                     const { message } = TestSimpleSchema.parse(params)
@@ -327,7 +327,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             group: 'core',
             inputSchema: z.object({}).strict(),
             outputSchema: TagsListOutputSchema,
-            annotations: { readOnlyHint: true, idempotentHint: true },
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (_params: unknown) => {
                 try {
                     const rawTags = db.listTags()

@@ -80,6 +80,11 @@ program
         'OAuth clock tolerance in seconds (default: 60)',
         '60'
     )
+    .option(
+        '--instruction-level <level>',
+        'Briefing depth: essential, standard, full (env: INSTRUCTION_LEVEL)',
+        'standard'
+    )
     // Briefing configuration
     .option(
         '--briefing-entries <count>',
@@ -159,6 +164,7 @@ program
             briefingWorkflows: string
             briefingWorkflowStatus?: boolean
             briefingCopilot?: boolean
+            instructionLevel: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -245,6 +251,11 @@ program
                             options.briefingCopilot ??
                             process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
                     },
+                    instructionLevel: (
+                        options.instructionLevel !== 'standard'
+                            ? options.instructionLevel
+                            : process.env['INSTRUCTION_LEVEL'] ?? 'standard'
+                    ) as 'essential' | 'standard' | 'full',
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

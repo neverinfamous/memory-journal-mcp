@@ -109,7 +109,14 @@ After creating all 12 entries, verify the seed data is searchable:
 | Skills metadata                  | Inspect `skillsDir` field       | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                    |
 | Enhanced CI row                  | Inspect briefing.userMessage    | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set |
 
-### 1.3 GitHub Status Resource
+### 1.3 Protocol Validation
+
+| Test              | Command/Action                | Expected Result                                                  |
+| ----------------- | ----------------------------- | ---------------------------------------------------------------- |
+| Read instructions | Read `memory://instructions` | Returns markdown instructions; length varies based on `--instruction-level` (`essential`, `standard`, `full`) |
+| Tool annotations  | Call `tools/list`             | Core/local tools (e.g., `create_entry`) have `openWorldHint: false`; GitHub tools have `openWorldHint: true` |
+
+### 1.4 GitHub Status Resource
 
 | Test              | Command/Action                | Expected Result                                                  |
 | ----------------- | ----------------------------- | ---------------------------------------------------------------- |
@@ -638,6 +645,8 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 - [ ] All 44 tools execute without errors on happy paths
 - [ ] All 7 template resources work with valid parameters
 - [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- [ ] Server instructions length respects `--instruction-level` (`essential`, `standard`, `full`)
+- [ ] Local tools have `openWorldHint: false` annotations; GitHub tools have `openWorldHint: true`
 
 ### Entry CRUD
 

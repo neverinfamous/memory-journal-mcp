@@ -442,6 +442,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`)           |
 | `RULES_FILE_PATH`          | Path to user rules file for agent awareness (CLI: `--rules-file`)       |
 | `SKILLS_DIR_PATH`          | Path to skills directory for agent awareness (CLI: `--skills-dir`)      |
+| `INSTRUCTION_LEVEL`        | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
 

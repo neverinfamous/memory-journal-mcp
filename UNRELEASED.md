@@ -14,6 +14,10 @@
   - SHA-pinned `actions/checkout` in `auto-release.yml` to commit SHA, matching all other workflows
   - Removed manually-maintained `LABEL version` from `Dockerfile` — Docker tags and OCI metadata already convey version info without drift risk
 
+- **MCP Builder Compliance (D3/D7)**
+  - Added `openWorldHint: false` to 28 non-GitHub tool annotations across 9 handler files (`core.ts`, `search.ts`, `relationships.ts`, `team.ts`, `backup.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `codemode.ts`) — explicitly declares local-only SQLite operations
+  - Added configurable instruction level via `--instruction-level` CLI flag and `INSTRUCTION_LEVEL` env var (values: `essential`, `standard`, `full`; default: `standard`) — controls AI briefing depth in MCP `initialize` response
+
 
 
 - **Pass 2 Testing Fixes**

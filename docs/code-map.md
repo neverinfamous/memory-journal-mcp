@@ -48,8 +48,8 @@ src/
 │                                   #   GitHubWorkflowRun, KanbanBoard, TrafficData, RepoStats
 │
 ├── constants/
-│   ├── server-instructions.ts      # Agent instructions string (29KB — system prompt)
-│   ├── server-instructions.md      # Human-readable version (24KB)
+│   ├── server-instructions.ts      # Agent instructions generator — 3 tiers: essential (~200 tokens), standard (~400), full (~600)
+│   ├── server-instructions.md      # Human-readable version of the instructions
 │   └── icons.ts                    # MCP icon definitions per tool group
 │
 ├── filtering/
@@ -246,8 +246,8 @@ try {
 
 | What | Where | Notes |
 |------|-------|-------|
-| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | 29KB — exported as string constant |
-| Human-readable instructions | `src/constants/server-instructions.md` | 24KB markdown version |
+| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | `generateInstructions(enabledTools, prompts, latestEntry, level)` — configurable via `--instruction-level` / `INSTRUCTION_LEVEL` |
+| Human-readable instructions | `src/constants/server-instructions.md` | Human-readable markdown version |
 | MCP icons | `src/constants/icons.ts` | Per-group icon definitions |
 | Tool filter | `src/filtering/tool-filter.ts` | `ToolFilter` class (same pattern as db-mcp/mysql-mcp/postgres-mcp) |
 | Default config | `src/types/index.ts` | `DEFAULT_CONFIG` — dbPath, model name, semantic search toggle |
