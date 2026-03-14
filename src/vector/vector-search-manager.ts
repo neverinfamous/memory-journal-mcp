@@ -140,7 +140,8 @@ export class VectorSearchManager {
             const vec = new Float32Array(embedding)
             this.db
                 .prepare('INSERT OR REPLACE INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
-                .run(entryId, vec)
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion -- sqlite-vec vec0 rejects non-strict-integer PKs from better-sqlite3
+                .run(Number(entryId), vec)
 
             logger.debug('Added entry to vector index', {
                 module: 'VectorSearch',
@@ -221,7 +222,8 @@ export class VectorSearchManager {
         if (!this.db) return false
 
         try {
-            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(entryId)
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion -- sqlite-vec vec0 rejects non-strict-integer PKs from better-sqlite3
+            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(Number(entryId))
             return true
         } catch (error) {
             logger.debug('Vector removeEntry failed (item may not exist)', {
@@ -299,7 +301,8 @@ export class VectorSearchManager {
                     if (embedding !== null) {
                         try {
                             const vec = new Float32Array(embedding)
-                            insertStmt.run(entry.id, vec)
+                            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion -- sqlite-vec vec0 rejects non-strict-integer PKs from better-sqlite3
+                            insertStmt.run(Number(entry.id), vec)
                             indexed++
                         } catch (error) {
                             failed++

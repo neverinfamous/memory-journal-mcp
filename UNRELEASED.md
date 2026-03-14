@@ -240,6 +240,8 @@
 
 ### Fixed
 
+- **Vector Index sqlite-vec Integer Coercion** — Fixed `"Only integers are allows for primary key values on vec_embeddings"` error by coercing entry IDs with `Number()` before passing to sqlite-vec's `vec0` virtual table INSERT/DELETE operations. The native C extension is stricter about integer types than regular SQLite tables, rejecting values that `better-sqlite3` passes through prepared statements. This was the root cause of all vector index failures (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`).
+
 - Resolved Zod `4.3.6` dependency resolution conflict with OpenAI SDK via explicit `package.json` overrides.
 - Replaced `as unknown` type assertions with strict types where appropriate (`wasm-connection.ts`, `backup.ts`) and auth test mocks with properly mapped `QueryResult` types and `Object.create(Type.prototype)` mock instantiation.
 - Resolved native driver (better-sqlite3) `datatype mismatch` and `more than one statement` exceptions by strictly enforcing `IDatabaseConnection`'s `exec` implementation in analytical routes.
