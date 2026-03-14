@@ -22,43 +22,26 @@
 
 **44 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
-| Feature                        | Description                                                                                                                                                                                                  |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments — no manual copy-pasting between sessions                                                                         |
-| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                       |
-| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                      |
-| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                  |
-| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 44 capabilities via `mj.*` API                |
-| **Configurable Briefing**      | 11 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, and rules/skills awareness                       |
-| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                         |
-| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                              |
-| **Team Collaboration**         | Separate public team database with author attribution, cross-DB search, and dedicated team tools                                                                                                             |
-| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                              |
-| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                |
-| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                               |
-| **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                             |
-| **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals |
-| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                             |
+| Feature                        | Description                                                                                                                                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments                                                                                                                                                                                     |
+| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                                                                                         |
+| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                                                                                        |
+| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                                                                                    |
+| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 44 capabilities via `mj.*` API                                                                                  |
+| **Configurable Briefing**      | 11 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, and rules/skills awareness                                                                                         |
+| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing threads                                                                                                                                                                             |
+| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking                                                                                                                                                                       |
+| **Team Collaboration**         | Separate public team database with author attribution, cross-DB search, and dedicated team tools                                                                                                                                                                               |
+| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                                                                                |
+| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                                                                                  |
+| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                                                                                 |
+| **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                                                                                               |
+| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                                                                                               |
 | **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, and IDE agents proactively apply past patterns ([setup guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
-| **Strict TypeScript**          | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                                                               |
-| **MCP 2025-03-26 Compliant**   | Full protocol support with tool safety annotations, resource priorities, and progress notifications                                                                                                          |
-
-**Ask Agent naturally:**
-
-- "Show me my recent journal entries"
-- "Create a backup of my journal"
-- "Check the server health status"
-- "Find entries related to performance"
+| **Strict TypeScript**          | 100% type-safe codebase with strict mode                                                                                                                                                                                                                                       |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
-
-### Deployment Options
-
-- **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Node.js Alpine-based multi-platform support
-- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Simple `npm install -g` for local deployment
-- **[MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)**
-
-**Flow:** AI Session Start → Read `memory://briefing` → Journal Operations (Create, Search, Link) → Triple Search + GitHub Integration → Outputs (Standups, Knowledge Graphs, Timelines) → Use `session-summary` prompt when ready to capture session context
 
 ## Rule (Add to AGENTS.md, GEMINI.md, etc)
 
@@ -119,56 +102,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🎯 **16 Workflow Prompts**
 
-- `find-related` - Discover connected entries via semantic similarity
-- `prepare-standup` - Daily standup summaries
-- `prepare-retro` - Sprint retrospectives
-- `weekly-digest` - Day-by-day weekly summaries
-- `analyze-period` - Deep period analysis with insights
-- `goal-tracker` - Milestone and achievement tracking
-- `get-context-bundle` - Project context with Git/GitHub/Kanban
-- `get-recent-entries` - Formatted recent entries
-- `project-status-summary` - GitHub Project status reports
-- `pr-summary` - Pull request journal activity summary
-- `code-review-prep` - Comprehensive PR review preparation
-- `pr-retrospective` - Completed PR analysis with learnings
-- `actions-failure-digest` - CI/CD failure analysis
-- `project-milestone-tracker` - Milestone progress tracking
-- `confirm-briefing` - Acknowledge session context to user
-- `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
-
-**[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
+Standups, retrospectives, PR summaries, weekly digests, period analysis, milestone tracking, context bundles, session summaries, and more. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **22 Resources** (15 Static + 7 Template)
 
-**Static Resources** (appear in resource lists):
-
-- `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
-- `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
-- `memory://recent` - 10 most recent entries
-- `memory://significant` - Significant milestones and breakthroughs
-- `memory://graph/recent` - Live Mermaid diagram of recent relationships
-- `memory://health` - Server health & diagnostics
-- `memory://graph/actions` - CI/CD narrative graph
-- `memory://actions/recent` - Recent workflow runs
-- `memory://tags` - All tags with usage counts
-- `memory://statistics` - Journal statistics
-- `memory://github/status` - GitHub repository status overview
-- `memory://github/insights` - Repository stars, forks, and 14-day traffic summary
-- `memory://github/milestones` - Open milestones with completion percentages
-- `memory://team/recent` - Recent team entries with author attribution
-- `memory://team/statistics` - Team entry counts, types, and author breakdown
-
-**Template Resources** (require parameters, fetch directly by URI):
-
-- `memory://projects/{number}/timeline` - Project activity timeline
-- `memory://issues/{issue_number}/entries` - Entries linked to issue
-- `memory://prs/{pr_number}/entries` - Entries linked to PR
-- `memory://prs/{pr_number}/timeline` - Combined PR + journal timeline
-- `memory://kanban/{project_number}` - GitHub Project Kanban board
-- `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
-- `memory://milestones/{number}` - Milestone detail with completion progress
-
-**[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+15 static resources (`memory://briefing`, `memory://health`, `memory://recent`, GitHub status/insights/milestones, team stats, and more) plus 7 template resources for project timelines, issue/PR entries, Kanban boards, and milestone details. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## 🚀 Quick Start (2 Minutes)
 
@@ -232,56 +170,40 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 Restart Cursor or your MCP client and start journaling!
 
-| Environment Variable       | Description                                                             |
-| -------------------------- | ----------------------------------------------------------------------- |
-| `DB_PATH`                  | Database location (default: `/app/data/memory_journal.db` in Docker)    |
-| `TEAM_DB_PATH`             | Team database file location (CLI: `--team-db`)                          |
-| `TEAM_AUTHOR`              | Override author name for team entries (default: `git config user.name`) |
-| `GITHUB_TOKEN`             | GitHub personal access token for API access                             |
-| `GITHUB_REPO_PATH`         | Path to git repo inside container (mount your repo)                     |
-| `DEFAULT_PROJECT_NUMBER`   | Default GitHub Project number for auto-assignment when creating issues  |
-| `AUTO_REBUILD_INDEX`       | Set to `true` to rebuild vector index on server startup                 |
-| `MCP_HOST`                 | Server bind host (`0.0.0.0` for containers, default: `localhost`)       |
-| `OAUTH_ENABLED`            | Set to `true` to enable OAuth 2.1 authentication (HTTP only)            |
-| `OAUTH_ISSUER`             | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)          |
-| `OAUTH_AUDIENCE`           | Expected JWT audience claim                                             |
-| `OAUTH_JWKS_URI`           | JWKS endpoint for token signature verification                          |
-| `BRIEFING_ENTRY_COUNT`     | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)   |
-| `BRIEFING_INCLUDE_TEAM`    | Include team DB entries in briefing (`true`/`false`; default: `false`)  |
-| `BRIEFING_ISSUE_COUNT`     | Issues to list in briefing; `0` = count only (default: `0`)             |
-| `BRIEFING_PR_COUNT`        | PRs to list in briefing; `0` = count only (default: `0`)                |
-| `BRIEFING_PR_STATUS`       | Show PR status breakdown (open/merged/closed; default: `false`)         |
-| `BRIEFING_WORKFLOW_COUNT`  | Workflow runs to list in briefing; `0` = status only (default: `0`)     |
-| `BRIEFING_WORKFLOW_STATUS` | Show workflow status breakdown in briefing (default: `false`)           |
-| `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`)           |
-| `RULES_FILE_PATH`          | Path to user rules file for agent awareness (CLI: `--rules-file`)       |
-| `SKILLS_DIR_PATH`          | Path to skills directory for agent awareness (CLI: `--skills-dir`)      |
+| Environment Variable       | Description                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `DB_PATH`                  | Database location (default: `/app/data/memory_journal.db` in Docker)                              |
+| `TEAM_DB_PATH`             | Team database file location (CLI: `--team-db`)                                                    |
+| `TEAM_AUTHOR`              | Override author name for team entries (default: `git config user.name`)                           |
+| `GITHUB_TOKEN`             | GitHub personal access token for API access                                                       |
+| `GITHUB_REPO_PATH`         | Path to git repo inside container (mount your repo)                                               |
+| `DEFAULT_PROJECT_NUMBER`   | Default GitHub Project number for auto-assignment when creating issues                            |
+| `AUTO_REBUILD_INDEX`       | Set to `true` to rebuild vector index on server startup                                           |
+| `MCP_HOST`                 | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
+| `OAUTH_ENABLED`            | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
+| `OAUTH_ISSUER`             | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |
+| `OAUTH_AUDIENCE`           | Expected JWT audience claim                                                                       |
+| `OAUTH_JWKS_URI`           | JWKS endpoint for token signature verification                                                    |
+| `BRIEFING_ENTRY_COUNT`     | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                             |
+| `BRIEFING_INCLUDE_TEAM`    | Include team DB entries in briefing (`true`/`false`; default: `false`)                            |
+| `BRIEFING_ISSUE_COUNT`     | Issues to list in briefing; `0` = count only (default: `0`)                                       |
+| `BRIEFING_PR_COUNT`        | PRs to list in briefing; `0` = count only (default: `0`)                                          |
+| `BRIEFING_PR_STATUS`       | Show PR status breakdown (open/merged/closed; default: `false`)                                   |
+| `BRIEFING_WORKFLOW_COUNT`  | Workflow runs to list in briefing; `0` = status only (default: `0`)                               |
+| `BRIEFING_WORKFLOW_STATUS` | Show workflow status breakdown in briefing (default: `false`)                                     |
+| `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`)                                     |
+| `RULES_FILE_PATH`          | Path to user rules file for agent awareness (CLI: `--rules-file`)                                 |
+| `SKILLS_DIR_PATH`          | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                |
 | `INSTRUCTION_LEVEL`        | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 
-#### Fallback Behavior
-
-When GitHub tools cannot auto-detect repository information:
-
-1. **With `GITHUB_REPO_PATH` set**: Tools auto-detect `owner` and `repo` from your mounted repo's git remote
-2. **Without `GITHUB_REPO_PATH`**: Tools return `requiresUserInput: true` with instructions
-3. **With explicit parameters**: Always works - specify `owner` and `repo` directly
-
-**Note**: In Docker, mount your repo read-only (`-v /path/to/repo:/app/repo:ro`) for auto-detection.
-
-### Client-Specific Notes
-
-**Cursor IDE:**
-
-- **Listing MCP Resources**: If the agent has trouble listing resources, instruct it to call `ListMcpResources()` without specifying a server parameter, or with `server: "user-memory-journal-mcp"` (Cursor prefixes server names with `user-`).
+**Fallback:** With `GITHUB_REPO_PATH` set, tools auto-detect `owner`/`repo` from the mounted repo's git remote. Without it, provide `owner` and `repo` parameters explicitly. Mount read-only: `-v /path/to/repo:/app/repo:ro`.
 
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions with a three-step cycle:
-
-1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
-2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
+1. **Session start** → agent reads `memory://briefing` and shows project context
+2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
 
 ### HTTP/SSE Transport (Remote Access)
@@ -321,20 +243,11 @@ docker run --rm -p 3000:3000 \
 
 **Session Management:** In stateful mode, include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
-**Security Features:**
-
-- **OAuth 2.1 Authentication** — RFC 9728/8414 compliant with JWT validation, JWKS caching, and granular scope enforcement (opt-in via `--oauth-enabled`)
-- **7 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (opt-in)
-- **Rate Limiting** — 100 requests/minute per IP with built-in sliding window (429 on excess)
-- **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`). Supports comma-separated multiple origins (exact-match only)
-- **Body Size Limit** — 1 MB maximum (configurable)
-- **Server Timeouts** — Request (120s), keep-alive (65s), and headers (66s) timeouts for DoS mitigation
-- **404 Handler** — Unknown paths return `{ error: "Not found" }`
-- **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
-- **Build Provenance** - Cryptographic proof of build process
-- **SBOM Available** - Complete software bill of materials
-- **Supply Chain Attestations** - Verifiable build integrity
-- **Non-root Execution** - Minimal attack surface
+- **OAuth 2.1** — RFC 9728/8414, JWT/JWKS, granular scopes (opt-in via `--oauth-enabled`)
+- **7 Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
+- **Rate Limiting** — 100 req/min per IP · **CORS** — configurable multi-origin (exact-match) · **1MB body limit**
+- **Server Timeouts** — Request (120s), keep-alive (65s), headers (66s) · **404 handler** · **Cross-protocol guard**
+- **Build Provenance** · **SBOM** · **Supply Chain Attestations** · **Non-root execution**
 
 | Mode                      | Progress Notifications | Legacy SSE | Serverless |
 | ------------------------- | ---------------------- | ---------- | ---------- |
@@ -366,17 +279,6 @@ docker run --rm -p 3000:3000 \
 
 Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
 
-**Example with curl:**
-
-Initialize session (returns `mcp-session-id` header). Include `mcp-session-id` header in subsequent requests.
-
-```bash
-curl -X POST http://localhost:3000/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-```
-
 ## 🔐 OAuth 2.1 Authentication
 
 For production deployments, enable OAuth 2.1 on the HTTP transport:
@@ -402,113 +304,31 @@ docker run --rm -p 3000:3000 \
 
 > **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN`, or runs without authentication.
 
-## ️ Supply Chain Security
-
-For enhanced security and reproducible builds, use SHA-pinned images:
-
-**Find SHA tags:** https://hub.docker.com/r/writenotenow/memory-journal-mcp/tags
-
-**Option 1: Multi-arch manifest (recommended)**
-
-```bash
-docker pull writenotenow/memory-journal-mcp:sha256-<manifest-digest>
-```
-
-**Option 2: Direct digest (maximum security)**
-
-```bash
-docker pull writenotenow/memory-journal-mcp@sha256:<manifest-digest>
-```
-
 ## 🔧 Configuration
 
 ### GitHub Management Capabilities
 
-Memory Journal provides a **hybrid approach** to GitHub management:
-
-| Capability Source  | Purpose                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| **MCP Server**     | Specialized features: Kanban visualization, Milestones, journal linking, project timelines |
-| **Agent (gh CLI)** | Full GitHub mutations: create/close issues, create/merge PRs, manage releases              |
-
-**MCP Server Tools (Read + Kanban + Milestones + Issue Lifecycle):**
-
-- `get_github_issues` / `get_github_issue` - Query issues
-- `get_github_prs` / `get_github_pr` - Query pull requests
-- `get_github_context` - Full repository context
-- `get_kanban_board` / `move_kanban_item` - **Kanban management**
-- `get_github_milestones` / `get_github_milestone` - **Milestone tracking with completion %**
-- `create_github_milestone` / `update_github_milestone` / `delete_github_milestone` - **Milestone CRUD**
-- `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
-- `create_github_issue_with_entry` / `close_github_issue_with_entry` - **Issue lifecycle with journal linking**
-
-> **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, Milestones, timeline resources, context linking). Standard GitHub mutations (create/close issues, merge PRs, manage releases) are handled directly by agents via `gh` CLI.
-
-**[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
+16 GitHub tools covering issues, PRs, Kanban boards, milestones (with completion %), repository insights, Copilot reviews, and issue lifecycle with journal linking. Standard mutations (create/close issues, merge PRs) are handled by agents via `gh` CLI. **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
 
 ## 📦 Image Details
 
-| Platform                  | Features                                          |
-| ------------------------- | ------------------------------------------------- |
-| **AMD64** (x86_64)        | Complete: all tools, semantic search, Git context |
-| **ARM64** (Apple Silicon) | Complete: all tools, semantic search, Git context |
+**Platforms:** AMD64 (x86_64) and ARM64 (Apple Silicon) — complete feature parity.
 
-**TypeScript Image Benefits:**
+**Stack:** Node.js 24 on Alpine Linux (~150MB compressed) · `better-sqlite3` (native SQLite) · `sqlite-vec` (vector search) · `@huggingface/transformers` (ML embeddings) · lazy model loading · deterministic error handling · automatic migrations.
 
-- **Node.js 24 on Alpine Linux** - Minimal footprint (~150MB compressed)
-- **Native SQLite Engine** - High-performance `better-sqlite3` with synchronous I/O
-- **sqlite-vec** - Vector similarity search via SQLite extension
-- **@huggingface/transformers** - ML embeddings in JavaScript
-- **Faster Startup** - Lazy loading of ML models
-- **Production/Stable** - Deterministic error handling (`{success, error, code, category, suggestion, recoverable}` on every tool) and automatic migrations
+**Performance:** Sub-millisecond database reads · 640+ ops/sec vector search/indexing · O(1) cached tool dispatch. Run `npm run bench` for local benchmarks.
 
-Designed for extremely low overhead: database reads in sub-millisecond, vector search and indexing both exceed 640 ops/sec, tool dispatch cached at O(1) with >4800x overhead reduction. Run `npm run bench` for local benchmarks.
-
-**Automated Deployment:**
-
-- ⚡ **Always Fresh** - Images built within minutes of commits
-- 🔒 **Security Scanned** - Automatic vulnerability scanning
-- 🌍 **Multi-Platform** - Intel (amd64) and Apple Silicon (arm64)
-- ✅ **Quality Tested** - Automated testing before deployment
-- 📋 **SBOM Available** - Complete software bill of materials
-
-**Available Tags:**
-
-- `5.1.1` - Specific version (recommended for production)
-- `5.1` - Latest patch in 5.1.x series
-- `5` - Latest minor in 5.x series
-- `latest` - Always the newest version
-- `sha256-<digest>` - SHA-pinned for maximum security
+**Tags:** `5.1.1` (recommended) · `5.1` · `5` · `latest` · `sha256-<digest>` (SHA-pinned)
 
 ## 🏗️ Build from Source
-
-**Step 1: Clone the repository**
 
 ```bash
 git clone https://github.com/neverinfamous/memory-journal-mcp.git
 cd memory-journal-mcp
-```
-
-**Step 2: Build the Docker image**
-
-```bash
 docker build -f Dockerfile -t memory-journal-mcp-local .
 ```
 
-**Step 3: Add to MCP config**
-
-Update your `~/.cursor/mcp.json` to use the local build:
-
-```json
-{
-  "mcpServers": {
-    "memory-journal-mcp": {
-      "command": "docker",
-      "args": ["run", "--rm", "-i", "-v", "./data:/app/data", "memory-journal-mcp-local"]
-    }
-  }
-}
-```
+Then use `memory-journal-mcp-local` as the image name in your MCP config (see Quick Start above).
 
 ## 📚 Documentation & Resources
 

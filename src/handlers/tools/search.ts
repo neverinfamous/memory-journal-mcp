@@ -150,12 +150,19 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.pr_number !== undefined ||
                         input.is_personal !== undefined
 
+                    // When merging across DBs, fetch more per-DB so BM25 ranking
+                    // in one DB doesn't silently drop entries before the merge.
+                    // The actual user limit is applied by mergeAndDedup.
+                    const perDbLimit = teamDb
+                        ? Math.min(input.limit * 2, 500)
+                        : input.limit
+
                     let personalEntries
                     if (!input.query && !hasFilters) {
-                        personalEntries = db.getRecentEntries(input.limit, input.is_personal)
+                        personalEntries = db.getRecentEntries(perDbLimit, input.is_personal)
                     } else {
                         personalEntries = db.searchEntries(input.query || '', {
-                            limit: input.limit,
+                            limit: perDbLimit,
                             isPersonal: input.is_personal,
                             projectNumber: input.project_number,
                             issueNumber: input.issue_number,
@@ -167,10 +174,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     if (teamDb) {
                         let teamEntries
                         if (!input.query && !hasFilters) {
-                            teamEntries = teamDb.getRecentEntries(input.limit)
+                            teamEntries = teamDb.getRecentEntries(perDbLimit)
                         } else {
                             teamEntries = teamDb.searchEntries(input.query || '', {
-                                limit: input.limit,
+                                limit: perDbLimit,
                                 projectNumber: input.project_number,
                                 issueNumber: input.issue_number,
                                 prNumber: input.pr_number,
@@ -201,6 +208,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
+                    const perDbLimit = teamDb
+                        ? Math.min(input.limit * 2, 500)
+                        : input.limit
                     const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
                         tags: input.tags,
@@ -209,7 +219,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         issueNumber: input.issue_number,
                         prNumber: input.pr_number,
                         workflowRunId: input.workflow_run_id,
-                        limit: input.limit,
+                        limit: perDbLimit,
                     })
 
                     // Cross-database merge when team DB is available
@@ -224,7 +234,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 issueNumber: input.issue_number,
                                 prNumber: input.pr_number,
                                 workflowRunId: input.workflow_run_id,
-                                limit: input.limit,
+                                limit: perDbLimit,
                             }
                         )
                         const merged = mergeAndDedup(

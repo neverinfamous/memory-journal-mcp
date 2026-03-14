@@ -248,6 +248,8 @@
 
 ### Fixed
 
+- **Cross-DB Search Limit Bug** — `search_entries` and `search_by_date_range` now use `Math.min(limit * 2, 500)` for per-database queries when a team DB is present, then apply the user's requested limit during the final `mergeAndDedup` step. Previously, the user's limit (default 10) was passed directly to each individual database query, causing FTS5 BM25 ranking in the larger personal DB to silently drop matching entries that ranked below position N, even when the total matching entries across both databases was well under the limit.
+
 - **Mermaid Graph Resources Return Raw Text** — `memory://graph/recent`, `memory://graph/actions`, and `memory://kanban/{n}/diagram` now return raw Mermaid diagram strings instead of JSON envelopes (`{ format, diagram, ... }`). Output is directly pasteable into [mermaid.live](https://mermaid.live/) without `UnknownDiagramError`. The `text/plain` mimeType now correctly matches the response body.
 
 - **Vector Index sqlite-vec Compatibility** — Fixed two sqlite-vec `vec0` virtual table incompatibilities that prevented all vector operations (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`):

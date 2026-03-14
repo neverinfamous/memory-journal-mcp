@@ -346,20 +346,11 @@ memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
 
 **Session Management:** The server uses stateful sessions by default. Include the `mcp-session-id` header (returned from initialization) in subsequent requests.
 
-**Security Features:**
-
-- **OAuth 2.1 Authentication** — RFC 9728/8414 compliant with JWT validation, JWKS caching, and granular scope enforcement (opt-in via `--oauth-enabled`)
-- **7 Security Headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Cache-Control`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` (opt-in)
-- **Rate Limiting** — 100 requests/minute per IP with built-in sliding window (429 on excess)
-- **CORS** — Configurable via `--cors-origin` or `MCP_CORS_ORIGIN` (default: `*`). Supports comma-separated multiple origins (exact-match only)
-- **Body Size Limit** — 1 MB maximum (configurable)
-- **Server Timeouts** — Request (120s), keep-alive (65s), and headers (66s) timeouts for DoS mitigation
-- **404 Handler** — Unknown paths return `{ error: "Not found" }`
-- **Cross-Protocol Guard** — SSE session IDs rejected on `/mcp` and vice versa
-- **Build Provenance** - Cryptographic proof of build process
-- **SBOM Available** - Complete software bill of materials
-- **Supply Chain Attestations** - Verifiable build integrity
-- **Non-root Execution** - Minimal attack surface
+- **OAuth 2.1** — RFC 9728/8414, JWT/JWKS, granular scopes (opt-in via `--oauth-enabled`)
+- **7 Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
+- **Rate Limiting** — 100 req/min per IP · **CORS** — configurable multi-origin (exact-match) · **1MB body limit**
+- **Server Timeouts** — Request (120s), keep-alive (65s), headers (66s) · **404 handler** · **Cross-protocol guard**
+- **Build Provenance** · **SBOM** · **Supply Chain Attestations** · **Non-root execution**
 
 **Example with curl:**
 
@@ -510,10 +501,8 @@ memory-journal-mcp --transport http --port 3000
 
 ### 🔄 Session Management
 
-Memory Journal bridges AI sessions with a three-step cycle:
-
-1. **Session start** → agent reads `memory://briefing` and shows you a project context summary (automatic via server instructions)
-2. **Session summary** → use the `session-summary` prompt to capture what was accomplished, what's pending, and context for the next session
+1. **Session start** → agent reads `memory://briefing` and shows project context
+2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
 
 ## 🔧 Configuration
