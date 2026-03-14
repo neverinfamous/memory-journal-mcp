@@ -8,7 +8,7 @@
   - **Utilities**: `github-helpers.test.ts` — covers resolveIssueUrl with all branch paths
   - Fixed existing test breakages from `hostHeaderValidation` middleware injection (middleware indices, mock response `.json()` method, `TokenValidator` import)
 
-- **E2E Test Expansion (71 → 104 tests)** — Added 8 new Playwright E2E spec files and refactored shared helpers:
+- **E2E Test Expansion (71 → 105 tests)** — Added 8 new Playwright E2E spec files and refactored shared helpers:
   - `streaming.spec.ts` — raw SSE stream validation: GET /mcp with session ID, Last-Event-ID reconnection, Legacy SSE /sse endpoint event format (dedicated server on port 3107)
   - `rate-limiting.spec.ts` — 429 trigger, Retry-After header, /health exemption (inline server spawns with MCP_RATE_LIMIT_MAX)
   - `session-advanced.spec.ts` — cross-protocol guard, sequential session isolation, non-existent session ID rejection, post-DELETE session rejection
@@ -81,6 +81,7 @@
   - Removed manually-maintained `LABEL version` from `Dockerfile` — Docker tags and OCI metadata already convey version info without drift risk
   - Removed dead `matchesCorsOrigin()` function from `security.ts` — unused since `setCorsHeaders()` was rewritten to use CodeQL-safe record-lookup pattern. Removed 6 associated tests and barrel re-export
   - Removed unused `crypto` import from `sandbox.ts` (only `worker-sandbox.ts` uses it for `poolId`)
+  - Wired `enableHSTS` config to CLI via `--enable-hsts` flag and `MCP_ENABLE_HSTS` env var — was previously a dead config path with no way to enable HSTS from CLI or environment
 
 - **MCP Builder Compliance (D3/D7)**
   - Added `openWorldHint: false` to 28 non-GitHub tool annotations across 9 handler files (`core.ts`, `search.ts`, `relationships.ts`, `team.ts`, `backup.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `codemode.ts`) — explicitly declares local-only SQLite operations

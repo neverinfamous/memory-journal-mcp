@@ -49,6 +49,7 @@ export interface ServerOptions {
     statelessHttp?: boolean
     corsOrigins?: string[]
     authToken?: string
+    enableHSTS?: boolean
     scheduler?: SchedulerOptions
     sandboxMode?: SandboxMode
     // OAuth 2.1 options
@@ -366,6 +367,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             corsOrigins,
             stateless: options.statelessHttp === true,
             authToken,
+            enableHSTS: options.enableHSTS,
             oauthEnabled: options.oauthEnabled,
             oauthIssuer: options.oauthIssuer,
             oauthAudience: options.oauthAudience,

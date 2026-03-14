@@ -6,6 +6,7 @@
  */
 
 import { test, expect } from '@playwright/test'
+import { startServer, stopServer } from './helpers.js'
 
 test.describe('HTTP Transport Security & Limits', () => {
     test('should return 404 Not Found for unknown endpoints', async ({ request }) => {
@@ -91,7 +92,21 @@ test.describe('HTTP Transport Security & Limits', () => {
         expect(headers['strict-transport-security']).toBeUndefined()
     })
 
-    // Note: Positive HSTS test (enableHSTS: true) is not possible via CLI/env.
-    // The config property exists but has no CLI flag or env var wired to it.
-    // If --enable-hsts is added as a CLI flag, add a positive test here.
+    test('should include HSTS header when --enable-hsts is configured', async () => {
+        const HSTS_PORT = 3106
+
+        await startServer(HSTS_PORT, ['--enable-hsts'], 'hsts')
+
+        try {
+            const response = await fetch(`http://localhost:${HSTS_PORT}/health`)
+            expect(response.status).toBe(200)
+
+            const hsts = response.headers.get('strict-transport-security')
+            expect(hsts).toBeDefined()
+            expect(hsts).toContain('max-age=')
+            expect(hsts).toContain('includeSubDomains')
+        } finally {
+            stopServer(HSTS_PORT)
+        }
+    })
 })

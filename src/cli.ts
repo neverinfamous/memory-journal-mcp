@@ -45,6 +45,7 @@ program
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
     .option('--cors-origin <origin>', 'CORS allowed origin for HTTP transport (default: *)')
+    .option('--enable-hsts', 'Enable HSTS header for HTTP transport (use when behind HTTPS)')
     .option(
         '--auth-token <token>',
         'Bearer token for HTTP transport authentication (env: MCP_AUTH_TOKEN)'
@@ -142,6 +143,7 @@ program
             defaultProject: string
             autoRebuildIndex?: boolean
             corsOrigin?: string
+            enableHsts?: boolean
             authToken?: string
             logLevel: string
             backupInterval: string
@@ -201,6 +203,8 @@ program
                     corsOrigins: options.corsOrigin
                         ? options.corsOrigin.split(',').map((s) => s.trim())
                         : undefined,
+                    enableHSTS:
+                        options.enableHsts ?? process.env['MCP_ENABLE_HSTS'] === 'true',
                     authToken: options.authToken,
                     scheduler: {
                         backupIntervalMinutes: parseInt(options.backupInterval, 10),
