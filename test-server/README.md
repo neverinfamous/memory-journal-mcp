@@ -4,13 +4,65 @@
 
 ## Files
 
-| File | Size | Purpose | When to Read |
-|------|------|---------|--------------|
-| `test-tools.md` | ~70KB | **Pass 1: Core Functionality** — Phases 0-10 covering seed data, happy paths, error paths, and feature verification for all 44 tools, 22 resources, 16 prompts, and scheduler | Always read first |
-| `test-tools2.md` | ~37KB | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes |
-| `test-tools-codemode.md` | ~12KB | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration | After Pass 1 completes |
-| [`tool-reference.md`](../docs/tool-reference.md) | ~8KB | **Tool Reference** — Categorized list of all 44 tools across 10 groups | Reference |
-| [`code-map.md`](../docs/code-map.md) | ~10KB | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error handling, constants, architecture patterns. | When debugging source code or making changes |
+| File | Purpose | When to Read |
+|------|---------|--------------|
+| `test-tools.md` | **Pass 1: Core Functionality** — Phases 0-10 covering seed data, happy paths, error paths, and feature verification for all 44 tools, 22 resources, 16 prompts, and scheduler | Always read first |
+| `test-tools2.md` | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes |
+| `test-tools-codemode.md` | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration | After Pass 1 completes |
+| [`tool-reference.md`](../docs/tool-reference.md) | **Tool Reference** — Categorized list of all 44 tools across 10 groups | Reference |
+| [`code-map.md`](../docs/code-map.md) | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error handling, constants, architecture patterns. | When debugging source code or making changes |
+
+## Integration Test Scripts
+
+These scripts test features that require separate server processes — they **cannot** be run via MCP tool calls. All scripts are Node.js (`.mjs`), require no dependencies beyond Node.js, and exit with code 0 on success.
+
+> [!IMPORTANT]
+> Always `npm run build` before running these scripts — they execute `dist/cli.js` directly.
+
+### Script Reference
+
+| Script | Tests | Transport | Duration |
+|--------|-------|-----------|----------|
+| `test-instruction-levels.mjs` | `--instruction-level` essential/standard/full token ordering | stdio | ~10s |
+| `test-tool-annotations.mjs` | `tools/list` openWorldHint annotation counts (28 false + 16 true = 44) | stdio | ~5s |
+| `test-scheduler.mjs` | Scheduler job execution (backup, vacuum, rebuild-index) | HTTP stateful | ~130s |
+
+### Quick Run
+
+```powershell
+cd C:\Users\chris\Desktop\memory-journal-mcp
+npm run build
+
+# Phase 1.3A — Instruction levels
+node test-server/test-instruction-levels.mjs
+
+# Phase 1.3B — Tool annotations
+node test-server/test-tool-annotations.mjs
+
+# Phase 10 — Scheduler (requires HTTP server in a separate terminal)
+node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
+# In another terminal:
+node test-server/test-scheduler.mjs
+```
+
+### Scheduler Script Options
+
+| Env Variable | Default | Description |
+|--------------|---------|-------------|
+| `MCP_URL` | `http://localhost:3099/mcp` | HTTP endpoint URL |
+| `WAIT_SECONDS` | `130` | Seconds to wait for jobs to fire (set to `0` for initial check only) |
+
+### Dual Transport Notes
+
+The server supports three transport modes:
+
+| Mode | CLI Flags | Scheduler | Sessions |
+|------|-----------|-----------|----------|
+| stdio | `--transport stdio` (default) | ❌ Inactive | N/A |
+| HTTP stateful | `--transport http` | ✅ Active | `mcp-session-id` header |
+| HTTP stateless | `--transport http --stateless` | ✅ Active | No sessions (serverless) |
+
+The scheduler activates in **both** HTTP modes. The test script handles SSE response parsing automatically (HTTP transport returns `text/event-stream`). In stateless mode, there are no sessions so each request is independent — the scheduler still runs but session-scoped resources behave differently.
 
 ## Conventions & Protocols
 
@@ -48,10 +100,11 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 1. Read `src/constants/server-instructions.md` (via `view_file` tool).
 2. Read `test-tools.md` for Pass 1 protocol, phases, and success criteria.
 3. Execute via direct MCP tool calls. Run both happy-path and 🔴 error-path tests.
-4. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior. 
-5. Report findings returning proper handler formatting.
-6. (Optional) Run Pass 2 from `test-tools2.md` after Pass 1 completes successfully.
-7. (Optional) Run Pass 3 from `test-tools-codemode.md` for Code Mode sandbox testing.
+4. **Run integration test scripts** for Phase 1.3 (instruction levels, annotations) and Phase 10 (scheduler).
+5. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior. 
+6. Report findings returning proper handler formatting.
+7. (Optional) Run Pass 2 from `test-tools2.md` after Pass 1 completes successfully.
+8. (Optional) Run Pass 3 from `test-tools-codemode.md` for Code Mode sandbox testing.
 
 ## Troubleshooting
 
@@ -84,4 +137,3 @@ The `memory-journal-mcp` uses `better-sqlite3` (native SQLite) in WAL mode. Lock
 ### Team tools return "Team database not configured"
 
 Set `TEAM_DB_PATH` in `mcp_config.json` env or via `--team-db` CLI flag. The path can be any writable location.
-

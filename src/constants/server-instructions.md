@@ -4,7 +4,7 @@
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read `memory://briefing` and present the `userMessage` to the user as a short, formatted bullet list of key facts (no tables):
+**REQUIRED**: Before processing any user request, read `memory://briefing` and present the `userMessage` to the user as a formatted bullet list of key facts:
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs

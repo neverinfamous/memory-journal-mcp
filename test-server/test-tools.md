@@ -112,33 +112,23 @@ After creating all 12 entries, verify the seed data is searchable:
 | Skills metadata                  | Inspect `skillsDir` field        | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                                        |
 | Enhanced CI row                  | Inspect briefing.userMessage     | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set      |
 
-### 1.3 Protocol Validation
+### 1.3 Protocol Validation — Run via Scripts
 
-**Test A — Instruction Level:**
+> [!IMPORTANT]
+> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. See `test-server/README.md` for full details.
 
-Start the server with different `--instruction-level` values and verify the server instructions length varies:
+```powershell
+# Test A — Instruction levels (essential < standard < full)
+node test-server/test-instruction-levels.mjs
 
-| `--instruction-level` | Expected Behavior                    |
-| --------------------- | ------------------------------------ |
-| `essential`           | Shortest instructions (~1.2K tokens) |
-| `standard` (default)  | Medium instructions (~1.4K tokens)   |
-| `full`                | Longest instructions (~6.7K tokens)  |
+# Test B — Tool annotations (44 tools, 28 openWorldHint=false, 16 openWorldHint=true, 0 missing)
+node test-server/test-tool-annotations.mjs
+```
 
-> **Note:** The `INSTRUCTION_LEVEL` environment variable also controls this; CLI flag takes precedence.
->
-> The `memory://instructions` **resource** always returns `full` instructions regardless of the server's configured level — it serves as a complete reference that agents can explicitly read when needed.
-
-**Test B — Tool Annotations (`openWorldHint`):**
-
-Call `tools/list` and verify annotation counts:
-
-| Check                                        | Expected                                                                               |
-| -------------------------------------------- | -------------------------------------------------------------------------------------- |
-| All tools have `annotations` object          | ✅ Present on every tool                                                               |
-| Core/local tools with `openWorldHint: false` | **28** (core, search, relationships, team, backup, export, analytics, admin, codemode) |
-| GitHub tools with `openWorldHint: true`      | **16** (read, issue, kanban, milestone, insights, copilot)                             |
-| Total tools                                  | **44**                                                                                 |
-| Tools with missing `openWorldHint`           | **0**                                                                                  |
+| Check | Expected |
+| ----- | -------- |
+| Instruction levels | essential (~1.2K) < standard (~1.4K) < full (~6.7K tokens) |
+| Tool annotations | 44 tools, all with `annotations`, 28 `false` + 16 `true` = 0 missing |
 
 ### 1.4 GitHub Status Resource
 
@@ -266,24 +256,24 @@ Call `tools/list` and verify annotation counts:
 | Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship                                  |
 | Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: 999999, to: <B>)"` |
 | Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: <A>, to: 999999)"` |
-| Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | Mermaid diagram returned                                                                     |
+| Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | Mermaid diagram returned (raw text, not JSON-wrapped)                                        |
 | Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                                                |
 | Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)                            |
 | Visualize nonexistent   | `visualize_relationships(entry_id: 999999)`                                                                               | Returns `message: "Entry 999999 not found"`                                                  |
 | Visualize by tags       | `visualize_relationships(tags: ["test"])`                                                                                 | Diagram scoped to entries with "test" tag                                                    |
 | Visualize depth 3       | `visualize_relationships(entry_id: <A>, depth: 3)`                                                                        | Deeper traversal than default `depth: 2`                                                     |
 | Visualize custom limit  | `visualize_relationships(entry_id: <A>, limit: 5)`                                                                        | Diagram limited to 5 entries                                                                 |
-| Graph resource          | Read `memory://graph/recent`                                                                                              | Live Mermaid diagram, arrows harmonized with `visualize_relationships`                       |
+| Graph resource          | Read `memory://graph/recent`                                                                                              | Raw Mermaid text (`text/plain` MIME), arrows harmonized with `visualize_relationships`       |
 
 ### 4.2 Causal Relationship Types
 
-| Test              | Command/Action                                                                        | Expected Result                                                            |
-| ----------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| blocked_by type   | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "blocked_by")` | Relationship created with `blocked_by` type                                |
-| resolved type     | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "resolved")`   | Relationship created with `resolved` type                                  |
-| caused type       | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "caused")`     | Relationship created with `caused` type                                    |
-| Causal viz arrows | `visualize_relationships(entry_id: <A>)`                                              | Mermaid shows `--x` (blocked_by), `==>` (resolved), `-.->` (caused) arrows |
-| Graph harmonized  | Read `memory://graph/recent`                                                          | Same arrows: `--x`, `==>`, `-.->` for causal types, `-->` for references   |
+| Test              | Command/Action                                                                        | Expected Result                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| blocked_by type   | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "blocked_by")` | Relationship created with `blocked_by` type                                           |
+| resolved type     | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "resolved")`   | Relationship created with `resolved` type                                             |
+| caused type       | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "caused")`     | Relationship created with `caused` type                                               |
+| Causal viz arrows | `visualize_relationships(entry_id: <A>)`                                              | Mermaid shows `--x` (blocked_by), `==>` (resolved), `-.->` (caused) arrows            |
+| Graph harmonized  | Read `memory://graph/recent`                                                          | Raw Mermaid `text/plain`: `--x`, `==>`, `-.->` for causal types, `-->` for references |
 
 ---
 
@@ -328,7 +318,7 @@ Call `tools/list` and verify annotation counts:
 | ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | Get board           | `get_kanban_board(project_number: 5)`                                              | Returns board structure with columns/items                            |
 | Kanban resource     | Read `memory://kanban/5`                                                           | JSON board data                                                       |
-| Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Mermaid swimlane visualization                                        |
+| Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                |
 | Move item           | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
 | Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
 | Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
@@ -397,7 +387,7 @@ Call `tools/list` and verify annotation counts:
 | PR entries       | `memory://prs/67/entries`      | Entries linked to PR #67 (permanent test fixture)                                                                                   |
 | PR timeline      | `memory://prs/67/timeline`     | PR lifecycle with `prMetadata` (live state) and `timelineNote`                                                                      |
 | Kanban JSON      | `memory://kanban/5`            | Board JSON                                                                                                                          |
-| Kanban diagram   | `memory://kanban/5/diagram`    | Mermaid diagram                                                                                                                     |
+| Kanban diagram   | `memory://kanban/5/diagram`    | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                                                               |
 | Milestone detail | `memory://milestones/<N>`      | Milestone with completion %, `openIssues` + `closedIssues` counts, and hint to use `get_github_issues` for individual issue details |
 
 ### 6.2 Template Error Paths
@@ -575,83 +565,27 @@ For **every** prompt response, verify:
 
 ---
 
-## Phase 10: Automated Scheduler [DO NOT DEFER]
+## Phase 10: Automated Scheduler — Run via Script
 
 > [!IMPORTANT]
-> (HTTP Only — Manual Terminal Test)
-> The scheduler only activates in HTTP/SSE transport mode. Run these tests in a separate PowerShell terminal.
-
-### 10.1 Start HTTP Server with Scheduler
+> The scheduler only activates in HTTP/SSE transport mode. Run the script below — it handles session init, health reads, and wait/verify automatically. See `test-server/README.md` for full details.
 
 ```powershell
-# Build first if needed
-cd C:\Users\chris\Desktop\memory-journal-mcp
+# Terminal 1: Start HTTP server with short scheduler intervals
 npm run build
+node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
 
-# Start with short intervals for testing (1-2 min)
-node dist/cli.js --transport http --port 3000 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
+# Terminal 2: Run scheduler test (waits 130s for jobs to fire)
+node test-server/test-scheduler.mjs
 ```
 
-**Expected logs:**
-
-- `[Scheduler] Scheduler started: backup (1min), vacuum (2min), rebuild-index (2min)`
-- `MCP server started on HTTP (stateful)`
-
-### 10.2 Initialize Session & Read Health
-
-```powershell
-# In a second terminal — initialize MCP session
-$headers = @{ "Content-Type" = "application/json"; "Accept" = "application/json, text/event-stream" }
-$body = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-$response = Invoke-WebRequest -Uri "http://localhost:3000/mcp" -Method Post -Headers $headers -Body $body
-$sessionId = $response.Headers["mcp-session-id"]
-Write-Host "Session ID: $sessionId"
-
-# Read health — scheduler should be active with 0 runCounts
-$headers["mcp-session-id"] = $sessionId
-$body = '{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"memory://health"}}'
-(Invoke-WebRequest -Uri "http://localhost:3000/mcp" -Method Post -Headers $headers -Body $body).Content
-```
-
-| Check                   | Expected                          |
-| ----------------------- | --------------------------------- |
-| `scheduler.active`      | `true`                            |
-| `scheduler.jobs` length | 3 (backup, vacuum, rebuild-index) |
-| All `runCount`          | 0                                 |
-| All `lastRun`           | `null`                            |
-| All `nextRun`           | ISO timestamp ~1-2 min from now   |
-
-### 10.3 Wait for Jobs & Verify
-
-Wait 2+ minutes, then re-read `memory://health`:
-
-```powershell
-# Wait and re-read
-Start-Sleep -Seconds 130
-$body = '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"memory://health"}}'
-(Invoke-WebRequest -Uri "http://localhost:3000/mcp" -Method Post -Headers $headers -Body $body).Content
-```
-
-| Check                      | Expected                 |
-| -------------------------- | ------------------------ |
-| backup `lastResult`        | `"success"`              |
-| backup `runCount`          | ≥ 2                      |
-| vacuum `lastResult`        | `"success"`              |
-| vacuum `runCount`          | ≥ 1                      |
-| rebuild-index `lastResult` | `"success"`              |
-| rebuild-index `runCount`   | ≥ 1                      |
-| `backups.count`            | ≤ 3 (keep-backups limit) |
-
-**Expected server logs:**
-
-- `[Scheduler][backup] Scheduled backup created`
-- `[Scheduler][backup-cleanup] Backup cleanup: deleted N, kept 3`
-- `[Scheduler][vacuum] Scheduled database optimize completed`
-- `[VectorSearch] Rebuilt vector index with N entries`
-
-### 10.4 Cleanup
-
-Stop the server (Ctrl+C in the server terminal) and delete test backups if needed.
+| Check | Expected |
+| ----- | -------- |
+| `scheduler.active` | `true`, 3 jobs |
+| All jobs `lastResult` | `"success"` after wait |
+| All jobs `lastError` | `null` |
+| backup `runCount` | ≥ 2 |
+| vacuum + rebuild `runCount` | ≥ 1 each |
 
 ---
 
