@@ -122,7 +122,7 @@ Standups, retrospectives, PR summaries, weekly digests, period analysis, milesto
 
 ## 🚀 Quick Start (2 Minutes)
 
-**Prerequisites:** Docker installed and running · ~300MB disk space · **[Full Installation Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation)**
+**Prerequisites:** Docker installed and running · ~250MB disk space · **[Full Installation Guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Installation)**
 
 ### 1. Pull the Image
 

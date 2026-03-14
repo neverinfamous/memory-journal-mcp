@@ -84,7 +84,8 @@ WORKDIR /app
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
 RUN apk add --no-cache git ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib && \
-    apk upgrade --no-cache
+    apk upgrade --no-cache && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy built artifacts and production dependencies from builder
 COPY --from=builder /app/dist ./dist

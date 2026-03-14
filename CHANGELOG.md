@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Docker Image Size Optimization** — Reduced amd64 image from ~733 MB to ~250 MB:
-  - Moved npm global upgrade + CVE patches to builder stage only (production image no longer installs npm)
+  - Moved npm global upgrade + CVE patches to builder stage only; removed npm/npx from production image
   - Production `npm ci --omit=dev` runs in builder; `node_modules` copied via `COPY --from=builder`
   - Stripped `onnxruntime-web` entirely (browser-only runtime, ~90 MB)
   - Stripped non-Linux `onnxruntime-node` platform binaries (darwin + win32, ~132 MB)
