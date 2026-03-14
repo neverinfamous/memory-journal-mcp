@@ -1,3 +1,5 @@
+## [Unreleased]
+
 ### Added
 
 - **Test Coverage Improvement (73% → 87%)** — Added 10 new test files with 320+ tests, restoring coverage lost after unreleased changes:
@@ -223,8 +225,7 @@
   - Replaced N+1 author queries in `team.ts` with single batch `SELECT ... WHERE id IN (...)` via `batchFetchAuthors()` helper
   - Replaced N+1 per-project tag queries in `analytics.ts` with single batch query grouped by `project_number`
 
-  - **Performance Optimization (I/O)** — Refactored blocking synchronous file system operations (`fs.writeFileSync`, `fs.readFileSync`, `fs.mkdirSync`, `fs.copyFileSync`, `fs.statSync`) in `BackupManager` to asynchronous `fs.promises` equivalents to prevent freezing the Node.js event pool during journal backups.
-
+- **Performance Optimization (I/O)** — Refactored blocking synchronous file system operations (`fs.writeFileSync`, `fs.readFileSync`, `fs.mkdirSync`, `fs.copyFileSync`, `fs.statSync`) in `BackupManager` to asynchronous `fs.promises` equivalents to prevent freezing the Node.js event pool during journal backups.
 - **Performance Optimization (I/O)** — Refactored synchronous `fs.mkdirSync` and `fs.rmSync` in `VectorSearchManager` to asynchronous `fs.promises` equivalents for non-blocking directory operations during index initialization and rebuilding.
 - **Performance Optimization (Build)** — Disabled generating `.map` source maps in production build (disabled `sourceMap` in `tsconfig.json`), saving approx 1-2MB in the final compiled bundle.
 - **Performance Optimization (Memory)** — Refactored unbounded `SELECT * FROM memory_journal` queries across core handlers (`entries.ts`, `templates.ts`, `github.ts`, `core.ts`, `stats.ts`, `graph.ts`, `workflow.ts`) to use explicit `ENTRY_COLUMNS` projections, reducing I/O latency and WASM memory overhead.
