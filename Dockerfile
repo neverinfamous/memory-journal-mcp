@@ -57,6 +57,22 @@ COPY src/ ./src/
 # Build TypeScript
 RUN npm run build
 
+# Install production-only dependencies in a separate directory for clean copy
+RUN mkdir /app/prod_modules && \
+    cp package*.json .npmrc /app/prod_modules/ && \
+    cd /app/prod_modules && \
+    npm ci --omit=dev && \
+    rm -rf node_modules/protobufjs/cli && \
+    npm cache clean --force
+
+# Strip unnecessary ONNX runtime binaries from production dependencies:
+# - Remove onnxruntime-web entirely (browser-only, not needed in Node.js)
+# - Remove non-Linux platform binaries from onnxruntime-node (darwin, win32)
+RUN rm -rf /app/prod_modules/node_modules/onnxruntime-web \
+           /app/prod_modules/node_modules/.onnxruntime-node-* \
+           /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/darwin \
+           /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/win32
+
 # Production stage
 FROM node:24-alpine
 
@@ -69,38 +85,12 @@ WORKDIR /app
 RUN apk add --no-cache git ca-certificates && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib && \
     apk upgrade --no-cache && \
-    npm install -g npm@latest --force && npm cache clean --force
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
-# Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff@8.0.2 to 8.0.3
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack diff@8.0.3 && \
-    rm -rf node_modules/diff && \
-    tar -xzf diff-8.0.3.tgz && \
-    mv package node_modules/diff && \
-    rm diff-8.0.3.tgz
-
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.11
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.11 && \
-    rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.11.tgz && \
-    mv package node_modules/tar && \
-    rm tar-7.5.11.tgz
-
-# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.4
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack minimatch@10.2.4 && \
-    rm -rf node_modules/minimatch && \
-    tar -xzf minimatch-10.2.4.tgz && \
-    mv package node_modules/minimatch && \
-    rm minimatch-10.2.4.tgz
-
-# Copy built artifacts and install production-only dependencies
+# Copy built artifacts and production dependencies from builder
 COPY --from=builder /app/dist ./dist
-COPY package*.json .npmrc ./
-RUN npm ci --omit=dev && \
-    rm -rf node_modules/protobufjs/cli && \
-    npm cache clean --force
+COPY --from=builder /app/prod_modules/node_modules ./node_modules
+COPY package*.json ./
 COPY LICENSE ./
 
 # Create data directory for SQLite database with proper permissions

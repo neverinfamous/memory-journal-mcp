@@ -335,7 +335,6 @@ describe('setupStateful', () => {
         clearInterval(timer)
     })
 
-
     it('should handle 500 error when request throws', async () => {
         const ctx = createMockCtx()
         const mockTransport = {
