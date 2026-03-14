@@ -157,7 +157,7 @@ describe('VectorSearchManager', () => {
                 'INSERT OR REPLACE INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
             )
             // Should call run with entryId and a Float32Array
-            expect(mockRun).toHaveBeenCalledWith(42, expect.any(Float32Array))
+            expect(mockRun).toHaveBeenCalledWith(BigInt(42), expect.any(Float32Array))
         })
 
         it('should return false on error', async () => {
@@ -230,7 +230,7 @@ describe('VectorSearchManager', () => {
             expect(mockPrepare).toHaveBeenCalledWith(
                 'DELETE FROM vec_embeddings WHERE entry_id = ?'
             )
-            expect(mockRun).toHaveBeenCalledWith(42)
+            expect(mockRun).toHaveBeenCalledWith(BigInt(42))
         })
 
         it('should return false if db not available', async () => {

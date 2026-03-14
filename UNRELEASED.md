@@ -240,7 +240,7 @@
 
 ### Fixed
 
-- **Vector Index sqlite-vec Integer Coercion** — Fixed `"Only integers are allows for primary key values on vec_embeddings"` error by coercing entry IDs with `Number()` before passing to sqlite-vec's `vec0` virtual table INSERT/DELETE operations. The native C extension is stricter about integer types than regular SQLite tables, rejecting values that `better-sqlite3` passes through prepared statements. This was the root cause of all vector index failures (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`).
+- **Vector Index sqlite-vec Integer Coercion** — Fixed `"Only integers are allows for primary key values on vec_embeddings"` error by coercing entry IDs with `BigInt()` before passing to sqlite-vec's `vec0` virtual table INSERT/DELETE operations, matching the [official sqlite-vec Node.js example](https://github.com/asg017/sqlite-vec/blob/main/examples/simple-node/demo.mjs). The `vec0` virtual table requires `BigInt` primary keys through `better-sqlite3`'s native bindings — regular JavaScript `number` values are rejected. This was the root cause of all vector index failures (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`).
 
 - Resolved Zod `4.3.6` dependency resolution conflict with OpenAI SDK via explicit `package.json` overrides.
 - Replaced `as unknown` type assertions with strict types where appropriate (`wasm-connection.ts`, `backup.ts`) and auth test mocks with properly mapped `QueryResult` types and `Object.create(Type.prototype)` mock instantiation.

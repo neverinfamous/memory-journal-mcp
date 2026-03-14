@@ -140,8 +140,8 @@ export class VectorSearchManager {
             const vec = new Float32Array(embedding)
             this.db
                 .prepare('INSERT OR REPLACE INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
-                // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion -- sqlite-vec vec0 rejects non-strict-integer PKs from better-sqlite3
-                .run(Number(entryId), vec)
+                // sqlite-vec vec0 requires BigInt primary keys through better-sqlite3 bindings
+                .run(BigInt(entryId), vec)
 
             logger.debug('Added entry to vector index', {
                 module: 'VectorSearch',
@@ -222,8 +222,8 @@ export class VectorSearchManager {
         if (!this.db) return false
 
         try {
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion -- sqlite-vec vec0 rejects non-strict-integer PKs from better-sqlite3
-            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(Number(entryId))
+            // sqlite-vec vec0 requires BigInt primary keys through better-sqlite3 bindings
+            this.db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(BigInt(entryId))
             return true
         } catch (error) {
             logger.debug('Vector removeEntry failed (item may not exist)', {
@@ -301,8 +301,8 @@ export class VectorSearchManager {
                     if (embedding !== null) {
                         try {
                             const vec = new Float32Array(embedding)
-                            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-conversion -- sqlite-vec vec0 rejects non-strict-integer PKs from better-sqlite3
-                            insertStmt.run(Number(entry.id), vec)
+                            // sqlite-vec vec0 requires BigInt primary keys through better-sqlite3 bindings
+                            insertStmt.run(BigInt(entry.id), vec)
                             indexed++
                         } catch (error) {
                             failed++
