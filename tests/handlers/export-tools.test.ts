@@ -169,7 +169,7 @@ describe('getExportTools', () => {
             { id: 3, timestamp: '2025-01-13', entryType: 'note', content: 'Another note' },
         ]
         const context = createMockContext({
-            getRecentEntries: vi.fn().mockReturnValue(entries),
+            searchByDateRange: vi.fn().mockReturnValue(entries),
         })
         const tools = getExportTools(context as never)
         const handler = tools[0]!.handler

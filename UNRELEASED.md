@@ -96,6 +96,7 @@
   - Added `getRecent` alias for `getRecentEntries` in Code Mode (`mj.core.getRecent()`) — agents commonly try this natural camelCase abbreviation
   - `semantic_search` hint is now governed by a quality floor (0.5) — if all returned results score below 0.5, a hint is included indicating results may be noise, even when `entries.length > 0`. Previously, `hint_on_empty` was effectively dead code because the default `similarity_threshold` (0.25) always returned noise matches from the MiniLM model
   - `semantic_search` quality gate hint is now always shown regardless of `hint_on_empty` — the `hint_on_empty` flag only controls advisory hints for empty indexes and zero-match queries, not the noise detection warning. Previously, `hint_on_empty=false` suppressed all hints including the quality gate, meaning clients received noisy results with no warning
+  - `export_entries` `entry_types` filter now scans the full database instead of post-filtering a truncated result set — previously, type-only queries fetched the most recent `limit` entries via `getRecentEntries()` then filtered, silently returning empty results when no matching types existed in the window
 
 - **MCP Builder Compliance Audit Fixes**
   - Added `error` field to `ErrorFieldsMixin` — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions

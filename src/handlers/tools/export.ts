@@ -82,29 +82,40 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 0, 2, 'Fetching entries...')
 
-                    // Apply filters — use searchByDateRange when dates/tags present
+                    // When entry_types filter is active, fetch a larger batch so
+                    // post-filtering doesn't silently return empty results.
+                    const hasTypeFilter =
+                        input.entry_types && input.entry_types.length > 0
+                    const fetchLimit = hasTypeFilter ? 500 : limit
+
+                    // Apply filters — use searchByDateRange when dates/tags/types present
                     let entries
                     if (input.start_date || input.end_date) {
                         const startDate = input.start_date ?? DATE_MIN_SENTINEL
                         const endDate = input.end_date ?? DATE_MAX_SENTINEL
                         entries = db.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
-                            limit,
+                            limit: fetchLimit,
                         })
-                    } else if (input.tags && input.tags.length > 0) {
-                        // Tags-only filter: use a wide date range to leverage searchByDateRange
+                    } else if (
+                        (input.tags && input.tags.length > 0) ||
+                        hasTypeFilter
+                    ) {
+                        // Tags/types filter: use a wide date range to scan the full database
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,
-                            limit,
+                            limit: fetchLimit,
                         })
                     } else {
-                        entries = db.getRecentEntries(limit)
+                        entries = db.getRecentEntries(fetchLimit)
                     }
 
-                    // Post-filter by entry_types if specified
-                    if (input.entry_types && input.entry_types.length > 0) {
+                    // Post-filter by entry_types, then cap to requested limit
+                    if (hasTypeFilter) {
                         const allowedTypes = new Set(input.entry_types)
-                        entries = entries.filter((e) => allowedTypes.has(e.entryType))
+                        entries = entries
+                            .filter((e) => allowedTypes.has(e.entryType))
+                            .slice(0, limit)
                     }
 
                     await sendProgress(
