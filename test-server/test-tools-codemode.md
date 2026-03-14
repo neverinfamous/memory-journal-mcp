@@ -193,7 +193,7 @@ const entry = await mj.core.createEntry({
 return {
   success: entry.success,
   id: entry.entry?.id,
-  type: entry.entry?.entry_type,
+  type: entry.entry?.entryType,
   prNumber: entry.entry?.prNumber,
   prStatus: entry.entry?.prStatus,
   workflowRunId: entry.entry?.workflowRunId,
@@ -256,17 +256,22 @@ const id = recent.entries[0].id;
 const full = await mj.core.getEntryById({ entry_id: id });
 const noRels = await mj.core.getEntryById({ entry_id: id, include_relationships: false });
 return {
-  hasImportance: typeof full.entry?.importance === "number",
-  hasBreakdown: !!full.entry?.importanceBreakdown,
+  hasEntryType: typeof full.entry?.entryType === "string",
+  hasContent: typeof full.entry?.content === "string",
+  hasTags: Array.isArray(full.entry?.tags),
   fullRelCount: full.entry?.relationships?.length ?? "none",
   noRelCount: noRels.entry?.relationships?.length ?? "none"
 };
 ```
 
+> [!NOTE]
+> The `importance` and `importanceBreakdown` fields are not included in the `getEntryById` code-mode response. Use the direct `get_entry_by_id` tool call to access these computed fields.
+
 | Check | Expected |
 |-------|----------|
-| `hasImportance` | `true` (0.0–1.0) |
-| `hasBreakdown` | `true` |
+| `hasEntryType` | `true` |
+| `hasContent` | `true` |
+| `hasTags` | `true` |
 | `fullRelCount` | Number ≥ 0 |
 | `noRelCount` | `"none"` or `0` (relationships omitted) |
 
@@ -286,7 +291,7 @@ const verify = await mj.core.getEntryById({ entry_id: id });
 return {
   updateSuccess: updated.success,
   newContent: verify.entry?.content,
-  newType: verify.entry?.entry_type,
+  newType: verify.entry?.entryType,
   newTags: verify.entry?.tags
 };
 ```
@@ -601,7 +606,7 @@ After testing, remove test entries created during Phases 18 and 20:
 - [ ] `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
 - [ ] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
 - [ ] `create_entry` rejects empty content with structured error
-- [ ] `get_entry_by_id` returns `importance` (0.0-1.0) and `importanceBreakdown`
+- [ ] `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` only available via direct tool call)
 - [ ] `get_entry_by_id` with `include_relationships: false` omits relationship data
 - [ ] `update_entry` updates content, tags, and entry_type — verified via read-back
 - [ ] `update_entry` returns structured error for nonexistent IDs
