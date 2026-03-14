@@ -247,3 +247,14 @@ jobs:
           echo "🏷️ Tags: ${{ steps.meta.outputs.tags }}"
           echo "📝 Commit: ${{ github.sha }}"
           echo "👤 Published by: ${{ github.actor }}"
+
+  # Publish to npm AFTER Docker images are successfully pushed
+  # This ensures npm and Docker releases are always in sync:
+  # - If Docker Scout blocks → npm doesn't publish → no burned version
+  # - If Lint/Test fails → nothing publishes
+  npm-publish:
+    needs: [merge-and-push]
+    if: always() && needs.merge-and-push.result == 'success' && github.event.workflow_run.head_branch == 'main'
+    uses: ./.github/workflows/publish-npm.yml
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

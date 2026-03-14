@@ -2,9 +2,4 @@
 
 ### Changed
 
-- **CI Dependency Updates** — Bumped GitHub Actions dependencies:
-  - `github/codeql-action` SHA update (#263)
-  - `actions/download-artifact` 7.0.0 → 8.0.1 (#264)
-  - `github/gh-aw` 0.57.2 → 0.58.1 (#265)
-  - `trufflesecurity/trufflehog` 3.93.7 → 3.93.8 (#266)
-  - `docker/scout-action` 1.18.2 → 1.20.2 (#267)
+- **npm publish gated behind Docker checks** — npm no longer publishes on release creation; instead `docker-publish.yml` calls `publish-npm.yml` via `workflow_call` after Docker Scout passes and images are pushed. Both artifacts ship together or neither ships. Manual `workflow_dispatch` fallback preserved.
