@@ -192,7 +192,7 @@ node test-server/test-tool-annotations.mjs
 | FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                    | ≥ 1 result (S2) — exact phrase match only                                     |
 | FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | ≥ 2 results (S1, S8) — matches "authentication", "authorization", etc.        |
 | FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns S3, S11 but NOT S5 (S5 contains "staging")                            |
-| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 2 results (S3, S5 expected; S4 may rank below default `limit: 10` via BM25) |
+| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 2 results (S3, S4, S5 expected)                                             |
 | FTS5 fallback         | `search_entries(query: "test's")`                                                                | ≥ 1 result (S6) — LIKE fallback, single quotes are FTS5-unsafe                |
 | FTS5 special chars    | `search_entries(query: "100%")`                                                                  | ≥ 1 result (S6) — LIKE fallback, `%` is FTS5-unsafe                           |
 | Date range            | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-01-31")`                         | Returns `structuredContent` array                                             |
@@ -211,7 +211,7 @@ node test-server/test-tool-annotations.mjs
 | Inverted date range   | `search_by_date_range(start_date: "2026-12-31", end_date: "2026-01-01")`                         | Returns empty results (no validation for `start > end` — confirmed)           |
 
 > [!NOTE]
-> **FTS5 BM25 Ranking Behavior:** FTS5 results are ranked by BM25 relevance and capped at the default `limit: 10`. Boolean OR queries (`deploy OR release`) may not return all matching entries if they rank below position 10. This is working as designed — use `limit: 50` to widen the result window if needed.
+> **Cross-DB Search Behavior:** When a team DB is present, per-DB queries fetch `limit × 2` (capped at 500) to prevent BM25 ranking in one DB from silently dropping entries before the cross-DB merge. The user's requested `limit` is applied after merging.
 >
 > **Code Mode API Group Structure:** When testing `mj_execute_code`, methods are bound to specific groups. Key mapping: `listTags` → `mj.core`, `mergeTags` → `mj.admin`, `getStatistics` → `mj.analytics`. Use `mj.help()` or `mj.<group>.help()` to discover available methods per group.
 
