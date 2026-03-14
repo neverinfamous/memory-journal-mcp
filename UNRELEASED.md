@@ -10,6 +10,8 @@
 
 ### Changed
 
+- **Dependency Updates** — Routine `npm update` bumping non-breaking transitive dependencies.
+
 - **Unified Audit Fixes**
   - SHA-pinned `actions/checkout` in `auto-release.yml` to commit SHA, matching all other workflows
   - Removed manually-maintained `LABEL version` from `Dockerfile` — Docker tags and OCI metadata already convey version info without drift risk
@@ -233,6 +235,7 @@
 
 ### Security
 
+- **Dependency Updates** — Bumped `undici` to 7.24.1 to address multiple CVEs (CVE-2026-1525, CVE-2026-1528, CVE-2026-2581, CVE-2026-1527, CVE-2026-2229, CVE-2026-1526) causing request smuggling, DoS, and memory exhaustion risks.
 - **Built-in Rate Limiting** — Replaced `express-rate-limit` dependency with zero-dependency implementation. Health endpoint bypass, `Retry-After` header on 429, periodic cleanup with `.unref()`.
 - **Server Timeouts** — Added HTTP request (120s), keep-alive (65s), and headers (66s) timeouts to mitigate DoS attacks.
 - **CORS Enhancements** — `Access-Control-Max-Age: 86400`, `Vary: Origin` for specific origin matching, `corsAllowCredentials` option.
