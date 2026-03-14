@@ -333,6 +333,8 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             }
                         } else {
                             try {
+                                // Brief delay for GitHub Projects v2 API propagation (eventual consistency)
+                                await new Promise((r) => setTimeout(r, 1000))
                                 const board = await resolved.github.getProjectKanban(
                                     resolved.owner,
                                     projectNum,
