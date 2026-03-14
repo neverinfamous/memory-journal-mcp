@@ -19,7 +19,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 }))
 
 vi.mock('../../src/utils/error-helpers.js', () => ({
-    formatHandlerErrorResponse: vi.fn().mockImplementation((err: Error) => ({
+    formatHandlerError: vi.fn().mockImplementation((err: Error) => ({
         success: false,
         error: err.message,
     })),
@@ -111,7 +111,7 @@ describe('getCopilotReviewTools', () => {
         expect(result['error']).toContain('GitHub')
     })
 
-    it('should handle handler errors via formatHandlerErrorResponse', async () => {
+    it('should handle handler errors via formatHandlerError', async () => {
         const context = createMockContext()
         mockResolveOwnerRepo.mockRejectedValue(new Error('Network failure'))
 

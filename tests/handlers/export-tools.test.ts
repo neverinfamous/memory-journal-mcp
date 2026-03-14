@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/utils/error-helpers.js', () => ({
-    formatHandlerErrorResponse: vi.fn().mockImplementation((err: Error) => ({
+    formatHandlerError: vi.fn().mockImplementation((err: Error) => ({
         success: false,
         error: err.message,
     })),
@@ -185,7 +185,7 @@ describe('getExportTools', () => {
     // Error handling
     // ========================================================================
 
-    it('should handle invalid format gracefully via formatHandlerErrorResponse', async () => {
+    it('should handle invalid format gracefully via formatHandlerError', async () => {
         const context = createMockContext()
         const tools = getExportTools(context as never)
         const handler = tools[0]!.handler

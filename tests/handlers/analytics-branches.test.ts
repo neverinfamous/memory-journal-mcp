@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/utils/error-helpers.js', () => ({
-    formatHandlerErrorResponse: vi.fn().mockImplementation((err: Error) => ({
+    formatHandlerError: vi.fn().mockImplementation((err: Error) => ({
         success: false,
         error: err.message,
     })),
@@ -69,7 +69,7 @@ describe('analytics tools — branch coverage', () => {
             expect(db.getStatistics).toHaveBeenCalledWith('month', '2025-01-01', '2025-01-31', true)
         })
 
-        it('should handle error with formatHandlerErrorResponse', () => {
+        it('should handle error with formatHandlerError', () => {
             const db = createMockDb({
                 getStatistics: vi.fn().mockImplementation(() => {
                     throw new Error('db error')

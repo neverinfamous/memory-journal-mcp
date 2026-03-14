@@ -6,10 +6,10 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
 import { relaxedNumber } from './schemas.js'
-import { ErrorResponseFields } from './error-response-fields.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
 
 // ============================================================================
@@ -23,7 +23,7 @@ const BackupResultOutputSchema = z.object({
     path: z.string().optional(),
     sizeBytes: z.number().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const BackupInfoSchema = z.object({
     filename: z.string(),
@@ -39,7 +39,7 @@ const BackupsListOutputSchema = z.object({
     backupsDirectory: z.string().optional(),
     hint: z.string().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const RestoreResultOutputSchema = z.object({
     success: z.boolean(),
@@ -55,7 +55,7 @@ const RestoreResultOutputSchema = z.object({
         })
         .optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const CleanupBackupsOutputSchema = z.object({
     success: z.boolean(),
@@ -64,7 +64,7 @@ const CleanupBackupsOutputSchema = z.object({
     keptCount: z.number().optional(),
     message: z.string().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -103,7 +103,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         sizeBytes: result.sizeBytes,
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -128,7 +128,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                                 : undefined,
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -204,7 +204,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         },
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -240,7 +240,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                                 : `No backups to delete. Currently have ${String(result.kept)} backup(s).`,
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },

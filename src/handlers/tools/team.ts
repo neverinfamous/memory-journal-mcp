@@ -9,11 +9,11 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
 import { resolveAuthor } from '../../utils/security-utils.js'
 import { resolveIssueUrl } from '../../utils/github-helpers.js'
 import { ENTRY_TYPES, SIGNIFICANCE_TYPES, MAX_CONTENT_LENGTH, EntryOutputSchema, relaxedNumber } from './schemas.js'
-import { ErrorResponseFields } from './error-response-fields.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 
 
@@ -88,14 +88,14 @@ const TeamCreateOutputSchema = z.object({
     entry: TeamEntryOutputSchema.optional(),
     author: z.string().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const TeamEntriesListOutputSchema = z.object({
     entries: z.array(TeamEntryOutputSchema).optional(),
     count: z.number().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Constants
@@ -185,7 +185,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                         author,
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -215,7 +215,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
 
                     return { entries: enriched, count: enriched.length }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -278,7 +278,7 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
 
                     return { entries: enriched, count: enriched.length }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },

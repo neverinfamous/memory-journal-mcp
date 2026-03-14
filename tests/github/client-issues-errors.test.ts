@@ -28,7 +28,7 @@ vi.mock('simple-git', () => ({
 
 import { GitHubClient } from '../../src/github/github-integration/client.js'
 import { IssuesManager } from '../../src/github/github-integration/issues.js'
-import { formatZodError, formatHandlerErrorResponse } from '../../src/utils/error-helpers.js'
+import { formatZodError, formatHandlerError } from '../../src/utils/error-helpers.js'
 import { MemoryJournalMcpError } from '../../src/types/errors.js'
 import { ErrorCategory } from '../../src/types/error-types.js'
 
@@ -366,10 +366,10 @@ describe('Error helpers — branch coverage', () => {
         })
     })
 
-    describe('formatHandlerErrorResponse', () => {
+    describe('formatHandlerError', () => {
         it('should handle MemoryJournalMcpError', () => {
             const err = new MemoryJournalMcpError('test error', 'TEST_CODE')
-            const result = formatHandlerErrorResponse(err)
+            const result = formatHandlerError(err)
             expect(result.success).toBe(false)
             expect(result.code).toBe('TEST_CODE')
         })
@@ -378,21 +378,21 @@ describe('Error helpers — branch coverage', () => {
             const err = new ZodError([
                 { code: ZodIssueCode.invalid_type, expected: 'string', received: 'number', path: ['x'], message: 'bad' },
             ])
-            const result = formatHandlerErrorResponse(err)
+            const result = formatHandlerError(err)
             expect(result.success).toBe(false)
             expect(result.code).toBe('VALIDATION_ERROR')
             expect(result.category).toBe(ErrorCategory.VALIDATION)
         })
 
         it('should handle plain Error', () => {
-            const result = formatHandlerErrorResponse(new Error('oops'))
+            const result = formatHandlerError(new Error('oops'))
             expect(result.success).toBe(false)
             expect(result.error).toBe('oops')
             expect(result.code).toBe('INTERNAL_ERROR')
         })
 
         it('should handle non-Error throw (string)', () => {
-            const result = formatHandlerErrorResponse('string error')
+            const result = formatHandlerError('string error')
             expect(result.error).toBe('string error')
             expect(result.code).toBe('INTERNAL_ERROR')
         })

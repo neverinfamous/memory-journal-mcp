@@ -6,9 +6,9 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext, RelationshipType } from '../../types/index.js'
-import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
 import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
-import { ErrorResponseFields } from './error-response-fields.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import type { QueryResult } from '../../database/core/interfaces.js'
 
 // ============================================================================
@@ -73,7 +73,7 @@ const LinkEntriesOutputSchema = z.object({
     duplicate: z.boolean().optional().describe('True if relationship already existed'),
     message: z.string().optional().describe('Additional context about the operation'),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const VisualizationOutputSchema = z.object({
     entry_count: z.number().optional(),
@@ -91,7 +91,7 @@ const VisualizationOutputSchema = z.object({
         .optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -143,7 +143,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         try {
                             return LinkEntriesSchema.parse(params)
                         } catch {
-                            // If parse itself failed, use formatHandlerErrorResponse
+                            // If parse itself failed, use formatHandlerError
                             return null
                         }
                     })()
@@ -166,7 +166,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                                 : errMsg,
                         }
                     }
-                    return formatHandlerErrorResponse(error)
+                    return formatHandlerError(error)
                 }
             },
         },
@@ -365,7 +365,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         },
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },

@@ -8,7 +8,7 @@
  * Each group module owns its:
  * - Input/output Zod schemas
  * - Tool definitions (name, description, group, annotations)
- * - Handler implementations (with try/catch + formatHandlerErrorResponse)
+ * - Handler implementations (with try/catch + formatHandlerError)
  */
 
 import type {

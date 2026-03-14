@@ -12,7 +12,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 }))
 
 vi.mock('../../src/utils/error-helpers.js', () => ({
-    formatHandlerErrorResponse: vi.fn().mockImplementation((err: Error) => ({
+    formatHandlerError: vi.fn().mockImplementation((err: Error) => ({
         success: false,
         error: err.message,
     })),

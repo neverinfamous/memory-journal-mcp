@@ -11,7 +11,7 @@ import type {
     EntryType,
     SignificanceType,
 } from '../../../types/index.js'
-import { formatHandlerErrorResponse } from '../../../utils/error-helpers.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
 import {
     CreateGitHubIssueWithEntryOutputSchema,
     CloseGitHubIssueWithEntryOutputSchema,
@@ -225,7 +225,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             ` and journal entry #${String(entry.id)}`,
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -431,7 +431,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             (kanbanResult?.moved ? ' and moved to Done' : ''),
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },

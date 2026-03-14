@@ -39,12 +39,12 @@ export function formatZodError(error: ZodError): string {
  *     // ... domain logic ...
  *     return { success: true, ... };
  *   } catch (err) {
- *     return formatHandlerErrorResponse(err);
+ *     return formatHandlerError(err);
  *   }
  * }
  * ```
  */
-export function formatHandlerErrorResponse(err: unknown): ErrorResponse {
+export function formatHandlerError(err: unknown): ErrorResponse {
     // MemoryJournalMcpError and subclasses (OAuthError, SecurityError, etc.)
     if (err instanceof MemoryJournalMcpError) {
         return err.toResponse()

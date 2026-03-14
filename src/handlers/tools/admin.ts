@@ -6,10 +6,10 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { ENTRY_TYPES, EntryOutputSchema, relaxedNumber } from './schemas.js'
-import { ErrorResponseFields } from './error-response-fields.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // ============================================================================
 // Input Schemas
@@ -52,14 +52,14 @@ const UpdateEntryOutputSchema = z.object({
     success: z.boolean().optional(),
     entry: EntryOutputSchema.optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const DeleteEntryOutputSchema = z.object({
     success: z.boolean().optional(),
     entryId: z.number().optional(),
     permanent: z.boolean().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const MergeTagsOutputSchema = z.object({
     success: z.boolean().optional(),
@@ -69,20 +69,20 @@ const MergeTagsOutputSchema = z.object({
     sourceDeleted: z.boolean().optional(),
     message: z.string().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const RebuildVectorIndexOutputSchema = z.object({
     success: z.boolean().optional(),
     entriesIndexed: z.number().optional(),
     failedEntries: z.number().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const AddToVectorIndexOutputSchema = z.object({
     success: z.boolean().optional(),
     entryId: z.number().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -122,7 +122,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
 
                     return { success: true, entry }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -159,7 +159,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
 
                     return { success, entryId: entry_id, permanent }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -211,7 +211,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                 } catch (error) {
                     // Zod or domain error
                     if (error instanceof z.ZodError) {
-                        return formatHandlerErrorResponse(error)
+                        return formatHandlerError(error)
                     }
                     // Domain error from db.mergeTags — try to preserve schema shape
                     try {
@@ -228,7 +228,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: error instanceof Error ? error.message : 'Unknown error',
                         }
                     } catch {
-                        return formatHandlerErrorResponse(error)
+                        return formatHandlerError(error)
                     }
                 }
             },
@@ -259,7 +259,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         ...(!success ? { error: 'All entries failed to generate embeddings' } : {}),
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -296,7 +296,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         ...(success ? {} : { error: 'Failed to generate or store embedding' }),
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },

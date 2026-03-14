@@ -9,7 +9,7 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
 import { relaxedNumber } from './schemas.js'
 import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
@@ -173,7 +173,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         return result
                     })
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },

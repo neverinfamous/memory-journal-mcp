@@ -6,9 +6,9 @@
 
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerErrorResponse } from '../../utils/error-helpers.js'
+import { formatHandlerError } from '../../utils/error-helpers.js'
 import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema, relaxedNumber } from './schemas.js'
-import { ErrorResponseFields } from './error-response-fields.js'
+import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // Named constants (magic value extraction)
 const INACTIVE_THRESHOLD_DAYS = 7
@@ -75,7 +75,7 @@ const StatisticsOutputSchema = z.object({
         .optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const ProjectSummaryOutputSchema = z.object({
     project_number: z.number(),
@@ -84,7 +84,7 @@ const ProjectSummaryOutputSchema = z.object({
     last_entry: z.string(),
     active_days: z.number(),
     top_tags: z.array(TagOutputSchema),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 const CrossProjectInsightsOutputSchema = z.object({
     project_count: z.number().optional(),
@@ -110,7 +110,7 @@ const CrossProjectInsightsOutputSchema = z.object({
     message: z.string().optional(),
     success: z.boolean().optional(),
     error: z.string().optional(),
-}).extend(ErrorResponseFields.shape)
+}).extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Input Schemas
@@ -182,7 +182,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     )
                     return { ...(stats as object), groupBy: group_by }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },
@@ -323,7 +323,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         time_distribution: distribution,
                     }
                 } catch (err) {
-                    return formatHandlerErrorResponse(err)
+                    return formatHandlerError(err)
                 }
             },
         },

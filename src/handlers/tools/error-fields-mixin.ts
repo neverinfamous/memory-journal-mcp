@@ -1,19 +1,19 @@
 /**
  * Shared Error Response Fields for Output Schemas
  *
- * Defines the ErrorResponseFields Zod schema fragment that gets extended into
- * every output schema. This ensures formatHandlerErrorResponse() responses pass
+ * Defines the ErrorFieldsMixin Zod schema fragment that gets extended into
+ * every output schema. This ensures formatHandlerError() responses pass
  * output schema validation (MCP SDK enforces additionalProperties: false).
  */
 
 import { z } from 'zod'
 
 /**
- * Standard error response fields returned by formatHandlerErrorResponse().
+ * Standard error response fields returned by formatHandlerError().
  * Extend this into every output schema:
- *   export const MyOutputSchema = z.object({ ... }).extend(ErrorResponseFields.shape);
+ *   export const MyOutputSchema = z.object({ ... }).extend(ErrorFieldsMixin.shape);
  */
-export const ErrorResponseFields = z.object({
+export const ErrorFieldsMixin = z.object({
     error: z
         .string()
         .optional()

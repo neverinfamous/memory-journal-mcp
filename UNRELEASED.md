@@ -10,6 +10,8 @@
 
 ### Changed
 
+- **MCP Builder Naming Alignment** — Renamed `ErrorResponseFields` → `ErrorFieldsMixin` and `formatHandlerErrorResponse()` → `formatHandlerError()` to match the cross-server naming convention in the mcp-builder skill. Renamed source file `error-response-fields.ts` → `error-fields-mixin.ts`. Zero logic changes.
+
 - **Server Instructions Session Start** — Replaced numbered-list "Session Start" with bold **REQUIRED** directive to read `memory://briefing` and present `userMessage` to the user. Moved server name discovery plumbing below the action to prevent agents from misinterpreting the section as configuration guidance.
 
 - **Dependency Updates** — Routine `npm update` bumping non-breaking transitive dependencies.
@@ -33,7 +35,7 @@
   - Added `getRecent` alias for `getRecentEntries` in Code Mode (`mj.core.getRecent()`) — agents commonly try this natural camelCase abbreviation
 
 - **MCP Builder Compliance Audit Fixes**
-  - Added `error` field to `ErrorResponseFields` mixin — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions
+  - Added `error` field to `ErrorFieldsMixin` — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions
   - Added DNS rebinding protection (`hostHeaderValidation()`) to HTTP transport — applies MCP SDK middleware when no auth is configured as defense-in-depth against CVE-2025-66414
   - SHA-pinned all GitHub Actions across 6 workflow files (`lint-and-test.yml`, `codeql.yml`, `publish-npm.yml`, `secrets-scanning.yml`, `security-update.yml`, `docker-publish.yml`) to prevent supply chain injection via force-pushed tags
 
@@ -194,7 +196,7 @@
 - **`MemoryJournalMcpError` Base Class (`errors.ts`)** — Enriched base error class with `category`, `code`, `suggestion`, `recoverable`, `details`, and `cause` properties. Includes `toResponse()` method returning structured `ErrorResponse`. 6 subclasses: `ConnectionError`, `QueryError`, `ValidationError`, `ResourceNotFoundError`, `ConfigurationError`, `PermissionError`
 - **`OAuthError` Extends `MemoryJournalMcpError`** — OAuth errors now inherit full error handling infrastructure (category, suggestion, toResponse()). Auto-categorizes as AUTHENTICATION (401) or AUTHORIZATION (403) based on httpStatus. Deprecated standalone `getWWWAuthenticateHeader()` utility; removed from barrel export
 - **`SecurityError` Extends `MemoryJournalMcpError`** — Security validation errors (`InvalidDateFormatError`, `PathTraversalError`) now participate in the enriched error hierarchy with VALIDATION category
-- **`formatHandlerErrorResponse()` Function** — New enriched error formatter in `error-helpers.ts` returning full `ErrorResponse` objects with code, category, suggestion, and recoverable fields. Handles `MemoryJournalMcpError`, `ZodError`, and raw errors. Existing `formatHandlerError()` preserved for backward compatibility
+- **`formatHandlerError()` Function** — Enriched error formatter in `error-helpers.ts` returning full `ErrorResponse` objects with code, category, suggestion, and recoverable fields. Handles `MemoryJournalMcpError`, `ZodError`, and raw errors
 
 - **Configurable Briefing (`memory://briefing`)** — 5 new env vars / CLI flags to customize the session briefing
   - `BRIEFING_ENTRY_COUNT` / `--briefing-entries` — Number of journal entries (default: 3)
