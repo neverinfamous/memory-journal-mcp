@@ -10,6 +10,8 @@
 
 ### Changed
 
+- **Server Instructions Session Start** — Replaced numbered-list "Session Start" with bold **REQUIRED** directive to read `memory://briefing` and present `userMessage` to the user. Moved server name discovery plumbing below the action to prevent agents from misinterpreting the section as configuration guidance.
+
 - **Dependency Updates** — Routine `npm update` bumping non-breaking transitive dependencies.
 
 - **Unified Audit Fixes**

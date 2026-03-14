@@ -43,26 +43,26 @@ export interface LatestEntrySnapshot {
 
 /**
  * Instruction detail level for token efficiency
- * - essential: ~1.2K tokens - Core behaviors only (for token-constrained clients)
- * - standard: ~1.4K tokens - + GitHub patterns (default)
- * - full: ~6.7K tokens - + tool/resource listings
+ * - essential: ~200 tokens - Core behaviors only (for token-constrained clients)
+ * - standard: ~400 tokens - + GitHub patterns (default)
+ * - full: ~600 tokens - + tool/resource listings
  */
 export type InstructionLevel = 'essential' | 'standard' | 'full'
 
 /**
- * Essential behavioral guidance (~1.2K tokens)
+ * Essential behavioral guidance (~200 tokens)
  * Core patterns every AI agent should follow.
  */
 const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Session Start
 
-1. Read \`memory://briefing\` for project context
-   - **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
-     - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` (e.g., \`mcp_memory-journal-mcp_create_entry\`). Server name = \`memory-journal-mcp\`.
-     - **Cursor**: Tools are \`user-{name}-{tool}\` (e.g., \`user-memory-journal-mcp-create_entry\`). Server name = \`user-memory-journal-mcp\`.
-     - **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly (e.g., \`memory-journal-mcp\`). Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method above if unsure.
-2. Proceed with the user's request
+**REQUIRED**: Before processing any user request, read \`memory://briefing\` and present the \`userMessage\` to the user.
+
+- **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
+  - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
+  - **Cursor**: Tools are \`user-{name}-{tool}\` → server name = \`user-memory-journal-mcp\`
+  - **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
 
 ## Behaviors
 
@@ -137,7 +137,7 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 `
 
 /**
- * GitHub integration patterns (~200 additional tokens)
+ * GitHub integration patterns (~150 additional tokens)
  */
 const GITHUB_INSTRUCTIONS = `
 ## GitHub Integration

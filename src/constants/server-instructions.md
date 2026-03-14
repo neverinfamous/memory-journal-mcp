@@ -4,12 +4,12 @@
 
 ## Session Start
 
-1. Read `memory://briefing` for project context
-   - **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
-     - **AntiGravity**: Tools are `mcp_{name}_{tool}` (e.g., `mcp_memory-journal-mcp_create_entry`). Server name = `memory-journal-mcp`.
-     - **Cursor**: Tools are `user-{name}-{tool}` (e.g., `user-memory-journal-mcp-create_entry`). Server name = `user-memory-journal-mcp`.
-     - **Other clients** (Claude Desktop, etc.): Likely use the configured name exactly (e.g., `memory-journal-mcp`). Only Cursor and AntiGravity have been verified — use the tool-prefix discovery method above if unsure.
-2. Proceed with the user's request
+**REQUIRED**: Before processing any user request, read `memory://briefing` and present the `userMessage` to the user.
+
+- **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
+  - **AntiGravity**: Tools are `mcp_{name}_{tool}` → server name = `memory-journal-mcp`
+  - **Cursor**: Tools are `user-{name}-{tool}` → server name = `user-memory-journal-mcp`
+  - **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.
 
 ## Behaviors
 
