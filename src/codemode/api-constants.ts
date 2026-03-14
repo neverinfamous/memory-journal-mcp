@@ -115,7 +115,9 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
     admin: [
         'mj.admin.updateEntry({ entry_id: 1, content: "Updated content" })',
         'mj.admin.deleteEntry({ entry_id: 1 })',
+        'mj.admin.mergeTags({ source_tag: "old", target_tag: "new" })',
         'mj.admin.rebuildVectorIndex()',
+        'mj.admin.addToVectorIndex({ entry_id: 1 })',
     ],
     github: [
         'mj.github.getGithubIssues({ state: "open" })',

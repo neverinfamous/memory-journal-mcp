@@ -22,7 +22,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 > **Test Session Prerequisites**
 
 1. The server instructions are auto-injected by the MCP protocol. Confirm receipt (no need to read `memory://instructions` separately).
-2. Confirm `memory://briefing` was auto-received but do NOT read it here. Detailed briefing testing is in Phase 1.2.
+2. Confirm `memory://briefing` was auto-received and **present the `userMessage` to the user as a formatted bullet list of key facts as the server instructions required:**. Detailed briefing testing is below in Phase 1.2.
 
 ---
 
@@ -95,9 +95,6 @@ After creating all 12 entries, verify the seed data is searchable:
 
 ### 1.2 Briefing Resource
 
-> [!NOTE]
-> This is the **only** phase that reads and tests `memory://briefing`. The prerequisites above only confirm it was auto-received — they do NOT read it.
-
 | Test                             | Command/Action                   | Expected Result                                                                                        |
 | -------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Read briefing                    | Read `memory://briefing`         | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`                              |
@@ -115,7 +112,7 @@ After creating all 12 entries, verify the seed data is searchable:
 ### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
 
 > [!IMPORTANT]
-> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. See `test-server/README.md` for full details.
+> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. See `test-server/README.md` for full details and script locations.
 
 ```powershell
 # Test A — Instruction levels (essential < standard < full)
@@ -447,7 +444,7 @@ node test-server/test-tool-annotations.mjs
 
 ---
 
-## Phase 8: Prompt Handler Verification (16 prompts)
+## Phase 8: Prompt Handler Verification (16 prompts) [DO NOT SKIP!]
 
 > [!NOTE]
 > Prompts return `GetPromptResult` objects with `messages` arrays. While the _workflows_ prompts describe require a human to act on, the **handlers themselves** are testable via `prompts/get` MCP calls. This phase verifies response shape, argument enforcement, and content generation.
@@ -565,7 +562,7 @@ For **every** prompt response, verify:
 
 ---
 
-## Phase 10: Automated Scheduler — Run via Script - DO NOT SKIP!
+## Phase 10: Automated Scheduler — Run via Script [DO NOT SKIP!]
 
 > [!IMPORTANT]
 > The scheduler only activates in HTTP/SSE transport mode. Run the script below — it handles session init, health reads, and wait/verify automatically. See `test-server/README.md` for full details.

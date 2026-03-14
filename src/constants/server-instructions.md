@@ -4,7 +4,7 @@
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read `memory://briefing` and present the `userMessage` to the user as a formatted bullet list of key facts:
+**REQUIRED**: Before processing any user request, read `memory://briefing` and **present the `userMessage` to the user as a formatted bullet list of key facts:**
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs
@@ -91,6 +91,7 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Team          | `mj.team.*`          | `mj.team.teamCreateEntry("Team update")`           |
 
 **Features**: Positional args (`createEntry("note")`), aliases (`mj.core.create`), `mj.help()` for discovery.
+**Readonly mode**: `readonly: true` restricts to read-only tools only. Write-only groups (e.g., `admin`) will be empty. Use `readonly: false` (default) for full access.
 **Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
 
 <!-- SECTION:GITHUB -->
