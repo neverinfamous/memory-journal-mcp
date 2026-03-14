@@ -8,6 +8,54 @@
   - **Utilities**: `github-helpers.test.ts` — covers resolveIssueUrl with all branch paths
   - Fixed existing test breakages from `hostHeaderValidation` middleware injection (middleware indices, mock response `.json()` method, `TokenValidator` import)
 
+  - **Agentic Workflows (GitHub Copilot)** — 4 new workflow scripts for automated repo maintenance using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot): `dependency-maintenance.md` (weekly npm + Docker dep updates, patch version bump, PR creation), `docs-drift-detector.md` (PR-triggered documentation accuracy audit), `ci-health-monitor.md` (weekly CI deprecation and action version check), `agentics-maintenance.yml` (daily expired entity cleanup). Includes `.github/workflows/README.md` with workflow map diagram and editing guidelines.
+
+- **WASM SQLite Fallback Removed** — Removed the `sql.js` WASM fallback adapter to simplify the architecture, test matrix, and dependency footprint. The server now runs exclusively on the high-performance native `better-sqlite3` driver. `--sqlite-native` and `--sqlite-wasm` flags have been removed.
+- **Harmonized Error Types (`error-types.ts`)** — New `ErrorCategory` enum (9 categories: validation, connection, query, permission, config, resource, authentication, authorization, internal), `ErrorResponse` interface, and `ErrorContext` interface. Part of the harmonized error handling standard across db-mcp, postgres-mcp, mysql-mcp, and memory-journal-mcp
+- **`MemoryJournalMcpError` Base Class (`errors.ts`)** — Enriched base error class with `category`, `code`, `suggestion`, `recoverable`, `details`, and `cause` properties. Includes `toResponse()` method returning structured `ErrorResponse`. 6 subclasses: `ConnectionError`, `QueryError`, `ValidationError`, `ResourceNotFoundError`, `ConfigurationError`, `PermissionError`
+- **`OAuthError` Extends `MemoryJournalMcpError`** — OAuth errors now inherit full error handling infrastructure (category, suggestion, toResponse()). Auto-categorizes as AUTHENTICATION (401) or AUTHORIZATION (403) based on httpStatus. Deprecated standalone `getWWWAuthenticateHeader()` utility; removed from barrel export
+- **`SecurityError` Extends `MemoryJournalMcpError`** — Security validation errors (`InvalidDateFormatError`, `PathTraversalError`) now participate in the enriched error hierarchy with VALIDATION category
+- **`formatHandlerError()` Function** — Enriched error formatter in `error-helpers.ts` returning full `ErrorResponse` objects with code, category, suggestion, and recoverable fields. Handles `MemoryJournalMcpError`, `ZodError`, and raw errors
+
+- **Configurable Briefing (`memory://briefing`)** — 5 new env vars / CLI flags to customize the session briefing
+  - `BRIEFING_ENTRY_COUNT` / `--briefing-entries` — Number of journal entries (default: 3)
+  - `BRIEFING_INCLUDE_TEAM` / `--briefing-include-team` — Include team DB entries in briefing
+  - `BRIEFING_ISSUE_COUNT` / `--briefing-issues` — Number of issues to list with titles (0 = count only)
+  - `BRIEFING_PR_COUNT` / `--briefing-prs` — Number of PRs to list with titles (0 = count only)
+  - `BRIEFING_PR_STATUS` / `--briefing-pr-status` — Show PR status breakdown (open/merged/closed)
+  - Issues and PRs row now always displayed in the `userMessage` table when GitHub is available
+  - `RULES_FILE_PATH` / `--rules-file` — Path to user rules file; shown in briefing with size and last-modified age
+  - `SKILLS_DIR_PATH` / `--skills-dir` — Path to skills directory; shown in briefing with skill count
+  - Expanded `## Rule & Skill Suggestions` in server instructions with guidance for adding, updating, and refining rules and skills
+  - `BRIEFING_WORKFLOW_COUNT` / `--briefing-workflows` — Number of recent workflow runs to list with names and status icons
+  - `BRIEFING_WORKFLOW_STATUS` / `--briefing-workflow-status` — Show workflow run status breakdown (passing/failing/pending/cancelled)
+  - CI Status row in briefing enhanced to show named runs (✅ build · ❌ deploy) or aggregated counts
+  - `get_copilot_reviews` tool — Fetch Copilot's code review findings for any PR (state, file-level comments with paths/lines)
+  - `BRIEFING_COPILOT_REVIEWS` / `--briefing-copilot` — Aggregate Copilot review state across recent PRs in briefing
+  - Copilot review patterns in server instructions (learn from reviews, pre-emptive checking, `copilot-finding` tag)
+
+- **OAuth 2.1 Authentication Module** — Full RFC-compliant OAuth 2.0 authentication and authorization for the HTTP transport
+  - 10 new files in `src/auth/`: types, errors, scopes, token-validator, oauth-resource-server, authorization-server-discovery, scope-map, auth-context, middleware, barrel
+  - RFC 9728 Protected Resource Metadata endpoint (`/.well-known/oauth-protected-resource`)
+  - RFC 8414 Authorization Server Metadata discovery with caching
+  - JWT validation via `jose` library with JWKS caching and issuer/audience verification
+  - 10 tool groups mapped to 3 OAuth scopes: `read` (core, search, analytics, relationships, export), `write` (github, team), `admin` (admin, backup, codemode)
+  - `AsyncLocalStorage`-based per-request auth context threading
+  - Express middleware for token extraction, validation, and scope enforcement
+  - Transport-agnostic utilities: `createAuthenticatedContext`, `validateAuth`, `formatOAuthError`
+  - 5 new CLI flags: `--oauth-enabled`, `--oauth-issuer`, `--oauth-audience`, `--oauth-jwks-uri`, `--oauth-clock-tolerance`
+  - Environment variable support: `OAUTH_ENABLED`, `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URI`
+
+- **Code Mode (`mj_execute_code`)** — Sandboxed JavaScript execution for multi-step workflows with 70-90% token reduction
+  - 9 new files in `src/codemode/`: types, security manager, VM sandbox, worker-thread sandbox, worker script, sandbox factory, API bridge, API constants, barrel
+  - `src/handlers/tools/codemode.ts` — Tool handler with security validation, rate limiting, and API bridge construction
+  - `mj.*` namespaced API exposes all 44 tools across 10 groups (core, search, analytics, relationships, export, admin, github, backup, team, codemode)
+  - Positional argument support, method aliases, per-group `help()` for discoverability
+  - Production sandbox: `node:worker_threads` with V8 isolate boundary, `node:vm` secondary isolation, MessagePort RPC bridge
+  - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (60 executions/min), result size (10MB)
+  - `--sandbox-mode <mode>` CLI flag: `worker` (production, default) or `vm` (lightweight)
+  - Tool count: 42 → 44 tools, tool groups: 9 → 10
+
 ### Changed
 
 - **MCP Builder Naming Alignment** — Renamed `ErrorResponseFields` → `ErrorFieldsMixin` and `formatHandlerErrorResponse()` → `formatHandlerError()` to match the cross-server naming convention in the mcp-builder skill. Renamed source file `error-response-fields.ts` → `error-fields-mixin.ts`. Zero logic changes.
@@ -19,12 +67,12 @@
 - **Unified Audit Fixes**
   - SHA-pinned `actions/checkout` in `auto-release.yml` to commit SHA, matching all other workflows
   - Removed manually-maintained `LABEL version` from `Dockerfile` — Docker tags and OCI metadata already convey version info without drift risk
+  - Removed dead `matchesCorsOrigin()` function from `security.ts` — unused since `setCorsHeaders()` was rewritten to use CodeQL-safe record-lookup pattern. Removed 6 associated tests and barrel re-export
+  - Removed unused `crypto` import from `sandbox.ts` (only `worker-sandbox.ts` uses it for `poolId`)
 
 - **MCP Builder Compliance (D3/D7)**
   - Added `openWorldHint: false` to 28 non-GitHub tool annotations across 9 handler files (`core.ts`, `search.ts`, `relationships.ts`, `team.ts`, `backup.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `codemode.ts`) — explicitly declares local-only SQLite operations
   - Added configurable instruction level via `--instruction-level` CLI flag and `INSTRUCTION_LEVEL` env var (values: `essential`, `standard`, `full`; default: `standard`) — controls AI briefing depth in MCP `initialize` response
-
-
 
 - **Pass 2 Testing Fixes**
   - Improved `link_entries` error message when source or target entry doesn't exist — now returns `"One or both entries not found (from: X, to: Y)"` instead of raw SQLite `"FOREIGN KEY constraint failed"` error
@@ -186,56 +234,6 @@
 - Secured native snapshot backups by switching from blocked in-memory blob exports to transactional file-system copies with `wal_checkpoint(TRUNCATE)`.
 - Fixed empty-array query result assertions across analytics, team, prompts, and resource handlers caused by SQLite native driver mismatching original `sql.js` row-wrapping (`rawDb.exec()`) structures natively by safely standardizing `executeRawQuery` mapping.
 - **Code Mode `timeout` Parameter Ignored** — The `timeout` parameter on `mj_execute_code` was parsed by the Zod schema but never forwarded to the sandbox pool. All executions used the default 30s timeout regardless of the user-specified value. Added per-call `timeoutMs` override to `ISandbox`, `ISandboxPool`, and all sandbox/pool implementations (`WorkerSandbox`, `WorkerSandboxPool`, `CodeModeSandbox`, `SandboxPool`). Handler now destructures `timeout` and passes it to `pool.execute()`.
-
-### Added
-
-- **Agentic Workflows (GitHub Copilot)** — 4 new workflow scripts for automated repo maintenance using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot): `dependency-maintenance.md` (weekly npm + Docker dep updates, patch version bump, PR creation), `docs-drift-detector.md` (PR-triggered documentation accuracy audit), `ci-health-monitor.md` (weekly CI deprecation and action version check), `agentics-maintenance.yml` (daily expired entity cleanup). Includes `.github/workflows/README.md` with workflow map diagram and editing guidelines.
-
-- **WASM SQLite Fallback Removed** — Removed the `sql.js` WASM fallback adapter to simplify the architecture, test matrix, and dependency footprint. The server now runs exclusively on the high-performance native `better-sqlite3` driver. `--sqlite-native` and `--sqlite-wasm` flags have been removed.
-- **Harmonized Error Types (`error-types.ts`)** — New `ErrorCategory` enum (9 categories: validation, connection, query, permission, config, resource, authentication, authorization, internal), `ErrorResponse` interface, and `ErrorContext` interface. Part of the harmonized error handling standard across db-mcp, postgres-mcp, mysql-mcp, and memory-journal-mcp
-- **`MemoryJournalMcpError` Base Class (`errors.ts`)** — Enriched base error class with `category`, `code`, `suggestion`, `recoverable`, `details`, and `cause` properties. Includes `toResponse()` method returning structured `ErrorResponse`. 6 subclasses: `ConnectionError`, `QueryError`, `ValidationError`, `ResourceNotFoundError`, `ConfigurationError`, `PermissionError`
-- **`OAuthError` Extends `MemoryJournalMcpError`** — OAuth errors now inherit full error handling infrastructure (category, suggestion, toResponse()). Auto-categorizes as AUTHENTICATION (401) or AUTHORIZATION (403) based on httpStatus. Deprecated standalone `getWWWAuthenticateHeader()` utility; removed from barrel export
-- **`SecurityError` Extends `MemoryJournalMcpError`** — Security validation errors (`InvalidDateFormatError`, `PathTraversalError`) now participate in the enriched error hierarchy with VALIDATION category
-- **`formatHandlerError()` Function** — Enriched error formatter in `error-helpers.ts` returning full `ErrorResponse` objects with code, category, suggestion, and recoverable fields. Handles `MemoryJournalMcpError`, `ZodError`, and raw errors
-
-- **Configurable Briefing (`memory://briefing`)** — 5 new env vars / CLI flags to customize the session briefing
-  - `BRIEFING_ENTRY_COUNT` / `--briefing-entries` — Number of journal entries (default: 3)
-  - `BRIEFING_INCLUDE_TEAM` / `--briefing-include-team` — Include team DB entries in briefing
-  - `BRIEFING_ISSUE_COUNT` / `--briefing-issues` — Number of issues to list with titles (0 = count only)
-  - `BRIEFING_PR_COUNT` / `--briefing-prs` — Number of PRs to list with titles (0 = count only)
-  - `BRIEFING_PR_STATUS` / `--briefing-pr-status` — Show PR status breakdown (open/merged/closed)
-  - Issues and PRs row now always displayed in the `userMessage` table when GitHub is available
-  - `RULES_FILE_PATH` / `--rules-file` — Path to user rules file; shown in briefing with size and last-modified age
-  - `SKILLS_DIR_PATH` / `--skills-dir` — Path to skills directory; shown in briefing with skill count
-  - Expanded `## Rule & Skill Suggestions` in server instructions with guidance for adding, updating, and refining rules and skills
-  - `BRIEFING_WORKFLOW_COUNT` / `--briefing-workflows` — Number of recent workflow runs to list with names and status icons
-  - `BRIEFING_WORKFLOW_STATUS` / `--briefing-workflow-status` — Show workflow run status breakdown (passing/failing/pending/cancelled)
-  - CI Status row in briefing enhanced to show named runs (✅ build · ❌ deploy) or aggregated counts
-  - `get_copilot_reviews` tool — Fetch Copilot's code review findings for any PR (state, file-level comments with paths/lines)
-  - `BRIEFING_COPILOT_REVIEWS` / `--briefing-copilot` — Aggregate Copilot review state across recent PRs in briefing
-  - Copilot review patterns in server instructions (learn from reviews, pre-emptive checking, `copilot-finding` tag)
-
-- **OAuth 2.1 Authentication Module** — Full RFC-compliant OAuth 2.0 authentication and authorization for the HTTP transport
-  - 10 new files in `src/auth/`: types, errors, scopes, token-validator, oauth-resource-server, authorization-server-discovery, scope-map, auth-context, middleware, barrel
-  - RFC 9728 Protected Resource Metadata endpoint (`/.well-known/oauth-protected-resource`)
-  - RFC 8414 Authorization Server Metadata discovery with caching
-  - JWT validation via `jose` library with JWKS caching and issuer/audience verification
-  - 10 tool groups mapped to 3 OAuth scopes: `read` (core, search, analytics, relationships, export), `write` (github, team), `admin` (admin, backup, codemode)
-  - `AsyncLocalStorage`-based per-request auth context threading
-  - Express middleware for token extraction, validation, and scope enforcement
-  - Transport-agnostic utilities: `createAuthenticatedContext`, `validateAuth`, `formatOAuthError`
-  - 5 new CLI flags: `--oauth-enabled`, `--oauth-issuer`, `--oauth-audience`, `--oauth-jwks-uri`, `--oauth-clock-tolerance`
-  - Environment variable support: `OAUTH_ENABLED`, `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URI`
-
-- **Code Mode (`mj_execute_code`)** — Sandboxed JavaScript execution for multi-step workflows with 70-90% token reduction
-  - 9 new files in `src/codemode/`: types, security manager, VM sandbox, worker-thread sandbox, worker script, sandbox factory, API bridge, API constants, barrel
-  - `src/handlers/tools/codemode.ts` — Tool handler with security validation, rate limiting, and API bridge construction
-  - `mj.*` namespaced API exposes all 44 tools across 10 groups (core, search, analytics, relationships, export, admin, github, backup, team, codemode)
-  - Positional argument support, method aliases, per-group `help()` for discoverability
-  - Production sandbox: `node:worker_threads` with V8 isolate boundary, `node:vm` secondary isolation, MessagePort RPC bridge
-  - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (60 executions/min), result size (10MB)
-  - `--sandbox-mode <mode>` CLI flag: `worker` (production, default) or `vm` (lightweight)
-  - Tool count: 42 → 44 tools, tool groups: 9 → 10
 
 ### Security
 

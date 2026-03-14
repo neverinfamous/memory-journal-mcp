@@ -6,67 +6,19 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { type ChildProcess, spawn } from 'node:child_process'
-import { setTimeout as delay } from 'node:timers/promises'
+import { startServer, stopServer } from './helpers.js'
 
 const AUTH_TOKEN = 'test-secret-token-e2e'
 const AUTH_PORT = 3101
 const AUTH_BASE = `http://localhost:${AUTH_PORT}`
 
-let serverProcess: ChildProcess | null = null
-
-/**
- * Start a second MCP server with --auth-token on a different port.
- * Waits for /health to become reachable before returning.
- */
-async function startAuthServer(): Promise<void> {
-    serverProcess = spawn(
-        'node',
-        [
-            'dist/cli.js',
-            '--transport',
-            'http',
-            '--port',
-            String(AUTH_PORT),
-            '--db',
-            './.test-output/e2e/test-e2e-auth.db',
-            '--auth-token',
-            AUTH_TOKEN,
-        ],
-        {
-            cwd: process.cwd(),
-            stdio: 'pipe',
-        }
-    )
-
-    // Wait for server to be ready (poll /health)
-    const maxAttempts = 30
-    for (let i = 0; i < maxAttempts; i++) {
-        try {
-            const res = await fetch(`${AUTH_BASE}/health`)
-            if (res.ok) return
-        } catch {
-            // Server not ready yet
-        }
-        await delay(500)
-    }
-    throw new Error('Auth server did not start within timeout')
-}
-
-function stopAuthServer(): void {
-    if (serverProcess) {
-        serverProcess.kill('SIGTERM')
-        serverProcess = null
-    }
-}
-
 test.describe('Bearer Token Authentication', () => {
     test.beforeAll(async () => {
-        await startAuthServer()
+        await startServer(AUTH_PORT, ['--auth-token', AUTH_TOKEN], 'auth')
     })
 
     test.afterAll(() => {
-        stopAuthServer()
+        stopServer(AUTH_PORT)
     })
 
     test('/health should be accessible without token (exempt)', async () => {

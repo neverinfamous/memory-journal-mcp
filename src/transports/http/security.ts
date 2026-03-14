@@ -99,20 +99,6 @@ export function setSecurityHeaders(res: Response, config: HttpTransportConfig): 
 // =============================================================================
 
 /**
- * Check if an origin matches a CORS pattern.
- * Supports exact match and wildcard subdomain patterns (e.g., `*.example.com`).
- */
-export function matchesCorsOrigin(origin: string, pattern: string): boolean {
-    if (pattern === '*') return true
-    if (pattern.startsWith('*.')) {
-        // Wildcard subdomain: "*.example.com" → ".example.com"
-        const domain = pattern.slice(1) // ".example.com"
-        return origin.endsWith(domain) && origin.length > domain.length
-    }
-    return origin === pattern
-}
-
-/**
  * Set CORS headers based on configuration.
  *
  * Uses the `origin in whitelist` pattern from CodeQL's documented safe example

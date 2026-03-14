@@ -2,7 +2,7 @@
  * memory-journal-mcp — HTTP Security Tests
  *
  * Tests for security.ts: getClientIp, checkRateLimit,
- * setSecurityHeaders, matchesCorsOrigin, setCorsHeaders.
+ * setSecurityHeaders, setCorsHeaders.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -10,7 +10,6 @@ import {
     getClientIp,
     checkRateLimit,
     setSecurityHeaders,
-    matchesCorsOrigin,
     setCorsHeaders,
 } from '../../src/transports/http/security.js'
 import type { HttpTransportConfig, RateLimitEntry } from '../../src/transports/http/types.js'
@@ -226,36 +225,6 @@ describe('setSecurityHeaders', () => {
             (c: unknown[]) => c[0] === 'Strict-Transport-Security'
         )
         expect(hstsCall[1]).toContain('max-age=86400')
-    })
-})
-
-// ============================================================================
-// matchesCorsOrigin
-// ============================================================================
-
-describe('matchesCorsOrigin', () => {
-    it('should match wildcard', () => {
-        expect(matchesCorsOrigin('https://example.com', '*')).toBe(true)
-    })
-
-    it('should match exact origin', () => {
-        expect(matchesCorsOrigin('https://example.com', 'https://example.com')).toBe(true)
-    })
-
-    it('should NOT match different origin', () => {
-        expect(matchesCorsOrigin('https://other.com', 'https://example.com')).toBe(false)
-    })
-
-    it('should match wildcard subdomain pattern', () => {
-        expect(matchesCorsOrigin('https://sub.example.com', '*.example.com')).toBe(true)
-    })
-
-    it('should NOT match base domain for wildcard subdomain', () => {
-        expect(matchesCorsOrigin('https://example.com', '*.example.com')).toBe(false)
-    })
-
-    it('should match deeply nested subdomains', () => {
-        expect(matchesCorsOrigin('https://deep.sub.example.com', '*.example.com')).toBe(true)
     })
 })
 

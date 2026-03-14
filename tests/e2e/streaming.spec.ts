@@ -1,0 +1,202 @@
+/**
+ * E2E Tests: HTTP/SSE Streaming
+ *
+ * Validates raw SSE event stream behavior for both Streamable HTTP
+ * (GET /mcp) and Legacy SSE (GET /sse) transports.
+ */
+
+import { test, expect } from '@playwright/test'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+
+test.describe('HTTP/SSE Streaming', () => {
+    test.describe('Streamable HTTP (GET /mcp)', () => {
+        test('should require session ID for GET /mcp SSE stream', async ({ request }) => {
+            const response = await request.get('/mcp')
+            expect(response.status()).toBe(400)
+        })
+
+        test('should accept GET /mcp with valid session ID', async ({ request }) => {
+            // First, initialize a session
+            const initResponse = await request.post('/mcp', {
+                headers: {
+                    Accept: 'application/json, text/event-stream',
+                },
+                data: {
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'initialize',
+                    params: {
+                        protocolVersion: '2025-03-26',
+                        capabilities: {},
+                        clientInfo: { name: 'streaming-test', version: '1.0.0' },
+                    },
+                },
+            })
+
+            expect(initResponse.status()).toBe(200)
+            const sessionId = initResponse.headers()['mcp-session-id']
+            expect(sessionId).toBeDefined()
+
+            // Open SSE stream with session ID — use raw fetch with AbortController
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 3000)
+
+            try {
+                const sseResponse = await fetch('http://localhost:3100/mcp', {
+                    headers: {
+                        'mcp-session-id': sessionId!,
+                        Accept: 'text/event-stream',
+                    },
+                    signal: controller.signal,
+                })
+
+                // Server should accept the SSE connection
+                expect(sseResponse.status).toBe(200)
+                expect(sseResponse.headers.get('content-type')).toContain('text/event-stream')
+            } catch (error) {
+                // AbortError is expected when we timeout the long-lived SSE stream
+                if (error instanceof Error && error.name !== 'AbortError') {
+                    throw error
+                }
+            } finally {
+                clearTimeout(timeout)
+            }
+        })
+
+        test('should accept Last-Event-ID header for reconnection', async ({ request }) => {
+            // Initialize session
+            const initResponse = await request.post('/mcp', {
+                headers: { Accept: 'application/json, text/event-stream' },
+                data: {
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'initialize',
+                    params: {
+                        protocolVersion: '2025-03-26',
+                        capabilities: {},
+                        clientInfo: { name: 'reconnect-test', version: '1.0.0' },
+                    },
+                },
+            })
+
+            const sessionId = initResponse.headers()['mcp-session-id']
+            expect(sessionId).toBeDefined()
+
+            // Reconnect with Last-Event-ID — server should accept (not error)
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 2000)
+
+            try {
+                const sseResponse = await fetch('http://localhost:3100/mcp', {
+                    headers: {
+                        'mcp-session-id': sessionId!,
+                        'Last-Event-ID': 'test-event-id-123',
+                        Accept: 'text/event-stream',
+                    },
+                    signal: controller.signal,
+                })
+
+                // Should still return 200 with event-stream
+                expect(sseResponse.status).toBe(200)
+            } catch (error) {
+                if (error instanceof Error && error.name !== 'AbortError') {
+                    throw error
+                }
+            } finally {
+                clearTimeout(timeout)
+            }
+        })
+    })
+
+    test.describe('Legacy SSE (GET /sse)', () => {
+        test('should return text/event-stream from /sse endpoint', async () => {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 3000)
+
+            try {
+                const response = await fetch('http://localhost:3100/sse', {
+                    headers: { Accept: 'text/event-stream' },
+                    signal: controller.signal,
+                })
+
+                expect(response.status).toBe(200)
+                expect(response.headers.get('content-type')).toContain('text/event-stream')
+
+                // Read the first chunk of SSE data — should contain the endpoint event
+                const reader = response.body!.getReader()
+                const decoder = new TextDecoder()
+
+                const { value } = await reader.read()
+                const text = decoder.decode(value)
+
+                // Legacy SSE sends an 'endpoint' event with the message URL
+                expect(text).toContain('event: endpoint')
+                expect(text).toContain('/messages?sessionId=')
+
+                reader.releaseLock()
+            } catch (error) {
+                if (error instanceof Error && error.name !== 'AbortError') {
+                    throw error
+                }
+            } finally {
+                clearTimeout(timeout)
+            }
+        })
+
+        // Note: Full SSE SDK round-trip test is in protocols.spec.ts (legacy SSE section).
+        // Duplicating it here consistently times out due to the single-transport
+        // limitation in McpServer.connect(). The raw stream test above validates
+        // SSE format and endpoint event delivery.
+    })
+
+    test.describe('Streamable HTTP SDK round-trip', () => {
+        test('should receive tool response via Streamable HTTP transport', async () => {
+            const transport = new StreamableHTTPClientTransport(
+                new URL('http://localhost:3100/mcp'),
+            )
+            const client = new Client(
+                { name: 'streamable-http-test', version: '1.0.0' },
+                { capabilities: {} },
+            )
+
+            try {
+                await client.connect(transport)
+
+                const response = await client.callTool({
+                    name: 'test_simple',
+                    arguments: { message: 'Streamable HTTP test' },
+                })
+
+                expect(response.isError).toBeUndefined()
+                expect(Array.isArray(response.content)).toBe(true)
+                const text = (response.content[0] as { type: string; text: string }).text
+                expect(text).toContain('Streamable HTTP test')
+            } finally {
+                await client.close()
+            }
+        })
+
+        test('should list resources via Streamable HTTP transport', async () => {
+            const transport = new StreamableHTTPClientTransport(
+                new URL('http://localhost:3100/mcp'),
+            )
+            const client = new Client(
+                { name: 'streamable-resource-test', version: '1.0.0' },
+                { capabilities: {} },
+            )
+
+            try {
+                await client.connect(transport)
+
+                const response = await client.listResources()
+                expect(response.resources).toBeDefined()
+                expect(Array.isArray(response.resources)).toBe(true)
+                expect(response.resources.length).toBeGreaterThan(0)
+            } finally {
+                await client.close()
+            }
+        })
+    })
+})

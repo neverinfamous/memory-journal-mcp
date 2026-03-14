@@ -7,7 +7,6 @@
  */
 
 import * as vm from 'node:vm'
-import * as crypto from 'node:crypto'
 import {
     DEFAULT_SANDBOX_OPTIONS,
     DEFAULT_POOL_OPTIONS,
