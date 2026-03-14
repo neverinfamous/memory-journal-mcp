@@ -29,26 +29,26 @@
 
 **44 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
-| Feature                        | Description                                                                                                                                                                                                  |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments — no manual copy-pasting between sessions                                                                         |
-| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                       |
-| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                      |
-| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                  |
-| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 44 capabilities via `mj.*` API                |
-| **Configurable Briefing**      | 11 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, and rules/skills awareness                       |
-| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                         |
-| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                              |
-| **Team Collaboration**         | Separate public team database with author attribution, cross-DB search, and dedicated team tools                                                                                                             |
-| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                              |
-| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                |
-| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                               |
-| **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                             |
-| **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals |
-| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                             |
+| Feature                        | Description                                                                                                                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments — no manual copy-pasting between sessions                                                                             |
+| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                           |
+| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                          |
+| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                      |
+| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 44 capabilities via `mj.*` API                    |
+| **Configurable Briefing**      | 11 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, and rules/skills awareness                           |
+| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                             |
+| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                  |
+| **Team Collaboration**         | Separate public team database with author attribution, cross-DB search, and dedicated team tools                                                                                                                 |
+| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                  |
+| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                    |
+| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                   |
+| **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                                 |
+| **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals     |
+| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                                 |
 | **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, and IDE agents proactively apply past patterns ([setup guide](docs/copilot-setup.md)) |
-| **Strict TypeScript**          | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                                                               |
-| **MCP 2025-03-26 Compliant**   | Full protocol support with tool safety annotations, resource priorities, and progress notifications                                                                                                          |
+| **Strict TypeScript**          | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                                                                   |
+| **MCP 2025-03-26 Compliant**   | Full protocol support with tool safety annotations, resource priorities, and progress notifications                                                                                                              |
 
 ---
 
@@ -119,15 +119,29 @@ flowchart TB
 
 ## Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-### Session Initialization
+## Session Start
 
-When starting a session with this server, the agent **must** read the `memory://briefing` resource before processing the user's request. The briefing contains a `userMessage` property with project context that should be presented to the user at the start of each session.
+**REQUIRED**: Before processing any user request, read `memory://briefing` and **present the briefing to the user as a two-column markdown table** (Context | Value). This format is strongly preferred over bullet lists for scannability. Example:
 
-**Steps:**
+```
+📋 **Session Context Loaded**
 
-1. Use the `read_resource` tool to fetch `memory://briefing`
-2. Parse the JSON response and present the `userMessage` content to the user
-3. Proceed with the user's request
+| Context | Value |
+|---------|-------|
+| **Project** | neverinfamous/memory-journal-mcp |
+| **Branch** | main |
+| **CI** | ✅ passing |
+| **Journal** | 414 entries |
+| **Team DB** | 2 entries |
+| **Issues** | 0 open |
+| **PRs** | 1 open · 2 merged |
+| **Milestones** | Add GitHub Projects Integration (100%) |
+| **Insights** | ⭐ 11 · 🍴 3 · 📦 1,058 clones · 👁️ 365 views (14d) |
+| **Skills** | 15 available |
+| **Rules** | GEMINI.md (6 KB, updated just now) |
+```
+
+Include all available context from the briefing: project, branch, CI status, journal/team entry counts, issues, PRs, milestones, insights, copilot reviews, skills, and rules. Omit rows where the data is absent.
 
 ---
 
@@ -412,30 +426,30 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `GITHUB_REPO_PATH` is configured (shown in the Quick Start config above).
 
-| Environment Variable       | Description                                                             |
-| -------------------------- | ----------------------------------------------------------------------- |
-| `DB_PATH`                  | Database file location (CLI: `--db`; default: `./memory_journal.db`)    |
-| `TEAM_DB_PATH`             | Team database file location (CLI: `--team-db`)                          |
-| `TEAM_AUTHOR`              | Override author name for team entries (default: `git config user.name`) |
-| `GITHUB_TOKEN`             | GitHub personal access token for API access                             |
-| `GITHUB_REPO_PATH`         | Path to the git repository for auto-detecting owner/repo                |
-| `DEFAULT_PROJECT_NUMBER`   | Default GitHub Project number for auto-assignment when creating issues  |
-| `AUTO_REBUILD_INDEX`       | Set to `true` to rebuild vector index on server startup                 |
-| `MCP_HOST`                 | Server bind host (`0.0.0.0` for containers, default: `localhost`)       |
-| `OAUTH_ENABLED`            | Set to `true` to enable OAuth 2.1 authentication (HTTP only)            |
-| `OAUTH_ISSUER`             | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)          |
-| `OAUTH_AUDIENCE`           | Expected JWT audience claim                                             |
-| `OAUTH_JWKS_URI`           | JWKS endpoint for token signature verification                          |
-| `BRIEFING_ENTRY_COUNT`     | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)   |
-| `BRIEFING_INCLUDE_TEAM`    | Include team DB entries in briefing (`true`/`false`; default: `false`)  |
-| `BRIEFING_ISSUE_COUNT`     | Issues to list in briefing; `0` = count only (default: `0`)             |
-| `BRIEFING_PR_COUNT`        | PRs to list in briefing; `0` = count only (default: `0`)                |
-| `BRIEFING_PR_STATUS`       | Show PR status breakdown (open/merged/closed; default: `false`)         |
-| `BRIEFING_WORKFLOW_COUNT`  | Workflow runs to list in briefing; `0` = status only (default: `0`)     |
-| `BRIEFING_WORKFLOW_STATUS` | Show workflow status breakdown in briefing (default: `false`)           |
-| `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`)           |
-| `RULES_FILE_PATH`          | Path to user rules file for agent awareness (CLI: `--rules-file`)       |
-| `SKILLS_DIR_PATH`          | Path to skills directory for agent awareness (CLI: `--skills-dir`)      |
+| Environment Variable       | Description                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `DB_PATH`                  | Database file location (CLI: `--db`; default: `./memory_journal.db`)                              |
+| `TEAM_DB_PATH`             | Team database file location (CLI: `--team-db`)                                                    |
+| `TEAM_AUTHOR`              | Override author name for team entries (default: `git config user.name`)                           |
+| `GITHUB_TOKEN`             | GitHub personal access token for API access                                                       |
+| `GITHUB_REPO_PATH`         | Path to the git repository for auto-detecting owner/repo                                          |
+| `DEFAULT_PROJECT_NUMBER`   | Default GitHub Project number for auto-assignment when creating issues                            |
+| `AUTO_REBUILD_INDEX`       | Set to `true` to rebuild vector index on server startup                                           |
+| `MCP_HOST`                 | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
+| `OAUTH_ENABLED`            | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
+| `OAUTH_ISSUER`             | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |
+| `OAUTH_AUDIENCE`           | Expected JWT audience claim                                                                       |
+| `OAUTH_JWKS_URI`           | JWKS endpoint for token signature verification                                                    |
+| `BRIEFING_ENTRY_COUNT`     | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                             |
+| `BRIEFING_INCLUDE_TEAM`    | Include team DB entries in briefing (`true`/`false`; default: `false`)                            |
+| `BRIEFING_ISSUE_COUNT`     | Issues to list in briefing; `0` = count only (default: `0`)                                       |
+| `BRIEFING_PR_COUNT`        | PRs to list in briefing; `0` = count only (default: `0`)                                          |
+| `BRIEFING_PR_STATUS`       | Show PR status breakdown (open/merged/closed; default: `false`)                                   |
+| `BRIEFING_WORKFLOW_COUNT`  | Workflow runs to list in briefing; `0` = status only (default: `0`)                               |
+| `BRIEFING_WORKFLOW_STATUS` | Show workflow status breakdown in briefing (default: `false`)                                     |
+| `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`)                                     |
+| `RULES_FILE_PATH`          | Path to user rules file for agent awareness (CLI: `--rules-file`)                                 |
+| `SKILLS_DIR_PATH`          | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                |
 | `INSTRUCTION_LEVEL`        | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
 
 **Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
@@ -609,9 +623,9 @@ flowchart TB
 
 Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
 
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~7x faster than retrieving 50 recent entries (composite index optimization narrows this gap by accelerating `getRecentEntries` ~4x).
-- **Vector Search Engine**: Both search (780 ops/sec) and indexing (640 ops/sec) are high-throughput via `sqlite-vec` with SQL-native KNN queries.
-- **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800x faster than tool execution). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~13x faster than retrieving 50 recent entries.
+- **Vector Search Engine**: Both search (~220 ops/sec) and indexing (~1600+ ops/sec) are high-throughput via `sqlite-vec` with SQL-native KNN queries.
+- **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800x faster than `get_recent_entries`). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
 
 To run the benchmarking suite locally:
 

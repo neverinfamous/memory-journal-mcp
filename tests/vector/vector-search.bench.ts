@@ -1,14 +1,14 @@
 import { bench, beforeAll, afterAll } from 'vitest'
 import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
 
 let vm: VectorSearchManager
-let db: SqliteAdapter
+let db: DatabaseAdapter
 const testDbPath = './benchmark-vector.db'
 
 beforeAll(async () => {
-    db = new SqliteAdapter(testDbPath)
+    db = new DatabaseAdapter(testDbPath)
     await db.initialize()
 
     vm = new VectorSearchManager(db)

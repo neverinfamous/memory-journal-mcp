@@ -45,15 +45,27 @@
 
 ## Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-### Session Initialization
+## Session Start
 
-When starting a session with this server, the agent **must** read the `memory://briefing` resource before processing the user's request. The briefing contains a `userMessage` property with project context that should be presented to the user at the start of each session.
+**REQUIRED**: Before processing any user request, read `memory://briefing` and **present the briefing to the user as a two-column markdown table** (Context | Value). This format is strongly preferred over bullet lists for scannability. Example:
 
-**Steps:**
+```
+📋 **Session Context Loaded**
 
-1. Use the `read_resource` tool to fetch `memory://briefing`
-2. Parse the JSON response and present the `userMessage` content to the user
-3. Proceed with the user's request
+| Context | Value |
+|---------|-------|
+| **Project** | neverinfamous/memory-journal-mcp |
+| **Branch** | main |
+| **CI** | ✅ passing |
+| **Journal** | 414 entries |
+| **Team DB** | 2 entries |
+| **Issues** | 0 open |
+| **PRs** | 1 open · 2 merged |
+| **Milestones** | Add GitHub Projects Integration (100%) |
+| **Insights** | ⭐ 11 · 🍴 3 · 📦 1,058 clones · 👁️ 365 views (14d) |
+| **Skills** | 15 available |
+| **Rules** | GEMINI.md (6 KB, updated just now) |
+```
 
 ---
 
@@ -309,16 +321,6 @@ docker run --rm -p 3000:3000 \
 ### GitHub Management Capabilities
 
 16 GitHub tools covering issues, PRs, Kanban boards, milestones (with completion %), repository insights, Copilot reviews, and issue lifecycle with journal linking. Standard mutations (create/close issues, merge PRs) are handled by agents via `gh` CLI. **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
-
-## 📦 Image Details
-
-**Platforms:** AMD64 (x86_64) and ARM64 (Apple Silicon) — complete feature parity.
-
-**Stack:** Node.js 24 on Alpine Linux (~150MB compressed) · `better-sqlite3` (native SQLite) · `sqlite-vec` (vector search) · `@huggingface/transformers` (ML embeddings) · lazy model loading · deterministic error handling · automatic migrations.
-
-**Performance:** Sub-millisecond database reads · 640+ ops/sec vector search/indexing · O(1) cached tool dispatch. Run `npm run bench` for local benchmarks.
-
-**Tags:** `5.1.1` (recommended) · `5.1` · `5` · `latest` · `sha256-<digest>` (SHA-pinned)
 
 ## 🏗️ Build from Source
 

@@ -1,13 +1,13 @@
 import { bench, beforeAll, afterAll } from 'vitest'
-import { SqliteAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
-let db: SqliteAdapter
+let db: DatabaseAdapter
 const testDbPath = path.join(process.cwd(), 'benchmark-adapter.db')
 
 beforeAll(async () => {
-    db = new SqliteAdapter(testDbPath)
+    db = new DatabaseAdapter(testDbPath)
     await db.initialize()
 
     // Setup initial data for read benchmarks
