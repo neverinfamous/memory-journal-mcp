@@ -98,6 +98,9 @@
   - `semantic_search` hint is now governed by a quality floor (0.5) — if all returned results score below 0.5, a hint is included indicating results may be noise, even when `entries.length > 0`. Previously, `hint_on_empty` was effectively dead code because the default `similarity_threshold` (0.25) always returned noise matches from the MiniLM model
   - `semantic_search` quality gate hint is now always shown regardless of `hint_on_empty` — the `hint_on_empty` flag only controls advisory hints for empty indexes and zero-match queries, not the noise detection warning. Previously, `hint_on_empty=false` suppressed all hints including the quality gate, meaning clients received noisy results with no warning
   - `export_entries` `entry_types` filter now scans the full database instead of post-filtering a truncated result set — previously, type-only queries fetched the most recent `limit` entries via `getRecentEntries()` then filtered, silently returning empty results when no matching types existed in the window
+  - `merge_tags` now wraps the entire operation in an explicit `db.transaction()` and cleans orphaned `entry_tags` rows (referencing permanently-deleted entries) before re-linking — previously failed with `FOREIGN KEY constraint failed` when both source and target tags existed with overlapping entries
+  - Server instructions now specify a **briefing confirmation format** — short bullet list of key facts (entry counts, GitHub status, milestones, template resources, optional metadata) instead of tables or elaborate formatting
+  - `test-tools.md` prerequisites no longer instruct agents to read `memory://briefing` separately — detailed briefing testing is deferred to Phase 1.2 to prevent duplicate reads
 
 - **MCP Builder Compliance Audit Fixes**
   - Added `error` field to `ErrorFieldsMixin` — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions

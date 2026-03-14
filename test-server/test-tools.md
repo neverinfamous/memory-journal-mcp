@@ -1,6 +1,6 @@
 # Test memory-journal-mcp — Pass 1: Core Functionality
 
-Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below.
+Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented.**
 
 **Scope:** 44 tools, 22 resources (15 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-10).
 
@@ -22,7 +22,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 > **Test Session Prerequisites**
 
 1. The server instructions are auto-injected by the MCP protocol. Confirm receipt (no need to read `memory://instructions` separately).
-2. Read `memory://briefing` to confirm context loaded (the briefing table confirms receipt).
+2. Confirm `memory://briefing` was auto-received (do NOT read it separately here — detailed briefing testing is in Phase 1.2).
 
 ---
 
@@ -37,46 +37,46 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 These entries ensure every FTS5 query pattern in Phase 3.1 returns actual results.
 
-| # | Tool | Params | Enables Tests |
-|---|------|--------|---------------|
-| S1 | `create_entry` | `content: "Redesigned the authentication architecture for the OAuth 2.1 module"`, `entry_type: "technical_note"`, `tags: ["architecture", "auth"]` | `architecture`, `auth*`, `"authentication architecture"` phrase |
-| S2 | `create_entry` | `content: "Improved error handling in the database adapter layer with typed error classes"`, `entry_type: "bug_fix"`, `significance_type: "lesson_learned"`, `tags: ["error-handling", "database"]` | `"error handling"` phrase, `significance_type` filter |
-| S3 | `create_entry` | `content: "Deploy new release candidate to the CDN edge network"`, `entry_type: "feature_implementation"`, `tags: ["deploy", "release"]`, `is_personal: false` | `deploy NOT staging`, `deploy OR release` |
-| S4 | `create_entry` | `content: "Released v5.0 with breaking API changes and migration guide"`, `entry_type: "milestone"`, `significance_type: "breakthrough"`, `tags: ["release"]` | `deploy OR release` (via "release"), semantic search for "release" |
-| S5 | `create_entry` | `content: "Deploy to staging environment failed — rollback initiated"`, `entry_type: "bug_fix"`, `tags: ["deploy", "staging"]` | `deploy NOT staging` (negative match — verifies NOT exclusion) |
-| S6 | `create_entry` | `content: "The test's scope was expanded to cover 100% of edge cases"`, `entry_type: "planning"`, `tags: ["testing"]` | `test's` LIKE fallback, `100%` LIKE fallback |
+| #   | Tool           | Params                                                                                                                                                                                              | Enables Tests                                                      |
+| --- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| S1  | `create_entry` | `content: "Redesigned the authentication architecture for the OAuth 2.1 module"`, `entry_type: "technical_note"`, `tags: ["architecture", "auth"]`                                                  | `architecture`, `auth*`, `"authentication architecture"` phrase    |
+| S2  | `create_entry` | `content: "Improved error handling in the database adapter layer with typed error classes"`, `entry_type: "bug_fix"`, `significance_type: "lesson_learned"`, `tags: ["error-handling", "database"]` | `"error handling"` phrase, `significance_type` filter              |
+| S3  | `create_entry` | `content: "Deploy new release candidate to the CDN edge network"`, `entry_type: "feature_implementation"`, `tags: ["deploy", "release"]`, `is_personal: false`                                      | `deploy NOT staging`, `deploy OR release`                          |
+| S4  | `create_entry` | `content: "Released v5.0 with breaking API changes and migration guide"`, `entry_type: "milestone"`, `significance_type: "breakthrough"`, `tags: ["release"]`                                       | `deploy OR release` (via "release"), semantic search for "release" |
+| S5  | `create_entry` | `content: "Deploy to staging environment failed — rollback initiated"`, `entry_type: "bug_fix"`, `tags: ["deploy", "staging"]`                                                                      | `deploy NOT staging` (negative match — verifies NOT exclusion)     |
+| S6  | `create_entry` | `content: "The test's scope was expanded to cover 100% of edge cases"`, `entry_type: "planning"`, `tags: ["testing"]`                                                                               | `test's` LIKE fallback, `100%` LIKE fallback                       |
 
 ### 0.2 Filter & GitHub-Linked Entries
 
 These entries ensure filter tests (`issue_number`, `pr_status`, `workflow_run_id`, `project_number`) return results.
 
-| # | Tool | Params | Enables Tests |
-|---|------|--------|---------------|
-| S7 | `create_entry` | `content: "Investigated performance regression in issue #44 — root cause was N+1 queries"`, `entry_type: "research"`, `issue_number: 44`, `project_number: 5`, `tags: ["performance", "investigation"]` | `issue_number: 44` filter, `project_number: 5` filter, semantic search for "performance" |
-| S8 | `create_entry` | `content: "Code review feedback from PR #67 merged — refactored authentication middleware"`, `entry_type: "code_review"`, `pr_number: 67`, `pr_status: "merged"`, `tags: ["code-review", "auth"]` | `pr_status: "merged"` filter, `pr_number` filter, `auth*` prefix |
-| S9 | `create_entry` | `content: "CI workflow run completed — all 910 tests passing across 3 test suites"`, `entry_type: "technical_note"`, `workflow_run_id: 12345`, `workflow_name: "lint-and-test"`, `workflow_status: "completed"`, `tags: ["ci", "testing"]` | `workflow_run_id` filter, workflow field persistence |
-| S10 | `create_entry` | `content: "Personal reflection on improving development velocity and reducing technical debt"`, `entry_type: "personal_reflection"`, `is_personal: true`, `tags: ["personal", "velocity"]` | `is_personal: true` filter, semantic search for "improving performance" |
+| #   | Tool           | Params                                                                                                                                                                                                                                     | Enables Tests                                                                            |
+| --- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| S7  | `create_entry` | `content: "Investigated performance regression in issue #44 — root cause was N+1 queries"`, `entry_type: "research"`, `issue_number: 44`, `project_number: 5`, `tags: ["performance", "investigation"]`                                    | `issue_number: 44` filter, `project_number: 5` filter, semantic search for "performance" |
+| S8  | `create_entry` | `content: "Code review feedback from PR #67 merged — refactored authentication middleware"`, `entry_type: "code_review"`, `pr_number: 67`, `pr_status: "merged"`, `tags: ["code-review", "auth"]`                                          | `pr_status: "merged"` filter, `pr_number` filter, `auth*` prefix                         |
+| S9  | `create_entry` | `content: "CI workflow run completed — all 910 tests passing across 3 test suites"`, `entry_type: "technical_note"`, `workflow_run_id: 12345`, `workflow_name: "lint-and-test"`, `workflow_status: "completed"`, `tags: ["ci", "testing"]` | `workflow_run_id` filter, workflow field persistence                                     |
+| S10 | `create_entry` | `content: "Personal reflection on improving development velocity and reducing technical debt"`, `entry_type: "personal_reflection"`, `is_personal: true`, `tags: ["personal", "velocity"]`                                                 | `is_personal: true` filter, semantic search for "improving performance"                  |
 
 ### 0.3 Team & Cross-DB Entries
 
 These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) returns results from both databases.
 
-| # | Tool | Params | Enables Tests |
-|---|------|--------|---------------|
-| S11 | `create_entry` | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
-| S12 | `team_create_entry` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]` | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB |
+| #   | Tool                | Params                                                                                                                                                                                     | Enables Tests                                                                    |
+| --- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| S11 | `create_entry`      | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
+| S12 | `team_create_entry` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]`                                   | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB           |
 
 ### 0.4 Post-Seed Verification
 
 After creating all 12 entries, verify the seed data is searchable:
 
-| Check | Command | Expected |
-|-------|---------|----------|
-| FTS5 indexed | `search_entries(query: "architecture")` | ≥ 2 results (S1, S11) |
-| Filters work | `search_entries(issue_number: 44)` | ≥ 1 result (S7) |
-| Cross-DB merged | `search_entries(query: "architecture")` | Results include `source: 'personal'` and `source: 'team'` entries |
-| Rebuild vector index | `rebuild_vector_index` | `entriesIndexed` > 0 |
-| Semantic search | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar) |
+| Check                | Command                                           | Expected                                                          |
+| -------------------- | ------------------------------------------------- | ----------------------------------------------------------------- |
+| FTS5 indexed         | `search_entries(query: "architecture")`           | ≥ 2 results (S1, S11)                                             |
+| Filters work         | `search_entries(issue_number: 44)`                | ≥ 1 result (S7)                                                   |
+| Cross-DB merged      | `search_entries(query: "architecture")`           | Results include `source: 'personal'` and `source: 'team'` entries |
+| Rebuild vector index | `rebuild_vector_index`                            | `entriesIndexed` > 0                                              |
+| Semantic search      | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar)               |
 
 ---
 
@@ -95,19 +95,22 @@ After creating all 12 entries, verify the seed data is searchable:
 
 ### 1.2 Briefing Resource
 
-| Test                             | Command/Action                  | Expected Result                                                                    |
-| -------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
-| Read briefing                    | Read `memory://briefing`        | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`          |
-| Verify `lastModified` annotation | Check resource metadata         | ISO 8601 timestamp (client-dependent — AntiGravity doesn't expose MCP annotations) |
-| Confirm `userMessage`            | Inspect briefing.userMessage    | Formatted table with project/branch/CI/journal stats                               |
-| Milestone progress row           | Inspect briefing.userMessage    | Table includes milestone progress row (e.g., "🚩 Milestones: X open")              |
-| Team DB row                      | Inspect briefing.userMessage    | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)       |
-| Template URIs                    | Check `templateResources` array | 7 template URIs listed (includes `memory://milestones/{number}`)                   |
-| Workflow summary                 | Inspect `github.workflowSummary`| Present when `BRIEFING_WORKFLOW_STATUS=true` — has `passing`, `failing`, `pending`, `cancelled` counts |
-| Workflow named runs              | Inspect `workflowSummary.runs`  | Array of `{name, conclusion}` when `BRIEFING_WORKFLOW_COUNT > 0`; CI row shows icons (✅/❌) |
-| Rules metadata                   | Inspect `rulesFile` field       | Present when `RULES_FILE_PATH` set — has `name`, `sizeKB`, `lastModified`          |
-| Skills metadata                  | Inspect `skillsDir` field       | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                    |
-| Enhanced CI row                  | Inspect briefing.userMessage    | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set |
+> [!NOTE]
+> This is the **only** phase that reads and tests `memory://briefing`. The prerequisites above only confirm it was auto-received — they do NOT read it.
+
+| Test                             | Command/Action                   | Expected Result                                                                                        |
+| -------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Read briefing                    | Read `memory://briefing`         | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`                              |
+| Verify `lastModified` annotation | Check resource metadata          | ISO 8601 timestamp (client-dependent — AntiGravity doesn't expose MCP annotations)                     |
+| Confirm `userMessage`            | Inspect briefing.userMessage     | Formatted table with project/branch/CI/journal stats                                                   |
+| Milestone progress row           | Inspect briefing.userMessage     | Table includes milestone progress row (e.g., "🚩 Milestones: X open")                                  |
+| Team DB row                      | Inspect briefing.userMessage     | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)                           |
+| Template URIs                    | Check `templateResources` array  | 7 template URIs listed (includes `memory://milestones/{number}`)                                       |
+| Workflow summary                 | Inspect `github.workflowSummary` | Present when `BRIEFING_WORKFLOW_STATUS=true` — has `passing`, `failing`, `pending`, `cancelled` counts |
+| Workflow named runs              | Inspect `workflowSummary.runs`   | Array of `{name, conclusion}` when `BRIEFING_WORKFLOW_COUNT > 0`; CI row shows icons (✅/❌)           |
+| Rules metadata                   | Inspect `rulesFile` field        | Present when `RULES_FILE_PATH` set — has `name`, `sizeKB`, `lastModified`                              |
+| Skills metadata                  | Inspect `skillsDir` field        | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                                        |
+| Enhanced CI row                  | Inspect briefing.userMessage     | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set      |
 
 ### 1.3 Protocol Validation
 
@@ -115,11 +118,11 @@ After creating all 12 entries, verify the seed data is searchable:
 
 Start the server with different `--instruction-level` values and verify the server instructions length varies:
 
-| `--instruction-level` | Expected Behavior |
-|---|---|
-| `essential` | Shortest instructions (~1.2K tokens) |
-| `standard` (default) | Medium instructions (~1.4K tokens) |
-| `full` | Longest instructions (~6.7K tokens) |
+| `--instruction-level` | Expected Behavior                    |
+| --------------------- | ------------------------------------ |
+| `essential`           | Shortest instructions (~1.2K tokens) |
+| `standard` (default)  | Medium instructions (~1.4K tokens)   |
+| `full`                | Longest instructions (~6.7K tokens)  |
 
 > **Note:** The `INSTRUCTION_LEVEL` environment variable also controls this; CLI flag takes precedence.
 >
@@ -129,13 +132,13 @@ Start the server with different `--instruction-level` values and verify the serv
 
 Call `tools/list` and verify annotation counts:
 
-| Check | Expected |
-|---|---|
-| All tools have `annotations` object | ✅ Present on every tool |
+| Check                                        | Expected                                                                               |
+| -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| All tools have `annotations` object          | ✅ Present on every tool                                                               |
 | Core/local tools with `openWorldHint: false` | **28** (core, search, relationships, team, backup, export, analytics, admin, codemode) |
-| GitHub tools with `openWorldHint: true` | **16** (read, issue, kanban, milestone, insights, copilot) |
-| Total tools | **44** |
-| Tools with missing `openWorldHint` | **0** |
+| GitHub tools with `openWorldHint: true`      | **16** (read, issue, kanban, milestone, insights, copilot)                             |
+| Total tools                                  | **44**                                                                                 |
+| Tools with missing `openWorldHint`           | **0**                                                                                  |
 
 ### 1.4 GitHub Status Resource
 
@@ -198,13 +201,13 @@ Call `tools/list` and verify annotation counts:
 
 | Test                  | Command/Action                                                                                   | Expected Result                                                           |
 | --------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| FTS5 search           | `search_entries(query: "architecture")`                                                          | ≥ 2 results (S1, S11) ranked by BM25 relevance                           |
-| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                     | ≥ 1 result (S2) — exact phrase match only                                 |
+| FTS5 search           | `search_entries(query: "architecture")`                                                          | ≥ 2 results (S1, S11) ranked by BM25 relevance                            |
+| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                    | ≥ 1 result (S2) — exact phrase match only                                 |
 | FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | ≥ 2 results (S1, S8) — matches "authentication", "authorization", etc.    |
-| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns S3, S11 but NOT S5 (S5 contains "staging")                       |
-| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 3 results (S3, S4, S5) — entries with either term                      |
+| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns S3, S11 but NOT S5 (S5 contains "staging")                        |
+| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 3 results (S3, S4, S5) — entries with either term                       |
 | FTS5 fallback         | `search_entries(query: "test's")`                                                                | ≥ 1 result (S6) — LIKE fallback, single quotes are FTS5-unsafe            |
-| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | ≥ 1 result (S6) — LIKE fallback, `%` is FTS5-unsafe                      |
+| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | ≥ 1 result (S6) — LIKE fallback, `%` is FTS5-unsafe                       |
 | Date range            | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-01-31")`                         | Returns `structuredContent` array                                         |
 | Cross-DB search       | `search_entries(query: "test")`                                                                  | Results include `source: 'personal' \| 'team'` marker on each entry       |
 | Cross-DB date         | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31")`                         | Results include `source` marker merging personal + team entries           |
@@ -222,13 +225,13 @@ Call `tools/list` and verify annotation counts:
 
 ### 3.2 Semantic Search
 
-| Test                   | Command/Action                                                     | Expected Result                                   |
-| ---------------------- | ------------------------------------------------------------------ | ------------------------------------------------- |
-| Vector index stats     | `get_vector_index_stats`                                           | Shows `itemCount`, `modelName`, `dimensions`      |
-| Rebuild index          | `rebuild_vector_index`                                             | `entriesIndexed` > 0 (indexes seed entries)       |
-| Semantic query         | `semantic_search(query: "improving performance")`                  | ≥ 1 result — S7, S10 semantically similar         |
-| Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)       |
-| Personal filter        | `semantic_search(query: "test", is_personal: true)`                | Only personal entries in results                  |
+| Test                   | Command/Action                                                     | Expected Result                                                                     |
+| ---------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Vector index stats     | `get_vector_index_stats`                                           | Shows `itemCount`, `modelName`, `dimensions`                                        |
+| Rebuild index          | `rebuild_vector_index`                                             | `entriesIndexed` > 0 (indexes seed entries)                                         |
+| Semantic query         | `semantic_search(query: "improving performance")`                  | ≥ 1 result — S7, S10 semantically similar                                           |
+| Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)                                         |
+| Personal filter        | `semantic_search(query: "test", is_personal: true)`                | Only personal entries in results                                                    |
 | Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Noise results with quality gate `hint` still shown (only advisory hints suppressed) |
 | Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Noise results with quality gate `hint` (all hints shown)                            |
 
@@ -252,20 +255,20 @@ Call `tools/list` and verify annotation counts:
 
 ### 4.1 Basic Relationships
 
-| Test                    | Command/Action                                                                                                            | Expected Result                                                        |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                   |
-| Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship            |
-| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: 999999, to: <B>)"`     |
-| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: <A>, to: 999999)"`     |
-| Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | Mermaid diagram returned                                               |
-| Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                          |
-| Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)      |
-| Visualize nonexistent   | `visualize_relationships(entry_id: 999999)`                                                                               | Returns `message: "Entry 999999 not found"`                            |
-| Visualize by tags       | `visualize_relationships(tags: ["test"])`                                                                                 | Diagram scoped to entries with "test" tag                              |
-| Visualize depth 3       | `visualize_relationships(entry_id: <A>, depth: 3)`                                                                        | Deeper traversal than default `depth: 2`                               |
-| Visualize custom limit  | `visualize_relationships(entry_id: <A>, limit: 5)`                                                                        | Diagram limited to 5 entries                                           |
-| Graph resource          | Read `memory://graph/recent`                                                                                              | Live Mermaid diagram, arrows harmonized with `visualize_relationships` |
+| Test                    | Command/Action                                                                                                            | Expected Result                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                                         |
+| Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship                                  |
+| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: 999999, to: <B>)"` |
+| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: <A>, to: 999999)"` |
+| Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | Mermaid diagram returned                                                                     |
+| Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                                                |
+| Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)                            |
+| Visualize nonexistent   | `visualize_relationships(entry_id: 999999)`                                                                               | Returns `message: "Entry 999999 not found"`                                                  |
+| Visualize by tags       | `visualize_relationships(tags: ["test"])`                                                                                 | Diagram scoped to entries with "test" tag                                                    |
+| Visualize depth 3       | `visualize_relationships(entry_id: <A>, depth: 3)`                                                                        | Deeper traversal than default `depth: 2`                                                     |
+| Visualize custom limit  | `visualize_relationships(entry_id: <A>, limit: 5)`                                                                        | Diagram limited to 5 entries                                                                 |
+| Graph resource          | Read `memory://graph/recent`                                                                                              | Live Mermaid diagram, arrows harmonized with `visualize_relationships`                       |
 
 ### 4.2 Causal Relationship Types
 
@@ -300,7 +303,7 @@ Call `tools/list` and verify annotation counts:
 
 ### 5.2 Issue Lifecycle Tools
 
-> [!CAUTION]  
+> [!CAUTION]
 > These tools **create and close real GitHub issues**. Use with awareness.
 
 | Test                          | Command/Action                                                                                                                                                                                       | Expected Result                                                                                                                                                                                                                                                                                                |
@@ -327,7 +330,7 @@ Call `tools/list` and verify annotation counts:
 
 ### 5.4 Milestone Tools
 
-> [!CAUTION]  
+> [!CAUTION]
 > These tools **create, modify, and delete real GitHub milestones**. Clean up test milestones after testing.
 
 | Test                 | Command/Action                                                                                   | Expected Result                                                                                                   |
@@ -355,11 +358,11 @@ Call `tools/list` and verify annotation counts:
 
 ### 5.6 Copilot Review Tool
 
-| Test                  | Command/Action                                        | Expected Result                                                              |
-| --------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body`|
-| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                 |
-| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                       |
+| Test                  | Command/Action                                        | Expected Result                                                               |
+| --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body` |
+| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                  |
+| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                        |
 | No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
 
 ### 5.7 GitHub Test Cleanup
@@ -452,7 +455,7 @@ Call `tools/list` and verify annotation counts:
 ## Phase 8: Prompt Handler Verification (16 prompts)
 
 > [!NOTE]
-> Prompts return `GetPromptResult` objects with `messages` arrays. While the *workflows* prompts describe require a human to act on, the **handlers themselves** are testable via `prompts/get` MCP calls. This phase verifies response shape, argument enforcement, and content generation.
+> Prompts return `GetPromptResult` objects with `messages` arrays. While the _workflows_ prompts describe require a human to act on, the **handlers themselves** are testable via `prompts/get` MCP calls. This phase verifies response shape, argument enforcement, and content generation.
 >
 > **How to test:** Call `prompts/get` with the prompt name and arguments. The MCP client should expose this as a callable action, or use the protocol directly.
 
@@ -460,69 +463,69 @@ Call `tools/list` and verify annotation counts:
 
 #### No-Argument Prompts
 
-| Prompt | Arguments | Expected Response |
-|--------|-----------|-------------------|
-| `prepare-standup` | _(none)_ | `messages` array with 1 `user` role message containing "standup" and date references |
-| `weekly-digest` | _(none)_ | `messages` array with 1 `user` role message containing "weekly digest" |
-| `goal-tracker` | _(none)_ | `messages` array with 1 `user` role message containing "goals" and "milestones" |
-| `get-context-bundle` | _(none)_ | `messages` array with 1 `user` role message containing "Project context bundle", recent entries, and statistics |
-| `confirm-briefing` | _(none)_ | `messages` array with 1 `user` role message containing "Session Context Received" and entry count |
-| `session-summary` | _(none)_ | `messages` array with 1 `user` role message containing "session summary" and instructions for entry creation |
+| Prompt               | Arguments | Expected Response                                                                                               |
+| -------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `prepare-standup`    | _(none)_  | `messages` array with 1 `user` role message containing "standup" and date references                            |
+| `weekly-digest`      | _(none)_  | `messages` array with 1 `user` role message containing "weekly digest"                                          |
+| `goal-tracker`       | _(none)_  | `messages` array with 1 `user` role message containing "goals" and "milestones"                                 |
+| `get-context-bundle` | _(none)_  | `messages` array with 1 `user` role message containing "Project context bundle", recent entries, and statistics |
+| `confirm-briefing`   | _(none)_  | `messages` array with 1 `user` role message containing "Session Context Received" and entry count               |
+| `session-summary`    | _(none)_  | `messages` array with 1 `user` role message containing "session summary" and instructions for entry creation    |
 
 #### Required-Argument Prompts
 
-| Prompt | Arguments | Expected Response |
-|--------|-----------|-------------------|
-| `find-related` | `query: "architecture"` | `messages` array with 1 `user` role message containing `"architecture"` and matching entries (from seed data) |
-| `analyze-period` | `start_date: "2026-01-01"`, `end_date: "2026-12-31"` | `messages` array with 1 `user` role message containing date range and statistics JSON |
+| Prompt           | Arguments                                            | Expected Response                                                                                             |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `find-related`   | `query: "architecture"`                              | `messages` array with 1 `user` role message containing `"architecture"` and matching entries (from seed data) |
+| `analyze-period` | `start_date: "2026-01-01"`, `end_date: "2026-12-31"` | `messages` array with 1 `user` role message containing date range and statistics JSON                         |
 
 #### Optional-Argument Prompts
 
-| Prompt | Arguments | Expected Response |
-|--------|-----------|-------------------|
-| `prepare-retro` | _(none — defaults to 14 days)_ | `messages` array with 1 `user` role message containing "retrospective" and "14 days" |
-| `prepare-retro` | `days: "7"` | `messages` array with 1 `user` role message containing "7 days" |
-| `get-recent-entries` | _(none — defaults to 10)_ | `messages` array with 1 `user` role message containing entries formatted with timestamps, types, and tags |
-| `get-recent-entries` | `limit: "3"` | `messages` array with 1 `user` role message containing at most 3 entries |
+| Prompt               | Arguments                      | Expected Response                                                                                         |
+| -------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `prepare-retro`      | _(none — defaults to 14 days)_ | `messages` array with 1 `user` role message containing "retrospective" and "14 days"                      |
+| `prepare-retro`      | `days: "7"`                    | `messages` array with 1 `user` role message containing "7 days"                                           |
+| `get-recent-entries` | _(none — defaults to 10)_      | `messages` array with 1 `user` role message containing entries formatted with timestamps, types, and tags |
+| `get-recent-entries` | `limit: "3"`                   | `messages` array with 1 `user` role message containing at most 3 entries                                  |
 
 ### 8.2 GitHub Prompts (6 prompts)
 
 #### Required-Argument Prompts
 
-| Prompt | Arguments | Expected Response |
-|--------|-----------|-------------------|
-| `project-status-summary` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and status summary instructions |
-| `pr-summary` | `pr_number: "67"` | `messages` array with 1 `user` role message containing `"PR #67"` and journal entries for that PR (from seed S8) |
-| `code-review-prep` | `pr_number: "67"` | `messages` array with 1 `user` role message containing `"PR #67"` and review checklist instructions |
-| `pr-retrospective` | `pr_number: "67"` | `messages` array with 1 `user` role message containing `"PR #67"` and retrospective instructions |
-| `project-milestone-tracker` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and milestone entries (from seed S7) |
+| Prompt                      | Arguments             | Expected Response                                                                                                |
+| --------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `project-status-summary`    | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and status summary instructions            |
+| `pr-summary`                | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and journal entries for that PR (from seed S8) |
+| `code-review-prep`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and review checklist instructions              |
+| `pr-retrospective`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and retrospective instructions                 |
+| `project-milestone-tracker` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and milestone entries (from seed S7)       |
 
 #### No-Argument Prompts
 
-| Prompt | Arguments | Expected Response |
-|--------|-----------|-------------------|
-| `actions-failure-digest` | _(none)_ | `messages` array with 1 `user` role message containing "CI/CD failures" and workflow entries (from seed S9) |
+| Prompt                   | Arguments | Expected Response                                                                                           |
+| ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `actions-failure-digest` | _(none)_  | `messages` array with 1 `user` role message containing "CI/CD failures" and workflow entries (from seed S9) |
 
 ### 8.3 Error Handling
 
-| Test | Action | Expected Result |
-|------|--------|-----------------|
-| Missing required arg | `prompts/get` for `find-related` with no `query` | Structured error or empty query handled gracefully (handler uses `args['query'] ?? ''`) |
-| Missing required arg | `prompts/get` for `analyze-period` with no dates | Structured error or empty dates handled gracefully |
-| Nonexistent prompt | `prompts/get` for `nonexistent-prompt` | MCP error: prompt not found |
-| Invalid argument name | `prompts/get` for `prepare-standup` with `foo: "bar"` | Succeeds (no-argument prompt ignores extra args) |
+| Test                  | Action                                                | Expected Result                                                                         |
+| --------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Missing required arg  | `prompts/get` for `find-related` with no `query`      | Structured error or empty query handled gracefully (handler uses `args['query'] ?? ''`) |
+| Missing required arg  | `prompts/get` for `analyze-period` with no dates      | Structured error or empty dates handled gracefully                                      |
+| Nonexistent prompt    | `prompts/get` for `nonexistent-prompt`                | MCP error: prompt not found                                                             |
+| Invalid argument name | `prompts/get` for `prepare-standup` with `foo: "bar"` | Succeeds (no-argument prompt ignores extra args)                                        |
 
 ### 8.4 Response Shape Verification
 
 For **every** prompt response, verify:
 
-| Check | Expected |
-|-------|----------|
-| `messages` is an array | `Array.isArray(result.messages) === true` |
-| At least 1 message | `messages.length >= 1` |
-| Message has `role` | `messages[0].role === 'user'` |
-| Message has `content` | `messages[0].content` is object with `type: 'text'` and `text: string` |
-| Text is non-empty | `messages[0].content.text.length > 0` |
+| Check                  | Expected                                                               |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `messages` is an array | `Array.isArray(result.messages) === true`                              |
+| At least 1 message     | `messages.length >= 1`                                                 |
+| Message has `role`     | `messages[0].role === 'user'`                                          |
+| Message has `content`  | `messages[0].content` is object with `type: 'text'` and `text: string` |
+| Text is non-empty      | `messages[0].content.text.length > 0`                                  |
 
 ## Phase 9: Team Collaboration (3 tools + 2 resources)
 
@@ -570,7 +573,7 @@ For **every** prompt response, verify:
 ## Phase 10: Automated Scheduler (HTTP Only — Manual Terminal Test)
 
 > [!IMPORTANT]
-> The scheduler only activates in HTTP/SSE transport mode. Run these  tests in a separate PowerShell terminal.
+> The scheduler only activates in HTTP/SSE transport mode. Run these tests in a separate PowerShell terminal.
 
 ### 10.1 Start HTTP Server with Scheduler
 

@@ -59,6 +59,14 @@ const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
 
 **REQUIRED**: Before processing any user request, read \`memory://briefing\` and present the \`userMessage\` to the user.
 
+**Briefing confirmation format** — present as a short bullet list of key facts (no tables, no elaborate formatting):
+
+- Entry counts (journal + team)
+- GitHub: repo, branch, CI status, open issues/PRs
+- Milestone progress (if any)
+- Template resources count
+- Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
+
 - **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
   - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
   - **Cursor**: Tools are \`user-{name}-{tool}\` → server name = \`user-memory-journal-mcp\`
