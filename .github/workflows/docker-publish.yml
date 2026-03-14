@@ -237,7 +237,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./DOCKER_README.md
-          short-description: 'MCP server — Persistent AI project memory with GitHub integration, knowledge graphs & search.'
+          short-description: 'MCP Server — Persistent AI Project Memory with GitHub Integration, Knowledge Graphs & Search.'
 
       - name: Deployment Summary
         if: github.ref == 'refs/heads/main'
