@@ -701,7 +701,12 @@ describe('McpServer', () => {
             // Find the OPTIONS middleware
             let optionsMwFound = false
             for (const mw of middlewareFns) {
-                const mockResOptions = { status: vi.fn().mockReturnThis(), end: vi.fn(), setHeader: vi.fn(), json: vi.fn() }
+                const mockResOptions = {
+                    status: vi.fn().mockReturnThis(),
+                    end: vi.fn(),
+                    setHeader: vi.fn(),
+                    json: vi.fn(),
+                }
                 const nextFn = vi.fn()
                 mw({ method: 'OPTIONS', headers: { host: 'localhost' } }, mockResOptions, nextFn)
                 if (mockResOptions.status.mock.calls.some((c: unknown[]) => c[0] === 204)) {
@@ -709,7 +714,12 @@ describe('McpServer', () => {
                     expect(nextFn).not.toHaveBeenCalled()
 
                     // Also verify non-OPTIONS calls next
-                    const mockRes2 = { status: vi.fn().mockReturnThis(), end: vi.fn(), setHeader: vi.fn(), json: vi.fn() }
+                    const mockRes2 = {
+                        status: vi.fn().mockReturnThis(),
+                        end: vi.fn(),
+                        setHeader: vi.fn(),
+                        json: vi.fn(),
+                    }
                     const nextFn2 = vi.fn()
                     mw({ method: 'GET', headers: { host: 'localhost' } }, mockRes2, nextFn2)
                     expect(nextFn2).toHaveBeenCalled()
@@ -791,7 +801,14 @@ describe('McpServer', () => {
                 }
 
                 const noopNext = vi.fn()
-                mw({ method: 'GET', headers: { origin: 'https://test.example.com', host: 'localhost' } }, mockRes, noopNext)
+                mw(
+                    {
+                        method: 'GET',
+                        headers: { origin: 'https://test.example.com', host: 'localhost' },
+                    },
+                    mockRes,
+                    noopNext
+                )
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
                 if (headerNames.includes('Access-Control-Allow-Methods')) {
@@ -832,7 +849,14 @@ describe('McpServer', () => {
                     json: vi.fn(),
                 }
                 const nextFn = vi.fn()
-                mw({ method: 'POST', headers: { origin: 'https://test.example.com', host: 'localhost' } }, mockRes, nextFn)
+                mw(
+                    {
+                        method: 'POST',
+                        headers: { origin: 'https://test.example.com', host: 'localhost' },
+                    },
+                    mockRes,
+                    nextFn
+                )
                 const calls = mockRes.setHeader.mock.calls as [string, string][]
                 const headerNames = calls.map((c) => c[0])
                 if (headerNames.includes('Access-Control-Allow-Methods')) {

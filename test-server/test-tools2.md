@@ -66,17 +66,17 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 
 ### 11.4 GitHub Tools
 
-| Tool                 | Schema                          | Verification                                                   |
-| -------------------- | ------------------------------- | -------------------------------------------------------------- |
-| `get_github_issues`  | `GitHubIssuesListOutputSchema`  | `owner`, `repo`, `issues` array, `count`                       |
-| `get_github_issues`  | (milestone field)               | Issue objects include optional `milestone` with number & title |
-| `get_github_prs`     | `GitHubPRsListOutputSchema`     | `owner`, `repo`, `pullRequests` array, `count`                 |
-| `get_github_issue`   | `GitHubIssueResultOutputSchema` | `issue` object with `body`, `labels`, `assignees`              |
-| `get_github_pr`      | `GitHubPRResultOutputSchema`    | `pullRequest` with `draft`, `headBranch`, `additions`          |
-| `get_github_context` | `GitHubContextOutputSchema`     | `repoName`, `branch`, `issues`, `pullRequests`                 |
-| `get_kanban_board`   | `KanbanBoardOutputSchema`       | `projectId`, `columns` array, `statusOptions`                  |
-| `get_repo_insights`  | `RepoInsightsOutputSchema`      | `owner`, `repo`, requested `section` data                      |
-| `get_copilot_reviews`| `CopilotReviewsOutputSchema`    | `prNumber`, `state`, `commentCount`, `comments` array          |
+| Tool                  | Schema                          | Verification                                                   |
+| --------------------- | ------------------------------- | -------------------------------------------------------------- |
+| `get_github_issues`   | `GitHubIssuesListOutputSchema`  | `owner`, `repo`, `issues` array, `count`                       |
+| `get_github_issues`   | (milestone field)               | Issue objects include optional `milestone` with number & title |
+| `get_github_prs`      | `GitHubPRsListOutputSchema`     | `owner`, `repo`, `pullRequests` array, `count`                 |
+| `get_github_issue`    | `GitHubIssueResultOutputSchema` | `issue` object with `body`, `labels`, `assignees`              |
+| `get_github_pr`       | `GitHubPRResultOutputSchema`    | `pullRequest` with `draft`, `headBranch`, `additions`          |
+| `get_github_context`  | `GitHubContextOutputSchema`     | `repoName`, `branch`, `issues`, `pullRequests`                 |
+| `get_kanban_board`    | `KanbanBoardOutputSchema`       | `projectId`, `columns` array, `statusOptions`                  |
+| `get_repo_insights`   | `RepoInsightsOutputSchema`      | `owner`, `repo`, requested `section` data                      |
+| `get_copilot_reviews` | `CopilotReviewsOutputSchema`    | `prNumber`, `state`, `commentCount`, `comments` array          |
 
 ### 11.5 Backup Tools
 
@@ -121,24 +121,24 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 
 ## Phase 12: Static Resources
 
-| Resource          | URI                          | Test                                                                                    |
-| ----------------- | ---------------------------- | --------------------------------------------------------------------------------------- |
+| Resource          | URI                          | Test                                                                                                                                              |
+| ----------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Briefing          | `memory://briefing`          | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`, optional `rulesFile`, `skillsDir`, `workflowSummary`, `copilotReviews` |
-| Instructions      | `memory://instructions`      | Full server instructions — verify it references all 44 tools and key resources          |
-| Recent entries    | `memory://recent`            | Read, verify 10 entries with typed fields                                               |
-| Significant       | `memory://significant`       | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary) |
-| Significant order | `memory://significant`       | Compare adjacent entries: `entries[0].importance >= entries[1].importance` etc.         |
-| Tags              | `memory://tags`              | Read, verify tag counts match `list_tags` output                                        |
-| Statistics        | `memory://statistics`        | Read, verify structured stats match `get_statistics` output                             |
-| Health            | `memory://health`            | Shows DB stats, tool filter status, vector index health                                 |
-| GitHub status     | `memory://github/status`     | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary (includes milestones)   |
-| Repo insights     | `memory://github/insights`   | Compact summary of stars, forks, and 14-day traffic                                     |
-| GitHub milestones | `memory://github/milestones` | Open milestones with completion percentages                                             |
-| Graph recent      | `memory://graph/recent`      | Mermaid diagram with harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)            |
-| Graph actions     | `memory://graph/actions`     | CI/CD narrative graph (verify graceful output when no workflow entries exist)           |
-| Actions recent    | `memory://actions/recent`    | Recent workflow runs (verify graceful output when no workflow entries exist)            |
-| Team recent       | `memory://team/recent`       | Author-enriched entries, `source: "team"`, `count`                                      |
-| Team statistics   | `memory://team/statistics`   | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`          |
+| Instructions      | `memory://instructions`      | Full server instructions — verify it references all 44 tools and key resources                                                                    |
+| Recent entries    | `memory://recent`            | Read, verify 10 entries with typed fields                                                                                                         |
+| Significant       | `memory://significant`       | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                                           |
+| Significant order | `memory://significant`       | Compare adjacent entries: `entries[0].importance >= entries[1].importance` etc.                                                                   |
+| Tags              | `memory://tags`              | Read, verify tag counts match `list_tags` output                                                                                                  |
+| Statistics        | `memory://statistics`        | Read, verify structured stats match `get_statistics` output                                                                                       |
+| Health            | `memory://health`            | Shows DB stats, tool filter status, vector index health                                                                                           |
+| GitHub status     | `memory://github/status`     | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary (includes milestones)                                                             |
+| Repo insights     | `memory://github/insights`   | Compact summary of stars, forks, and 14-day traffic                                                                                               |
+| GitHub milestones | `memory://github/milestones` | Open milestones with completion percentages                                                                                                       |
+| Graph recent      | `memory://graph/recent`      | Mermaid diagram with harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)                                                                      |
+| Graph actions     | `memory://graph/actions`     | CI/CD narrative graph (verify graceful output when no workflow entries exist)                                                                     |
+| Actions recent    | `memory://actions/recent`    | Recent workflow runs (verify graceful output when no workflow entries exist)                                                                      |
+| Team recent       | `memory://team/recent`       | Author-enriched entries, `source: "team"`, `count`                                                                                                |
+| Team statistics   | `memory://team/statistics`   | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                                    |
 
 ---
 
@@ -152,17 +152,24 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 All tools return errors as structured objects via `formatHandlerError()` (never thrown). A thrown error propagates as a raw MCP error, which is unhelpful to clients. The expected pattern:
 
 ```json
-{ "success": false, "error": "Human-readable error message", "code": "VALIDATION_ERROR", "category": "validation", "recoverable": false, "suggestion": "Check input parameters against the tool schema" }
+{
+  "success": false,
+  "error": "Human-readable error message",
+  "code": "VALIDATION_ERROR",
+  "category": "validation",
+  "recoverable": false,
+  "suggestion": "Check input parameters against the tool schema"
+}
 ```
 
 #### Handler Error vs MCP Error — How to Distinguish
 
 There are two kinds of error responses. Only one is correct:
 
-| Type                 | Source                                                             | What you see                                                                                                          | Verdict            |
-| -------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Type                 | Source                                                     | What you see                                                                                                          | Verdict            |
+| -------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | **Handler error** ✅ | Handler catches error and returns enriched `ErrorResponse` | Parseable JSON object with `success`, `error`, `code`, `category`, `recoverable` fields                               | Correct            |
-| **MCP error** ❌     | Uncaught throw propagates to MCP framework                  | Raw text error string, often prefixed with `Error:`, wrapped in an `isError: true` content block — no `success` field | Bug — report as ❌ |
+| **MCP error** ❌     | Uncaught throw propagates to MCP framework                 | Raw text error string, often prefixed with `Error:`, wrapped in an `isError: true` content block — no `success` field | Bug — report as ❌ |
 
 **Concrete examples:**
 
@@ -228,21 +235,21 @@ For every tool with optional numeric parameters, call the tool with `param: "abc
 
 Unacceptable: Raw MCP error frame with `-32602` code.
 
-| Tool | Parameter | Test Call |
-|---|---|---|
-| `get_recent_entries` | `limit` | `get_recent_entries({limit: "abc"})` |
-| `search_entries` | `limit` | `search_entries({query: "test", limit: "abc"})` |
-| `search_by_date_range` | `limit` | `search_by_date_range({start_date: "2026-01-01", end_date: "2026-12-31", limit: "abc"})` |
-| `semantic_search` | `limit` | `semantic_search({query: "test", limit: "abc"})` |
-| `semantic_search` | `similarity_threshold` | `semantic_search({query: "test", similarity_threshold: "abc"})` |
-| `export_entries` | `limit` | `export_entries({format: "json", limit: "abc"})` |
-| `cleanup_backups` | `keep_count` | `cleanup_backups({keep_count: "abc"})` |
-| `visualize_relationships` | `depth` | `visualize_relationships({entry_id: 1, depth: "abc"})` |
-| `visualize_relationships` | `limit` | `visualize_relationships({entry_id: 1, limit: "abc"})` |
-| `get_github_issues` | `limit` | `get_github_issues({limit: "abc"})` |
-| `get_github_prs` | `limit` | `get_github_prs({limit: "abc"})` |
-| `team_get_recent` | `limit` | `team_get_recent({limit: "abc"})` |
-| `get_cross_project_insights` | `min_entries` | `get_cross_project_insights({min_entries: "abc"})` |
+| Tool                         | Parameter              | Test Call                                                                                |
+| ---------------------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
+| `get_recent_entries`         | `limit`                | `get_recent_entries({limit: "abc"})`                                                     |
+| `search_entries`             | `limit`                | `search_entries({query: "test", limit: "abc"})`                                          |
+| `search_by_date_range`       | `limit`                | `search_by_date_range({start_date: "2026-01-01", end_date: "2026-12-31", limit: "abc"})` |
+| `semantic_search`            | `limit`                | `semantic_search({query: "test", limit: "abc"})`                                         |
+| `semantic_search`            | `similarity_threshold` | `semantic_search({query: "test", similarity_threshold: "abc"})`                          |
+| `export_entries`             | `limit`                | `export_entries({format: "json", limit: "abc"})`                                         |
+| `cleanup_backups`            | `keep_count`           | `cleanup_backups({keep_count: "abc"})`                                                   |
+| `visualize_relationships`    | `depth`                | `visualize_relationships({entry_id: 1, depth: "abc"})`                                   |
+| `visualize_relationships`    | `limit`                | `visualize_relationships({entry_id: 1, limit: "abc"})`                                   |
+| `get_github_issues`          | `limit`                | `get_github_issues({limit: "abc"})`                                                      |
+| `get_github_prs`             | `limit`                | `get_github_prs({limit: "abc"})`                                                         |
+| `team_get_recent`            | `limit`                | `team_get_recent({limit: "abc"})`                                                        |
+| `get_cross_project_insights` | `min_entries`          | `get_cross_project_insights({min_entries: "abc"})`                                       |
 
 ### Reporting Format
 

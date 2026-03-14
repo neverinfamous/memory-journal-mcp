@@ -48,9 +48,7 @@ export const significantResource: InternalResourceDef = {
         const entriesWithImportance: (Record<string, unknown> & { importance: number })[] =
             rows.map((row) => {
                 const entry = transformEntryRow(row)
-                const { score: importance } = context.db.calculateImportance(
-                    entry['id'] as number
-                )
+                const { score: importance } = context.db.calculateImportance(entry['id'] as number)
                 return { ...entry, importance }
             })
         entriesWithImportance.sort((a, b) => {

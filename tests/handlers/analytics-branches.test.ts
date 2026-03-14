@@ -28,7 +28,11 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
             entriesByPeriod: [{ period: '2025-W03', count: 10 }],
             decisionDensity: [{ period: '2025-W03', significantCount: 2 }],
             relationshipComplexity: { totalRelationships: 5, avgPerEntry: 0.05 },
-            activityTrend: { currentPeriod: '2025-W03', previousPeriod: '2025-W02', growthPercent: 15 },
+            activityTrend: {
+                currentPeriod: '2025-W03',
+                previousPeriod: '2025-W02',
+                growthPercent: 15,
+            },
             causalMetrics: { blocked_by: 1, resolved: 2, caused: 3 },
         }),
         executeRawQuery: vi.fn(),
@@ -64,7 +68,12 @@ describe('analytics tools — branch coverage', () => {
             const db = createMockDb()
             const handler = getStatisticsHandler(db)
 
-            handler({ group_by: 'month', start_date: '2025-01-01', end_date: '2025-01-31', project_breakdown: true })
+            handler({
+                group_by: 'month',
+                start_date: '2025-01-01',
+                end_date: '2025-01-31',
+                project_breakdown: true,
+            })
 
             expect(db.getStatistics).toHaveBeenCalledWith('month', '2025-01-01', '2025-01-31', true)
         })
@@ -121,7 +130,13 @@ describe('analytics tools — branch coverage', () => {
                     // 1st call: project stats
                     .mockReturnValueOnce([
                         {
-                            columns: ['project_number', 'entry_count', 'first_entry', 'last_entry', 'active_days'],
+                            columns: [
+                                'project_number',
+                                'entry_count',
+                                'first_entry',
+                                'last_entry',
+                                'active_days',
+                            ],
                             values: [
                                 [1, 10, '2025-01-01', '2025-01-10', 5],
                                 [2, 5, '2025-01-05', '2025-01-08', 3],
@@ -171,7 +186,13 @@ describe('analytics tools — branch coverage', () => {
                     .fn()
                     .mockReturnValueOnce([
                         {
-                            columns: ['project_number', 'entry_count', 'first_entry', 'last_entry', 'active_days'],
+                            columns: [
+                                'project_number',
+                                'entry_count',
+                                'first_entry',
+                                'last_entry',
+                                'active_days',
+                            ],
                             values: [[1, 10, '2025-01-01', '2025-01-10', 5]],
                         },
                     ])

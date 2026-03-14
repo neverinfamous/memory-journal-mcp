@@ -23,7 +23,10 @@ export interface JournalContext {
     lastModified: string
 }
 
-export function buildJournalContext(context: ResourceContext, config: BriefingConfig): JournalContext {
+export function buildJournalContext(
+    context: ResourceContext,
+    config: BriefingConfig
+): JournalContext {
     const recentEntries = context.db.getRecentEntries(config.entryCount)
     const latestEntries = recentEntries.map((e) => {
         const content = e.content ?? ''
@@ -88,15 +91,19 @@ export function buildTeamContext(
                     timestamp: e.timestamp,
                     type: e.entryType,
                     preview:
-                        content.slice(0, PREVIEW_LENGTH) +
-                        (content.length > PREVIEW_LENGTH ? '...' : ''),
+                        content.slice(0, TEAM_PREVIEW_LENGTH) +
+                        (content.length > TEAM_PREVIEW_LENGTH ? '...' : ''),
                 }
             })
         }
 
         return { teamInfo, teamLatestEntries }
     } catch (error) {
-        logger.debug('Failed to build team context', { module: 'BRIEFING', operation: 'team-context', error: error instanceof Error ? error.message : String(error) })
+        logger.debug('Failed to build team context', {
+            module: 'BRIEFING',
+            operation: 'team-context',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return undefined
     }
 }
@@ -144,7 +151,11 @@ export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile
             lastModified: agoStr,
         }
     } catch (error) {
-        logger.debug('Failed to read rules file', { module: 'BRIEFING', operation: 'rules-file', error: error instanceof Error ? error.message : String(error) })
+        logger.debug('Failed to read rules file', {
+            module: 'BRIEFING',
+            operation: 'rules-file',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return undefined
     }
 }
@@ -161,7 +172,11 @@ export function buildSkillsDirInfo(skillsDirPath: string | undefined): SkillsDir
             names: skillDirs.map((d) => d.name),
         }
     } catch (error) {
-        logger.debug('Failed to read skills directory', { module: 'BRIEFING', operation: 'skills-dir', error: error instanceof Error ? error.message : String(error) })
+        logger.debug('Failed to read skills directory', {
+            module: 'BRIEFING',
+            operation: 'skills-dir',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return undefined
     }
 }

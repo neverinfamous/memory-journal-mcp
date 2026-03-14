@@ -11,14 +11,18 @@ import type { IDatabaseConnection, QueryResult } from '../core/interfaces.js'
  * Pre-compiled regex to detect SQL mutation statements.
  * Hoisted to module scope to avoid recompilation on every exec() call.
  */
-const IS_MUTATION_RE = /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store))./i
+const IS_MUTATION_RE =
+    /^\s*(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|PRAGMA (?!table_info|foreign_key_list|index_info|index_list|journal_mode|synchronous|temp_store))./i
 
 /**
  * Shared migration columns required by both personal and team schemas.
  * Adding a new column here ensures it is applied in both migrateSchema() and applyTeamSchema().
  */
 const SHARED_MIGRATION_COLUMNS: { name: string; sql: string }[] = [
-    { name: 'significance_type', sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT' },
+    {
+        name: 'significance_type',
+        sql: 'ALTER TABLE memory_journal ADD COLUMN significance_type TEXT',
+    },
     { name: 'auto_context', sql: 'ALTER TABLE memory_journal ADD COLUMN auto_context TEXT' },
     { name: 'deleted_at', sql: 'ALTER TABLE memory_journal ADD COLUMN deleted_at TEXT' },
     { name: 'project_number', sql: 'ALTER TABLE memory_journal ADD COLUMN project_number INTEGER' },
@@ -28,7 +32,10 @@ const SHARED_MIGRATION_COLUMNS: { name: string; sql: string }[] = [
     { name: 'pr_number', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_number INTEGER' },
     { name: 'pr_url', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_url TEXT' },
     { name: 'pr_status', sql: 'ALTER TABLE memory_journal ADD COLUMN pr_status TEXT' },
-    { name: 'workflow_run_id', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER' },
+    {
+        name: 'workflow_run_id',
+        sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_run_id INTEGER',
+    },
     { name: 'workflow_name', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_name TEXT' },
     { name: 'workflow_status', sql: 'ALTER TABLE memory_journal ADD COLUMN workflow_status TEXT' },
 ]
@@ -53,7 +60,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         try {
             this.db = new DatabaseAdapter(this.dbPath)
             const db = this.db
-            
+
             // Native-only PRAGMAs for performance and safety
             db.pragma('journal_mode = WAL')
             db.pragma('synchronous = NORMAL')
@@ -85,16 +92,19 @@ export class NativeConnectionManager implements IDatabaseConnection {
                     embedding float[384]
                 )
             `)
-            
+
             // Run schema migrations
             this.migrateSchema()
 
             this.initialized = true
-            logger.info('Native database opened', { module: 'NativeConnectionManager', dbPath: this.dbPath })
+            logger.info('Native database opened', {
+                module: 'NativeConnectionManager',
+                dbPath: this.dbPath,
+            })
         } catch (error) {
             logger.error('Failed to initialize native database', {
                 module: 'NativeConnectionManager',
-                error: String(error)
+                error: String(error),
             })
             throw new ConnectionError(`Native DB Initialization failed: ${String(error)}`)
         }
@@ -102,9 +112,11 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
     private migrateSchema(): void {
         const db = this.ensureDb()
-        
+
         // table_info in better-sqlite3 returns an array of objects like { "cid": 0, "name": "id", ...}
-        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
+        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
+            name: string
+        }[]
         const columns = new Set(tableInfo.map((row) => row.name))
 
         const added: string[] = []
@@ -119,8 +131,12 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
         // Populate FTS5 index for existing databases that were created before FTS5 was added.
         // Uses FTS5's built-in 'rebuild' command for content-sync tables.
-        const ftsCount = (db.prepare('SELECT COUNT(*) as c FROM fts_content').get() as { c: number }).c
-        const entryCount = (db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }).c
+        const ftsCount = (
+            db.prepare('SELECT COUNT(*) as c FROM fts_content').get() as { c: number }
+        ).c
+        const entryCount = (
+            db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
+        ).c
         if (ftsCount === 0 && entryCount > 0) {
             db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
             added.push('fts5:populated')
@@ -137,7 +153,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
     applyTeamSchema(): void {
         const db = this.ensureDb()
-        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
+        const tableInfo = db.prepare('PRAGMA table_info(memory_journal)').all() as {
+            name: string
+        }[]
         const columns = new Set(tableInfo.map((row) => row.name))
 
         // Shared columns + team-only author column
@@ -169,7 +187,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
      */
     exec(sql: string, params?: unknown[]): QueryResult[] {
         const db = this.ensureDb()
-        
+
         // Use pre-compiled regex to detect true mutations that should return an empty set
         const isMutation = IS_MUTATION_RE.test(sql)
 
@@ -192,18 +210,17 @@ export class NativeConnectionManager implements IDatabaseConnection {
         }
 
         // It's a SELECT/PRAGMA with a reader
-        const rows = (params && params.length > 0)
-            ? stmt.all(...params) as Record<string, unknown>[]
-            : stmt.all() as Record<string, unknown>[]
+        const rows =
+            params && params.length > 0
+                ? (stmt.all(...params) as Record<string, unknown>[])
+                : (stmt.all() as Record<string, unknown>[])
 
         if (rows.length === 0) {
             return []
         }
 
         const columns = Object.keys(rows[0] as object)
-        const values: unknown[][] = rows.map((row) => 
-            columns.map((col) => row[col])
-        )
+        const values: unknown[][] = rows.map((row) => columns.map((col) => row[col]))
 
         return [{ columns, values }]
     }

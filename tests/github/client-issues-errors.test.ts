@@ -321,7 +321,10 @@ describe('IssuesManager — branch coverage', () => {
             const result = await issues.closeIssue('o', 'r', 1, 'closing comment')
             expect(result?.success).toBe(true)
             expect(client.octokit!.issues.createComment).toHaveBeenCalledWith({
-                owner: 'o', repo: 'r', issue_number: 1, body: 'closing comment',
+                owner: 'o',
+                repo: 'r',
+                issue_number: 1,
+                body: 'closing comment',
             })
         })
 
@@ -345,22 +348,46 @@ describe('Error helpers — branch coverage', () => {
     describe('formatZodError', () => {
         it('should format ZodError with path', () => {
             const error = new ZodError([
-                { code: ZodIssueCode.invalid_type, expected: 'string', received: 'number', path: ['name'], message: 'Expected string' },
+                {
+                    code: ZodIssueCode.invalid_type,
+                    expected: 'string',
+                    received: 'number',
+                    path: ['name'],
+                    message: 'Expected string',
+                },
             ])
             expect(formatZodError(error)).toBe('name: Expected string')
         })
 
         it('should format ZodError without path', () => {
             const error = new ZodError([
-                { code: ZodIssueCode.invalid_type, expected: 'string', received: 'number', path: [], message: 'Required' },
+                {
+                    code: ZodIssueCode.invalid_type,
+                    expected: 'string',
+                    received: 'number',
+                    path: [],
+                    message: 'Required',
+                },
             ])
             expect(formatZodError(error)).toBe('Required')
         })
 
         it('should join multiple issues', () => {
             const error = new ZodError([
-                { code: ZodIssueCode.invalid_type, expected: 'string', received: 'number', path: ['a'], message: 'Bad A' },
-                { code: ZodIssueCode.invalid_type, expected: 'number', received: 'string', path: ['b'], message: 'Bad B' },
+                {
+                    code: ZodIssueCode.invalid_type,
+                    expected: 'string',
+                    received: 'number',
+                    path: ['a'],
+                    message: 'Bad A',
+                },
+                {
+                    code: ZodIssueCode.invalid_type,
+                    expected: 'number',
+                    received: 'string',
+                    path: ['b'],
+                    message: 'Bad B',
+                },
             ])
             expect(formatZodError(error)).toBe('a: Bad A; b: Bad B')
         })
@@ -376,7 +403,13 @@ describe('Error helpers — branch coverage', () => {
 
         it('should handle ZodError', () => {
             const err = new ZodError([
-                { code: ZodIssueCode.invalid_type, expected: 'string', received: 'number', path: ['x'], message: 'bad' },
+                {
+                    code: ZodIssueCode.invalid_type,
+                    expected: 'string',
+                    received: 'number',
+                    path: ['x'],
+                    message: 'bad',
+                },
             ])
             const result = formatHandlerError(err)
             expect(result.success).toBe(false)

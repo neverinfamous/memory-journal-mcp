@@ -36,7 +36,12 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
             sizeBytes: 1024,
         }),
         listBackups: vi.fn().mockReturnValue([
-            { filename: 'backup_2025-01-01.db', path: '/data/backups/backup_2025-01-01.db', sizeBytes: 1024, createdAt: '2025-01-01' },
+            {
+                filename: 'backup_2025-01-01.db',
+                path: '/data/backups/backup_2025-01-01.db',
+                sizeBytes: 1024,
+                createdAt: '2025-01-01',
+            },
         ]),
         restoreFromFile: vi.fn().mockResolvedValue({
             restoredFrom: 'backup_2025-01-01.db',
@@ -116,7 +121,9 @@ describe('backup tools — branch coverage', () => {
 
         it('should handle error', () => {
             const db = createMockDb({
-                listBackups: vi.fn().mockImplementation(() => { throw new Error('io') }),
+                listBackups: vi.fn().mockImplementation(() => {
+                    throw new Error('io')
+                }),
             })
             const handler = getHandler(db, 'list_backups')
 
@@ -134,7 +141,10 @@ describe('backup tools — branch coverage', () => {
             const db = createMockDb()
             const handler = getHandler(db, 'restore_backup')
 
-            const result = (await handler({ filename: 'backup_2025-01-01.db', confirm: true })) as Record<string, unknown>
+            const result = (await handler({
+                filename: 'backup_2025-01-01.db',
+                confirm: true,
+            })) as Record<string, unknown>
             expect(result['success']).toBe(true)
             expect(result['previousEntryCount']).toBe(100)
             expect(result['newEntryCount']).toBe(95)
@@ -155,7 +165,10 @@ describe('backup tools — branch coverage', () => {
             })
             const handler = getHandler(db, 'restore_backup')
 
-            const result = (await handler({ filename: 'backup.db', confirm: true })) as Record<string, unknown>
+            const result = (await handler({ filename: 'backup.db', confirm: true })) as Record<
+                string,
+                unknown
+            >
             const reverted = result['revertedChanges'] as Record<string, unknown>
             expect(reverted['entries']).toBeUndefined()
         })
@@ -171,7 +184,10 @@ describe('backup tools — branch coverage', () => {
             const tools = getBackupTools({ db, progress: progressCtx } as never)
             const handler = tools.find((t) => t.name === 'restore_backup')!.handler
 
-            const result = (await handler({ filename: 'backup.db', confirm: true })) as Record<string, unknown>
+            const result = (await handler({ filename: 'backup.db', confirm: true })) as Record<
+                string,
+                unknown
+            >
             expect(result['success']).toBe(true)
             expect(mockNotification).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -191,7 +207,10 @@ describe('backup tools — branch coverage', () => {
             const tools = getBackupTools({ db, progress: progressCtx } as never)
             const handler = tools.find((t) => t.name === 'restore_backup')!.handler
 
-            const result = (await handler({ filename: 'backup.db', confirm: true })) as Record<string, unknown>
+            const result = (await handler({ filename: 'backup.db', confirm: true })) as Record<
+                string,
+                unknown
+            >
             // Should still succeed even if notification fails
             expect(result['success']).toBe(true)
         })
@@ -202,7 +221,10 @@ describe('backup tools — branch coverage', () => {
             })
             const handler = getHandler(db, 'restore_backup')
 
-            const result = (await handler({ filename: 'bad.db', confirm: true })) as Record<string, unknown>
+            const result = (await handler({ filename: 'bad.db', confirm: true })) as Record<
+                string,
+                unknown
+            >
             expect(result['success']).toBe(false)
         })
     })
@@ -235,7 +257,9 @@ describe('backup tools — branch coverage', () => {
 
         it('should handle error', () => {
             const db = createMockDb({
-                deleteOldBackups: vi.fn().mockImplementation(() => { throw new Error('perm') }),
+                deleteOldBackups: vi.fn().mockImplementation(() => {
+                    throw new Error('perm')
+                }),
             })
             const handler = getHandler(db, 'cleanup_backups')
 

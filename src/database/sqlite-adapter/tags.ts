@@ -20,9 +20,9 @@ export class TagsManager {
         const db = this.db
 
         const insertPlaceholders = tagNames.map(() => '(?, 0)').join(', ')
-        db.prepare(`INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`).run(
-            ...tagNames
-        )
+        db.prepare(
+            `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
+        ).run(...tagNames)
 
         const selectPlaceholders = tagNames.map(() => '?').join(', ')
         const rows = db
@@ -40,7 +40,13 @@ export class TagsManager {
 
         const updatePlaceholders = tagIds.map(() => '?').join(', ')
         db.prepare(
-            `UPDATE tags SET usage_count = usage_count + 1 WHERE id IN (${updatePlaceholders})`
+            `UPDATE tags
+             SET usage_count = (
+                 SELECT COUNT(*)
+                 FROM entry_tags et
+                 WHERE et.tag_id = tags.id
+             )
+             WHERE id IN (${updatePlaceholders})`
         ).run(...tagIds)
     }
 
@@ -110,8 +116,7 @@ export class TagsManager {
             const targetRow = db.prepare('SELECT id FROM tags WHERE name = ?').get(targetTag) as
                 | { id: number }
                 | undefined
-            if (!targetRow)
-                throw new QueryError(`Failed to get or create target tag: ${targetTag}`)
+            if (!targetRow) throw new QueryError(`Failed to get or create target tag: ${targetTag}`)
             const targetTagId = targetRow.id
 
             // Clean orphaned entry_tags (entries permanently deleted but links remain)

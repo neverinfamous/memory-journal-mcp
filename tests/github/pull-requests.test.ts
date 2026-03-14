@@ -29,8 +29,20 @@ function createMockClient(overrides: Partial<Record<string, unknown>> = {}) {
             pulls: {
                 list: vi.fn().mockResolvedValue({
                     data: [
-                        { number: 1, title: 'Feature A', html_url: 'https://github.com/x/1', state: 'open', merged_at: null },
-                        { number: 2, title: 'Feature B', html_url: 'https://github.com/x/2', state: 'closed', merged_at: '2025-01-01' },
+                        {
+                            number: 1,
+                            title: 'Feature A',
+                            html_url: 'https://github.com/x/1',
+                            state: 'open',
+                            merged_at: null,
+                        },
+                        {
+                            number: 2,
+                            title: 'Feature B',
+                            html_url: 'https://github.com/x/2',
+                            state: 'closed',
+                            merged_at: '2025-01-01',
+                        },
                     ],
                 }),
                 get: vi.fn().mockResolvedValue({
@@ -91,7 +103,9 @@ function createMockClient(overrides: Partial<Record<string, unknown>> = {}) {
             },
         },
         getCached: vi.fn().mockImplementation((key: string) => cache.get(key)),
-        setCache: vi.fn().mockImplementation((key: string, value: unknown) => cache.set(key, value)),
+        setCache: vi
+            .fn()
+            .mockImplementation((key: string, value: unknown) => cache.set(key, value)),
         ...overrides,
     }
 }
@@ -256,7 +270,15 @@ describe('PullRequestsManager', () => {
         it('should return state=none when no Copilot reviews', async () => {
             const client = createMockClient()
             client.octokit!.rest.pulls.listReviews.mockResolvedValue({
-                data: [{ id: 1, user: { login: 'human' }, state: 'APPROVED', body: '', submitted_at: '2025-01-01' }],
+                data: [
+                    {
+                        id: 1,
+                        user: { login: 'human' },
+                        state: 'APPROVED',
+                        body: '',
+                        submitted_at: '2025-01-01',
+                    },
+                ],
             })
             client.octokit!.rest.pulls.listReviewComments.mockResolvedValue({ data: [] })
 
@@ -271,7 +293,13 @@ describe('PullRequestsManager', () => {
             const client = createMockClient()
             client.octokit!.rest.pulls.listReviews.mockResolvedValue({
                 data: [
-                    { id: 1, user: { login: 'copilot[bot]' }, state: 'APPROVED', body: '', submitted_at: '2025-01-01' },
+                    {
+                        id: 1,
+                        user: { login: 'copilot[bot]' },
+                        state: 'APPROVED',
+                        body: '',
+                        submitted_at: '2025-01-01',
+                    },
                 ],
             })
             client.octokit!.rest.pulls.listReviewComments.mockResolvedValue({ data: [] })
@@ -286,7 +314,13 @@ describe('PullRequestsManager', () => {
             const client = createMockClient()
             client.octokit!.rest.pulls.listReviews.mockResolvedValue({
                 data: [
-                    { id: 1, user: { login: 'github-copilot[bot]' }, state: 'CHANGES_REQUESTED', body: '', submitted_at: '2025-01-01' },
+                    {
+                        id: 1,
+                        user: { login: 'github-copilot[bot]' },
+                        state: 'CHANGES_REQUESTED',
+                        body: '',
+                        submitted_at: '2025-01-01',
+                    },
                 ],
             })
             client.octokit!.rest.pulls.listReviewComments.mockResolvedValue({ data: [] })

@@ -16,14 +16,16 @@ import { logger } from '../../utils/logger.js'
 // Output Schemas
 // ============================================================================
 
-const BackupResultOutputSchema = z.object({
-    success: z.boolean(),
-    message: z.string().optional(),
-    filename: z.string().optional(),
-    path: z.string().optional(),
-    sizeBytes: z.number().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const BackupResultOutputSchema = z
+    .object({
+        success: z.boolean(),
+        message: z.string().optional(),
+        filename: z.string().optional(),
+        path: z.string().optional(),
+        sizeBytes: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 const BackupInfoSchema = z.object({
     filename: z.string(),
@@ -32,39 +34,45 @@ const BackupInfoSchema = z.object({
     createdAt: z.string(),
 })
 
-const BackupsListOutputSchema = z.object({
-    success: z.boolean().optional(),
-    backups: z.array(BackupInfoSchema).optional(),
-    total: z.number().optional(),
-    backupsDirectory: z.string().optional(),
-    hint: z.string().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const BackupsListOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        backups: z.array(BackupInfoSchema).optional(),
+        total: z.number().optional(),
+        backupsDirectory: z.string().optional(),
+        hint: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const RestoreResultOutputSchema = z.object({
-    success: z.boolean(),
-    message: z.string().optional(),
-    restoredFrom: z.string().optional(),
-    previousEntryCount: z.number().optional(),
-    newEntryCount: z.number().optional(),
-    warning: z.string().optional(),
-    revertedChanges: z
-        .object({
-            tagMerges: z.string().optional(),
-            entries: z.string().optional(),
-        })
-        .optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const RestoreResultOutputSchema = z
+    .object({
+        success: z.boolean(),
+        message: z.string().optional(),
+        restoredFrom: z.string().optional(),
+        previousEntryCount: z.number().optional(),
+        newEntryCount: z.number().optional(),
+        warning: z.string().optional(),
+        revertedChanges: z
+            .object({
+                tagMerges: z.string().optional(),
+                entries: z.string().optional(),
+            })
+            .optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const CleanupBackupsOutputSchema = z.object({
-    success: z.boolean(),
-    deleted: z.array(z.string()).optional(),
-    deletedCount: z.number().optional(),
-    keptCount: z.number().optional(),
-    message: z.string().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const CleanupBackupsOutputSchema = z
+    .object({
+        success: z.boolean(),
+        deleted: z.array(z.string()).optional(),
+        deletedCount: z.number().optional(),
+        keptCount: z.number().optional(),
+        message: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -147,7 +155,12 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Must be set to true to confirm the restore operation'),
             }),
             outputSchema: RestoreResultOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: true, openWorldHint: false },
+            annotations: {
+                readOnlyHint: false,
+                idempotentHint: false,
+                destructiveHint: true,
+                openWorldHint: false,
+            },
             handler: async (params: unknown) => {
                 try {
                     const input = z

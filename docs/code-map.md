@@ -132,24 +132,24 @@ src/
 
 ### Tool Handlers (`src/handlers/tools/`)
 
-| Group | Handler File(s) | Tools | Key Tools |
-|-------|----------------|-------|-----------:|
-| **core** | `core.ts` | 6 | `create_entry`, `create_entry_minimal`, `get_recent_entries`, `get_entry_by_id`, `test_simple`, `list_tags` |
-| **search** | `search.ts` | 4 | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats` |
-| **analytics** | `analytics.ts` | 2 | `get_statistics`, `get_cross_project_insights` |
-| **relationships** | `relationships.ts` | 2 | `link_entries`, `visualize_relationships` |
-| **export** | `export.ts` | 1 | `export_entries` |
-| **admin** | `admin.ts` | 5 | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index` |
-| **backup** | `backup.ts` | 4 | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
-| **team** | `team.ts` | 3 | `team_create_entry`, `team_get_recent`, `team_search` |
-| **github** | `github.ts` → `github/` | 16 | See sub-handlers below |
-| | `github/read-tools.ts` | 5 | `get_github_issues`, `get_github_issue`, `get_github_prs`, `get_github_pr`, `get_github_context` |
-| | `github/issue-tools.ts` | 2 | `create_github_issue_with_entry`, `close_github_issue_with_entry` |
-| | `github/kanban-tools.ts` | 2 | `get_kanban_board`, `move_kanban_item` |
-| | `github/milestone-tools.ts` | 5 | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` |
-| | `github/insights-tools.ts` | 1 | `get_repo_insights` |
-| | `github/copilot-tools.ts` | 1 | `get_copilot_reviews` |
-| **codemode** | `codemode.ts` | 1 | `mj_execute_code` (sandboxed JavaScript execution via `mj.*` API) |
+| Group             | Handler File(s)             | Tools |                                                                                                                        Key Tools |
+| ----------------- | --------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------: |
+| **core**          | `core.ts`                   | 6     |                      `create_entry`, `create_entry_minimal`, `get_recent_entries`, `get_entry_by_id`, `test_simple`, `list_tags` |
+| **search**        | `search.ts`                 | 4     |                                            `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats` |
+| **analytics**     | `analytics.ts`              | 2     |                                                                                   `get_statistics`, `get_cross_project_insights` |
+| **relationships** | `relationships.ts`          | 2     |                                                                                        `link_entries`, `visualize_relationships` |
+| **export**        | `export.ts`                 | 1     |                                                                                                                 `export_entries` |
+| **admin**         | `admin.ts`                  | 5     |                                      `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index` |
+| **backup**        | `backup.ts`                 | 4     |                                                            `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups` |
+| **team**          | `team.ts`                   | 3     |                                                                            `team_create_entry`, `team_get_recent`, `team_search` |
+| **github**        | `github.ts` → `github/`     | 16    |                                                                                                           See sub-handlers below |
+|                   | `github/read-tools.ts`      | 5     |                                 `get_github_issues`, `get_github_issue`, `get_github_prs`, `get_github_pr`, `get_github_context` |
+|                   | `github/issue-tools.ts`     | 2     |                                                                `create_github_issue_with_entry`, `close_github_issue_with_entry` |
+|                   | `github/kanban-tools.ts`    | 2     |                                                                                           `get_kanban_board`, `move_kanban_item` |
+|                   | `github/milestone-tools.ts` | 5     | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` |
+|                   | `github/insights-tools.ts`  | 1     |                                                                                                              `get_repo_insights` |
+|                   | `github/copilot-tools.ts`   | 1     |                                                                                                            `get_copilot_reviews` |
+| **codemode**      | `codemode.ts`               | 1     |                                                                `mj_execute_code` (sandboxed JavaScript execution via `mj.*` API) |
 
 **Non-tool handler files:**
 | File | Purpose |
@@ -167,29 +167,29 @@ src/
 
 22 resources providing read-only journal metadata:
 
-| File | Resources |
-|------|-----------|
-| `core/` | Core resources (briefing, instructions, health, utilities) |
-| `core/briefing/` | `memory://briefing` — modular builders (github-section, context-section, user-message) |
-| `core/instructions.ts` | `memory://instructions` |
-| `core/health.ts` | `memory://health` |
-| `core/utilities.ts` | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics` |
-| `graph.ts` | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent` |
-| `team.ts` | `memory://team/recent`, `memory://team/statistics` |
-| `github.ts` | `memory://github/status`, `memory://github/insights`, `memory://github/milestones` |
-| `templates.ts` | Template resources (`memory://projects/{N}/timeline`, `memory://issues/{N}/entries`, `memory://prs/{N}/entries`, `memory://prs/{N}/timeline`, `memory://kanban/{N}`, `memory://kanban/{N}/diagram`, `memory://milestones/{N}`) |
-| `shared.ts` | Shared resource helpers (`resolveGitHubRepo()`, `milestoneCompletionPct()`, etc.) |
-| `index.ts` | `createResourceDefinitions(ctx)` — assembles all resources |
+| File                   | Resources                                                                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `core/`                | Core resources (briefing, instructions, health, utilities)                                                                                                                                                                     |
+| `core/briefing/`       | `memory://briefing` — modular builders (github-section, context-section, user-message)                                                                                                                                         |
+| `core/instructions.ts` | `memory://instructions`                                                                                                                                                                                                        |
+| `core/health.ts`       | `memory://health`                                                                                                                                                                                                              |
+| `core/utilities.ts`    | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics`                                                                                                                                              |
+| `graph.ts`             | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                                                                                                   |
+| `team.ts`              | `memory://team/recent`, `memory://team/statistics`                                                                                                                                                                             |
+| `github.ts`            | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                                                                                                                                             |
+| `templates.ts`         | Template resources (`memory://projects/{N}/timeline`, `memory://issues/{N}/entries`, `memory://prs/{N}/entries`, `memory://prs/{N}/timeline`, `memory://kanban/{N}`, `memory://kanban/{N}/diagram`, `memory://milestones/{N}`) |
+| `shared.ts`            | Shared resource helpers (`resolveGitHubRepo()`, `milestoneCompletionPct()`, etc.)                                                                                                                                              |
+| `index.ts`             | `createResourceDefinitions(ctx)` — assembles all resources                                                                                                                                                                     |
 
 ---
 
 ## Prompts (`src/handlers/prompts/`)
 
-| File | Prompts |
-|------|---------|
-| `index.ts` | Barrel + prompt assembly |
+| File          | Prompts                                                                                                                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`    | Barrel + prompt assembly                                                                                                                                                                 |
 | `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary` |
-| `github.ts` | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker` |
+| `github.ts`   | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                    |
 
 ---
 
@@ -235,40 +235,40 @@ try {
 }
 ```
 
-| Function | Purpose |
-|----------|---------|
+| Function                  | Purpose                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `formatHandlerError(err)` | Returns enriched `ErrorResponse` with `code`, `category`, `suggestion`, `recoverable` — used by all handlers |
-| `formatZodError(err)` | Extracts human-readable messages from Zod validation errors |
+| `formatZodError(err)`     | Extracts human-readable messages from Zod validation errors                                                  |
 
 ---
 
 ## Key Constants & Config
 
-| What | Where | Notes |
-|------|-------|-------|
+| What                               | Where                                  | Notes                                                                                                                            |
+| ---------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Server instructions (agent prompt) | `src/constants/server-instructions.ts` | `generateInstructions(enabledTools, prompts, latestEntry, level)` — configurable via `--instruction-level` / `INSTRUCTION_LEVEL` |
-| Human-readable instructions | `src/constants/server-instructions.md` | Human-readable markdown version |
-| MCP icons | `src/constants/icons.ts` | Per-group icon definitions |
-| Tool filter | `src/filtering/tool-filter.ts` | `ToolFilter` class (same pattern as db-mcp/mysql-mcp/postgres-mcp) |
-| Default config | `src/types/index.ts` | `DEFAULT_CONFIG` — dbPath, model name, semantic search toggle |
-| Security utils | `src/utils/security-utils.ts` | SQL sanitization, path traversal prevention, author sanitization |
+| Human-readable instructions        | `src/constants/server-instructions.md` | Human-readable markdown version                                                                                                  |
+| MCP icons                          | `src/constants/icons.ts`               | Per-group icon definitions                                                                                                       |
+| Tool filter                        | `src/filtering/tool-filter.ts`         | `ToolFilter` class (same pattern as db-mcp/mysql-mcp/postgres-mcp)                                                               |
+| Default config                     | `src/types/index.ts`                   | `DEFAULT_CONFIG` — dbPath, model name, semantic search toggle                                                                    |
+| Security utils                     | `src/utils/security-utils.ts`          | SQL sanitization, path traversal prevention, author sanitization                                                                 |
 
 ---
 
 ## Architecture Patterns (Quick Reference)
 
-| Pattern | Description |
-|---------|-------------|
-| **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerError()`. All handlers use enriched formatter. Output schemas include `ErrorFieldsMixin` for validation compatibility. |
-| **Native SQLite** | `better-sqlite3` for high-performance native disk access. `sqlite-vec` extension loaded for vector search. No WASM fallback. |
-| **Adapter Factory** | `DatabaseAdapterFactory.create()` in `adapter-factory.ts` instantiates `SqliteAdapter`. |
-| **ToolContext** | All tool handlers receive `ToolContext` (db, teamDb?, vectorManager?, github?, config?, progress?). |
-| **GitHub Integration** | `GitHubIntegration` class in `github-integration/` directory — modularized into client, issues, PRs, milestones, projects, insights. |
-| **Vector Search** | `VectorSearchManager` with `sqlite-vec` KNN queries + `@huggingface/transformers` embeddings (all-MiniLM-L6-v2, 384-dim). Embeddings stored in `vec_embeddings` virtual table. |
-| **Scheduler** | `Scheduler` for automated periodic tasks (backups, vacuum, vector index rebuilds). |
-| **Tool Filtering** | Same `ToolFilter` pattern as database MCPs — `--tool-filter` CLI flag. |
-| **Code Mode** | Sandboxed JavaScript execution via `mj.*` API — `mj_execute_code` runs in `worker_threads` with `MessagePort` RPC bridge (port passed via `workerData`, results via `parentPort`), secondary `vm.createContext` isolation, resource limits, and hard timeouts. |
-| **OAuth 2.1** | Optional RFC-compliant OAuth 2.0 auth for HTTP transport — JWT validation, JWKS caching, scope-based access control. 11 files in `src/auth/`. |
+| Pattern                     | Description                                                                                                                                                                                                                                                    |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerError()`. All handlers use enriched formatter. Output schemas include `ErrorFieldsMixin` for validation compatibility.                                                   |
+| **Native SQLite**           | `better-sqlite3` for high-performance native disk access. `sqlite-vec` extension loaded for vector search. No WASM fallback.                                                                                                                                   |
+| **Adapter Factory**         | `DatabaseAdapterFactory.create()` in `adapter-factory.ts` instantiates `SqliteAdapter`.                                                                                                                                                                        |
+| **ToolContext**             | All tool handlers receive `ToolContext` (db, teamDb?, vectorManager?, github?, config?, progress?).                                                                                                                                                            |
+| **GitHub Integration**      | `GitHubIntegration` class in `github-integration/` directory — modularized into client, issues, PRs, milestones, projects, insights.                                                                                                                           |
+| **Vector Search**           | `VectorSearchManager` with `sqlite-vec` KNN queries + `@huggingface/transformers` embeddings (all-MiniLM-L6-v2, 384-dim). Embeddings stored in `vec_embeddings` virtual table.                                                                                 |
+| **Scheduler**               | `Scheduler` for automated periodic tasks (backups, vacuum, vector index rebuilds).                                                                                                                                                                             |
+| **Tool Filtering**          | Same `ToolFilter` pattern as database MCPs — `--tool-filter` CLI flag.                                                                                                                                                                                         |
+| **Code Mode**               | Sandboxed JavaScript execution via `mj.*` API — `mj_execute_code` runs in `worker_threads` with `MessagePort` RPC bridge (port passed via `workerData`, results via `parentPort`), secondary `vm.createContext` isolation, resource limits, and hard timeouts. |
+| **OAuth 2.1**               | Optional RFC-compliant OAuth 2.0 auth for HTTP transport — JWT validation, JWKS caching, scope-based access control. 11 files in `src/auth/`.                                                                                                                  |
 
 ---
 
@@ -282,16 +282,16 @@ try {
 
 ## Test Infrastructure
 
-| File / Directory | Purpose |
-|-----------------|---------|
-| `test-server/README.md` | Agent testing orchestration doc |
-| `test-server/test-tools.md` | Pass 1: Core functionality (Phases 0-10, 44 tools + 22 resources + 16 prompts) |
-| `test-server/test-tools2.md` | Pass 2: Validation & edge cases (Phases 11-15) |
-| `test-server/test-tools-codemode.md` | Pass 3: Code Mode testing (Phases 16-21) |
-| `test-server/test-instruction-levels.mjs` | Integration: instruction level ordering test (stdio) |
-| `test-server/test-tool-annotations.mjs` | Integration: tool annotation counts test (stdio) |
-| `test-server/test-scheduler.mjs` | Integration: scheduler job verification (HTTP, ~130s) |
-| `docs/tool-reference.md` | Complete 44-tool inventory by group |
-| `tests/` | Vitest unit tests |
-| `tests/auth/` | Auth module unit tests (OAuth, JWT, scopes) |
-| `tests/e2e/` | Playwright E2E tests (HTTP/SSE transport) |
+| File / Directory                          | Purpose                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------ |
+| `test-server/README.md`                   | Agent testing orchestration doc                                                |
+| `test-server/test-tools.md`               | Pass 1: Core functionality (Phases 0-10, 44 tools + 22 resources + 16 prompts) |
+| `test-server/test-tools2.md`              | Pass 2: Validation & edge cases (Phases 11-15)                                 |
+| `test-server/test-tools-codemode.md`      | Pass 3: Code Mode testing (Phases 16-21)                                       |
+| `test-server/test-instruction-levels.mjs` | Integration: instruction level ordering test (stdio)                           |
+| `test-server/test-tool-annotations.mjs`   | Integration: tool annotation counts test (stdio)                               |
+| `test-server/test-scheduler.mjs`          | Integration: scheduler job verification (HTTP, ~130s)                          |
+| `docs/tool-reference.md`                  | Complete 44-tool inventory by group                                            |
+| `tests/`                                  | Vitest unit tests                                                              |
+| `tests/auth/`                             | Auth module unit tests (OAuth, JWT, scopes)                                    |
+| `tests/e2e/`                              | Playwright E2E tests (HTTP/SSE transport)                                      |

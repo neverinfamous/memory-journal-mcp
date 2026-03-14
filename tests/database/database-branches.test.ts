@@ -68,10 +68,10 @@ describe('NativeConnectionManager exec branches', () => {
     })
 
     it('should handle INSERT (mutation) with params', () => {
-        const result = conn.exec(
-            'INSERT INTO test_table (name, value) VALUES (?, ?)',
-            ['test', 'data']
-        )
+        const result = conn.exec('INSERT INTO test_table (name, value) VALUES (?, ?)', [
+            'test',
+            'data',
+        ])
         expect(result).toEqual([])
     })
 
@@ -111,11 +111,15 @@ describe('NativeConnectionManager exec branches', () => {
     })
 
     it('should handle run() without params', () => {
-        expect(() => conn.run("INSERT INTO tags (name, usage_count) VALUES ('test', 0)")).not.toThrow()
+        expect(() =>
+            conn.run("INSERT INTO tags (name, usage_count) VALUES ('test', 0)")
+        ).not.toThrow()
     })
 
     it('should handle run() with params', () => {
-        expect(() => conn.run('INSERT INTO tags (name, usage_count) VALUES (?, ?)', ['tag1', 0])).not.toThrow()
+        expect(() =>
+            conn.run('INSERT INTO tags (name, usage_count) VALUES (?, ?)', ['tag1', 0])
+        ).not.toThrow()
     })
 
     it('should handle scheduleSave as no-op', () => {

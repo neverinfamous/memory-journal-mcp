@@ -7,7 +7,11 @@
 
 import { describe, it, expect, afterAll } from 'vitest'
 import Database from 'better-sqlite3'
-import { rowToObject, queryRow, queryRows } from '../../src/database/sqlite-adapter/entries/shared.js'
+import {
+    rowToObject,
+    queryRow,
+    queryRows,
+} from '../../src/database/sqlite-adapter/entries/shared.js'
 
 describe('shared entry helpers', () => {
     // =========================================================================
@@ -53,7 +57,9 @@ describe('shared entry helpers', () => {
 
         // Set up a tiny test table
         db.exec('CREATE TABLE test_items (id INTEGER PRIMARY KEY, name TEXT, value INTEGER)')
-        db.exec("INSERT INTO test_items (name, value) VALUES ('alpha', 10), ('beta', 20), ('gamma', 30)")
+        db.exec(
+            "INSERT INTO test_items (name, value) VALUES ('alpha', 10), ('beta', 20), ('gamma', 30)"
+        )
 
         describe('queryRow', () => {
             it('should return a single row as Record<string, unknown>', () => {

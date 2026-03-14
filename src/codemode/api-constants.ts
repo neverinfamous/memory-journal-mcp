@@ -100,10 +100,7 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.search.searchByDateRange({ start_date: "2026-03-01", end_date: "2026-03-11" })',
         'mj.search.semanticSearch({ query: "authentication patterns" })',
     ],
-    analytics: [
-        'mj.analytics.getStatistics()',
-        'mj.analytics.getCrossProjectInsights()',
-    ],
+    analytics: ['mj.analytics.getStatistics()', 'mj.analytics.getCrossProjectInsights()'],
     relationships: [
         'mj.relationships.linkEntries({ from_entry_id: 1, to_entry_id: 2, relationship_type: "implements" })',
         'mj.relationships.visualizeRelationships({ entry_id: 1 })',

@@ -5,11 +5,258 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.1...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.0.0...HEAD)
 
-## [5.1.1](https://github.com/neverinfamous/memory-journal-mcp/compare/v5.1.0...v5.1.1) - 2026-03-10
+## [6.0.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.0.0) - 2026-03-14
+
+### Added
+
+- **Test Coverage Improvement (73% → 87%)** — Added 10 new test files with 320+ tests, restoring coverage lost after unreleased changes:
+  - **Briefing resources**: `briefing-context-section.test.ts`, `briefing-user-message.test.ts`, `briefing-github-section.test.ts` — covers all 4 context builders, the user message formatter, and GitHub section aggregation
+  - **HTTP transport**: `http-stateful.test.ts`, `http-legacy-sse.test.ts`, `http-security.test.ts` — covers session sweep, POST/GET/DELETE /mcp routes, SSE lifecycle, rate limiting, CORS, and security headers
+  - **GitHub integration**: `pull-requests.test.ts` — covers all 5 PullRequestsManager methods including Copilot bot detection
+  - **Tool handlers**: `copilot-tools.test.ts`, `export-tools.test.ts` — covers get_copilot_reviews and export_entries handlers
+  - **Utilities**: `github-helpers.test.ts` — covers resolveIssueUrl with all branch paths
+  - Fixed existing test breakages from `hostHeaderValidation` middleware injection (middleware indices, mock response `.json()` method, `TokenValidator` import)
+
+- **E2E Test Expansion (71 → 105 tests)** — Added 8 new Playwright E2E spec files and refactored shared helpers:
+  - `streaming.spec.ts` — raw SSE stream validation: GET /mcp with session ID, Last-Event-ID reconnection, Legacy SSE /sse endpoint event format (dedicated server on port 3107)
+  - `rate-limiting.spec.ts` — 429 trigger, Retry-After header, /health exemption (inline server spawns with MCP_RATE_LIMIT_MAX)
+  - `session-advanced.spec.ts` — cross-protocol guard, sequential session isolation, non-existent session ID rejection, post-DELETE session rejection
+  - `prompts.spec.ts` — listPrompts (16+ prompts), getPrompt, parameterized prompt (find-related)
+  - `resources-expanded.spec.ts` — memory://instructions, memory://significant, memory://graph/recent, memory://tags, unknown URI error handling
+  - `payloads-codemode.spec.ts` — mj_execute_code basic execution, multi-step workflow, blocked patterns (require/process), timeout enforcement
+  - `tool-filtering.spec.ts` — --tool-filter starter preset validation: correct subset exposed, core tools included, codemode/github/admin excluded (dedicated server on port 3104)
+  - `oauth-discovery.spec.ts` — RFC 9728 /.well-known/oauth-protected-resource endpoint with/without OAuth enabled, scope validation, 401 without token (dedicated server on port 3105)
+  - Refactored `helpers.ts` with shared `startServer()`/`stopServer()` lifecycle management
+  - Refactored `auth.spec.ts` and `stateless.spec.ts` to use shared helpers, eliminating ~60 lines of duplicated boilerplate
+
+  - **Agentic Workflows (GitHub Copilot)** — 4 new workflow scripts for automated repo maintenance using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot): `dependency-maintenance.md` (weekly npm + Docker dep updates, patch version bump, PR creation), `docs-drift-detector.md` (PR-triggered documentation accuracy audit), `ci-health-monitor.md` (weekly CI deprecation and action version check), `agentics-maintenance.yml` (daily expired entity cleanup). Includes `.github/workflows/README.md` with workflow map diagram and editing guidelines.
+
+- **WASM SQLite Fallback Removed** — Removed the `sql.js` WASM fallback adapter to simplify the architecture, test matrix, and dependency footprint. The server now runs exclusively on the high-performance native `better-sqlite3` driver. `--sqlite-native` and `--sqlite-wasm` flags have been removed.
+- **Harmonized Error Types (`error-types.ts`)** — New `ErrorCategory` enum (9 categories: validation, connection, query, permission, config, resource, authentication, authorization, internal), `ErrorResponse` interface, and `ErrorContext` interface. Part of the harmonized error handling standard across db-mcp, postgres-mcp, mysql-mcp, and memory-journal-mcp
+- **`MemoryJournalMcpError` Base Class (`errors.ts`)** — Enriched base error class with `category`, `code`, `suggestion`, `recoverable`, `details`, and `cause` properties. Includes `toResponse()` method returning structured `ErrorResponse`. 6 subclasses: `ConnectionError`, `QueryError`, `ValidationError`, `ResourceNotFoundError`, `ConfigurationError`, `PermissionError`
+- **`OAuthError` Extends `MemoryJournalMcpError`** — OAuth errors now inherit full error handling infrastructure (category, suggestion, toResponse()). Auto-categorizes as AUTHENTICATION (401) or AUTHORIZATION (403) based on httpStatus. Deprecated standalone `getWWWAuthenticateHeader()` utility; removed from barrel export
+- **`SecurityError` Extends `MemoryJournalMcpError`** — Security validation errors (`InvalidDateFormatError`, `PathTraversalError`) now participate in the enriched error hierarchy with VALIDATION category
+- **`formatHandlerError()` Function** — Enriched error formatter in `error-helpers.ts` returning full `ErrorResponse` objects with code, category, suggestion, and recoverable fields. Handles `MemoryJournalMcpError`, `ZodError`, and raw errors
+
+- **Configurable Briefing (`memory://briefing`)** — 5 new env vars / CLI flags to customize the session briefing
+  - `BRIEFING_ENTRY_COUNT` / `--briefing-entries` — Number of journal entries (default: 3)
+  - `BRIEFING_INCLUDE_TEAM` / `--briefing-include-team` — Include team DB entries in briefing
+  - `BRIEFING_ISSUE_COUNT` / `--briefing-issues` — Number of issues to list with titles (0 = count only)
+  - `BRIEFING_PR_COUNT` / `--briefing-prs` — Number of PRs to list with titles (0 = count only)
+  - `BRIEFING_PR_STATUS` / `--briefing-pr-status` — Show PR status breakdown (open/merged/closed)
+  - Issues and PRs row now always displayed in the `userMessage` table when GitHub is available
+  - `RULES_FILE_PATH` / `--rules-file` — Path to user rules file; shown in briefing with size and last-modified age
+  - `SKILLS_DIR_PATH` / `--skills-dir` — Path to skills directory; shown in briefing with skill count
+  - Expanded `## Rule & Skill Suggestions` in server instructions with guidance for adding, updating, and refining rules and skills
+  - `BRIEFING_WORKFLOW_COUNT` / `--briefing-workflows` — Number of recent workflow runs to list with names and status icons
+  - `BRIEFING_WORKFLOW_STATUS` / `--briefing-workflow-status` — Show workflow run status breakdown (passing/failing/pending/cancelled)
+  - CI Status row in briefing enhanced to show named runs (✅ build · ❌ deploy) or aggregated counts
+  - `get_copilot_reviews` tool — Fetch Copilot's code review findings for any PR (state, file-level comments with paths/lines)
+  - `BRIEFING_COPILOT_REVIEWS` / `--briefing-copilot` — Aggregate Copilot review state across recent PRs in briefing
+  - Copilot review patterns in server instructions (learn from reviews, pre-emptive checking, `copilot-finding` tag)
+
+- **OAuth 2.1 Authentication Module** — Full RFC-compliant OAuth 2.0 authentication and authorization for the HTTP transport
+  - 10 new files in `src/auth/`: types, errors, scopes, token-validator, oauth-resource-server, authorization-server-discovery, scope-map, auth-context, middleware, barrel
+  - RFC 9728 Protected Resource Metadata endpoint (`/.well-known/oauth-protected-resource`)
+  - RFC 8414 Authorization Server Metadata discovery with caching
+  - JWT validation via `jose` library with JWKS caching and issuer/audience verification
+  - 10 tool groups mapped to 3 OAuth scopes: `read` (core, search, analytics, relationships, export), `write` (github, team), `admin` (admin, backup, codemode)
+  - `AsyncLocalStorage`-based per-request auth context threading
+  - Express middleware for token extraction, validation, and scope enforcement
+  - Transport-agnostic utilities: `createAuthenticatedContext`, `validateAuth`, `formatOAuthError`
+  - 5 new CLI flags: `--oauth-enabled`, `--oauth-issuer`, `--oauth-audience`, `--oauth-jwks-uri`, `--oauth-clock-tolerance`
+  - Environment variable support: `OAUTH_ENABLED`, `OAUTH_ISSUER`, `OAUTH_AUDIENCE`, `OAUTH_JWKS_URI`
+
+- **Code Mode (`mj_execute_code`)** — Sandboxed JavaScript execution for multi-step workflows with 70-90% token reduction
+  - 9 new files in `src/codemode/`: types, security manager, VM sandbox, worker-thread sandbox, worker script, sandbox factory, API bridge, API constants, barrel
+  - `src/handlers/tools/codemode.ts` — Tool handler with security validation, rate limiting, and API bridge construction
+  - `mj.*` namespaced API exposes all 44 tools across 10 groups (core, search, analytics, relationships, export, admin, github, backup, team, codemode)
+  - Positional argument support, method aliases, per-group `help()` for discoverability
+  - Production sandbox: `node:worker_threads` with V8 isolate boundary, `node:vm` secondary isolation, MessagePort RPC bridge
+  - Resource limits: code length (50KB), execution timeout (30s), memory (128MB), rate limiting (60 executions/min), result size (10MB)
+  - `--sandbox-mode <mode>` CLI flag: `worker` (production, default) or `vm` (lightweight)
+  - Tool count: 42 → 44 tools, tool groups: 9 → 10
 
 ### Changed
+
+- **MCP Builder Naming Alignment** — Renamed `ErrorResponseFields` → `ErrorFieldsMixin` and `formatHandlerErrorResponse()` → `formatHandlerError()` to match the cross-server naming convention in the mcp-builder skill. Renamed source file `error-response-fields.ts` → `error-fields-mixin.ts`. Zero logic changes.
+
+- **Server Instructions Session Start** — Replaced numbered-list "Session Start" with bold **REQUIRED** directive to read `memory://briefing` and present `userMessage` to the user. Moved server name discovery plumbing below the action to prevent agents from misinterpreting the section as configuration guidance.
+
+- **Dependency Updates** — `better-sqlite3` bumped from `12.6.2` → `12.8.0` (skips non-viable `12.7.0`/`12.7.1` intermediates — both were yanked due to Electron v41 V8 ABI breakage and the withdrawn SQLite 3.52.0 release). `12.8.0` ships SQLite **3.51.3** (WAL-reset bug fix), resolves the `HolderV2()` V8 API compat issue, and carries no breaking API changes. Also bumped non-breaking transitive dependencies.
+
+- **Unified Audit Fixes**
+  - SHA-pinned `actions/checkout` in `auto-release.yml` to commit SHA, matching all other workflows
+  - Removed manually-maintained `LABEL version` from `Dockerfile` — Docker tags and OCI metadata already convey version info without drift risk
+  - Removed dead `matchesCorsOrigin()` function from `security.ts` — unused since `setCorsHeaders()` was rewritten to use CodeQL-safe record-lookup pattern. Removed 6 associated tests and barrel re-export
+  - Removed unused `crypto` import from `sandbox.ts` (only `worker-sandbox.ts` uses it for `poolId`)
+  - Wired `enableHSTS` config to CLI via `--enable-hsts` flag and `MCP_ENABLE_HSTS` env var — was previously a dead config path with no way to enable HSTS from CLI or environment
+
+- **MCP Builder Compliance (D3/D7)**
+  - Added `openWorldHint: false` to 28 non-GitHub tool annotations across 9 handler files (`core.ts`, `search.ts`, `relationships.ts`, `team.ts`, `backup.ts`, `export.ts`, `analytics.ts`, `admin.ts`, `codemode.ts`) — explicitly declares local-only SQLite operations
+  - Added configurable instruction level via `--instruction-level` CLI flag and `INSTRUCTION_LEVEL` env var (values: `essential`, `standard`, `full`; default: `standard`) — controls AI briefing depth in MCP `initialize` response
+
+- **Pass 2 Testing Fixes**
+  - Improved `link_entries` error message when source or target entry doesn't exist — now returns `"One or both entries not found (from: X, to: Y)"` instead of raw SQLite `"FOREIGN KEY constraint failed"` error
+  - `add_to_vector_index` now surfaces the actual error message from embedding generation/storage failures instead of a generic `"Failed to generate or store embedding"` string — enables diagnosis of model loading, ONNX runtime, or sqlite-vec issues
+  - `get_github_issues` and `get_github_prs` `inputSchema` now uses `relaxedNumber()` for `limit` parameter — previously used `z.number()` which caused the MCP SDK to pre-validate and produce raw `-32602` errors instead of structured handler errors when a string was passed
+  - Code Mode `mj.admin.help()` examples now list all 5 admin tools (`updateEntry`, `deleteEntry`, `mergeTags`, `rebuildVectorIndex`, `addToVectorIndex`) — previously missing `mergeTags` and `addToVectorIndex`
+  - Server instructions Code Mode section now documents `readonly` mode behavior — write-only groups (e.g., `admin`) are empty when `readonly: true`
+
+- **Pass 1 Retest Fixes**
+  - `rebuild_vector_index` now returns `failedEntries` count, `firstError` with the actual embedding error message, and sets `success: false` when every entry fails — previously returned `success: true, entriesIndexed: 0` with no indication of failure
+  - Added `getRecent` alias for `getRecentEntries` in Code Mode (`mj.core.getRecent()`) — agents commonly try this natural camelCase abbreviation
+  - `semantic_search` hint is now governed by a quality floor (0.5) — if all returned results score below 0.5, a hint is included indicating results may be noise, even when `entries.length > 0`. Previously, `hint_on_empty` was effectively dead code because the default `similarity_threshold` (0.25) always returned noise matches from the MiniLM model
+  - `semantic_search` quality gate hint is now always shown regardless of `hint_on_empty` — the `hint_on_empty` flag only controls advisory hints for empty indexes and zero-match queries, not the noise detection warning. Previously, `hint_on_empty=false` suppressed all hints including the quality gate, meaning clients received noisy results with no warning
+  - `export_entries` `entry_types` filter now scans the full database instead of post-filtering a truncated result set — previously, type-only queries fetched the most recent `limit` entries via `getRecentEntries()` then filtered, silently returning empty results when no matching types existed in the window
+  - `merge_tags` now wraps the entire operation in an explicit `db.transaction()` and cleans orphaned `entry_tags` rows (referencing permanently-deleted entries) before re-linking — previously failed with `FOREIGN KEY constraint failed` when both source and target tags existed with overlapping entries
+  - Server instructions now specify a **briefing confirmation format** — short bullet list of key facts (entry counts, GitHub status, milestones, template resources, optional metadata) instead of tables or elaborate formatting
+  - `test-tools.md` prerequisites no longer instruct agents to read `memory://briefing` separately — detailed briefing testing is deferred to Phase 1.2 to prevent duplicate reads
+  - `close_github_issue_with_entry` with `move_to_done: true` now uses `addProjectItem` (idempotent) to resolve the item ID directly — bypasses the race condition where a newly-added item was not yet visible on the board during the immediately-following close call
+
+- **MCP Builder Compliance Audit Fixes**
+  - Added `error` field to `ErrorFieldsMixin` — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions
+  - Added DNS rebinding protection (`hostHeaderValidation()`) to HTTP transport — applies MCP SDK middleware when no auth is configured as defense-in-depth against CVE-2025-66414
+  - SHA-pinned all GitHub Actions across 6 workflow files (`lint-and-test.yml`, `codeql.yml`, `publish-npm.yml`, `secrets-scanning.yml`, `security-update.yml`, `docker-publish.yml`) to prevent supply chain injection via force-pushed tags
+
+- **Performance Audit Fixes (Round 4)**
+  - Enabled tsup `splitting: true` — shared code between `cli.js` and `index.js` is now extracted into a common chunk, reducing total dist size from 875 KB to 455 KB (~48% reduction, ~420 KB saved)
+  - Migrated `TagsManager` and `RelationshipsManager` from legacy `exec()` (which translated rows to `{ columns, values }` arrays) to direct `db.prepare()` calls, matching the pattern already used by `EntriesManager`. Eliminates row-format translation overhead and the manual `rowToObject` helper. Uses native `result.lastInsertRowid` instead of `SELECT last_insert_rowid()` query.
+
+- **Code Quality Audit Fixes (Round 10)**
+  - Extracted `MAX_CONTENT_LENGTH = 50_000` constant into `schemas.ts`, replacing 4 inline `max(50000)` literals in `core.ts` and `team.ts`
+  - Extracted `DATE_MIN_SENTINEL` / `DATE_MAX_SENTINEL` constants into `schemas.ts`, replacing 3 inline `'1970-01-01'` / `'2999-12-31'` literals in `export.ts`
+  - Extracted `CORS_PREFLIGHT_MAX_AGE_SECONDS = 86_400` constant into `types.ts`, replacing inline `'86400'` in `security.ts`
+  - Extracted `JSONRPC_SERVER_ERROR = -32000` and `JSONRPC_INTERNAL_ERROR = -32603` constants into `types.ts`, replacing 6 inline literals across `stateless.ts`, `stateful.ts`, and `legacy-sse.ts`
+  - Cached `collectNonCodeModeTools()` result in `codemode.ts` using referential identity check on `ToolContext`, matching the caching pattern in `handlers/tools/index.ts`
+
+- **Stale sql.js Comment Cleanup** — Updated 8 stale comment references to sql.js across 5 source files (`scheduler.ts`, `schema.ts`, `interfaces.ts`, `native-connection.ts`, `sqlite-adapter/index.ts`) to accurately reflect the better-sqlite3 native-only architecture. Comment-only changes, zero functional impact.
+
+- **Copilot Instructions Path Fixes** — Updated `.github/copilot-instructions.md` architecture tree to reflect kebab-case renames (`server-instructions.ts`, `sqlite-adapter/`, `tool-filter.ts`, `github-integration/`, `mcp-server.ts`, `scheduler.ts`, `http/`) and moved reference file paths (`test-server/` → `docs/`). Updated descriptions to reflect better-sqlite3 native-only architecture and modularized directory structures.
+
+- **Code Quality Audit Fixes (Round 9)**
+  - Consolidated 4 duplicate `resolveOwnerRepo` implementations (in `milestone-tools.ts`, `read-tools.ts`, `copilot-tools.ts`, and inlined in `insights-tools.ts`) into the single shared helper in `helpers.ts` with optional `entityLabel` parameter
+  - Extracted resource and prompt registration from `mcp-server.ts` (457 lines) into new `server/registration.ts` module, reducing the main server file to ~375 lines
+
+- **Code Map Audit Fixes** — Corrected handler→tool mapping table: swapped `update_entry`/`delete_entry` from core to admin, and `test_simple`/`list_tags` from admin to core to match actual source files. Fixed GitHub sub-handler tool counts (`issue-tools.ts` 4→2, `kanban-tools.ts` 1→2, removed non-existent `add_project_item`). Added missing `src/index.ts` to directory tree. Fixed backup tool name `create_backup`→`backup_journal`. Moved `confirm-briefing` prompt from `github.ts` to `workflow.ts` listing (workflow: 9→10, github: 7→6). Removed phantom `database/core/index.ts` barrel from directory tree.
+
+- **README/DOCKER_README Audit Fixes** — Fixed tool filter `full` count (43→44) to match `tool-reference.md` source of truth. Fixed coverage badge URL encoding (`%78`→`%25`) and updated stale badge values (coverage 74%, tests 910). Updated stack diagram tool count (43→44). Corrected MCP annotations date reference (2025-11-25→2025-03-26) in README Security section.
+
+- **README/DOCKER_README Session Initialization Rule** — Added a `## Rule` section with explicit instructions for AI agents to read `memory://briefing` before processing user requests. This supplements the MCP `instructions` field (which not all clients surface) by providing a README-level directive that clients like Claude Desktop and Cursor parse directly, making briefing initialization 100% reliable across all MCP clients.
+
+- **README/DOCKER_README Cross-Agent Memory** — Added **Cross-Agent Memory** feature row to both README and DOCKER_README feature tables, highlighting the IDE ↔ Copilot bridge via journal entries. Added Copilot Setup Guide link to Documentation & Resources sections.
+
+- **Wiki: Copilot Integration Page** — Created dedicated `Copilot-Integration.md` wiki page documenting the cross-agent memory bridge between IDE agents and GitHub Copilot (three usage patterns, setup for both directions, recommended workflow, security notes). Added to `_Sidebar.md` and `Home.md` navigation. Fixed stale tool counts (43→44) in `Home.md`.
+
+- **README/DOCKER_README "What Sets Us Apart" Table** — Converted the 14-bullet "Key Benefits" list into a 17-row feature table matching db-mcp's "What Sets Us Apart" format. Added rows for Configurable Briefing, OAuth 2.1 + Access Control, HTTP Streaming Transport, Production-Ready Security, Strict TypeScript, and MCP 2025-03-26 compliance. Removed all WASM/Dual-Backend/sql.js references (variant rows, stack diagram, Technical Highlights, security bullets) to reflect the native-only `better-sqlite3` architecture. Applied same changes to `DOCKER_README.md`.
+
+- **Performance Audit Fixes (Round 3)**
+  - Pre-compiled `IS_MUTATION_RE` regex as module-level constant in `native-connection.ts` — eliminates repeated regex compilation on every `exec()` call
+  - Replaced `new Date()` object allocation in `mergeAndDedup` sort comparator with `localeCompare()` in `search.ts` — ISO 8601 timestamps sort lexicographically without parsing
+  - Moved `fetchCopilotReviews` into main `Promise.all` block in `github-section.ts` — runs in parallel with 4 other GitHub API calls instead of sequentially after them
+
+- **FTS5 Full-Text Search** — Replaced `LIKE '%query%'` substring matching in `search_entries` with SQLite FTS5 full-text search. Adds BM25 relevance ranking, phrase queries (`"exact match"`), prefix matching (`auth*`), and boolean operators (`error NOT warning`). Uses `content=memory_journal` content-sync mode (no duplicate storage), Porter stemmer with unicode61 tokenizer, and three auto-sync triggers (INSERT/UPDATE/DELETE). Gracefully falls back to LIKE on FTS5 syntax errors (e.g. SQL injection payloads, special characters). Existing databases auto-populate the FTS5 index on first migration via `rebuild` command. Updated `search_entries` tool description and server instructions with FTS5 query syntax documentation.
+
+- **Generator Script Fix** — Fixed `scripts/generate-server-instructions.ts` to output kebab-case `server-instructions.ts` (was PascalCase `ServerInstructions.ts`, a dead file with wrong import path). Fixed import from `ToolFilter.js` → `tool-filter.js`. Removed stale `_resources: ResourceDefinition[]` parameter from `server-instructions-function-body.ts` to match actual callers. Deleted orphaned `ServerInstructions.ts`.
+
+- **Test Artifact Consolidation** — Consolidated scattered test output directories (`coverage/`, `test-results/`, `test-server/*.db*`, `test-server/backups/`, `backups/`) into a single `.test-output/` directory with `coverage/` (vitest), `playwright/` (Playwright results), and `e2e/` (E2E databases and scheduler backups). Moved `code-map.md`, `test-tools.md`, and `tool-reference.md` from `test-server/` to `docs/`. Updated `.gitignore` and `.dockerignore` to use single `.test-output/` entry. No source code changes needed — the backup system auto-adapts via `dirname(dbPath)` path derivation.
+
+- **Vector Search Backend** — Replaced `vectra` with `sqlite-vec` for vector search. Embeddings now stored in the main SQLite database via a `vec0` virtual table (`vec_embeddings`), eliminating the separate `.vectra_index/` directory and 86 transitive dependencies (460→376 packages). KNN search uses SQL `WHERE embedding MATCH ? ORDER BY distance LIMIT ?` queries directly. `removeEntry()` and `getStats()` are now synchronous (better-sqlite3 is synchronous). NativeConnectionManager loads the sqlite-vec extension on init with a race-condition guard for concurrent close during async import.
+
+- **Build Tooling** — Replaced `tsc` with `tsup` (esbuild) for production builds. Output reduced from 372 files (1.04 MB) to 6 files (875 KB) with tree-shaking. Build speed: ~9s vs 19s. Type checking remains as a separate `npm run typecheck` step (`tsc --noEmit`).
+- **ML Embedding Library** — Migrated from `@xenova/transformers` v2 (archived, unmaintained) to `@huggingface/transformers` v3.8.1 (official Hugging Face org, actively maintained). API change: `quantized: true` → `dtype: 'q8'`. Same `Xenova/all-MiniLM-L6-v2` model, same embedding quality. Updated README, SECURITY, and DOCKER_README references.
+
+- **Performance Audit Fixes (Round 2)**
+  - Replaced N+1 `getEntryById` calls in `semantic_search` handler with batch `getEntriesByIds()` — single `WHERE id IN(…)` query + `batchGetTagsForEntries` instead of N separate lookups
+  - Replaced per-item sequential `deleteItem()` loop in `rebuildIndex()` with O(1) directory wipe + recreate — eliminates O(n) serial file I/O during vector index rebuilds
+  - Parallelized 4 independent GitHub API calls (`fetchCiStatus`, `fetchIssuesAndPrs`, `fetchMilestones`, `fetchInsights`) in briefing resource using `Promise.all()` — reduces cold-load latency from additive to max of the 4 calls
+
+- **Performance Audit Fixes**
+  - Replaced `getStatistics('week')` with `getActiveEntryCount()` in `buildJournalContext()` and `buildTeamContext()` — briefing only needs `totalEntries`, not the full stat breakdown (~5× fewer queries per session start)
+  - Replaced N+1 exist-check loop in `mergeTags()` with bulk pre-fetch + batch `INSERT OR IGNORE` — O(1) vs O(N) queries during tag merge operations
+
+- **Code Quality Audit Fixes (Round 8)**
+  - Extracted `milestoneCompletionPct()` helper into `resources/shared.ts`, replacing 4 inline duplicate calculations across `resources/github.ts` (×3) and `briefing/github-section.ts` (×1)
+  - Added `logger.debug()` to 8 empty `catch {}` blocks in `briefing/context-section.ts` (team context, rules file, skills dir) and `briefing/github-section.ts` (CI status, issues/PRs, milestones, traffic, insights) for improved troubleshooting
+
+- **Code Quality Audit Fixes (Round 7)**
+  - Replaced two remaining `inactiveThresholdDays: 7` literals with `INACTIVE_THRESHOLD_DAYS` constant in `analytics.ts`
+  - Hoisted `DEDUP_KEY_LENGTH` from local function scope to module-level named constant in `search.ts`
+  - Removed misleading `async` keyword from `DatabaseAdapterFactory.create()` in `adapter-factory.ts` (synchronous constructor wrapped in `Promise.resolve()`)
+
+- **Code Quality Audit Fixes (Round 6)**
+  - Eliminated 10 `@typescript-eslint/no-non-null-assertion` lint errors in `resources/github.ts` by threading the narrowed `github` instance through `GitHubRepoResolved` from `resolveGitHubRepo()` — downstream handlers now destructure `github` instead of using `context.github!`
+  - Extracted `MS_PER_DAY` constant in `prompts/workflow.ts`, replacing 3 inline `86400000` magic values
+
+- **Code Quality Audit Fixes (Round 5)**
+  - Extracted `resolveGitHubRepo()` + `isResourceError()` guard helper into `resources/shared.ts`, eliminating ~60 lines of duplicated GitHub availability checks across 4 resource handlers and the briefing section
+  - Added debug logging to 4 silent `catch {}` blocks in `vector-search-manager.ts` (`removeEntry`, `rebuildIndex` deletion/embedding, `getStats`) for improved troubleshooting
+  - Extracted 5 inline API limits into named constants (`RESOURCE_ISSUE_LIMIT`, `RESOURCE_PR_LIMIT`, `RESOURCE_WORKFLOW_LIMIT`, `RESOURCE_STATUS_MILESTONE_LIMIT`, `RESOURCE_MILESTONE_LIMIT`) in `resources/github.ts`
+  - Parallelized 6 serial GitHub API calls in `github/status` resource handler using `Promise.allSettled()` for reduced latency
+
+- **Code Quality Audit Fixes (Round 4)**
+  - Added debug logging to 8 silent `catch {}` blocks across `github-section.ts`, `resources/github.ts`, `core.ts`, and `backup.ts` for improved debuggability
+  - Wrapped `github/milestones` and `milestones/{number}` resource handler returns in `{ data, annotations }` structure for consistency with other GitHub resource handlers
+  - Parallelized sequential `getCopilotReviewSummary()` API calls in `fetchCopilotReviews()` using `Promise.all()` for faster briefing generation
+
+- **Code Quality Audit Fixes (Round 3)**
+  - Extracted duplicated `resolveIssueUrl()` logic from `core.ts` and `team.ts` into shared `utils/github-helpers.ts`
+  - Replaced magic numbers with named constants: `INACTIVE_THRESHOLD_DAYS`, `MS_PER_DAY`, `MAX_TAGS_PER_PROJECT` in `analytics.ts`; `MERMAID_CONTENT_PREVIEW_LENGTH` in `relationships.ts`; `DEDUP_KEY_LENGTH` in `search.ts`; `LATEST_ENTRY_PREVIEW_LENGTH` in `server-instructions.ts`
+  - Fixed N+1 tag query in `team_search` with batch `SELECT ... WHERE entry_id IN (...)` query
+  - Consolidated 4 serial `SELECT COUNT(*)` queries in `getHealthStatus()` into a single subquery
+  - Moved `scheduler` declaration before `handleResourceRead` closure to eliminate temporal hazard
+  - Removed unused `_resources` parameter and `ResourceDefinition` type from `generateInstructions()`
+  - Split `auth/middleware.ts` (519 lines) by extracting transport-agnostic auth functions to `auth/transport-agnostic.ts`
+
+- **Code Quality Audit Fixes (Round 2)**
+  - Extracted `ToolRegistration` interface for typed `getTools()` return, eliminating ~10 unsafe `as` casts in `mcp-server.ts` tool registration
+  - Added typed `pragma(command: string)` method to `IDatabaseAdapter` and `IDatabaseConnection` interfaces, eliminating unsafe `getRawDb() as { pragma/run }` casts in `scheduler.ts` and `backup.ts`
+  - Typed `getStatistics()` return from `unknown` to `Record<string, unknown>` on `IDatabaseAdapter`
+  - Added `queryRow()` / `queryRows()` typed query helpers to entries shared module
+  - Extracted `autoIndexEntry()` helper into `utils/vector-index-helpers.ts`, removing 3-way fire-and-forget vector indexing duplication across `core.ts` and `admin.ts`
+  - Extracted `handleResourceRead()` helper in `mcp-server.ts`, removing ~30 lines of duplicated resource response formatting between template and static resource registration
+  - Replaced magic numbers with named constants: `MAX_RELATIONSHIP_SCORE_AT`, `MAX_CAUSAL_SCORE_AT`, `RECENCY_WINDOW_DAYS` in `importance.ts`; `MAX_PERIOD_ROWS` in `statistics.ts`; `MAX_BACKUP_NAME_LENGTH` in `backup.ts`
+  - Removed no-op `await Promise.resolve()` calls in `scheduler.ts` (`runBackup`, `runVacuumOptimize`)
+  - Added debug-level logging to previously silent WAL checkpoint error catch block in `backup.ts`
+
+- **Code Quality Audit Fixes (Round 1)**
+  - Renamed 7 `PascalCase` files to kebab-case to match workspace standards (`sqlite-adapter.ts`, `tool-filter.ts`, `github-integration.ts`, `mcp-server.ts`, `mcp-logger.ts`, `vector-search-manager.ts`, `server-instructions.ts`, `scheduler.ts`) and updated 27 import references across the codebase
+  - Converted 13 bare `throw new Error(...)` statements to typed error classes (`ConfigurationError`, `ResourceNotFoundError`, `ConnectionError`, `QueryError`, `ValidationError`) for consistent error handling and standard structured error responses (`vector-search-manager.ts`, `sqlite-adapter.ts`, `handlers/resources/index.ts`, `handlers/prompts/index.ts`, `authorization-server-discovery.ts`, `sandbox-factory.ts`)
+  - Renamed `src/types/sql.js.d.ts` to `sql-js.d.ts` to ensure strict compliance with kebab-case naming standard
+  - Eliminated `eslint-disable-next-line` pragmas where possible (e.g. `no-control-regex` solved natively in `security-utils.ts`, `no-explicit-any` removed in `backup.ts`)
+  - Strictified `z.object({})` Zod schemas by appending `.strict()` for safer payload validation on empty schemas (`admin.ts`, `backup.ts`, `core.ts`, `search.ts`, `read-tools.ts`)
+  - Consolidated duplicated `resolveAuthor` / `resolveTeamAuthor` logic from `core.ts` and `team.ts` into shared `resolveAuthor()` in `security-utils.ts`
+  - Removed `as unknown as Record<string, unknown>` type cast in `crud.ts` by adding `timestamp?: string` to `CreateEntryInput` interface
+  - Removed deprecated `SERVER_INSTRUCTIONS` constant from `server-instructions.ts` (zero consumers)
+  - Split 603-line `briefing.ts` into `briefing/` directory: `github-section.ts`, `context-section.ts`, `user-message.ts`, `index.ts` (all under 260 lines)
+  - Replaced N+1 author queries in `team.ts` with single batch `SELECT ... WHERE id IN (...)` via `batchFetchAuthors()` helper
+  - Replaced N+1 per-project tag queries in `analytics.ts` with single batch query grouped by `project_number`
+
+- **Performance Optimization (I/O)** — Refactored blocking synchronous file system operations (`fs.writeFileSync`, `fs.readFileSync`, `fs.mkdirSync`, `fs.copyFileSync`, `fs.statSync`) in `BackupManager` to asynchronous `fs.promises` equivalents to prevent freezing the Node.js event pool during journal backups.
+- **Performance Optimization (I/O)** — Refactored synchronous `fs.mkdirSync` and `fs.rmSync` in `VectorSearchManager` to asynchronous `fs.promises` equivalents for non-blocking directory operations during index initialization and rebuilding.
+- **Performance Optimization (Build)** — Disabled generating `.map` source maps in production build (disabled `sourceMap` in `tsconfig.json`), saving approx 1-2MB in the final compiled bundle.
+- **Performance Optimization (Memory)** — Refactored unbounded `SELECT * FROM memory_journal` queries across core handlers (`entries.ts`, `templates.ts`, `github.ts`, `core.ts`, `stats.ts`, `graph.ts`, `workflow.ts`) to use explicit `ENTRY_COLUMNS` projections, reducing I/O latency and WASM memory overhead.
+- **Performance Optimization (Bundle)** — `WasmSqliteAdapter` initialization is now strictly loaded via a dynamic `await import` block inside `DatabaseAdapterFactory.create`. This keeps the heavy WASM binaries fully isolated from the top-level bundle payload on native platforms.
+- **Performance Optimization (Database)** — Unbounded `SELECT * FROM relationships` wildcard lookups have been restricted to strict `id, from_entry_id, to_entry_id, relationship_type, description, created_at` column mappings.
+- **Performance Optimization (Sandbox)** — Capped Code Mode Result serialization using strict buffer tracking logic to prevent `JSON.stringify` from creating maximum V8 strings that blow through native application memory.
+- **GitHub API Caching** — Implemented a bounded (max 100 items), TTL-aware LRU cache strategy in `GitHubClient` to prevent memory leaks on long-running instances.
+- **Core Handlers Modularized**:
+  - **SQLite Adapter** — Split monolithic `src/database/sqlite-adapter.ts` (1640 lines) into `src/database/sqlite-adapter/` containing `connection.ts`, `tags.ts`, `entries.ts`, `relationships.ts`, `backup.ts`, and `index.ts`.
+  - **GitHub Integration** — Split monolithic `src/github/github-integration.ts` (1707 lines) into `src/github/github-integration/` containing focused modules (`auth.ts`, `repos.ts`, `issues.ts`, `pull-requests.ts`, `search.ts`, `copilot.ts`, `index.ts`).
+  - **Core Resources** — Split monolithic `src/handlers/resources/core.ts` (823 lines) into `src/handlers/resources/core/` containing `briefing.ts`, `instructions.ts`, `stats.ts`, and `index.ts`.
+  - **Briefing Resource** — Split monolithic `src/handlers/resources/core/briefing.ts` (603 lines) into `src/handlers/resources/core/briefing/` containing focused builders (`github-section.ts`, `context-section.ts`, `user-message.ts`) and `index.ts`.
+- **Test Directory Renamed** — Renamed `src/auth/__tests__` to `src/auth/tests` to comply with the project's strict kebab-case naming standard.
+- **HTTP Transport Modularized** — Continued splitting `src/transports/http.ts` and `src/transports/http/server.ts` into a fully modularized directory:
+  - `types.ts` — Configuration interface (`HttpTransportConfig`), constants, rate limiting types
+  - `security.ts` — Client IP extraction, built-in rate limiting, CORS (exact-match multi-origin), security headers
+  - `handlers.ts` — Health check, root info, bearer token auth middleware
+  - `server/` — Split `server.ts` into `stateless.ts`, `stateful.ts`, `legacy-sse.ts`, and `index.ts`
+  - `index.ts` — Barrel re-export
+- **CORS Configuration** — `corsOrigin: string` changed to `corsOrigins: string[]` for multi-origin support. CLI `--cors-origin` accepts comma-separated values. Exact-match origins only (CodeQL-safe record-lookup pattern).
+- **HSTS Configuration** — HSTS is now config-driven via `enableHSTS: true` instead of auto-detecting from `X-Forwarded-Proto` header.
+- **Cache-Control Header** — Strengthened from `no-store` to `no-store, no-cache, must-revalidate`.
 
 - **Dependency Updates**
   - `@types/node`: 25.3.5 → 25.4.0 (minor)
@@ -20,6 +267,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `axios` override: 1.13.5 → 1.13.6 (patch)
   - `tmp` override: 0.2.4 → 0.2.5 (patch)
   - GitHub Actions: `docker/setup-buildx-action` (v3 → v4), `docker/metadata-action` (v5 → v6), `docker/login-action` (v3 → v4), `aquasecurity/trivy-action` (0.34.1 → 0.35.0), `docker/scout-action` (v1.20.1 reverted to v1.18.2 — upstream 403 on asset download)
+
+### Fixed
+
+- **Cross-DB `is_personal` Filter Bypass** — `search_entries`, `search_by_date_range`, and `semantic_search` now correctly honor `is_personal: true` when a team DB is present. Previously, team entries (which are never personal) were included in results even when `is_personal: true` was explicitly specified: `searchEntries` and `searchByDateRange` now skip the team DB entirely when `is_personal: true`, and `semanticSearch` now post-filters results by `isPersonal` when the parameter is set.
+
+- **Cross-DB Search Limit Bug** — `search_entries` and `search_by_date_range` now use `Math.min(limit * 2, 500)` for per-database queries when a team DB is present, then apply the user's requested limit during the final `mergeAndDedup` step. Previously, the user's limit (default 10) was passed directly to each individual database query, causing FTS5 BM25 ranking in the larger personal DB to silently drop matching entries that ranked below position N, even when the total matching entries across both databases was well under the limit.
+
+- **Mermaid Graph Resources Return Raw Text** — `memory://graph/recent`, `memory://graph/actions`, and `memory://kanban/{n}/diagram` now return raw Mermaid diagram strings instead of JSON envelopes (`{ format, diagram, ... }`). Output is directly pasteable into [mermaid.live](https://mermaid.live/) without `UnknownDiagramError`. The `text/plain` mimeType now correctly matches the response body.
+
+- **Vector Index sqlite-vec Compatibility** — Fixed two sqlite-vec `vec0` virtual table incompatibilities that prevented all vector operations (`rebuild_vector_index`, `add_to_vector_index`, `semantic_search`):
+  1. Entry IDs must be `BigInt` through `better-sqlite3` bindings — regular JavaScript `number` values are rejected with `"Only integers are allows for primary key values"`. Fixed by coercing with `BigInt()`, matching the [official sqlite-vec Node.js example](https://github.com/asg017/sqlite-vec/blob/main/examples/simple-node/demo.mjs).
+  2. `vec0` virtual tables don't support `INSERT OR REPLACE` conflict resolution — upserts fail with `"UNIQUE constraint failed"`. Changed `addEntry()` to DELETE+INSERT pattern.
+
+- Resolved Zod `4.3.6` dependency resolution conflict with OpenAI SDK via explicit `package.json` overrides.
+- Replaced `as unknown` type assertions with strict types where appropriate (`wasm-connection.ts`, `backup.ts`) and auth test mocks with properly mapped `QueryResult` types and `Object.create(Type.prototype)` mock instantiation.
+- Resolved native driver (better-sqlite3) `datatype mismatch` and `more than one statement` exceptions by strictly enforcing `IDatabaseConnection`'s `exec` implementation in analytical routes.
+- Abstracted `rawDb.exec` within the `relationships` tool group to an integrated adapter `executeRawQuery` to prevent query injection bypasses.
+- Secured native snapshot backups by switching from blocked in-memory blob exports to transactional file-system copies with `wal_checkpoint(TRUNCATE)`.
+- Fixed empty-array query result assertions across analytics, team, prompts, and resource handlers caused by SQLite native driver mismatching original `sql.js` row-wrapping (`rawDb.exec()`) structures natively by safely standardizing `executeRawQuery` mapping.
+- **Code Mode `timeout` Parameter Ignored** — The `timeout` parameter on `mj_execute_code` was parsed by the Zod schema but never forwarded to the sandbox pool. All executions used the default 30s timeout regardless of the user-specified value. Added per-call `timeoutMs` override to `ISandbox`, `ISandboxPool`, and all sandbox/pool implementations (`WorkerSandbox`, `WorkerSandboxPool`, `CodeModeSandbox`, `SandboxPool`). Handler now destructures `timeout` and passes it to `pool.execute()`.
+
+### Security
+
+- **Dependency Updates** — Bumped `undici` to 7.24.1 to address multiple CVEs (CVE-2026-1525, CVE-2026-1528, CVE-2026-2581, CVE-2026-1527, CVE-2026-2229, CVE-2026-1526) causing request smuggling, DoS, and memory exhaustion risks.
+- **Built-in Rate Limiting** — Replaced `express-rate-limit` dependency with zero-dependency implementation. Health endpoint bypass, `Retry-After` header on 429, periodic cleanup with `.unref()`.
+- **Server Timeouts** — Added HTTP request (120s), keep-alive (65s), and headers (66s) timeouts to mitigate DoS attacks.
+- **CORS Enhancements** — `Access-Control-Max-Age: 86400`, `Vary: Origin` for specific origin matching, `corsAllowCredentials` option.
+- **Trust Proxy** — `trustProxy` config option for correct `X-Forwarded-For` client IP extraction behind reverse proxies.
+- **Max Body Size** — Configurable `maxBodySize` (default: 1MB) to prevent large request body attacks.
+
+### Removed
+
+- **`express-rate-limit` Dependency** — Replaced by built-in rate limiter.
 
 ## [5.1.0](https://github.com/neverinfamous/memory-journal-mcp/compare/v5.0.1...v5.1.0) - 2026-03-07
 
@@ -1358,4 +1638,3 @@ npm install -g memory-journal-mcp
 - Git and GitHub CLI integration
 - SQLite FTS5 full-text search
 - Optional FAISS semantic search
-

@@ -110,34 +110,40 @@ const TestSimpleSchema = z.object({
 // Output Schemas
 // ============================================================================
 
-const CreateEntryOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entry: EntryOutputSchema.optional(),
-    sharedWithTeam: z.boolean().optional(),
-    author: z.string().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const CreateEntryOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: EntryOutputSchema.optional(),
+        sharedWithTeam: z.boolean().optional(),
+        author: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const EntryByIdOutputSchema = z.object({
-    entry: EntryOutputSchema.optional(),
-    relationships: z.array(RelationshipOutputSchema).optional(),
-    importance: z.number().nullable().optional(),
-    importanceBreakdown: ImportanceBreakdownSchema.optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const EntryByIdOutputSchema = z
+    .object({
+        entry: EntryOutputSchema.optional(),
+        relationships: z.array(RelationshipOutputSchema).optional(),
+        importance: z.number().nullable().optional(),
+        importanceBreakdown: ImportanceBreakdownSchema.optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const TestSimpleOutputSchema = z.object({
-    message: z.string(),
-}).extend(ErrorFieldsMixin.shape)
+const TestSimpleOutputSchema = z
+    .object({
+        message: z.string(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const TagsListOutputSchema = z.object({
-    tags: z.array(TagOutputSchema).optional(),
-    count: z.number().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
-
-
+const TagsListOutputSchema = z
+    .object({
+        tags: z.array(TagOutputSchema).optional(),
+        count: z.number().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -160,7 +166,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const input = CreateEntrySchema.parse(params)
 
                     // Auto-populate issueUrl if issue_number provided without issueUrl
-                    const resolvedIssueUrl = resolveIssueUrl(github, input.issue_number, input.issue_url)
+                    const resolvedIssueUrl = resolveIssueUrl(
+                        github,
+                        input.issue_number,
+                        input.issue_url
+                    )
 
                     const entry = db.createEntry({
                         content: input.content,
@@ -207,10 +217,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status,
                             })
-                            teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
-                                author,
-                                teamEntry.id,
-                            ])
+                            teamDb.executeRawQuery(
+                                'UPDATE memory_journal SET author = ? WHERE id = ?',
+                                [author, teamEntry.id]
+                            )
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {

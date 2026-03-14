@@ -36,10 +36,10 @@ export class AuthorizationServerDiscovery {
         this.cacheTtl = config.cacheTtl ?? 3600
         this.timeout = config.timeout ?? 5000
 
-        logger.info(
-            `Authorization Server Discovery initialized for: ${this.authServerUrl}`,
-            { module: 'AUTH', operation: 'init' }
-        )
+        logger.info(`Authorization Server Discovery initialized for: ${this.authServerUrl}`, {
+            module: 'AUTH',
+            operation: 'init',
+        })
     }
 
     /**
@@ -83,7 +83,9 @@ export class AuthorizationServerDiscovery {
             clearTimeout(timeoutId)
 
             if (!response.ok) {
-                throw new ConfigurationError(`HTTP ${String(response.status)}: ${response.statusText}`)
+                throw new ConfigurationError(
+                    `HTTP ${String(response.status)}: ${response.statusText}`
+                )
             }
 
             const metadata = (await response.json()) as AuthorizationServerMetadata
@@ -134,10 +136,10 @@ export class AuthorizationServerDiscovery {
         // Per RFC 8414, issuer MUST be identical to the authorization server URL
         const expectedIssuer = this.authServerUrl
         if (metadata.issuer !== expectedIssuer) {
-            logger.warning(
-                `Issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`,
-                { module: 'AUTH', operation: 'discovery-validation' }
-            )
+            logger.warning(`Issuer mismatch: expected ${expectedIssuer}, got ${metadata.issuer}`, {
+                module: 'AUTH',
+                operation: 'discovery-validation',
+            })
             // Note: This is a warning, not an error, as some auth servers may use different URLs
         }
     }

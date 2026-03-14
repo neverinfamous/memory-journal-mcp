@@ -1,6 +1,11 @@
 import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
-import type { KanbanBoard, KanbanColumn, ProjectV2Item, ProjectV2StatusOption } from '../../types/index.js'
+import type {
+    KanbanBoard,
+    KanbanColumn,
+    ProjectV2Item,
+    ProjectV2StatusOption,
+} from '../../types/index.js'
 
 export class ProjectsManager {
     constructor(private client: GitHubClient) {}

@@ -117,8 +117,6 @@ vi.mock('express', () => {
     }
 })
 
-
-
 vi.mock('../../src/utils/logger.js', () => ({
     logger: {
         info: vi.fn(),
@@ -268,14 +266,16 @@ describe('HttpTransport', () => {
     describe('middleware behavior', () => {
         /** Find a middleware by probing: returns the first mw whose invocation triggers the predicate. */
         function findMiddleware(
-            predicate: (res: Record<string, unknown>) => boolean,
+            predicate: (res: Record<string, unknown>) => boolean
         ): Function | undefined {
             for (const mw of mockMiddlewares) {
                 const req = mockReq()
                 const res = mockRes()
                 try {
                     mw(req, res, () => {})
-                } catch { /* hostHeaderValidation may throw */ }
+                } catch {
+                    /* hostHeaderValidation may throw */
+                }
                 if (predicate(res)) return mw
             }
             return undefined
@@ -293,7 +293,10 @@ describe('HttpTransport', () => {
 
             // Find middleware that sets security headers (position is dynamic due to hostHeaderValidation)
             const securityMw = findMiddleware((res) => {
-                const calls = (res['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [string, string][]
+                const calls = (res['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [
+                    string,
+                    string,
+                ][]
                 return calls.some((c) => c[0] === 'X-Content-Type-Options')
             })
             expect(securityMw).toBeDefined()
@@ -322,7 +325,10 @@ describe('HttpTransport', () => {
 
             // Find security headers middleware by behavior
             const securityMw = findMiddleware((res) => {
-                const calls = (res['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [string, string][]
+                const calls = (res['setHeader'] as ReturnType<typeof vi.fn>).mock.calls as [
+                    string,
+                    string,
+                ][]
                 return calls.some((c) => c[0] === 'Strict-Transport-Security')
             })
             expect(securityMw).toBeDefined()
@@ -353,8 +359,14 @@ describe('HttpTransport', () => {
                 const res = mockRes()
                 try {
                     mw(req, res, () => {})
-                } catch { /* skip */ }
-                if ((res['status'] as ReturnType<typeof vi.fn>).mock.calls.some((c: unknown[]) => c[0] === 204)) {
+                } catch {
+                    /* skip */
+                }
+                if (
+                    (res['status'] as ReturnType<typeof vi.fn>).mock.calls.some(
+                        (c: unknown[]) => c[0] === 204
+                    )
+                ) {
                     optionsMw = mw
                     break
                 }
@@ -451,8 +463,14 @@ describe('HttpTransport', () => {
                 const probe = mockRes()
                 try {
                     mw(mockReq({ method: 'OPTIONS' }), probe, () => {})
-                } catch { /* skip */ }
-                if ((probe['status'] as ReturnType<typeof vi.fn>).mock.calls.some((c: unknown[]) => c[0] === 204)) {
+                } catch {
+                    /* skip */
+                }
+                if (
+                    (probe['status'] as ReturnType<typeof vi.fn>).mock.calls.some(
+                        (c: unknown[]) => c[0] === 204
+                    )
+                ) {
                     optionsMw = mw
                     break
                 }

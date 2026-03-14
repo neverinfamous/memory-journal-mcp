@@ -15,6 +15,8 @@
 
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
+
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler } from 'express'
@@ -58,6 +60,10 @@ export class HttpTransport {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
     public readonly sseTransports = new Map<string, SSEServerTransport>()
     public readonly sessionLastActivity = new Map<string, number>()
+    /** Connect-once pattern: tracks whether server.connect() has been called */
+    public serverConnected = false
+    /** Cached onmessage handler from first server.connect() — replayed onto subsequent transports */
+    public cachedOnMessage: Transport['onmessage']
     private httpServer: ReturnType<Express['listen']> | null = null
     private sessionSweepTimer: ReturnType<typeof setInterval> | null = null
 
@@ -83,7 +89,7 @@ export class HttpTransport {
             logger.warning(
                 'CORS origin is set to "*" (all origins). ' +
                     'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
-                { module: 'HTTP' },
+                { module: 'HTTP' }
             )
         }
 
@@ -91,7 +97,7 @@ export class HttpTransport {
             logger.warning(
                 'No authentication configured for HTTP transport. ' +
                     'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',
-                { module: 'HTTP' },
+                { module: 'HTTP' }
             )
         }
 
@@ -173,15 +179,10 @@ export class HttpTransport {
         }
 
         // Authentication middleware
-        if (
-            this.config.oauthEnabled &&
-            this.config.oauthIssuer &&
-            this.config.oauthAudience
-        ) {
+        if (this.config.oauthEnabled && this.config.oauthIssuer && this.config.oauthAudience) {
             // OAuth 2.1 authentication
             const jwksUri =
-                this.config.oauthJwksUri ??
-                `${this.config.oauthIssuer}/.well-known/jwks.json`
+                this.config.oauthJwksUri ?? `${this.config.oauthIssuer}/.well-known/jwks.json`
 
             const tokenValidator = createTokenValidator({
                 jwksUri,
@@ -197,10 +198,7 @@ export class HttpTransport {
             })
 
             // Register RFC 9728 metadata endpoint
-            this.app.get(
-                resourceServer.getWellKnownPath(),
-                resourceServer.getMetadataHandler()
-            )
+            this.app.get(resourceServer.getWellKnownPath(), resourceServer.getMetadataHandler())
 
             // Apply OAuth middleware
             this.app.use(
@@ -258,7 +256,7 @@ export class HttpTransport {
                     port,
                     host,
                     endpoint: `http://${host}:${String(port)}/mcp`,
-                },
+                }
             )
         })
 

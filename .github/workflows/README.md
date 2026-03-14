@@ -64,36 +64,36 @@ flowchart LR
 
 ### CI
 
-| File | Trigger | Purpose |
-|------|---------|---------|
+| File                                   | Trigger             | Purpose                                                                 |
+| -------------------------------------- | ------------------- | ----------------------------------------------------------------------- |
 | [lint-and-test.yml](lint-and-test.yml) | push / PR to `main` | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit |
 
 ### Security
 
-| File | Trigger | Purpose |
-|------|---------|---------|
-| [codeql.yml](codeql.yml) | push / PR / weekly (Mon 02:23 UTC) | CodeQL static analysis for `javascript-typescript` and `actions` |
-| [secrets-scanning.yml](secrets-scanning.yml) | push / PR | TruffleHog (verified secrets) + Gitleaks scanning |
-| [security-update.yml](security-update.yml) | push (Dockerfile/package changes) / weekly (Sun 02:00 UTC) / manual | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
+| File                                         | Trigger                                                             | Purpose                                                                                            |
+| -------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [codeql.yml](codeql.yml)                     | push / PR / weekly (Mon 02:23 UTC)                                  | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
+| [secrets-scanning.yml](secrets-scanning.yml) | push / PR                                                           | TruffleHog (verified secrets) + Gitleaks scanning                                                  |
+| [security-update.yml](security-update.yml)   | push (Dockerfile/package changes) / weekly (Sun 02:00 UTC) / manual | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
 
 ### Release & Publishing
 
-| File | Trigger | Purpose |
-|------|---------|---------|
-| [auto-release.yml](auto-release.yml) | push to `main` with `[deps]` in commit message | Creates git tag + GitHub release for dependency-maintenance patch bumps |
-| [publish-npm.yml](publish-npm.yml) | release published / manual | Publishes to npm with version verification |
+| File                                     | Trigger                                        | Purpose                                                                                                   |
+| ---------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [auto-release.yml](auto-release.yml)     | push to `main` with `[deps]` in commit message | Creates git tag + GitHub release for dependency-maintenance patch bumps                                   |
+| [publish-npm.yml](publish-npm.yml)       | release published / manual                     | Publishes to npm with version verification                                                                |
 | [docker-publish.yml](docker-publish.yml) | `lint-and-test` workflow_run success on `main` | Multi-arch Docker build (amd64 + arm64), Docker Scout scan, manifest merge, Docker Hub description update |
 
 ### Agentic Workflows (GitHub Copilot)
 
 These are AI-powered workflows using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot). Each `.md` file contains the agent prompt; the corresponding `.lock.yml` is the auto-generated compiled workflow (**do not edit `.lock.yml` files**).
 
-| Prompt | Lock File | Schedule | Purpose |
-|--------|-----------|----------|---------|
-| [dependency-maintenance.md](dependency-maintenance.md) | [dependency-maintenance.lock.yml](dependency-maintenance.lock.yml) | Mon 14:00 UTC | Batch-updates npm, Dockerfile patches, Alpine packages; validates, bumps patch version, creates PR |
-| [ci-health-monitor.md](ci-health-monitor.md) | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml) | Wed 14:00 UTC | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config |
-| [docs-drift-detector.md](docs-drift-detector.md) | [docs-drift-detector.lock.yml](docs-drift-detector.lock.yml) | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes |
-| [agentics-maintenance.yml](agentics-maintenance.yml) | — | Daily 00:37 UTC | Auto-closes expired discussions, issues, and PRs created by agentic workflows |
+| Prompt                                                 | Lock File                                                          | Schedule             | Purpose                                                                                            |
+| ------------------------------------------------------ | ------------------------------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------- |
+| [dependency-maintenance.md](dependency-maintenance.md) | [dependency-maintenance.lock.yml](dependency-maintenance.lock.yml) | Mon 14:00 UTC        | Batch-updates npm, Dockerfile patches, Alpine packages; validates, bumps patch version, creates PR |
+| [ci-health-monitor.md](ci-health-monitor.md)           | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml)           | Wed 14:00 UTC        | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config           |
+| [docs-drift-detector.md](docs-drift-detector.md)       | [docs-drift-detector.lock.yml](docs-drift-detector.lock.yml)       | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes                          |
+| [agentics-maintenance.yml](agentics-maintenance.yml)   | —                                                                  | Daily 00:37 UTC      | Auto-closes expired discussions, issues, and PRs created by agentic workflows                      |
 
 ---
 
@@ -117,12 +117,12 @@ For manual releases (feature/breaking changes), the maintainer runs `/bump-deplo
 
 ## Secrets Required
 
-| Secret | Used By | Purpose |
-|--------|---------|---------|
-| `GITHUB_TOKEN` | auto-release, security-update, agentics-maintenance | Git operations, issue creation |
-| `NPM_TOKEN` | publish-npm | npm registry authentication |
-| `DOCKER_USERNAME` | docker-publish | Docker Hub login |
-| `DOCKER_PASSWORD` | docker-publish | Docker Hub login |
+| Secret            | Used By                                             | Purpose                        |
+| ----------------- | --------------------------------------------------- | ------------------------------ |
+| `GITHUB_TOKEN`    | auto-release, security-update, agentics-maintenance | Git operations, issue creation |
+| `NPM_TOKEN`       | publish-npm                                         | npm registry authentication    |
+| `DOCKER_USERNAME` | docker-publish                                      | Docker Hub login               |
+| `DOCKER_PASSWORD` | docker-publish                                      | Docker Hub login               |
 
 ---
 

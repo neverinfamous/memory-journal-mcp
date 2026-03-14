@@ -30,8 +30,14 @@ describe('Team Resource Handlers', () => {
         const entry2 = teamDb.createEntry({ content: 'Team resource test beta' })
 
         // Set author on entries via raw SQL
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', ['Alice', entry1.id])
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', ['Bob', entry2.id])
+        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+            'Alice',
+            entry1.id,
+        ])
+        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+            'Bob',
+            entry2.id,
+        ])
     })
 
     afterAll(() => {

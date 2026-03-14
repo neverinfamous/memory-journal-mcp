@@ -123,7 +123,10 @@ export class VectorSearchManager {
     /**
      * Add an entry to the vector index (upsert - replaces if exists)
      */
-    async addEntry(entryId: number, content: string): Promise<{ success: boolean; error?: string }> {
+    async addEntry(
+        entryId: number,
+        content: string
+    ): Promise<{ success: boolean; error?: string }> {
         if (!this.initialized) {
             await this.initialize()
         }
@@ -243,7 +246,10 @@ export class VectorSearchManager {
      * @param db - Database adapter
      * @param progress - Optional progress context for notifications
      */
-    async rebuildIndex(db: IDatabaseAdapter, progress?: ProgressContext): Promise<{ indexed: number; failed: number; firstError: string | null }> {
+    async rebuildIndex(
+        db: IDatabaseAdapter,
+        progress?: ProgressContext
+    ): Promise<{ indexed: number; failed: number; firstError: string | null }> {
         if (!this.initialized) {
             await this.initialize()
         }
@@ -285,9 +291,14 @@ export class VectorSearchManager {
                 const embeddings = await Promise.all(
                     batch.map(async (entry: JournalEntry) => {
                         try {
-                            return { entry, embedding: await this.generateEmbedding(entry.content), error: null }
+                            return {
+                                entry,
+                                embedding: await this.generateEmbedding(entry.content),
+                                error: null,
+                            }
                         } catch (embError) {
-                            const errorMsg = embError instanceof Error ? embError.message : String(embError)
+                            const errorMsg =
+                                embError instanceof Error ? embError.message : String(embError)
                             logger.debug('Failed to generate embedding for entry', {
                                 module: 'VectorSearch',
                                 entityId: entry.id,
@@ -338,9 +349,12 @@ export class VectorSearchManager {
         await sendProgress(progress, indexed, totalEntries, 'Vector index rebuild complete')
 
         if (failed > 0) {
-            logger.warning(`Vector index rebuild: ${String(indexed)} indexed, ${String(failed)} failed`, {
-                module: 'VectorSearch',
-            })
+            logger.warning(
+                `Vector index rebuild: ${String(indexed)} indexed, ${String(failed)} failed`,
+                {
+                    module: 'VectorSearch',
+                }
+            )
         } else {
             logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
                 module: 'VectorSearch',
@@ -358,9 +372,9 @@ export class VectorSearchManager {
         }
 
         try {
-            const result = this.db
-                .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
-                .get() as { count: number } | undefined
+            const result = this.db.prepare('SELECT COUNT(*) as count FROM vec_embeddings').get() as
+                | { count: number }
+                | undefined
             return {
                 itemCount: result?.count ?? 0,
                 modelName: this.modelName,

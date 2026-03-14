@@ -37,7 +37,10 @@ const ExecuteCodeSchema = z.object({
 /** Relaxed schema for MCP registration */
 const ExecuteCodeSchemaMcp = z.object({
     code: z.string().describe('JavaScript code to execute in the sandbox'),
-    timeout: relaxedNumber().optional().default(30000).describe('Execution timeout in ms (max 30000)'),
+    timeout: relaxedNumber()
+        .optional()
+        .default(30000)
+        .describe('Execution timeout in ms (max 30000)'),
     readonly: z.boolean().optional().default(false).describe('Restrict to read-only operations'),
 })
 
@@ -121,7 +124,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             },
             handler: (params: unknown) => {
                 try {
-                    const { code, timeout, readonly: readonlyMode } = ExecuteCodeSchema.parse(params)
+                    const {
+                        code,
+                        timeout,
+                        readonly: readonlyMode,
+                    } = ExecuteCodeSchema.parse(params)
 
                     // Security validation
                     const security = getSecurityManager()

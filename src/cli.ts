@@ -31,16 +31,8 @@ program
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost)')
     .option('--stateless', 'Use stateless HTTP mode (no session management)')
-    .option(
-        '--db <path>',
-        'Database path (env: DB_PATH)',
-        defaultDbPath
-    )
-    .option(
-        '--team-db <path>',
-        'Team database path (env: TEAM_DB_PATH)',
-        defaultTeamDbPath
-    )
+    .option('--db <path>', 'Database path (env: DB_PATH)', defaultDbPath)
+    .option('--team-db <path>', 'Team database path (env: TEAM_DB_PATH)', defaultTeamDbPath)
     .option('--tool-filter <filter>', 'Tool filter string (e.g., "starter", "core,search")')
     .option('--default-project <number>', 'Default GitHub Project number')
     .option('--auto-rebuild-index', 'Rebuild vector index on server startup')
@@ -203,8 +195,7 @@ program
                     corsOrigins: options.corsOrigin
                         ? options.corsOrigin.split(',').map((s) => s.trim())
                         : undefined,
-                    enableHSTS:
-                        options.enableHsts ?? process.env['MCP_ENABLE_HSTS'] === 'true',
+                    enableHSTS: options.enableHsts ?? process.env['MCP_ENABLE_HSTS'] === 'true',
                     authToken: options.authToken,
                     scheduler: {
                         backupIntervalMinutes: parseInt(options.backupInterval, 10),
@@ -214,8 +205,7 @@ program
                     },
                     sandboxMode: options.sandboxMode as 'vm' | 'worker',
                     // OAuth 2.1
-                    oauthEnabled:
-                        options.oauthEnabled ?? process.env['OAUTH_ENABLED'] === 'true',
+                    oauthEnabled: options.oauthEnabled ?? process.env['OAUTH_ENABLED'] === 'true',
                     oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],
                     oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
@@ -255,11 +245,12 @@ program
                             options.briefingCopilot ??
                             process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
                     },
-                    instructionLevel: (
-                        options.instructionLevel !== 'standard'
-                            ? options.instructionLevel
-                            : process.env['INSTRUCTION_LEVEL'] ?? 'standard'
-                    ) as 'essential' | 'standard' | 'full',
+                    instructionLevel: (options.instructionLevel !== 'standard'
+                        ? options.instructionLevel
+                        : (process.env['INSTRUCTION_LEVEL'] ?? 'standard')) as
+                        | 'essential'
+                        | 'standard'
+                        | 'full',
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

@@ -1,11 +1,11 @@
 ---
-description: "Weekly audit of CI workflows for deprecations, outdated actions, and health issues"
+description: 'Weekly audit of CI workflows for deprecations, outdated actions, and health issues'
 private: true
 labels: [maintenance, ci-cd]
 
 on:
   schedule:
-    - cron: "0 14 * * 3" # Every Wednesday at 14:00 UTC
+    - cron: '0 14 * * 3' # Every Wednesday at 14:00 UTC
   workflow_dispatch:
 
 engine:
@@ -21,7 +21,7 @@ permissions: read-all
 
 safe-outputs:
   create-issue:
-    title-prefix: "[ci-health] "
+    title-prefix: '[ci-health] '
     labels: [maintenance, ci-cd]
     max: 1
   noop:

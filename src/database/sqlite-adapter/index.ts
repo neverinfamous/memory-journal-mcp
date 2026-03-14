@@ -158,7 +158,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         relationshipType: RelationshipType,
         description?: string
     ): Relationship {
-        return this.relationshipsMgr.linkEntries(fromEntryId, toEntryId, relationshipType, description)
+        return this.relationshipsMgr.linkEntries(
+            fromEntryId,
+            toEntryId,
+            relationshipType,
+            description
+        )
     }
 
     getRelationships(entryId: number): Relationship[] {
@@ -169,7 +174,9 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.connection.getBackupsDir()
     }
 
-    async exportToFile(backupName?: string): Promise<{ filename: string; path: string; sizeBytes: number }> {
+    async exportToFile(
+        backupName?: string
+    ): Promise<{ filename: string; path: string; sizeBytes: number }> {
         return this.backupMgr.exportToFile(backupName)
     }
 

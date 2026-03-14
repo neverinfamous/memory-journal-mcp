@@ -85,7 +85,15 @@ export class GitHubIntegration {
         assignees?: string[],
         milestone?: number
     ): Promise<{ number: number; url: string; title: string; nodeId: string } | null> {
-        return this.issuesManager.createIssue(owner, repo, title, body, labels, assignees, milestone)
+        return this.issuesManager.createIssue(
+            owner,
+            repo,
+            title,
+            body,
+            labels,
+            assignees,
+            milestone
+        )
     }
 
     async closeIssue(
@@ -114,11 +122,7 @@ export class GitHubIntegration {
         return this.pullRequestsManager.getPullRequest(owner, repo, prNumber)
     }
 
-    async getReviews(
-        owner: string,
-        repo: string,
-        prNumber: number
-    ): Promise<GitHubReview[]> {
+    async getReviews(owner: string, repo: string, prNumber: number): Promise<GitHubReview[]> {
         return this.pullRequestsManager.getReviews(owner, repo, prNumber)
     }
 
@@ -168,15 +172,29 @@ export class GitHubIntegration {
         }
 
         if (repoInfo.owner && repoInfo.repo) {
-            context.issues = await this.issuesManager.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10)
+            context.issues = await this.issuesManager.getIssues(
+                repoInfo.owner,
+                repoInfo.repo,
+                'open',
+                10
+            )
             context.pullRequests = await this.pullRequestsManager.getPullRequests(
                 repoInfo.owner,
                 repoInfo.repo,
                 'open',
                 10
             )
-            context.workflowRuns = await this.repositoryManager.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10)
-            context.milestones = await this.milestonesManager.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10)
+            context.workflowRuns = await this.repositoryManager.getWorkflowRuns(
+                repoInfo.owner,
+                repoInfo.repo,
+                10
+            )
+            context.milestones = await this.milestonesManager.getMilestones(
+                repoInfo.owner,
+                repoInfo.repo,
+                'open',
+                10
+            )
         }
 
         this.client.setCache('context:repo', context)
@@ -197,7 +215,12 @@ export class GitHubIntegration {
         statusFieldId: string,
         statusOptionId: string
     ): Promise<{ success: boolean; error?: string }> {
-        return this.projectsManager.moveProjectItem(projectId, itemId, statusFieldId, statusOptionId)
+        return this.projectsManager.moveProjectItem(
+            projectId,
+            itemId,
+            statusFieldId,
+            statusOptionId
+        )
     }
 
     async addProjectItem(

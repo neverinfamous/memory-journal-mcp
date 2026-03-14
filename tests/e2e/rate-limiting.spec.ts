@@ -54,7 +54,7 @@ test.describe('Rate Limiting', () => {
                     ...process.env,
                     MCP_RATE_LIMIT_MAX: '5',
                 },
-            },
+            }
         )
 
         // Wait for server to start
@@ -139,7 +139,7 @@ test.describe('Rate Limiting', () => {
                     ...process.env,
                     MCP_RATE_LIMIT_MAX: '3',
                 },
-            },
+            }
         )
 
         for (let i = 0; i < 30; i++) {
@@ -224,7 +224,7 @@ test.describe('Rate Limiting', () => {
                     ...process.env,
                     MCP_RATE_LIMIT_MAX: '2',
                 },
-            },
+            }
         )
 
         for (let i = 0; i < 30; i++) {

@@ -67,31 +67,35 @@ const VisualizeInputSchemaMcp = z.object({
 // Output Schemas
 // ============================================================================
 
-const LinkEntriesOutputSchema = z.object({
-    success: z.boolean().optional(),
-    relationship: RelationshipOutputSchema.optional(),
-    duplicate: z.boolean().optional().describe('True if relationship already existed'),
-    message: z.string().optional().describe('Additional context about the operation'),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const LinkEntriesOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        relationship: RelationshipOutputSchema.optional(),
+        duplicate: z.boolean().optional().describe('True if relationship already existed'),
+        message: z.string().optional().describe('Additional context about the operation'),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const VisualizationOutputSchema = z.object({
-    entry_count: z.number().optional(),
-    relationship_count: z.number().optional(),
-    root_entry: z.number().nullable().optional(),
-    depth: z.number().optional(),
-    mermaid: z.string().nullable().optional(),
-    message: z.string().optional(),
-    legend: z
-        .object({
-            blue: z.string(),
-            orange: z.string(),
-            arrows: z.record(z.string(), z.string()),
-        })
-        .optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const VisualizationOutputSchema = z
+    .object({
+        entry_count: z.number().optional(),
+        relationship_count: z.number().optional(),
+        root_entry: z.number().nullable().optional(),
+        depth: z.number().optional(),
+        mermaid: z.string().nullable().optional(),
+        message: z.string().optional(),
+        legend: z
+            .object({
+                blue: z.string(),
+                orange: z.string(),
+                arrows: z.record(z.string(), z.string()),
+            })
+            .optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -305,8 +309,11 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     let mermaid = '```mermaid\\ngraph TD\\n'
 
                     for (const [idStr, entry] of Object.entries(entries)) {
-                        let contentPreview = entry.content.slice(0, MERMAID_CONTENT_PREVIEW_LENGTH).replace(/\\n/g, ' ')
-                        if (entry.content.length > MERMAID_CONTENT_PREVIEW_LENGTH) contentPreview += '...'
+                        let contentPreview = entry.content
+                            .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
+                            .replace(/\\n/g, ' ')
+                        if (entry.content.length > MERMAID_CONTENT_PREVIEW_LENGTH)
+                            contentPreview += '...'
                         contentPreview = contentPreview
                             .replace(/"/g, "'")
                             .replace(/\[/g, '(')

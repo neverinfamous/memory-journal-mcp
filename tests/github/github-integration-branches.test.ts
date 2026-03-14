@@ -61,9 +61,11 @@ function createMockClient(overrides: Partial<Record<string, unknown>> = {}) {
         },
         git: {
             branch: vi.fn().mockResolvedValue({ current: 'main' }),
-            getRemotes: vi.fn().mockResolvedValue([
-                { name: 'origin', refs: { fetch: 'git@github.com:neverinfamous/test.git' } },
-            ]),
+            getRemotes: vi
+                .fn()
+                .mockResolvedValue([
+                    { name: 'origin', refs: { fetch: 'git@github.com:neverinfamous/test.git' } },
+                ]),
         },
         cachedRepoInfo: null as Record<string, unknown> | null,
         getCached: vi.fn().mockImplementation((key: string) => cache.get(key)?.data),
@@ -128,7 +130,13 @@ describe('MilestonesManager — branch coverage', () => {
 
     it('should map milestone with creator', async () => {
         client.octokit.issues.listMilestones.mockResolvedValue({
-            data: [makeMilestoneData({ creator: { login: 'user1' }, description: 'A desc', due_on: '2025-06-01' })],
+            data: [
+                makeMilestoneData({
+                    creator: { login: 'user1' },
+                    description: 'A desc',
+                    due_on: '2025-06-01',
+                }),
+            ],
         })
         const result = await manager.getMilestones('o', 'r')
         expect(result[0]!.creator).toBe('user1')

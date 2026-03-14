@@ -80,7 +80,7 @@ export class CodeModeSandbox {
     async execute(
         code: string,
         bindings: Record<string, unknown>,
-        timeoutMs?: number,
+        timeoutMs?: number
     ): Promise<SandboxResult> {
         const effectiveTimeout = timeoutMs ?? this.options.timeoutMs
         const startTime = performance.now()
@@ -190,7 +190,7 @@ export class SandboxPool {
     async execute(
         code: string,
         bindings: Record<string, unknown>,
-        timeoutMs?: number,
+        timeoutMs?: number
     ): Promise<SandboxResult> {
         if (this.activeCount >= this.options.maxInstances) {
             return {

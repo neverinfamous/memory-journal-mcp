@@ -63,9 +63,11 @@ describe('Workflow prompts — branch coverage', () => {
     it('prepare-standup: should format entries', () => {
         const standup = prompts.find((p) => p.name === 'prepare-standup')!
         const db = createMockDb({
-            searchByDateRange: vi.fn().mockReturnValue([
-                { timestamp: '2025-01-01', entryType: 'note', content: 'Did things' },
-            ]),
+            searchByDateRange: vi
+                .fn()
+                .mockReturnValue([
+                    { timestamp: '2025-01-01', entryType: 'note', content: 'Did things' },
+                ]),
         })
         const result = standup.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('Did things')
@@ -81,9 +83,11 @@ describe('Workflow prompts — branch coverage', () => {
     it('prepare-retro: should use custom days', () => {
         const retro = prompts.find((p) => p.name === 'prepare-retro')!
         const db = createMockDb({
-            searchByDateRange: vi.fn().mockReturnValue([
-                { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(250) },
-            ]),
+            searchByDateRange: vi
+                .fn()
+                .mockReturnValue([
+                    { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(250) },
+                ]),
         })
         const result = retro.handler({ days: '7' }, db as never)
         expect(result.messages[0]!.content.text).toContain('last 7 days')
@@ -92,9 +96,11 @@ describe('Workflow prompts — branch coverage', () => {
     it('weekly-digest: should format entries with content truncation', () => {
         const digest = prompts.find((p) => p.name === 'weekly-digest')!
         const db = createMockDb({
-            searchByDateRange: vi.fn().mockReturnValue([
-                { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(200) },
-            ]),
+            searchByDateRange: vi
+                .fn()
+                .mockReturnValue([
+                    { timestamp: '2025-01-01', entryType: 'note', content: 'x'.repeat(200) },
+                ]),
         })
         const result = digest.handler({}, db as never)
         expect(result.messages[0]!.content.text).toContain('weekly digest')
@@ -142,7 +148,13 @@ describe('Workflow prompts — branch coverage', () => {
         const recent = prompts.find((p) => p.name === 'get-recent-entries')!
         const db = createMockDb({
             getRecentEntries: vi.fn().mockReturnValue([
-                { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test', tags: ['a'] },
+                {
+                    id: 1,
+                    entryType: 'note',
+                    timestamp: '2025-01-01',
+                    content: 'test',
+                    tags: ['a'],
+                },
             ]),
         })
         const result = recent.handler({}, db as never)
@@ -154,7 +166,13 @@ describe('Workflow prompts — branch coverage', () => {
         const recent = prompts.find((p) => p.name === 'get-recent-entries')!
         const db = createMockDb({
             getRecentEntries: vi.fn().mockReturnValue([
-                { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test', tags: [] },
+                {
+                    id: 1,
+                    entryType: 'note',
+                    timestamp: '2025-01-01',
+                    content: 'test',
+                    tags: [],
+                },
             ]),
         })
         const result = recent.handler({ limit: '5' }, db as never)
@@ -172,9 +190,11 @@ describe('Workflow prompts — branch coverage', () => {
     it('confirm-briefing: should format entries when present', () => {
         const confirm = prompts.find((p) => p.name === 'confirm-briefing')!
         const db = createMockDb({
-            getRecentEntries: vi.fn().mockReturnValue([
-                { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(50) },
-            ]),
+            getRecentEntries: vi
+                .fn()
+                .mockReturnValue([
+                    { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'x'.repeat(50) },
+                ]),
             getStatistics: vi.fn().mockReturnValue({ totalEntries: 42 }),
         })
         const result = confirm.handler({}, db as never)
@@ -219,22 +239,30 @@ describe('Team resources — branch coverage', () => {
         it('should return error when teamDb not configured', () => {
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!
             const context = createMockContext()
-            const result = resource.handler('memory://team/recent', context as never) as Record<string, unknown>
-            expect((result.data as Record<string, unknown>).error).toContain('Team database not configured')
+            const result = resource.handler('memory://team/recent', context as never) as Record<
+                string,
+                unknown
+            >
+            expect((result.data as Record<string, unknown>).error).toContain(
+                'Team database not configured'
+            )
         })
 
         it('should enrich entries with author from teamDb', () => {
             const teamDb = createMockDb({
-                getRecentEntries: vi.fn().mockReturnValue([
-                    { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test' },
-                ]),
-                executeRawQuery: vi.fn().mockReturnValue([
-                    { values: [['alice']] },
-                ]),
+                getRecentEntries: vi
+                    .fn()
+                    .mockReturnValue([
+                        { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test' },
+                    ]),
+                executeRawQuery: vi.fn().mockReturnValue([{ values: [['alice']] }]),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!
-            const result = resource.handler('memory://team/recent', context as never) as Record<string, unknown>
+            const result = resource.handler('memory://team/recent', context as never) as Record<
+                string,
+                unknown
+            >
             const data = result.data as Record<string, unknown>
             const entries = data.entries as { author: string }[]
             expect(entries[0]!.author).toBe('alice')
@@ -246,7 +274,10 @@ describe('Team resources — branch coverage', () => {
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!
-            const result = resource.handler('memory://team/recent', context as never) as Record<string, unknown>
+            const result = resource.handler('memory://team/recent', context as never) as Record<
+                string,
+                unknown
+            >
             const data = result.data as Record<string, unknown>
             expect(data.count).toBe(0)
         })
@@ -256,7 +287,10 @@ describe('Team resources — branch coverage', () => {
         it('should return error when teamDb not configured', () => {
             const resource = resources.find((r) => r.uri === 'memory://team/statistics')!
             const context = createMockContext()
-            const result = resource.handler('memory://team/statistics', context as never) as Record<string, unknown>
+            const result = resource.handler('memory://team/statistics', context as never) as Record<
+                string,
+                unknown
+            >
             expect((result.data as Record<string, unknown>).configured).toBe(false)
         })
 
@@ -264,12 +298,20 @@ describe('Team resources — branch coverage', () => {
             const teamDb = createMockDb({
                 getStatistics: vi.fn().mockReturnValue({ totalEntries: 10 }),
                 executeRawQuery: vi.fn().mockReturnValue([
-                    { values: [['alice', 5], ['bob', 3]] },
+                    {
+                        values: [
+                            ['alice', 5],
+                            ['bob', 3],
+                        ],
+                    },
                 ]),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/statistics')!
-            const result = resource.handler('memory://team/statistics', context as never) as Record<string, unknown>
+            const result = resource.handler('memory://team/statistics', context as never) as Record<
+                string,
+                unknown
+            >
             const data = result.data as Record<string, unknown>
             expect(data.configured).toBe(true)
             expect((data.authors as { author: string }[])[0]!.author).toBe('alice')
@@ -278,11 +320,16 @@ describe('Team resources — branch coverage', () => {
         it('should handle author query failure gracefully', () => {
             const teamDb = createMockDb({
                 getStatistics: vi.fn().mockReturnValue({ totalEntries: 10 }),
-                executeRawQuery: vi.fn().mockImplementation(() => { throw new Error('fail') }),
+                executeRawQuery: vi.fn().mockImplementation(() => {
+                    throw new Error('fail')
+                }),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/statistics')!
-            const result = resource.handler('memory://team/statistics', context as never) as Record<string, unknown>
+            const result = resource.handler('memory://team/statistics', context as never) as Record<
+                string,
+                unknown
+            >
             const data = result.data as Record<string, unknown>
             expect(data.configured).toBe(true)
             expect(data.authors).toEqual([])
@@ -295,7 +342,10 @@ describe('Team resources — branch coverage', () => {
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/statistics')!
-            const result = resource.handler('memory://team/statistics', context as never) as Record<string, unknown>
+            const result = resource.handler('memory://team/statistics', context as never) as Record<
+                string,
+                unknown
+            >
             const data = result.data as Record<string, unknown>
             expect(data.authors).toEqual([])
         })
@@ -332,8 +382,16 @@ describe('Graph resources — branch coverage', () => {
                 db: createMockDb({
                     executeRawQuery: vi.fn().mockReturnValue([
                         {
-                            columns: ['from_entry_id', 'to_entry_id', 'relationship_type', 'from_content', 'to_content'],
-                            values: [[1, 2, 'unknown_type', 'Entry one content', 'Entry two content']],
+                            columns: [
+                                'from_entry_id',
+                                'to_entry_id',
+                                'relationship_type',
+                                'from_content',
+                                'to_content',
+                            ],
+                            values: [
+                                [1, 2, 'unknown_type', 'Entry one content', 'Entry two content'],
+                            ],
                         },
                     ]),
                 }),
@@ -348,7 +406,10 @@ describe('Graph resources — branch coverage', () => {
         it('should return no-github message when github integration not available', async () => {
             const resource = resources.find((r) => r.uri === 'memory://graph/actions')!
             const context = createMockContext()
-            const result = (await resource.handler('memory://graph/actions', context as never)) as string
+            const result = (await resource.handler(
+                'memory://graph/actions',
+                context as never
+            )) as string
             expect(result).toContain('GitHub integration not available')
         })
 
@@ -359,7 +420,10 @@ describe('Graph resources — branch coverage', () => {
                     getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
                 },
             })
-            const result = (await resource.handler('memory://graph/actions', context as never)) as string
+            const result = (await resource.handler(
+                'memory://graph/actions',
+                context as never
+            )) as string
             expect(result).toContain('Repository not detected')
         })
 
@@ -371,7 +435,10 @@ describe('Graph resources — branch coverage', () => {
                     getWorkflowRuns: vi.fn().mockResolvedValue([]),
                 },
             })
-            const result = (await resource.handler('memory://graph/actions', context as never)) as string
+            const result = (await resource.handler(
+                'memory://graph/actions',
+                context as never
+            )) as string
             expect(result).toContain('No GitHub Actions workflow runs')
         })
     })
@@ -384,7 +451,10 @@ describe('Graph resources — branch coverage', () => {
                     executeRawQuery: vi.fn().mockReturnValue([]),
                 }),
             })
-            const result = (await resource.handler('memory://actions/recent', context as never)) as Record<string, unknown>
+            const result = (await resource.handler(
+                'memory://actions/recent',
+                context as never
+            )) as Record<string, unknown>
             expect(result.source).toBe('database')
         })
 
@@ -398,7 +468,10 @@ describe('Graph resources — branch coverage', () => {
                     executeRawQuery: vi.fn().mockReturnValue([]),
                 }),
             })
-            const result = (await resource.handler('memory://actions/recent', context as never)) as Record<string, unknown>
+            const result = (await resource.handler(
+                'memory://actions/recent',
+                context as never
+            )) as Record<string, unknown>
             expect(result.source).toBe('database')
         })
 
@@ -412,7 +485,10 @@ describe('Graph resources — branch coverage', () => {
                     executeRawQuery: vi.fn().mockReturnValue([]),
                 }),
             })
-            const result = (await resource.handler('memory://actions/recent', context as never)) as Record<string, unknown>
+            const result = (await resource.handler(
+                'memory://actions/recent',
+                context as never
+            )) as Record<string, unknown>
             expect(result.source).toBe('database')
         })
     })

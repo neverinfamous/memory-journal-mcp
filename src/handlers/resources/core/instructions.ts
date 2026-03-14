@@ -1,5 +1,8 @@
 import { getAllToolNames } from '../../../filtering/tool-filter.js'
-import { generateInstructions, type InstructionLevel } from '../../../constants/server-instructions.js'
+import {
+    generateInstructions,
+    type InstructionLevel,
+} from '../../../constants/server-instructions.js'
 import { getPrompts } from '../../prompts/index.js'
 import { ICON_BRIEFING } from '../../../constants/icons.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
@@ -26,12 +29,7 @@ export const instructionsResource: InternalResourceDef = {
             return { name: prompt.name, description: prompt.description }
         })
 
-        const instructions = generateInstructions(
-            enabledTools,
-            prompts,
-            undefined,
-            level
-        )
+        const instructions = generateInstructions(enabledTools, prompts, undefined, level)
 
         return {
             data: instructions,

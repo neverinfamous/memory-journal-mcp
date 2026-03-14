@@ -87,7 +87,8 @@ export async function buildGitHubSection(
                       prStatusSummary: {
                           open:
                               openPrList.filter((p) => p.state === 'OPEN').length +
-                              (openPRs - (openPrList?.filter((p) => p.state === 'OPEN').length ?? 0)),
+                              (openPRs -
+                                  (openPrList?.filter((p) => p.state === 'OPEN').length ?? 0)),
                           merged: openPrList.filter((p) => p.state === 'MERGED').length,
                           closed: openPrList.filter((p) => p.state === 'CLOSED').length,
                       },
@@ -177,7 +178,9 @@ async function fetchCiStatus(
                           runs: runs.slice(0, config.workflowCount).map((r) => ({
                               name: r.name,
                               conclusion:
-                                  r.status !== 'completed' ? 'pending' : (r.conclusion ?? 'unknown'),
+                                  r.status !== 'completed'
+                                      ? 'pending'
+                                      : (r.conclusion ?? 'unknown'),
                           })),
                       }
                     : {}),
@@ -186,7 +189,11 @@ async function fetchCiStatus(
 
         return { status, workflowSummary }
     } catch (error) {
-        logger.debug('Failed to fetch CI status', { module: 'BRIEFING', operation: 'ci-status', error: error instanceof Error ? error.message : String(error) })
+        logger.debug('Failed to fetch CI status', {
+            module: 'BRIEFING',
+            operation: 'ci-status',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return { status: 'unknown' }
     }
 }
@@ -208,7 +215,9 @@ async function fetchIssuesAndPrs(
         const openIssues = issues.length > 0 ? issues.length : 0
         const openIssueList =
             config.issueCount > 0 && issues.length > 0
-                ? issues.slice(0, config.issueCount).map((i) => ({ number: i.number, title: i.title }))
+                ? issues
+                      .slice(0, config.issueCount)
+                      .map((i) => ({ number: i.number, title: i.title }))
                 : undefined
 
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
@@ -234,7 +243,11 @@ async function fetchIssuesAndPrs(
 
         return { openIssues, openPRs, openIssueList, openPrList }
     } catch (error) {
-        logger.debug('Failed to fetch issues and PRs', { module: 'BRIEFING', operation: 'issues-prs', error: error instanceof Error ? error.message : String(error) })
+        logger.debug('Failed to fetch issues and PRs', {
+            module: 'BRIEFING',
+            operation: 'issues-prs',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return { openIssues: 0, openPRs: 0 }
     }
 }
@@ -255,7 +268,11 @@ async function fetchMilestones(
             }
         })
     } catch (error) {
-        logger.debug('Failed to fetch milestones', { module: 'BRIEFING', operation: 'milestones', error: error instanceof Error ? error.message : String(error) })
+        logger.debug('Failed to fetch milestones', {
+            module: 'BRIEFING',
+            operation: 'milestones',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return []
     }
 }
@@ -281,12 +298,20 @@ async function fetchInsights(
                 result.views14d = trafficData.views.total
             }
         } catch (error) {
-            logger.debug('Traffic data unavailable (requires push access)', { module: 'BRIEFING', operation: 'traffic', error: error instanceof Error ? error.message : String(error) })
+            logger.debug('Traffic data unavailable (requires push access)', {
+                module: 'BRIEFING',
+                operation: 'traffic',
+                error: error instanceof Error ? error.message : String(error),
+            })
         }
 
         return result
     } catch (error) {
-        logger.debug('Failed to fetch repo insights', { module: 'BRIEFING', operation: 'insights', error: error instanceof Error ? error.message : String(error) })
+        logger.debug('Failed to fetch repo insights', {
+            module: 'BRIEFING',
+            operation: 'insights',
+            error: error instanceof Error ? error.message : String(error),
+        })
         return undefined
     }
 }
@@ -304,9 +329,9 @@ async function fetchCopilotReviews(
         let totalComments = 0
 
         const summaries = await Promise.all(
-            recentPrs.slice(0, 5).map((pr) =>
-                github.getCopilotReviewSummary(owner, repo, pr.number)
-            )
+            recentPrs
+                .slice(0, 5)
+                .map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
         )
         for (const summary of summaries) {
             if (summary.state !== 'none') {

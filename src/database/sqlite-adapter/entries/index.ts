@@ -1,8 +1,4 @@
-import type {
-    JournalEntry,
-    EntryType,
-    ImportanceResult
-} from '../../../types/index.js'
+import type { JournalEntry, EntryType, ImportanceResult } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
 import type { Database } from 'better-sqlite3'
 import type { NativeConnectionManager } from '../native-connection.js'
@@ -30,11 +26,14 @@ import { getStatistics } from './statistics.js'
 export class EntriesManager {
     private sharedContext: EntriesSharedContext
 
-    constructor(
-        ctx: NativeConnectionManager,
-        tagsMgr: TagsManager
-    ) {
-        this.sharedContext = { ctx, tagsMgr, get db() { return ctx.getRawDb() as Database } }
+    constructor(ctx: NativeConnectionManager, tagsMgr: TagsManager) {
+        this.sharedContext = {
+            ctx,
+            tagsMgr,
+            get db() {
+                return ctx.getRawDb() as Database
+            },
+        }
     }
 
     createEntry(input: CreateEntryInput): JournalEntry {
@@ -57,24 +56,27 @@ export class EntriesManager {
         return getActiveEntryCount(this.sharedContext)
     }
 
-    updateEntry(id: number, input: {
-        content?: string
-        entryType?: EntryType
-        tags?: string[]
-        isPersonal?: boolean
-        significanceType?: string
-        autoContext?: boolean
-        projectNumber?: number
-        projectOwner?: string
-        issueNumber?: number
-        issueUrl?: string
-        prNumber?: number
-        prUrl?: string
-        prStatus?: string
-        workflowRunId?: number
-        workflowName?: string
-        workflowStatus?: string
-    }): JournalEntry | null {
+    updateEntry(
+        id: number,
+        input: {
+            content?: string
+            entryType?: EntryType
+            tags?: string[]
+            isPersonal?: boolean
+            significanceType?: string
+            autoContext?: boolean
+            projectNumber?: number
+            projectOwner?: string
+            issueNumber?: number
+            issueUrl?: string
+            prNumber?: number
+            prUrl?: string
+            prStatus?: string
+            workflowRunId?: number
+            workflowName?: string
+            workflowStatus?: string
+        }
+    ): JournalEntry | null {
         return updateEntry(this.sharedContext, id, input)
     }
 
@@ -89,19 +91,37 @@ export class EntriesManager {
         return getRecentEntriesQuery(this.sharedContext, limit)
     }
 
-    getEntriesPage(
-        offset: number,
-        limit: number,
-        order: 'asc' | 'desc' = 'desc'
-    ): JournalEntry[] {
+    getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): JournalEntry[] {
         return getEntriesPage(this.sharedContext, offset, limit, order)
     }
 
-    searchEntries(queryStr: string, options?: { limit?: number, isPersonal?: boolean, projectNumber?: number, issueNumber?: number, prNumber?: number }): JournalEntry[] {
+    searchEntries(
+        queryStr: string,
+        options?: {
+            limit?: number
+            isPersonal?: boolean
+            projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
+        }
+    ): JournalEntry[] {
         return searchEntries(this.sharedContext, queryStr, options)
     }
 
-    searchByDateRange(startDate: string, endDate: string, options?: { entryType?: EntryType, tags?: string[], isPersonal?: boolean, projectNumber?: number, issueNumber?: number, prNumber?: number, workflowRunId?: number, limit?: number }): JournalEntry[] {
+    searchByDateRange(
+        startDate: string,
+        endDate: string,
+        options?: {
+            entryType?: EntryType
+            tags?: string[]
+            isPersonal?: boolean
+            projectNumber?: number
+            issueNumber?: number
+            prNumber?: number
+            workflowRunId?: number
+            limit?: number
+        }
+    ): JournalEntry[] {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)
     }
 
@@ -109,7 +129,12 @@ export class EntriesManager {
         return calculateImportance(this.sharedContext, entryId)
     }
 
-    getStatistics(timeframe: 'day' | 'week' | 'month' | 'year' = 'month', startDate?: string, endDate?: string, projectBreakdown?: boolean): Record<string, unknown> {
+    getStatistics(
+        timeframe: 'day' | 'week' | 'month' | 'year' = 'month',
+        startDate?: string,
+        endDate?: string,
+        projectBreakdown?: boolean
+    ): Record<string, unknown> {
         return getStatistics(this.sharedContext, timeframe, startDate, endDate, projectBreakdown)
     }
 }

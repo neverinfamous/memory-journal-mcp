@@ -28,25 +28,41 @@ export function getStatistics(
     const entriesByType: Record<string, number> = {}
 
     if (dateParams.length > 0) {
-        const countRow = db.prepare(`SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter}`).get(...dateParams) as { count: number }
+        const countRow = db
+            .prepare(
+                `SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter}`
+            )
+            .get(...dateParams) as { count: number }
         totalEntries = countRow?.count ?? 0
 
-        const typeRows = db.prepare(`SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter} GROUP BY entry_type`).all(...dateParams) as { entry_type: string; count: number }[]
+        const typeRows = db
+            .prepare(
+                `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter} GROUP BY entry_type`
+            )
+            .all(...dateParams) as { entry_type: string; count: number }[]
         for (const row of typeRows) {
             entriesByType[row.entry_type] = row.count
         }
     } else {
-        const countRow = db.prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL').get() as { count: number }
+        const countRow = db
+            .prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL')
+            .get() as { count: number }
         totalEntries = countRow?.count ?? 0
-        
-        const typeRows = db.prepare(`SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL GROUP BY entry_type`).all() as { entry_type: string; count: number }[]
+
+        const typeRows = db
+            .prepare(
+                `SELECT entry_type, COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL GROUP BY entry_type`
+            )
+            .all() as { entry_type: string; count: number }[]
         for (const row of typeRows) {
             entriesByType[row.entry_type] = row.count
         }
     }
 
     const dateFormat = validateDateFormatPattern(groupBy === 'year' ? 'month' : groupBy)
-    const periodRows = db.prepare(`SELECT
+    const periodRows = db
+        .prepare(
+            `SELECT
         strftime('${dateFormat}', timestamp) as period,
         COUNT(*) as total_count,
         SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END) as significant_count
@@ -54,7 +70,9 @@ export function getStatistics(
     WHERE deleted_at IS NULL${dateFilter}
     GROUP BY period
     ORDER BY period DESC
-    LIMIT ${String(MAX_PERIOD_ROWS)}`).all(...dateParams) as { period: string; total_count: number; significant_count: number }[]
+    LIMIT ${String(MAX_PERIOD_ROWS)}`
+        )
+        .all(...dateParams) as { period: string; total_count: number; significant_count: number }[]
 
     const entriesByPeriod = periodRows.map((r) => ({
         period: r.period,
@@ -68,13 +86,19 @@ export function getStatistics(
             significantCount: r.significant_count,
         }))
 
-    const relCountRow = db.prepare('SELECT COUNT(*) as count FROM relationships').get() as { count: number }
-    const relTypeRows = db.prepare(`
+    const relCountRow = db.prepare('SELECT COUNT(*) as count FROM relationships').get() as {
+        count: number
+    }
+    const relTypeRows = db
+        .prepare(
+            `
         SELECT relationship_type, COUNT(*) as count
         FROM relationships
         WHERE relationship_type IN ('blocked_by', 'resolved', 'caused')
         GROUP BY relationship_type
-    `).all() as { relationship_type: 'blocked_by' | 'resolved' | 'caused'; count: number }[]
+    `
+        )
+        .all() as { relationship_type: 'blocked_by' | 'resolved' | 'caused'; count: number }[]
 
     const totalRelationships = relCountRow?.count ?? 0
     const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
@@ -83,7 +107,10 @@ export function getStatistics(
     const previousPeriod = entriesByPeriod[1]?.period ?? ''
     const currentCount = entriesByPeriod[0]?.count ?? 0
     const previousCount = entriesByPeriod[1]?.count ?? 0
-    const growthPercent = previousCount > 0 ? Math.round(((currentCount - previousCount) / previousCount) * 100) : null
+    const growthPercent =
+        previousCount > 0
+            ? Math.round(((currentCount - previousCount) / previousCount) * 100)
+            : null
 
     const causalMetrics = { blocked_by: 0, resolved: 0, caused: 0 }
     for (const row of relTypeRows) {
@@ -115,12 +142,16 @@ export function getStatistics(
     }
 
     if (projectBreakdown) {
-        const projRows = db.prepare(`SELECT project_number, COUNT(*) as entry_count
+        const projRows = db
+            .prepare(
+                `SELECT project_number, COUNT(*) as entry_count
             FROM memory_journal
             WHERE deleted_at IS NULL AND project_number IS NOT NULL${dateFilter}
             GROUP BY project_number
-            ORDER BY entry_count DESC`).all(...dateParams) as { project_number: number; entry_count: number }[]
-        
+            ORDER BY entry_count DESC`
+            )
+            .all(...dateParams) as { project_number: number; entry_count: number }[]
+
         result['projectBreakdown'] = projRows.map((r) => ({
             project_number: r.project_number,
             entry_count: r.entry_count,

@@ -45,20 +45,25 @@ const ExportEntriesSchemaMcp = z.object({
     end_date: z.string().optional(),
     entry_types: z.array(z.string()).optional(),
     tags: z.array(z.string()).optional(),
-    limit: relaxedNumber().optional().default(100).describe('Maximum entries to export (default: 100)'),
+    limit: relaxedNumber()
+        .optional()
+        .default(100)
+        .describe('Maximum entries to export (default: 100)'),
 })
 
 // ============================================================================
 // Output Schemas
 // ============================================================================
 
-const ExportEntriesOutputSchema = z.object({
-    format: z.enum(['json', 'markdown']).optional(),
-    entries: z.array(EntryOutputSchema).optional(),
-    content: z.string().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const ExportEntriesOutputSchema = z
+    .object({
+        format: z.enum(['json', 'markdown']).optional(),
+        entries: z.array(EntryOutputSchema).optional(),
+        content: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -84,8 +89,7 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
 
                     // When entry_types filter is active, fetch a larger batch so
                     // post-filtering doesn't silently return empty results.
-                    const hasTypeFilter =
-                        input.entry_types && input.entry_types.length > 0
+                    const hasTypeFilter = input.entry_types && input.entry_types.length > 0
                     const fetchLimit = hasTypeFilter ? 500 : limit
 
                     // Apply filters — use searchByDateRange when dates/tags/types present
@@ -97,10 +101,7 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
                             tags: input.tags,
                             limit: fetchLimit,
                         })
-                    } else if (
-                        (input.tags && input.tags.length > 0) ||
-                        hasTypeFilter
-                    ) {
+                    } else if ((input.tags && input.tags.length > 0) || hasTypeFilter) {
                         // Tags/types filter: use a wide date range to scan the full database
                         entries = db.searchByDateRange(DATE_MIN_SENTINEL, DATE_MAX_SENTINEL, {
                             tags: input.tags,

@@ -9,14 +9,14 @@ The team tool group (`team.ts`) only supports 3 operations: `team_create_entry`,
 
 ## Current vs Proposed
 
-| Capability     | Current | Proposed  |
-|----------------|---------|-----------|
-| Create         | ✅       | —         |
-| Get recent     | ✅       | —         |
-| Search         | ✅       | —         |
-| Get by ID      | ❌       | `team_get_entry_by_id` |
-| Update         | ❌       | `team_update_entry` |
-| Delete         | ❌       | `team_delete_entry` |
+| Capability | Current | Proposed               |
+| ---------- | ------- | ---------------------- |
+| Create     | ✅      | —                      |
+| Get recent | ✅      | —                      |
+| Search     | ✅      | —                      |
+| Get by ID  | ❌      | `team_get_entry_by_id` |
+| Update     | ❌      | `team_update_entry`    |
+| Delete     | ❌      | `team_delete_entry`    |
 
 All 3 new tools follow the established patterns from `team_create_entry` (author enrichment, TEAM_DB_PATH guard, batch author fetch).
 
@@ -100,7 +100,7 @@ The new tools automatically appear in the `mj.team.*` API bridge once registered
 
 ```javascript
 mj.team.getEntryById({ entry_id: 42 })
-mj.team.updateEntry({ entry_id: 42, content: "updated" })
+mj.team.updateEntry({ entry_id: 42, content: 'updated' })
 mj.team.deleteEntry({ entry_id: 42, permanent: true })
 ```
 

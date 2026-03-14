@@ -174,11 +174,16 @@ describe('getExportTools', () => {
         const tools = getExportTools(context as never)
         const handler = tools[0]!.handler
 
-        const result = (await handler({ format: 'json', entry_types: ['project_decision'] })) as Record<string, unknown>
+        const result = (await handler({
+            format: 'json',
+            entry_types: ['project_decision'],
+        })) as Record<string, unknown>
 
         expect(result['format']).toBe('json')
         expect(result['entries']).toHaveLength(1)
-        expect((result['entries'] as Record<string, unknown>[])[0]!['entryType']).toBe('project_decision')
+        expect((result['entries'] as Record<string, unknown>[])[0]!['entryType']).toBe(
+            'project_decision'
+        )
     })
 
     // ========================================================================

@@ -420,7 +420,9 @@ describe('createAuthMiddleware', () => {
             tokenValidator: mockValidator,
             resourceServer: mockResourceServer,
         })
-        const { req, res, next } = makeReqResNext({ path: '/.well-known/oauth-authorization-server' })
+        const { req, res, next } = makeReqResNext({
+            path: '/.well-known/oauth-authorization-server',
+        })
 
         await middleware(req, res, next)
         expect(next).toHaveBeenCalled()
@@ -475,9 +477,7 @@ describe('createAuthMiddleware', () => {
         await middleware(req, res, next)
         expect(next).not.toHaveBeenCalled()
         expect(statusMock).toHaveBeenCalledWith(401)
-        expect(jsonMock).toHaveBeenCalledWith(
-            expect.objectContaining({ error: 'unauthorized' })
-        )
+        expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ error: 'unauthorized' }))
     })
 
     it('should return 401 when token is invalid', async () => {
@@ -498,9 +498,7 @@ describe('createAuthMiddleware', () => {
         await middleware(req, res, next)
         expect(next).not.toHaveBeenCalled()
         expect(statusMock).toHaveBeenCalledWith(401)
-        expect(jsonMock).toHaveBeenCalledWith(
-            expect.objectContaining({ error: 'invalid_token' })
-        )
+        expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ error: 'invalid_token' }))
     })
 
     it('should attach auth context and call next() for valid token', async () => {
@@ -546,9 +544,7 @@ describe('createAuthMiddleware', () => {
         await middleware(req, res, next)
         expect(next).not.toHaveBeenCalled()
         expect(statusMock).toHaveBeenCalledWith(500)
-        expect(jsonMock).toHaveBeenCalledWith(
-            expect.objectContaining({ error: 'internal_error' })
-        )
+        expect(jsonMock).toHaveBeenCalledWith(expect.objectContaining({ error: 'internal_error' }))
     })
 
     it('should not bypass non-matching paths', async () => {

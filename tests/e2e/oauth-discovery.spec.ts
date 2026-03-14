@@ -33,7 +33,7 @@ test.describe('OAuth 2.1 Discovery', () => {
                     '--oauth-audience',
                     'memory-journal-mcp',
                 ],
-                'oauth',
+                'oauth'
             )
         })
 
@@ -43,7 +43,7 @@ test.describe('OAuth 2.1 Discovery', () => {
 
         test('/.well-known/oauth-protected-resource should return RFC 9728 metadata', async () => {
             const response = await fetch(
-                `http://localhost:${OAUTH_PORT}/.well-known/oauth-protected-resource`,
+                `http://localhost:${OAUTH_PORT}/.well-known/oauth-protected-resource`
             )
 
             expect(response.status).toBe(200)
@@ -56,14 +56,12 @@ test.describe('OAuth 2.1 Discovery', () => {
             expect(body.authorization_servers.length).toBeGreaterThan(0)
 
             // Should include the issuer we configured
-            expect(body.authorization_servers).toContain(
-                'https://auth.example.com/realms/test',
-            )
+            expect(body.authorization_servers).toContain('https://auth.example.com/realms/test')
         })
 
         test('/.well-known/oauth-protected-resource should include scopes', async () => {
             const response = await fetch(
-                `http://localhost:${OAUTH_PORT}/.well-known/oauth-protected-resource`,
+                `http://localhost:${OAUTH_PORT}/.well-known/oauth-protected-resource`
             )
 
             const body = await response.json()

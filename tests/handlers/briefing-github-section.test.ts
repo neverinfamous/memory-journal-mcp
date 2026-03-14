@@ -44,12 +44,14 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}) {
             { number: 1, title: 'Bug fix', state: 'open' },
             { number: 2, title: 'Feature request', state: 'open' },
         ]),
-        getPullRequests: vi.fn().mockResolvedValue([
-            { number: 10, title: 'Add feature', state: 'OPEN' },
-        ]),
-        getMilestones: vi.fn().mockResolvedValue([
-            { title: 'v1.0', openIssues: 2, closedIssues: 8, dueOn: '2025-04-01T00:00:00Z' },
-        ]),
+        getPullRequests: vi
+            .fn()
+            .mockResolvedValue([{ number: 10, title: 'Add feature', state: 'OPEN' }]),
+        getMilestones: vi
+            .fn()
+            .mockResolvedValue([
+                { title: 'v1.0', openIssues: 2, closedIssues: 8, dueOn: '2025-04-01T00:00:00Z' },
+            ]),
         getRepoStats: vi.fn().mockResolvedValue({
             stars: 100,
             forks: 25,
@@ -130,9 +132,9 @@ describe('buildGitHubSection', () => {
 
     it('should report failing CI', async () => {
         const github = createMockGitHub({
-            getWorkflowRuns: vi.fn().mockResolvedValue([
-                { name: 'CI', status: 'completed', conclusion: 'failure' },
-            ]),
+            getWorkflowRuns: vi
+                .fn()
+                .mockResolvedValue([{ name: 'CI', status: 'completed', conclusion: 'failure' }]),
         })
 
         const result = await buildGitHubSection(github as never, defaultConfig() as never)
@@ -142,9 +144,9 @@ describe('buildGitHubSection', () => {
 
     it('should report pending CI for in-progress workflows', async () => {
         const github = createMockGitHub({
-            getWorkflowRuns: vi.fn().mockResolvedValue([
-                { name: 'CI', status: 'in_progress', conclusion: null },
-            ]),
+            getWorkflowRuns: vi
+                .fn()
+                .mockResolvedValue([{ name: 'CI', status: 'in_progress', conclusion: null }]),
         })
 
         const result = await buildGitHubSection(github as never, defaultConfig() as never)
@@ -154,9 +156,9 @@ describe('buildGitHubSection', () => {
 
     it('should report cancelled CI', async () => {
         const github = createMockGitHub({
-            getWorkflowRuns: vi.fn().mockResolvedValue([
-                { name: 'CI', status: 'completed', conclusion: 'cancelled' },
-            ]),
+            getWorkflowRuns: vi
+                .fn()
+                .mockResolvedValue([{ name: 'CI', status: 'completed', conclusion: 'cancelled' }]),
         })
 
         const result = await buildGitHubSection(github as never, defaultConfig() as never)

@@ -6,11 +6,7 @@
  * and result size caps.
  */
 
-import {
-    DEFAULT_SECURITY_CONFIG,
-    type SecurityConfig,
-    type ValidationResult,
-} from './types.js'
+import { DEFAULT_SECURITY_CONFIG, type SecurityConfig, type ValidationResult } from './types.js'
 
 // =============================================================================
 // Rate Limiter
@@ -49,9 +45,7 @@ export class CodeModeSecurityManager {
 
         // Length check
         if (Buffer.byteLength(code, 'utf-8') > this.config.maxCodeLength) {
-            errors.push(
-                `Code exceeds maximum length of ${String(this.config.maxCodeLength)} bytes`,
-            )
+            errors.push(`Code exceeds maximum length of ${String(this.config.maxCodeLength)} bytes`)
         }
 
         // Empty code check
@@ -62,9 +56,7 @@ export class CodeModeSecurityManager {
         // Blocked pattern scan
         for (const pattern of this.config.blockedPatterns) {
             if (pattern.test(code)) {
-                errors.push(
-                    `Code contains blocked pattern: ${pattern.source}`,
-                )
+                errors.push(`Code contains blocked pattern: ${pattern.source}`)
             }
         }
 
@@ -126,20 +118,22 @@ export class CodeModeSecurityManager {
     validateResultSize(result: unknown): ValidationResult {
         const errors: string[] = []
         try {
-            // Stringify and measure length iteratively or just check the resulting buffer bounds safely. 
+            // Stringify and measure length iteratively or just check the resulting buffer bounds safely.
             // In Node, creating a huge string can trigger V8 allocation limits (max ~1GB).
             // A safer bounds check limits string allocation immediately.
             const serialized = JSON.stringify(result)
-            
+
             // If stringification succeeded but the string itself is larger than the limit
             if (Buffer.byteLength(serialized, 'utf-8') > this.config.maxResultSize) {
                 errors.push(
-                    `Result exceeds maximum size of ${String(this.config.maxResultSize)} bytes`,
+                    `Result exceeds maximum size of ${String(this.config.maxResultSize)} bytes`
                 )
             }
         } catch (error) {
             if (error instanceof RangeError || String(error).includes('Invalid string length')) {
-                errors.push(`Result exceeds V8 string length allocation limits (> ~${String(this.config.maxResultSize)} bytes)`)
+                errors.push(
+                    `Result exceeds V8 string length allocation limits (> ~${String(this.config.maxResultSize)} bytes)`
+                )
             } else {
                 errors.push('Result could not be serialized to JSON')
             }

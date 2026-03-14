@@ -35,9 +35,7 @@ export function formatUserMessage(opts: {
                 cancelled: '⛔',
                 unknown: '❓',
             }
-            ciDisplay = ws.runs
-                .map((r) => `${icons[r.conclusion] ?? '❓'} ${r.name}`)
-                .join(' · ')
+            ciDisplay = ws.runs.map((r) => `${icons[r.conclusion] ?? '❓'} ${r.name}`).join(' · ')
         } else {
             const parts: string[] = []
             if (ws.passing > 0) parts.push(`${String(ws.passing)} passing`)
@@ -90,8 +88,10 @@ export function formatUserMessage(opts: {
         const parts: string[] = []
         if (github.insights.stars !== null) parts.push(`⭐ ${String(github.insights.stars)} stars`)
         if (github.insights.forks !== null) parts.push(`🍴 ${String(github.insights.forks)} forks`)
-        if (github.insights.clones14d !== undefined) parts.push(`📦 ${String(github.insights.clones14d)} clones`)
-        if (github.insights.views14d !== undefined) parts.push(`👁️ ${String(github.insights.views14d)} views`)
+        if (github.insights.clones14d !== undefined)
+            parts.push(`📦 ${String(github.insights.clones14d)} clones`)
+        if (github.insights.views14d !== undefined)
+            parts.push(`👁️ ${String(github.insights.views14d)} views`)
         if (parts.length > 0) {
             const trafficNote = github.insights.clones14d !== undefined ? ' (14d)' : ''
             insightsRow = `\n| **Insights** | ${parts.join(' · ')}${trafficNote} |`

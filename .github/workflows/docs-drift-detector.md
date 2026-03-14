@@ -1,5 +1,5 @@
 ---
-description: "Audit README and DOCKER_README for consistency and accuracy on every code PR"
+description: 'Audit README and DOCKER_README for consistency and accuracy on every code PR'
 private: true
 labels: [documentation, automation]
 

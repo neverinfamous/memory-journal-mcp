@@ -15,8 +15,6 @@ const ALL_TOOLS = new Set(getAllToolNames())
 /** Minimal tool set for basic testing */
 const TEST_TOOLS = new Set(['create_entry', 'search_entries', 'backup_journal'])
 
-
-
 /** Minimal prompts for testing */
 const TEST_PROMPTS = [{ name: 'test-prompt', description: 'A test prompt' }]
 
@@ -28,33 +26,18 @@ function fullInstructions(): string {
 describe('generateInstructions', () => {
     describe('essential level', () => {
         it('should return non-empty string', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result.length).toBeGreaterThan(0)
         })
 
         it('should include core behaviors', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).toContain('memory://briefing')
             expect(result).toContain('Session Start')
         })
 
         it('should include Quick Access table', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).toContain('Quick Access')
             expect(result).toContain('memory://health')
             expect(result).toContain('semantic_search')
@@ -62,54 +45,29 @@ describe('generateInstructions', () => {
         })
 
         it('should include all three Behaviors bullets', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).toContain('Create entries for')
             expect(result).toContain('Search before')
             expect(result).toContain('Link entries')
         })
 
         it('should not include tool parameter reference', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).not.toContain('Tool Parameter Reference')
         })
 
         it('should not include GitHub Integration heading', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).not.toContain('## GitHub Integration')
         })
 
         it('should not include Session End section (replaced by session-summary prompt)', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).not.toContain('Session End')
         })
 
         it('should include Rule & Skill Suggestions section', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'essential'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).toContain('Rule & Skill Suggestions')
             expect(result).toContain('Always ask the user first')
         })
@@ -117,22 +75,12 @@ describe('generateInstructions', () => {
 
     describe('standard level', () => {
         it('should include GitHub instructions', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'standard'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'standard')
             expect(result).toContain('GitHub')
         })
 
         it('should include GitHub integration patterns', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'standard'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'standard')
             expect(result).toContain('issue_number')
             expect(result).toContain('pr_number')
             expect(result).toContain('actions-failure-digest')
@@ -142,12 +90,7 @@ describe('generateInstructions', () => {
         })
 
         it('should not include tool parameter reference', () => {
-            const result = generateInstructions(
-                TEST_TOOLS,
-                TEST_PROMPTS,
-                undefined,
-                'standard'
-            )
+            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'standard')
             expect(result).not.toContain('Tool Parameter Reference')
         })
     })

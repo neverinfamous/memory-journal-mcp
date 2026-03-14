@@ -62,7 +62,11 @@ describe('ProjectsManager — branch coverage', () => {
                 title: 'Test Project',
                 fields: {
                     nodes: [
-                        { id: 'SF1', name: 'Status', options: [{ id: 'opt1', name: 'Todo', color: 'green' }] },
+                        {
+                            id: 'SF1',
+                            name: 'Status',
+                            options: [{ id: 'opt1', name: 'Todo', color: 'green' }],
+                        },
                     ],
                 },
                 items: { nodes: [] },
@@ -134,7 +138,11 @@ describe('ProjectsManager — branch coverage', () => {
                         title: 'Test',
                         fields: {
                             nodes: [
-                                { id: 'SF1', name: 'Status', options: [{ id: 'opt1', name: 'Todo' }] },
+                                {
+                                    id: 'SF1',
+                                    name: 'Status',
+                                    options: [{ id: 'opt1', name: 'Todo' }],
+                                },
                             ],
                         },
                         items: {
@@ -144,7 +152,9 @@ describe('ProjectsManager — branch coverage', () => {
                                     type: 'DRAFT_ISSUE',
                                     createdAt: '2025-01-01',
                                     updatedAt: '2025-01-01',
-                                    fieldValues: { nodes: [{ name: 'Todo', field: { name: 'Status' } }] },
+                                    fieldValues: {
+                                        nodes: [{ name: 'Todo', field: { name: 'Status' } }],
+                                    },
                                     content: null,
                                 },
                             ],
@@ -165,7 +175,11 @@ describe('ProjectsManager — branch coverage', () => {
                         title: 'Test',
                         fields: {
                             nodes: [
-                                { id: 'SF1', name: 'Status', options: [{ id: 'opt1', name: 'Todo' }] },
+                                {
+                                    id: 'SF1',
+                                    name: 'Status',
+                                    options: [{ id: 'opt1', name: 'Todo' }],
+                                },
                             ],
                         },
                         items: {
@@ -175,8 +189,18 @@ describe('ProjectsManager — branch coverage', () => {
                                     type: 'ISSUE',
                                     createdAt: '2025-01-01',
                                     updatedAt: '2025-01-01',
-                                    fieldValues: { nodes: [{ name: 'Unknown Column', field: { name: 'Status' } }] },
-                                    content: { number: 1, title: 'Orphan', url: 'http://test', labels: { nodes: [] }, assignees: { nodes: [] } },
+                                    fieldValues: {
+                                        nodes: [
+                                            { name: 'Unknown Column', field: { name: 'Status' } },
+                                        ],
+                                    },
+                                    content: {
+                                        number: 1,
+                                        title: 'Orphan',
+                                        url: 'http://test',
+                                        labels: { nodes: [] },
+                                        assignees: { nodes: [] },
+                                    },
                                 },
                             ],
                         },
@@ -270,9 +294,27 @@ describe('PullRequestsManager — branch coverage', () => {
                 pulls: {
                     list: vi.fn().mockResolvedValue({
                         data: [
-                            { number: 1, title: 'Open PR', html_url: 'u1', state: 'open', merged_at: null },
-                            { number: 2, title: 'Merged PR', html_url: 'u2', state: 'closed', merged_at: '2025-01-01' },
-                            { number: 3, title: 'Closed PR', html_url: 'u3', state: 'closed', merged_at: null },
+                            {
+                                number: 1,
+                                title: 'Open PR',
+                                html_url: 'u1',
+                                state: 'open',
+                                merged_at: null,
+                            },
+                            {
+                                number: 2,
+                                title: 'Merged PR',
+                                html_url: 'u2',
+                                state: 'closed',
+                                merged_at: '2025-01-01',
+                            },
+                            {
+                                number: 3,
+                                title: 'Closed PR',
+                                html_url: 'u3',
+                                state: 'closed',
+                                merged_at: null,
+                            },
                         ],
                     }),
                 },
@@ -339,10 +381,22 @@ describe('PullRequestsManager — branch coverage', () => {
                 pulls: {
                     get: vi.fn().mockResolvedValue({
                         data: {
-                            number: 6, title: 'T', html_url: 'u', state: 'open', merged_at: null,
-                            body: null, draft: undefined, head: { ref: 'h' }, base: { ref: 'b' },
-                            user: null, created_at: 'c', updated_at: 'u', closed_at: null,
-                            additions: 0, deletions: 0, changed_files: 0,
+                            number: 6,
+                            title: 'T',
+                            html_url: 'u',
+                            state: 'open',
+                            merged_at: null,
+                            body: null,
+                            draft: undefined,
+                            head: { ref: 'h' },
+                            base: { ref: 'b' },
+                            user: null,
+                            created_at: 'c',
+                            updated_at: 'u',
+                            closed_at: null,
+                            additions: 0,
+                            deletions: 0,
+                            changed_files: 0,
                         },
                     }),
                 },
@@ -378,8 +432,22 @@ describe('PullRequestsManager — branch coverage', () => {
                     pulls: {
                         listReviews: vi.fn().mockResolvedValue({
                             data: [
-                                { id: 1, user: { login: 'copilot-pull-request-reviewer[bot]' }, state: 'APPROVED', body: 'ok', submitted_at: '2025-01-01', commit_id: null },
-                                { id: 2, user: { login: 'human-reviewer' }, state: 'COMMENTED', body: 'comment', submitted_at: null, commit_id: 'abc123' },
+                                {
+                                    id: 1,
+                                    user: { login: 'copilot-pull-request-reviewer[bot]' },
+                                    state: 'APPROVED',
+                                    body: 'ok',
+                                    submitted_at: '2025-01-01',
+                                    commit_id: null,
+                                },
+                                {
+                                    id: 2,
+                                    user: { login: 'human-reviewer' },
+                                    state: 'COMMENTED',
+                                    body: 'comment',
+                                    submitted_at: null,
+                                    commit_id: 'abc123',
+                                },
                             ],
                         }),
                     },
@@ -416,8 +484,26 @@ describe('PullRequestsManager — branch coverage', () => {
                     pulls: {
                         listReviewComments: vi.fn().mockResolvedValue({
                             data: [
-                                { id: 1, user: { login: 'github-copilot[bot]' }, body: 'fix', path: 'a.ts', line: null, original_line: 42, side: null, created_at: 'c' },
-                                { id: 2, user: null, body: 'note', path: 'b.ts', line: 10, original_line: null, side: 'LEFT', created_at: 'c' },
+                                {
+                                    id: 1,
+                                    user: { login: 'github-copilot[bot]' },
+                                    body: 'fix',
+                                    path: 'a.ts',
+                                    line: null,
+                                    original_line: 42,
+                                    side: null,
+                                    created_at: 'c',
+                                },
+                                {
+                                    id: 2,
+                                    user: null,
+                                    body: 'note',
+                                    path: 'b.ts',
+                                    line: 10,
+                                    original_line: null,
+                                    side: 'LEFT',
+                                    created_at: 'c',
+                                },
                             ],
                         }),
                     },
@@ -434,7 +520,9 @@ describe('PullRequestsManager — branch coverage', () => {
 
         it('should handle API error', async () => {
             client.octokit = {
-                rest: { pulls: { listReviewComments: vi.fn().mockRejectedValue(new Error('fail')) } },
+                rest: {
+                    pulls: { listReviewComments: vi.fn().mockRejectedValue(new Error('fail')) },
+                },
             } as never
             expect(await prs.getReviewComments('o', 'r', 1)).toEqual([])
         })
@@ -461,7 +549,14 @@ describe('PullRequestsManager — branch coverage', () => {
                     pulls: {
                         listReviews: vi.fn().mockResolvedValue({
                             data: [
-                                { id: 1, user: { login: 'copilot-pull-request-reviewer[bot]' }, state: 'CHANGES_REQUESTED', body: null, submitted_at: '2025-01-01', commit_id: null },
+                                {
+                                    id: 1,
+                                    user: { login: 'copilot-pull-request-reviewer[bot]' },
+                                    state: 'CHANGES_REQUESTED',
+                                    body: null,
+                                    submitted_at: '2025-01-01',
+                                    commit_id: null,
+                                },
                             ],
                         }),
                         listReviewComments: vi.fn().mockResolvedValue({ data: [] }),
@@ -478,7 +573,14 @@ describe('PullRequestsManager — branch coverage', () => {
                     pulls: {
                         listReviews: vi.fn().mockResolvedValue({
                             data: [
-                                { id: 1, user: { login: 'copilot[bot]' }, state: 'COMMENTED', body: 'review', submitted_at: '2025-01-01', commit_id: null },
+                                {
+                                    id: 1,
+                                    user: { login: 'copilot[bot]' },
+                                    state: 'COMMENTED',
+                                    body: 'review',
+                                    submitted_at: '2025-01-01',
+                                    commit_id: null,
+                                },
                             ],
                         }),
                         listReviewComments: vi.fn().mockResolvedValue({ data: [] }),
@@ -510,9 +612,11 @@ describe('RepositoryManager — branch coverage', () => {
         it('should parse SSH remote URL', async () => {
             client.git = {
                 branch: vi.fn().mockResolvedValue({ current: 'main' }),
-                getRemotes: vi.fn().mockResolvedValue([
-                    { name: 'origin', refs: { fetch: 'git@github.com:owner/repo.git' } },
-                ]),
+                getRemotes: vi
+                    .fn()
+                    .mockResolvedValue([
+                        { name: 'origin', refs: { fetch: 'git@github.com:owner/repo.git' } },
+                    ]),
             } as never
             const result = await repo.getRepoInfo()
             expect(result.owner).toBe('owner')
@@ -522,9 +626,11 @@ describe('RepositoryManager — branch coverage', () => {
         it('should parse HTTPS remote URL', async () => {
             client.git = {
                 branch: vi.fn().mockResolvedValue({ current: 'dev' }),
-                getRemotes: vi.fn().mockResolvedValue([
-                    { name: 'origin', refs: { fetch: 'https://github.com/org/project.git' } },
-                ]),
+                getRemotes: vi
+                    .fn()
+                    .mockResolvedValue([
+                        { name: 'origin', refs: { fetch: 'https://github.com/org/project.git' } },
+                    ]),
             } as never
             const result = await repo.getRepoInfo()
             expect(result.owner).toBe('org')
@@ -543,9 +649,11 @@ describe('RepositoryManager — branch coverage', () => {
         it('should handle non-GitHub URL', async () => {
             client.git = {
                 branch: vi.fn().mockResolvedValue({ current: 'main' }),
-                getRemotes: vi.fn().mockResolvedValue([
-                    { name: 'origin', refs: { fetch: 'https://gitlab.com/user/repo.git' } },
-                ]),
+                getRemotes: vi
+                    .fn()
+                    .mockResolvedValue([
+                        { name: 'origin', refs: { fetch: 'https://gitlab.com/user/repo.git' } },
+                    ]),
             } as never
             const result = await repo.getRepoInfo()
             expect(result.owner).toBeNull()
@@ -554,9 +662,9 @@ describe('RepositoryManager — branch coverage', () => {
         it('should handle invalid URL string', async () => {
             client.git = {
                 branch: vi.fn().mockResolvedValue({ current: 'main' }),
-                getRemotes: vi.fn().mockResolvedValue([
-                    { name: 'origin', refs: { fetch: 'not-a-url' } },
-                ]),
+                getRemotes: vi
+                    .fn()
+                    .mockResolvedValue([{ name: 'origin', refs: { fetch: 'not-a-url' } }]),
             } as never
             const result = await repo.getRepoInfo()
             expect(result.owner).toBeNull()
@@ -574,9 +682,11 @@ describe('RepositoryManager — branch coverage', () => {
         it('should handle empty branch name', async () => {
             client.git = {
                 branch: vi.fn().mockResolvedValue({ current: '' }),
-                getRemotes: vi.fn().mockResolvedValue([
-                    { name: 'origin', refs: { fetch: 'git@github.com:a/b.git' } },
-                ]),
+                getRemotes: vi
+                    .fn()
+                    .mockResolvedValue([
+                        { name: 'origin', refs: { fetch: 'git@github.com:a/b.git' } },
+                    ]),
             } as never
             const result = await repo.getRepoInfo()
             expect(result.branch).toBeNull()
@@ -608,7 +718,17 @@ describe('RepositoryManager — branch coverage', () => {
                         listWorkflowRunsForRepo: vi.fn().mockResolvedValue({
                             data: {
                                 workflow_runs: [
-                                    { id: 1, name: null, status: 'completed', conclusion: 'success', html_url: 'u', head_branch: null, head_sha: 'abc', created_at: 'c', updated_at: 'u' },
+                                    {
+                                        id: 1,
+                                        name: null,
+                                        status: 'completed',
+                                        conclusion: 'success',
+                                        html_url: 'u',
+                                        head_branch: null,
+                                        head_sha: 'abc',
+                                        created_at: 'c',
+                                        updated_at: 'u',
+                                    },
                                 ],
                             },
                         }),
@@ -623,7 +743,9 @@ describe('RepositoryManager — branch coverage', () => {
         it('should handle API error', async () => {
             client.octokit = {
                 rest: {
-                    actions: { listWorkflowRunsForRepo: vi.fn().mockRejectedValue(new Error('fail')) },
+                    actions: {
+                        listWorkflowRunsForRepo: vi.fn().mockRejectedValue(new Error('fail')),
+                    },
                 },
             } as never
             expect(await repo.getWorkflowRuns('o', 'r')).toEqual([])

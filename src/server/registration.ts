@@ -81,11 +81,8 @@ export function registerResources(
                 async (uri: URL, _variables: Variables) => handleResourceRead(uri, mimeType)
             )
         } else {
-            server.registerResource(
-                resDef.name,
-                resDef.uri,
-                meta,
-                async (uri: URL) => handleResourceRead(uri, mimeType)
+            server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) =>
+                handleResourceRead(uri, mimeType)
             )
         }
     }

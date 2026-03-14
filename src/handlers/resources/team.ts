@@ -23,7 +23,10 @@ function enrichWithAuthor<T extends { id: number }>(
     const teamDb = context.teamDb
     if (!teamDb) return entries.map((e: T) => ({ ...e, author: null }))
     return entries.map((e: T) => {
-        const authorResult = teamDb.executeRawQuery('SELECT author FROM memory_journal WHERE id = ?', [e.id])
+        const authorResult = teamDb.executeRawQuery(
+            'SELECT author FROM memory_journal WHERE id = ?',
+            [e.id]
+        )
         const author = (authorResult[0]?.values[0]?.[0] as string) ?? null
         return { ...e, author }
     })

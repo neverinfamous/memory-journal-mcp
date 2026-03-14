@@ -51,7 +51,7 @@ RUN npm ci
 RUN rm -rf node_modules/protobufjs/cli
 
 # Copy source code
-COPY tsconfig.json ./
+COPY tsconfig.json tsup.config.ts ./
 COPY src/ ./src/
 
 # Build TypeScript

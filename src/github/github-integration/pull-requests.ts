@@ -1,6 +1,11 @@
 import { logger } from '../../utils/logger.js'
 import type { GitHubClient } from './client.js'
-import type { GitHubPullRequest, GitHubReview, GitHubReviewComment, CopilotReviewSummary } from '../../types/index.js'
+import type {
+    GitHubPullRequest,
+    GitHubReview,
+    GitHubReviewComment,
+    CopilotReviewSummary,
+} from '../../types/index.js'
 import type { PullRequestDetails } from './types.js'
 
 export class PullRequestsManager {
@@ -114,14 +119,12 @@ export class PullRequestsManager {
 
     private static isCopilotAuthor(login: string): boolean {
         const lower = login.toLowerCase()
-        return PullRequestsManager.COPILOT_BOT_PATTERNS.some((p) => lower === p || lower.includes('copilot'))
+        return PullRequestsManager.COPILOT_BOT_PATTERNS.some(
+            (p) => lower === p || lower.includes('copilot')
+        )
     }
 
-    async getReviews(
-        owner: string,
-        repo: string,
-        prNumber: number
-    ): Promise<GitHubReview[]> {
+    async getReviews(owner: string, repo: string, prNumber: number): Promise<GitHubReview[]> {
         if (!this.client.octokit) return []
 
         const cacheKey = `reviews:${owner}:${repo}:${String(prNumber)}`

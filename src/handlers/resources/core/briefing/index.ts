@@ -10,7 +10,12 @@ import pkg from '../../../../../package.json' with { type: 'json' }
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
-import { buildJournalContext, buildTeamContext, buildRulesFileInfo, buildSkillsDirInfo } from './context-section.js'
+import {
+    buildJournalContext,
+    buildTeamContext,
+    buildRulesFileInfo,
+    buildSkillsDirInfo,
+} from './context-section.js'
 import { formatUserMessage } from './user-message.js'
 
 export const briefingResource: InternalResourceDef = {

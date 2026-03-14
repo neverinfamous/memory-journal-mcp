@@ -21,12 +21,9 @@ test.describe('Tool Filtering', () => {
         await startServer(FILTER_PORT, ['--tool-filter', 'starter'], 'tool-filter')
 
         const transport = new StreamableHTTPClientTransport(
-            new URL(`http://localhost:${FILTER_PORT}/mcp`),
+            new URL(`http://localhost:${FILTER_PORT}/mcp`)
         )
-        client = new Client(
-            { name: 'tool-filter-test', version: '1.0.0' },
-            { capabilities: {} },
-        )
+        client = new Client({ name: 'tool-filter-test', version: '1.0.0' }, { capabilities: {} })
         await client.connect(transport)
     })
 

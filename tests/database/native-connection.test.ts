@@ -173,7 +173,9 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
 
             const db = mgr.getRawDb() as Database
-            db.exec("INSERT INTO memory_journal (entry_type, content, timestamp, is_personal) VALUES ('test_entry', 'test content', datetime('now'), 1)")
+            db.exec(
+                "INSERT INTO memory_journal (entry_type, content, timestamp, is_personal) VALUES ('test_entry', 'test content', datetime('now'), 1)"
+            )
 
             const result = mgr.exec('SELECT COUNT(*) as c FROM memory_journal', [])
             expect(result).toBeDefined()

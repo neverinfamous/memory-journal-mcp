@@ -9,6 +9,7 @@ Memory Journal MCP is a TypeScript MCP (Model Context Protocol) server providing
 ## Session Context
 
 Before starting work on this project, read `memory://briefing` from the `memory-journal-mcp` server for real-time context:
+
 - **Recent journal entries** — what was just worked on by the development agent
 - **GitHub status** — open issues, PRs, CI status, milestones
 - **Workflow runs** — recent CI/CD results
@@ -100,12 +101,12 @@ src/
 
 ## Key Reference Files
 
-| File | Purpose |
-|------|---------|
+| File                                   | Purpose                                               |
+| -------------------------------------- | ----------------------------------------------------- |
 | `src/constants/server-instructions.md` | Full tool parameter reference and behavioral guidance |
-| `docs/code-map.md` | File → tool/handler mapping |
-| `docs/tool-reference.md` | Categorized 44-tool inventory |
-| `CONTRIBUTING.md` | Development setup and PR guidelines |
+| `docs/code-map.md`                     | File → tool/handler mapping                           |
+| `docs/tool-reference.md`               | Categorized 44-tool inventory                         |
+| `CONTRIBUTING.md`                      | Development setup and PR guidelines                   |
 
 ## Review Checklist
 

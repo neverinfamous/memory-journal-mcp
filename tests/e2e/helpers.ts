@@ -22,7 +22,10 @@ const BASE_URL = 'http://localhost:3100/mcp'
  */
 export async function createClient(port = 3100): Promise<Client> {
     const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${port}/mcp`))
-    const client = new Client({ name: 'payload-contract-test', version: '1.0.0' }, { capabilities: {} })
+    const client = new Client(
+        { name: 'payload-contract-test', version: '1.0.0' },
+        { capabilities: {} }
+    )
     await client.connect(transport)
     return client
 }
@@ -34,7 +37,7 @@ export async function createClient(port = 3100): Promise<Client> {
 export async function callToolAndParse(
     client: Client,
     toolName: string,
-    args: Record<string, unknown>,
+    args: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
     const response = await client.callTool({ name: toolName, arguments: args })
 
@@ -82,7 +85,7 @@ const managedServers = new Map<number, ManagedServer>()
 export async function startServer(
     port: number,
     args: string[] = [],
-    dbSuffix?: string,
+    dbSuffix?: string
 ): Promise<void> {
     const suffix = dbSuffix ?? String(port)
     const serverProcess = spawn(
@@ -102,9 +105,11 @@ export async function startServer(
             stdio: 'pipe',
             env: {
                 ...process.env,
-                MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max') ? undefined : '10000',
+                MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
+                    ? undefined
+                    : '10000',
             },
-        },
+        }
     )
 
     managedServers.set(port, { process: serverProcess, port })

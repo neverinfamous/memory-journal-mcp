@@ -11,13 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Hoisted mock functions (must be declared before vi.mock)
 // ============================================================================
 
-const {
-    mockEmbedderFn,
-    mockPrepare,
-    mockRun,
-    mockAll,
-    mockGet,
-} = vi.hoisted(() => ({
+const { mockEmbedderFn, mockPrepare, mockRun, mockAll, mockGet } = vi.hoisted(() => ({
     mockEmbedderFn: vi.fn(),
     mockPrepare: vi.fn(),
     mockRun: vi.fn(),

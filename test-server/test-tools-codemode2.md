@@ -32,25 +32,25 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 
 ### 22.1 Read-Only Pipelines
 
-| Test | Code | Expected Result |
-|------|------|--------------------|
-| Stats + recent summary | `const stats = await mj.analytics.getStatistics({}); const recent = await mj.core.getRecentEntries({limit: 3}); return { total: stats.totalEntries, recentCount: recent.entries.length };` | Both fields populated |
-| Search + count | `const results = await mj.search.searchEntries({query: "test", limit: 5}); return { matchCount: results.entries.length, query: "test" };` | `matchCount` ≥ 0, `query: "test"` |
+| Test                    | Code                                                                                                                                                                                                                                                                                                                      | Expected Result                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Stats + recent summary  | `const stats = await mj.analytics.getStatistics({}); const recent = await mj.core.getRecentEntries({limit: 3}); return { total: stats.totalEntries, recentCount: recent.entries.length };`                                                                                                                                | Both fields populated             |
+| Search + count          | `const results = await mj.search.searchEntries({query: "test", limit: 5}); return { matchCount: results.entries.length, query: "test" };`                                                                                                                                                                                 | `matchCount` ≥ 0, `query: "test"` |
 | Recent + tag extraction | `const r = await mj.core.getRecentEntries({limit: 10}); const tags = r.entries.flatMap(e => e.tags \|\| []); const counts = {}; for (const t of tags) { counts[t] = (counts[t] \|\| 0) + 1; } return { uniqueTags: Object.keys(counts).length, topTags: Object.entries(counts).sort(([,a],[,b]) => b - a).slice(0, 5) };` | `uniqueTags` ≥ 0, `topTags` array |
 
 ### 22.2 Conditional Branching
 
-| Test | Code | Expected Result |
-|------|------|--------------------|
+| Test                 | Code                                                                                                                                                                                | Expected Result                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Conditional on stats | `const s = await mj.analytics.getStatistics({}); if (s.totalEntries > 0) { return { status: "has entries", count: s.totalEntries }; } else { return { status: "empty journal" }; }` | Returns either branch based on data |
-| Loop over entries | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entry_type, len: e.content?.length ?? 0 })); return summaries;` | Array of summary objects |
+| Loop over entries    | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entry_type, len: e.content?.length ?? 0 })); return summaries;`    | Array of summary objects            |
 
 ### 22.3 Create + Read Round-Trip (via Code Mode)
 
-| Test | Code | Expected Result |
-|------|------|--------------------|
-| Create + read back | `const created = await mj.core.createEntryMinimal({content: "Code Mode round-trip test"}); const fetched = await mj.core.getEntryById({entry_id: created.entry.id}); return { createdId: created.entry.id, fetchedContent: fetched.entry.content };` | `fetchedContent` matches "Code Mode round-trip test" |
-| Create + search | `const created = await mj.core.createEntry({content: "CodeMode search marker XYZ789", tags: ["codemode-test"]}); const found = await mj.search.searchEntries({query: "CodeMode search marker XYZ789", limit: 1}); return { found: found.entries.length > 0, createdId: created.entry.id };` | `found: true` |
+| Test               | Code                                                                                                                                                                                                                                                                                        | Expected Result                                      |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Create + read back | `const created = await mj.core.createEntryMinimal({content: "Code Mode round-trip test"}); const fetched = await mj.core.getEntryById({entry_id: created.entry.id}); return { createdId: created.entry.id, fetchedContent: fetched.entry.content };`                                        | `fetchedContent` matches "Code Mode round-trip test" |
+| Create + search    | `const created = await mj.core.createEntry({content: "CodeMode search marker XYZ789", tags: ["codemode-test"]}); const found = await mj.search.searchEntries({query: "CodeMode search marker XYZ789", limit: 1}); return { found: found.entries.length > 0, createdId: created.entry.id };` | `found: true`                                        |
 
 ---
 
@@ -63,86 +63,86 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 
 ```javascript
 // Test code:
-const stats = await mj.analytics.getStatistics({});
-const recent = await mj.core.getRecentEntries({ limit: 5 });
-const tags = await mj.core.listTags({});
+const stats = await mj.analytics.getStatistics({})
+const recent = await mj.core.getRecentEntries({ limit: 5 })
+const tags = await mj.core.listTags({})
 return {
   totalEntries: stats.totalEntries,
-  recentTitles: recent.entries.map(e => e.title || e.content?.substring(0, 50)),
+  recentTitles: recent.entries.map((e) => e.title || e.content?.substring(0, 50)),
   tagCount: tags.tags?.length ?? 0,
-  healthStatus: stats.totalEntries > 0 ? "healthy" : "empty"
-};
+  healthStatus: stats.totalEntries > 0 ? 'healthy' : 'empty',
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `totalEntries` | Number > 0 |
+| Check          | Expected         |
+| -------------- | ---------------- |
+| `totalEntries` | Number > 0       |
 | `recentTitles` | Array of strings |
-| `tagCount` | Number ≥ 0 |
-| `healthStatus` | `"healthy"` |
+| `tagCount`     | Number ≥ 0       |
+| `healthStatus` | `"healthy"`      |
 
 ### 23.2 GitHub-Journal Coverage Report
 
 ```javascript
 // Test code:
-const issues = await mj.github.getGithubIssues({ limit: 3 });
-const results = [];
+const issues = await mj.github.getGithubIssues({ limit: 3 })
+const results = []
 for (const issue of (issues.issues || []).slice(0, 2)) {
   const entries = await mj.search.searchEntries({
     query: `#${issue.number}`,
-    limit: 3
-  });
+    limit: 3,
+  })
   results.push({
     issue: `#${issue.number}: ${issue.title}`,
-    linkedEntries: entries.entries.length
-  });
+    linkedEntries: entries.entries.length,
+  })
 }
-return { issueCount: issues.issues?.length ?? 0, coverage: results };
+return { issueCount: issues.issues?.length ?? 0, coverage: results }
 ```
 
-| Check | Expected |
-|-------|----------|
-| `issueCount` | Number ≥ 0 |
-| `coverage` | Array with `issue` and `linkedEntries` per item |
+| Check        | Expected                                        |
+| ------------ | ----------------------------------------------- |
+| `issueCount` | Number ≥ 0                                      |
+| `coverage`   | Array with `issue` and `linkedEntries` per item |
 
 ### 23.3 Tag Analysis Pipeline
 
 ```javascript
 // Test code:
-const tagList = await mj.core.listTags({});
-const topTags = (tagList.tags || []).sort((a, b) => b.count - a.count).slice(0, 3);
-const report = [];
+const tagList = await mj.core.listTags({})
+const topTags = (tagList.tags || []).sort((a, b) => b.count - a.count).slice(0, 3)
+const report = []
 for (const tag of topTags) {
-  const entries = await mj.search.searchEntries({ query: tag.name, limit: 2 });
-  report.push({ tag: tag.name, count: tag.count, sampleEntries: entries.entries.length });
+  const entries = await mj.search.searchEntries({ query: tag.name, limit: 2 })
+  report.push({ tag: tag.name, count: tag.count, sampleEntries: entries.entries.length })
 }
-return { analyzedTags: report.length, report };
+return { analyzedTags: report.length, report }
 ```
 
-| Check | Expected |
-|-------|----------|
-| `analyzedTags` | Number ≥ 0 |
-| `report` | Array with `tag`, `count`, `sampleEntries` per item |
+| Check          | Expected                                            |
+| -------------- | --------------------------------------------------- |
+| `analyzedTags` | Number ≥ 0                                          |
+| `report`       | Array with `tag`, `count`, `sampleEntries` per item |
 
 ### 23.4 Relationship Graph Summary
 
 ```javascript
 // Test code:
-const recent = await mj.core.getRecentEntries({ limit: 5 });
-const withRelationships = [];
+const recent = await mj.core.getRecentEntries({ limit: 5 })
+const withRelationships = []
 for (const entry of recent.entries.slice(0, 3)) {
-  const detail = await mj.core.getEntryById({ entry_id: entry.id });
-  const relCount = detail.entry?.relationships?.length ?? 0;
+  const detail = await mj.core.getEntryById({ entry_id: entry.id })
+  const relCount = detail.entry?.relationships?.length ?? 0
   if (relCount > 0) {
-    withRelationships.push({ id: entry.id, relationships: relCount });
+    withRelationships.push({ id: entry.id, relationships: relCount })
   }
 }
-return { checked: Math.min(recent.entries.length, 3), withRelationships };
+return { checked: Math.min(recent.entries.length, 3), withRelationships }
 ```
 
-| Check | Expected |
-|-------|----------|
-| `checked` | Number (1-3) |
+| Check               | Expected                                       |
+| ------------------- | ---------------------------------------------- |
+| `checked`           | Number (1-3)                                   |
 | `withRelationships` | Array (may be empty if no relationships exist) |
 
 ### 23.5 Full Pipeline: Create → Index → Search
@@ -153,29 +153,29 @@ return { checked: Math.min(recent.entries.length, 3), withRelationships };
 ```javascript
 // Test code:
 const entry = await mj.core.createEntry({
-  content: "Code Mode pipeline test: semantic indexing verification ZQJKM",
-  tags: ["codemode-pipeline-test"],
-  entry_type: "technical_note"
-});
-await mj.admin.addToVectorIndex({ entry_id: entry.entry.id });
+  content: 'Code Mode pipeline test: semantic indexing verification ZQJKM',
+  tags: ['codemode-pipeline-test'],
+  entry_type: 'technical_note',
+})
+await mj.admin.addToVectorIndex({ entry_id: entry.entry.id })
 const found = await mj.search.semanticSearch({
-  query: "semantic indexing verification",
-  limit: 5
-});
-const match = found.entries?.some(e => e.id === entry.entry.id);
+  query: 'semantic indexing verification',
+  limit: 5,
+})
+const match = found.entries?.some((e) => e.id === entry.entry.id)
 return {
   createdId: entry.entry.id,
   indexed: true,
   foundInSemantic: match,
-  totalResults: found.entries?.length ?? 0
-};
+  totalResults: found.entries?.length ?? 0,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `createdId` | Number |
+| Check             | Expected                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| `createdId`       | Number                                                                                                |
 | `foundInSemantic` | `true` or `false` — may be `false` due to vector indexing latency within a single Code Mode execution |
-| `totalResults` | ≥ 1 |
+| `totalResults`    | ≥ 1                                                                                                   |
 
 ---
 
@@ -185,31 +185,36 @@ return {
 
 ```javascript
 // Test code:
-const r = await mj.core.getRecentEntries({ limit: 4 });
-const ids = r.entries.map(e => e.id);
-if (ids.length < 4) return { error: "Need at least 4 entries" };
+const r = await mj.core.getRecentEntries({ limit: 4 })
+const ids = r.entries.map((e) => e.id)
+if (ids.length < 4) return { error: 'Need at least 4 entries' }
 
 const ref = await mj.relationships.linkEntries({
-  from_entry_id: ids[0], to_entry_id: ids[1],
-  relationship_type: "references"
-});
+  from_entry_id: ids[0],
+  to_entry_id: ids[1],
+  relationship_type: 'references',
+})
 const impl = await mj.relationships.linkEntries({
-  from_entry_id: ids[0], to_entry_id: ids[2],
-  relationship_type: "implements",
-  description: "Implements the spec"
-});
+  from_entry_id: ids[0],
+  to_entry_id: ids[2],
+  relationship_type: 'implements',
+  description: 'Implements the spec',
+})
 const blocked = await mj.relationships.linkEntries({
-  from_entry_id: ids[0], to_entry_id: ids[3],
-  relationship_type: "blocked_by"
-});
+  from_entry_id: ids[0],
+  to_entry_id: ids[3],
+  relationship_type: 'blocked_by',
+})
 const resolved = await mj.relationships.linkEntries({
-  from_entry_id: ids[1], to_entry_id: ids[2],
-  relationship_type: "resolved"
-});
+  from_entry_id: ids[1],
+  to_entry_id: ids[2],
+  relationship_type: 'resolved',
+})
 const caused = await mj.relationships.linkEntries({
-  from_entry_id: ids[2], to_entry_id: ids[3],
-  relationship_type: "caused"
-});
+  from_entry_id: ids[2],
+  to_entry_id: ids[3],
+  relationship_type: 'caused',
+})
 return {
   refSuccess: ref.success,
   implSuccess: impl.success,
@@ -217,84 +222,88 @@ return {
   blockedSuccess: blocked.success,
   resolvedSuccess: resolved.success,
   causedSuccess: caused.success,
-  entryIds: ids
-};
+  entryIds: ids,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| All `*Success` | `true` |
-| `implHasDesc` | `true` |
+| Check          | Expected |
+| -------------- | -------- |
+| All `*Success` | `true`   |
+| `implHasDesc`  | `true`   |
 
 ### 24.2 Link Entries — Duplicate & Error Paths
 
 ```javascript
 // Test code (run after 24.1):
-const r = await mj.core.getRecentEntries({ limit: 2 });
-const [a, b] = r.entries.map(e => e.id);
+const r = await mj.core.getRecentEntries({ limit: 2 })
+const [a, b] = r.entries.map((e) => e.id)
 
 const dup = await mj.relationships.linkEntries({
-  from_entry_id: a, to_entry_id: b,
-  relationship_type: "references"
-});
+  from_entry_id: a,
+  to_entry_id: b,
+  relationship_type: 'references',
+})
 const reverse = await mj.relationships.linkEntries({
-  from_entry_id: b, to_entry_id: a,
-  relationship_type: "references"
-});
+  from_entry_id: b,
+  to_entry_id: a,
+  relationship_type: 'references',
+})
 const badSource = await mj.relationships.linkEntries({
-  from_entry_id: 999999, to_entry_id: b,
-  relationship_type: "references"
-});
+  from_entry_id: 999999,
+  to_entry_id: b,
+  relationship_type: 'references',
+})
 const badTarget = await mj.relationships.linkEntries({
-  from_entry_id: a, to_entry_id: 999999,
-  relationship_type: "references"
-});
+  from_entry_id: a,
+  to_entry_id: 999999,
+  relationship_type: 'references',
+})
 return {
   dupDetected: dup.duplicate === true,
   dupHasMessage: !!dup.message,
   reverseSuccess: reverse.success,
   badSourceFailed: badSource.success === false,
-  badTargetFailed: badTarget.success === false
-};
+  badTargetFailed: badTarget.success === false,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `dupDetected` | `true` |
-| `reverseSuccess` | `true` (reverse direction allowed) |
-| `badSourceFailed` | `true` |
-| `badTargetFailed` | `true` |
+| Check             | Expected                           |
+| ----------------- | ---------------------------------- |
+| `dupDetected`     | `true`                             |
+| `reverseSuccess`  | `true` (reverse direction allowed) |
+| `badSourceFailed` | `true`                             |
+| `badTargetFailed` | `true`                             |
 
 ### 24.3 Visualize Relationships
 
 ```javascript
 // Test code:
-const r = await mj.core.getRecentEntries({ limit: 1 });
-const id = r.entries[0].id;
+const r = await mj.core.getRecentEntries({ limit: 1 })
+const id = r.entries[0].id
 
-const viz = await mj.relationships.visualizeRelationships({ entry_id: id });
-const vizTags = await mj.relationships.visualizeRelationships({ tags: ["architecture"] });
-const vizDeep = await mj.relationships.visualizeRelationships({ entry_id: id, depth: 3 });
-const vizLimit = await mj.relationships.visualizeRelationships({ entry_id: id, limit: 5 });
-const vizBad = await mj.relationships.visualizeRelationships({ entry_id: 999999 });
+const viz = await mj.relationships.visualizeRelationships({ entry_id: id })
+const vizTags = await mj.relationships.visualizeRelationships({ tags: ['architecture'] })
+const vizDeep = await mj.relationships.visualizeRelationships({ entry_id: id, depth: 3 })
+const vizLimit = await mj.relationships.visualizeRelationships({ entry_id: id, limit: 5 })
+const vizBad = await mj.relationships.visualizeRelationships({ entry_id: 999999 })
 return {
-  hasMermaid: typeof viz.mermaid === "string" && viz.mermaid.length > 0,
+  hasMermaid: typeof viz.mermaid === 'string' && viz.mermaid.length > 0,
   hasLegend: !!viz.legend,
   entryCount: viz.entry_count,
   relCount: viz.relationship_count,
-  tagVizHasMermaid: typeof vizTags.mermaid === "string",
+  tagVizHasMermaid: typeof vizTags.mermaid === 'string',
   deepEntryCount: vizDeep.entry_count,
   limitEntryCount: vizLimit.entry_count,
-  badNotFound: !!vizBad.message && vizBad.message.includes("not found")
-};
+  badNotFound: !!vizBad.message && vizBad.message.includes('not found'),
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `hasMermaid` | `true` |
-| `hasLegend` | `true` |
-| `entryCount` | ≥ 1 |
-| `badNotFound` | `true` |
+| Check         | Expected |
+| ------------- | -------- |
+| `hasMermaid`  | `true`   |
+| `hasLegend`   | `true`   |
+| `entryCount`  | ≥ 1      |
+| `badNotFound` | `true`   |
 
 ---
 
@@ -307,18 +316,18 @@ return {
 
 ```javascript
 // Test code:
-const ctx = await mj.github.getGithubContext({});
-const issues = await mj.github.getGithubIssues({ limit: 3 });
-const closedIssues = await mj.github.getGithubIssues({ state: "closed", limit: 2 });
-const prs = await mj.github.getGithubPrs({ limit: 3 });
-const closedPrs = await mj.github.getGithubPrs({ state: "closed", limit: 2 });
-const milestones = await mj.github.getGithubMilestones({});
+const ctx = await mj.github.getGithubContext({})
+const issues = await mj.github.getGithubIssues({ limit: 3 })
+const closedIssues = await mj.github.getGithubIssues({ state: 'closed', limit: 2 })
+const prs = await mj.github.getGithubPrs({ limit: 3 })
+const closedPrs = await mj.github.getGithubPrs({ state: 'closed', limit: 2 })
+const milestones = await mj.github.getGithubMilestones({})
 
 // Single-item lookups (use known numbers from context)
-const issueNum = issues.issues?.[0]?.number;
-const prNum = prs.pullRequests?.[0]?.number ?? closedPrs.pullRequests?.[0]?.number;
-const singleIssue = issueNum ? await mj.github.getGithubIssue({ issue_number: issueNum }) : null;
-const singlePr = prNum ? await mj.github.getGithubPr({ pr_number: prNum }) : null;
+const issueNum = issues.issues?.[0]?.number
+const prNum = prs.pullRequests?.[0]?.number ?? closedPrs.pullRequests?.[0]?.number
+const singleIssue = issueNum ? await mj.github.getGithubIssue({ issue_number: issueNum }) : null
+const singlePr = prNum ? await mj.github.getGithubPr({ pr_number: prNum }) : null
 
 return {
   contextHasRepo: !!ctx.repoName,
@@ -330,48 +339,48 @@ return {
   closedPrCount: closedPrs.count,
   milestoneCount: milestones.count,
   singleIssueHasBody: !!singleIssue?.issue?.body !== undefined,
-  singlePrHasDraft: singlePr?.pullRequest?.draft !== undefined
-};
+  singlePrHasDraft: singlePr?.pullRequest?.draft !== undefined,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `contextHasRepo` | `true` |
-| `contextHasBranch` | `true` |
-| `issueCount` | ≥ 0 |
-| `milestoneCount` | ≥ 0 |
+| Check              | Expected |
+| ------------------ | -------- |
+| `contextHasRepo`   | `true`   |
+| `contextHasBranch` | `true`   |
+| `issueCount`       | ≥ 0      |
+| `milestoneCount`   | ≥ 0      |
 
 ### 25.2 GitHub Error Paths
 
-| Test | Code | Expected Result |
-|------|------|--------------------|
-| Nonexistent issue | `return await mj.github.getGithubIssue({ issue_number: 999999 });` | `{ error: "Issue #999999 not found" }` |
-| Nonexistent PR | `return await mj.github.getGithubPr({ pr_number: 999999 });` | `{ error: "PR #999999 not found" }` |
+| Test                  | Code                                                                       | Expected Result                            |
+| --------------------- | -------------------------------------------------------------------------- | ------------------------------------------ |
+| Nonexistent issue     | `return await mj.github.getGithubIssue({ issue_number: 999999 });`         | `{ error: "Issue #999999 not found" }`     |
+| Nonexistent PR        | `return await mj.github.getGithubPr({ pr_number: 999999 });`               | `{ error: "PR #999999 not found" }`        |
 | Nonexistent milestone | `return await mj.github.getGithubMilestone({ milestone_number: 999999 });` | `{ error: "Milestone #999999 not found" }` |
-| Nonexistent Kanban | `return await mj.github.getKanbanBoard({ project_number: 99999 });` | Structured error with project not found |
+| Nonexistent Kanban    | `return await mj.github.getKanbanBoard({ project_number: 99999 });`        | Structured error with project not found    |
 
 ### 25.3 Kanban Tools
 
 ```javascript
 // Test code:
-const board = await mj.github.getKanbanBoard({ project_number: 5 });
-const hasItems = board.columns?.some(c => c.items?.length > 0);
-const itemId = board.columns?.flatMap(c => c.items ?? []).find(i => i)?.id;
+const board = await mj.github.getKanbanBoard({ project_number: 5 })
+const hasItems = board.columns?.some((c) => c.items?.length > 0)
+const itemId = board.columns?.flatMap((c) => c.items ?? []).find((i) => i)?.id
 
-let moveResult = null;
+let moveResult = null
 if (itemId) {
   moveResult = await mj.github.moveKanbanItem({
     project_number: 5,
     item_id: itemId,
-    target_status: "In progress"
-  });
+    target_status: 'In progress',
+  })
 }
 
 const badMove = await mj.github.moveKanbanItem({
   project_number: 5,
-  item_id: itemId || "fake-id",
-  target_status: "Nonexistent Status"
-});
+  item_id: itemId || 'fake-id',
+  target_status: 'Nonexistent Status',
+})
 
 return {
   boardHasColumns: Array.isArray(board.columns),
@@ -379,17 +388,17 @@ return {
   hasItems,
   moveSuccess: moveResult?.success,
   badMoveError: badMove.success === false,
-  badMoveHasStatuses: Array.isArray(badMove.availableStatuses)
-};
+  badMoveHasStatuses: Array.isArray(badMove.availableStatuses),
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `boardHasColumns` | `true` |
-| `statusOptions` | Array of valid statuses |
-| `moveSuccess` | `true` (if items exist) |
-| `badMoveError` | `true` |
-| `badMoveHasStatuses` | `true` |
+| Check                | Expected                |
+| -------------------- | ----------------------- |
+| `boardHasColumns`    | `true`                  |
+| `statusOptions`      | Array of valid statuses |
+| `moveSuccess`        | `true` (if items exist) |
+| `badMoveError`       | `true`                  |
+| `badMoveHasStatuses` | `true`                  |
 
 ### 25.4 Issue Lifecycle & Milestone CRUD
 
@@ -399,25 +408,25 @@ return {
 ```javascript
 // Test code — Issue Lifecycle:
 const created = await mj.github.createGithubIssueWithEntry({
-  title: "CM4 Test: Code Mode Issue",
-  body: "Created via Code Mode test",
-  labels: ["test"],
+  title: 'CM4 Test: Code Mode Issue',
+  body: 'Created via Code Mode test',
+  labels: ['test'],
   project_number: 5,
-  tags: ["codemode4-test"]
-});
-const issueNum = created.issue?.number;
+  tags: ['codemode4-test'],
+})
+const issueNum = created.issue?.number
 
 const closed = await mj.github.closeGithubIssueWithEntry({
   issue_number: issueNum,
-  resolution_notes: "CM4 test complete",
-  comment: "Closing via Code Mode",
+  resolution_notes: 'CM4 test complete',
+  comment: 'Closing via Code Mode',
   move_to_done: true,
-  project_number: 5
-});
+  project_number: 5,
+})
 
 const alreadyClosed = await mj.github.closeGithubIssueWithEntry({
-  issue_number: issueNum
-});
+  issue_number: issueNum,
+})
 
 return {
   createSuccess: created.success,
@@ -428,45 +437,45 @@ return {
   closeHasKanban: !!closed.kanban,
   kanbanMoved: closed.kanban?.moved,
   alreadyClosedError: alreadyClosed.success === false,
-  alreadyClosedMsg: alreadyClosed.error
-};
+  alreadyClosedMsg: alreadyClosed.error,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `createSuccess` | `true` |
-| `hasJournal` | `true` |
-| `closeSuccess` | `true` |
-| `kanbanMoved` | `true` |
-| `alreadyClosedError` | `true` |
+| Check                | Expected |
+| -------------------- | -------- |
+| `createSuccess`      | `true`   |
+| `hasJournal`         | `true`   |
+| `closeSuccess`       | `true`   |
+| `kanbanMoved`        | `true`   |
+| `alreadyClosedError` | `true`   |
 
 ```javascript
 // Test code — Milestone CRUD:
 const ms = await mj.github.createGithubMilestone({
-  title: "CM4 Test Milestone",
-  description: "Created via Code Mode",
-  due_on: "2026-12-31"
-});
-const msNum = ms.milestone?.number;
+  title: 'CM4 Test Milestone',
+  description: 'Created via Code Mode',
+  due_on: '2026-12-31',
+})
+const msNum = ms.milestone?.number
 
 const updated = await mj.github.updateGithubMilestone({
   milestone_number: msNum,
-  description: "Updated via Code Mode"
-});
+  description: 'Updated via Code Mode',
+})
 
 const closed = await mj.github.updateGithubMilestone({
   milestone_number: msNum,
-  state: "closed"
-});
+  state: 'closed',
+})
 
 const detail = await mj.github.getGithubMilestone({
-  milestone_number: msNum
-});
+  milestone_number: msNum,
+})
 
 const deleted = await mj.github.deleteGithubMilestone({
   milestone_number: msNum,
-  confirm: true
-});
+  confirm: true,
+})
 
 return {
   createSuccess: ms.success,
@@ -474,42 +483,42 @@ return {
   updateSuccess: updated.success,
   closeSuccess: closed.success,
   detailState: detail.milestone?.state,
-  deleteSuccess: deleted.success
-};
+  deleteSuccess: deleted.success,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `createSuccess` | `true` |
-| `updateSuccess` | `true` |
-| `detailState` | `"closed"` |
-| `deleteSuccess` | `true` |
+| Check           | Expected   |
+| --------------- | ---------- |
+| `createSuccess` | `true`     |
+| `updateSuccess` | `true`     |
+| `detailState`   | `"closed"` |
+| `deleteSuccess` | `true`     |
 
 ### 25.5 Repo Insights & Copilot Reviews
 
 ```javascript
 // Test code:
-const stars = await mj.github.getRepoInsights({});
-const traffic = await mj.github.getRepoInsights({ sections: "traffic" });
-const all = await mj.github.getRepoInsights({ sections: "all" });
+const stars = await mj.github.getRepoInsights({})
+const traffic = await mj.github.getRepoInsights({ sections: 'traffic' })
+const all = await mj.github.getRepoInsights({ sections: 'all' })
 
 // Copilot reviews (use a known PR number)
-const reviewed = await mj.github.getCopilotReviews({ pr_number: 1 });
+const reviewed = await mj.github.getCopilotReviews({ pr_number: 1 })
 
 return {
-  hasStars: typeof stars.stars === "number",
-  hasForks: typeof stars.forks === "number",
+  hasStars: typeof stars.stars === 'number',
+  hasForks: typeof stars.forks === 'number',
   trafficHasClones: traffic.traffic?.clones !== undefined || traffic.error !== undefined,
   allSections: !!all,
   reviewState: reviewed.state,
-  reviewComments: reviewed.commentCount
-};
+  reviewComments: reviewed.commentCount,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `hasStars` | `true` |
-| `hasForks` | `true` |
+| Check         | Expected                              |
+| ------------- | ------------------------------------- |
+| `hasStars`    | `true`                                |
+| `hasForks`    | `true`                                |
 | `reviewState` | String (`"none"`, `"approved"`, etc.) |
 
 ### 25.6 GitHub Cleanup
@@ -517,8 +526,8 @@ return {
 > [!IMPORTANT]
 > Run after all Phase 25 tests. Check for any unclosed test issues or milestones.
 
-| Cleanup Step | Code |
-|--------------|------|
+| Cleanup Step      | Code                                                                                                                                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Verify no orphans | `const b = await mj.github.getKanbanBoard({ project_number: 5 }); const testItems = b.columns?.flatMap(c => c.items ?? []).filter(i => i.title?.includes("CM4")); return { orphans: testItems?.length ?? 0 };` |
 
 ---
@@ -529,28 +538,28 @@ return {
 
 ```javascript
 // Test code:
-const tags = await mj.core.listTags({});
-const hasEntries = tags.tags?.length > 0;
+const tags = await mj.core.listTags({})
+const hasEntries = tags.tags?.length > 0
 
 // Create source tag for merge
-await mj.core.createEntry({ content: "CM4 merge test entry", tags: ["cm4-old-tag"] });
+await mj.core.createEntry({ content: 'CM4 merge test entry', tags: ['cm4-old-tag'] })
 const merged = await mj.admin.mergeTags({
-  source_tag: "cm4-old-tag",
-  target_tag: "cm4-new-tag"
-});
-const afterMerge = await mj.core.listTags({});
-const oldGone = !afterMerge.tags?.some(t => t.name === "cm4-old-tag");
-const newExists = afterMerge.tags?.some(t => t.name === "cm4-new-tag");
+  source_tag: 'cm4-old-tag',
+  target_tag: 'cm4-new-tag',
+})
+const afterMerge = await mj.core.listTags({})
+const oldGone = !afterMerge.tags?.some((t) => t.name === 'cm4-old-tag')
+const newExists = afterMerge.tags?.some((t) => t.name === 'cm4-new-tag')
 
 // Error paths
 const sameMerge = await mj.admin.mergeTags({
-  source_tag: "cm4-new-tag",
-  target_tag: "cm4-new-tag"
-});
+  source_tag: 'cm4-new-tag',
+  target_tag: 'cm4-new-tag',
+})
 const nonexistentMerge = await mj.admin.mergeTags({
-  source_tag: "nonexistent-xyz-cm4",
-  target_tag: "test"
-});
+  source_tag: 'nonexistent-xyz-cm4',
+  target_tag: 'test',
+})
 
 return {
   tagCount: tags.tags?.length ?? 0,
@@ -559,109 +568,110 @@ return {
   oldTagGone: oldGone,
   newTagExists: newExists,
   sameTagError: sameMerge.success === false,
-  nonexistentError: nonexistentMerge.success === false
-};
+  nonexistentError: nonexistentMerge.success === false,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `mergeSuccess` | `true` |
-| `oldTagGone` | `true` |
-| `newTagExists` | `true` |
-| `sameTagError` | `true` |
-| `nonexistentError` | `true` |
+| Check              | Expected |
+| ------------------ | -------- |
+| `mergeSuccess`     | `true`   |
+| `oldTagGone`       | `true`   |
+| `newTagExists`     | `true`   |
+| `sameTagError`     | `true`   |
+| `nonexistentError` | `true`   |
 
 ### 26.2 Export
 
 ```javascript
 // Test code:
-const jsonExport = await mj.export.exportEntries({ format: "json", limit: 5 });
-const mdExport = await mj.export.exportEntries({ format: "markdown", limit: 5 });
+const jsonExport = await mj.export.exportEntries({ format: 'json', limit: 5 })
+const mdExport = await mj.export.exportEntries({ format: 'markdown', limit: 5 })
 const tagExport = await mj.export.exportEntries({
-  format: "json",
-  tags: ["architecture"],
-  limit: 10
-});
+  format: 'json',
+  tags: ['architecture'],
+  limit: 10,
+})
 const dateExport = await mj.export.exportEntries({
-  format: "json",
-  start_date: "2026-01-01",
-  end_date: "2026-03-01"
-});
+  format: 'json',
+  start_date: '2026-01-01',
+  end_date: '2026-03-01',
+})
 const typeExport = await mj.export.exportEntries({
-  format: "json",
-  entry_types: ["planning"],
-  limit: 10
-});
+  format: 'json',
+  entry_types: ['planning'],
+  limit: 10,
+})
 return {
   jsonHasEntries: Array.isArray(jsonExport.entries),
   jsonCount: jsonExport.entries?.length ?? 0,
-  mdHasContent: typeof mdExport.content === "string",
-  tagFiltered: tagExport.entries?.every(e =>
-    e.tags?.includes("architecture") || e.tags?.some(t => t === "architecture")
-  ) ?? false,
+  mdHasContent: typeof mdExport.content === 'string',
+  tagFiltered:
+    tagExport.entries?.every(
+      (e) => e.tags?.includes('architecture') || e.tags?.some((t) => t === 'architecture')
+    ) ?? false,
   dateFiltered: dateExport.entries?.length >= 0,
-  typeFiltered: typeExport.entries?.every(e => e.entryType === "planning") ?? true
-};
+  typeFiltered: typeExport.entries?.every((e) => e.entryType === 'planning') ?? true,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `jsonHasEntries` | `true` |
-| `mdHasContent` | `true` |
-| `tagFiltered` | `true` (only entries with "architecture" tag) |
-| `typeFiltered` | `true` (only "planning" type) |
+| Check            | Expected                                      |
+| ---------------- | --------------------------------------------- |
+| `jsonHasEntries` | `true`                                        |
+| `mdHasContent`   | `true`                                        |
+| `tagFiltered`    | `true` (only entries with "architecture" tag) |
+| `typeFiltered`   | `true` (only "planning" type)                 |
 
 ### 26.3 Backup & Restore
 
 ```javascript
 // Test code:
-const named = await mj.backup.backupJournal({ name: "cm4-test-backup" });
-const auto = await mj.backup.backupJournal({});
-const list = await mj.backup.listBackups({});
+const named = await mj.backup.backupJournal({ name: 'cm4-test-backup' })
+const auto = await mj.backup.backupJournal({})
+const list = await mj.backup.listBackups({})
 
 // Path traversal
-const traversal = await mj.backup.backupJournal({ name: "../../etc/passwd" });
+const traversal = await mj.backup.backupJournal({ name: '../../etc/passwd' })
 
 // Restore
 const restored = await mj.backup.restoreBackup({
   filename: named.filename,
-  confirm: true
-});
+  confirm: true,
+})
 
 // Restore nonexistent
 const badRestore = await mj.backup.restoreBackup({
-  filename: "nonexistent-cm4.db",
-  confirm: true
-});
+  filename: 'nonexistent-cm4.db',
+  confirm: true,
+})
 
 // Cleanup
-const cleanup = await mj.backup.cleanupBackups({ keep_count: 5 });
+const cleanup = await mj.backup.cleanupBackups({ keep_count: 5 })
 
 return {
   namedSuccess: named.success,
   namedFilename: named.filename,
   namedHasPath: !!named.path,
-  namedHasSize: typeof named.sizeBytes === "number",
+  namedHasSize: typeof named.sizeBytes === 'number',
   autoSuccess: auto.success,
   listTotal: list.total,
   traversalBlocked: traversal.success === false,
   restoreSuccess: restored.success,
   restoreHasReverted: !!restored.revertedChanges,
   badRestoreError: badRestore.success === false,
-  cleanupSuccess: cleanup.success
-};
+  cleanupSuccess: cleanup.success,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `namedSuccess` | `true` |
-| `namedHasPath` | `true` |
-| `namedHasSize` | `true` |
-| `autoSuccess` | `true` |
-| `traversalBlocked` | `true` |
-| `restoreSuccess` | `true` |
-| `badRestoreError` | `true` |
-| `cleanupSuccess` | `true` |
+| Check              | Expected |
+| ------------------ | -------- |
+| `namedSuccess`     | `true`   |
+| `namedHasPath`     | `true`   |
+| `namedHasSize`     | `true`   |
+| `autoSuccess`      | `true`   |
+| `traversalBlocked` | `true`   |
+| `restoreSuccess`   | `true`   |
+| `badRestoreError`  | `true`   |
+| `cleanupSuccess`   | `true`   |
 
 ---
 
@@ -675,22 +685,22 @@ return {
 ```javascript
 // Test code:
 const created = await mj.team.teamCreateEntry({
-  content: "CM4 team entry test",
-  tags: ["codemode4-team-test"],
-  entry_type: "standup"
-});
+  content: 'CM4 team entry test',
+  tags: ['codemode4-team-test'],
+  entry_type: 'standup',
+})
 const withAuthor = await mj.team.teamCreateEntry({
-  content: "CM4 team explicit author",
-  author: "CM4Bot"
-});
-const recent = await mj.team.teamGetRecent({ limit: 5 });
-const search = await mj.team.teamSearch({ query: "CM4 team entry test" });
-const tagSearch = await mj.team.teamSearch({ tags: ["codemode4-team-test"] });
+  content: 'CM4 team explicit author',
+  author: 'CM4Bot',
+})
+const recent = await mj.team.teamGetRecent({ limit: 5 })
+const search = await mj.team.teamSearch({ query: 'CM4 team entry test' })
+const tagSearch = await mj.team.teamSearch({ tags: ['codemode4-team-test'] })
 const combined = await mj.team.teamSearch({
-  query: "team",
-  tags: ["codemode4-team-test"]
-});
-const noArgs = await mj.team.teamSearch({});
+  query: 'team',
+  tags: ['codemode4-team-test'],
+})
+const noArgs = await mj.team.teamSearch({})
 
 return {
   createSuccess: created.success,
@@ -701,23 +711,23 @@ return {
   searchCount: search.entries?.length ?? 0,
   tagSearchCount: tagSearch.entries?.length ?? 0,
   combinedCount: combined.entries?.length ?? 0,
-  noArgsCount: noArgs.entries?.length ?? 0
-};
+  noArgsCount: noArgs.entries?.length ?? 0,
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `createSuccess` | `true` |
-| `createAuthor` | Non-empty string (auto-populated) |
-| `explicitAuthor` | `"CM4Bot"` |
-| `recentHasAuthor` | `true` |
-| `searchCount` | ≥ 1 |
-| `tagSearchCount` | ≥ 1 |
+| Check             | Expected                          |
+| ----------------- | --------------------------------- |
+| `createSuccess`   | `true`                            |
+| `createAuthor`    | Non-empty string (auto-populated) |
+| `explicitAuthor`  | `"CM4Bot"`                        |
+| `recentHasAuthor` | `true`                            |
+| `searchCount`     | ≥ 1                               |
+| `tagSearchCount`  | ≥ 1                               |
 
 ### 27.2 Team Error Paths
 
-| Test | Code | Expected Result |
-|------|------|--------------------|
+| Test               | Code                                                                                | Expected Result                    |
+| ------------------ | ----------------------------------------------------------------------------------- | ---------------------------------- |
 | Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid" });` | `{ success: false, error: "..." }` |
 
 ### 27.3 Cross-Tool Error Path Verification (via Code Mode)
@@ -727,65 +737,69 @@ return {
 
 ```javascript
 // Test code — batch error path testing:
-const errors = {};
+const errors = {}
 
 // Core errors
-errors.createEmpty = await mj.core.createEntry({ content: "" });
-errors.getNotFound = await mj.core.getEntryById({ entry_id: 999999 });
-errors.updateNotFound = await mj.admin.updateEntry({ entry_id: 999999, content: "x" });
-errors.deleteNotFound = await mj.admin.deleteEntry({ entry_id: 999999 });
+errors.createEmpty = await mj.core.createEntry({ content: '' })
+errors.getNotFound = await mj.core.getEntryById({ entry_id: 999999 })
+errors.updateNotFound = await mj.admin.updateEntry({ entry_id: 999999, content: 'x' })
+errors.deleteNotFound = await mj.admin.deleteEntry({ entry_id: 999999 })
 
 // Relationship errors
 errors.linkBadSource = await mj.relationships.linkEntries({
-  from_entry_id: 999999, to_entry_id: 1,
-  relationship_type: "references"
-});
-errors.vizNotFound = await mj.relationships.visualizeRelationships({ entry_id: 999999 });
+  from_entry_id: 999999,
+  to_entry_id: 1,
+  relationship_type: 'references',
+})
+errors.vizNotFound = await mj.relationships.visualizeRelationships({ entry_id: 999999 })
 
 // GitHub errors
-errors.issueNotFound = await mj.github.getGithubIssue({ issue_number: 999999 });
-errors.prNotFound = await mj.github.getGithubPr({ pr_number: 999999 });
-errors.msNotFound = await mj.github.getGithubMilestone({ milestone_number: 999999 });
+errors.issueNotFound = await mj.github.getGithubIssue({ issue_number: 999999 })
+errors.prNotFound = await mj.github.getGithubPr({ pr_number: 999999 })
+errors.msNotFound = await mj.github.getGithubMilestone({ milestone_number: 999999 })
 
 // Backup errors
 errors.restoreNotFound = await mj.backup.restoreBackup({
-  filename: "nonexistent.db",
-  confirm: true
-});
-errors.backupTraversal = await mj.backup.backupJournal({ name: "../../../etc/passwd" });
+  filename: 'nonexistent.db',
+  confirm: true,
+})
+errors.backupTraversal = await mj.backup.backupJournal({ name: '../../../etc/passwd' })
 
 // Admin errors
 errors.mergeNonexistent = await mj.admin.mergeTags({
-  source_tag: "nonexistent-xyz-abc",
-  target_tag: "test"
-});
-errors.addVectorBad = await mj.admin.addToVectorIndex({ entry_id: 999999 });
+  source_tag: 'nonexistent-xyz-abc',
+  target_tag: 'test',
+})
+errors.addVectorBad = await mj.admin.addToVectorIndex({ entry_id: 999999 })
 
 // Verify all errors are structured (not raw throws)
 const allStructured = Object.entries(errors).every(([key, val]) => {
-  return val && typeof val === "object" && (
-    val.success === false ||
-    val.error !== undefined ||
-    val.message?.includes("not found")
-  );
-});
+  return (
+    val &&
+    typeof val === 'object' &&
+    (val.success === false || val.error !== undefined || val.message?.includes('not found'))
+  )
+})
 
 return {
   testedCount: Object.keys(errors).length,
   allStructured,
   details: Object.fromEntries(
-    Object.entries(errors).map(([k, v]) => [k, {
-      success: v.success,
-      hasError: !!v.error || !!v.message,
-      errorSnippet: (v.error || v.message || "")?.substring(0, 60)
-    }])
-  )
-};
+    Object.entries(errors).map(([k, v]) => [
+      k,
+      {
+        success: v.success,
+        hasError: !!v.error || !!v.message,
+        errorSnippet: (v.error || v.message || '')?.substring(0, 60),
+      },
+    ])
+  ),
+}
 ```
 
-| Check | Expected |
-|-------|----------|
-| `testedCount` | 13 |
+| Check           | Expected                                            |
+| --------------- | --------------------------------------------------- |
+| `testedCount`   | 13                                                  |
 | `allStructured` | `true` — no raw exceptions through Code Mode bridge |
 
 ---
@@ -796,26 +810,29 @@ After testing, remove all entries and backups created during Phases 22-27:
 
 ```javascript
 // Cleanup code:
-const entries = await mj.search.searchEntries({ query: "CM4", limit: 50 });
-const cm4Entries = entries.entries.filter(e =>
-  e.content?.includes("CM4") || e.tags?.some(t => t.startsWith("codemode4"))
-);
-const results = [];
+const entries = await mj.search.searchEntries({ query: 'CM4', limit: 50 })
+const cm4Entries = entries.entries.filter(
+  (e) => e.content?.includes('CM4') || e.tags?.some((t) => t.startsWith('codemode4'))
+)
+const results = []
 for (const e of cm4Entries) {
-  const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true });
-  results.push({ id: e.id, deleted: del.success });
+  const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true })
+  results.push({ id: e.id, deleted: del.success })
 }
 
 // Also clean up Code Mode (Phase 22-23) entries
-const cmEntries = await mj.search.searchEntries({ query: "CodeMode", limit: 50 });
+const cmEntries = await mj.search.searchEntries({ query: 'CodeMode', limit: 50 })
 for (const e of cmEntries.entries) {
-  if (e.content?.includes("Code Mode") && (e.tags?.includes("codemode-test") || e.tags?.includes("codemode-pipeline-test"))) {
-    const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true });
-    results.push({ id: e.id, deleted: del.success });
+  if (
+    e.content?.includes('Code Mode') &&
+    (e.tags?.includes('codemode-test') || e.tags?.includes('codemode-pipeline-test'))
+  ) {
+    const del = await mj.admin.deleteEntry({ entry_id: e.id, permanent: true })
+    results.push({ id: e.id, deleted: del.success })
   }
 }
 
-return { cleaned: results.length, details: results };
+return { cleaned: results.length, details: results }
 ```
 
 ---

@@ -222,17 +222,23 @@ describe('searchByDateRange — filter combinations', () => {
     })
 
     it('should filter by workflowRunId', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { workflowRunId: 100 })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
+            workflowRunId: 100,
+        })
         expect(result.length).toBe(1)
     })
 
     it('should filter by entryType', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { entryType: 'decision' })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
+            entryType: 'decision',
+        })
         expect(result.length).toBe(1)
     })
 
     it('should filter by tags', () => {
-        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', { tags: ['test-tag'] })
+        const result = searchByDateRange(context, '2025-01-01', '2025-12-31', {
+            tags: ['test-tag'],
+        })
         expect(result.length).toBe(1)
     })
 
@@ -287,18 +293,21 @@ describe('getStatistics — branch coverage', () => {
 
     it('should compute stats with startDate filter', () => {
         const result = getStatistics(context, 'week', '2025-01-18')
-        expect((result.totalEntries as number)).toBe(2)
+        expect(result.totalEntries as number).toBe(2)
     })
 
     it('should compute stats with both date filters', () => {
         const result = getStatistics(context, 'week', '2025-01-01', '2025-01-31')
-        expect((result.totalEntries as number)).toBe(2)
+        expect(result.totalEntries as number).toBe(2)
     })
 
     it('should include projectBreakdown when requested', () => {
         const result = getStatistics(context, 'week', undefined, undefined, true)
         expect(result.projectBreakdown).toBeDefined()
-        const breakdown = result.projectBreakdown as { project_number: number; entry_count: number }[]
+        const breakdown = result.projectBreakdown as {
+            project_number: number
+            entry_count: number
+        }[]
         expect(breakdown.length).toBe(1)
         expect(breakdown[0]!.project_number).toBe(42)
     })
@@ -365,14 +374,18 @@ describe('calculateImportance — branch coverage', () => {
     })
 
     it('should compute importance with no significance type', () => {
-        db.exec(`INSERT INTO memory_journal (id, content, timestamp) VALUES (1, 'test', '${new Date().toISOString()}')`)
+        db.exec(
+            `INSERT INTO memory_journal (id, content, timestamp) VALUES (1, 'test', '${new Date().toISOString()}')`
+        )
         const result = calculateImportance(context, 1)
         expect(result.breakdown.significance).toBe(0)
     })
 
     it('should decay recency for old entries', () => {
         const oldDate = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString()
-        db.exec(`INSERT INTO memory_journal (id, content, timestamp) VALUES (1, 'old entry', '${oldDate}')`)
+        db.exec(
+            `INSERT INTO memory_journal (id, content, timestamp) VALUES (1, 'old entry', '${oldDate}')`
+        )
         const result = calculateImportance(context, 1)
         expect(result.breakdown.recency).toBe(0)
     })

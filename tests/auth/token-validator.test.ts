@@ -104,7 +104,7 @@ describe('TokenValidator', () => {
         it('should return invalid for expired tokens', async () => {
             const { jwtVerify, errors } = await import('jose')
             const mockVerify = vi.mocked(jwtVerify)
-            
+
             const mockError = Object.create(errors.JWTExpired.prototype) as Error
             mockError.message = 'JWT expired'
             mockError.name = 'JWTExpired'
@@ -122,8 +122,10 @@ describe('TokenValidator', () => {
         it('should handle signature verification failure', async () => {
             const { jwtVerify, errors } = await import('jose')
             const mockVerify = vi.mocked(jwtVerify)
-            
-            const mockError = Object.create(errors.JWSSignatureVerificationFailed.prototype) as Error
+
+            const mockError = Object.create(
+                errors.JWSSignatureVerificationFailed.prototype
+            ) as Error
             mockError.message = 'Signature failed'
             mockError.name = 'JWSSignatureVerificationFailed'
 
@@ -139,7 +141,7 @@ describe('TokenValidator', () => {
         it('should handle claim validation failure', async () => {
             const { jwtVerify, errors } = await import('jose')
             const mockVerify = vi.mocked(jwtVerify)
-            
+
             const mockError = Object.create(errors.JWTClaimValidationFailed.prototype) as Error
             mockError.message = 'Claim validation failed'
             mockError.name = 'JWTClaimValidationFailed'
@@ -156,7 +158,7 @@ describe('TokenValidator', () => {
         it('should handle no matching key in JWKS', async () => {
             const { jwtVerify, errors } = await import('jose')
             const mockVerify = vi.mocked(jwtVerify)
-            
+
             const mockError = Object.create(errors.JWKSNoMatchingKey.prototype) as Error
             mockError.message = 'No matching key'
             mockError.name = 'JWKSNoMatchingKey'

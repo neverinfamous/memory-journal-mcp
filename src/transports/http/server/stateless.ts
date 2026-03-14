@@ -16,24 +16,24 @@ export async function setupStateless(app: Express, server: McpServer): Promise<v
 
     // POST /mcp — all requests go to the same transport
     app.post('/mcp', (req: Request, res: Response): void => {
-            void statelessTransport.handleRequest(
-                req as IncomingMessage,
-                res as ServerResponse,
-                req.body,
-            )
-        })
+        void statelessTransport.handleRequest(
+            req as IncomingMessage,
+            res as ServerResponse,
+            req.body
+        )
+    })
 
     // GET /mcp — SSE not available in stateless mode
     app.get('/mcp', (_req: Request, res: Response): void => {
-            res.status(405).json({
-                jsonrpc: '2.0',
-                error: {
-                    code: JSONRPC_SERVER_ERROR,
-                    message: 'SSE streaming not available in stateless mode',
-                },
-                id: null,
-            })
+        res.status(405).json({
+            jsonrpc: '2.0',
+            error: {
+                code: JSONRPC_SERVER_ERROR,
+                message: 'SSE streaming not available in stateless mode',
+            },
+            id: null,
         })
+    })
 
     // DELETE /mcp — no-op in stateless mode
     app.delete('/mcp', (_req: Request, res: Response): void => {

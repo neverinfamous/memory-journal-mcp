@@ -11,7 +11,9 @@ const MAX_BACKUP_NAME_LENGTH = 50
 export class BackupManager {
     constructor(private ctx: IDatabaseConnection) {}
 
-    async exportToFile(backupName?: string): Promise<{ filename: string; path: string; sizeBytes: number }> {
+    async exportToFile(
+        backupName?: string
+    ): Promise<{ filename: string; path: string; sizeBytes: number }> {
         const backupsDir = this.ctx.getBackupsDir()
 
         if (backupName) {
@@ -35,7 +37,8 @@ export class BackupManager {
             logger.debug('WAL checkpoint skipped', {
                 module: 'SqliteAdapter',
                 operation: 'exportToFile',
-                error: checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr),
+                error:
+                    checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr),
             })
         }
         await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
@@ -59,7 +62,8 @@ export class BackupManager {
         }
 
         const files = fs.readdirSync(backupsDir)
-        const backups: { filename: string; path: string; sizeBytes: number; createdAt: string }[] = []
+        const backups: { filename: string; path: string; sizeBytes: number; createdAt: string }[] =
+            []
 
         for (const filename of files) {
             if (!filename.endsWith('.db')) continue
@@ -127,7 +131,9 @@ export class BackupManager {
             throw new ResourceNotFoundError('Backup', filename)
         }
 
-        const currentCountResult = this.ctx.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
+        const currentCountResult = this.ctx.exec(
+            'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
+        )
         const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         await this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
@@ -137,7 +143,7 @@ export class BackupManager {
 
         // Native better-sqlite3 connection
         await fs.promises.copyFile(backupPath, this.ctx.getDbPath())
-        
+
         // Re-initialize the native connection via dynamic import to avoid static dependency
         const DatabaseAdapter = (await import('better-sqlite3').then((m) => m.default)) as new (
             path: string
@@ -145,7 +151,9 @@ export class BackupManager {
         const newDb = new DatabaseAdapter(this.ctx.getDbPath())
         this.ctx.setDbAndInitialized(newDb)
 
-        const newCountResult = this.ctx.exec('SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL')
+        const newCountResult = this.ctx.exec(
+            'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
+        )
         const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0
 
         logger.info('Database restored from backup', {

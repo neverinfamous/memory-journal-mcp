@@ -5,7 +5,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { OAuthResourceServer, createOAuthResourceServer } from '../../src/auth/oauth-resource-server.js'
+import {
+    OAuthResourceServer,
+    createOAuthResourceServer,
+} from '../../src/auth/oauth-resource-server.js'
 
 describe('OAuthResourceServer', () => {
     const config = {

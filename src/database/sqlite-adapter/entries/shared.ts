@@ -81,7 +81,11 @@ export function rowToObject(row: unknown): Record<string, unknown> | undefined {
  * Typed wrapper for `db.prepare(sql).get(…params)`.
  * Returns the row cast to a `Record<string, unknown>` for safe access.
  */
-export function queryRow(db: Database, sql: string, ...params: unknown[]): Record<string, unknown> | undefined {
+export function queryRow(
+    db: Database,
+    sql: string,
+    ...params: unknown[]
+): Record<string, unknown> | undefined {
     return db.prepare(sql).get(...params) as Record<string, unknown> | undefined
 }
 
@@ -89,6 +93,10 @@ export function queryRow(db: Database, sql: string, ...params: unknown[]): Recor
  * Typed wrapper for `db.prepare(sql).all(…params)`.
  * Returns rows cast to `Record<string, unknown>[]` for safe access.
  */
-export function queryRows(db: Database, sql: string, ...params: unknown[]): Record<string, unknown>[] {
+export function queryRows(
+    db: Database,
+    sql: string,
+    ...params: unknown[]
+): Record<string, unknown>[] {
     return db.prepare(sql).all(...params) as Record<string, unknown>[]
 }

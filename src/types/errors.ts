@@ -135,11 +135,16 @@ export class ValidationError extends MemoryJournalMcpError {
  */
 export class ResourceNotFoundError extends MemoryJournalMcpError {
     constructor(resourceType: string, identifier: string) {
-        super(`${resourceType} not found: ${identifier}`, 'RESOURCE_NOT_FOUND', ErrorCategory.RESOURCE, {
-            suggestion: `Verify the ${resourceType.toLowerCase()} identifier and try again`,
-            recoverable: false,
-            details: { resourceType, identifier },
-        })
+        super(
+            `${resourceType} not found: ${identifier}`,
+            'RESOURCE_NOT_FOUND',
+            ErrorCategory.RESOURCE,
+            {
+                suggestion: `Verify the ${resourceType.toLowerCase()} identifier and try again`,
+                recoverable: false,
+                details: { resourceType, identifier },
+            }
+        )
         this.name = 'ResourceNotFoundError'
     }
 }

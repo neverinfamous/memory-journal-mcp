@@ -54,7 +54,8 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             arguments: [],
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
                 const today = new Date().toISOString().split('T')[0] ?? ''
-                const yesterday = new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
+                const yesterday =
+                    new Date(Date.now() - MS_PER_DAY).toISOString().split('T')[0] ?? ''
 
                 const entries = db.searchByDateRange(yesterday, today)
 

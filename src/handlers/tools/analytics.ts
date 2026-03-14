@@ -7,7 +7,12 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE, TagOutputSchema, relaxedNumber } from './schemas.js'
+import {
+    DATE_FORMAT_REGEX,
+    DATE_FORMAT_MESSAGE,
+    TagOutputSchema,
+    relaxedNumber,
+} from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 
 // Named constants (magic value extraction)
@@ -19,98 +24,104 @@ const MAX_TAGS_PER_PROJECT = 5
 // Output Schemas
 // ============================================================================
 
-const StatisticsOutputSchema = z.object({
-    groupBy: z.string().optional(),
-    totalEntries: z.number().optional(),
-    entriesByType: z.record(z.string(), z.number()).optional(),
-    entriesByPeriod: z
-        .array(
-            z.object({
-                period: z.string(),
-                count: z.number(),
+const StatisticsOutputSchema = z
+    .object({
+        groupBy: z.string().optional(),
+        totalEntries: z.number().optional(),
+        entriesByType: z.record(z.string(), z.number()).optional(),
+        entriesByPeriod: z
+            .array(
+                z.object({
+                    period: z.string(),
+                    count: z.number(),
+                })
+            )
+            .optional(),
+        decisionDensity: z
+            .array(
+                z.object({
+                    period: z.string(),
+                    significantCount: z.number(),
+                })
+            )
+            .optional(),
+        relationshipComplexity: z
+            .object({
+                totalRelationships: z.number(),
+                avgPerEntry: z.number(),
             })
-        )
-        .optional(),
-    decisionDensity: z
-        .array(
-            z.object({
-                period: z.string(),
-                significantCount: z.number(),
+            .optional(),
+        activityTrend: z
+            .object({
+                currentPeriod: z.string(),
+                previousPeriod: z.string(),
+                growthPercent: z.number().nullable(),
             })
-        )
-        .optional(),
-    relationshipComplexity: z
-        .object({
-            totalRelationships: z.number(),
-            avgPerEntry: z.number(),
-        })
-        .optional(),
-    activityTrend: z
-        .object({
-            currentPeriod: z.string(),
-            previousPeriod: z.string(),
-            growthPercent: z.number().nullable(),
-        })
-        .optional(),
-    causalMetrics: z
-        .object({
-            blocked_by: z.number(),
-            resolved: z.number(),
-            caused: z.number(),
-        })
-        .optional(),
-    dateRange: z
-        .object({
-            startDate: z.string(),
-            endDate: z.string(),
-        })
-        .optional(),
-    projectBreakdown: z
-        .array(
-            z.object({
-                project_number: z.number(),
-                entry_count: z.number(),
+            .optional(),
+        causalMetrics: z
+            .object({
+                blocked_by: z.number(),
+                resolved: z.number(),
+                caused: z.number(),
             })
-        )
-        .optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+            .optional(),
+        dateRange: z
+            .object({
+                startDate: z.string(),
+                endDate: z.string(),
+            })
+            .optional(),
+        projectBreakdown: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    entry_count: z.number(),
+                })
+            )
+            .optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const ProjectSummaryOutputSchema = z.object({
-    project_number: z.number(),
-    entry_count: z.number(),
-    first_entry: z.string(),
-    last_entry: z.string(),
-    active_days: z.number(),
-    top_tags: z.array(TagOutputSchema),
-}).extend(ErrorFieldsMixin.shape)
+const ProjectSummaryOutputSchema = z
+    .object({
+        project_number: z.number(),
+        entry_count: z.number(),
+        first_entry: z.string(),
+        last_entry: z.string(),
+        active_days: z.number(),
+        top_tags: z.array(TagOutputSchema),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const CrossProjectInsightsOutputSchema = z.object({
-    project_count: z.number().optional(),
-    total_entries: z.number().optional(),
-    projects: z.array(ProjectSummaryOutputSchema).optional(),
-    inactive_projects: z
-        .array(
-            z.object({
-                project_number: z.number(),
-                last_entry_date: z.string(),
-            })
-        )
-        .optional(),
-    inactiveThresholdDays: z.number().optional(),
-    time_distribution: z
-        .array(
-            z.object({
-                project_number: z.number(),
-                percentage: z.string(),
-            })
-        )
-        .optional(),
-    message: z.string().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const CrossProjectInsightsOutputSchema = z
+    .object({
+        project_count: z.number().optional(),
+        total_entries: z.number().optional(),
+        projects: z.array(ProjectSummaryOutputSchema).optional(),
+        inactive_projects: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    last_entry_date: z.string(),
+                })
+            )
+            .optional(),
+        inactiveThresholdDays: z.number().optional(),
+        time_distribution: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    percentage: z.string(),
+                })
+            )
+            .optional(),
+        message: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Input Schemas
@@ -151,7 +162,10 @@ const CrossProjectInsightsInputSchema = z.object({
 const CrossProjectInsightsInputSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
-    min_entries: relaxedNumber().optional().default(3).describe('Minimum entries to include project'),
+    min_entries: relaxedNumber()
+        .optional()
+        .default(3)
+        .describe('Minimum entries to include project'),
 })
 
 // ============================================================================
@@ -301,7 +315,8 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     // Calculate time distribution
                     const totalEntries = projects.reduce(
-                        (sum: number, p: Record<string, unknown>) => sum + (p['entry_count'] as number),
+                        (sum: number, p: Record<string, unknown>) =>
+                            sum + (p['entry_count'] as number),
                         0
                     )
                     const distribution = projects.slice(0, 5).map((p: Record<string, unknown>) => ({

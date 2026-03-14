@@ -49,7 +49,7 @@ test.describe('Stateless HTTP Mode', () => {
         const body = await response.json()
         expect(body.error).toHaveProperty(
             'message',
-            'SSE streaming not available in stateless mode',
+            'SSE streaming not available in stateless mode'
         )
     })
 

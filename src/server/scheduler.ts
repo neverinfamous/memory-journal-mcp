@@ -74,7 +74,11 @@ export class Scheduler {
     private readonly timers: JobTimer[] = []
     private started = false
 
-    constructor(options: SchedulerOptions, db: IDatabaseAdapter, vectorManager?: VectorSearchManager) {
+    constructor(
+        options: SchedulerOptions,
+        db: IDatabaseAdapter,
+        vectorManager?: VectorSearchManager
+    ) {
         this.options = options
         this.db = db
         this.vectorManager = vectorManager ?? null
@@ -121,7 +125,9 @@ export class Scheduler {
         }
 
         if (this.timers.length > 0) {
-            const summary = this.timers.map((t: JobTimer) => `${t.name} (${String(t.intervalMinutes)}min)`)
+            const summary = this.timers.map(
+                (t: JobTimer) => `${t.name} (${String(t.intervalMinutes)}min)`
+            )
             logger.info(`Scheduler started: ${summary.join(', ')}`, { module: 'Scheduler' })
         } else {
             logger.info('Scheduler started with no jobs enabled', { module: 'Scheduler' })

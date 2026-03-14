@@ -1,11 +1,11 @@
 ---
-description: "Automated dependency maintenance — npm, Docker transitive deps, Alpine packages, and validation (no version bump)"
+description: 'Automated dependency maintenance — npm, Docker transitive deps, Alpine packages, and validation (no version bump)'
 private: true
 labels: [dependencies, automation, maintenance]
 
 on:
   schedule:
-    - cron: "0 14 * * 1" # Every Monday at 14:00 UTC
+    - cron: '0 14 * * 1' # Every Monday at 14:00 UTC
   workflow_dispatch:
 
 engine:
@@ -14,7 +14,7 @@ engine:
 
 runtimes:
   node:
-    version: "24"
+    version: '24'
 
 network:
   allowed:
@@ -25,14 +25,14 @@ permissions: read-all
 
 safe-outputs:
   create-pull-request:
-    title-prefix: "[deps] "
+    title-prefix: '[deps] '
     labels: [dependencies, automated]
     reviewers: [neverinfamous]
     draft: false
     max: 1
     expires: 14
     fallback-as-issue: true
-    if-no-changes: "ignore"
+    if-no-changes: 'ignore'
 
 timeout-minutes: 30
 concurrency: dependency-maintenance
@@ -109,6 +109,7 @@ Run `npm audit` one final time and capture the output. Include the result (clean
 Read the current version from `package.json`. Bump the **patch** version only (e.g., `5.1.1` → `5.1.2`). Dependency-only updates are always patch bumps. **Never bump minor or major versions** — those are reserved for the maintainer.
 
 Update version references in:
+
 - `package.json` (`"version"` field)
 - Run `npm install --package-lock-only` to sync `package-lock.json`
 - `README.md` (version badge if present)

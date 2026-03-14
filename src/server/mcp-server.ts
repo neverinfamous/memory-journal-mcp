@@ -300,8 +300,16 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 
     // Resource read handler shared by template and static branches (D2 fix)
-    const handleResourceRead = async (uri: URL, mimeType: string): Promise<{
-        contents: { uri: string; mimeType: string; text: string; annotations?: Record<string, unknown> }[]
+    const handleResourceRead = async (
+        uri: URL,
+        mimeType: string
+    ): Promise<{
+        contents: {
+            uri: string
+            mimeType: string
+            text: string
+            annotations?: Record<string, unknown>
+        }[]
     }> => {
         const result = await readResource(
             uri.href,
@@ -314,9 +322,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
         )
         const dataStr =
-            typeof result.data === 'string'
-                ? result.data
-                : JSON.stringify(result.data, null, 2)
+            typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
         return {
             contents: [
                 {
@@ -338,7 +344,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Register prompts (reusing prompts from instruction generation)
     registerPrompts(server, prompts as PromptDefinition[], db)
-
 
     // Start server based on transport
     if (transport === 'stdio') {

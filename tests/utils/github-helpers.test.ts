@@ -29,7 +29,9 @@ describe('resolveIssueUrl', () => {
 
     it('should construct URL from cached repo info', () => {
         const github = {
-            getCachedRepoInfo: vi.fn().mockReturnValue({ owner: 'neverinfamous', repo: 'memory-journal-mcp' }),
+            getCachedRepoInfo: vi
+                .fn()
+                .mockReturnValue({ owner: 'neverinfamous', repo: 'memory-journal-mcp' }),
         }
 
         const result = resolveIssueUrl(github as never, 42, undefined)

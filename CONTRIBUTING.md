@@ -138,7 +138,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 
 ### Database Changes
 
-- **Schema migrations** — Update `src/database/schema.ts` for database changes
+- **Schema migrations** — Update `src/database/core/schema.ts` for database changes
 - **Backward compatibility** — Ensure existing data isn't broken; use `migrateSchema()` for column additions
 - **Performance** — Consider index implications for new queries
 - **Testing** — Verify with both empty and populated databases
@@ -219,16 +219,19 @@ src/
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/                  # Server instructions (source + generated)
 ├── database/
-│   ├── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
-│   └── schema.ts               # DDL + migrations
+│   ├── adapter-factory.ts      # Adapter instantiation
+│   ├── core/                   # Interfaces, schema, entry columns
+│   └── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
 ├── filtering/                  # Tool filtering system
-├── github-integration/         # GitHub API integration
+├── github/
+│   └── github-integration/     # GitHub API integration
 ├── handlers/
 │   ├── tools/                  # 44 tool handlers (10 groups)
 │   ├── resources/              # 22 resource handlers
 │   └── prompts/                # 16 prompt handlers
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup
+│   ├── registration.ts         # Tool/resource/prompt registration
 │   └── scheduler.ts            # Recurring task scheduler
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions

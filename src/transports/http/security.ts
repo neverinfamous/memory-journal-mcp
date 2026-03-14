@@ -6,7 +6,12 @@
 
 import type { Request, Response } from 'express'
 import type { HttpTransportConfig, RateLimitEntry } from './types.js'
-import { DEFAULT_RATE_LIMIT_WINDOW_MS, DEFAULT_RATE_LIMIT_MAX_REQUESTS, DEFAULT_HSTS_MAX_AGE, CORS_PREFLIGHT_MAX_AGE_SECONDS } from './types.js'
+import {
+    DEFAULT_RATE_LIMIT_WINDOW_MS,
+    DEFAULT_RATE_LIMIT_MAX_REQUESTS,
+    DEFAULT_HSTS_MAX_AGE,
+    CORS_PREFLIGHT_MAX_AGE_SECONDS,
+} from './types.js'
 
 // =============================================================================
 // Client IP Extraction
@@ -39,7 +44,7 @@ export function getClientIp(req: Request, trustProxy: boolean): string {
 export function checkRateLimit(
     req: Request,
     config: HttpTransportConfig,
-    rateLimitMap: Map<string, RateLimitEntry>,
+    rateLimitMap: Map<string, RateLimitEntry>
 ): { allowed: boolean; retryAfterSeconds?: number } {
     if (config.enableRateLimit === false) {
         return { allowed: true }
@@ -135,7 +140,7 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
     res.setHeader(
         'Access-Control-Allow-Headers',
-        'Content-Type, Accept, Authorization, mcp-session-id, Last-Event-ID, mcp-protocol-version',
+        'Content-Type, Accept, Authorization, mcp-session-id, Last-Event-ID, mcp-protocol-version'
     )
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
     res.setHeader('Access-Control-Max-Age', String(CORS_PREFLIGHT_MAX_AGE_SECONDS))

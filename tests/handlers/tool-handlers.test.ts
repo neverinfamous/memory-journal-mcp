@@ -209,10 +209,10 @@ describe('Tool Handlers', () => {
             tomorrow.setDate(tomorrow.getDate() + 1)
             const todayStr = today.toISOString().split('T')[0]!
             const tomorrowStr = tomorrow.toISOString().split('T')[0]!
-            
+
             // Ensure an entry exists today
             await callTool('create_entry', { content: 'Date range test entry' }, db)
-            
+
             const result = (await callTool(
                 'search_by_date_range',
                 { start_date: todayStr, end_date: tomorrowStr },

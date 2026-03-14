@@ -107,23 +107,27 @@ const SemanticEntryOutputSchema = EntryOutputSchema.extend({
     similarity: z.number(),
 })
 
-const SemanticSearchOutputSchema = z.object({
-    query: z.string().optional(),
-    entries: z.array(SemanticEntryOutputSchema).optional(),
-    count: z.number().optional(),
-    hint: z.string().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const SemanticSearchOutputSchema = z
+    .object({
+        query: z.string().optional(),
+        entries: z.array(SemanticEntryOutputSchema).optional(),
+        count: z.number().optional(),
+        hint: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const VectorStatsOutputSchema = z.object({
-    available: z.boolean(),
-    error: z.string().optional(),
-    itemCount: z.number().optional(),
-    modelName: z.string().optional(),
-    dimensions: z.number().optional(),
-    success: z.boolean().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const VectorStatsOutputSchema = z
+    .object({
+        available: z.boolean(),
+        error: z.string().optional(),
+        itemCount: z.number().optional(),
+        modelName: z.string().optional(),
+        dimensions: z.number().optional(),
+        success: z.boolean().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -153,9 +157,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     // When merging across DBs, fetch more per-DB so BM25 ranking
                     // in one DB doesn't silently drop entries before the merge.
                     // The actual user limit is applied by mergeAndDedup.
-                    const perDbLimit = teamDb
-                        ? Math.min(input.limit * 2, 500)
-                        : input.limit
+                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
 
                     let personalEntries
                     if (!input.query && !hasFilters) {
@@ -209,9 +211,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
-                    const perDbLimit = teamDb
-                        ? Math.min(input.limit * 2, 500)
-                        : input.limit
+                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
                     const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
                         tags: input.tags,
@@ -290,7 +290,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
                             // Apply is_personal filter if specified
-                            if (input.is_personal !== undefined && entry.isPersonal !== input.is_personal) return null
+                            if (
+                                input.is_personal !== undefined &&
+                                entry.isPersonal !== input.is_personal
+                            )
+                                return null
                             return {
                                 ...entry,
                                 similarity: Math.round(r.score * 100) / 100,
@@ -311,13 +315,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     // Build hint: quality gate hint is always shown (not gated by hint_on_empty)
                     // because noisy results ≠ empty results. hint_on_empty only controls
                     // the "no results" and "empty index" advisory hints.
-                    const hint = isIndexEmpty && includeHint
-                        ? 'No entries in vector index. Use rebuild_vector_index to index existing entries.'
-                        : entries.length === 0 && includeHint
-                          ? `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
-                          : allNoise
-                            ? `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`
-                            : undefined
+                    const hint =
+                        isIndexEmpty && includeHint
+                            ? 'No entries in vector index. Use rebuild_vector_index to index existing entries.'
+                            : entries.length === 0 && includeHint
+                              ? `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
+                              : allNoise
+                                ? `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`
+                                : undefined
 
                     return {
                         query: input.query,
@@ -384,9 +389,7 @@ function mergeAndDedup(
     const merged: EntryWithSource[] = []
 
     // Concat and sort by timestamp descending (ISO 8601 sorts lexicographically)
-    const all = [...personal, ...team].sort(
-        (a, b) => b.timestamp.localeCompare(a.timestamp)
-    )
+    const all = [...personal, ...team].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
 
     for (const entry of all) {
         // Deduplicate by content (same entry shared to team)

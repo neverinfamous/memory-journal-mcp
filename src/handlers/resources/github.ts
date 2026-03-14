@@ -47,18 +47,25 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const { owner, repo, branch, lastModified, github } = resolved
 
                 // Parallelize independent API calls for performance
-                const [commitResult, issuesResult, prsResult, workflowsResult, kanbanResult, milestoneResult] =
-                    await Promise.allSettled([
-                        github.getRepoContext(),
-                        github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT),
-                        github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT),
-                        github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT),
-                        github.getProjectKanban(owner, 1, repo),
-                        github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT),
-                    ])
+                const [
+                    commitResult,
+                    issuesResult,
+                    prsResult,
+                    workflowsResult,
+                    kanbanResult,
+                    milestoneResult,
+                ] = await Promise.allSettled([
+                    github.getRepoContext(),
+                    github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT),
+                    github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT),
+                    github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT),
+                    github.getProjectKanban(owner, 1, repo),
+                    github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT),
+                ])
 
                 // Extract results with safe defaults
-                const commit = commitResult.status === 'fulfilled' ? commitResult.value.commit : null
+                const commit =
+                    commitResult.status === 'fulfilled' ? commitResult.value.commit : null
                 if (commitResult.status === 'rejected') {
                     logger.debug('Failed to fetch commit context', {
                         module: 'RESOURCE',
@@ -81,7 +88,8 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 }))
 
                 // CI status from workflow runs
-                const workflowRuns = workflowsResult.status === 'fulfilled' ? workflowsResult.value : []
+                const workflowRuns =
+                    workflowsResult.status === 'fulfilled' ? workflowsResult.value : []
                 let ciStatus: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown' =
                     'unknown'
                 let latestRun: { name: string; conclusion: string | null; headSha: string } | null =
@@ -253,9 +261,17 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
 
-                const milestones = await github.getMilestones(owner, repo, 'open', RESOURCE_MILESTONE_LIMIT)
+                const milestones = await github.getMilestones(
+                    owner,
+                    repo,
+                    'open',
+                    RESOURCE_MILESTONE_LIMIT
+                )
                 const milestonesWithProgress = milestones.map((ms) => {
-                    const completionPercentage = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
+                    const completionPercentage = milestoneCompletionPct(
+                        ms.openIssues,
+                        ms.closedIssues
+                    )
                     return { ...ms, completionPercentage }
                 })
 
@@ -306,7 +322,10 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const completionPercentage = milestoneCompletionPct(milestone.openIssues, milestone.closedIssues)
+                const completionPercentage = milestoneCompletionPct(
+                    milestone.openIssues,
+                    milestone.closedIssues
+                )
 
                 return {
                     data: {

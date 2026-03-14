@@ -62,11 +62,10 @@ describe('Handler Error Branches', () => {
 
     describe('search_entries — FTS fallback', () => {
         it('should fall back to LIKE when query has unbalanced quotes', async () => {
-            const result = (await callTool(
-                'search_entries',
-                { query: '"unbalanced' },
-                db
-            )) as { entries: unknown[]; count: number }
+            const result = (await callTool('search_entries', { query: '"unbalanced' }, db)) as {
+                entries: unknown[]
+                count: number
+            }
 
             // Should not throw, should return results (possibly empty)
             expect(result.entries).toBeDefined()
@@ -74,11 +73,9 @@ describe('Handler Error Branches', () => {
         })
 
         it('should handle empty query gracefully', async () => {
-            const result = (await callTool(
-                'search_entries',
-                { query: '' },
-                db
-            )) as { entries: unknown[] }
+            const result = (await callTool('search_entries', { query: '' }, db)) as {
+                entries: unknown[]
+            }
 
             expect(result.entries).toBeDefined()
         })
@@ -240,9 +237,9 @@ describe('Handler Error Branches', () => {
 
     describe('callTool — unknown tool', () => {
         it('should reject with Error for unknown tool name', async () => {
-            await expect(
-                callTool('nonexistent_tool_xyz', {}, db)
-            ).rejects.toThrow('Unknown tool: nonexistent_tool_xyz')
+            await expect(callTool('nonexistent_tool_xyz', {}, db)).rejects.toThrow(
+                'Unknown tool: nonexistent_tool_xyz'
+            )
         })
     })
 
@@ -267,11 +264,7 @@ describe('Handler Error Branches', () => {
 
     describe('get_vector_index_stats — no vector manager', () => {
         it('should return error when vector manager is not available', async () => {
-            const result = (await callTool(
-                'get_vector_index_stats',
-                {},
-                db
-            )) as { error: string }
+            const result = (await callTool('get_vector_index_stats', {}, db)) as { error: string }
 
             expect(result.error).toContain('not available')
         })
@@ -285,12 +278,12 @@ describe('Handler Error Branches', () => {
         it('should return stats from vector manager', async () => {
             const vectorManager = createMockVector()
 
-            const result = (await callTool(
-                'get_vector_index_stats',
-                {},
-                db,
-                vectorManager
-            )) as { success: boolean; available: boolean; itemCount: number; modelName: string }
+            const result = (await callTool('get_vector_index_stats', {}, db, vectorManager)) as {
+                success: boolean
+                available: boolean
+                itemCount: number
+                modelName: string
+            }
 
             expect(result.success).toBe(true)
             expect(result.available).toBe(true)

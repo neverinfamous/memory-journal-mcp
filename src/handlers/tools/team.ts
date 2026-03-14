@@ -12,10 +12,14 @@ import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { resolveAuthor } from '../../utils/security-utils.js'
 import { resolveIssueUrl } from '../../utils/github-helpers.js'
-import { ENTRY_TYPES, SIGNIFICANCE_TYPES, MAX_CONTENT_LENGTH, EntryOutputSchema, relaxedNumber } from './schemas.js'
+import {
+    ENTRY_TYPES,
+    SIGNIFICANCE_TYPES,
+    MAX_CONTENT_LENGTH,
+    EntryOutputSchema,
+    relaxedNumber,
+} from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-
-
 
 // ============================================================================
 // Input Schemas
@@ -83,19 +87,23 @@ const TeamEntryOutputSchema = EntryOutputSchema.extend({
     author: z.string().nullable().optional(),
 })
 
-const TeamCreateOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entry: TeamEntryOutputSchema.optional(),
-    author: z.string().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const TeamCreateOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: TeamEntryOutputSchema.optional(),
+        author: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const TeamEntriesListOutputSchema = z.object({
-    entries: z.array(TeamEntryOutputSchema).optional(),
-    count: z.number().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const TeamEntriesListOutputSchema = z
+    .object({
+        entries: z.array(TeamEntryOutputSchema).optional(),
+        count: z.number().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Constants
@@ -155,7 +163,11 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     const author = input.author ?? resolveAuthor()
 
                     // Auto-populate issueUrl if issue_number provided
-                    const resolvedIssueUrl = resolveIssueUrl(github, input.issue_number, input.issue_url)
+                    const resolvedIssueUrl = resolveIssueUrl(
+                        github,
+                        input.issue_number,
+                        input.issue_url
+                    )
 
                     const entry = teamDb.createEntry({
                         content: input.content,
@@ -207,7 +219,10 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     const entries = teamDb.getRecentEntries(limit)
 
                     // Batch-fetch authors (single query instead of N+1)
-                    const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
+                    const authorMap = batchFetchAuthors(
+                        teamDb,
+                        entries.map((e) => e.id)
+                    )
                     const enriched = entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,
@@ -270,7 +285,10 @@ export function getTeamTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Batch-fetch authors (single query instead of N+1)
-                    const authorMap = batchFetchAuthors(teamDb, entries.map((e) => e.id))
+                    const authorMap = batchFetchAuthors(
+                        teamDb,
+                        entries.map((e) => e.id)
+                    )
                     const enriched = entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,

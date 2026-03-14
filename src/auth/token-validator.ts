@@ -7,7 +7,13 @@
 
 import * as jose from 'jose'
 import type { TokenValidationResult, TokenClaims, TokenValidatorConfig } from './types.js'
-import { InvalidTokenError, TokenExpiredError, InvalidSignatureError, JwksFetchError, AUTH_ERROR_CODES } from './errors.js'
+import {
+    InvalidTokenError,
+    TokenExpiredError,
+    InvalidSignatureError,
+    JwksFetchError,
+    AUTH_ERROR_CODES,
+} from './errors.js'
 import { parseScopes } from './scopes.js'
 import { logger } from '../utils/logger.js'
 

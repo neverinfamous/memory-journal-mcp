@@ -15,7 +15,10 @@ const MAX_CAUSAL_SCORE_AT = 3
 /** Number of days after which the recency component decays to zero */
 const RECENCY_WINDOW_DAYS = 90
 
-export function calculateImportance(context: EntriesSharedContext, entryId: number): ImportanceResult {
+export function calculateImportance(
+    context: EntriesSharedContext,
+    entryId: number
+): ImportanceResult {
     const { db } = context
     const round2 = (n: number): number => Math.round(n * 100) / 100
 

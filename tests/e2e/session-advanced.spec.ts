@@ -16,7 +16,7 @@ test.describe('Advanced Session Management', () => {
         const sseTransport = new SSEClientTransport(new URL('http://localhost:3100/sse'))
         const sseClient = new Client(
             { name: 'cross-protocol-test', version: '1.0.0' },
-            { capabilities: {} },
+            { capabilities: {} }
         )
 
         let sseSessionId: string | undefined
@@ -59,11 +59,11 @@ test.describe('Advanced Session Management', () => {
 
         for (let i = 0; i < 3; i++) {
             const transport = new StreamableHTTPClientTransport(
-                new URL('http://localhost:3100/mcp'),
+                new URL('http://localhost:3100/mcp')
             )
             const client = new Client(
                 { name: `sequential-test-${i}`, version: '1.0.0' },
-                { capabilities: {} },
+                { capabilities: {} }
             )
 
             try {

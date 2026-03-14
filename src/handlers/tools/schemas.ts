@@ -89,51 +89,57 @@ export const relaxedNumber = (): z.ZodAny => z.any()
  * Schema for a journal entry in output responses.
  * Uses camelCase to match actual database output format.
  */
-export const EntryOutputSchema = z.object({
-    id: z.number(),
-    content: z.string(),
-    entryType: z.string(),
-    isPersonal: z.boolean(),
-    timestamp: z.string(),
-    tags: z.array(z.string()).optional(),
-    significanceType: z.string().nullable().optional(),
-    autoContext: z.string().nullable().optional(),
-    deletedAt: z.string().nullable().optional(),
-    projectNumber: z.number().nullable().optional(),
-    projectOwner: z.string().nullable().optional(),
-    issueNumber: z.number().nullable().optional(),
-    issueUrl: z.string().nullable().optional(),
-    prNumber: z.number().nullable().optional(),
-    prUrl: z.string().nullable().optional(),
-    prStatus: z.string().nullable().optional(),
-    workflowRunId: z.number().nullable().optional(),
-    workflowName: z.string().nullable().optional(),
-    workflowStatus: z.string().nullable().optional(),
-    source: z.enum(['personal', 'team']).optional(),
-}).extend(ErrorFieldsMixin.shape)
+export const EntryOutputSchema = z
+    .object({
+        id: z.number(),
+        content: z.string(),
+        entryType: z.string(),
+        isPersonal: z.boolean(),
+        timestamp: z.string(),
+        tags: z.array(z.string()).optional(),
+        significanceType: z.string().nullable().optional(),
+        autoContext: z.string().nullable().optional(),
+        deletedAt: z.string().nullable().optional(),
+        projectNumber: z.number().nullable().optional(),
+        projectOwner: z.string().nullable().optional(),
+        issueNumber: z.number().nullable().optional(),
+        issueUrl: z.string().nullable().optional(),
+        prNumber: z.number().nullable().optional(),
+        prUrl: z.string().nullable().optional(),
+        prStatus: z.string().nullable().optional(),
+        workflowRunId: z.number().nullable().optional(),
+        workflowName: z.string().nullable().optional(),
+        workflowStatus: z.string().nullable().optional(),
+        source: z.enum(['personal', 'team']).optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 /**
  * Schema for list of entries with count.
  * Used by get_recent_entries, search_entries, search_by_date_range.
  */
-export const EntriesListOutputSchema = z.object({
-    entries: z.array(EntryOutputSchema).optional(),
-    count: z.number().optional(),
-    success: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+export const EntriesListOutputSchema = z
+    .object({
+        entries: z.array(EntryOutputSchema).optional(),
+        count: z.number().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 /**
  * Schema for a relationship between entries.
  */
-export const RelationshipOutputSchema = z.object({
-    id: z.number(),
-    fromEntryId: z.number(),
-    toEntryId: z.number(),
-    relationshipType: z.string(),
-    description: z.string().nullable().optional(),
-    createdAt: z.string(),
-}).extend(ErrorFieldsMixin.shape)
+export const RelationshipOutputSchema = z
+    .object({
+        id: z.number(),
+        fromEntryId: z.number(),
+        toEntryId: z.number(),
+        relationshipType: z.string(),
+        description: z.string().nullable().optional(),
+        createdAt: z.string(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 /**
  * Importance score breakdown schema.
@@ -148,7 +154,9 @@ export const ImportanceBreakdownSchema = z.object({
 /**
  * Tag with usage count.
  */
-export const TagOutputSchema = z.object({
-    name: z.string(),
-    count: z.number().nullable(),
-}).extend(ErrorFieldsMixin.shape)
+export const TagOutputSchema = z
+    .object({
+        name: z.string(),
+        count: z.number().nullable(),
+    })
+    .extend(ErrorFieldsMixin.shape)

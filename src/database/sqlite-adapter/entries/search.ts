@@ -1,5 +1,10 @@
 import type { JournalEntry, EntryType } from '../../../types/index.js'
-import { ENTRY_COLUMNS, ALIASED_ENTRY_COLUMNS, type EntriesSharedContext, rowsToEntries } from './shared.js'
+import {
+    ENTRY_COLUMNS,
+    ALIASED_ENTRY_COLUMNS,
+    type EntriesSharedContext,
+    rowsToEntries,
+} from './shared.js'
 
 export function getRecentEntries(context: EntriesSharedContext, limit: number): JournalEntry[] {
     const { db, tagsMgr } = context
@@ -34,7 +39,7 @@ export function getEntriesPage(
 }
 
 export function searchEntries(
-    context: EntriesSharedContext, 
+    context: EntriesSharedContext,
     queryStr: string,
     options?: {
         limit?: number
@@ -70,7 +75,15 @@ export function searchEntries(
  */
 function buildSearchQuery(
     queryStr: string,
-    options: { limit?: number; isPersonal?: boolean; projectNumber?: number; issueNumber?: number; prNumber?: number } | undefined,
+    options:
+        | {
+              limit?: number
+              isPersonal?: boolean
+              projectNumber?: number
+              issueNumber?: number
+              prNumber?: number
+          }
+        | undefined,
     useFts: boolean
 ): { sql: string; params: unknown[] } {
     let query: string
@@ -103,7 +116,7 @@ function buildSearchQuery(
         conditions.push(`e.is_personal = ?`)
         params.push(options.isPersonal ? 1 : 0)
     }
-    
+
     if (options?.projectNumber !== undefined) {
         conditions.push(`e.project_number = ?`)
         params.push(options.projectNumber)
@@ -170,7 +183,7 @@ export function searchByDateRange(
     let query = `
         SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS} FROM memory_journal e
     `
-    
+
     if (options?.tags && options.tags.length > 0) {
         query += `
             JOIN entry_tags et ON e.id = et.entry_id
@@ -185,7 +198,7 @@ export function searchByDateRange(
         conditions.push(`e.entry_type = ?`)
         params.push(options.entryType)
     }
-    
+
     if (options?.isPersonal !== undefined) {
         conditions.push(`e.is_personal = ?`)
         params.push(options.isPersonal ? 1 : 0)

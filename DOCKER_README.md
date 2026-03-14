@@ -192,6 +192,8 @@ Restart Cursor or your MCP client and start journaling!
 | `DEFAULT_PROJECT_NUMBER`   | Default GitHub Project number for auto-assignment when creating issues                            |
 | `AUTO_REBUILD_INDEX`       | Set to `true` to rebuild vector index on server startup                                           |
 | `MCP_HOST`                 | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
+| `MCP_AUTH_TOKEN`           | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
+| `MCP_ENABLE_HSTS`          | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)            |
 | `OAUTH_ENABLED`            | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
 | `OAUTH_ISSUER`             | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |
 | `OAUTH_AUDIENCE`           | Expected JWT audience claim                                                                       |

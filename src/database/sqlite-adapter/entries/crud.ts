@@ -48,7 +48,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             tagsMgr.linkTagsToEntry(insertId, input.tags)
         }
     })
-    
+
     txn()
 
     const entry = getEntryById(context, insertId)
@@ -72,7 +72,10 @@ export function getEntryById(context: EntriesSharedContext, id: number): Journal
     return rowToEntry(tagsMgr, row)
 }
 
-export function getEntriesByIds(context: EntriesSharedContext, ids: number[]): Map<number, JournalEntry> {
+export function getEntriesByIds(
+    context: EntriesSharedContext,
+    ids: number[]
+): Map<number, JournalEntry> {
     const result = new Map<number, JournalEntry>()
     if (ids.length === 0) return result
 
@@ -105,7 +108,10 @@ export function getEntriesByIds(context: EntriesSharedContext, ids: number[]): M
     return result
 }
 
-export function getEntryByIdIncludeDeleted(context: EntriesSharedContext, id: number): JournalEntry | null {
+export function getEntryByIdIncludeDeleted(
+    context: EntriesSharedContext,
+    id: number
+): JournalEntry | null {
     const { db, tagsMgr } = context
     const stmt = db.prepare(`SELECT ${ENTRY_COLUMNS} FROM memory_journal WHERE id = ?`)
     const row = rowToObject(stmt.get(id))
@@ -125,8 +131,8 @@ export function getActiveEntryCount(context: EntriesSharedContext): number {
 }
 
 export function updateEntry(
-    context: EntriesSharedContext, 
-    id: number, 
+    context: EntriesSharedContext,
+    id: number,
     input: {
         content?: string
         entryType?: EntryType
@@ -219,7 +225,9 @@ export function deleteEntry(context: EntriesSharedContext, id: number, permanent
         return result.changes > 0
     }
 
-    const stmt = db.prepare(`UPDATE memory_journal SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`)
+    const stmt = db.prepare(
+        `UPDATE memory_journal SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`
+    )
     const result = stmt.run(new Date().toISOString(), id)
     return result.changes > 0
 }

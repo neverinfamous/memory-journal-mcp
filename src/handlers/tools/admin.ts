@@ -48,41 +48,51 @@ const DeleteEntrySchemaMcp = z.object({
 // Output Schemas
 // ============================================================================
 
-const UpdateEntryOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entry: EntryOutputSchema.optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const UpdateEntryOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: EntryOutputSchema.optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const DeleteEntryOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entryId: z.number().optional(),
-    permanent: z.boolean().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const DeleteEntryOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entryId: z.number().optional(),
+        permanent: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const MergeTagsOutputSchema = z.object({
-    success: z.boolean().optional(),
-    sourceTag: z.string().optional(),
-    targetTag: z.string().optional(),
-    entriesUpdated: z.number().optional(),
-    sourceDeleted: z.boolean().optional(),
-    message: z.string().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const MergeTagsOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        sourceTag: z.string().optional(),
+        targetTag: z.string().optional(),
+        entriesUpdated: z.number().optional(),
+        sourceDeleted: z.boolean().optional(),
+        message: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const RebuildVectorIndexOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entriesIndexed: z.number().optional(),
-    failedEntries: z.number().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const RebuildVectorIndexOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entriesIndexed: z.number().optional(),
+        failedEntries: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
-const AddToVectorIndexOutputSchema = z.object({
-    success: z.boolean().optional(),
-    entryId: z.number().optional(),
-    error: z.string().optional(),
-}).extend(ErrorFieldsMixin.shape)
+const AddToVectorIndexOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entryId: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
 
 // ============================================================================
 // Tool Definitions
@@ -250,13 +260,18 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                         }
                     }
-                    const { indexed, failed, firstError } = await vectorManager.rebuildIndex(db, progress)
+                    const { indexed, failed, firstError } = await vectorManager.rebuildIndex(
+                        db,
+                        progress
+                    )
                     const success = indexed > 0 || failed === 0
                     return {
                         success,
                         entriesIndexed: indexed,
                         ...(failed > 0 ? { failedEntries: failed } : {}),
-                        ...(!success ? { error: firstError ?? 'All entries failed to generate embeddings' } : {}),
+                        ...(!success
+                            ? { error: firstError ?? 'All entries failed to generate embeddings' }
+                            : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -293,7 +308,9 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     return {
                         success: result.success,
                         entryId: entry_id,
-                        ...(result.success ? {} : { error: result.error ?? 'Failed to generate or store embedding' }),
+                        ...(result.success
+                            ? {}
+                            : { error: result.error ?? 'Failed to generate or store embedding' }),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

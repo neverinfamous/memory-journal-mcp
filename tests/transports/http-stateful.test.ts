@@ -59,7 +59,10 @@ vi.mock('../../../src/utils/logger.js', () => ({
     },
 }))
 
-import { setupStateful, type StatefulContext } from '../../../src/transports/http/server/stateful.js'
+import {
+    setupStateful,
+    type StatefulContext,
+} from '../../../src/transports/http/server/stateful.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 
 // ============================================================================
@@ -72,6 +75,8 @@ function createMockCtx(): StatefulContext {
         sseTransports: new Map(),
         sessionLastActivity: new Map(),
         touchSession: vi.fn(),
+        serverConnected: false,
+        cachedOnMessage: undefined,
     }
 }
 
@@ -327,6 +332,38 @@ describe('setupStateful', () => {
 
         expect(server.connect).toHaveBeenCalled()
         expect(mockHandleRequest).toHaveBeenCalled()
+        expect(ctx.serverConnected).toBe(true)
+
+        clearInterval(timer)
+    })
+
+    it('should NOT call server.close() when second session initializes (connect-once)', async () => {
+        vi.mocked(isInitializeRequest).mockReturnValue(true)
+
+        const ctx = createMockCtx()
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, server as never)
+        const handler = app.routes['post']!['/mcp']!
+
+        // First initialization
+        const req1 = mockReq({ headers: {}, body: { method: 'initialize' } })
+        const res1 = mockRes()
+        handler(req1, res1)
+        await vi.advanceTimersByTimeAsync(10)
+
+        expect(server.connect).toHaveBeenCalledTimes(1)
+        expect(ctx.serverConnected).toBe(true)
+
+        // Second initialization — should NOT call server.connect() or server.close()
+        const req2 = mockReq({ headers: {}, body: { method: 'initialize' } })
+        const res2 = mockRes()
+        handler(req2, res2)
+        await vi.advanceTimersByTimeAsync(10)
+
+        expect(server.connect).toHaveBeenCalledTimes(1) // Still 1 — not called again
+        expect(server.close).not.toHaveBeenCalled() // Never disconnects
 
         clearInterval(timer)
     })
