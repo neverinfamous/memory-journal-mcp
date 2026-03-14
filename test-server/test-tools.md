@@ -377,6 +377,9 @@ Call `tools/list` and verify annotation counts:
 
 ## Phase 6: Template Resources
 
+> [!CAUTION]
+> Issue and PR template URIs require the `/entries` or `/timeline` suffix — they are **NOT** bare `memory://issues/{number}` or `memory://prs/{number}`. Using bare URIs will return "Resource not found". Always use the full paths shown in the table below (e.g. `memory://issues/55/entries`, `memory://prs/67/timeline`).
+
 ### 6.1 Happy Path
 
 | Template         | Test URI                       | Expected Result                                                                                                                     |
