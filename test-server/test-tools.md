@@ -111,10 +111,31 @@ After creating all 12 entries, verify the seed data is searchable:
 
 ### 1.3 Protocol Validation
 
-| Test              | Command/Action                | Expected Result                                                  |
-| ----------------- | ----------------------------- | ---------------------------------------------------------------- |
-| Read instructions | Read `memory://instructions` | Returns markdown instructions; length varies based on `--instruction-level` (`essential`, `standard`, `full`) |
-| Tool annotations  | Call `tools/list`             | Core/local tools (e.g., `create_entry`) have `openWorldHint: false`; GitHub tools have `openWorldHint: true` |
+**Test A — Instruction Level:**
+
+Start the server with different `--instruction-level` values and verify the server instructions length varies:
+
+| `--instruction-level` | Expected Behavior |
+|---|---|
+| `essential` | Shortest instructions (~1.2K tokens) |
+| `standard` (default) | Medium instructions (~1.4K tokens) |
+| `full` | Longest instructions (~6.7K tokens) |
+
+> **Note:** The `INSTRUCTION_LEVEL` environment variable also controls this; CLI flag takes precedence.
+>
+> The `memory://instructions` **resource** always returns `full` instructions regardless of the server's configured level — it serves as a complete reference that agents can explicitly read when needed.
+
+**Test B — Tool Annotations (`openWorldHint`):**
+
+Call `tools/list` and verify annotation counts:
+
+| Check | Expected |
+|---|---|
+| All tools have `annotations` object | ✅ Present on every tool |
+| Core/local tools with `openWorldHint: false` | **28** (core, search, relationships, team, backup, export, analytics, admin, codemode) |
+| GitHub tools with `openWorldHint: true` | **16** (read, issue, kanban, milestone, insights, copilot) |
+| Total tools | **44** |
+| Tools with missing `openWorldHint` | **0** |
 
 ### 1.4 GitHub Status Resource
 
@@ -645,8 +666,8 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 - [ ] All 44 tools execute without errors on happy paths
 - [ ] All 7 template resources work with valid parameters
 - [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
-- [ ] Server instructions length respects `--instruction-level` (`essential`, `standard`, `full`)
-- [ ] Local tools have `openWorldHint: false` annotations; GitHub tools have `openWorldHint: true`
+- [ ] Server instructions length respects `--instruction-level`: essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
+- [ ] 28 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (44 total, 0 missing)
 
 ### Entry CRUD
 
