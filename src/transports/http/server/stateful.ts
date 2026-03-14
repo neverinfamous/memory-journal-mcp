@@ -12,7 +12,6 @@ import {
     JSONRPC_INTERNAL_ERROR,
 } from '../types.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 
 export interface StatefulContext {
     transports: Map<string, StreamableHTTPServerTransport>
@@ -20,10 +19,8 @@ export interface StatefulContext {
     sseTransports: Map<string, SSEServerTransport>
     sessionLastActivity: Map<string, number>
     touchSession: (sid: string) => void
-    /** Tracks whether server.connect() has been called (connect-once pattern) */
+    /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     serverConnected: boolean
-    /** Cached onmessage handler captured from first server.connect() — replayed onto subsequent transports */
-    cachedOnMessage: Transport['onmessage']
 }
 
 export function setupStateful(
@@ -122,17 +119,15 @@ export function setupStateful(
                         }
                     }
 
-                    // Connect transport to server (connect-once pattern)
-                    // SDK McpServer only supports one active transport — connect once,
-                    // then replay the captured onmessage handler for subsequent sessions.
-                    if (!ctx.serverConnected) {
-                        await server.connect(newTransport)
-                        ctx.cachedOnMessage = newTransport.onmessage
-                        ctx.serverConnected = true
-                    } else {
-                        newTransport.onmessage = ctx.cachedOnMessage
-                        await newTransport.start()
+                    // Connect transport to server
+                    // SDK requires close() before reconnecting to a new transport.
+                    // This cleanly supports sequential sessions; concurrent sessions
+                    // are an SDK limitation (only one transport at a time).
+                    if (ctx.serverConnected) {
+                        await server.close()
                     }
+                    await server.connect(newTransport)
+                    ctx.serverConnected = true
                     await newTransport.handleRequest(
                         req as IncomingMessage,
                         res as ServerResponse,

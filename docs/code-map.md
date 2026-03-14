@@ -287,7 +287,8 @@ try {
 | `test-server/README.md`                   | Agent testing orchestration doc                                                |
 | `test-server/test-tools.md`               | Pass 1: Core functionality (Phases 0-10, 44 tools + 22 resources + 16 prompts) |
 | `test-server/test-tools2.md`              | Pass 2: Validation & edge cases (Phases 11-15)                                 |
-| `test-server/test-tools-codemode.md`      | Pass 3: Code Mode testing (Phases 16-21)                                       |
+| `test-server/test-tools-codemode.md`      | Pass 3: Code Mode foundations (Phases 16-21)                                   |
+| `test-server/test-tools-codemode2.md`     | Pass 4: Code Mode advanced (Phases 22-27)                                      |
 | `test-server/test-instruction-levels.mjs` | Integration: instruction level ordering test (stdio)                           |
 | `test-server/test-tool-annotations.mjs`   | Integration: tool annotation counts test (stdio)                               |
 | `test-server/test-scheduler.mjs`          | Integration: scheduler job verification (HTTP, ~130s)                          |

@@ -15,7 +15,6 @@
 
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import express from 'express'
@@ -60,10 +59,8 @@ export class HttpTransport {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
     public readonly sseTransports = new Map<string, SSEServerTransport>()
     public readonly sessionLastActivity = new Map<string, number>()
-    /** Connect-once pattern: tracks whether server.connect() has been called */
+    /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     public serverConnected = false
-    /** Cached onmessage handler from first server.connect() — replayed onto subsequent transports */
-    public cachedOnMessage: Transport['onmessage']
     private httpServer: ReturnType<Express['listen']> | null = null
     private sessionSweepTimer: ReturnType<typeof setInterval> | null = null
 

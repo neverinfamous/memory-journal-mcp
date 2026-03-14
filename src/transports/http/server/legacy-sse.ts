@@ -24,18 +24,13 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, server: McpSe
 
         void (async () => {
             try {
-                // Connect SSE transport to server (connect-once pattern)
-                // SDK McpServer only supports one active transport — connect once,
-                // then replay the captured onmessage handler for subsequent sessions.
-                if (!ctx.serverConnected) {
-                    await server.connect(sseTransport as Parameters<typeof server.connect>[0])
-                    ctx.cachedOnMessage = sseTransport.onmessage
-                    ctx.serverConnected = true
-                } else {
-                    sseTransport.onmessage = ctx.cachedOnMessage
-                    await (sseTransport as Parameters<typeof server.connect>[0]).start()
+                // Connect SSE transport to server
+                // SDK requires close() before reconnecting to a new transport.
+                if (ctx.serverConnected) {
+                    await server.close()
                 }
-                // Note: server.connect() auto-calls start() on SSEServerTransport
+                await server.connect(sseTransport as Parameters<typeof server.connect>[0])
+                ctx.serverConnected = true
                 ctx.sseTransports.set(sseTransport.sessionId, sseTransport)
                 ctx.touchSession(sseTransport.sessionId)
                 logger.info('Legacy SSE connection established', {

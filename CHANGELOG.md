@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.0.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.0.0) - 2026-03-14
 
+### Fixed
+
+- **HTTP Transport Close-Before-Reconnect** — MCP SDK `McpServer.connect()` now throws when called while already connected. Added `server.close()` before `server.connect()` for subsequent session initializations in both Streamable HTTP (`stateful.ts`) and Legacy SSE (`legacy-sse.ts`) transports. Tracks connection state via `serverConnected` flag on `StatefulContext`. Sequential sessions work correctly; concurrent multi-session is a known SDK limitation (single transport at a time).
+
+- **Copilot Review Fixes** — Addressed 5 code review findings from GitHub Copilot:
+  - `tags.ts`: Fixed `usage_count` increment to use a subquery for accurate batch counting instead of flat `+1`
+  - `context-section.ts`: Used `TEAM_PREVIEW_LENGTH` instead of `PREVIEW_LENGTH` for team context previews
+  - `interfaces.ts`: Expanded `groupBy` union in `IDatabaseAdapter.getStatistics` to include `'year'`
+  - `Dockerfile`: Added `tsup.config.ts` to `COPY` instruction to fix `tsup` build failure
+  - `server/index.ts`: Replaced inline `import()` type annotation with top-level `import type` to resolve linting error
+
+- **Documentation Updates**
+  - `CONTRIBUTING.md`: Corrected schema path to `src/database/core/schema.ts` and updated architecture tree
+  - `README.md` / `DOCKER_README.md`: Added `MCP_AUTH_TOKEN` and `MCP_ENABLE_HSTS` environment variables to configuration tables
+  - `docs/code-map.md`: Added `test-tools-codemode2.md` entry to Test Infrastructure table
+
 ### Added
 
 - **Test Coverage Improvement (73% → 87%)** — Added 10 new test files with 320+ tests, restoring coverage lost after unreleased changes:
