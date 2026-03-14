@@ -90,4 +90,8 @@ test.describe('HTTP Transport Security & Limits', () => {
         const headers = response.headers()
         expect(headers['strict-transport-security']).toBeUndefined()
     })
+
+    // Note: Positive HSTS test (enableHSTS: true) is not possible via CLI/env.
+    // The config property exists but has no CLI flag or env var wired to it.
+    // If --enable-hsts is added as a CLI flag, add a positive test here.
 })

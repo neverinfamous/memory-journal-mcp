@@ -6,8 +6,6 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 
 
 test.describe('HTTP/SSE Streaming', () => {
@@ -151,52 +149,7 @@ test.describe('HTTP/SSE Streaming', () => {
         // SSE format and endpoint event delivery.
     })
 
-    test.describe('Streamable HTTP SDK round-trip', () => {
-        test('should receive tool response via Streamable HTTP transport', async () => {
-            const transport = new StreamableHTTPClientTransport(
-                new URL('http://localhost:3100/mcp'),
-            )
-            const client = new Client(
-                { name: 'streamable-http-test', version: '1.0.0' },
-                { capabilities: {} },
-            )
-
-            try {
-                await client.connect(transport)
-
-                const response = await client.callTool({
-                    name: 'test_simple',
-                    arguments: { message: 'Streamable HTTP test' },
-                })
-
-                expect(response.isError).toBeUndefined()
-                expect(Array.isArray(response.content)).toBe(true)
-                const text = (response.content[0] as { type: string; text: string }).text
-                expect(text).toContain('Streamable HTTP test')
-            } finally {
-                await client.close()
-            }
-        })
-
-        test('should list resources via Streamable HTTP transport', async () => {
-            const transport = new StreamableHTTPClientTransport(
-                new URL('http://localhost:3100/mcp'),
-            )
-            const client = new Client(
-                { name: 'streamable-resource-test', version: '1.0.0' },
-                { capabilities: {} },
-            )
-
-            try {
-                await client.connect(transport)
-
-                const response = await client.listResources()
-                expect(response.resources).toBeDefined()
-                expect(Array.isArray(response.resources)).toBe(true)
-                expect(response.resources.length).toBeGreaterThan(0)
-            } finally {
-                await client.close()
-            }
-        })
-    })
+    // Note: Streamable HTTP SDK round-trip tests live in tools.spec.ts and
+    // resources.spec.ts. Duplicating them here causes timeouts due to the
+    // single-transport limitation in McpServer.connect().
 })
