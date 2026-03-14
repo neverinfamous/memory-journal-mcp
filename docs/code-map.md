@@ -48,7 +48,7 @@ src/
 │                                   #   GitHubWorkflowRun, KanbanBoard, TrafficData, RepoStats
 │
 ├── constants/
-│   ├── server-instructions.ts      # Agent instructions generator — 3 tiers: essential (~200 tokens), standard (~400), full (~600)
+│   ├── server-instructions.ts      # Agent instructions generator — 3 tiers: essential (~1.2K tokens), standard (~1.4K), full (~6.7K)
 │   ├── server-instructions.md      # Human-readable version of the instructions
 │   └── icons.ts                    # MCP icon definitions per tool group
 │

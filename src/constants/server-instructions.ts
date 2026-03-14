@@ -43,14 +43,14 @@ export interface LatestEntrySnapshot {
 
 /**
  * Instruction detail level for token efficiency
- * - essential: ~200 tokens - Core behaviors only (for token-constrained clients)
- * - standard: ~400 tokens - + GitHub patterns (default)
- * - full: ~600 tokens - + tool/resource listings
+ * - essential: ~1.2K tokens - Core behaviors only (for token-constrained clients)
+ * - standard: ~1.4K tokens - + GitHub patterns (default)
+ * - full: ~6.7K tokens - + tool/resource listings
  */
 export type InstructionLevel = 'essential' | 'standard' | 'full'
 
 /**
- * Essential behavioral guidance (~200 tokens)
+ * Essential behavioral guidance (~1.2K tokens)
  * Core patterns every AI agent should follow.
  */
 const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
@@ -137,7 +137,7 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 `
 
 /**
- * GitHub integration patterns (~150 additional tokens)
+ * GitHub integration patterns (~200 additional tokens)
  */
 const GITHUB_INSTRUCTIONS = `
 ## GitHub Integration
