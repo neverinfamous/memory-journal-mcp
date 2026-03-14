@@ -219,17 +219,17 @@ src/
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/                  # Server instructions (source + generated)
 ├── database/
-│   ├── SqliteAdapter.ts        # SQLite operations via sql.js
+│   ├── sqlite-adapter/         # Native SQLite operations (better-sqlite3)
 │   └── schema.ts               # DDL + migrations
 ├── filtering/                  # Tool filtering system
-├── github/                     # GitHub API integration
+├── github-integration/         # GitHub API integration
 ├── handlers/
 │   ├── tools/                  # 44 tool handlers (10 groups)
 │   ├── resources/              # 22 resource handlers
-│   └── prompts/                # 15 prompt handlers
+│   └── prompts/                # 16 prompt handlers
 ├── server/
-│   ├── McpServer.ts            # MCP server setup
-│   └── Scheduler.ts            # Recurring task scheduler
+│   ├── mcp-server.ts           # MCP server setup
+│   └── scheduler.ts            # Recurring task scheduler
 ├── transports/                 # HTTP/SSE transport
 ├── types/                      # TypeScript type definitions
 ├── utils/                      # Logger, error helpers, progress

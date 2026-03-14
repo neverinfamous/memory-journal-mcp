@@ -4,14 +4,14 @@ The Memory Journal MCP server implements comprehensive security measures to prot
 
 ## 🛡️ **Database Security**
 
-### **sql.js In-Memory Architecture**
+### **Native SQLite Architecture**
 
-The server uses **sql.js** (pure JavaScript SQLite compiled to WebAssembly) which operates on an in-memory database copy with periodic flushing to disk. This differs from native SQLite:
+The server uses the native **better-sqlite3** driver with **sqlite-vec** for vector operations, running directly against the filesystem.
 
 - ✅ **PRAGMA foreign_keys = ON** — enforces referential integrity and `ON DELETE CASCADE`
 - ✅ **Parameterized queries** — all user input bound via `?` placeholders
-- ✅ **Debounced disk writes** — periodic flushing with immediate flush on critical operations
-- ⚠️ WAL mode, mmap, busy_timeout, and other file-level PRAGMAs are **not applicable** to sql.js
+- ✅ **WAL journal mode** — high concurrency with non-blocking reads (`PRAGMA journal_mode = WAL`)
+- ✅ **Synchronous Normal** — optimized durability and performance (`PRAGMA synchronous = NORMAL`)
 
 ### **File Permissions (Docker)**
 
@@ -38,7 +38,7 @@ are safely handled by the database layer and do not pose injection risks.
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** via Zod schemas before database operations
 - ✅ **Warning system** for potentially dangerous content patterns
-- ✅ **LIKE pattern sanitization** (escapes `%`, `_`, `\` wildcards)
+- ✅ **FTS5 / LIKE pattern sanitization** (escapes `%`, `_`, `\` wildcards and handles FTS5 syntax errors gracefully)
 - ✅ **Date format whitelisting** (prevents strftime injection)
 
 ### **Path Traversal Protection**
@@ -52,26 +52,34 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 ### **CORS Configuration**
 
-- ✅ **Configurable origin** via `--cors-origin` flag or `MCP_CORS_ORIGIN` environment variable
+- ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `MCP_CORS_ORIGIN` environment variable
+- ✅ **Exact-match verification** (no wildcard matching for custom domains)
 - ⚠️ **Default: `*`** (allow all origins) for backward compatibility
-- 🔒 **Recommended**: Set a specific origin for production deployments
+- 🔒 **Recommended**: Set specific origins for production deployments
 
 ```bash
-# Restrict CORS to specific origin
-memory-journal-mcp --transport http --cors-origin "http://localhost:3000"
+# Restrict CORS to specific origins
+memory-journal-mcp --transport http --cors-origin "http://localhost:3000,https://my-app.com"
 
 # Or via environment variable
-export MCP_CORS_ORIGIN="http://localhost:3000"
+export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ```
 
-### **Security Headers**
+### **Security Headers & Protections**
 
+- ✅ **DNS Rebinding Protection** — `hostHeaderValidation` middleware prevents CVE-2025-66414
+- ✅ **Strict-Transport-Security (HSTS)** — max-age=31536000; includeSubDomains (opt-in via `--enable-hsts`)
 - ✅ **X-Content-Type-Options: nosniff** — prevents MIME sniffing
 - ✅ **X-Frame-Options: DENY** — prevents clickjacking
 - ✅ **Content-Security-Policy: default-src 'none'; frame-ancestors 'none'** — prevents XSS and framing
-- ✅ **Cache-Control: no-store** — prevents caching of sensitive journal data
+- ✅ **Cache-Control: no-store, no-cache, must-revalidate** — prevents caching of sensitive journal data
 - ✅ **Referrer-Policy: no-referrer** — prevents referrer leakage
 - ⚠️ **CORS wildcard warning** — server logs a warning when CORS origin is `*`
+
+### **Rate Limiting & Timeouts**
+
+- ✅ **Built-in Rate Limiting** — 100 requests/minute per IP (sliding window with `Retry-After` header)
+- ✅ **HTTP Timeouts** — Request timeout (120s), keep-alive timeout (65s), headers timeout (66s)
 
 ### **Session Management (Stateful Mode)**
 
@@ -185,11 +193,13 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 - [x] Parameterized SQL queries
 - [x] SQL injection detection heuristics (defense-in-depth)
 - [x] Path traversal protection (`assertNoPathTraversal`)
-- [x] LIKE pattern sanitization (`sanitizeSearchQuery`)
+- [x] FTS5 / LIKE pattern sanitization (`sanitizeSearchQuery`)
 - [x] Date format whitelisting (`validateDateFormatPattern`)
 - [x] HTTP body size limit (1MB)
-- [x] Configurable CORS origin (with wildcard warning)
-- [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy)
+- [x] Configurable CORS multi-origin with exact-match enforcement
+- [x] HTTP timeouts and built-in rate limiter (100 req/min)
+- [x] DNS rebinding protection and strict HSTS
+- [x] Security headers (CSP, X-Content-Type-Options, X-Frame-Options, Cache-Control, Referrer-Policy, Permissions-Policy)
 - [x] Session timeout (30 minutes)
 - [x] Non-root Docker user
 - [x] Multi-stage Docker build
