@@ -363,7 +363,7 @@ if (itemId) {
   moveResult = await mj.github.moveKanbanItem({
     project_number: 5,
     item_id: itemId,
-    target_status: "In Progress"
+    target_status: "In progress"
   });
 }
 
@@ -499,7 +499,7 @@ const reviewed = await mj.github.getCopilotReviews({ pr_number: 1 });
 return {
   hasStars: typeof stars.stars === "number",
   hasForks: typeof stars.forks === "number",
-  trafficHasClones: traffic.clones !== undefined || traffic.error !== undefined,
+  trafficHasClones: traffic.traffic?.clones !== undefined || traffic.error !== undefined,
   allSections: !!all,
   reviewState: reviewed.state,
   reviewComments: reviewed.commentCount
@@ -600,7 +600,7 @@ return {
     e.tags?.includes("architecture") || e.tags?.some(t => t === "architecture")
   ) ?? false,
   dateFiltered: dateExport.entries?.length >= 0,
-  typeFiltered: typeExport.entries?.every(e => e.entry_type === "planning") ?? true
+  typeFiltered: typeExport.entries?.every(e => e.entryType === "planning") ?? true
 };
 ```
 
