@@ -74,7 +74,7 @@
 
 - **Server Instructions Session Start** — Replaced numbered-list "Session Start" with bold **REQUIRED** directive to read `memory://briefing` and present `userMessage` to the user. Moved server name discovery plumbing below the action to prevent agents from misinterpreting the section as configuration guidance.
 
-- **Dependency Updates** — Routine `npm update` bumping non-breaking transitive dependencies.
+- **Dependency Updates** — `better-sqlite3` bumped from `12.6.2` → `12.8.0` (skips non-viable `12.7.0`/`12.7.1` intermediates — both were yanked due to Electron v41 V8 ABI breakage and the withdrawn SQLite 3.52.0 release). `12.8.0` ships SQLite **3.51.3** (WAL-reset bug fix), resolves the `HolderV2()` V8 API compat issue, and carries no breaking API changes. Also bumped non-breaking transitive dependencies.
 
 - **Unified Audit Fixes**
   - SHA-pinned `actions/checkout` in `auto-release.yml` to commit SHA, matching all other workflows
