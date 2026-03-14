@@ -328,7 +328,7 @@ return {
   closedIssueCount: closedIssues.count,
   prCount: prs.count,
   closedPrCount: closedPrs.count,
-  milestoneCount: milestones.total,
+  milestoneCount: milestones.count,
   singleIssueHasBody: !!singleIssue?.issue?.body !== undefined,
   singlePrHasDraft: singlePr?.pullRequest?.draft !== undefined
 };
