@@ -3,25 +3,42 @@
  *
  * Validates raw SSE event stream behavior for both Streamable HTTP
  * (GET /mcp) and Legacy SSE (GET /sse) transports.
+ *
+ * Uses a dedicated server on port 3107 to avoid disrupting SDK-based
+ * tests on the shared port 3100 (raw SSE connections interfere with
+ * McpServer.connect() single-transport state).
  */
 
 import { test, expect } from '@playwright/test'
+import { startServer, stopServer } from './helpers.js'
 
+const STREAM_PORT = 3107
+const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('HTTP/SSE Streaming', () => {
+    test.beforeAll(async () => {
+        await startServer(STREAM_PORT, [], 'streaming')
+    })
+
+    test.afterAll(() => {
+        stopServer(STREAM_PORT)
+    })
+
     test.describe('Streamable HTTP (GET /mcp)', () => {
-        test('should require session ID for GET /mcp SSE stream', async ({ request }) => {
-            const response = await request.get('/mcp')
-            expect(response.status()).toBe(400)
+        test('should require session ID for GET /mcp SSE stream', async () => {
+            const response = await fetch(`${STREAM_BASE}/mcp`)
+            expect(response.status).toBe(400)
         })
 
-        test('should accept GET /mcp with valid session ID', async ({ request }) => {
+        test('should accept GET /mcp with valid session ID', async () => {
             // First, initialize a session
-            const initResponse = await request.post('/mcp', {
+            const initResponse = await fetch(`${STREAM_BASE}/mcp`, {
+                method: 'POST',
                 headers: {
+                    'Content-Type': 'application/json',
                     Accept: 'application/json, text/event-stream',
                 },
-                data: {
+                body: JSON.stringify({
                     jsonrpc: '2.0',
                     id: 1,
                     method: 'initialize',
@@ -30,11 +47,11 @@ test.describe('HTTP/SSE Streaming', () => {
                         capabilities: {},
                         clientInfo: { name: 'streaming-test', version: '1.0.0' },
                     },
-                },
+                }),
             })
 
-            expect(initResponse.status()).toBe(200)
-            const sessionId = initResponse.headers()['mcp-session-id']
+            expect(initResponse.status).toBe(200)
+            const sessionId = initResponse.headers.get('mcp-session-id')
             expect(sessionId).toBeDefined()
 
             // Open SSE stream with session ID — use raw fetch with AbortController
@@ -42,7 +59,7 @@ test.describe('HTTP/SSE Streaming', () => {
             const timeout = setTimeout(() => controller.abort(), 3000)
 
             try {
-                const sseResponse = await fetch('http://localhost:3100/mcp', {
+                const sseResponse = await fetch(`${STREAM_BASE}/mcp`, {
                     headers: {
                         'mcp-session-id': sessionId!,
                         Accept: 'text/event-stream',
@@ -63,11 +80,15 @@ test.describe('HTTP/SSE Streaming', () => {
             }
         })
 
-        test('should accept Last-Event-ID header for reconnection', async ({ request }) => {
+        test('should accept Last-Event-ID header for reconnection', async () => {
             // Initialize session
-            const initResponse = await request.post('/mcp', {
-                headers: { Accept: 'application/json, text/event-stream' },
-                data: {
+            const initResponse = await fetch(`${STREAM_BASE}/mcp`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json, text/event-stream',
+                },
+                body: JSON.stringify({
                     jsonrpc: '2.0',
                     id: 1,
                     method: 'initialize',
@@ -76,10 +97,10 @@ test.describe('HTTP/SSE Streaming', () => {
                         capabilities: {},
                         clientInfo: { name: 'reconnect-test', version: '1.0.0' },
                     },
-                },
+                }),
             })
 
-            const sessionId = initResponse.headers()['mcp-session-id']
+            const sessionId = initResponse.headers.get('mcp-session-id')
             expect(sessionId).toBeDefined()
 
             // Reconnect with Last-Event-ID — server should accept (not error)
@@ -87,7 +108,7 @@ test.describe('HTTP/SSE Streaming', () => {
             const timeout = setTimeout(() => controller.abort(), 2000)
 
             try {
-                const sseResponse = await fetch('http://localhost:3100/mcp', {
+                const sseResponse = await fetch(`${STREAM_BASE}/mcp`, {
                     headers: {
                         'mcp-session-id': sessionId!,
                         'Last-Event-ID': 'test-event-id-123',
@@ -114,7 +135,7 @@ test.describe('HTTP/SSE Streaming', () => {
             const timeout = setTimeout(() => controller.abort(), 3000)
 
             try {
-                const response = await fetch('http://localhost:3100/sse', {
+                const response = await fetch(`${STREAM_BASE}/sse`, {
                     headers: { Accept: 'text/event-stream' },
                     signal: controller.signal,
                 })

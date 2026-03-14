@@ -8,6 +8,18 @@
   - **Utilities**: `github-helpers.test.ts` — covers resolveIssueUrl with all branch paths
   - Fixed existing test breakages from `hostHeaderValidation` middleware injection (middleware indices, mock response `.json()` method, `TokenValidator` import)
 
+- **E2E Test Expansion (71 → 104 tests)** — Added 8 new Playwright E2E spec files and refactored shared helpers:
+  - `streaming.spec.ts` — raw SSE stream validation: GET /mcp with session ID, Last-Event-ID reconnection, Legacy SSE /sse endpoint event format (dedicated server on port 3107)
+  - `rate-limiting.spec.ts` — 429 trigger, Retry-After header, /health exemption (inline server spawns with MCP_RATE_LIMIT_MAX)
+  - `session-advanced.spec.ts` — cross-protocol guard, sequential session isolation, non-existent session ID rejection, post-DELETE session rejection
+  - `prompts.spec.ts` — listPrompts (16+ prompts), getPrompt, parameterized prompt (find-related)
+  - `resources-expanded.spec.ts` — memory://instructions, memory://significant, memory://graph/recent, memory://tags, unknown URI error handling
+  - `payloads-codemode.spec.ts` — mj_execute_code basic execution, multi-step workflow, blocked patterns (require/process), timeout enforcement
+  - `tool-filtering.spec.ts` — --tool-filter starter preset validation: correct subset exposed, core tools included, codemode/github/admin excluded (dedicated server on port 3104)
+  - `oauth-discovery.spec.ts` — RFC 9728 /.well-known/oauth-protected-resource endpoint with/without OAuth enabled, scope validation, 401 without token (dedicated server on port 3105)
+  - Refactored `helpers.ts` with shared `startServer()`/`stopServer()` lifecycle management
+  - Refactored `auth.spec.ts` and `stateless.spec.ts` to use shared helpers, eliminating ~60 lines of duplicated boilerplate
+
   - **Agentic Workflows (GitHub Copilot)** — 4 new workflow scripts for automated repo maintenance using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot): `dependency-maintenance.md` (weekly npm + Docker dep updates, patch version bump, PR creation), `docs-drift-detector.md` (PR-triggered documentation accuracy audit), `ci-health-monitor.md` (weekly CI deprecation and action version check), `agentics-maintenance.yml` (daily expired entity cleanup). Includes `.github/workflows/README.md` with workflow map diagram and editing guidelines.
 
 - **WASM SQLite Fallback Removed** — Removed the `sql.js` WASM fallback adapter to simplify the architecture, test matrix, and dependency footprint. The server now runs exclusively on the high-performance native `better-sqlite3` driver. `--sqlite-native` and `--sqlite-wasm` flags have been removed.
