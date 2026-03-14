@@ -1,6 +1,5 @@
 # Dependabot configuration for Memory Journal MCP Server
-# v3.0.0+ is a TypeScript/Node.js project (npm dependencies)
-# The Python codebase is deprecated and archived in archive/python-v2
+# TypeScript/Node.js project — npm, github-actions, and docker ecosystems only
 
 version: 2
 updates:
@@ -35,7 +34,6 @@ updates:
           - 'patch'
       database:
         patterns:
-          - 'sql.js*'
           - 'better-sqlite3*'
         update-types:
           - 'minor'
