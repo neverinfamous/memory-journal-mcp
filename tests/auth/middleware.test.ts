@@ -12,6 +12,7 @@ import {
     requireAnyScope,
     requireToolScope,
     oauthErrorHandler,
+    createAuthMiddleware,
     createAuthenticatedContext,
     validateAuth,
     formatOAuthError,
@@ -379,5 +380,210 @@ describe('formatOAuthError', () => {
         const result = formatOAuthError(new Error('Unknown'))
         expect(result.status).toBe(500)
         expect(result.body).toHaveProperty('error', 'server_error')
+    })
+})
+
+// =============================================================================
+// createAuthMiddleware
+// =============================================================================
+
+describe('createAuthMiddleware', () => {
+    function makeReqResNext(overrides: Record<string, unknown> = {}) {
+        const req = {
+            path: '/mcp',
+            headers: {} as Record<string, string>,
+            ...overrides,
+        } as never
+        const statusMock = vi.fn().mockReturnThis()
+        const jsonMock = vi.fn()
+        const setHeaderMock = vi.fn()
+        const res = { status: statusMock, json: jsonMock, setHeader: setHeaderMock } as never
+        const next = vi.fn()
+        return { req, res, next, statusMock, jsonMock, setHeaderMock }
+    }
+
+    const mockValidator = Object.create(TokenValidator.prototype) as TokenValidator
+    mockValidator.validate = vi.fn()
+
+    const mockResourceServer = {
+        getResourceUri: () => 'https://mcp.example.com',
+        getWWWAuthenticateHeader: (error?: string, description?: string) =>
+            `Bearer realm="mcp", error="${error ?? ''}", error_description="${description ?? ''}"`,
+    } as never
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it('should bypass auth for .well-known paths', async () => {
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+        })
+        const { req, res, next } = makeReqResNext({ path: '/.well-known/oauth-authorization-server' })
+
+        await middleware(req, res, next)
+        expect(next).toHaveBeenCalled()
+    })
+
+    it('should bypass auth for exact public paths', async () => {
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+            publicPaths: ['/health'],
+        })
+        const { req, res, next } = makeReqResNext({ path: '/health' })
+
+        await middleware(req, res, next)
+        expect(next).toHaveBeenCalled()
+    })
+
+    it('should bypass auth for wildcard public paths', async () => {
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+            publicPaths: ['/api/*'],
+        })
+        const { req, res, next } = makeReqResNext({ path: '/api/users' })
+
+        await middleware(req, res, next)
+        expect(next).toHaveBeenCalled()
+    })
+
+    it('should bypass auth for wildcard prefix exact match', async () => {
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+            publicPaths: ['/api/*'],
+        })
+        const { req, res, next } = makeReqResNext({ path: '/api' })
+
+        await middleware(req, res, next)
+        expect(next).toHaveBeenCalled()
+    })
+
+    it('should return 401 when no token provided', async () => {
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+        })
+        const { req, res, next, statusMock, jsonMock } = makeReqResNext({
+            path: '/mcp',
+            headers: {},
+        })
+
+        await middleware(req, res, next)
+        expect(next).not.toHaveBeenCalled()
+        expect(statusMock).toHaveBeenCalledWith(401)
+        expect(jsonMock).toHaveBeenCalledWith(
+            expect.objectContaining({ error: 'unauthorized' })
+        )
+    })
+
+    it('should return 401 when token is invalid', async () => {
+        vi.mocked(mockValidator.validate).mockResolvedValueOnce({
+            valid: false,
+            error: 'Token expired',
+        })
+
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+        })
+        const { req, res, next, statusMock, jsonMock } = makeReqResNext({
+            path: '/mcp',
+            headers: { authorization: 'Bearer bad-token' },
+        })
+
+        await middleware(req, res, next)
+        expect(next).not.toHaveBeenCalled()
+        expect(statusMock).toHaveBeenCalledWith(401)
+        expect(jsonMock).toHaveBeenCalledWith(
+            expect.objectContaining({ error: 'invalid_token' })
+        )
+    })
+
+    it('should attach auth context and call next() for valid token', async () => {
+        vi.mocked(mockValidator.validate).mockResolvedValueOnce({
+            valid: true,
+            claims: { sub: 'user-42', scopes: ['read', 'write'], exp: 0, iat: 0 },
+        })
+
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+        })
+
+        const rawReq = {
+            path: '/mcp',
+            headers: { authorization: 'Bearer good-token' },
+        } as unknown as Record<string, unknown>
+        const statusMock = vi.fn().mockReturnThis()
+        const res = { status: statusMock, json: vi.fn(), setHeader: vi.fn() } as never
+        const next = vi.fn()
+
+        await middleware(rawReq as never, res, next)
+        expect(next).toHaveBeenCalled()
+        expect(rawReq['auth']).toBeDefined()
+        expect((rawReq['auth'] as { sub: string }).sub).toBe('user-42')
+    })
+
+    it('should return 500 when valid=true but claims is undefined', async () => {
+        vi.mocked(mockValidator.validate).mockResolvedValueOnce({
+            valid: true,
+            claims: undefined,
+        } as never)
+
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+        })
+        const { req, res, next, statusMock, jsonMock } = makeReqResNext({
+            path: '/mcp',
+            headers: { authorization: 'Bearer weird-token' },
+        })
+
+        await middleware(req, res, next)
+        expect(next).not.toHaveBeenCalled()
+        expect(statusMock).toHaveBeenCalledWith(500)
+        expect(jsonMock).toHaveBeenCalledWith(
+            expect.objectContaining({ error: 'internal_error' })
+        )
+    })
+
+    it('should not bypass non-matching paths', async () => {
+        const middleware = createAuthMiddleware({
+            tokenValidator: mockValidator,
+            resourceServer: mockResourceServer,
+            publicPaths: ['/health', '/api/*'],
+        })
+        const { req, res, next, statusMock } = makeReqResNext({
+            path: '/secret',
+            headers: {},
+        })
+
+        await middleware(req, res, next)
+        expect(next).not.toHaveBeenCalled()
+        expect(statusMock).toHaveBeenCalledWith(401)
+    })
+})
+
+// =============================================================================
+// requireToolScope — scope-denied branch
+// =============================================================================
+
+describe('requireToolScope - scope denied', () => {
+    it('should return 403 when user lacks required scope for tool', () => {
+        // backup_journal requires admin scope
+        const middleware = requireToolScope('backup_journal')
+
+        const req = { auth: { scopes: ['read'] } } as never
+        const statusMock = vi.fn().mockReturnThis()
+        const res = { status: statusMock, json: vi.fn(), setHeader: vi.fn() } as never
+        const next = vi.fn()
+
+        middleware(req, res, next)
+        expect(next).not.toHaveBeenCalled()
+        expect(statusMock).toHaveBeenCalledWith(403)
     })
 })

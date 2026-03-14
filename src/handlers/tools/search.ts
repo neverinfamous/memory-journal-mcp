@@ -288,6 +288,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     const isIndexEmpty = stats.itemCount === 0
                     const includeHint = input.hint_on_empty ?? true
 
+                    // Quality gate: if the best match is below this floor,
+                    // treat all results as noise and include the hint
+                    const QUALITY_FLOOR = 0.5
+                    const bestSimilarity = entries[0]?.similarity ?? 0
+                    const allNoise = entries.length > 0 && bestSimilarity < QUALITY_FLOOR
+
                     return {
                         query: input.query,
                         entries,
@@ -300,7 +306,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                               ? {
                                     hint: `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`,
                                 }
-                              : {}),
+                              : includeHint && allNoise
+                                ? {
+                                      hint: `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`,
+                                  }
+                                : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
