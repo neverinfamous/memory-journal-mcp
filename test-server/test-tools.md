@@ -1,6 +1,6 @@
 # Test memory-journal-mcp — Pass 1: Core Functionality
 
-Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented.**
+Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented below.**
 
 **Scope:** 44 tools, 22 resources (15 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-10).
 
@@ -22,7 +22,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 > **Test Session Prerequisites**
 
 1. The server instructions are auto-injected by the MCP protocol. Confirm receipt (no need to read `memory://instructions` separately).
-2. Confirm `memory://briefing` was auto-received (do NOT read it separately here — detailed briefing testing is in Phase 1.2).
+2. Confirm `memory://briefing` was auto-received but do NOT read it here. Detailed briefing testing is in Phase 1.2.
 
 ---
 
@@ -112,7 +112,7 @@ After creating all 12 entries, verify the seed data is searchable:
 | Skills metadata                  | Inspect `skillsDir` field        | Present when `SKILLS_DIR_PATH` set — has `count`, `names` array                                        |
 | Enhanced CI row                  | Inspect briefing.userMessage     | CI row shows breakdown or named runs (not just single-word status) when workflow env vars are set      |
 
-### 1.3 Protocol Validation — Run via Scripts
+### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
 
 > [!IMPORTANT]
 > These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. See `test-server/README.md` for full details.
@@ -125,10 +125,10 @@ node test-server/test-instruction-levels.mjs
 node test-server/test-tool-annotations.mjs
 ```
 
-| Check | Expected |
-| ----- | -------- |
-| Instruction levels | essential (~1.2K) < standard (~1.4K) < full (~6.7K tokens) |
-| Tool annotations | 44 tools, all with `annotations`, 28 `false` + 16 `true` = 0 missing |
+| Check              | Expected                                                             |
+| ------------------ | -------------------------------------------------------------------- |
+| Instruction levels | essential (~1.2K) < standard (~1.4K) < full (~6.7K tokens)           |
+| Tool annotations   | 44 tools, all with `annotations`, 28 `false` + 16 `true` = 0 missing |
 
 ### 1.4 GitHub Status Resource
 
@@ -387,7 +387,7 @@ node test-server/test-tool-annotations.mjs
 | PR entries       | `memory://prs/67/entries`      | Entries linked to PR #67 (permanent test fixture)                                                                                   |
 | PR timeline      | `memory://prs/67/timeline`     | PR lifecycle with `prMetadata` (live state) and `timelineNote`                                                                      |
 | Kanban JSON      | `memory://kanban/5`            | Board JSON                                                                                                                          |
-| Kanban diagram   | `memory://kanban/5/diagram`    | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                                                               |
+| Kanban diagram   | `memory://kanban/5/diagram`    | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                                                                              |
 | Milestone detail | `memory://milestones/<N>`      | Milestone with completion %, `openIssues` + `closedIssues` counts, and hint to use `get_github_issues` for individual issue details |
 
 ### 6.2 Template Error Paths
@@ -565,7 +565,7 @@ For **every** prompt response, verify:
 
 ---
 
-## Phase 10: Automated Scheduler — Run via Script
+## Phase 10: Automated Scheduler — Run via Script - DO NOT SKIP!
 
 > [!IMPORTANT]
 > The scheduler only activates in HTTP/SSE transport mode. Run the script below — it handles session init, health reads, and wait/verify automatically. See `test-server/README.md` for full details.
@@ -579,13 +579,13 @@ node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups
 node test-server/test-scheduler.mjs
 ```
 
-| Check | Expected |
-| ----- | -------- |
-| `scheduler.active` | `true`, 3 jobs |
-| All jobs `lastResult` | `"success"` after wait |
-| All jobs `lastError` | `null` |
-| backup `runCount` | ≥ 2 |
-| vacuum + rebuild `runCount` | ≥ 1 each |
+| Check                       | Expected               |
+| --------------------------- | ---------------------- |
+| `scheduler.active`          | `true`, 3 jobs         |
+| All jobs `lastResult`       | `"success"` after wait |
+| All jobs `lastError`        | `null`                 |
+| backup `runCount`           | ≥ 2                    |
+| vacuum + rebuild `runCount` | ≥ 1 each               |
 
 ---
 
