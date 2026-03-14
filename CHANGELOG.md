@@ -5,7 +5,24 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.0.0...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.0.1...HEAD)
+
+## [6.0.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.0.1) - 2026-03-14
+
+### Changed
+
+- **Docker Image Size Optimization** — Reduced amd64 image from ~733 MB to ~250 MB:
+  - Moved npm global upgrade + CVE patches to builder stage only (production image no longer installs npm)
+  - Production `npm ci --omit=dev` runs in builder; `node_modules` copied via `COPY --from=builder`
+  - Stripped `onnxruntime-web` entirely (browser-only runtime, ~90 MB)
+  - Stripped non-Linux `onnxruntime-node` platform binaries (darwin + win32, ~132 MB)
+
+- **CI Dependency Updates** — Bumped GitHub Actions dependencies:
+  - `github/codeql-action` SHA update (#263)
+  - `actions/download-artifact` 7.0.0 → 8.0.1 (#264)
+  - `github/gh-aw` 0.57.2 → 0.58.1 (#265)
+  - `trufflesecurity/trufflehog` 3.93.7 → 3.93.8 (#266)
+  - `docker/scout-action` 1.18.2 → 1.20.2 (#267)
 
 ## [6.0.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.0.0) - 2026-03-14
 
