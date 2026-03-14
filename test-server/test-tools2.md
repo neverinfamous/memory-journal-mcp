@@ -145,11 +145,11 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 ## Phase 12b: Structured Error Response Verification
 
 > [!IMPORTANT]
-> All 44 tools now use deterministic error handling via `formatHandlerErrorResponse()` in `src/utils/error-helpers.ts`. Each handler is wrapped in a `try/catch` block that catches all errors (including Zod validation) and returns enriched structured responses. This phase verifies that no tool produces raw MCP error frames.
+> All 44 tools now use deterministic error handling via `formatHandlerError()` in `src/utils/error-helpers.ts`. Each handler is wrapped in a `try/catch` block that catches all errors (including Zod validation) and returns enriched structured responses. This phase verifies that no tool produces raw MCP error frames.
 
 ### Structured Error Response Pattern
 
-All tools return errors as structured objects via `formatHandlerErrorResponse()` (never thrown). A thrown error propagates as a raw MCP error, which is unhelpful to clients. The expected pattern:
+All tools return errors as structured objects via `formatHandlerError()` (never thrown). A thrown error propagates as a raw MCP error, which is unhelpful to clients. The expected pattern:
 
 ```json
 { "success": false, "error": "Human-readable error message", "code": "VALIDATION_ERROR", "category": "validation", "recoverable": false, "suggestion": "Check input parameters against the tool schema" }

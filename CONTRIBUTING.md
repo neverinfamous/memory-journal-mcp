@@ -134,7 +134,7 @@ docker run --rm -i -v ./data:/app/data memory-journal-dev
 - **Prettier** — Run `npx prettier --write .` for formatting
 - **Type safety** — Avoid `any`; use proper types and Zod schemas
 - **Modularity** — Keep files under ~500 lines; split into sub-modules when approaching the limit
-- **Error handling** — Use `formatHandlerErrorResponse()` for structured `{success, error, code, category, suggestion, recoverable}` responses in tool handlers
+- **Error handling** — Use `formatHandlerError()` for structured `{success, error, code, category, suggestion, recoverable}` responses in tool handlers
 
 ### Database Changes
 

@@ -56,7 +56,7 @@ src/
 │   └── tool-filter.ts              # ToolFilter class — parse/apply --tool-filter expressions
 │
 ├── utils/
-│   ├── error-helpers.ts            # formatHandlerErrorResponse(), formatZodError()
+│   ├── error-helpers.ts            # formatHandlerError(), formatZodError()
 │   │                               #   (see § Error Handling)
 │   ├── logger.ts                   # Logger class (structured JSON, severity filtering)
 │   ├── mcp-logger.ts               # MCP protocol logging integration
@@ -156,7 +156,7 @@ src/
 |------|---------|
 | `index.ts` | `createToolDefinitions(ctx)` — assembles all tools, applies ToolContext |
 | `schemas.ts` | Shared Zod schemas, constants (`ENTRY_TYPES`, `SIGNIFICANCE_TYPES`, `DATE_FORMAT_REGEX`), `relaxedNumber()` helper for MCP input schemas |
-| `error-response-fields.ts` | Shared `ErrorResponseFields` Zod fragment — extended into all output schemas for `formatHandlerErrorResponse()` compatibility |
+| `error-fields-mixin.ts` | Shared `ErrorFieldsMixin` Zod fragment — extended into all output schemas for `formatHandlerError()` compatibility |
 | `github/schemas.ts` | GitHub-specific Zod schemas |
 | `github/helpers.ts` | GitHub tool shared helpers |
 | `github/mutation-tools.ts` | (Placeholder for future mutation tools) |
@@ -231,13 +231,13 @@ try {
   // ... domain logic ...
   return { success: true, ... };
 } catch (err) {
-  return formatHandlerErrorResponse(err); // enriched: {success, error, code, category, suggestion, recoverable}
+  return formatHandlerError(err); // enriched: {success, error, code, category, suggestion, recoverable}
 }
 ```
 
 | Function | Purpose |
 |----------|---------|
-| `formatHandlerErrorResponse(err)` | Returns enriched `ErrorResponse` with `code`, `category`, `suggestion`, `recoverable` — used by all handlers |
+| `formatHandlerError(err)` | Returns enriched `ErrorResponse` with `code`, `category`, `suggestion`, `recoverable` — used by all handlers |
 | `formatZodError(err)` | Extracts human-readable messages from Zod validation errors |
 
 ---
@@ -259,7 +259,7 @@ try {
 
 | Pattern | Description |
 |---------|-------------|
-| **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerErrorResponse()`. All handlers use enriched formatter. Output schemas include `ErrorResponseFields` for validation compatibility. |
+| **Enriched Error Handling** | `MemoryJournalMcpError` hierarchy with `ErrorCategory`, `toResponse()`, `formatHandlerError()`. All handlers use enriched formatter. Output schemas include `ErrorFieldsMixin` for validation compatibility. |
 | **Native SQLite** | `better-sqlite3` for high-performance native disk access. `sqlite-vec` extension loaded for vector search. No WASM fallback. |
 | **Adapter Factory** | `DatabaseAdapterFactory.create()` in `adapter-factory.ts` instantiates `SqliteAdapter`. |
 | **ToolContext** | All tool handlers receive `ToolContext` (db, teamDb?, vectorManager?, github?, config?, progress?). |
