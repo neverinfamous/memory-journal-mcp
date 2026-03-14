@@ -294,23 +294,22 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     const bestSimilarity = entries[0]?.similarity ?? 0
                     const allNoise = entries.length > 0 && bestSimilarity < QUALITY_FLOOR
 
+                    // Build hint: quality gate hint is always shown (not gated by hint_on_empty)
+                    // because noisy results ≠ empty results. hint_on_empty only controls
+                    // the "no results" and "empty index" advisory hints.
+                    const hint = isIndexEmpty && includeHint
+                        ? 'No entries in vector index. Use rebuild_vector_index to index existing entries.'
+                        : entries.length === 0 && includeHint
+                          ? `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
+                          : allNoise
+                            ? `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`
+                            : undefined
+
                     return {
                         query: input.query,
                         entries,
                         count: entries.length,
-                        ...(includeHint && isIndexEmpty
-                            ? {
-                                  hint: 'No entries in vector index. Use rebuild_vector_index to index existing entries.',
-                              }
-                            : includeHint && entries.length === 0
-                              ? {
-                                    hint: `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`,
-                                }
-                              : includeHint && allNoise
-                                ? {
-                                      hint: `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`,
-                                  }
-                                : {}),
+                        ...(hint !== undefined ? { hint } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

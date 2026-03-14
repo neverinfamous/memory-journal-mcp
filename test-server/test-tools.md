@@ -229,8 +229,8 @@ Call `tools/list` and verify annotation counts:
 | Semantic query         | `semantic_search(query: "improving performance")`                  | ≥ 1 result — S7, S10 semantically similar         |
 | Custom threshold       | `semantic_search(query: "performance", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)       |
 | Personal filter        | `semantic_search(query: "test", is_personal: true)`                | Only personal entries in results                  |
-| Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Empty results, no `hint` field in response        |
-| Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Empty results with `hint` suggesting alternatives |
+| Hint disabled          | `semantic_search(query: "xyznonexistent", hint_on_empty: false)`   | Noise results with quality gate `hint` still shown (only advisory hints suppressed) |
+| Hint enabled (default) | `semantic_search(query: "xyznonexistent")`                         | Noise results with quality gate `hint` (all hints shown)                            |
 
 ### 3.3 Analytics & Index Management
 
@@ -696,7 +696,7 @@ Stop the server (Ctrl+C in the server terminal) and delete test backups if neede
 - [ ] `search_by_date_range` merges team results with `source` marker
 - [ ] `semantic_search` with custom `similarity_threshold` affects result count
 - [ ] `semantic_search` with `is_personal` filter returns only matching entries
-- [ ] `semantic_search` with `hint_on_empty: false` omits `hint` in response
+- [ ] `semantic_search` with `hint_on_empty: false` still shows quality gate `hint` for noisy results (only suppresses advisory hints)
 - [ ] `get_statistics` returns all 4 enhanced analytics metrics
 - [ ] `get_statistics` with `group_by: "month"` and `"day"` produces correct groupings
 - [ ] `get_cross_project_insights` returns all required schema fields even when empty

@@ -95,6 +95,7 @@
   - `rebuild_vector_index` now returns `failedEntries` count, `firstError` with the actual embedding error message, and sets `success: false` when every entry fails — previously returned `success: true, entriesIndexed: 0` with no indication of failure
   - Added `getRecent` alias for `getRecentEntries` in Code Mode (`mj.core.getRecent()`) — agents commonly try this natural camelCase abbreviation
   - `semantic_search` hint is now governed by a quality floor (0.5) — if all returned results score below 0.5, a hint is included indicating results may be noise, even when `entries.length > 0`. Previously, `hint_on_empty` was effectively dead code because the default `similarity_threshold` (0.25) always returned noise matches from the MiniLM model
+  - `semantic_search` quality gate hint is now always shown regardless of `hint_on_empty` — the `hint_on_empty` flag only controls advisory hints for empty indexes and zero-match queries, not the noise detection warning. Previously, `hint_on_empty=false` suppressed all hints including the quality gate, meaning clients received noisy results with no warning
 
 - **MCP Builder Compliance Audit Fixes**
   - Added `error` field to `ErrorFieldsMixin` — centralizes the 6th ErrorResponse field that was previously defined per-schema, preventing future omissions
