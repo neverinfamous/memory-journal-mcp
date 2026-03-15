@@ -9,6 +9,8 @@
 | `test-tools.md`                                  | **Pass 1: Core Functionality** — Phases 0-10 covering seed data, happy paths, error paths, and feature verification for all 44 tools, 22 resources, 16 prompts, and scheduler         | Always read first                            |
 | `test-tools2.md`                                 | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes                       |
 | `test-tools-codemode.md`                         | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration              | After Pass 1 completes                       |
+| `test-tools-codemode2.md`                        | **Pass 4: Code Mode Advanced** — Extended Code Mode scenarios                                                                                                                         | After Pass 3 completes                       |
+| `test-agent-experience.md`                       | **Agent experience test** — 23 open-ended scenarios across 4 passes validating instruction sufficiency for cold-start                                                                  | After instruction changes                    |
 | [`tool-reference.md`](../docs/tool-reference.md) | **Tool Reference** — Categorized list of all 44 tools across 10 groups                                                                                                                | Reference                                    |
 | [`code-map.md`](../docs/code-map.md)             | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error handling, constants, architecture patterns.                                                         | When debugging source code or making changes |
 
@@ -123,7 +125,7 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 
 ## Agent Workflow
 
-1. Read `src/constants/server-instructions.md` (via `view_file` tool).
+1. Read the server instructions you received during initialization, then `memory://briefing`.
 2. Read `test-tools.md` for Pass 1 protocol, phases, and success criteria.
 3. Execute via direct MCP tool calls. Run both happy-path and 🔴 error-path tests.
 4. **Run integration test scripts** for Phase 1.3 (instruction levels, annotations) and Phase 10 (scheduler).
