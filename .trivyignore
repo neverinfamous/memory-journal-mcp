@@ -1,14 +1,7 @@
-# Trivy Ignore File
-# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+# Trivy CVE Ignore List for memory-journal-mcp
+# Add CVEs here that are:
+# 1. False positives
+# 2. Upstream issues with no fix available
+# 3. Not applicable to our use case
 
-# ============================================================================
-# Alpine Base Image - No upstream fix available
-# ============================================================================
-
-# CVE-2026-22184: zlib vulnerability (CRITICAL)
-# No fix version released by Alpine yet - zlib 1.3.1.3 not packaged
-CVE-2026-22184
-
-# CVE-2025-60876: busybox wget CRLF injection (MEDIUM)
-# Patch submitted to busybox upstream but not in a release yet
-CVE-2025-60876
+# Format: CVE-YYYY-NNNNN
