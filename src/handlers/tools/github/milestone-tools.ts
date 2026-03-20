@@ -8,6 +8,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { milestoneCompletionPct } from '../../resources/shared.js'
 import {
     GitHubMilestonesListOutputSchema,
     GitHubMilestoneResultOutputSchema,
@@ -70,9 +71,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         input.limit
                     )
                     const milestonesWithPercentage = milestones.map((ms) => {
-                        const total = ms.openIssues + ms.closedIssues
-                        const completionPercentage =
-                            total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                        const completionPercentage = milestoneCompletionPct(
+                            ms.openIssues,
+                            ms.closedIssues
+                        )
                         return { ...ms, completionPercentage }
                     })
 
@@ -135,9 +137,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         }
                     }
 
-                    const total = milestone.openIssues + milestone.closedIssues
-                    const completionPercentage =
-                        total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+                    const completionPercentage = milestoneCompletionPct(
+                        milestone.openIssues,
+                        milestone.closedIssues
+                    )
 
                     return {
                         milestone: { ...milestone, completionPercentage },
@@ -269,9 +272,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         }
                     }
 
-                    const total = milestone.openIssues + milestone.closedIssues
-                    const completionPercentage =
-                        total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+                    const completionPercentage = milestoneCompletionPct(
+                        milestone.openIssues,
+                        milestone.closedIssues
+                    )
 
                     return {
                         success: true,

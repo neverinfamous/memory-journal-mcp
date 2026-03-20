@@ -18,13 +18,20 @@ import {
 } from './schemas.js'
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Maximum entries returned by any single search query */
+const MAX_QUERY_LIMIT = 500
+
+// ============================================================================
 // Input Schemas
 // ============================================================================
 
 /** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
     query: z.string().optional(),
-    limit: z.number().max(500).optional().default(10),
+    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
     issue_number: z.number().optional(),
@@ -56,7 +63,7 @@ const SearchByDateRangeSchema = z.object({
     issue_number: z.number().optional(),
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
-    limit: z.number().max(500).optional().default(500),
+    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(500),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -76,7 +83,7 @@ const SearchByDateRangeSchemaMcp = z.object({
 /** Strict schema — used inside handler for structured Zod errors */
 const SemanticSearchSchema = z.object({
     query: z.string(),
-    limit: z.number().max(500).optional().default(10),
+    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     is_personal: z.boolean().optional(),
     hint_on_empty: z
@@ -157,7 +164,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     // When merging across DBs, fetch more per-DB so BM25 ranking
                     // in one DB doesn't silently drop entries before the merge.
                     // The actual user limit is applied by mergeAndDedup.
-                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
+                    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
 
                     let personalEntries
                     if (!input.query && !hasFilters) {
@@ -211,7 +218,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
-                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
+                    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
                     const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
                         tags: input.tags,
@@ -368,6 +375,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
 /** Number of leading characters used as deduplication key */
 const DEDUP_KEY_LENGTH = 200
+
+/**
+ * When merging across personal + team DBs, fetch more per-DB so BM25
+ * ranking in one DB doesn't silently drop entries before the merge.
+ */
+function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
+    return hasTeamDb ? Math.min(limit * 2, MAX_QUERY_LIMIT) : limit
+}
 
 interface EntryWithSource {
     content: string
