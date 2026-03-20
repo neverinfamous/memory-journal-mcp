@@ -31,7 +31,7 @@ import { getExportTools } from './export.js'
 import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
-import { getTeamTools } from './team.js'
+import { getTeamTools } from './team/index.js'
 import { getCodeModeTools } from './codemode.js'
 
 // Re-export for backward compatibility (McpServer imports these)

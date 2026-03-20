@@ -77,6 +77,18 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         create: 'teamCreateEntry',
         recent: 'teamGetRecent',
         find: 'teamSearch',
+        get: 'teamGetEntryById',
+        tags: 'teamListTags',
+        byDate: 'teamSearchByDateRange',
+        update: 'teamUpdateEntry',
+        remove: 'teamDeleteEntry',
+        mergeTags: 'teamMergeTags',
+        stats: 'teamGetStatistics',
+        link: 'teamLinkEntries',
+        graph: 'teamVisualizeRelationships',
+        export: 'teamExportEntries',
+        backup: 'teamBackup',
+        listBackups: 'teamListBackups',
     },
 }
 
@@ -132,6 +144,12 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.team.teamCreateEntry({ content: "Team update" })',
         'mj.team.teamGetRecent({ limit: 5 })',
         'mj.team.teamSearch({ query: "release" })',
+        'mj.team.teamGetEntryById({ entry_id: 1 })',
+        'mj.team.teamListTags()',
+        'mj.team.teamUpdateEntry({ entry_id: 1, content: "Updated" })',
+        'mj.team.teamGetStatistics()',
+        'mj.team.teamExportEntries({ format: "json" })',
+        'mj.team.teamBackup()',
     ],
 }
 
@@ -196,6 +214,14 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamCreateEntry: 'content',
     teamGetRecent: 'limit',
     teamSearch: 'query',
+    teamGetEntryById: 'entry_id',
+    teamSearchByDateRange: ['start_date', 'end_date'],
+    teamUpdateEntry: 'entry_id',
+    teamDeleteEntry: 'entry_id',
+    teamMergeTags: ['source_tag', 'target_tag'],
+    teamLinkEntries: ['from_entry_id', 'to_entry_id', 'relationship_type'],
+    teamVisualizeRelationships: 'entry_id',
+    teamExportEntries: 'format',
 }
 
 // =============================================================================

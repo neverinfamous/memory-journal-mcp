@@ -126,8 +126,18 @@ src/
     │   ├── export.ts               # Export tool group (1 tool)
     │   ├── admin.ts                # Admin tool group (5 tools)
     │   ├── backup.ts               # Backup tool group (4 tools)
-    │   ├── team.ts                 # Team tool group (3 tools)
     │   ├── codemode.ts             # Code Mode tool group (1 tool)
+    │   ├── team/                   # Team tool group (15 tools)
+    │   │   ├── index.ts            # Barrel — composes all team sub-modules
+    │   │   ├── helpers.ts          # Shared team helpers (author batch-fetch, constants)
+    │   │   ├── schemas.ts          # Team Zod input/output schemas (all 15 tools)
+    │   │   ├── core-tools.ts       # Core team tools (create, get_by_id, get_recent, list_tags)
+    │   │   ├── search-tools.ts     # Search team tools (search, search_by_date_range)
+    │   │   ├── admin-tools.ts      # Admin team tools (update, delete, merge_tags)
+    │   │   ├── analytics-tools.ts  # Analytics team tool (get_statistics)
+    │   │   ├── relationship-tools.ts # Relationship team tools (link, visualize)
+    │   │   ├── export-tools.ts     # Export team tool (export_entries)
+    │   │   └── backup-tools.ts     # Backup team tools (backup, list_backups)
     │   ├── github.ts               # GitHub tools barrel (re-exports from github/ subdirectory)
     │   └── github/                 # GitHub tool handlers (split by domain)
     │       ├── helpers.ts          # Shared GitHub tool helpers (repo detection, error formatting)
@@ -188,7 +198,13 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 |                   | `github/insights-tools.ts`         | 1     | `get_repo_insights`                                                                                                                  |
 |                   | `github/copilot-tools.ts`          | 1     | `get_copilot_reviews`                                                                                                                |
 | **backup**        | `backup.ts`                        | 4     | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups`                                                                |
-| **team**          | `team.ts`                          | 3     | `team_create_entry`, `team_get_recent`, `team_search`                                                                                |
+| **team**          | `team/core-tools.ts`               | 4     | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`                                                     |
+|                   | `team/search-tools.ts`             | 2     | `team_search`, `team_search_by_date_range`                                                                                           |
+|                   | `team/admin-tools.ts`              | 3     | `team_update_entry`, `team_delete_entry`, `team_merge_tags`                                                                          |
+|                   | `team/analytics-tools.ts`          | 1     | `team_get_statistics`                                                                                                                |
+|                   | `team/relationship-tools.ts`       | 2     | `team_link_entries`, `team_visualize_relationships`                                                                                  |
+|                   | `team/export-tools.ts`             | 1     | `team_export_entries`                                                                                                                |
+|                   | `team/backup-tools.ts`             | 2     | `team_backup`, `team_list_backups`                                                                                                   |
 
 ### Utility Files (no tools, shared helpers)
 
@@ -320,7 +336,7 @@ catch (error) {
 | **Scheduler**              | HTTP-only `setInterval` jobs: automated backup, vacuum, vector index rebuild. Error-isolated — failure in one job doesn't affect others. Status visible via `memory://health`.                        |
 | **ErrorFieldsMixin**       | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation.                                                                               |
 | **Barrel Re-exports**      | Every directory has `index.ts` barrel. Import from `./module/index.js` (with `.js` extension for ESM).                                                                                                |
-| **Team Database**          | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 3 dedicated tools (`team_create_entry`, `team_get_recent`, `team_search`). Cross-DB isolation.                                        |
+| **Team Database**          | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 15 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup). Cross-DB isolation. |
 
 ---
 
@@ -340,7 +356,7 @@ catch (error) {
 | File / Directory                  | Purpose                                                                               |
 | --------------------------------- | ------------------------------------------------------------------------------------- |
 | `test-server/README.md`           | Agent testing orchestration doc                                                       |
-| `test-server/tool-reference.md`   | Complete 44-tool inventory with descriptions                                          |
+| `test-server/tool-reference.md`   | Complete 56-tool inventory with descriptions                                          |
 | `test-server/code-map.md`         | This file — agent-optimized codebase navigation                                       |
 | `test-server/test-preflight.md`   | Pre-test verification checklist                                                       |
 | `test-server/test-tools.md`       | Entry-point agent test protocol (main tool tests)                                     |

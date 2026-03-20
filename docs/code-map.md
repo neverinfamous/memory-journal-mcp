@@ -128,7 +128,7 @@ src/
 
 ## Handler → Tool Mapping
 
-44 tools across 10 groups.
+56 tools across 10 groups.
 
 ### Tool Handlers (`src/handlers/tools/`)
 
@@ -285,7 +285,7 @@ try {
 | File / Directory                          | Purpose                                                                        |
 | ----------------------------------------- | ------------------------------------------------------------------------------ |
 | `test-server/README.md`                   | Agent testing orchestration doc                                                |
-| `test-server/test-tools.md`               | Pass 1: Core functionality (Phases 0-10, 44 tools + 22 resources + 16 prompts) |
+| `test-server/test-tools.md`               | Pass 1: Core functionality (Phases 0-10, 56 tools + 22 resources + 16 prompts) |
 | `test-server/test-tools2.md`              | Pass 2: Validation & edge cases (Phases 11-15)                                 |
 | `test-server/test-tools-codemode.md`      | Pass 3: Code Mode foundations (Phases 16-21)                                   |
 | `test-server/test-tools-codemode2.md`     | Pass 4: Code Mode advanced (Phases 22-27)                                      |

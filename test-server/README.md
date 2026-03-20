@@ -6,13 +6,13 @@
 
 | File                                             | Purpose                                                                                                                                                                               | When to Read                                 |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `test-tools.md`                                  | **Pass 1: Core Functionality** — Phases 0-10 covering seed data, happy paths, error paths, and feature verification for all 44 tools, 22 resources, 16 prompts, and scheduler         | Always read first                            |
+| `test-tools.md`                                  | **Pass 1: Core Functionality** — Phases 0-10 covering seed data, happy paths, error paths, and feature verification for all 56 tools, 22 resources, 16 prompts, and scheduler         | Always read first                            |
 | `test-tools2.md`                                 | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes                       |
 | `test-tools-codemode.md`                         | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration              | After Pass 1 completes                       |
 | `test-tools-codemode2.md`                        | **Pass 4: Code Mode Advanced** — Extended Code Mode scenarios                                                                                                                         | After Pass 3 completes                       |
 | `test-preflight.md`                              | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps                                                                                  | Before any test pass                         |
 | `test-agent-experience.md`                       | **Agent experience test** — 23 open-ended scenarios across 4 passes validating instruction sufficiency for cold-start                                                                  | After instruction changes                    |
-| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 44 tools across 10 groups                                                                                                                | Reference                                    |
+| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 56 tools across 10 groups                                                                                                                | Reference                                    |
 | [`code-map.md`](code-map.md)             | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns                                                      | When debugging source code or making changes |
 
 ## Integration Test Scripts
@@ -76,7 +76,7 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 ### Tool Annotations (Phase 1.3B)
 
-- [ ] 44 tools returned, all with `annotations` object
+- [ ] 56 tools returned, all with `annotations` object
 - [ ] 28 tools with `openWorldHint: false`, 16 with `openWorldHint: true`, 0 missing
 
 ### Scheduler (Phase 10)

@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **44 tools** organized by 10 tool groups.
+Complete reference of all **56 tools** organized by 10 tool groups.
 
 > Every tool returns structured `{success, error}` responses — no raw exceptions, no silent failures.
 >
@@ -10,7 +10,7 @@ Complete reference of all **44 tools** organized by 10 tool groups.
 
 ## Code Mode (1 tool)
 
-> 🌟 **Recommended** — Sandboxed JavaScript execution that exposes all 44 tools via the `mj.*` API. Reduces token overhead by up to 90%.
+> 🌟 **Recommended** — Sandboxed JavaScript execution that exposes all 56 tools via the `mj.*` API. Reduces token overhead by up to 90%.
 
 | Tool              | Description                                                                                                                                                                            |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

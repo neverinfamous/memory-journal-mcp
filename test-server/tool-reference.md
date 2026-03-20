@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **44 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **56 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -130,15 +130,59 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (3 tools + Code Mode)
+## team (15 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
-| Tool                | Description                                                              |
-| ------------------- | ------------------------------------------------------------------------ |
-| `team_create_entry` | Create an entry in the team database for sharing with collaborators.     |
-| `team_get_recent`   | Get recent entries from the team database.                               |
-| `team_search`       | Search entries in the team database by text and/or tags.                 |
+### Core
+
+| Tool                     | Description                                                                                                |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `team_create_entry`      | Create an entry in the team database for sharing with collaborators.                                       |
+| `team_get_entry_by_id`   | Get a specific team entry by ID with full details including relationships and importance score.             |
+| `team_get_recent`        | Get recent entries from the team database.                                                                 |
+| `team_list_tags`         | List all tags used in the team database with usage counts.                                                 |
+
+### Search
+
+| Tool                        | Description                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `team_search`               | Search entries in the team database by text and/or tags.                                                |
+| `team_search_by_date_range` | Search team entries within a date range with optional filters for entry type and tags.                   |
+
+### Admin
+
+| Tool                 | Description                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `team_update_entry`  | Update a team entry (content, type, or tags).                                                              |
+| `team_delete_entry`  | Soft-delete a team entry (marks as deleted, preservable).                                                  |
+| `team_merge_tags`    | Merge a source tag into a target tag in the team database.                                                 |
+
+### Analytics
+
+| Tool                  | Description                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------- |
+| `team_get_statistics` | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown.   |
+
+### Relationships
+
+| Tool                            | Description                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `team_link_entries`             | Create a relationship between two team entries.                                                        |
+| `team_visualize_relationships`  | Generate a Mermaid diagram showing relationships between team entries.                                 |
+
+### Export
+
+| Tool                  | Description                                                                                              |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| `team_export_entries` | Export team entries in JSON or Markdown format with optional date range, type, and tag filters.           |
+
+### Backup
+
+| Tool                | Description                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `team_backup`       | Create a timestamped backup of the team database.                                                          |
+| `team_list_backups` | List all available backup files for the team database.                                                     |
 
 ---
 
@@ -148,12 +192,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 44    | All tools (default)      |
+| `full`               | 56    | All tools (default)      |
 | `starter`            | ~10   | Core + search + codemode |
 | `essential`          | ~6    | Minimal footprint        |
 | `readonly`           | ~15   | Disable all mutations    |
-| `-github`            | 28    | Exclude a group          |
-| `-github,-analytics` | 26    | Exclude multiple groups  |
+| `-github`            | 40    | Exclude a group          |
+| `-github,-analytics` | 38    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
