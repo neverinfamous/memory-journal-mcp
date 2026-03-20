@@ -10,8 +10,8 @@ Run **each pass** as a separate conversation with the corresponding `--tool-filt
 |------|-----------------|-------|-----------|
 | Pass 1 | `essential` | Core, Search, Analytics, Relationships (~22) | 1–8 |
 | Pass 2 | `standard` | Essential + Export, Admin, Backup (~28) | 9–13 |
-| Pass 3 | `full` | Standard + GitHub, Team (~45) | 14–20 |
-| Pass 4 | `codemode` | Code Mode only (1) | 21–23 |
+| Pass 3 | `full` | Standard + GitHub, Team (~57) | 14–21 |
+| Pass 4 | `codemode` | Code Mode only (1) | 22–24 |
 
 > **Important:** Do NOT combine passes. Each pass is a fresh conversation with a clean context. The agent has never used this server before.
 
@@ -142,7 +142,12 @@ List milestones. What's the completion percentage? Are any overdue?
 #### Scenario 19 — End-of-day summary
 Simulate an end-of-day workflow: review today's entries, summarize accomplishments, check GitHub for any CI failures or new issues, and create a retrospective entry.
 
-#### Scenario 20 — Context bundle
+#### Scenario 20 — Team knowledge sharing
+Create a team entry about a design decision. Search the team database for related entries. Check team statistics to see the contributor breakdown. Export this week's team entries as markdown.
+
+> **What we're testing:** Can the agent discover the expanded team tools (`team_get_statistics`, `team_export_entries`, `team_search_by_date_range`) and compose a cross-tool workflow?
+
+#### Scenario 21 — Context bundle
 Use the `get-context-bundle` prompt to pull together full session context. Is it comprehensive?
 
 ---
@@ -153,13 +158,13 @@ Use the `get-context-bundle` prompt to pull together full session context. Is it
 
 ### Phase 8 — Code Mode Discovery
 
-#### Scenario 21 — Cold-start Code Mode
+#### Scenario 22 — Cold-start Code Mode
 Using only `mj_execute_code`, discover what API groups are available (`mj.help()`). List the groups and pick one to explore.
 
-#### Scenario 22 — Multi-step workflow
+#### Scenario 23 — Multi-step workflow
 Using a single `mj_execute_code` call: search for entries about "deployment", get statistics, and create a summary entry linking findings. Compare token efficiency vs individual tool calls.
 
-#### Scenario 23 — Read-only mode
+#### Scenario 24 — Read-only mode
 Execute code with `readonly: true`. Verify that write operations fail gracefully. What error message does the agent get?
 
 ---
@@ -173,4 +178,4 @@ Compile findings across all passes into:
 3. **Resource sufficiency** — were `memory://briefing`, `memory://health`, etc. enough context?
 4. **Suggested improvements** — specific additions to instruction tiers or resource content
 
-> **Key metric:** How many of the 23 scenarios did the agent complete on the first try with ≤1 resource read? This measures whether the tiered instructions + tool descriptions are self-sufficient.
+> **Key metric:** How many of the 24 scenarios did the agent complete on the first try with ≤1 resource read? This measures whether the tiered instructions + tool descriptions are self-sufficient.
