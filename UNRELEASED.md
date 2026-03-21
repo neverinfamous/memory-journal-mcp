@@ -52,6 +52,8 @@
 - **`team_link_entries` default `relationship_type`** — Changed relaxed schema default from `'related_to'` (not a valid enum value) to `'references'`, matching the strict schema.
 - **`get_github_milestone` structured error fields** — Added missing `code`, `category`, `suggestion`, and `recoverable` fields to the not-found error response. Same fix applied to `create_github_milestone`, `update_github_milestone`, and `delete_github_milestone` failure responses.
 - **Vector search lazy init error handling** — Wrapped lazy `initialize()` calls in `addEntry()`, `search()`, and `rebuildIndex()` with try/catch so `better-sqlite3` connection errors return structured responses instead of crashing.
+- **`MoveKanbanItemOutputSchema` missing `availableStatuses`** — The `move_kanban_item` handler returns `availableStatuses: string[]` in the status-not-found error path, but this field was missing from the output schema. Could cause `-32602` under strict `structuredContent` validation.
+- **Kanban + admin error enrichment** — 5 error responses in `delete_entry`, `merge_tags` (same-tag and domain error), `get_kanban_board` (not-found), and `move_kanban_item` (project/status not-found) now include `code`, `category`, `suggestion`, and `recoverable` fields, matching the `formatHandlerError()` pattern.
 
 ### Security
 - **CI/CD Hardening**: Added `--provenance` flag to `npm publish` in `publish-npm.yml` for SLSA Build L3 attestation. Added `id-token: write` permission for OIDC provenance token generation.

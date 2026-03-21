@@ -159,6 +159,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             entryId: entry_id,
                             permanent,
                             error: `Entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
                         }
                     }
 
@@ -210,6 +214,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             sourceDeleted: false,
                             message: 'Source and target tags cannot be the same',
                             error: 'Source and target tags must be different',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Provide two different tag names',
+                            recoverable: true,
                         }
                     }
 
@@ -240,6 +248,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             sourceDeleted: false,
                             message: 'Tag merge failed',
                             error: error instanceof Error ? error.message : 'Unknown error',
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the source tag exists using list_tags',
+                            recoverable: true,
                         }
                     } catch {
                         return formatHandlerError(error)
