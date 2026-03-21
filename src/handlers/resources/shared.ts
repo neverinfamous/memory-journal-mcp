@@ -100,6 +100,8 @@ export interface BriefingConfig {
     workflowStatusBreakdown: boolean
     /** Aggregate Copilot review state across recent PRs in briefing (default: false) */
     copilotReviews: boolean
+    /** Workflow summary string for the memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY) */
+    workflowSummary?: string
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */

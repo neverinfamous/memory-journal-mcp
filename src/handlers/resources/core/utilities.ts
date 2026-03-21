@@ -155,15 +155,19 @@ export const workflowsResource: InternalResourceDef = {
         audience: ['assistant'],
         priority: 0.6,
     },
-    handler: (_uri: string, _context: ResourceContext): ResourceResult => {
-        // workflowSummary is not yet part of BriefingConfig — surfaced via env var
-        const workflowSummary: string | undefined = process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
+    handler: (_uri: string, context: ResourceContext): ResourceResult => {
+        // Prefer briefingConfig.workflowSummary (set via CLI --workflow-summary or
+        // MEMORY_JOURNAL_WORKFLOW_SUMMARY env var in cli.ts). Fall back to env var
+        // for callers that don't pass a briefingConfig (e.g., tests, direct readResource).
+        const workflowSummary: string | undefined =
+            context.briefingConfig?.workflowSummary ??
+            process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
         if (workflowSummary === undefined || workflowSummary === '') {
             return {
                 data: {
                     configured: false,
                     message:
-                        'No workflow summary is available. Set MEMORY_JOURNAL_WORKFLOW_SUMMARY env var.',
+                        'No workflow summary is available. Set MEMORY_JOURNAL_WORKFLOW_SUMMARY env var or use --workflow-summary.',
                 },
             }
         }

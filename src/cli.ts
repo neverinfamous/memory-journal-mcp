@@ -123,6 +123,10 @@ program
         '--briefing-copilot',
         'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT_REVIEWS)'
     )
+    .option(
+        '--workflow-summary <text>',
+        'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
+    )
     .action(
         async (options: {
             transport: string
@@ -158,6 +162,7 @@ program
             briefingWorkflows: string
             briefingWorkflowStatus?: boolean
             briefingCopilot?: boolean
+            workflowSummary?: string
             instructionLevel: string
         }) => {
             // Set log level
@@ -244,6 +249,10 @@ program
                         copilotReviews:
                             options.briefingCopilot ??
                             process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
+                        workflowSummary:
+                            options.workflowSummary ??
+                            process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] ??
+                            undefined,
                     },
                     instructionLevel: (options.instructionLevel !== 'standard'
                         ? options.instructionLevel
