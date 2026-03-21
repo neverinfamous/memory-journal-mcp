@@ -91,7 +91,7 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Team          | `mj.team.*`          | `mj.team.teamCreateEntry("Team update")`           |
 
 **Features**: Positional args (`createEntry("note")`), aliases (`mj.core.create`), `mj.help()` for discovery.
-**Readonly mode**: `readonly: true` restricts to read-only tools only. Write-only groups (e.g., `admin`) will be empty. Use `readonly: false` (default) for full access.
+**Readonly mode**: `readonly: true` restricts to read-only tools only. Calling a mutation method (e.g., `mj.relationships.linkEntries`) returns `{ success: false, error: "Operation '...' is not available in read-only mode" }` instead of throwing.
 **Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
 
 <!-- SECTION:GITHUB -->

@@ -269,4 +269,68 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.error).toBeDefined()
         })
     })
+
+    // ========================================================================
+    // search_entries — FTS5 phrase query (porter-stemmer sanitization)
+    // ========================================================================
+
+    describe('search_entries FTS5 phrase query', () => {
+        it('should match entries when using a quoted phrase query', async () => {
+            // Seed an entry with the phrase "error handling"
+            db.createEntry({
+                content: 'Improved error handling without breaking the API',
+                entryType: 'bug_fix',
+                tags: ['fts5-phrase-test'],
+            })
+
+            // Unquoted — should match
+            const unquoted = (await callTool(
+                'search_entries',
+                { query: 'error handling', limit: 10 },
+                db
+            )) as { entries: { content: string }[]; count: number }
+            expect(unquoted.count).toBeGreaterThan(0)
+
+            // Quoted phrase — should also match after sanitizeFtsQuery rewrites it
+            const quoted = (await callTool(
+                'search_entries',
+                { query: '"error handling"', limit: 10 },
+                db
+            )) as { entries: { content: string }[]; count: number }
+            expect(quoted.count).toBeGreaterThan(0)
+
+            // Both should find the same entry
+            const unquotedContents = unquoted.entries.map((e) => e.content)
+            const quotedContents = quoted.entries.map((e) => e.content)
+            const phraseEntry = 'Improved error handling without breaking the API'
+            expect(unquotedContents).toContain(phraseEntry)
+            expect(quotedContents).toContain(phraseEntry)
+        })
+
+        it('should pass through non-phrase queries unchanged', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'deploy OR release', limit: 10 },
+                db
+            )) as { entries: unknown[]; count: number }
+            // Should not throw and may return results
+            expect(result).toBeDefined()
+            expect(typeof result.count).toBe('number')
+        })
+
+        it('should handle single-word quoted phrase', async () => {
+            db.createEntry({
+                content: 'Architecture decision for the backend',
+                entryType: 'project_decision',
+                tags: ['fts5-single-word-test'],
+            })
+
+            const result = (await callTool(
+                'search_entries',
+                { query: '"architecture"', limit: 10 },
+                db
+            )) as { entries: { content: string }[]; count: number }
+            expect(result.count).toBeGreaterThan(0)
+        })
+    })
 })

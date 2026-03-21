@@ -87,7 +87,23 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
                 methods: methodNames,
             })
 
-        api[group] = groupProxy
+        // Wrap in a Proxy so that calling an undefined method (e.g. a mutation
+        // that was stripped in readonly mode) returns a structured error object
+        // instead of throwing `TypeError: mj.<group>.<method> is not a function`.
+        const groupProxyWrapped = new Proxy(groupProxy, {
+            get(target, prop) {
+                const key = String(prop)
+                if (key in target) return target[key]
+                // Unknown method — return a function that resolves to a structured error
+                return (..._args: unknown[]) =>
+                    Promise.resolve({
+                        success: false,
+                        error: `Operation '${key}' is not available${methodNames.length === 0 ? ' — this group has no methods in read-only mode' : ` in this context (readonly mode may be active)`}. Available: ${methodNames.join(', ') || 'none'}.`,
+                    })
+            },
+        })
+
+        api[group] = groupProxyWrapped
     }
 
     // Top-level help()

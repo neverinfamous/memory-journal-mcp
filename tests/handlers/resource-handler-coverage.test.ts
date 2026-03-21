@@ -177,4 +177,105 @@ describe('Resource Handler Coverage', () => {
             expect(data.entries).toBeDefined()
         })
     })
+
+    // ========================================================================
+    // New optional resources — rules, workflows, skills
+    // ========================================================================
+
+    describe('core resources — memory://rules', () => {
+        it('should return configured:false when RULES_FILE_PATH is not set', async () => {
+            const originalEnv = process.env['RULES_FILE_PATH']
+            delete process.env['RULES_FILE_PATH']
+
+            const result = await readResource('memory://rules', db)
+            const data = result.data as { configured: boolean; message: string }
+            expect(data.configured).toBe(false)
+            expect(data.message).toContain('RULES_FILE_PATH')
+
+            // Restore
+            if (originalEnv !== undefined) process.env['RULES_FILE_PATH'] = originalEnv
+        })
+
+        it('should return error when RULES_FILE_PATH points to nonexistent file', async () => {
+            process.env['RULES_FILE_PATH'] = '/nonexistent/path/RULES.md'
+
+            const result = await readResource('memory://rules', db)
+            const data = result.data as { configured: boolean; error: string }
+            expect(data.configured).toBe(true)
+            expect(data.error).toBeDefined()
+
+            delete process.env['RULES_FILE_PATH']
+        })
+    })
+
+    describe('core resources — memory://workflows', () => {
+        it('should return configured:false when MEMORY_JOURNAL_WORKFLOW_SUMMARY is not set', async () => {
+            const originalEnv = process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
+            delete process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
+
+            const result = await readResource('memory://workflows', db)
+            const data = result.data as { configured: boolean; message: string }
+            expect(data.configured).toBe(false)
+            expect(data.message).toContain('MEMORY_JOURNAL_WORKFLOW_SUMMARY')
+
+            if (originalEnv !== undefined)
+                process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] = originalEnv
+        })
+
+        it('should return workflow summary when MEMORY_JOURNAL_WORKFLOW_SUMMARY is set', async () => {
+            process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] = 'deploy, release, audit'
+
+            const result = await readResource('memory://workflows', db)
+            const data = result.data as { configured: boolean; summary: string }
+            expect(data.configured).toBe(true)
+            expect(data.summary).toBe('deploy, release, audit')
+
+            delete process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
+        })
+    })
+
+    describe('core resources — memory://skills', () => {
+        it('should return configured:false when SKILLS_DIR_PATH is not set', async () => {
+            const originalEnv = process.env['SKILLS_DIR_PATH']
+            delete process.env['SKILLS_DIR_PATH']
+
+            const result = await readResource('memory://skills', db)
+            const data = result.data as { configured: boolean; message: string }
+            expect(data.configured).toBe(false)
+            expect(data.message).toContain('SKILLS_DIR_PATH')
+
+            // Restore
+            if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv
+        })
+
+        it('should return error when SKILLS_DIR_PATH points to nonexistent directory', async () => {
+            process.env['SKILLS_DIR_PATH'] = '/nonexistent/skills/dir'
+
+            const result = await readResource('memory://skills', db)
+            const data = result.data as { configured: boolean; skills: unknown[]; count: number }
+            expect(data.configured).toBe(true)
+            expect(data.skills).toEqual([])
+            expect(data.count).toBe(0)
+
+            delete process.env['SKILLS_DIR_PATH']
+        })
+
+        it('should scan existing directory and return skill list', async () => {
+            // Point at the test server directory which has markdown files (no SKILL.md, so count=0)
+            process.env['SKILLS_DIR_PATH'] = './tests'
+
+            const result = await readResource('memory://skills', db)
+            const data = result.data as {
+                configured: boolean
+                skillsDir: string
+                skills: { name: string; path: string; excerpt: string }[]
+                count: number
+            }
+            expect(data.configured).toBe(true)
+            expect(data.skills).toBeDefined()
+            expect(typeof data.count).toBe('number')
+
+            delete process.env['SKILLS_DIR_PATH']
+        })
+    })
 })
