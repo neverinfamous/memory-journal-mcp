@@ -14,7 +14,7 @@ Exhaustively validate the memory-journal-mcp server's prompt handlers, structure
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools3.md`).
+1. Create a plan to implement any fixes and/or improvements/optimizations needed, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools3.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
@@ -38,13 +38,13 @@ npm run build
 node test-server/test-prompts.mjs
 ```
 
-| Check                   | Expected                                                       |
-| ----------------------- | -------------------------------------------------------------- |
-| Prompts listed          | 16 prompts with correct argument signatures                    |
-| All 18 prompt calls     | PASS — `messages[0].role === 'user'`, non-empty `content.text` |
-| Nonexistent prompt      | MCP error (code `-32602`)                                      |
-| Missing required arg    | Error returned or handled gracefully                           |
-| **Total**               | **20 pass, 0 fail**                                            |
+| Check                | Expected                                                       |
+| -------------------- | -------------------------------------------------------------- |
+| Prompts listed       | 16 prompts with correct argument signatures                    |
+| All 18 prompt calls  | PASS — `messages[0].role === 'user'`, non-empty `content.text` |
+| Nonexistent prompt   | MCP error (code `-32602`)                                      |
+| Missing required arg | Error returned or handled gracefully                           |
+| **Total**            | **20 pass, 0 fail**                                            |
 
 The tables below document what the script tests — use them as a reference for manual verification or when adding new prompts.
 
