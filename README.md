@@ -27,7 +27,7 @@
 
 ### What Sets Us Apart
 
-**56 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**61 MCP Tools** · **16 Workflow Prompts** · **22 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
 
 | Feature                        | Description                                                                                                                                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -35,7 +35,7 @@
 | **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                           |
 | **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                          |
 | **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                      |
-| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 56 capabilities via `mj.*` API                    |
+| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 61 capabilities via `mj.*` API                    |
 | **Configurable Briefing**      | 11 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, and rules/skills awareness                           |
 | **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                             |
 | **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                  |
@@ -154,12 +154,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 56    | All tools (default)      |
-| `starter`            | ~10   | Core + search + codemode |
-| `essential`          | ~6    | Minimal footprint        |
+| `full`               | 61    | All tools (default)      |
+| `starter`            | ~11   | Core + search + codemode |
+| `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | ~15   | Disable all mutations    |
-| `-github`            | 40    | Exclude a group          |
-| `-github,-analytics` | 38    | Exclude multiple groups  |
+| `-github`            | 45    | Exclude a group          |
+| `-github,-analytics` | 43    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -173,7 +173,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **56 MCP Tools** (10 Groups)
+### 🛠️ **61 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                          |
 | --------------- | ----- | ---------------------------------------------------------------------------------------------------- |
@@ -186,7 +186,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                              |
 | `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews** |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                       |
-| `team`          | 15    | CRUD, search, stats, relationships, export, backup (requires `TEAM_DB_PATH`)                         |
+| `team`          | 20    | CRUD, search, stats, relationships, export, backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -256,7 +256,7 @@ Code executes in a **sandboxed VM context** with multiple layers of security. Al
 
 ### ⚡ Code Mode Only (Maximum Token Savings)
 
-Run with **only Code Mode enabled** — a single tool that provides access to all 56 tools' worth of capability through the `mj.*` API:
+Run with **only Code Mode enabled** — a single tool that provides access to all 61 tools' worth of capability through the `mj.*` API:
 
 ```json
 {
@@ -564,7 +564,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 56 Tools"]
+        Tools["🛠️ 61 Tools"]
         Resources["📡 22 Resources"]
         Prompts["💬 16 Prompts"]
     end
@@ -593,7 +593,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (56)      │  │ Resources (22)  │  │ Prompts (16)│  │
+│  │ Tools (61)      │  │ Resources (22)  │  │ Prompts (16)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
