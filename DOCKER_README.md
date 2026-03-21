@@ -208,6 +208,7 @@ Restart Cursor or your MCP client and start journaling!
 | `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`)                                     |
 | `RULES_FILE_PATH`          | Path to user rules file for agent awareness (CLI: `--rules-file`)                                 |
 | `SKILLS_DIR_PATH`          | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                |
+| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)          |
 | `INSTRUCTION_LEVEL`        | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
