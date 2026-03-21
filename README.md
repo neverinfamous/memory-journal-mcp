@@ -211,7 +211,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **27 Resources** (20 Static + 7 Template)
+### 📡 **27 Resources** (19 Static + 8 Template)
 
 **Static Resources** (appear in resource lists):
 
@@ -234,7 +234,6 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://team/recent` - Recent team entries with author attribution
 - `memory://team/statistics` - Team entry counts, types, and author breakdown
 - `memory://help` - Tool group index with descriptions and tool counts
-- `memory://help/{group}` - Per-group tool reference with parameters and annotations
 
 **Template Resources** (require parameters, fetch directly by URI):
 
@@ -245,6 +244,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://kanban/{project_number}` - GitHub Project Kanban board
 - `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
 - `memory://milestones/{number}` - Milestone detail with completion progress
+- `memory://help/{group}` - Per-group tool reference with parameters and annotations
 
 ---
 

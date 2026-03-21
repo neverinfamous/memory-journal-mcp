@@ -161,7 +161,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | Help index        | `memory://help`              | Lists all tool groups with counts, descriptions, and `totalTools`                                                                                 |
 | Help group detail | `memory://help/{group}`      | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                                            |
 | Rules             | `memory://rules`             | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                                        |
-| Workflows         | `memory://workflows`         | Workflow listing (requires `WORKFLOWS_DIR_PATH`); graceful empty if not set                                                                       |
+| Workflows         | `memory://workflows`         | Workflow summary (requires `MEMORY_JOURNAL_WORKFLOW_SUMMARY` or `--workflow-summary`); returns `{ configured: false }` when not set                |
 | Skills            | `memory://skills`            | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                                    |
 
 ### 1.2 Template Resources — Happy Path

@@ -827,6 +827,7 @@ return {
 | `contentUpdated` | `true`   |
 | `mergeSuccess`   | `true`   |
 | `oldTagGone`     | `true`   |
+| `newTagExists`   | `true`   |
 | `deleteSuccess`  | `true`   |
 
 ### 27.5 Team Analytics
