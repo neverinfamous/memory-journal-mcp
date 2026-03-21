@@ -91,8 +91,30 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Team          | `mj.team.*`          | `mj.team.teamCreateEntry("Team update")`           |
 
 **Features**: Positional args (`createEntry("note")`), aliases (`mj.core.create`), `mj.help()` for discovery.
-**Readonly mode**: `readonly: true` restricts to read-only tools only. Calling a mutation method (e.g., `mj.relationships.linkEntries`) returns `{ success: false, error: "Operation '...' is not available in read-only mode" }` instead of throwing.
+**Readonly mode**: `readonly: true` restricts to read-only tools only. Calling a mutation method (e.g., `mj.core.create(...)`) in readonly mode throws an error that halts execution — the sandbox returns `{ success: false, error: "Operation '...' is not available in read-only mode" }`.
 **Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
+
+**Important — all `mj.*` methods return Promises. Always `await` them:**
+
+```js
+// ✅ Correct
+const result = await mj.core.recent({ limit: 5 })
+return result.entries.map(e => e.id)
+
+// ❌ Wrong — returns a Promise object, not the entries
+const result = mj.core.recent({ limit: 5 })
+
+// ✅ Discovery
+const help = await mj.help()           // { groups, totalMethods, usage }
+const groupHelp = await mj.core.help() // { group, methods }
+```
+
+**`mj.core.recent()` return shape**: Returns `{ entries: JournalEntry[], count: number }` — not a plain array. Access `.entries` to iterate:
+
+```js
+const { entries, count } = await mj.core.recent({ limit: 10 })
+return entries.map(e => ({ id: e.id, content: e.content.slice(0, 50) }))
+```
 
 <!-- SECTION:GITHUB -->
 

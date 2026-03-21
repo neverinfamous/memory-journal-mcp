@@ -116,6 +116,16 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = LinkEntriesSchema.parse(params)
 
+                    // Guard: self-referential links are not meaningful
+                    if (input.from_entry_id === input.to_entry_id) {
+                        return {
+                            success: false,
+                            error: 'Cannot link an entry to itself',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                        }
+                    }
+
                     // Check for existing duplicate relationship
                     const existingRelationships = db.getRelationships(input.from_entry_id)
                     const existing = existingRelationships.find(
@@ -157,17 +167,11 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         const isFkError = errMsg.includes('FOREIGN KEY constraint failed')
                         return {
                             success: false,
-                            relationship: {
-                                id: 0,
-                                fromEntryId: input.from_entry_id,
-                                toEntryId: input.to_entry_id,
-                                relationshipType: input.relationship_type,
-                                description: input.description ?? null,
-                                createdAt: '',
-                            },
-                            message: isFkError
+                            error: isFkError
                                 ? `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`
                                 : errMsg,
+                            code: 'NOT_FOUND',
+                            category: 'not_found',
                         }
                     }
                     return formatHandlerError(error)

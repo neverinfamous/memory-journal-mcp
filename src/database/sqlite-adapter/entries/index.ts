@@ -103,6 +103,8 @@ export class EntriesManager {
             projectNumber?: number
             issueNumber?: number
             prNumber?: number
+            prStatus?: string
+            workflowRunId?: number
         }
     ): JournalEntry[] {
         return searchEntries(this.sharedContext, queryStr, options)

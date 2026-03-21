@@ -88,18 +88,20 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
             })
 
         // Wrap in a Proxy so that calling an undefined method (e.g. a mutation
-        // that was stripped in readonly mode) returns a structured error object
-        // instead of throwing `TypeError: mj.<group>.<method> is not a function`.
+        // that was stripped in readonly mode) throws a rejected Promise instead of
+        // silently returning { success: false } — this halts control flow in the
+        // sandbox and surfaces a proper error to the caller.
         const groupProxyWrapped = new Proxy(groupProxy, {
             get(target, prop) {
                 const key = String(prop)
                 if (key in target) return target[key]
-                // Unknown method — return a function that resolves to a structured error
-                return (..._args: unknown[]) =>
-                    Promise.resolve({
-                        success: false,
-                        error: `Operation '${key}' is not available${methodNames.length === 0 ? ' — this group has no methods in read-only mode' : ` in this context (readonly mode may be active)`}. Available: ${methodNames.join(', ') || 'none'}.`,
-                    })
+                // Unknown/stripped method — reject so the sandbox try/catch catches it
+                const available = methodNames.join(', ') || 'none'
+                const reason =
+                    methodNames.length === 0
+                        ? `Operation '${key}' is not available — this group has no methods in read-only mode. Available: ${available}.`
+                        : `Operation '${key}' is not available in read-only mode. Available: ${available}.`
+                return (..._args: unknown[]) => Promise.reject(new Error(reason))
             },
         })
 

@@ -159,6 +159,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.project_number !== undefined ||
                         input.issue_number !== undefined ||
                         input.pr_number !== undefined ||
+                        input.pr_status !== undefined ||
+                        input.workflow_run_id !== undefined ||
                         input.is_personal !== undefined
 
                     // When merging across DBs, fetch more per-DB so BM25 ranking
@@ -176,6 +178,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             projectNumber: input.project_number,
                             issueNumber: input.issue_number,
                             prNumber: input.pr_number,
+                            prStatus: input.pr_status,
+                            workflowRunId: input.workflow_run_id,
                         })
                     }
 
@@ -191,6 +195,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 projectNumber: input.project_number,
                                 issueNumber: input.issue_number,
                                 prNumber: input.pr_number,
+                                prStatus: input.pr_status,
+                                workflowRunId: input.workflow_run_id,
                             })
                         }
                         const merged = mergeAndDedup(

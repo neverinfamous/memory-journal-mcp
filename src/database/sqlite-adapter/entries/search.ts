@@ -47,6 +47,8 @@ export function searchEntries(
         projectNumber?: number
         issueNumber?: number
         prNumber?: number
+        prStatus?: string
+        workflowRunId?: number
     }
 ): JournalEntry[] {
     const { db, tagsMgr } = context
@@ -82,6 +84,8 @@ function buildSearchQuery(
               projectNumber?: number
               issueNumber?: number
               prNumber?: number
+              prStatus?: string
+              workflowRunId?: number
           }
         | undefined,
     useFts: boolean
@@ -130,6 +134,16 @@ function buildSearchQuery(
     if (options?.prNumber !== undefined) {
         conditions.push(`e.pr_number = ?`)
         params.push(options.prNumber)
+    }
+
+    if (options?.prStatus !== undefined) {
+        conditions.push(`e.pr_status = ?`)
+        params.push(options.prStatus)
+    }
+
+    if (options?.workflowRunId !== undefined) {
+        conditions.push(`e.workflow_run_id = ?`)
+        params.push(options.workflowRunId)
     }
 
     if (conditions.length > 0) {
