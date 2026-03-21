@@ -11,7 +11,7 @@
 | `test-tools2.md`                         | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes                       |
 | `test-tools-codemode.md`                 | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration              | After Pass 1 completes                       |
 | `test-tools-codemode2.md`               | **Pass 4: Code Mode Advanced** — Extended Code Mode scenarios                                                                                                                         | After Pass 3 completes                       |
-| `test-resources.md`                      | **Resource Testing** — Comprehensive validation of all 22 resources (15 static + 7 template) with expected output shapes and pass criteria                                            | After Pass 1 completes                       |
+
 | `test-preflight.md`                      | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps                                                                                  | Before any test pass                         |
 | `test-agent-experience.md`               | **Agent experience test** — 23 open-ended scenarios across 4 passes validating instruction sufficiency for cold-start                                                                  | After instruction changes                    |
 | [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 61 tools across 11 groups                                                                                                                | Reference                                    |
@@ -142,7 +142,7 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 8. (Optional) Run Pass 2 from `test-tools2.md` after Pass 1 completes successfully.
 9. (Optional) Run Pass 3 from `test-tools-codemode.md` for Code Mode sandbox testing.
 10. (Optional) Run Pass 4 from `test-tools-codemode2.md` for advanced Code Mode scenarios.
-11. (Optional) Run resource tests from `test-resources.md` for comprehensive resource validation.
+
 
 ## Troubleshooting
 
