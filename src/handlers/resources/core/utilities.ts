@@ -180,6 +180,10 @@ export const workflowsResource: InternalResourceDef = {
     },
 }
 
+let cachedSkills: { name: string; path: string; excerpt: string }[] | null = null
+let lastScanTime = 0
+const SKILLS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
 export const skillsResource: InternalResourceDef = {
     uri: 'memory://skills',
     name: 'Skills',
@@ -213,6 +217,17 @@ export const skillsResource: InternalResourceDef = {
                 }
             }
 
+            if (cachedSkills && Date.now() - lastScanTime < SKILLS_CACHE_TTL_MS) {
+                return {
+                    data: {
+                        configured: true,
+                        skillsDir,
+                        skills: cachedSkills,
+                        count: cachedSkills.length,
+                    },
+                }
+            }
+
             // Find all SKILL.md files one level deep (each skill is a directory)
             const entries = fs.readdirSync(skillsDir, { withFileTypes: true })
             const skills: { name: string; path: string; excerpt: string }[] = []
@@ -234,6 +249,9 @@ export const skillsResource: InternalResourceDef = {
             }
 
             skills.sort((a, b) => a.name.localeCompare(b.name))
+
+            cachedSkills = skills
+            lastScanTime = Date.now()
 
             return {
                 data: {
