@@ -28,14 +28,14 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 
 ---
 
-## Phase 9: Team Collaboration (20 tools + 2 resources)
+## Phase 10: Team Collaboration (20 tools + 2 resources)
 
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`. Team entries are stored in a separate public database with author attribution.
 >
 > **`team_delete_entry` is soft-delete only** — no `permanent` flag (unlike individual `delete_entry`).
 
-### 9.1 Team Entry Creation
+### 10.1 Team Entry Creation
 
 | Test               | Command/Action                                                      | Expected Result                                             |
 | ------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -46,7 +46,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | With entry type    | `team_create_entry(content: "...", entry_type: "project_decision")` | Entry type set correctly                                    |
 | Invalid entry_type | `team_create_entry(content: "...", entry_type: "invalid")`          | Structured error: `{ success: false, error: "..." }`        |
 
-### 9.2 Team Read Tools
+### 10.2 Team Read Tools
 
 | Test            | Command/Action                                    | Expected Result                                  |
 | --------------- | ------------------------------------------------- | ------------------------------------------------ |
@@ -57,7 +57,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Combined search | `team_search(query: "test", tags: ["team-test"])` | Text + tag filtered results                      |
 | No query/tags   | `team_search`                                     | Returns recent entries (fallback to `getRecent`) |
 
-### 9.3 Team Entry Detail
+### 10.3 Team Entry Detail
 
 | Test             | Command/Action                                                       | Expected Result                                                  |
 | ---------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -66,14 +66,14 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | No relationships | `team_get_entry_by_id(entry_id: <id>, include_relationships: false)` | Response omits `relationships` array                             |
 | Nonexistent ID   | `team_get_entry_by_id(entry_id: 999999)`                             | Structured error: `{ success: false, error: "..." }`             |
 
-### 9.4 Team Tags
+### 10.4 Team Tags
 
 | Test       | Command/Action   | Expected Result                              |
 | ---------- | ---------------- | -------------------------------------------- |
 | List tags  | `team_list_tags` | `tags` array with `{ name, count }` per tag  |
 | Tag counts | Inspect response | Counts match entries created with those tags |
 
-### 9.5 Team Date Range Search
+### 10.5 Team Date Range Search
 
 | Test             | Command/Action                                                                                       | Expected Result                                      |
 | ---------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -82,7 +82,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | With tags filter | `team_search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", tags: ["standup"])`     | Only entries with `standup` tag                      |
 | Invalid date     | `team_search_by_date_range(start_date: "Jan 1", end_date: "Jan 31")`                                 | Structured error with YYYY-MM-DD hint                |
 
-### 9.6 Team Admin
+### 10.6 Team Admin
 
 | Test                     | Command/Action                                                       | Expected Result                                      |
 | ------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -96,7 +96,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Merge same tag           | `team_merge_tags(source_tag: "team-new", target_tag: "team-new")`    | Structured error: `{ success: false, error: "..." }` |
 | Merge nonexistent source | `team_merge_tags(source_tag: "nonexistent-xyz", target_tag: "x")`    | Structured error: `{ success: false, error: "..." }` |
 
-### 9.7 Team Analytics
+### 10.7 Team Analytics
 
 | Test             | Command/Action                           | Expected Result                                          |
 | ---------------- | ---------------------------------------- | -------------------------------------------------------- |
@@ -105,7 +105,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Group by day     | `team_get_statistics(group_by: "day")`   | Periods grouped by day                                   |
 | Author breakdown | Inspect `authors` field                  | Array of `{ author, count }` for each contributor        |
 
-### 9.8 Team Vector Search
+### 10.8 Team Vector Search
 
 | Test                    | Command/Action                                                   | Expected Result                                     |
 | ----------------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
@@ -117,7 +117,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Team add to index       | `team_add_to_vector_index(entry_id: <team_entry_id>)`            | `success: true`, `entryId` in response              |
 | Team add nonexistent    | `team_add_to_vector_index(entry_id: 999999)`                     | `{ success: false, error: "..." }`                  |
 
-### 9.9 Team Cross-Project Insights
+### 10.9 Team Cross-Project Insights
 
 | Test                 | Command/Action                                                                      | Expected Result                                    |
 | -------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -125,7 +125,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Insights with dates  | `team_get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered project insights                     |
 | Insights min_entries | `team_get_cross_project_insights(min_entries: 1)`                                   | Lower threshold includes more projects             |
 
-### 9.10 Team Relationships
+### 10.10 Team Relationships
 
 | Test                  | Command/Action                                                                                                 | Expected Result                                      |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
@@ -137,7 +137,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Visualize by tag      | `team_visualize_relationships(tag: "team-test")`                                                               | Mermaid diagram scoped to tag                        |
 | Visualize nonexistent | `team_visualize_relationships(entry_id: 999999)`                                                               | Structured error or empty diagram                    |
 
-### 9.11 Team Export
+### 10.11 Team Export
 
 | Test                   | Command/Action                                                                          | Expected Result                          |
 | ---------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------- |
@@ -147,7 +147,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Export with dates      | `team_export_entries(format: "json", start_date: "2026-01-01", end_date: "2026-03-01")` | Only entries within date range           |
 | Export with entry_type | `team_export_entries(format: "json", entry_type: "standup", limit: 10)`                 | Only entries of specified type           |
 
-### 9.12 Team Backup
+### 10.12 Team Backup
 
 | Test              | Command/Action                          | Expected Result                                            |
 | ----------------- | --------------------------------------- | ---------------------------------------------------------- |
@@ -155,7 +155,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Auto-named backup | `team_backup`                           | Backup created with auto-generated timestamped name        |
 | List backups      | `team_list_backups`                     | `backups` array with metadata, `total`, `backupsDirectory` |
 
-### 9.13 Team Resources
+### 10.13 Team Resources
 
 | Test             | URI                        | Expected Result                                                       |
 | ---------------- | -------------------------- | --------------------------------------------------------------------- |
@@ -163,7 +163,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Statistics       | `memory://team/statistics` | `configured: true`, `totalEntries`, `authors` array, `source: "team"` |
 | Author breakdown | `memory://team/statistics` | `authors` contains `{ author: "<name>", count: N }` for each author   |
 
-### 9.14 Cleanup
+### 10.14 Cleanup
 
 | Test        | Command/Action                                     | Expected Result                 |
 | ----------- | -------------------------------------------------- | ------------------------------- |
