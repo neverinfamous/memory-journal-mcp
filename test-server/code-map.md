@@ -171,9 +171,9 @@ src/
     │           └── user-message.ts      # User message section (rules, skills awareness)
     │
     └── prompts/                    # Prompt handlers
-        ├── index.ts                # Prompt registration barrel + confirm-briefing
-        ├── workflow.ts             # 13 workflow prompts (standup, retro, digest, analysis, etc.)
-        └── github.ts              # 2 GitHub prompts (actions-failure-digest, project-milestone-tracker)
+        ├── index.ts                # Prompt registration barrel
+        ├── workflow.ts             # 10 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
+        └── github.ts              # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
 ```
 
 ---
@@ -264,9 +264,9 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 | File          | Prompts                                                                                                                                                                              |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `session-summary` |
-| `github.ts`   | `actions-failure-digest`, `project-milestone-tracker`                                                                                                                                |
-| `index.ts`    | `confirm-briefing` (barrel also re-exports above)                                                                                                                                    |
+| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary` |
+| `github.ts`   | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                    |
+| `index.ts`    | Barrel — re-exports workflow + GitHub prompts, `getPrompt()` / `getPrompts()` dispatch                                                                                                   |
 
 ---
 

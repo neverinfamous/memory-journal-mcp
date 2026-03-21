@@ -2,7 +2,7 @@
 
 Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented below.**
 
-**Scope:** 25 core tools (entry CRUD, search, analytics, relationships, admin, backup), seed data — this file covers happy paths, core error paths, and feature verification (Phases 0-6). GitHub tools (16 tools), all 27 resources, and prompt handlers are tested in `test-tools2.md`. Team tools (20 tools) are tested in `test-tools-team.md`.
+**Scope:** 24 core tools (entry CRUD, search, analytics, relationships, admin, backup), seed data — this file covers happy paths, core error paths, and feature verification (Phases 0-6). GitHub tools (16 tools), all 27 resources, and prompt handlers are tested in `test-tools2.md`. Team tools (20 tools) are tested in `test-tools-team.md`.
 
 **Constraints:**
 
@@ -355,7 +355,7 @@ node test-server/test-scheduler.mjs
 
 ### Core Functionality
 
-- [ ] All 25 core tools execute without errors on happy paths (GitHub tools tested in `test-tools2.md`, team tools in `test-tools-team.md`)
+- [ ] All 24 core tools execute without errors on happy paths (GitHub tools tested in `test-tools2.md`, team tools in `test-tools-team.md`)
 - [ ] Server instructions length respects `--instruction-level`: essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
 - [ ] 45 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (61 total, 0 missing)
 

@@ -2,7 +2,7 @@
 
 Exhaustively validate the memory-journal-mcp server's output schemas, error handling, GitHub integration, template/static resources, prompt handlers, data integrity, boundary values, and implementation correctness.
 
-**Scope:** Cross-cutting validation of all 61 tools and 27 resources — this file covers outputSchema verification, all resource validation, GitHub tool happy paths + lifecycle + cleanup, prompt handler verification, structured error testing, data integrity round-trips, boundary values, and implementation bug detection. Phases 0-7.
+**Scope:** Cross-cutting validation of all 61 tools (60 with outputSchema + Code Mode) and 27 resources — this file covers outputSchema verification, all resource validation, GitHub tool happy paths + lifecycle + cleanup, prompt handler verification, structured error testing, data integrity round-trips, boundary values, and implementation bug detection. Phases 0-7.
 
 **Prerequisites:**
 
@@ -30,7 +30,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 ## Phase 0: outputSchema Validation
 
 > [!NOTE]
-> **61 tools** now return `structuredContent` validated against Zod output schemas.
+> **60 tools** now return `structuredContent` validated against Zod output schemas (`mj_execute_code` intentionally excluded — its dynamic return type produces a bare `{}` JSON Schema that crashes clients processing `structuredContent`).
 > Verify each response is structured JSON (not raw text).
 
 ### 0.1 Original 5 Tools
@@ -629,7 +629,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 
 ### outputSchema Validation (Phase 0)
 
-- [ ] All 61 outputSchema tools return `structuredContent` (not raw text)
+- [ ] All 60 outputSchema tools return `structuredContent` (not raw text) — `mj_execute_code` excluded by design
 
 ### Resources (Phase 1)
 
