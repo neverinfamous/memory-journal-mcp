@@ -2,7 +2,7 @@
 
 Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented below.**
 
-**Scope:** 41 core tools, 22 resources (15 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-8, 10). Team collaboration tools (20 tools) are tested separately in `test-tools-team.md`.
+**Scope:** 41 core tools, 24 resources (17 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-8, 10). Team collaboration tools (20 tools) are tested separately in `test-tools-team.md`.
 
 **Constraints:**
 

@@ -27,7 +27,7 @@
 
 ### What Sets Us Apart
 
-**61 MCP Tools** · **16 Workflow Prompts** · **25 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**61 MCP Tools** · **16 Workflow Prompts** · **27 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                        | Description                                                                                                                                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -211,7 +211,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **25 Resources** (18 Static + 7 Template)
+### 📡 **27 Resources** (20 Static + 7 Template)
 
 **Static Resources** (appear in resource lists):
 
@@ -233,6 +233,8 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://github/milestones` - Open milestones with completion percentages
 - `memory://team/recent` - Recent team entries with author attribution
 - `memory://team/statistics` - Team entry counts, types, and author breakdown
+- `memory://help` - Tool group index with descriptions and tool counts
+- `memory://help/{group}` - Per-group tool reference with parameters and annotations
 
 **Template Resources** (require parameters, fetch directly by URI):
 
@@ -570,7 +572,7 @@ flowchart TB
 
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 61 Tools"]
-        Resources["📡 22 Resources"]
+        Resources["📡 27 Resources"]
         Prompts["💬 16 Prompts"]
     end
 
@@ -598,7 +600,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (61)      │  │ Resources (25)  │  │ Prompts (16)│  │
+│  │ Tools (61)      │  │ Resources (27)  │  │ Prompts (16)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤

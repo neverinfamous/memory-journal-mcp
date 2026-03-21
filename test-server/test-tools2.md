@@ -2,7 +2,7 @@
 
 Exhaustively validate the memory-journal-mcp server's output schemas, error handling, data integrity, boundary values, and implementation correctness.
 
-**Scope:** Cross-cutting validation of all 61 tools and 22 resources — this pass re-exercises tools tested in Pass 1 with different concerns (schema shape, error structure, boundary values, silent bugs). Phases 11, 12, 12b, 13-15.
+**Scope:** Cross-cutting validation of all 61 tools and 24 resources — this pass re-exercises tools tested in Pass 1 with different concerns (schema shape, error structure, boundary values, silent bugs). Phases 11, 12, 12b, 13-15.
 
 **Prerequisites:**
 
@@ -156,6 +156,8 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | Actions recent    | `memory://actions/recent`    | Recent workflow runs (verify graceful output when no workflow entries exist)                                                                      |
 | Team recent       | `memory://team/recent`       | Author-enriched entries, `source: "team"`, `count`                                                                                                |
 | Team statistics   | `memory://team/statistics`   | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                                    |
+| Help index        | `memory://help`              | Lists all tool groups with counts, descriptions, and `totalTools`                                                                 |
+| Help group detail | `memory://help/{group}`      | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                             |
 
 ---
 
@@ -408,7 +410,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 ### outputSchema Validation (Phase 11)
 
 - [ ] All **44** outputSchema tools return `structuredContent` (not raw text)
-- [ ] All 15 static resources return valid data
+- [ ] All 17 static resources return valid data
 - [ ] All 7 template resources work with valid parameters
 
 ### Static Resources (Phase 12)

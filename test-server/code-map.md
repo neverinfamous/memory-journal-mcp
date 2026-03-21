@@ -157,6 +157,7 @@ src/
     │   ├── github.ts               # GitHub static resources (status, insights, milestones)
     │   ├── graph.ts                # Graph resources (recent relationships, actions narrative)
     │   ├── team.ts                 # Team resources (recent, statistics)
+    │   ├── help.ts                 # Dynamic help resources (memory://help, memory://help/{group})
     │   ├── templates.ts            # Template resources (projects, issues, PRs, kanban, milestones)
     │   └── core/
     │       ├── index.ts            # Core static resources barrel
@@ -223,7 +224,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-25 resources total — 18 static + 7 template.
+27 resources total — 20 static + 7 template.
 
 ### Static Resources
 
@@ -236,6 +237,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `github.ts`              | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                |
 | `graph.ts`               | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                      |
 | `team.ts`                | `memory://team/recent`, `memory://team/statistics`                                                |
+| `help.ts`                | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)              |
 
 ### Template Resources
 
@@ -309,6 +311,7 @@ catch (error) {
 | Instruction source markdown        | `src/constants/server-instructions.md` | Source content for instruction generation                                                   |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                |
 | Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist                      |
+| Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`) |
 | Code Mode API constants            | `src/codemode/api-constants.ts`        | Method→group map, JSON-RPC error codes, sandbox method names                                |
 | Logger                             | `src/utils/logger.ts`                  | Structured JSON logging with severity filtering                                              |
 | Security utilities                 | `src/utils/security-utils.ts`          | Input validation, SQL injection prevention, path traversal protection, token scrubbing       |

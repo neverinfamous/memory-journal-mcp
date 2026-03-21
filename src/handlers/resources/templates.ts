@@ -8,6 +8,7 @@
 
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
+import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { execQuery, transformEntryRow } from './shared.js'
 
@@ -22,10 +23,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             title: 'Project Activity Timeline',
             description: 'Project activity timeline',
             mimeType: 'application/json',
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.6,
-            },
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/projects\/(\d+)\/timeline/.exec(uri)
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
@@ -56,10 +54,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'All entries linked to a specific issue',
             mimeType: 'application/json',
             icons: [ICON_ISSUE],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.6,
-            },
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/issues\/(\d+)\/entries/.exec(uri)
                 const issueNumber = match?.[1] ? parseInt(match[1], 10) : null
@@ -89,10 +84,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'All entries linked to a specific pull request',
             mimeType: 'application/json',
             icons: [ICON_PR],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.6,
-            },
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/prs\/(\d+)\/entries/.exec(uri)
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
@@ -131,10 +123,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             description: 'Combined PR + journal timeline with live PR metadata',
             mimeType: 'application/json',
             icons: [ICON_PR],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.5,
-            },
+            annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/prs\/(\d+)\/timeline/.exec(uri)
                 const prNumber = match?.[1] ? parseInt(match[1], 10) : null
@@ -226,10 +215,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             title: 'GitHub Project Kanban Board',
             description: 'View a GitHub Project v2 as a Kanban board with items grouped by Status',
             mimeType: 'application/json',
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.6,
-            },
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/kanban\/(\d+)/.exec(uri)
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
@@ -275,10 +261,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             title: 'Kanban Board Mermaid Diagram',
             description: 'Mermaid diagram visualization of a GitHub Project Kanban board',
             mimeType: 'text/plain',
-            annotations: {
-                audience: ['user', 'assistant'],
-                priority: 0.5,
-            },
+            annotations: MEDIUM_PRIORITY,
             handler: async (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/kanban\/(\d+)\/diagram/.exec(uri)
                 const projectNumber = match?.[1] ? parseInt(match[1], 10) : null

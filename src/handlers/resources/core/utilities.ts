@@ -1,6 +1,7 @@
 import type { Tag } from '../../../types/index.js'
 import { ICON_CLOCK, ICON_STAR, ICON_TAG, ICON_ANALYTICS, ICON_BRIEFING } from '../../../constants/icons.js'
 import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../../database/core/entry-columns.js'
+import { withPriority, ASSISTANT_FOCUSED, LOW_PRIORITY, MEDIUM_PRIORITY } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 import { execQuery, transformEntryRow } from '../shared.js'
 import * as fs from 'node:fs'
@@ -13,10 +14,7 @@ export const recentResource: InternalResourceDef = {
     description: '10 most recent journal entries',
     mimeType: 'application/json',
     icons: [ICON_CLOCK],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.8,
-    },
+    annotations: withPriority(0.8, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
         const entries = context.db.getRecentEntries(10)
         const lastModified = entries[0]?.timestamp ?? new Date().toISOString()
@@ -34,10 +32,7 @@ export const significantResource: InternalResourceDef = {
     description: 'Significant milestones and breakthroughs',
     mimeType: 'application/json',
     icons: [ICON_STAR],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.7,
-    },
+    annotations: withPriority(0.7, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext) => {
         const rows = execQuery(
             context.db,
@@ -73,10 +68,7 @@ export const tagsResource: InternalResourceDef = {
     description: 'All available tags with usage counts',
     mimeType: 'application/json',
     icons: [ICON_TAG],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.4,
-    },
+    annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
     handler: (_uri: string, context: ResourceContext) => {
         const tags: Tag[] = context.db.listTags()
         const mappedTags = tags.map((t) => ({
@@ -95,10 +87,7 @@ export const statisticsResource: InternalResourceDef = {
     description: 'Overall journal statistics',
     mimeType: 'application/json',
     icons: [ICON_ANALYTICS],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.4,
-    },
+    annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
     handler: (_uri: string, context: ResourceContext) => {
         return context.db.getStatistics('week')
     },
@@ -111,10 +100,7 @@ export const rulesResource: InternalResourceDef = {
     description: 'Contents of the configured RULES_FILE_PATH (agent rules / GEMINI.md)',
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.7,
-    },
+    annotations: withPriority(0.7, ASSISTANT_FOCUSED),
     handler: (_uri: string, _context: ResourceContext): ResourceResult => {
         const rulesPath = process.env['RULES_FILE_PATH']
         if (!rulesPath) {
@@ -151,10 +137,7 @@ export const workflowsResource: InternalResourceDef = {
     description: 'Summary of available agent workflows from the configured workflow directory',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.6,
-    },
+    annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
         // Prefer briefingConfig.workflowSummary (set via CLI --workflow-summary or
         // MEMORY_JOURNAL_WORKFLOW_SUMMARY env var in cli.ts). Fall back to env var
@@ -191,10 +174,7 @@ export const skillsResource: InternalResourceDef = {
     description: 'Index of available agent skills from the configured SKILLS_DIR_PATH',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.6,
-    },
+    annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
     handler: (_uri: string, _context: ResourceContext): ResourceResult => {
         const skillsDir = process.env['SKILLS_DIR_PATH']
         if (!skillsDir) {

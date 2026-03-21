@@ -12,6 +12,7 @@
 - **`structuredContent` on error responses** — Tool error responses now include `structuredContent` with `code`, `category`, `suggestion`, and `recoverable` fields when the tool has an `outputSchema`, matching the success path behavior.
 - **Query helpers** — New `coerceNumber()`, `coerceBoolean()`, `coerceLimit()`, `buildLimitClause()` utilities in `src/utils/query-helpers.ts` for type-safe MCP input coercion.
 - **Resource annotation presets** — Centralized `HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED` presets in `src/utils/resource-annotations.ts`.
+- **Dynamic help resources** — `memory://help` (lists all tool groups with descriptions and tool counts) and `memory://help/{group}` (per-group tool reference with parameters and annotations). Content generated at runtime from live tool definitions — stays in sync automatically.
 - **Tool invariant tests** — Added `tool-annotations.test.ts` and `tool-output-schemas.test.ts` verifying all tools have annotations (`readOnlyHint`, `openWorldHint`), `outputSchema`, and `ErrorFieldsMixin` compliance.
 
 ### Fixed
@@ -49,4 +50,4 @@
 - **npm publish gated behind Docker checks** — npm no longer publishes on release creation; instead `docker-publish.yml` calls `publish-npm.yml` via `workflow_call` after Docker Scout passes and images are pushed. Both artifacts ship together or neither ships. Manual `workflow_dispatch` fallback preserved.
 - **Dependency Updates** — Updated 27 npm packages; `eslint` → `10.1.0`, `jose` → `6.2.2`, `sqlite-vec` → `0.1.7`, `typescript-eslint` → `8.57.1`. 0 vulnerabilities.
 - **`relaxedNumber()` type-safe union** — Changed from `z.any()` to `z.union([z.number(), z.string()])` for MCP SDK inputSchema registration. Accepts both native numbers and string-typed numbers while rejecting non-numeric types at the SDK level. `z.preprocess()` was evaluated but caused 192 ESLint `@typescript-eslint/no-unsafe-*` cascading errors due to unresolvable `ZodEffects` generics.
-- **mcp-builder compliance audit** — Complexity tier 4. Audited error handling, input coercion, and tool/resource patterns against mcp-builder standards. Implemented 10 remediation items; deferred `memory://help` resources (R3) to a separate PR.
+- **mcp-builder compliance audit** — Complexity tier 4. Audited error handling, input coercion, and tool/resource patterns against mcp-builder standards. Implemented 10 remediation items including dynamic help resources (R3) and resource annotation preset migration (R2).

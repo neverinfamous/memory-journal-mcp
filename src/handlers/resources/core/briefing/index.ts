@@ -6,6 +6,7 @@
  */
 
 import { ICON_BRIEFING } from '../../../../constants/icons.js'
+import { withPriority, withSessionInit, ASSISTANT_FOCUSED } from '../../../../utils/resource-annotations.js'
 import pkg from '../../../../../package.json' with { type: 'json' }
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
@@ -27,10 +28,8 @@ export const briefingResource: InternalResourceDef = {
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: {
-        audience: ['assistant'],
-        priority: 1.0,
+        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
         autoRead: true,
-        sessionInit: true,
     },
     handler: async (_uri: string, context: ResourceContext) => {
         const config = context.briefingConfig ?? DEFAULT_BRIEFING_CONFIG

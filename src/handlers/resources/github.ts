@@ -5,6 +5,7 @@
  */
 
 import { ICON_GITHUB, ICON_ANALYTICS, ICON_MILESTONE } from '../../constants/icons.js'
+import { withPriority, ASSISTANT_FOCUSED, LOW_PRIORITY, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from './shared.js'
 import { logger } from '../../utils/logger.js'
@@ -37,10 +38,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 'Compact GitHub status: repository, branch, CI, issues, PRs, Kanban summary',
             mimeType: 'application/json',
             icons: [ICON_GITHUB],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.7,
-            },
+            annotations: withPriority(0.7, ASSISTANT_FOCUSED),
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const resolved = await resolveGitHubRepo(context.github)
                 if (isResourceError(resolved)) return resolved
@@ -204,10 +202,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             description: 'Compact repo insights: stars, forks, 14-day traffic totals (~150 tokens)',
             mimeType: 'application/json',
             icons: [ICON_ANALYTICS],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.4,
-            },
+            annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const resolved = await resolveGitHubRepo(context.github)
                 if (isResourceError(resolved)) return resolved
@@ -252,10 +247,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 'Open GitHub milestones with completion percentages, due dates, and issue counts',
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.6,
-            },
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const resolved = await resolveGitHubRepo(context.github)
                 if (isResourceError(resolved)) return resolved
@@ -294,10 +286,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 'Detailed view of a single GitHub milestone with completion progress and issue counts. Use get_github_issues with the milestone filter for individual issue details.',
             mimeType: 'application/json',
             icons: [ICON_MILESTONE],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.5,
-            },
+            annotations: ASSISTANT_FOCUSED,
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const lastModified = new Date().toISOString()
                 const match = /memory:\/\/milestones\/(\d+)/.exec(uri)
