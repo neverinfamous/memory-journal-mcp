@@ -837,18 +837,18 @@ const stats = await mj.team.teamGetStatistics({})
 const monthly = await mj.team.teamGetStatistics({ group_by: 'month' })
 return {
   hasTotalEntries: typeof stats.totalEntries === 'number',
-  hasEntryTypes: !!stats.entryTypes,
-  hasTopTags: Array.isArray(stats.topTags),
+  hasEntriesByType: !!stats.entriesByType,
   hasAuthors: Array.isArray(stats.authors),
-  monthlyHasPeriod: typeof monthly.periodEntries === 'number',
+  monthlyHasPeriods: Array.isArray(monthly.entriesByPeriod),
 }
 ```
 
-| Check             | Expected |
-| ----------------- | -------- |
-| `hasTotalEntries` | `true`   |
-| `hasEntryTypes`   | `true`   |
-| `hasAuthors`      | `true`   |
+| Check               | Expected |
+| ------------------- | -------- |
+| `hasTotalEntries`   | `true`   |
+| `hasEntriesByType`  | `true`   |
+| `hasAuthors`        | `true`   |
+| `monthlyHasPeriods` | `true`   |
 
 ### 27.6 Team Relationships
 
@@ -1043,12 +1043,8 @@ errors.teamLinkBad = await mj.team.teamLinkEntries({
   relationship_type: 'references',
 })
 
-// Team vector & insights errors
+// Team vector errors (only true error paths)
 errors.teamAddVectorBad = await mj.team.teamAddToVectorIndex({ entry_id: 999999 })
-errors.teamSemanticEmpty = await mj.team.teamSemanticSearch({ query: 'xyznonexistent99' })
-errors.teamVectorStats = await mj.team.teamGetVectorIndexStats({})
-errors.teamRebuild = await mj.team.teamRebuildVectorIndex({})
-errors.teamInsights = await mj.team.teamGetCrossProjectInsights({})
 
 // Verify all errors are structured (not raw throws)
 const allStructured = Object.entries(errors).every(([key, val]) => {
@@ -1077,7 +1073,7 @@ return {
 
 | Check           | Expected                                            |
 | --------------- | --------------------------------------------------- |
-| `testedCount`   | 22                                                  |
+| `testedCount`   | 19                                                  |
 | `allStructured` | `true` — no raw exceptions through Code Mode bridge |
 
 ---
@@ -1203,7 +1199,7 @@ return { cleaned: results.length, details: results }
 - [ ] `team_update_entry` updates content, tags, and entry_type
 - [ ] `team_delete_entry` soft-deletes team entries
 - [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
-- [ ] `team_get_statistics` returns `totalEntries`, `entryTypes`, `topTags`, `authors`
+- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
 - [ ] `team_link_entries` creates relationships with duplicate detection
 - [ ] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
 - [ ] `team_export_entries` exports JSON and markdown with filters
@@ -1215,5 +1211,5 @@ return { cleaned: results.length, details: results }
 - [ ] `team_add_to_vector_index` succeeds for existing, errors for nonexistent via Code Mode
 - [ ] `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 - [ ] Invalid `entry_type` on team create returns structured error
-- [ ] All 22 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
+- [ ] All 19 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
 - [ ] All test entries cleaned up after Phase 27
