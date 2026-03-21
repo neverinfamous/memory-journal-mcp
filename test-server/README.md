@@ -30,6 +30,7 @@ These scripts test features that require separate server processes — they **ca
 | ----------------------------- | ---------------------------------------------------------------------- | ------------- | -------- |
 | `test-instruction-levels.mjs` | `--instruction-level` essential/standard/full token ordering           | stdio         | ~10s     |
 | `test-tool-annotations.mjs`   | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61) | stdio         | ~5s      |
+| `test-prompts.mjs`            | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)     | stdio         | ~10s     |
 | `test-scheduler.mjs`          | Scheduler job execution (backup, vacuum, rebuild-index)                | HTTP stateful | ~130s    |
 
 ### Quick Run
@@ -44,7 +45,10 @@ node test-server/test-instruction-levels.mjs
 # Phase 1.3B — Tool annotations
 node test-server/test-tool-annotations.mjs
 
-# Phase 10 — Scheduler (requires HTTP server in a separate terminal)
+# Phase 8 — Prompt handlers
+node test-server/test-prompts.mjs
+
+# Phase 9 — Scheduler (requires HTTP server in a separate terminal)
 node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
 # In another terminal:
 node test-server/test-scheduler.mjs
@@ -81,7 +85,7 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 - [ ] 61 tools returned, all with `annotations` object
 - [ ] 45 tools with `openWorldHint: false`, 16 with `openWorldHint: true`, 0 missing
 
-### Scheduler (Phase 10)
+### Scheduler (Phase 9)
 
 - [ ] `memory://health` shows `scheduler.active: false` and empty `jobs` array in stdio mode
 - [ ] Server logs confirm scheduler started with correct intervals
@@ -131,7 +135,7 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 1. Read the server instructions you received during initialization, then `memory://briefing`.
 2. Read `test-tools.md` for Pass 1 protocol, phases, and success criteria.
 3. Execute via direct MCP tool calls. Run both happy-path and 🔴 error-path tests.
-4. **Run integration test scripts** for Phase 1.3 (instruction levels, annotations) and Phase 10 (scheduler).
+4. **Run integration test scripts** for Phase 1.3 (instruction levels, annotations), Phase 8 (prompts), and Phase 9 (scheduler).
 5. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
 6. Report findings returning proper handler formatting.
 7. (Optional) Run Pass 1b from `test-tools-team.md` for team collaboration testing.
