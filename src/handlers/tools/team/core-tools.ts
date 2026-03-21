@@ -182,7 +182,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { success: false, error: TEAM_DB_NOT_CONFIGURED }
                     }
 
-                    const tags = teamDb.listTags()
+                    const rawTags = teamDb.listTags()
+                    const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
                     return { success: true, tags, count: tags.length }
                 } catch (err) {
                     return formatHandlerError(err)
