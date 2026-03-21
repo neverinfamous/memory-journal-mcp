@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Changed
+
+- **Compact JSON for tool responses** — Success-path responses use `JSON.stringify(result)` (no pretty-print) for ~15-20% payload reduction per mcp-builder §3.1. Error responses remain pretty-printed for readability.
+- **mcp-builder skill updates (S1-S5)** — Updated `SKILL.md` with production-tested patterns from memory-journal-mcp: dynamic help resources as preferred Approach A (S1), single-source instructions alternative (S2), `ToolDefinition` vs `ToolRegistration` type distinction with `mapTool()` example (S3), briefing configuration with 12 env vars table (S4), `inferGroupFromName()` workaround for SDK's missing `group` field (S5).
+
 ### Added
 
 - **Team Tools Parity** — 12 new team tools bringing the team group from 3 to 15 tools: `team_get_entry_by_id`, `team_list_tags`, `team_search_by_date_range`, `team_update_entry`, `team_delete_entry`, `team_merge_tags`, `team_get_statistics`, `team_link_entries`, `team_visualize_relationships`, `team_export_entries`, `team_backup`, `team_list_backups`. Split `team.ts` into `team/` directory with 8 sub-modules.

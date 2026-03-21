@@ -252,13 +252,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
                     // MCP 2025-11-25: If tool has outputSchema, return both:
                     // - structuredContent: validated JSON for clients that support it
-                    // - content: formatted text fallback for clients that don't (e.g., AntiGravity)
+                    // - content: compact text fallback (~15-20% payload reduction per §3.1)
                     if (hasOutputSchema) {
                         return {
                             content: [
                                 {
                                     type: 'text' as const,
-                                    text: JSON.stringify(result, null, 2),
+                                    text: JSON.stringify(result),
                                 },
                             ],
                             structuredContent: result as Record<string, unknown>,
