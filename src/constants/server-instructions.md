@@ -247,6 +247,33 @@ Milestone resources:
 | ----------------- | ------------------- | ----------------------------------------------------------- |
 | `mj_execute_code` | `code` (string)     | `timeout` (ms, max 30000), `readonly` (bool, default false) |
 
+### Team Tools (requires `TEAM_DB_PATH`)
+
+Team tools mirror personal tools but operate on a separate team database. All include `author` attribution.
+
+| Tool                              | Required Parameters                      | Optional Parameters                                                                                                                |
+| --------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `team_create_entry`               | `content` (string)                       | `entry_type`, `tags`, `significance_type`, `author`, `project_number`, `project_owner`, `issue_number`, `issue_url`, `pr_number`, `pr_url`, `pr_status` |
+| `team_get_recent`                 | none                                     | `limit` (default 10)                                                                                                               |
+| `team_search`                     | none                                     | `query`, `tags`, `limit` (default 10)                                                                                              |
+| `team_get_entry_by_id`            | `entry_id` (number)                      | `include_relationships` (bool, default true)                                                                                       |
+| `team_list_tags`                  | none                                     | none                                                                                                                               |
+| `team_search_by_date_range`       | `start_date`, `end_date` (YYYY-MM-DD)    | `entry_type`, `tags`, `limit` (default 50)                                                                                         |
+| `team_update_entry`               | `entry_id` (number)                      | `content`, `entry_type`, `tags`                                                                                                    |
+| `team_delete_entry`               | `entry_id` (number)                      | none                                                                                                                               |
+| `team_merge_tags`                 | `source_tag`, `target_tag` (strings)     | none                                                                                                                               |
+| `team_get_statistics`             | none                                     | `group_by` (day/week/month, default week)                                                                                          |
+| `team_get_cross_project_insights` | none                                     | `start_date`, `end_date` (YYYY-MM-DD), `min_entries` (default 3)                                                                   |
+| `team_link_entries`               | `from_entry_id`, `to_entry_id` (numbers) | `relationship_type` (default references), `description`                                                                            |
+| `team_visualize_relationships`    | none                                     | `entry_id`, `tag`, `depth` (1-5, default 2)                                                                                        |
+| `team_export_entries`             | none                                     | `format` (json/markdown), `start_date`, `end_date`, `entry_type`, `tags`, `limit` (default 100)                                    |
+| `team_backup`                     | none                                     | `name` (custom backup name)                                                                                                        |
+| `team_list_backups`               | none                                     | none                                                                                                                               |
+| `team_semantic_search`            | `query` (string)                         | `limit`, `similarity_threshold` (default 0.25), `hint_on_empty` (bool, default true)                                               |
+| `team_get_vector_index_stats`     | none                                     | none                                                                                                                               |
+| `team_rebuild_vector_index`       | none                                     | none                                                                                                                               |
+| `team_add_to_vector_index`        | `entry_id` (number)                      | none                                                                                                                               |
+
 ## Entry Types
 
 Valid values for `entry_type` parameter:
@@ -288,6 +315,9 @@ Valid values for `entry_type` parameter:
 - **`search_entries` FTS5 query syntax**: Uses FTS5 full-text search with Porter stemmer. Phrase queries: `"error handling"`. Prefix: `auth*`. Boolean: `deploy OR release`, `error NOT warning`. Word-boundary matching ("log" matches "log" but not "catalog"). Results ranked by BM25 relevance. Falls back to LIKE substring matching for queries with unbalanced quotes or special characters.
 - **GitHub metadata in entries**: Entry output includes 10 GitHub fields (`issueNumber`, `issueUrl`, `prNumber`, `prUrl`, `prStatus`, `projectNumber`, `projectOwner`, `workflowRunId`, `workflowName`, `workflowStatus`) in all tool responses.
 - **`delete_entry` on soft-deleted**: `delete_entry(id, permanent: true)` works on previously soft-deleted entries. Returns `success: false` for nonexistent entries.
+- **Team cross-database search**: `search_entries` and `search_by_date_range` automatically merge team DB results when `TEAM_DB_PATH` is configured. Results include a `source` field ("personal" or "team").
+- **Team vector search**: Team has its own isolated vector index. Use `team_rebuild_vector_index` if the team index drifts. `team_semantic_search` works identically to personal `semantic_search`.
+- **Team tools without `TEAM_DB_PATH`**: All 20 team tools return `{ success: false, error: "Team collaboration is not configured..." }` — no crash, no partial results.
 
 ## Key Resources
 
@@ -314,3 +344,5 @@ Valid values for `entry_type` parameter:
 | `memory://issues/{n}/entries` | Entries linked to issue n |
 | `memory://prs/{n}/entries` | Entries linked to PR n |
 | `memory://prs/{n}/timeline` | PR lifecycle and linked entries |
+| `memory://team/recent` | Recent team entries (requires TEAM_DB_PATH) |
+| `memory://team/statistics` | Team entry stats by type and author |
