@@ -22,7 +22,7 @@ const tsPath = resolve(projectRoot, 'src/constants/server-instructions.ts')
 const markdown = readFileSync(mdPath, 'utf-8')
 
 // Section names in order
-const SECTION_NAMES = ['ESSENTIAL', 'GITHUB', 'SERVER_ACCESS', 'TOOL_PARAMETER_REFERENCE']
+const SECTION_NAMES = ['ESSENTIAL', 'GITHUB', 'HELP_POINTERS', 'SERVER_ACCESS']
 
 /**
  * Parse sections from markdown using <!-- SECTION:NAME --> delimiters
@@ -75,6 +75,12 @@ const FUNCTION_BODY = readFileSync(
     'utf-8'
 )
 
+// Read the gotchas content (kept as a separate const, not in .md sections)
+const GOTCHAS_BODY = readFileSync(
+    resolve(projectRoot, 'scripts/server-instructions-gotchas.ts'),
+    'utf-8'
+)
+
 // Build the TypeScript file using string concatenation to avoid nested escaping
 const lines = []
 
@@ -87,6 +93,9 @@ lines.push(' *     then run: npm run generate:instructions')
 lines.push(' *')
 lines.push(' * These instructions are automatically sent to MCP clients during initialization,')
 lines.push(' * providing guidance for AI agents on tool usage.')
+lines.push(' *')
+lines.push(' * Tool parameter reference is served dynamically via memory://help/{group}.')
+lines.push(' * Field notes and gotchas are served via memory://help/gotchas.')
 lines.push(' *')
 lines.push(' * Optimized for token efficiency with tiered instruction levels.')
 lines.push(' */')
@@ -124,8 +133,8 @@ lines.push('')
 lines.push('/**')
 lines.push(' * Instruction detail level for token efficiency')
 lines.push(' * - essential: ~200 tokens - Core behaviors only (for token-constrained clients)')
-lines.push(' * - standard: ~400 tokens - + GitHub patterns (default)')
-lines.push(' * - full: ~600 tokens - + tool/resource listings')
+lines.push(' * - standard: ~350 tokens - + GitHub patterns + help pointers')
+lines.push(' * - full: ~400 tokens - + active tools/prompts summary')
 lines.push(' */')
 lines.push("export type InstructionLevel = 'essential' | 'standard' | 'full'")
 lines.push('')
@@ -140,25 +149,23 @@ lines.push('')
 lines.push('/**')
 lines.push(' * GitHub integration patterns (~150 additional tokens)')
 lines.push(' */')
-lines.push('const GITHUB_INSTRUCTIONS = `\n' + escapeForTemplateLiteral(sections.GITHUB) + '\n`')
+lines.push('const GITHUB_INSTRUCTIONS = `\\n' + escapeForTemplateLiteral(sections.GITHUB) + '\n`')
+lines.push('')
+lines.push('/**')
+lines.push(' * Help resource pointers — directs agents to pull-based reference')
+lines.push(' */')
+lines.push('const HELP_POINTERS = `\\n' + escapeForTemplateLiteral(sections.HELP_POINTERS) + '\n`')
 lines.push('')
 lines.push('/**')
 lines.push(' * Server access instructions - critical for AI agents to call tools correctly')
 lines.push(' */')
 lines.push(
-    'const SERVER_ACCESS_INSTRUCTIONS = `\n' +
+    'const SERVER_ACCESS_INSTRUCTIONS = `\\n' +
         escapeForTemplateLiteral(sections.SERVER_ACCESS) +
         '\n`'
 )
 lines.push('')
-lines.push('/**')
-lines.push(' * Tool parameter reference - essential for correct tool invocation')
-lines.push(' */')
-lines.push(
-    'const TOOL_PARAMETER_REFERENCE = `\n' +
-        escapeForTemplateLiteral(sections.TOOL_PARAMETER_REFERENCE) +
-        '\n`'
-)
+lines.push(GOTCHAS_BODY)
 lines.push('')
 lines.push(FUNCTION_BODY)
 lines.push('')

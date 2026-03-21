@@ -29,8 +29,8 @@ src/
 │
 ├── constants/
 │   ├── icons.ts                    # MCP icon definitions per tool group (CDN SVG URLs)
-│   ├── server-instructions.md      # Source markdown for instruction levels
-│   └── server-instructions.ts      # INSTRUCTIONS constant for AI agents + instruction level generation
+│   ├── server-instructions.md      # Source markdown for behavioral instruction levels
+│   └── server-instructions.ts      # Behavioral guidance + GOTCHAS_CONTENT export + generateInstructions()
 │
 ├── filtering/
 │   └── tool-filter.ts              # ToolFilter class — parse/apply --tool-filter expressions, group/shortcut/tool resolution
@@ -160,7 +160,7 @@ src/
     │   ├── github.ts               # GitHub static resources (status, insights, milestones)
     │   ├── graph.ts                # Graph resources (recent relationships, actions narrative)
     │   ├── team.ts                 # Team resources (recent, statistics)
-    │   ├── help.ts                 # Dynamic help resources (memory://help, memory://help/{group})
+    │   ├── help.ts                 # Dynamic help resources (memory://help, memory://help/{group}, memory://help/gotchas)
     │   ├── templates.ts            # Template resources (projects, issues, PRs, kanban, milestones)
     │   └── core/
     │       ├── index.ts            # Core static resources barrel
@@ -241,7 +241,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `github.ts`              | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                |
 | `graph.ts`               | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                      |
 | `team.ts`                | `memory://team/recent`, `memory://team/statistics`                                                |
-| `help.ts`                | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details)              |
+| `help.ts`                | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details), `memory://help/gotchas` (field notes) |
 
 ### Template Resources
 
@@ -311,8 +311,8 @@ catch (error) {
 
 | What                               | Where                              | Notes                                                                                          |
 | ---------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | `INSTRUCTIONS` constant + instruction level generation (`essential`, `standard`, `full`)    |
-| Instruction source markdown        | `src/constants/server-instructions.md` | Source content for instruction generation                                                   |
+| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Behavioral guidance + `GOTCHAS_CONTENT` export + `generateInstructions()` (`essential`, `standard`, `full`) |
+| Instruction source markdown        | `src/constants/server-instructions.md` | Source content for behavioral instruction levels (tool reference served via `memory://help/{group}`)        |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                |
 | Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist                      |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`) |

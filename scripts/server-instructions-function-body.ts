@@ -20,15 +20,15 @@ export function generateInstructions(
         instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
     }
 
-    // Standard and full levels include GitHub patterns
+    // Standard and full levels include GitHub patterns + help pointers
     if (level === 'standard' || level === 'full') {
         instructions += GITHUB_INSTRUCTIONS
+        instructions += HELP_POINTERS
     }
 
-    // Full level includes server access instructions and tool parameter reference
+    // Full level includes server access instructions + active tools/prompts summary
     if (level === 'full') {
         instructions += SERVER_ACCESS_INSTRUCTIONS
-        instructions += TOOL_PARAMETER_REFERENCE
 
         // Add active tools summary
         const activeGroups = getActiveToolGroups(enabledTools)

@@ -10,6 +10,7 @@
  */
 
 import { ICON_BRIEFING } from '../../constants/icons.js'
+import { GOTCHAS_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 
@@ -159,7 +160,8 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         totalTools: tools.length,
                         totalGroups: groupList.length,
                         groups: groupList,
-                        hint: 'Read memory://help/{group} for detailed parameter info on each tool.',
+                        gotchas: 'memory://help/gotchas',
+                        hint: 'Read memory://help/{group} for detailed parameter info on each tool. Read memory://help/gotchas for field notes and critical usage patterns.',
                     },
                 }
             },
@@ -220,6 +222,21 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                         toolCount: toolDetails.length,
                         tools: toolDetails,
                     },
+                }
+            },
+        },
+        {
+            uri: 'memory://help/gotchas',
+            name: 'Help — Field Notes & Gotchas',
+            title: 'Critical Usage Patterns',
+            description:
+                'Field notes, edge cases, and critical usage patterns for memory-journal-mcp tools.',
+            mimeType: 'text/markdown',
+            icons: [ICON_BRIEFING],
+            annotations: ASSISTANT_FOCUSED,
+            handler: (): ResourceResult => {
+                return {
+                    data: GOTCHAS_CONTENT,
                 }
             },
         },
