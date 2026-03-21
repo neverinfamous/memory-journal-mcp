@@ -12,6 +12,7 @@
 src/
 ├── cli.ts                          # CLI entry point (arg parsing, transport selection)
 ├── index.ts                        # Barrel re-export for library consumers
+├── version.ts                      # Version SSoT — reads package.json, exports VERSION
 │
 ├── server/
 │   ├── mcp-server.ts               # McpServer setup, tool/resource/prompt wiring
@@ -41,7 +42,9 @@ src/
 │   ├── mcp-logger.ts               # MCP-specific logger with module prefixing
 │   ├── progress-utils.ts           # MCP progress notification helpers (ProgressContext)
 │   ├── security-utils.ts           # Input validation, SQL injection prevention, path traversal guards
-│   └── vector-index-helpers.ts     # Vector index utility helpers
+│   ├── vector-index-helpers.ts     # Vector index utility helpers
+│   └── errors/
+│       └── error-response-fields.ts # ErrorFieldsMixin SSoT — 6 optional error fields for output schemas
 │
 ├── auth/                           # OAuth 2.1 implementation
 │   ├── auth-context.ts             # Auth context utilities
@@ -118,7 +121,7 @@ src/
     ├── tools/                      # Tool handlers — see § Handler Map below
     │   ├── index.ts                # getTools() / callTool() dispatch, tool map cache
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
-    │   ├── error-fields-mixin.ts   # ErrorFieldsMixin — 6 optional error fields merged into all output schemas
+    │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
     │   ├── core.ts                 # Core tool group (6 tools)
     │   ├── search.ts               # Search tool group (4 tools)
     │   ├── analytics.ts            # Analytics tool group (2 tools)
@@ -214,8 +217,9 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | File                             | Purpose                                                                    |
 | -------------------------------- | -------------------------------------------------------------------------- |
 | `index.ts`                       | `getTools()` / `callTool()` dispatch, O(1) tool map cache, icon mapping    |
-| `schemas.ts`                     | Shared Zod input schemas reused across multiple tool groups                |
-| `error-fields-mixin.ts`          | `ErrorFieldsMixin` — 6 optional error fields merged into all output schemas |
+| `schemas.ts`                     | Shared Zod input/output schemas reused across multiple tool groups         |
+| `error-fields-mixin.ts`          | Re-export stub → `utils/errors/error-response-fields.ts` (canonical SSoT)  |
+| `../version.ts`                  | Version SSoT — reads `package.json`, exports `VERSION`                     |
 | `github/helpers.ts`              | GitHub repo auto-detection, error formatting, token scrubbing              |
 | `github/schemas.ts`              | Zod input/output schemas for all 16 GitHub tools                           |
 | `github/mutation-tools.ts`       | GitHub mutation tools barrel (re-exports issue + kanban + milestone tools)  |
@@ -339,7 +343,7 @@ catch (error) {
 | **OAuth 2.1**              | RFC 9728/8414 compliant. Scope enforcement via `scope-map.ts` (read/write/admin). JWT/JWKS validation. Optional — falls back to bearer token or no auth.                                             |
 | **HTTP Transport**         | Stateful (Streamable HTTP + legacy SSE) / Stateless (serverless) modes. Security headers, rate limiting (100 req/min), CORS, 1MB body limit, session management.                                     |
 | **Scheduler**              | HTTP-only `setInterval` jobs: automated backup, vacuum, vector index rebuild. Error-isolated — failure in one job doesn't affect others. Status visible via `memory://health`.                        |
-| **ErrorFieldsMixin**       | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation.                                                                               |
+| **ErrorFieldsMixin**       | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation. Canonical SSoT at `utils/errors/error-response-fields.ts`; handler layer re-export stub preserved. |
 | **Barrel Re-exports**      | Every directory has `index.ts` barrel. Import from `./module/index.js` (with `.js` extension for ESM).                                                                                                |
 | **Team Database**          | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 20 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup, vector). Cross-DB isolation with dedicated `teamVectorManager`. |
 

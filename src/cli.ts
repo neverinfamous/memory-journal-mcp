@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import * as fs from 'node:fs'
 import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
-import pkg from '../package.json' with { type: 'json' }
+import { VERSION } from './version.js'
 
 // Smart Database Resolution: Check root, then test-server, then default to root
 function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
@@ -26,7 +26,7 @@ const program = new Command()
 program
     .name('memory-journal-mcp')
     .description('Project context management for AI-assisted development')
-    .version(pkg.version)
+    .version(VERSION)
     .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost)')

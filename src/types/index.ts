@@ -149,6 +149,8 @@ export interface ToolDefinition {
  */
 export interface ToolRegistration {
     name: string
+    /** Human-readable display title (MCP 2025-11-25) */
+    title?: string
     description: string
     inputSchema: unknown
     outputSchema?: unknown

@@ -35,7 +35,7 @@ import {
     type PromptDefinition,
     type ResourceReadHandler,
 } from './registration.js'
-import pkg from '../../package.json' with { type: 'json' }
+import { VERSION } from '../version.js'
 
 export interface ServerOptions {
     transport: 'stdio' | 'http'
@@ -174,7 +174,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const server = new McpServer(
         {
             name: 'memory-journal-mcp',
-            version: pkg.version,
+            version: VERSION,
         },
         {
             capabilities: {
@@ -192,6 +192,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // Build tool options matching MCP SDK expectations
         const toolOptions: Record<string, unknown> = {
             description: tool.description,
+        }
+
+        // MCP 2025-11-25: Pass title for human-readable display
+        if (tool.title) {
+            toolOptions['title'] = tool.title
         }
 
         if (tool.inputSchema !== undefined) {

@@ -120,6 +120,7 @@ export function getTools(
 
     const mapTool = (t: ToolDefinition): ToolRegistration => ({
         name: t.name,
+        title: t.title,
         description: t.description,
         inputSchema: t.inputSchema,
         // Only include outputSchema when defined — undefined values in the

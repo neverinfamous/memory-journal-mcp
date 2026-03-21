@@ -77,6 +77,16 @@ describe('Tool Annotations Invariant', () => {
         ).toBe(0)
     })
 
+    it('every tool must have a non-empty title', () => {
+        for (const tool of tools) {
+            expect(
+                tool.title,
+                `Tool "${tool.name}" is missing title`
+            ).toBeTruthy()
+            expect(tool.title!.length).toBeGreaterThan(0)
+        }
+    })
+
     // Cleanup
     it('cleanup', () => {
         try {

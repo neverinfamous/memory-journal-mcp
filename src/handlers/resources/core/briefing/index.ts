@@ -7,7 +7,7 @@
 
 import { ICON_BRIEFING } from '../../../../constants/icons.js'
 import { withPriority, withSessionInit, ASSISTANT_FOCUSED } from '../../../../utils/resource-annotations.js'
-import pkg from '../../../../../package.json' with { type: 'json' }
+import { VERSION } from '../../../../version.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
@@ -60,7 +60,7 @@ export const briefingResource: InternalResourceDef = {
 
         return {
             data: {
-                version: pkg.version,
+                version: VERSION,
                 serverTime: new Date().toISOString(),
                 journal: {
                     totalEntries: journal.totalEntries,
