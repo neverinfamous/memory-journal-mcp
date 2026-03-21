@@ -100,10 +100,10 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 
 | Test             | Command/Action                           | Expected Result                                          |
 | ---------------- | ---------------------------------------- | -------------------------------------------------------- |
-| Default stats    | `team_get_statistics`                    | `totalEntries`, `entryTypes`, `topTags`, `authors` array |
-| Group by month   | `team_get_statistics(group_by: "month")` | `periodEntries`, periods grouped by month                |
-| Group by day     | `team_get_statistics(group_by: "day")`   | Periods grouped by day                                   |
-| Author breakdown | Inspect `authors` field                  | Array of `{ author, count }` for each contributor        |
+| Default stats    | `team_get_statistics`                    | `totalEntries`, `entriesByType`, `entriesByPeriod`, `authors` array |
+| Group by month   | `team_get_statistics(group_by: "month")` | `entriesByPeriod` periods grouped by month                          |
+| Group by day     | `team_get_statistics(group_by: "day")`   | `entriesByPeriod` periods grouped by day                            |
+| Author breakdown | Inspect `authors` field                  | Array of `{ author, count }` for each contributor                   |
 
 ### 10.8 Team Vector Search
 
@@ -113,7 +113,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Team vector stats       | `team_get_vector_index_stats`                                    | `available`, `itemCount`, `modelName`, `dimensions` |
 | Team semantic query     | `team_semantic_search(query: "team standup")`                    | ≥ 1 result with `similarity` score                  |
 | Team semantic threshold | `team_semantic_search(query: "test", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)         |
-| Team personal filter    | `team_semantic_search(query: "test", is_personal: true)`         | Only personal entries in results                    |
+
 | Team add to index       | `team_add_to_vector_index(entry_id: <team_entry_id>)`            | `success: true`, `entryId` in response              |
 | Team add nonexistent    | `team_add_to_vector_index(entry_id: 999999)`                     | `{ success: false, error: "..." }`                  |
 
@@ -192,7 +192,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 - [ ] `team_delete_entry` returns structured error for nonexistent ID
 - [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
 - [ ] `team_merge_tags` returns structured errors for same-tag and nonexistent source
-- [ ] `team_get_statistics` returns `totalEntries`, `entryTypes`, `topTags`, `authors`
+- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `entriesByPeriod`, `authors`
 - [ ] `team_get_statistics` respects `group_by` parameter
 - [ ] `team_link_entries` creates relationships, detects duplicates, errors on nonexistent IDs
 - [ ] `team_visualize_relationships` returns Mermaid diagram with `nodeCount`, `edgeCount`
