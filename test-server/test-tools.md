@@ -520,7 +520,7 @@ For **every** prompt response, verify:
 | Text is non-empty      | `messages[0].content.text.length > 0`                                  |
 
 
-## Phase 10: Automated Scheduler — Run via Script [DO NOT SKIP!]
+## Phase 9: Automated Scheduler — Run via Script [DO NOT SKIP!]
 
 > [!IMPORTANT]
 > The scheduler only activates in HTTP/SSE transport mode. Run the script below — it handles session init, health reads, and wait/verify automatically. See `test-server/README.md` for full details.
@@ -555,8 +555,8 @@ node test-server/test-scheduler.mjs
 6. **Phase 6**: Template Resources (happy path + error paths for invalid IDs)
 7. **Phase 7**: Admin/Backup (test last to avoid data loss)
 8. **Phase 8**: Prompt Handler Verification (verify `prompts/get` response shape for all 16 prompts)
-9. **Phase 9**: Team Collaboration → see `test-tools-team.md`
-10. **Phase 10**: Automated Scheduler (HTTP only — manual terminal test)
+9. **Phase 9**: Automated Scheduler (HTTP only — manual terminal test)
+   - Team Collaboration tests → see `test-tools-team.md`
 
 ---
 
@@ -665,15 +665,15 @@ node test-server/test-scheduler.mjs
 
 See `test-tools-team.md` for team collaboration success criteria (20 tools + 2 resources).
 
-### Scheduler (Phase 10)
+### Scheduler (Phase 9)
 
 - [ ] `memory://health` shows `scheduler.active: false` and empty `jobs` array in stdio mode
 - [ ] No TypeScript/runtime errors in server logs
-- [ ] Server logs confirm scheduler started with correct intervals (Phase 10)
-- [ ] `memory://health` shows all 3 jobs active with `nextRun` timestamps (Phase 10)
-- [ ] Backup job creates timestamped `.db` files and prunes to `--keep-backups` limit (Phase 10)
-- [ ] Vacuum job logs `PRAGMA optimize` completion (Phase 10)
-- [ ] Rebuild-index job logs vector index rebuild with entry count (Phase 10)
-- [ ] All `lastResult` values are `"success"` after jobs fire (Phase 10)
-- [ ] `lastError` remains `null` for all jobs (Phase 10)
-- [ ] Error in one job does not prevent others from running (Phase 10)
+- [ ] Server logs confirm scheduler started with correct intervals (Phase 9)
+- [ ] `memory://health` shows all 3 jobs active with `nextRun` timestamps (Phase 9)
+- [ ] Backup job creates timestamped `.db` files and prunes to `--keep-backups` limit (Phase 9)
+- [ ] Vacuum job logs `PRAGMA optimize` completion (Phase 9)
+- [ ] Rebuild-index job logs vector index rebuild with entry count (Phase 9)
+- [ ] All `lastResult` values are `"success"` after jobs fire (Phase 9)
+- [ ] `lastError` remains `null` for all jobs (Phase 9)
+- [ ] Error in one job does not prevent others from running (Phase 9)
