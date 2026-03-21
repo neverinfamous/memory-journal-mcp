@@ -228,7 +228,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-27 resources total — 20 static + 7 template.
+28 resources total — 20 static + 8 template.
 
 ### Static Resources
 
