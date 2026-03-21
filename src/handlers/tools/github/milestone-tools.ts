@@ -130,6 +130,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         return {
                             success: false,
                             error: `Milestone #${String(input.milestone_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the milestone number exists in this repository.',
+                            recoverable: true,
                             owner: resolved.owner,
                             repo: resolved.repo,
                             detectedOwner: resolved.detectedOwner,
@@ -201,6 +205,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         return {
                             success: false,
                             error: 'Failed to create milestone. Check GITHUB_TOKEN permissions.',
+                            code: 'GITHUB_API_ERROR',
+                            category: 'github',
+                            suggestion: 'Verify GITHUB_TOKEN has repo scope and try again.',
+                            recoverable: true,
                         }
                     }
 
@@ -269,6 +277,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         return {
                             success: false,
                             error: `Failed to update milestone #${String(input.milestone_number)}. Check that it exists and GITHUB_TOKEN has permissions.`,
+                            code: 'GITHUB_API_ERROR',
+                            category: 'github',
+                            suggestion: 'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
+                            recoverable: true,
                         }
                     }
 
@@ -336,6 +348,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             milestoneNumber: input.milestone_number,
                             message: `Failed to delete milestone #${String(input.milestone_number)}`,
                             error: result.error ?? undefined,
+                            code: 'GITHUB_API_ERROR',
+                            category: 'github',
+                            suggestion: 'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
+                            recoverable: true,
                         }
                     }
 

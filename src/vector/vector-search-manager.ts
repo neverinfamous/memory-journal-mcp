@@ -128,7 +128,12 @@ export class VectorSearchManager {
         content: string
     ): Promise<{ success: boolean; error?: string }> {
         if (!this.initialized) {
-            await this.initialize()
+            try {
+                await this.initialize()
+            } catch (initError) {
+                const msg = initError instanceof Error ? initError.message : String(initError)
+                return { success: false, error: `Vector search initialization failed: ${msg}` }
+            }
         }
 
         if (!this.db) {
@@ -177,7 +182,11 @@ export class VectorSearchManager {
         similarityThreshold = 0.3
     ): Promise<SemanticSearchResult[]> {
         if (!this.initialized) {
-            await this.initialize()
+            try {
+                await this.initialize()
+            } catch {
+                return []
+            }
         }
 
         if (!this.db) {
@@ -251,7 +260,12 @@ export class VectorSearchManager {
         progress?: ProgressContext
     ): Promise<{ indexed: number; failed: number; firstError: string | null }> {
         if (!this.initialized) {
-            await this.initialize()
+            try {
+                await this.initialize()
+            } catch (initError) {
+                const msg = initError instanceof Error ? initError.message : String(initError)
+                return { indexed: 0, failed: 0, firstError: `Vector search initialization failed: ${msg}` }
+            }
         }
 
         if (!this.db) {

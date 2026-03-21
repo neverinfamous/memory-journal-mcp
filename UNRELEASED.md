@@ -49,6 +49,9 @@
 - **Team + GitHub error responses standardized** — 19 `TEAM_DB_NOT_CONFIGURED` responses across all 8 team tool files and 5 GitHub bare errors in `helpers.ts` and `read-tools.ts` now include structured `code`, `category`, `suggestion`, and `recoverable` fields. Added shared `TEAM_DB_ERROR_RESPONSE` constant in `team/helpers.ts`.
 - **`formatHandlerError` enriched** — Raw `Error` instances now get matched against `ERROR_SUGGESTIONS` for actionable suggestions and refined error codes instead of always returning bare `INTERNAL_ERROR`.
 - **Timer `.unref()` parity** — Added `.unref()` to the session sweep timer (`stateful.ts`) and scheduler job timers (`scheduler.ts`) so they don't prevent clean process exit. The `rateLimitCleanupTimer` already had `.unref()` — this brings all `setInterval` timers into compliance with mcp-builder §2.2.1.
+- **`team_link_entries` default `relationship_type`** — Changed relaxed schema default from `'related_to'` (not a valid enum value) to `'references'`, matching the strict schema.
+- **`get_github_milestone` structured error fields** — Added missing `code`, `category`, `suggestion`, and `recoverable` fields to the not-found error response. Same fix applied to `create_github_milestone`, `update_github_milestone`, and `delete_github_milestone` failure responses.
+- **Vector search lazy init error handling** — Wrapped lazy `initialize()` calls in `addEntry()`, `search()`, and `rebuildIndex()` with try/catch so `better-sqlite3` connection errors return structured responses instead of crashing.
 
 ### Security
 - **CI/CD Hardening**: Added `--provenance` flag to `npm publish` in `publish-npm.yml` for SLSA Build L3 attestation. Added `id-token: write` permission for OIDC provenance token generation.

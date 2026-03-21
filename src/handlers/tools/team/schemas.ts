@@ -199,7 +199,7 @@ export const TeamLinkEntriesSchema = z.object({
 export const TeamLinkEntriesSchemaMcp = z.object({
     from_entry_id: relaxedNumber(),
     to_entry_id: relaxedNumber(),
-    relationship_type: z.string().optional().default('related_to'),
+    relationship_type: z.string().optional().default('references'),
     description: z.string().optional(),
 })
 
