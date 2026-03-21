@@ -15,9 +15,14 @@
   - Added `dependabot-auto-merge.yml` (auto-squash patch/minor, manual review for major)
   - Added `security-extended,security-and-quality` CodeQL query sets (was using defaults only)
   - Added `.gitleaks.toml` and `.trivyignore` configuration files
+- **CI Action Bumps** (supply-chain pinning):
+  - `github/gh-aw` actions (`setup`, `setup-cli`) bumped from `v0.58.1` → `v0.58.3` (SHA-pinned)
+  - `github/codeql-action` (`init`, `autobuild`, `analyze`, `upload-sarif`) bumped from pre-v4.33.0 SHA → `v4.33.0` (SHA-pinned, all steps in sync)
+  - `actions/upload-artifact` in `docker-publish.yml` corrected from `v6` → `v7` (SHA-pinned, resolves upload/download mismatch)
+  - `github/gh-aw/actions/setup-cli` mutable semver tag replaced with pinned SHA (supply-chain hardening)
 
 ### Changed
 
 - **Code Quality Audit Fixes**: Used `milestoneCompletionPct` helper in milestone tool handlers and extracted `MAX_QUERY_LIMIT` constant/helper in search handlers to DRY up duplication.
 - **npm publish gated behind Docker checks** — npm no longer publishes on release creation; instead `docker-publish.yml` calls `publish-npm.yml` via `workflow_call` after Docker Scout passes and images are pushed. Both artifacts ship together or neither ships. Manual `workflow_dispatch` fallback preserved.
-- **Dependency Updates** — Bumped `better-sqlite3` from `^12.6.2` to `^12.8.0` (range tightened to explicitly exclude yanked 12.7.x intermediates).
+- **Dependency Updates** — Updated 27 npm packages; `eslint` → `10.1.0`, `jose` → `6.2.2`, `sqlite-vec` → `0.1.7`, `typescript-eslint` → `8.57.1`. 0 vulnerabilities.
