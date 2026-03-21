@@ -118,8 +118,9 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         GROUP BY project_number
                         HAVING entry_count >= ?
                         ORDER BY entry_count DESC
+                        LIMIT ?
                     `,
-                        [...sqlParams, input.min_entries]
+                        [...sqlParams, input.min_entries, input.limit]
                     )
 
                     if (!projectsResult[0] || projectsResult[0].values.length === 0) {
@@ -191,8 +192,10 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         WHERE deleted_at IS NULL AND project_number IS NOT NULL
                         GROUP BY project_number
                         HAVING last_entry_date < ?
+                        ORDER BY last_entry_date DESC
+                        LIMIT ?
                     `,
-                        [cutoffDate]
+                        [cutoffDate, input.limit]
                     )
 
                     const inactiveProjects =

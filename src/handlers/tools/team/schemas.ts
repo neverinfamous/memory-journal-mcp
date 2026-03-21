@@ -508,6 +508,7 @@ export const TeamCrossProjectInsightsSchema = z.object({
         .optional()
         .describe('End date (YYYY-MM-DD)'),
     min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+    limit: z.number().max(500).optional().default(100).describe('Max projects to return'),
 })
 
 /** team_get_cross_project_insights — relaxed */
@@ -518,6 +519,10 @@ export const TeamCrossProjectInsightsSchemaMcp = z.object({
         .optional()
         .default(3)
         .describe('Minimum entries to include project'),
+    limit: relaxedNumber()
+        .optional()
+        .default(100)
+        .describe('Max projects to return'),
 })
 
 export const TeamProjectSummaryOutputSchema = z
