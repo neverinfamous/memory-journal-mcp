@@ -1,8 +1,8 @@
-# Test memory-journal-mcp — Pass 1: Core Functionality
+# Test memory-journal-mcp — Core & Mutations
 
 Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented below.**
 
-**Scope:** 41 core tools, 24 resources (17 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-8, 10). Team collaboration tools (20 tools) are tested separately in `test-tools-team.md`.
+**Scope:** 25 core tools (entry CRUD, search, analytics, relationships, admin, backup), seed data — this file covers happy paths, core error paths, and feature verification (Phases 0-6). GitHub tools (16 tools), all 27 resources, and prompt handlers are tested in `test-tools2.md`. Team tools (20 tools) are tested in `test-tools-team.md`.
 
 **Constraints:**
 
@@ -274,139 +274,10 @@ node test-server/test-tool-annotations.mjs
 
 ---
 
-## Phase 5: GitHub Integration (16 tools)
+## Phase 5: Admin & Backup Tools
 
-### 5.1 Read-Only Tools
 
-| Test                  | Command/Action                                 | Expected Result                                          |
-| --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
-| Context               | `get_github_context`                           | Returns repo, branch, issues, PRs                        |
-| List issues           | `get_github_issues(limit: 5)`                  | Returns open issues                                      |
-| Issue milestone data  | Inspect issue objects                          | Issues include `milestone` field (if assigned)           |
-| Get issue             | `get_github_issue(issue_number: <N>)`          | Returns issue details                                    |
-| List PRs              | `get_github_prs(limit: 5)`                     | Returns open PRs                                         |
-| List closed issues    | `get_github_issues(state: "closed", limit: 3)` | Returns closed issues                                    |
-| List all issues       | `get_github_issues(state: "all", limit: 3)`    | Returns both open and closed issues                      |
-| List closed PRs       | `get_github_prs(state: "closed", limit: 3)`    | Returns closed/merged PRs                                |
-| List all PRs          | `get_github_prs(state: "all", limit: 3)`       | Returns both open and closed PRs                         |
-| Get PR                | `get_github_pr(pr_number: <N>)`                | Returns PR details (use known closed PR)                 |
-| Get nonexistent issue | `get_github_issue(issue_number: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
-| Get nonexistent PR    | `get_github_pr(pr_number: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
-
-### 5.2 Issue Lifecycle Tools
-
-> [!CAUTION]
-> These tools **create and close real GitHub issues**. Use with awareness.
-
-| Test                          | Command/Action                                                                                                                                                                                       | Expected Result                                                                                                                                                                                                                                               |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create issue + entry          | `create_github_issue_with_entry(title: "Test: Unreleased Verification", project_number: 5)`                                                                                                          | GitHub issue created + journal entry created + added to project                                                                                                                                                                                               |
-| Create with milestone         | `create_github_issue_with_entry(title: "Test: Milestone", milestone_number: <N>)`                                                                                                                    | Issue assigned to milestone, verify on GitHub                                                                                                                                                                                                                 |
-| Close issue + entry           | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Verified working")`                                                                                                     | Issue closed + resolution entry created                                                                                                                                                                                                                       |
-| Close with move_to_done       | `close_github_issue_with_entry(issue_number: <new_issue>, move_to_done: true, project_number: 5)`                                                                                                    | Issue closed + `kanban` block in response. `kanban.moved: true` expected — uses idempotent `addProjectItem` to resolve item ID directly (no board-scan race condition)                                                                                        |
-| Create with full params       | `create_github_issue_with_entry(title: "Test: Full", body: "Description", labels: ["test"], project_number: 5, initial_status: "In Progress", entry_content: "Custom journal text", tags: ["test"])` | Issue created with body/labels, project item in "In Progress", journal entry uses custom content                                                                                                                                                              |
-| Close with comment            | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Done", comment: "Closing comment", tags: ["resolved"])`                                                                 | Issue closed with comment posted, entry tagged                                                                                                                                                                                                                |
-| Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                   |
-| Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }` |
-
-### 5.3 Kanban Tools
-
-| Test                | Command/Action                                                                     | Expected Result                                                       |
-| ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Get board           | `get_kanban_board(project_number: 5)`                                              | Returns board structure with columns/items                            |
-| Kanban resource     | Read `memory://kanban/5`                                                           | JSON board data                                                       |
-| Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                |
-| Move item           | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
-| Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
-| Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
-
-### 5.4 Milestone Tools
-
-> [!CAUTION]
-> These tools **create, modify, and delete real GitHub milestones**. Clean up test milestones after testing.
-
-| Test                 | Command/Action                                                                                   | Expected Result                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| List milestones      | `get_github_milestones(state: "open")`                                                           | Returns milestones array with `completion_percentage`, `open_issues`                                              |
-| List all states      | `get_github_milestones(state: "all")`                                                            | Returns both open and closed milestones                                                                           |
-| Get milestone detail | `get_github_milestone(milestone_number: <N>)`                                                    | Returns single milestone with full metadata                                                                       |
-| Create milestone     | `create_github_milestone(title: "Test Milestone", description: "Testing", due_on: "YYYY-MM-DD")` | Returns `success: true`, created milestone with number and URL (⚠️ `due_on` must be `YYYY-MM-DD`, not ISO 8601)   |
-| Update milestone     | `update_github_milestone(milestone_number: <new>, description: "Updated description")`           | Returns `success: true`, updated milestone                                                                        |
-| Close milestone      | `update_github_milestone(milestone_number: <new>, state: "closed")`                              | Milestone state changed to `closed`                                                                               |
-| Delete milestone     | `delete_github_milestone(milestone_number: <new>, confirm: true)`                                | Returns `success: true`, milestone removed from GitHub                                                            |
-| Get nonexistent      | `get_github_milestone(milestone_number: 999999)`                                                 | Structured error: `{ error: "Milestone #999999 not found" }`                                                      |
-| Milestone resource   | Read `memory://github/milestones`                                                                | Static resource lists open milestones with completion %                                                           |
-| Milestone detail     | Read `memory://milestones/<N>`                                                                   | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
-
-### 5.5 Repository Insights Tool
-
-| Test              | Command/Action                             | Expected Result                                    |
-| ----------------- | ------------------------------------------ | -------------------------------------------------- |
-| Default (stars)   | `get_repo_insights`                        | Returns `stars`, `forks`, `watchers`, `openIssues` |
-| Traffic section   | `get_repo_insights(sections: "traffic")`   | Returns 14-day `clones` and `views` aggregates     |
-| Referrers section | `get_repo_insights(sections: "referrers")` | Returns top 5 referral sources                     |
-| Paths section     | `get_repo_insights(sections: "paths")`     | Returns top 5 popular content paths                |
-| All sections      | `get_repo_insights(sections: "all")`       | Returns full payload with all sections above       |
-
-### 5.6 Copilot Review Tool
-
-| Test                  | Command/Action                                        | Expected Result                                                               |
-| --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body` |
-| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                  |
-| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                        |
-| No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
-
-### 5.7 GitHub Test Cleanup
-
-> [!IMPORTANT]
-> After GitHub testing, ensure all test artifacts are removed. Use the checklist below.
-
-| Cleanup Step           | Command/Action                                                    |
-| ---------------------- | ----------------------------------------------------------------- |
-| Close test issues      | `close_github_issue_with_entry` for any unclosed test issues      |
-| Delete test milestones | `delete_github_milestone` for any test milestones still on GitHub |
-| Verify project board   | `get_kanban_board(project_number: 5)` — no orphaned test items    |
-
----
-
-## Phase 6: Template Resources
-
-> [!CAUTION]
-> Issue and PR template URIs require the `/entries` or `/timeline` suffix — they are **NOT** bare `memory://issues/{number}` or `memory://prs/{number}`. Using bare URIs will return "Resource not found". Always use the full paths shown in the table below (e.g. `memory://issues/55/entries`, `memory://prs/67/timeline`).
-
-### 6.1 Happy Path
-
-| Template         | Test URI                       | Expected Result                                                                                                                     |
-| ---------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Project timeline | `memory://projects/5/timeline` | Timeline data                                                                                                                       |
-| Issue entries    | `memory://issues/55/entries`   | Entries linked to issue #55                                                                                                         |
-| PR entries       | `memory://prs/67/entries`      | Entries linked to PR #67 (permanent test fixture)                                                                                   |
-| PR timeline      | `memory://prs/67/timeline`     | PR lifecycle with `prMetadata` (live state) and `timelineNote`                                                                      |
-| Kanban JSON      | `memory://kanban/5`            | Board JSON                                                                                                                          |
-| Kanban diagram   | `memory://kanban/5/diagram`    | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                                                                              |
-| Milestone detail | `memory://milestones/<N>`      | Milestone with completion %, `openIssues` + `closedIssues` counts, and hint to use `get_github_issues` for individual issue details |
-
-### 6.2 Template Error Paths
-
-| Template                   | Test URI                           | Expected Result                                                 |
-| -------------------------- | ---------------------------------- | --------------------------------------------------------------- |
-| Nonexistent project        | `memory://projects/99999/timeline` | Empty or graceful response (no entries for nonexistent project) |
-| Nonexistent issue          | `memory://issues/999999/entries`   | Empty entries array (no crash)                                  |
-| Nonexistent PR             | `memory://prs/999999/entries`      | Empty entries array (no crash)                                  |
-| Nonexistent PR timeline    | `memory://prs/999999/timeline`     | Graceful response with empty/null `prMetadata`                  |
-| Nonexistent Kanban         | `memory://kanban/99999`            | Error or empty board (no crash)                                 |
-| Nonexistent Kanban diagram | `memory://kanban/99999/diagram`    | Error or empty diagram (no crash)                               |
-| Nonexistent milestone      | `memory://milestones/999999`       | Error or empty milestone data (no crash)                        |
-
----
-
-## Phase 7: Admin & Backup Tools
-
-| Test | Command/Action | Expected Result |
-| ---- | -------------- | --------------- |
-
-### 7.1 Tags
+### 5.1 Tags
 
 | Test              | Command/Action                                                | Expected Result                                                             |
 | ----------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -420,7 +291,7 @@ node test-server/test-tool-annotations.mjs
 > [!NOTE]
 > If `restore_backup` is tested after `merge_tags`, the restored backup will revert the merge. This is expected behavior. Verify merge worked immediately after calling `merge_tags`, before any backup restoration.
 
-### 7.2 Export
+### 5.2 Export
 
 | Test                    | Command/Action                                                                     | Expected Result                          |
 | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
@@ -430,7 +301,7 @@ node test-server/test-tool-annotations.mjs
 | Export with dates       | `export_entries(format: "json", start_date: "2026-01-01", end_date: "2026-03-01")` | Only entries within date range returned  |
 | Export with entry_types | `export_entries(format: "json", entry_types: ["planning"], limit: 10)`             | Only entries of specified type returned  |
 
-### 7.3 Backup & Restore
+### 5.3 Backup & Restore
 
 | Test                  | Command/Action                                              | Expected Result                                                                  |
 | --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -444,95 +315,7 @@ node test-server/test-tool-annotations.mjs
 
 ---
 
-## Phase 8: Prompt Handler Verification (16 prompts) [DO NOT SKIP!]
-
-> [!IMPORTANT]
-> Prompts return `GetPromptResult` objects with `messages` arrays. Most MCP clients don't expose `prompts/get` as a callable tool — run the script below instead. It handles session init, prompt listing, and shape verification automatically. See `test-server/README.md` for full details.
-
-```powershell
-npm run build
-node test-server/test-prompts.mjs
-```
-
-| Check                   | Expected                                                       |
-| ----------------------- | -------------------------------------------------------------- |
-| Prompts listed          | 16 prompts with correct argument signatures                    |
-| All 18 prompt calls     | PASS — `messages[0].role === 'user'`, non-empty `content.text` |
-| Nonexistent prompt      | MCP error (code `-32602`)                                      |
-| Missing required arg    | Error returned or handled gracefully                           |
-| **Total**               | **20 pass, 0 fail**                                            |
-
-The tables below document what the script tests — use them as a reference for manual verification or when adding new prompts.
-
-### 8.1 Workflow Prompts (10 prompts)
-
-#### No-Argument Prompts
-
-| Prompt               | Arguments | Expected Response                                                                                               |
-| -------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
-| `prepare-standup`    | _(none)_  | `messages` array with 1 `user` role message containing "standup" and date references                            |
-| `weekly-digest`      | _(none)_  | `messages` array with 1 `user` role message containing "weekly digest"                                          |
-| `goal-tracker`       | _(none)_  | `messages` array with 1 `user` role message containing "goals" and "milestones"                                 |
-| `get-context-bundle` | _(none)_  | `messages` array with 1 `user` role message containing "Project context bundle", recent entries, and statistics |
-| `confirm-briefing`   | _(none)_  | `messages` array with 1 `user` role message containing "Session Context Received" and entry count               |
-| `session-summary`    | _(none)_  | `messages` array with 1 `user` role message containing "session summary" and instructions for entry creation    |
-
-#### Required-Argument Prompts
-
-| Prompt           | Arguments                                            | Expected Response                                                                                             |
-| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `find-related`   | `query: "architecture"`                              | `messages` array with 1 `user` role message containing `"architecture"` and matching entries (from seed data) |
-| `analyze-period` | `start_date: "2026-01-01"`, `end_date: "2026-12-31"` | `messages` array with 1 `user` role message containing date range and statistics JSON                         |
-
-#### Optional-Argument Prompts
-
-| Prompt               | Arguments                      | Expected Response                                                                                         |
-| -------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `prepare-retro`      | _(none — defaults to 14 days)_ | `messages` array with 1 `user` role message containing "retrospective" and "14 days"                      |
-| `prepare-retro`      | `days: "7"`                    | `messages` array with 1 `user` role message containing "7 days"                                           |
-| `get-recent-entries` | _(none — defaults to 10)_      | `messages` array with 1 `user` role message containing entries formatted with timestamps, types, and tags |
-| `get-recent-entries` | `limit: "3"`                   | `messages` array with 1 `user` role message containing at most 3 entries                                  |
-
-### 8.2 GitHub Prompts (6 prompts)
-
-#### Required-Argument Prompts
-
-| Prompt                      | Arguments             | Expected Response                                                                                                |
-| --------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `project-status-summary`    | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and status summary instructions            |
-| `pr-summary`                | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and journal entries for that PR (from seed S8) |
-| `code-review-prep`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and review checklist instructions              |
-| `pr-retrospective`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and retrospective instructions                 |
-| `project-milestone-tracker` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and milestone entries (from seed S7)       |
-
-#### No-Argument Prompts
-
-| Prompt                   | Arguments | Expected Response                                                                                           |
-| ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
-| `actions-failure-digest` | _(none)_  | `messages` array with 1 `user` role message containing "CI/CD failures" and workflow entries (from seed S9) |
-
-### 8.3 Error Handling
-
-| Test                  | Action                                                | Expected Result                                                                         |
-| --------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Missing required arg  | `prompts/get` for `find-related` with no `query`      | Structured error or empty query handled gracefully (handler uses `args['query'] ?? ''`) |
-| Missing required arg  | `prompts/get` for `analyze-period` with no dates      | Structured error or empty dates handled gracefully                                      |
-| Nonexistent prompt    | `prompts/get` for `nonexistent-prompt`                | MCP error: prompt not found                                                             |
-| Invalid argument name | `prompts/get` for `prepare-standup` with `foo: "bar"` | Succeeds (no-argument prompt ignores extra args)                                        |
-
-### 8.4 Response Shape Verification
-
-For **every** prompt response, verify:
-
-| Check                  | Expected                                                               |
-| ---------------------- | ---------------------------------------------------------------------- |
-| `messages` is an array | `Array.isArray(result.messages) === true`                              |
-| At least 1 message     | `messages.length >= 1`                                                 |
-| Message has `role`     | `messages[0].role === 'user'`                                          |
-| Message has `content`  | `messages[0].content` is object with `type: 'text'` and `text: string` |
-| Text is non-empty      | `messages[0].content.text.length > 0`                                  |
-
-## Phase 9: Automated Scheduler — Run via Script [DO NOT SKIP!]
+## Phase 6: Automated Scheduler — Run via Script [DO NOT SKIP!]
 
 > [!IMPORTANT]
 > The scheduler only activates in HTTP/SSE transport mode. Run the script below — it handles session init, health reads, and wait/verify automatically. See `test-server/README.md` for full details.
@@ -563,11 +346,8 @@ node test-server/test-scheduler.mjs
 2. **Phase 2**: Entry CRUD (creates additional test data + validates CRUD operations)
 3. **Phase 3**: Search + Analytics (requires entries from Phase 0 + 2)
 4. **Phase 4**: Relationships (links entries from Phase 0 + 2)
-5. **Phase 5**: GitHub Integration (tests live GitHub API including milestones + cleanup)
-6. **Phase 6**: Template Resources (happy path + error paths for invalid IDs)
-7. **Phase 7**: Admin/Backup (test last to avoid data loss)
-8. **Phase 8**: Prompt Handler Verification (verify `prompts/get` response shape for all 16 prompts)
-9. **Phase 9**: Automated Scheduler (HTTP only — manual terminal test)
+5. **Phase 5**: Admin/Backup (test last to avoid data loss)
+6. **Phase 6**: Automated Scheduler (HTTP only — manual terminal test)
 
 ---
 
@@ -575,9 +355,7 @@ node test-server/test-scheduler.mjs
 
 ### Core Functionality
 
-- [ ] All 41 core tools execute without errors on happy paths (team tools tested in `test-tools-team.md`)
-- [ ] All 7 template resources work with valid parameters
-- [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- [ ] All 25 core tools execute without errors on happy paths (GitHub tools tested in `test-tools2.md`, team tools in `test-tools-team.md`)
 - [ ] Server instructions length respects `--instruction-level`: essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
 - [ ] 45 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (61 total, 0 missing)
 
@@ -588,99 +366,39 @@ node test-server/test-scheduler.mjs
 - [ ] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors (not raw throws)
 - [ ] `create_entry` with `issue_number` auto-populates `issueUrl` from cached repo info
 - [ ] `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
-- [ ] `get_entry_by_id(include_relationships: false)` omits relationship data
 - [ ] `get_recent_entries` with `is_personal` filter returns only matching entries
-- [ ] `update_entry` updates `content`, `entry_type`, `tags`, and `is_personal` independently
 - [ ] `update_entry` returns `success: false` for nonexistent entry IDs
 - [ ] `delete_entry` returns `success: false` for nonexistent entry IDs
-- [ ] Soft-deleted entries are hidden from `search_entries`, `get_recent_entries`, and `semantic_search`
 
 ### Search & Analytics
 
-- [ ] `search_entries` FTS5 phrase queries return exact phrase matches
-- [ ] `search_entries` FTS5 prefix queries (`auth*`) match word stems
-- [ ] `search_entries` FTS5 boolean operators (`NOT`, `OR`) filter correctly
+- [ ] `search_entries` FTS5 phrase, prefix, and boolean operators work correctly
 - [ ] `search_entries` gracefully falls back to LIKE for FTS5-unsafe queries (single quotes, `%`)
 - [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`
 - [ ] `search_by_date_range` filters work: `entry_type`, `tags`, `is_personal`, `project_number`
 - [ ] `search_by_date_range` rejects non-YYYY-MM-DD date strings with structured errors
-- [ ] `search_entries` merges team results with `source: 'personal' | 'team'` marker
-- [ ] `search_by_date_range` merges team results with `source` marker
+- [ ] Cross-DB merging includes `source: 'personal' | 'team'` marker
 - [ ] `semantic_search` with custom `similarity_threshold` affects result count
-- [ ] `semantic_search` with `is_personal` filter returns only matching entries
-- [ ] `semantic_search` with `hint_on_empty: false` still shows quality gate `hint` for noisy results (only suppresses advisory hints)
-- [ ] `get_statistics` returns all 4 enhanced analytics metrics
-- [ ] `get_statistics` with `group_by: "month"` and `"day"` produces correct groupings
+- [ ] `get_statistics` returns all 4 enhanced analytics metrics with correct groupings
 - [ ] `get_cross_project_insights` returns all required schema fields even when empty
-- [ ] `add_to_vector_index` succeeds for existing entries, errors for nonexistent
 
 ### Relationships
 
 - [ ] Causal relationship types (`blocked_by`, `resolved`, `caused`) create correctly
-- [ ] `link_entries` with `description` persists the description
-- [ ] `link_entries` returns `success: false` with `"One or both entries not found (from: X, to: Y)"` for nonexistent entry IDs
+- [ ] `link_entries` returns `success: false` for nonexistent entry IDs
 - [ ] `visualize_relationships` shows distinct arrows for causal types
-- [ ] `visualize_relationships` with `tags` filter scopes diagram correctly
-- [ ] `visualize_relationships` with `depth: 1` and `depth: 3` produce different results
-- [ ] `visualize_relationships` returns `"Entry X not found"` for nonexistent `entry_id`
 - [ ] `memory://graph/recent` uses harmonized arrows matching `visualize_relationships`
-- [ ] Reverse-direction duplicate behavior is documented (B→A when A→B exists)
-
-### Prompt Handlers (Phase 8)
-
-- [ ] All 16 prompts return valid `GetPromptResult` with `messages` array
-- [ ] Every message has `role: 'user'` and `content` with `type: 'text'` and non-empty `text`
-- [ ] Required-argument prompts (`find-related`, `analyze-period`, `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `project-milestone-tracker`) include argument values in response text
-- [ ] Optional-argument prompts (`prepare-retro`, `get-recent-entries`) apply defaults when arguments omitted
-- [ ] GitHub prompts reference seed data (S7 for project #5, S8 for PR #67, S9 for workflow entries)
-- [ ] Nonexistent prompt name returns MCP error (not crash)
-
-### GitHub Integration
-
-- [ ] GitHub issue lifecycle tools create/close issues correctly
-- [ ] `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
-- [ ] `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
-- [ ] `close_github_issue_with_entry` with `comment` posts the comment on the issue
-- [ ] `close_github_issue_with_entry` returns structured error for already-closed issues
-- [ ] `close_github_issue_with_entry` with `move_to_done: true` but no `project_number`: when `DEFAULT_PROJECT_NUMBER` is set, uses that default (no error); when NOT set, returns `kanban: { moved: false, error: "project_number required..." }` (soft error, not blocking)
-- [ ] `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
-- [ ] `get_github_issue` / `get_github_pr` / `get_github_milestone` return structured errors for nonexistent IDs
-- [ ] `move_kanban_item` with invalid `target_status` returns structured error without breaking outputSchema
-- [ ] Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
-- [ ] `memory://github/milestones` returns milestones with `completion_percentage`
-- [ ] `memory://milestones/{number}` returns milestone with completion %, issue counts (`openIssues`, `closedIssues`), and a hint to use `get_github_issues` for individual issue details
-- [ ] `get_repo_insights` returns correct data based on `sections` parameter
-- [ ] `memory://github/insights` returns compact stats including traffic aggregates
-- [ ] All GitHub test artifacts cleaned up after testing
-- [ ] `memory://briefing` includes `userMessage` with milestone progress row and `templateResources`
-- [ ] `memory://briefing` includes `rulesFile` metadata when `RULES_FILE_PATH` is set
-- [ ] `memory://briefing` includes `skillsDir` metadata when `SKILLS_DIR_PATH` is set
-- [ ] `memory://briefing` includes `workflowSummary` with counts when `BRIEFING_WORKFLOW_STATUS=true`
-- [ ] `memory://briefing` CI row shows named runs or breakdown when workflow env vars are configured
-- [ ] `get_copilot_reviews` returns review data with `state`, `commentCount`, `comments` for reviewed PRs
-- [ ] `get_copilot_reviews` returns `state: "none"` for unreviewed PRs
-- [ ] `memory://briefing` includes `copilotReviews` summary when `BRIEFING_COPILOT_REVIEWS=true`
-- [ ] `memory://github/status` includes milestone summary data
 
 ### Admin & Backup
 
-- [ ] `cleanup_backups` removes old backups and keeps N most recent
 - [ ] `merge_tags` consolidates duplicate tags correctly — verified via `list_tags` and entry re-check
-- [ ] `merge_tags` returns structured error when source equals target
-- [ ] `merge_tags` returns structured error for nonexistent source tag
-- [ ] `backup_journal` without `name` generates auto-timestamped backup
+- [ ] `merge_tags` returns structured error when source equals target or source tag nonexistent
 - [ ] `backup_journal` rejects names containing path traversal characters (`../`) with structured errors
 - [ ] `restore_backup` with nonexistent filename returns structured error
 
-### Scheduler (Phase 9)
+### Scheduler (Phase 6)
 
 - [ ] `memory://health` shows `scheduler.active: false` and empty `jobs` array in stdio mode
-- [ ] No TypeScript/runtime errors in server logs
-- [ ] Server logs confirm scheduler started with correct intervals (Phase 9)
-- [ ] `memory://health` shows all 3 jobs active with `nextRun` timestamps (Phase 9)
-- [ ] Backup job creates timestamped `.db` files and prunes to `--keep-backups` limit (Phase 9)
-- [ ] Vacuum job logs `PRAGMA optimize` completion (Phase 9)
-- [ ] Rebuild-index job logs vector index rebuild with entry count (Phase 9)
-- [ ] All `lastResult` values are `"success"` after jobs fire (Phase 9)
-- [ ] `lastError` remains `null` for all jobs (Phase 9)
-- [ ] Error in one job does not prevent others from running (Phase 9)
+- [ ] All 3 jobs active with `nextRun` timestamps in HTTP mode
+- [ ] All `lastResult` values are `"success"` after jobs fire
+- [ ] Error in one job does not prevent others from running

@@ -1,12 +1,12 @@
-# Test memory-journal-mcp — Pass 2: Validation & Edge Cases
+# Test memory-journal-mcp — Validation, GitHub & Edge Cases
 
-Exhaustively validate the memory-journal-mcp server's output schemas, error handling, data integrity, boundary values, and implementation correctness.
+Exhaustively validate the memory-journal-mcp server's output schemas, error handling, GitHub integration, template/static resources, prompt handlers, data integrity, boundary values, and implementation correctness.
 
-**Scope:** Cross-cutting validation of all 61 tools and 24 resources — this pass re-exercises tools tested in Pass 1 with different concerns (schema shape, error structure, boundary values, silent bugs). Phases 11, 12, 12b, 13-15.
+**Scope:** Cross-cutting validation of all 61 tools and 27 resources — this file covers outputSchema verification, all resource validation, GitHub tool happy paths + lifecycle + cleanup, prompt handler verification, structured error testing, data integrity round-trips, boundary values, and implementation bug detection. Phases 0-7.
 
 **Prerequisites:**
 
-- Pass 1 must have completed successfully and any fixes applied before running Pass 2.
+- The core tests in `test-tools.md` must have completed successfully and any fixes applied before running this file.
 - Confirm MCP server instructions were auto-received before starting.
 - Use the MCP server directly for all tests — not the terminal or scripts.
 - Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.
@@ -27,13 +27,13 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 
 ---
 
-## Phase 11: outputSchema Validation
+## Phase 0: outputSchema Validation
 
 > [!NOTE]
 > **61 tools** now return `structuredContent` validated against Zod output schemas.
 > Verify each response is structured JSON (not raw text).
 
-### 11.1 Original 5 Tools
+### 0.1 Original 5 Tools
 
 | Tool                   | Verification                                                                                                                                   |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -43,7 +43,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `get_entry_by_id`      | Response has `entry` object with `relationships` array                                                                                         |
 | `get_statistics`       | Response has `totalEntries`, `entriesByType`, `entriesByPeriod`, `decisionDensity`, `relationshipComplexity`, `activityTrend`, `causalMetrics` |
 
-### 11.2 Core Read Tools
+### 0.2 Core Read Tools
 
 | Tool                         | Schema                             | Verification                                                   |
 | ---------------------------- | ---------------------------------- | -------------------------------------------------------------- |
@@ -53,7 +53,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `visualize_relationships`    | `VisualizationOutputSchema`        | `entry_count`, `relationship_count`, `mermaid`, `legend`       |
 | `get_cross_project_insights` | `CrossProjectInsightsOutputSchema` | `project_count`, `total_entries`, `projects` array             |
 
-### 11.3 Mutation Tools
+### 0.3 Mutation Tools
 
 | Tool                   | Schema                    | Verification                                                            |
 | ---------------------- | ------------------------- | ----------------------------------------------------------------------- |
@@ -64,7 +64,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `link_entries`         | `LinkEntriesOutputSchema` | `success: true`, `relationship` object, optional `duplicate`, `message` |
 | `merge_tags`           | `MergeTagsOutputSchema`   | `success`, `sourceTag`, `targetTag`, `entriesUpdated`, `message`        |
 
-### 11.4 GitHub Tools
+### 0.4 GitHub Tools
 
 | Tool                  | Schema                          | Verification                                                   |
 | --------------------- | ------------------------------- | -------------------------------------------------------------- |
@@ -78,7 +78,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `get_repo_insights`   | `RepoInsightsOutputSchema`      | `owner`, `repo`, requested `section` data                      |
 | `get_copilot_reviews` | `CopilotReviewsOutputSchema`    | `prNumber`, `state`, `commentCount`, `comments` array          |
 
-### 11.5 Backup Tools
+### 0.5 Backup Tools
 
 | Tool              | Schema                       | Verification                                                                                   |
 | ----------------- | ---------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -87,7 +87,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `cleanup_backups` | `CleanupBackupsOutputSchema` | `success`, `deleted` array, `deletedCount`, `keptCount`                                        |
 | `restore_backup`  | `RestoreResultOutputSchema`  | `success`, `message`, `restoredFrom`, `previousEntryCount`, `newEntryCount`, `revertedChanges` |
 
-### 11.6 Remaining Tools
+### 0.6 Remaining Tools
 
 | Tool                             | Schema                                   | Verification                                                 |
 | -------------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
@@ -99,7 +99,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `create_github_issue_with_entry` | `CreateGitHubIssueWithEntryOutputSchema` | `success`, `issue`, `journalEntry`, optional `project`       |
 | `close_github_issue_with_entry`  | `CloseGitHubIssueWithEntryOutputSchema`  | `success`, `issue`, `journalEntry`, optional `kanban`        |
 
-### 11.7 Milestone Tools
+### 0.7 Milestone Tools
 
 | Tool                      | Schema                              | Verification                                                     |
 | ------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
@@ -109,7 +109,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `update_github_milestone` | `UpdateMilestoneOutputSchema`       | `success`, `milestone` (updated fields), `message`               |
 | `delete_github_milestone` | `DeleteMilestoneOutputSchema`       | `success`, `message`                                             |
 
-### 11.8 Team Tools
+### 0.8 Team Tools
 
 | Tool                              | Schema                                 | Verification                                                               |
 | --------------------------------- | -------------------------------------- | -------------------------------------------------------------------------- |
@@ -136,7 +136,9 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 
 ---
 
-## Phase 12: Static Resources
+## Phase 1: All Resources
+
+### 1.1 Static Resources
 
 | Resource          | URI                          | Test                                                                                                                                              |
 | ----------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -156,12 +158,228 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | Actions recent    | `memory://actions/recent`    | Recent workflow runs (verify graceful output when no workflow entries exist)                                                                      |
 | Team recent       | `memory://team/recent`       | Author-enriched entries, `source: "team"`, `count`                                                                                                |
 | Team statistics   | `memory://team/statistics`   | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                                    |
-| Help index        | `memory://help`              | Lists all tool groups with counts, descriptions, and `totalTools`                                                                 |
-| Help group detail | `memory://help/{group}`      | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                             |
+| Help index        | `memory://help`              | Lists all tool groups with counts, descriptions, and `totalTools`                                                                                 |
+| Help group detail | `memory://help/{group}`      | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                                            |
+| Rules             | `memory://rules`             | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                                        |
+| Workflows         | `memory://workflows`         | Workflow listing (requires `WORKFLOWS_DIR_PATH`); graceful empty if not set                                                                       |
+| Skills            | `memory://skills`            | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                                    |
+
+### 1.2 Template Resources — Happy Path
+
+> [!CAUTION]
+> Issue and PR template URIs require the `/entries` or `/timeline` suffix — they are **NOT** bare `memory://issues/{number}` or `memory://prs/{number}`. Using bare URIs will return "Resource not found". Always use the full paths shown in the table below (e.g. `memory://issues/55/entries`, `memory://prs/67/timeline`).
+
+| Template         | Test URI                       | Expected Result                                                                                                                     |
+| ---------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Project timeline | `memory://projects/5/timeline` | Timeline data                                                                                                                       |
+| Issue entries    | `memory://issues/55/entries`   | Entries linked to issue #55                                                                                                         |
+| PR entries       | `memory://prs/67/entries`      | Entries linked to PR #67 (permanent test fixture)                                                                                   |
+| PR timeline      | `memory://prs/67/timeline`     | PR lifecycle with `prMetadata` (live state) and `timelineNote`                                                                      |
+| Kanban JSON      | `memory://kanban/5`            | Board JSON                                                                                                                          |
+| Kanban diagram   | `memory://kanban/5/diagram`    | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                                                                              |
+| Milestone detail | `memory://milestones/<N>`      | Milestone with completion %, `openIssues` + `closedIssues` counts, and hint to use `get_github_issues` for individual issue details |
+
+### 1.3 Template Resources — Error Paths
+
+| Template                   | Test URI                           | Expected Result                                                 |
+| -------------------------- | ---------------------------------- | --------------------------------------------------------------- |
+| Nonexistent project        | `memory://projects/99999/timeline` | Empty or graceful response (no entries for nonexistent project) |
+| Nonexistent issue          | `memory://issues/999999/entries`   | Empty entries array (no crash)                                  |
+| Nonexistent PR             | `memory://prs/999999/entries`      | Empty entries array (no crash)                                  |
+| Nonexistent PR timeline    | `memory://prs/999999/timeline`     | Graceful response with empty/null `prMetadata`                  |
+| Nonexistent Kanban         | `memory://kanban/99999`            | Error or empty board (no crash)                                 |
+| Nonexistent Kanban diagram | `memory://kanban/99999/diagram`    | Error or empty diagram (no crash)                               |
+| Nonexistent milestone      | `memory://milestones/999999`       | Error or empty milestone data (no crash)                        |
 
 ---
 
-## Phase 12b: Structured Error Response Verification
+## Phase 2: GitHub Integration (16 tools)
+
+### 2.1 Read-Only Tools
+
+| Test                  | Command/Action                                 | Expected Result                                          |
+| --------------------- | ---------------------------------------------- | -------------------------------------------------------- |
+| Context               | `get_github_context`                           | Returns repo, branch, issues, PRs                        |
+| List issues           | `get_github_issues(limit: 5)`                  | Returns open issues                                      |
+| Issue milestone data  | Inspect issue objects                          | Issues include `milestone` field (if assigned)           |
+| Get issue             | `get_github_issue(issue_number: <N>)`          | Returns issue details                                    |
+| List PRs              | `get_github_prs(limit: 5)`                     | Returns open PRs                                         |
+| List closed issues    | `get_github_issues(state: "closed", limit: 3)` | Returns closed issues                                    |
+| List all issues       | `get_github_issues(state: "all", limit: 3)`    | Returns both open and closed issues                      |
+| List closed PRs       | `get_github_prs(state: "closed", limit: 3)`    | Returns closed/merged PRs                                |
+| List all PRs          | `get_github_prs(state: "all", limit: 3)`       | Returns both open and closed PRs                         |
+| Get PR                | `get_github_pr(pr_number: <N>)`                | Returns PR details (use known closed PR)                 |
+| Get nonexistent issue | `get_github_issue(issue_number: 999999)`       | Structured error: `{ error: "Issue #999999 not found" }` |
+| Get nonexistent PR    | `get_github_pr(pr_number: 999999)`             | Structured error: `{ error: "PR #999999 not found" }`    |
+
+### 2.2 Issue Lifecycle Tools
+
+> [!CAUTION]
+> These tools **create and close real GitHub issues**. Use with awareness.
+
+| Test                          | Command/Action                                                                                                                                                                                       | Expected Result                                                                                                                                                                                                                                               |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create issue + entry          | `create_github_issue_with_entry(title: "Test: Unreleased Verification", project_number: 5)`                                                                                                          | GitHub issue created + journal entry created + added to project                                                                                                                                                                                               |
+| Create with milestone         | `create_github_issue_with_entry(title: "Test: Milestone", milestone_number: <N>)`                                                                                                                    | Issue assigned to milestone, verify on GitHub                                                                                                                                                                                                                 |
+| Close issue + entry           | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Verified working")`                                                                                                     | Issue closed + resolution entry created                                                                                                                                                                                                                       |
+| Close with move_to_done       | `close_github_issue_with_entry(issue_number: <new_issue>, move_to_done: true, project_number: 5)`                                                                                                    | Issue closed + `kanban` block in response. `kanban.moved: true` expected — uses idempotent `addProjectItem` to resolve item ID directly (no board-scan race condition)                                                                                        |
+| Create with full params       | `create_github_issue_with_entry(title: "Test: Full", body: "Description", labels: ["test"], project_number: 5, initial_status: "In Progress", entry_content: "Custom journal text", tags: ["test"])` | Issue created with body/labels, project item in "In Progress", journal entry uses custom content                                                                                                                                                              |
+| Close with comment            | `close_github_issue_with_entry(issue_number: <new_issue>, resolution_notes: "Done", comment: "Closing comment", tags: ["resolved"])`                                                                 | Issue closed with comment posted, entry tagged                                                                                                                                                                                                                |
+| Close already closed          | `close_github_issue_with_entry(issue_number: <known_closed>)`                                                                                                                                        | Structured error: `{ success: false, error: "Issue #X is already closed" }`                                                                                                                                                                                   |
+| Close move_to_done no project | `close_github_issue_with_entry(issue_number: <open_issue>, move_to_done: true)`                                                                                                                      | When `DEFAULT_PROJECT_NUMBER` is configured: uses default project, issue closes (`success: true`), Kanban move attempted against default project. When NOT configured: `kanban: { moved: false, error: "project_number required when move_to_done is true" }` |
+
+### 2.3 Kanban Tools
+
+| Test                | Command/Action                                                                     | Expected Result                                                       |
+| ------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Get board           | `get_kanban_board(project_number: 5)`                                              | Returns board structure with columns/items                            |
+| Kanban resource     | Read `memory://kanban/5`                                                           | JSON board data                                                       |
+| Kanban diagram      | Read `memory://kanban/5/diagram`                                                   | Raw Mermaid text (`text/plain` MIME), not JSON-wrapped                |
+| Move item           | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "In Progress")` | Item status updated                                                   |
+| Move invalid status | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Nonexistent")` | Structured error with `availableStatuses` array listing valid options |
+| Board nonexistent   | `get_kanban_board(project_number: 99999)`                                          | Structured error: `{ error: "Project #99999 not found..." }`          |
+
+### 2.4 Milestone Tools
+
+> [!CAUTION]
+> These tools **create, modify, and delete real GitHub milestones**. Clean up test milestones after testing.
+
+| Test                 | Command/Action                                                                                   | Expected Result                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| List milestones      | `get_github_milestones(state: "open")`                                                           | Returns milestones array with `completion_percentage`, `open_issues`                                              |
+| List all states      | `get_github_milestones(state: "all")`                                                            | Returns both open and closed milestones                                                                           |
+| Get milestone detail | `get_github_milestone(milestone_number: <N>)`                                                    | Returns single milestone with full metadata                                                                       |
+| Create milestone     | `create_github_milestone(title: "Test Milestone", description: "Testing", due_on: "YYYY-MM-DD")` | Returns `success: true`, created milestone with number and URL (⚠️ `due_on` must be `YYYY-MM-DD`, not ISO 8601)   |
+| Update milestone     | `update_github_milestone(milestone_number: <new>, description: "Updated description")`           | Returns `success: true`, updated milestone                                                                        |
+| Close milestone      | `update_github_milestone(milestone_number: <new>, state: "closed")`                              | Milestone state changed to `closed`                                                                               |
+| Delete milestone     | `delete_github_milestone(milestone_number: <new>, confirm: true)`                                | Returns `success: true`, milestone removed from GitHub                                                            |
+| Get nonexistent      | `get_github_milestone(milestone_number: 999999)`                                                 | Structured error: `{ error: "Milestone #999999 not found" }`                                                      |
+| Milestone resource   | Read `memory://github/milestones`                                                                | Static resource lists open milestones with completion %                                                           |
+| Milestone detail     | Read `memory://milestones/<N>`                                                                   | Template resource shows milestone with completion %, openIssues + closedIssues counts, and hint for issue details |
+
+### 2.5 Repository Insights Tool
+
+| Test              | Command/Action                             | Expected Result                                    |
+| ----------------- | ------------------------------------------ | -------------------------------------------------- |
+| Default (stars)   | `get_repo_insights`                        | Returns `stars`, `forks`, `watchers`, `openIssues` |
+| Traffic section   | `get_repo_insights(sections: "traffic")`   | Returns 14-day `clones` and `views` aggregates     |
+| Referrers section | `get_repo_insights(sections: "referrers")` | Returns top 5 referral sources                     |
+| Paths section     | `get_repo_insights(sections: "paths")`     | Returns top 5 popular content paths                |
+| All sections      | `get_repo_insights(sections: "all")`       | Returns full payload with all sections above       |
+
+### 2.6 Copilot Review Tool
+
+| Test                  | Command/Action                                        | Expected Result                                                               |
+| --------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Reviewed PR           | `get_copilot_reviews(pr_number: <known_reviewed_pr>)` | Returns `state`, `commentCount`, `comments` array with `path`, `line`, `body` |
+| Unreviewed PR         | `get_copilot_reviews(pr_number: <unreviewed_pr>)`     | Returns `state: "none"`, `commentCount: 0`, empty `comments`                  |
+| Auto-detect repo      | `get_copilot_reviews(pr_number: 1)`                   | Uses auto-detected owner/repo from git                                        |
+| No GitHub integration | (server without `GITHUB_TOKEN`)                       | Returns `{ success: false, error: "GitHub integration not available" }`       |
+
+### 2.7 GitHub Test Cleanup
+
+> [!IMPORTANT]
+> After GitHub testing, ensure all test artifacts are removed. Use the checklist below.
+
+| Cleanup Step           | Command/Action                                                    |
+| ---------------------- | ----------------------------------------------------------------- |
+| Close test issues      | `close_github_issue_with_entry` for any unclosed test issues      |
+| Delete test milestones | `delete_github_milestone` for any test milestones still on GitHub |
+| Verify project board   | `get_kanban_board(project_number: 5)` — no orphaned test items    |
+
+---
+
+## Phase 3: Prompt Handler Verification (16 prompts) [DO NOT SKIP!]
+
+> [!IMPORTANT]
+> Prompts return `GetPromptResult` objects with `messages` arrays. Most MCP clients don't expose `prompts/get` as a callable tool — run the script below instead. It handles session init, prompt listing, and shape verification automatically. See `test-server/README.md` for full details.
+
+```powershell
+npm run build
+node test-server/test-prompts.mjs
+```
+
+| Check                   | Expected                                                       |
+| ----------------------- | -------------------------------------------------------------- |
+| Prompts listed          | 16 prompts with correct argument signatures                    |
+| All 18 prompt calls     | PASS — `messages[0].role === 'user'`, non-empty `content.text` |
+| Nonexistent prompt      | MCP error (code `-32602`)                                      |
+| Missing required arg    | Error returned or handled gracefully                           |
+| **Total**               | **20 pass, 0 fail**                                            |
+
+The tables below document what the script tests — use them as a reference for manual verification or when adding new prompts.
+
+### 3.1 Workflow Prompts (10 prompts)
+
+#### No-Argument Prompts
+
+| Prompt               | Arguments | Expected Response                                                                                               |
+| -------------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
+| `prepare-standup`    | _(none)_  | `messages` array with 1 `user` role message containing "standup" and date references                            |
+| `weekly-digest`      | _(none)_  | `messages` array with 1 `user` role message containing "weekly digest"                                          |
+| `goal-tracker`       | _(none)_  | `messages` array with 1 `user` role message containing "goals" and "milestones"                                 |
+| `get-context-bundle` | _(none)_  | `messages` array with 1 `user` role message containing "Project context bundle", recent entries, and statistics |
+| `confirm-briefing`   | _(none)_  | `messages` array with 1 `user` role message containing "Session Context Received" and entry count               |
+| `session-summary`    | _(none)_  | `messages` array with 1 `user` role message containing "session summary" and instructions for entry creation    |
+
+#### Required-Argument Prompts
+
+| Prompt           | Arguments                                            | Expected Response                                                                                             |
+| ---------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `find-related`   | `query: "architecture"`                              | `messages` array with 1 `user` role message containing `"architecture"` and matching entries (from seed data) |
+| `analyze-period` | `start_date: "2026-01-01"`, `end_date: "2026-12-31"` | `messages` array with 1 `user` role message containing date range and statistics JSON                         |
+
+#### Optional-Argument Prompts
+
+| Prompt               | Arguments                      | Expected Response                                                                                         |
+| -------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `prepare-retro`      | _(none — defaults to 14 days)_ | `messages` array with 1 `user` role message containing "retrospective" and "14 days"                      |
+| `prepare-retro`      | `days: "7"`                    | `messages` array with 1 `user` role message containing "7 days"                                           |
+| `get-recent-entries` | _(none — defaults to 10)_      | `messages` array with 1 `user` role message containing entries formatted with timestamps, types, and tags |
+| `get-recent-entries` | `limit: "3"`                   | `messages` array with 1 `user` role message containing at most 3 entries                                  |
+
+### 3.2 GitHub Prompts (6 prompts)
+
+#### Required-Argument Prompts
+
+| Prompt                      | Arguments             | Expected Response                                                                                                |
+| --------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `project-status-summary`    | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and status summary instructions            |
+| `pr-summary`                | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and journal entries for that PR (from seed S8) |
+| `code-review-prep`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and review checklist instructions              |
+| `pr-retrospective`          | `pr_number: "67"`     | `messages` array with 1 `user` role message containing `"PR #67"` and retrospective instructions                 |
+| `project-milestone-tracker` | `project_number: "5"` | `messages` array with 1 `user` role message containing `"Project #5"` and milestone entries (from seed S7)       |
+
+#### No-Argument Prompts
+
+| Prompt                   | Arguments | Expected Response                                                                                           |
+| ------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `actions-failure-digest` | _(none)_  | `messages` array with 1 `user` role message containing "CI/CD failures" and workflow entries (from seed S9) |
+
+### 3.3 Error Handling
+
+| Test                  | Action                                                | Expected Result                                                                         |
+| --------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Missing required arg  | `prompts/get` for `find-related` with no `query`      | Structured error or empty query handled gracefully (handler uses `args['query'] ?? ''`) |
+| Missing required arg  | `prompts/get` for `analyze-period` with no dates      | Structured error or empty dates handled gracefully                                      |
+| Nonexistent prompt    | `prompts/get` for `nonexistent-prompt`                | MCP error: prompt not found                                                             |
+| Invalid argument name | `prompts/get` for `prepare-standup` with `foo: "bar"` | Succeeds (no-argument prompt ignores extra args)                                        |
+
+### 3.4 Response Shape Verification
+
+For **every** prompt response, verify:
+
+| Check                  | Expected                                                               |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `messages` is an array | `Array.isArray(result.messages) === true`                              |
+| At least 1 message     | `messages.length >= 1`                                                 |
+| Message has `role`     | `messages[0].role === 'user'`                                          |
+| Message has `content`  | `messages[0].content` is object with `type: 'text'` and `text: string` |
+| Text is non-empty      | `messages[0].content.text.length > 0`                                  |
+
+---
+
+## Phase 4: Structured Error Response Verification
 
 > [!IMPORTANT]
 > All 61 tools now use deterministic error handling via `formatHandlerError()` in `src/utils/error-helpers.ts`. Each handler is wrapped in a `try/catch` block that catches all errors (including Zod validation) and returns enriched structured responses. This phase verifies that no tool produces raw MCP error frames.
@@ -291,19 +509,19 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 
 ---
 
-## Phase 13: Data Integrity & Round-Trip Tests
+## Phase 5: Data Integrity & Round-Trip Tests
 
 > [!NOTE]
-> These tests verify that data survives full lifecycles and that operations compose correctly. Run after Phases 1-10 (Pass 1).
+> These tests verify that data survives full lifecycles and that operations compose correctly.
 
-### 13.1 Create → Read Round-Trip
+### 5.1 Create → Read Round-Trip
 
 | Test                       | Steps                                                                                                                                                                                                                                         | Expected Result                                                                                              |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | All fields persist         | 1. `create_entry(content: "RT test", entry_type: "planning", tags: ["rt"], pr_number: 99, pr_status: "open", workflow_run_id: 1, workflow_name: "CI", workflow_status: "completed", project_number: 5)` 2. `get_entry_by_id(entry_id: <new>)` | All fields match: `prNumber`, `prStatus`, `workflowRunId`, `workflowName`, `workflowStatus`, `projectNumber` |
 | share_with_team round-trip | 1. `create_entry(content: "Shared RT", share_with_team: true)` 2. `team_search(query: "Shared RT")`                                                                                                                                           | Entry appears in team search with `author` field                                                             |
 
-### 13.2 Soft Delete Isolation
+### 5.2 Soft Delete Isolation
 
 | Test                        | Steps                                                                                               | Expected Result                                                                         |
 | --------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -312,7 +530,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 | Hidden from semantic search | Same setup, then `semantic_search(query: ...)`                                                      | Entry does not appear in semantic results                                               |
 | Still fetchable by ID       | Same setup, then `get_entry_by_id(entry_id: <id>)`                                                  | ⚠️ Verify behavior — document whether soft-deleted entries are retrievable by direct ID |
 
-### 13.3 Backup → Restore Integrity
+### 5.3 Backup → Restore Integrity
 
 | Test                    | Steps                                                                                                                              | Expected Result                            |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
@@ -321,7 +539,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 | Relationships survive   | 1. Link two entries 2. `backup_journal` 3. Delete one entry 4. `restore_backup` 5. `visualize_relationships`                       | Relationship graph is intact after restore |
 | Tags survive            | 1. `merge_tags` 2. `backup_journal` 3. `restore_backup` 4. `list_tags`                                                             | Tags reflect post-merge state from backup  |
 
-### 13.4 Merge Tags Verification
+### 5.4 Merge Tags Verification
 
 | Test                      | Steps                                                                                                                             | Expected Result                               |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
@@ -331,7 +549,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 
 ---
 
-## Phase 14: Boundary Value Tests
+## Phase 6: Boundary Value Tests
 
 > [!NOTE]
 > These tests exercise min/max limits and edge values defined in Zod schemas.
@@ -357,12 +575,12 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 
 ---
 
-## Phase 15: Implementation Bug Detection
+## Phase 7: Implementation Bug Detection
 
 > [!IMPORTANT]
 > These tests are designed to surface known or suspected implementation bugs where tool handlers accept parameters via Zod but silently ignore them. If a filter has no effect, report it as ⚠️ — the handler accepts the parameter but doesn't pass it to the database query.
 
-### 15.1 Silent Filter Bugs
+### 7.1 Silent Filter Bugs
 
 | Test                       | Command/Action                                                                                                              | Verification                                                                                |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -375,7 +593,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 | search_by_date_range PR    | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", pr_number: 67)`                                     | ⚠️ Verify if PR filter applies (handler may not pass to DB query)                           |
 | search_by_date_range wf    | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", workflow_run_id: 999)`                              | ⚠️ Verify if workflow filter applies (handler may not pass to DB query)                     |
 
-### 15.2 OutputSchema Compatibility on Error Paths
+### 7.2 OutputSchema Compatibility on Error Paths
 
 > [!NOTE]
 > Some tools return extra fields in error responses that aren't declared in their outputSchema. This can cause `-32602` errors when `structuredContent` validation is strict.
@@ -385,7 +603,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 | move_kanban_item invalid status   | `move_kanban_item(project_number: 5, item_id: <id>, target_status: "Bad")` | Error response includes `availableStatuses` — verify this doesn't break outputSchema |
 | get_repo_insights partial failure | `get_repo_insights(sections: "traffic")` (may require push access)         | Verify partial API failures don't produce fields outside outputSchema                |
 
-### 15.3 Duplicate Relationship Direction
+### 7.3 Duplicate Relationship Direction
 
 | Test                     | Command/Action                                                      | Verification                                                                             |
 | ------------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -396,59 +614,77 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 
 ## Test Execution Order
 
-1. **Phase 11**: outputSchema Validation (verify structured responses across all 61 tools)
-2. **Phase 12**: Static Resources (comprehensive resource check with cross-verification)
-3. **Phase 12b**: Structured Error Response Verification (expanded error path testing for all groups)
-4. **Phase 13**: Data Integrity & Round-Trip Tests (create→read, backup→restore, merge→verify)
-5. **Phase 14**: Boundary Value Tests (min/max limits, Zod schema edges)
-6. **Phase 15**: Implementation Bug Detection (silent filter bugs, schema compatibility, duplicate directions)
+0. **Phase 0**: outputSchema Validation (verify structured responses across all 61 tools)
+1. **Phase 1**: All Resources (static + template, happy path + error paths)
+2. **Phase 2**: GitHub Integration (happy paths, lifecycle, milestones, insights, copilot, cleanup)
+3. **Phase 3**: Prompt Handler Verification (scripted + response shape for all 16 prompts)
+4. **Phase 4**: Structured Error Response Verification (expanded error path testing for all groups)
+5. **Phase 5**: Data Integrity & Round-Trip Tests (create→read, backup→restore, merge→verify)
+6. **Phase 6**: Boundary Value Tests (min/max limits, Zod schema edges)
+7. **Phase 7**: Implementation Bug Detection (silent filter bugs, schema compatibility, duplicate directions)
 
 ---
 
 ## Success Criteria
 
-### outputSchema Validation (Phase 11)
+### outputSchema Validation (Phase 0)
 
-- [ ] All **44** outputSchema tools return `structuredContent` (not raw text)
-- [ ] All 17 static resources return valid data
+- [ ] All 61 outputSchema tools return `structuredContent` (not raw text)
+
+### Resources (Phase 1)
+
+- [ ] All 20 static resources return valid data
 - [ ] All 7 template resources work with valid parameters
-
-### Static Resources (Phase 12)
-
+- [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - [ ] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
 - [ ] `memory://tags` tag counts match `list_tags` output
 - [ ] `memory://statistics` structured stats match `get_statistics` output
 - [ ] `memory://github/insights` returns compact stats including traffic aggregates
 - [ ] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
-- [ ] `memory://graph/actions` handles graceful output when no workflow entries exist
-- [ ] `memory://actions/recent` handles graceful output when no workflow entries exist
 - [ ] `memory://instructions` references all 61 tools and key resources
 
-### Structured Error Verification (Phase 12b)
+### GitHub Integration (Phase 2)
+
+- [ ] GitHub issue lifecycle tools create/close issues correctly
+- [ ] `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
+- [ ] `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
+- [ ] `close_github_issue_with_entry` returns structured error for already-closed issues
+- [ ] `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
+- [ ] `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
+- [ ] Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
+- [ ] `memory://milestones/{number}` returns milestone with completion %, issue counts, and hint
+- [ ] `get_repo_insights` returns correct data based on `sections` parameter
+- [ ] `get_copilot_reviews` returns review data for reviewed PRs and `state: "none"` for unreviewed
+- [ ] All GitHub test artifacts cleaned up after testing
+
+### Prompt Handlers (Phase 3)
+
+- [ ] All 16 prompts return valid `GetPromptResult` with `messages` array
+- [ ] Every message has `role: 'user'` and non-empty `content.text`
+- [ ] Nonexistent prompt name returns MCP error (not crash)
+
+### Structured Error Verification (Phase 4)
 
 - [ ] **All tools return structured handler errors — no raw MCP error frames**
 - [ ] **Zod validation errors (empty params, wrong types) return `{ success: false, error: "..." }`**
 
-### Data Integrity (Phase 13)
+### Data Integrity (Phase 5)
 
 - [ ] All `create_entry` fields survive round-trip through `get_entry_by_id`
-- [ ] `share_with_team: true` entries appear in both personal and team search
-- [ ] Soft-deleted entries are hidden from all search/recent but behavior for direct ID fetch is documented
+- [ ] Soft-deleted entries are hidden from all search/recent; direct ID fetch behavior documented
 - [ ] Backup → restore preserves entry counts, specific entries, relationships, and tags
 - [ ] `merge_tags` results verified: entries re-tagged, source removed, target count accurate
 
-### Boundary Values (Phase 14)
+### Boundary Values (Phase 6)
 
 - [ ] Content at max length (50,000 chars) creates successfully
 - [ ] Empty content rejected
-- [ ] Limit boundaries: 0, 500, 501 behave correctly for `get_recent_entries`, `search_entries`, `semantic_search`
+- [ ] Limit boundaries: 0, 500, 501 behave correctly
 - [ ] `similarity_threshold` at 0.0 and 1.0 produce expected result counts
-- [ ] `cleanup_backups(keep_count: 0)` rejected, `keep_count: 1` accepted
 
-### Implementation Bugs (Phase 15)
+### Implementation Bugs (Phase 7)
 
-- [ ] ⚠️ `export_entries` filters (`tags`, `start_date/end_date`, `entry_types`) are either functional or documented as no-ops
-- [ ] ⚠️ `get_statistics` filters (`start_date`, `end_date`, `project_breakdown`) are either functional or documented as no-ops
-- [ ] ⚠️ `search_by_date_range` extra filters (`issue_number`, `pr_number`, `workflow_run_id`) are either functional or documented as no-ops
+- [ ] ⚠️ `export_entries` filters (`tags`, `start_date/end_date`, `entry_types`) functional or documented
+- [ ] ⚠️ `get_statistics` filters (`start_date`, `end_date`, `project_breakdown`) functional or documented
 - [ ] ⚠️ `move_kanban_item` error path `availableStatuses` field doesn't break outputSchema
-- [ ] ⚠️ Reverse-direction relationship duplicate behavior is documented as intentional or fixed
+- [ ] ⚠️ Reverse-direction relationship duplicate behavior documented as intentional or fixed

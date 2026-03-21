@@ -10,7 +10,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 - Confirm MCP server instructions were auto-received before starting.
 - Use the MCP server directly for all tests — not the terminal or scripts.
 - Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`.
-- Seed entries S11 and S12 from Pass 1 Phase 0 must exist (cross-DB search depends on them).
+- Seed entries S11 and S12 from `test-tools.md` Phase 0 must exist (cross-DB search depends on them).
 
 **Workflow after testing:**
 
@@ -24,7 +24,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 > **Test Session Prerequisites**
 
 1. The server instructions are auto-injected by the MCP protocol. Confirm receipt (no need to read `memory://instructions` separately).
-2. Confirm `memory://briefing` was auto-received and **present the `userMessage` to the user as a formatted bullet list of key facts as the server instructions required:**. Detailed briefing testing is in Pass 1 Phase 1.2.
+2. Confirm `memory://briefing` was auto-received and **present the `userMessage` to the user as a formatted bullet list of key facts as the server instructions required:**. Detailed briefing testing is in `test-tools.md` Phase 1.2.
 
 ---
 
