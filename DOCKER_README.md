@@ -116,9 +116,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 Standups, retrospectives, PR summaries, weekly digests, period analysis, milestone tracking, context bundles, session summaries, and more. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **27 Resources** (20 Static + 7 Template)
+### 📡 **27 Resources** (19 Static + 8 Template)
 
-20 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, GitHub status/insights, team stats, and more) plus 7 template resources for project timelines, issue/PR entries, Kanban boards, and milestone details. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+19 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, GitHub status/insights, team stats, and more) plus 8 template resources for project timelines, issue/PR entries, Kanban boards, milestone details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## 🚀 Quick Start (2 Minutes)
 

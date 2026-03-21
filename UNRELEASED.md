@@ -19,7 +19,7 @@
 
 - **Test prompt: incorrect env var** — `test-tools2.md` referenced non-existent `WORKFLOWS_DIR_PATH`; corrected to `MEMORY_JOURNAL_WORKFLOW_SUMMARY` (or `--workflow-summary`).
 - **Test prompt: missing verification row** — `test-tools-codemode2.md` Phase 27.4 table omitted `newTagExists` check despite the test code computing it.
-- **README resource categorization** — `memory://help/{group}` moved from Static to Template resources (19 Static + 8 Template = 27 total).
+- **README/DOCKER_README resource categorization** — `memory://help/{group}` moved from Static to Template resources (19 Static + 8 Template = 27 total).
 
 - **`visualize_relationships` missing success field** — The handler returned a `message` but omitted `success: false` when an entry was not found, violating the common structured error format. Added `success: false` to the failure response.
 - **`team_list_tags` output validation error** — Handler passed raw `listTags()` result with `usageCount` field directly, but `TagOutputSchema` expects `count`. Added mapping to match the personal `list_tags` handler pattern.
