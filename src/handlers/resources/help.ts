@@ -267,28 +267,33 @@ interface MinimalToolDef {
 }
 
 /**
+ * Cached reference to handlers/tools/index.js to avoid per-read require() overhead.
+ * The module is loaded lazily on first use to break the circular dependency.
+ */
+let toolIndexModule: {
+    getTools: (
+        db: unknown,
+        filterConfig: unknown,
+        vectorManager?: unknown
+    ) => { name: string; description: string; annotations: unknown }[]
+} | null = null
+
+/**
  * Get all tool definitions from the context's database.
  * Uses lazy dynamic import to avoid circular dependency with tools/index.ts.
+ * The module reference is cached after first load.
  */
 function getAllToolDefinitions(context: ResourceContext): MinimalToolDef[] {
-    // We can't import getTools statically (circular dep: tools → types → resources → tools).
-    // Instead, query the database for the raw tool definitions by importing dynamically.
-    // Since this is a sync handler, we use require-style resolution.
     try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const toolIndex = require('../../handlers/tools/index.js') as {
-            getTools: (
-                db: unknown,
-                filterConfig: unknown,
-                vectorManager?: unknown
-            ) => { name: string; description: string; annotations: unknown }[]
-        }
+        toolIndexModule ??= require('../../handlers/tools/index.js') as typeof toolIndexModule
+        if (!toolIndexModule) return []
 
         // getTools returns ToolRegistration[] which doesn't include `group`.
         // We need access to the internal tool map instead.
         // Workaround: call getTools with no filter to get all tools, but we
         // lose the `group` field. We'll reconstruct it from the tool name prefix.
-        const tools = toolIndex.getTools(context.db, null)
+        const tools = toolIndexModule.getTools(context.db, null)
         return tools.map((t) => ({
             name: t.name,
             title: (t as Record<string, unknown>)['title'] as string ?? t.name,

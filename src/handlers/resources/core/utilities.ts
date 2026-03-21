@@ -34,26 +34,62 @@ export const significantResource: InternalResourceDef = {
     icons: [ICON_STAR],
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext) => {
+        // Batched importance: single query computes rel_count + causal_count for all
+        // significant entries using LEFT JOIN aggregations, eliminating N+1 per-entry calls.
+        // Weights mirror importance.ts constants (significance 0.3, relationships 0.35,
+        // causal 0.2, recency 0.15). If those change, update the formula here too.
         const rows = execQuery(
             context.db,
             `
-            SELECT ${ENTRY_COLUMNS} FROM memory_journal
+            SELECT ${ENTRY_COLUMNS},
+                   COALESCE(r.rel_count, 0) AS rel_count,
+                   COALESCE(r.causal_count, 0) AS causal_count
+            FROM memory_journal
+            LEFT JOIN (
+                SELECT entry_id,
+                       COUNT(*) AS rel_count,
+                       SUM(CASE WHEN rel_type IN ('blocked_by','resolved','caused') THEN 1 ELSE 0 END) AS causal_count
+                FROM (
+                    SELECT from_entry_id AS entry_id, relationship_type AS rel_type FROM relationships
+                    UNION ALL
+                    SELECT to_entry_id AS entry_id, relationship_type AS rel_type FROM relationships
+                ) grouped
+                GROUP BY entry_id
+            ) r ON r.entry_id = memory_journal.id
             WHERE significance_type IS NOT NULL
             AND deleted_at IS NULL
         `
         )
-        const entriesWithImportance: (Record<string, unknown> & { importance: number })[] =
-            rows.map((row) => {
-                const entry = transformEntryRow(row)
-                const { score: importance } = context.db.calculateImportance(entry['id'] as number)
-                return { ...entry, importance }
-            })
+
+        const now = Date.now()
+        const MS_PER_DAY = 86_400_000
+        const RECENCY_WINDOW_DAYS = 90
+        const MAX_REL_SCORE_AT = 5
+        const MAX_CAUSAL_SCORE_AT = 3
+
+        const entriesWithImportance = rows.map((row) => {
+            const entry = transformEntryRow(row)
+            const relCount = (row['rel_count'] as number) ?? 0
+            const causalCount = (row['causal_count'] as number) ?? 0
+            const daysSince = Math.floor((now - new Date(entry['timestamp'] as string).getTime()) / MS_PER_DAY)
+            const recency = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
+
+            const importance = Math.round((
+                1.0 * 0.3 +                                                  // significance (always 1.0 — filtered by IS NOT NULL)
+                Math.min(relCount / MAX_REL_SCORE_AT, 1.0) * 0.35 +          // relationships
+                Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0) * 0.2 +     // causal
+                recency * 0.15                                                // recency
+            ) * 100) / 100
+
+            return { ...entry, importance } as { timestamp: string; importance: number }
+        })
+
         entriesWithImportance.sort((a, b) => {
             if (b.importance !== a.importance) {
                 return b.importance - a.importance
             }
-            const aTime = new Date(a['timestamp'] as string).getTime()
-            const bTime = new Date(b['timestamp'] as string).getTime()
+            const aTime = new Date(a.timestamp).getTime()
+            const bTime = new Date(b.timestamp).getTime()
             return bTime - aTime
         })
         const top20 = entriesWithImportance.slice(0, 20)
