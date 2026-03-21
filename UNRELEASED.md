@@ -46,6 +46,7 @@
 - **Ad-hoc error responses standardized** — 8 handler error responses across `core.ts`, `admin.ts`, and `search.ts` that returned bare `{ success: false, error }` now include `code`, `category`, `suggestion`, and `recoverable` fields.
 - **Team + GitHub error responses standardized** — 19 `TEAM_DB_NOT_CONFIGURED` responses across all 8 team tool files and 5 GitHub bare errors in `helpers.ts` and `read-tools.ts` now include structured `code`, `category`, `suggestion`, and `recoverable` fields. Added shared `TEAM_DB_ERROR_RESPONSE` constant in `team/helpers.ts`.
 - **`formatHandlerError` enriched** — Raw `Error` instances now get matched against `ERROR_SUGGESTIONS` for actionable suggestions and refined error codes instead of always returning bare `INTERNAL_ERROR`.
+- **Timer `.unref()` parity** — Added `.unref()` to the session sweep timer (`stateful.ts`) and scheduler job timers (`scheduler.ts`) so they don't prevent clean process exit. The `rateLimitCleanupTimer` already had `.unref()` — this brings all `setInterval` timers into compliance with mcp-builder §2.2.1.
 
 ### Security
 - **CI/CD Hardening**: Added `--provenance` flag to `npm publish` in `publish-npm.yml` for SLSA Build L3 attestation. Added `id-token: write` permission for OIDC provenance token generation.

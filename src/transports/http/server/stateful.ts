@@ -65,6 +65,7 @@ export function setupStateful(
             }
         }
     }, SESSION_SWEEP_INTERVAL_MS)
+    sessionSweepTimer.unref()
 
     // POST /mcp — Handle JSON-RPC requests
     app.post('/mcp', (req: Request, res: Response): void => {
