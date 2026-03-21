@@ -27,7 +27,7 @@
 
 ### What Sets Us Apart
 
-**61 MCP Tools** · **16 Workflow Prompts** · **25 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights)
+**61 MCP Tools** · **16 Workflow Prompts** · **25 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                        | Description                                                                                                                                                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -39,7 +39,7 @@
 | **Configurable Briefing**      | 12 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, rules/skills awareness, and workflow summary (`memory://workflows`)  |
 | **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                             |
 | **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                  |
-| **Team Collaboration**         | Separate public team database with author attribution, cross-DB search, and dedicated team tools                                                                                                                 |
+| **Team Collaboration**         | 20 dedicated team tools providing full functionality parity — including CRUD, isolated semantic vector search, relationship graphs, and cross-project insights via a shared database with author attribution     |
 | **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                  |
 | **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                    |
 | **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                   |
