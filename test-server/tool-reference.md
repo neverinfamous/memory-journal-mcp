@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **56 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **61 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -130,7 +130,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (15 tools + Code Mode)
+## team (20 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -160,9 +160,10 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 ### Analytics
 
-| Tool                  | Description                                                                                               |
-| --------------------- | --------------------------------------------------------------------------------------------------------- |
-| `team_get_statistics` | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown.   |
+| Tool                              | Description                                                                                               |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `team_get_statistics`             | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown.   |
+| `team_get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in team entries. Requires TEAM_DB_PATH.                |
 
 ### Relationships
 
@@ -184,6 +185,15 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_backup`       | Create a timestamped backup of the team database.                                                          |
 | `team_list_backups` | List all available backup files for the team database.                                                     |
 
+### Vector
+
+| Tool                          | Description                                                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `team_semantic_search`        | Perform semantic/vector search on team entries using AI embeddings. Requires TEAM_DB_PATH.                 |
+| `team_get_vector_index_stats` | Get statistics about the team vector search index (item count, model, dimensions). Requires TEAM_DB_PATH.  |
+| `team_rebuild_vector_index`   | Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH.       |
+| `team_add_to_vector_index`    | Add a specific team entry to the semantic search vector index. Requires TEAM_DB_PATH.                      |
+
 ---
 
 ## ⚙️ Tool Filtering
@@ -192,12 +202,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 56    | All tools (default)      |
-| `starter`            | ~10   | Core + search + codemode |
-| `essential`          | ~6    | Minimal footprint        |
+| `full`               | 61    | All tools (default)      |
+| `starter`            | ~11   | Core + search + codemode |
+| `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | ~15   | Disable all mutations    |
-| `-github`            | 40    | Exclude a group          |
-| `-github,-analytics` | 38    | Exclude multiple groups  |
+| `-github`            | 45    | Exclude a group          |
+| `-github,-analytics` | 43    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

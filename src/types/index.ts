@@ -174,6 +174,8 @@ export interface ToolContext {
     teamDb?: IDatabaseAdapter
     /** Vector search manager (optional) */
     vectorManager?: VectorSearchManager
+    /** Team vector search manager (optional, bound to team DB) */
+    teamVectorManager?: VectorSearchManager
     /** GitHub integration (optional) */
     github?: GitHubIntegration
     /** Handler configuration */

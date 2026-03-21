@@ -112,10 +112,11 @@ export function getTools(
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
-    teamDb?: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter,
+    teamVectorManager?: VectorSearchManager
 ): ToolRegistration[] {
     // Ensure tool map is built / up-to-date (shared cache with callTool)
-    ensureToolCache(db, vectorManager, github, config, teamDb)
+    ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
     const mapTool = (t: ToolDefinition): ToolRegistration => ({
         name: t.name,
@@ -157,6 +158,7 @@ let cachedContextRefs: {
     vectorManager?: VectorSearchManager
     config?: ToolHandlerConfig
     teamDb?: IDatabaseAdapter
+    teamVectorManager?: VectorSearchManager
 } | null = null
 
 /**
@@ -168,7 +170,8 @@ function ensureToolCache(
     vectorManager?: VectorSearchManager,
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
-    teamDb?: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter,
+    teamVectorManager?: VectorSearchManager
 ): void {
     if (
         toolMapCache &&
@@ -176,15 +179,16 @@ function ensureToolCache(
         cachedContextRefs.github === github &&
         cachedContextRefs.vectorManager === vectorManager &&
         cachedContextRefs.config === config &&
-        cachedContextRefs.teamDb === teamDb
+        cachedContextRefs.teamDb === teamDb &&
+        cachedContextRefs.teamVectorManager === teamVectorManager
     ) {
         return // Cache is valid
     }
 
-    const context: ToolContext = { db, teamDb, vectorManager, github, config }
+    const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
     toolMapCache = new Map(getAllToolDefinitions(context).map((t) => [t.name, t]))
     mappedToolsCache = null // Invalidate mapped cache when definitions change
-    cachedContextRefs = { db, github, vectorManager, config, teamDb }
+    cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
 }
 
 /**
@@ -198,9 +202,10 @@ export function callTool(
     github?: GitHubIntegration,
     config?: ToolHandlerConfig,
     progress?: ProgressContext,
-    teamDb?: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter,
+    teamVectorManager?: VectorSearchManager
 ): Promise<unknown> {
-    ensureToolCache(db, vectorManager, github, config, teamDb)
+    ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
     const tool = (toolMapCache ?? EMPTY_TOOL_MAP).get(name)
 
@@ -211,7 +216,7 @@ export function callTool(
     // When progress context is provided, rebuild the handler with it.
     // This is rare (only MCP server calls with progress tokens, not benchmarked).
     if (progress) {
-        const context: ToolContext = { db, teamDb, vectorManager, github, config, progress }
+        const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config, progress }
         const freshTools = getAllToolDefinitions(context)
         const freshTool = freshTools.find((t) => t.name === name)
         if (freshTool) {

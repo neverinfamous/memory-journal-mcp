@@ -1,7 +1,7 @@
 /**
  * Team Tool Schemas
  *
- * Input and output Zod schemas for all 15 team tools.
+ * Input and output Zod schemas for all 20 team tools.
  * Follows dual-schema pattern: relaxed (MCP SDK) + strict (handler).
  */
 
@@ -405,3 +405,157 @@ export const TeamBackupsListOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+
+// ============================================================================
+// Vector Tool Schemas
+// ============================================================================
+
+/** team_semantic_search — strict */
+export const TeamSemanticSearchSchema = z.object({
+    query: z.string(),
+    limit: z.number().max(500).optional().default(10),
+    similarity_threshold: z.number().optional().default(0.25),
+    hint_on_empty: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include hint when no results found (default: true)'),
+})
+
+/** team_semantic_search — relaxed */
+export const TeamSemanticSearchSchemaMcp = z.object({
+    query: z.string(),
+    limit: relaxedNumber().optional().default(10),
+    similarity_threshold: relaxedNumber().optional().default(0.25),
+    hint_on_empty: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include hint when no results found (default: true)'),
+})
+
+/** team_add_to_vector_index — strict */
+export const TeamAddToVectorIndexSchema = z.object({
+    entry_id: z.number(),
+})
+
+/** team_add_to_vector_index — relaxed */
+export const TeamAddToVectorIndexSchemaMcp = z.object({
+    entry_id: relaxedNumber(),
+})
+
+// ============================================================================
+// Vector Output Schemas
+// ============================================================================
+
+const TeamSemanticEntryOutputSchema = TeamEntryOutputSchema.extend({
+    similarity: z.number(),
+})
+
+export const TeamSemanticSearchOutputSchema = z
+    .object({
+        query: z.string().optional(),
+        entries: z.array(TeamSemanticEntryOutputSchema).optional(),
+        count: z.number().optional(),
+        hint: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const TeamVectorStatsOutputSchema = z
+    .object({
+        available: z.boolean(),
+        error: z.string().optional(),
+        itemCount: z.number().optional(),
+        modelName: z.string().optional(),
+        dimensions: z.number().optional(),
+        success: z.boolean().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const TeamRebuildVectorIndexOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entriesIndexed: z.number().optional(),
+        failedEntries: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const TeamAddToVectorIndexOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entryId: z.number().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+// ============================================================================
+// Cross-Project Insights Schemas
+// ============================================================================
+
+/** team_get_cross_project_insights — strict */
+export const TeamCrossProjectInsightsSchema = z.object({
+    start_date: z
+        .string()
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .optional()
+        .describe('Start date (YYYY-MM-DD)'),
+    end_date: z
+        .string()
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .optional()
+        .describe('End date (YYYY-MM-DD)'),
+    min_entries: z.number().optional().default(3).describe('Minimum entries to include project'),
+})
+
+/** team_get_cross_project_insights — relaxed */
+export const TeamCrossProjectInsightsSchemaMcp = z.object({
+    start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
+    min_entries: relaxedNumber()
+        .optional()
+        .default(3)
+        .describe('Minimum entries to include project'),
+})
+
+export const TeamProjectSummaryOutputSchema = z
+    .object({
+        project_number: z.number(),
+        entry_count: z.number(),
+        first_entry: z.string(),
+        last_entry: z.string(),
+        active_days: z.number(),
+        top_tags: z.array(z.object({ name: z.string(), count: z.number() })),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const TeamCrossProjectInsightsOutputSchema = z
+    .object({
+        project_count: z.number().optional(),
+        total_entries: z.number().optional(),
+        projects: z.array(TeamProjectSummaryOutputSchema).optional(),
+        inactive_projects: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    last_entry_date: z.string(),
+                })
+            )
+            .optional(),
+        inactiveThresholdDays: z.number().optional(),
+        time_distribution: z
+            .array(
+                z.object({
+                    project_number: z.number(),
+                    percentage: z.string(),
+                })
+            )
+            .optional(),
+        message: z.string().optional(),
+        success: z.boolean().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+

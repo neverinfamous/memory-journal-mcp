@@ -97,6 +97,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const vectorManager = new VectorSearchManager(db)
     logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
 
+    // Initialize team vector search manager if team DB is configured
+    let teamVectorManager: VectorSearchManager | undefined
+    if (teamDb) {
+        teamVectorManager = new VectorSearchManager(teamDb)
+        logger.info('Team vector search manager created', { module: 'McpServer' })
+    }
+
     // Auto-rebuild vector index if enabled
     if (options.autoRebuildIndex) {
         logger.info('Auto-rebuilding vector index on startup...', { module: 'McpServer' })
@@ -149,7 +156,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         : undefined
 
     // Get all tools once (unfiltered) for both instruction generation and registration
-    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber }, teamDb)
+    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber }, teamDb, teamVectorManager)
     const allToolNames = new Set(allTools.map((t) => t.name))
 
     // Generate dynamic instructions based on enabled tools, prompts, and latest entry
@@ -179,7 +186,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Apply filter to get the set of tools to register
     const tools = filterConfig
-        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber }, teamDb)
+        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber }, teamDb, teamVectorManager)
         : allTools
     for (const tool of tools) {
         // Build tool options matching MCP SDK expectations
@@ -234,7 +241,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         github,
                         { defaultProjectNumber },
                         progressContext,
-                        teamDb
+                        teamDb,
+                        teamVectorManager
                     )
 
                     // MCP 2025-11-25: If tool has outputSchema, return both:

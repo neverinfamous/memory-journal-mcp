@@ -72,9 +72,9 @@ describe('mj_execute_code Tool Handler', () => {
             expect(codeTool?.annotations?.readOnlyHint).toBe(false)
         })
 
-        it('should total 56 tools across all groups', () => {
+        it('should total 61 tools across all groups', () => {
             const tools = getTools(db, null)
-            expect(tools.length).toBe(56)
+            expect(tools.length).toBe(61)
         })
     })
 

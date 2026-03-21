@@ -89,6 +89,11 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         export: 'teamExportEntries',
         backup: 'teamBackup',
         listBackups: 'teamListBackups',
+        semanticSearch: 'teamSemanticSearch',
+        vectorStats: 'teamGetVectorIndexStats',
+        rebuildIndex: 'teamRebuildVectorIndex',
+        addToIndex: 'teamAddToVectorIndex',
+        insights: 'teamGetCrossProjectInsights',
     },
 }
 
@@ -150,6 +155,8 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.team.teamGetStatistics()',
         'mj.team.teamExportEntries({ format: "json" })',
         'mj.team.teamBackup()',
+        'mj.team.teamSemanticSearch({ query: "deployment" })',
+        'mj.team.teamGetCrossProjectInsights()',
     ],
 }
 
@@ -222,6 +229,8 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamLinkEntries: ['from_entry_id', 'to_entry_id', 'relationship_type'],
     teamVisualizeRelationships: 'entry_id',
     teamExportEntries: 'format',
+    teamSemanticSearch: 'query',
+    teamAddToVectorIndex: 'entry_id',
 }
 
 // =============================================================================

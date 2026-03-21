@@ -127,17 +127,18 @@ src/
     │   ├── admin.ts                # Admin tool group (5 tools)
     │   ├── backup.ts               # Backup tool group (4 tools)
     │   ├── codemode.ts             # Code Mode tool group (1 tool)
-    │   ├── team/                   # Team tool group (15 tools)
+    │   ├── team/                   # Team tool group (20 tools)
     │   │   ├── index.ts            # Barrel — composes all team sub-modules
     │   │   ├── helpers.ts          # Shared team helpers (author batch-fetch, constants)
-    │   │   ├── schemas.ts          # Team Zod input/output schemas (all 15 tools)
+    │   │   ├── schemas.ts          # Team Zod input/output schemas (all 20 tools)
     │   │   ├── core-tools.ts       # Core team tools (create, get_by_id, get_recent, list_tags)
     │   │   ├── search-tools.ts     # Search team tools (search, search_by_date_range)
     │   │   ├── admin-tools.ts      # Admin team tools (update, delete, merge_tags)
-    │   │   ├── analytics-tools.ts  # Analytics team tool (get_statistics)
+    │   │   ├── analytics-tools.ts  # Analytics team tools (get_statistics, get_cross_project_insights)
     │   │   ├── relationship-tools.ts # Relationship team tools (link, visualize)
     │   │   ├── export-tools.ts     # Export team tool (export_entries)
-    │   │   └── backup-tools.ts     # Backup team tools (backup, list_backups)
+    │   │   ├── backup-tools.ts     # Backup team tools (backup, list_backups)
+    │   │   └── vector-tools.ts     # Vector team tools (semantic_search, vector_index_stats, rebuild, add)
     │   ├── github.ts               # GitHub tools barrel (re-exports from github/ subdirectory)
     │   └── github/                 # GitHub tool handlers (split by domain)
     │       ├── helpers.ts          # Shared GitHub tool helpers (repo detection, error formatting)
@@ -201,10 +202,11 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **team**          | `team/core-tools.ts`               | 4     | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`                                                     |
 |                   | `team/search-tools.ts`             | 2     | `team_search`, `team_search_by_date_range`                                                                                           |
 |                   | `team/admin-tools.ts`              | 3     | `team_update_entry`, `team_delete_entry`, `team_merge_tags`                                                                          |
-|                   | `team/analytics-tools.ts`          | 1     | `team_get_statistics`                                                                                                                |
+|                   | `team/analytics-tools.ts`          | 2     | `team_get_statistics`, `team_get_cross_project_insights`                                                                             |
 |                   | `team/relationship-tools.ts`       | 2     | `team_link_entries`, `team_visualize_relationships`                                                                                  |
 |                   | `team/export-tools.ts`             | 1     | `team_export_entries`                                                                                                                |
 |                   | `team/backup-tools.ts`             | 2     | `team_backup`, `team_list_backups`                                                                                                   |
+|                   | `team/vector-tools.ts`             | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                       |
 
 ### Utility Files (no tools, shared helpers)
 
@@ -323,7 +325,7 @@ catch (error) {
 | Pattern                    | Description                                                                                                                                                                                          |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Structured Errors**      | Every tool returns `{success: false, error, code, category, suggestion, recoverable}` — never raw exceptions. Uses `formatHandlerError()`.                                                           |
-| **Tool Context**           | `ToolContext` passes `db`, `teamDb?`, `vectorManager?`, `github?`, `config?`, `progress?` to all tool group modules. Each group factory receives context and returns `ToolDefinition[]`.              |
+| **Tool Context**           | `ToolContext` passes `db`, `teamDb?`, `vectorManager?`, `teamVectorManager?`, `github?`, `config?`, `progress?` to all tool group modules. Each group factory receives context and returns `ToolDefinition[]`. |
 | **Tool Map Cache**         | `getTools()` + `callTool()` share a `Map<string, ToolDefinition>` cache (O(1) lookup). Cache invalidates when context refs change. `mappedToolsCache` avoids re-mapping for unfiltered calls.        |
 | **Code Mode Bridge**       | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). |
 | **Tool Filtering**         | `ToolFilter` parses `--tool-filter` string → whitelist/blacklist of tool names. `codemode` auto-injected unless explicitly excluded. Shortcuts: `starter`, `essential`, `readonly`.                   |
@@ -336,7 +338,7 @@ catch (error) {
 | **Scheduler**              | HTTP-only `setInterval` jobs: automated backup, vacuum, vector index rebuild. Error-isolated — failure in one job doesn't affect others. Status visible via `memory://health`.                        |
 | **ErrorFieldsMixin**       | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation.                                                                               |
 | **Barrel Re-exports**      | Every directory has `index.ts` barrel. Import from `./module/index.js` (with `.js` extension for ESM).                                                                                                |
-| **Team Database**          | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 15 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup). Cross-DB isolation. |
+| **Team Database**          | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 20 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup, vector). Cross-DB isolation with dedicated `teamVectorManager`. |
 
 ---
 
@@ -356,7 +358,7 @@ catch (error) {
 | File / Directory                  | Purpose                                                                               |
 | --------------------------------- | ------------------------------------------------------------------------------------- |
 | `test-server/README.md`           | Agent testing orchestration doc                                                       |
-| `test-server/tool-reference.md`   | Complete 56-tool inventory with descriptions                                          |
+| `test-server/tool-reference.md`   | Complete 61-tool inventory with descriptions                                          |
 | `test-server/code-map.md`         | This file — agent-optimized codebase navigation                                       |
 | `test-server/test-preflight.md`   | Pre-test verification checklist                                                       |
 | `test-server/test-tools.md`       | Entry-point agent test protocol (main tool tests)                                     |
