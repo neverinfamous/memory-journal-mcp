@@ -2,7 +2,7 @@
 
 Exhaustively test the memory-journal-mcp server's core functionality using the phased plan below. **Please make sure to use the correct resource names/urls as documented below.**
 
-**Scope:** 56 tools, 22 resources (15 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-10).
+**Scope:** 61 tools, 22 resources (15 static + 7 templates), 16 prompts — this pass covers happy paths, core error paths, and feature verification (Phases 0-10).
 
 **Constraints:**
 
@@ -118,14 +118,14 @@ After creating all 12 entries, verify the seed data is searchable:
 # Test A — Instruction levels (essential < standard < full)
 node test-server/test-instruction-levels.mjs
 
-# Test B — Tool annotations (56 tools, 28 openWorldHint=false, 16 openWorldHint=true, 0 missing)
+# Test B — Tool annotations (61 tools, 33 openWorldHint=false, 16 openWorldHint=true, 0 missing)
 node test-server/test-tool-annotations.mjs
 ```
 
 | Check              | Expected                                                             |
 | ------------------ | -------------------------------------------------------------------- |
 | Instruction levels | essential (~1.2K) < standard (~1.4K) < full (~6.7K tokens)           |
-| Tool annotations   | 56 tools, all with `annotations`, 28 `false` + 16 `true` = 0 missing |
+| Tool annotations   | 61 tools, all with `annotations`, 33 `false` + 16 `true` = 0 missing |
 
 ### 1.4 GitHub Status Resource
 
@@ -519,7 +519,7 @@ For **every** prompt response, verify:
 | Message has `content`  | `messages[0].content` is object with `type: 'text'` and `text: string` |
 | Text is non-empty      | `messages[0].content.text.length > 0`                                  |
 
-## Phase 9: Team Collaboration (15 tools + 2 resources)
+## Phase 9: Team Collaboration (20 tools + 2 resources)
 
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`. Team entries are stored in a separate public database with author attribution.
@@ -596,7 +596,27 @@ For **every** prompt response, verify:
 | Group by day     | `team_get_statistics(group_by: "day")`   | Periods grouped by day                                               |
 | Author breakdown | Inspect `authors` field                  | Array of `{ author, count }` for each contributor                    |
 
-### 9.8 Team Relationships
+### 9.8 Team Vector Search
+
+| Test                    | Command/Action                                                            | Expected Result                                                         |
+| ----------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Rebuild team index      | `team_rebuild_vector_index`                                               | `success: true`, `entriesIndexed` > 0                                   |
+| Team vector stats       | `team_get_vector_index_stats`                                             | `available`, `itemCount`, `modelName`, `dimensions`                     |
+| Team semantic query     | `team_semantic_search(query: "team standup")`                             | ≥ 1 result with `similarity` score                                      |
+| Team semantic threshold | `team_semantic_search(query: "test", similarity_threshold: 0.5)`         | Fewer results than default threshold (0.25)                             |
+| Team personal filter    | `team_semantic_search(query: "test", is_personal: true)`                 | Only personal entries in results                                        |
+| Team add to index       | `team_add_to_vector_index(entry_id: <team_entry_id>)`                    | `success: true`, `entryId` in response                                  |
+| Team add nonexistent    | `team_add_to_vector_index(entry_id: 999999)`                             | `{ success: false, error: "..." }`                                      |
+
+### 9.9 Team Cross-Project Insights
+
+| Test                    | Command/Action                                                                                     | Expected Result                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Default insights        | `team_get_cross_project_insights`                                                                  | `project_count`, `total_entries`, `projects` array |
+| Insights with dates     | `team_get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")`               | Date-filtered project insights                     |
+| Insights min_entries    | `team_get_cross_project_insights(min_entries: 1)`                                                  | Lower threshold includes more projects             |
+
+### 9.10 Team Relationships
 
 | Test                    | Command/Action                                                                                           | Expected Result                                                 |
 | ----------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -608,7 +628,7 @@ For **every** prompt response, verify:
 | Visualize by tag        | `team_visualize_relationships(tag: "team-test")`                                                         | Mermaid diagram scoped to tag                                   |
 | Visualize nonexistent   | `team_visualize_relationships(entry_id: 999999)`                                                         | Structured error or empty diagram                               |
 
-### 9.9 Team Export
+### 9.11 Team Export
 
 | Test                    | Command/Action                                                                          | Expected Result                                |
 | ----------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -618,7 +638,7 @@ For **every** prompt response, verify:
 | Export with dates       | `team_export_entries(format: "json", start_date: "2026-01-01", end_date: "2026-03-01")` | Only entries within date range                  |
 | Export with entry_type  | `team_export_entries(format: "json", entry_type: "standup", limit: 10)`                 | Only entries of specified type                  |
 
-### 9.10 Team Backup
+### 9.12 Team Backup
 
 | Test              | Command/Action                              | Expected Result                                                |
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
@@ -626,7 +646,7 @@ For **every** prompt response, verify:
 | Auto-named backup | `team_backup`                               | Backup created with auto-generated timestamped name            |
 | List backups      | `team_list_backups`                         | `backups` array with metadata, `total`, `backupsDirectory`     |
 
-### 9.11 Team Resources
+### 9.13 Team Resources
 
 | Test             | URI                        | Expected Result                                                       |
 | ---------------- | -------------------------- | --------------------------------------------------------------------- |
@@ -634,7 +654,7 @@ For **every** prompt response, verify:
 | Statistics       | `memory://team/statistics` | `configured: true`, `totalEntries`, `authors` array, `source: "team"` |
 | Author breakdown | `memory://team/statistics` | `authors` contains `{ author: "<name>", count: N }` for each author   |
 
-### 9.12 Cleanup
+### 9.14 Cleanup
 
 | Test        | Command/Action                                     | Expected Result                 |
 | ----------- | -------------------------------------------------- | ------------------------------- |
@@ -686,11 +706,11 @@ node test-server/test-scheduler.mjs
 
 ### Core Functionality
 
-- [ ] All 56 tools execute without errors on happy paths
+- [ ] All 61 tools execute without errors on happy paths
 - [ ] All 7 template resources work with valid parameters
 - [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - [ ] Server instructions length respects `--instruction-level`: essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
-- [ ] 28 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (44 total, 0 missing)
+- [ ] 33 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (49 total, 0 missing)
 
 ### Entry CRUD
 
@@ -809,7 +829,12 @@ node test-server/test-scheduler.mjs
 - [ ] `team_export_entries` exports JSON and markdown with optional filters
 - [ ] `team_backup` creates named and auto-named backups with `filename`, `path`, `sizeBytes`
 - [ ] `team_list_backups` returns backup metadata array
-- [ ] All 15 team tools return structured errors when `TEAM_DB_PATH` not configured
+- [ ] `team_rebuild_vector_index` indexes team entries successfully
+- [ ] `team_get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
+- [ ] `team_semantic_search` returns semantically similar entries with `similarity` scores
+- [ ] `team_add_to_vector_index` succeeds for existing entries, errors for nonexistent
+- [ ] `team_get_cross_project_insights` returns `project_count`, `total_entries`, `projects` array
+- [ ] All 20 team tools return structured errors when `TEAM_DB_PATH` not configured
 - [ ] `memory://team/recent` returns author-enriched entries with `source: "team"`
 - [ ] `memory://team/statistics` returns `configured: true`, `authors` array with `{ author, count }`
 - [ ] `memory://briefing` includes team entry count ("Team DB" row)

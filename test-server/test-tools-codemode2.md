@@ -939,7 +939,59 @@ return {
 | `autoSuccess`    | `true`   |
 | `listHasBackups` | `true`   |
 
-### 27.9 Cross-Tool Error Path Verification (via Code Mode)
+### 27.9 Team Vector & Cross-Project Insights
+
+```javascript
+// Test code:
+const rebuild = await mj.team.teamRebuildVectorIndex({})
+const stats = await mj.team.teamGetVectorIndexStats({})
+
+const search = await mj.team.teamSemanticSearch({ query: 'standup' })
+const strict = await mj.team.teamSemanticSearch({
+  query: 'standup',
+  similarity_threshold: 0.5,
+})
+
+const recent = await mj.team.teamGetRecent({ limit: 1 })
+const addResult = await mj.team.teamAddToVectorIndex({
+  entry_id: recent.entries[0].id,
+})
+const addBad = await mj.team.teamAddToVectorIndex({ entry_id: 999999 })
+
+const insights = await mj.team.teamGetCrossProjectInsights({})
+const insightsFiltered = await mj.team.teamGetCrossProjectInsights({
+  start_date: '2026-01-01',
+  end_date: '2026-03-01',
+  min_entries: 1,
+})
+
+return {
+  rebuildSuccess: rebuild.success,
+  entriesIndexed: rebuild.entriesIndexed,
+  vectorAvailable: stats.available,
+  vectorItemCount: stats.itemCount,
+  searchCount: search.entries?.length ?? 0,
+  strictFewer: (strict.entries?.length ?? 0) <= (search.entries?.length ?? 0),
+  addSuccess: addResult.success,
+  addBadError: addBad.success === false,
+  insightsProjectCount: insights.project_count,
+  insightsHasProjects: Array.isArray(insights.projects),
+  filteredInsights: insightsFiltered.project_count >= 0,
+}
+```
+
+| Check                 | Expected |
+| --------------------- | -------- |
+| `rebuildSuccess`      | `true`   |
+| `entriesIndexed`      | Number > 0 |
+| `vectorAvailable`     | `true`   |
+| `searchCount`         | ≥ 1      |
+| `strictFewer`         | `true`   |
+| `addSuccess`          | `true`   |
+| `addBadError`         | `true`   |
+| `insightsHasProjects` | `true`   |
+
+### 27.10 Cross-Tool Error Path Verification (via Code Mode)
 
 > [!IMPORTANT]
 > Verify that tool errors propagate as structured handler errors through the Code Mode API bridge — not as raw MCP errors or unhandled exceptions.
@@ -991,6 +1043,13 @@ errors.teamLinkBad = await mj.team.teamLinkEntries({
   relationship_type: 'references',
 })
 
+// Team vector & insights errors
+errors.teamAddVectorBad = await mj.team.teamAddToVectorIndex({ entry_id: 999999 })
+errors.teamSemanticEmpty = await mj.team.teamSemanticSearch({ query: 'xyznonexistent99' })
+errors.teamVectorStats = await mj.team.teamGetVectorIndexStats({})
+errors.teamRebuild = await mj.team.teamRebuildVectorIndex({})
+errors.teamInsights = await mj.team.teamGetCrossProjectInsights({})
+
 // Verify all errors are structured (not raw throws)
 const allStructured = Object.entries(errors).every(([key, val]) => {
   return (
@@ -1018,7 +1077,7 @@ return {
 
 | Check           | Expected                                            |
 | --------------- | --------------------------------------------------- |
-| `testedCount`   | 17                                                  |
+| `testedCount`   | 22                                                  |
 | `allStructured` | `true` — no raw exceptions through Code Mode bridge |
 
 ---
@@ -1072,7 +1131,7 @@ return { cleaned: results.length, details: results }
 3. **Phase 24**: Relationships & Visualization (all types, duplicates, visualization variants, error paths)
 4. **Phase 25**: GitHub (16 tools — context, issues, PRs, Kanban, milestones, insights, copilot + cleanup)
 5. **Phase 26**: Admin, Backup & Export (tags, merge, export filters, backup lifecycle)
-6. **Phase 27**: Team + Error Paths (15 team tools CRUD, admin, analytics, relationships, export, backup, cross-tool error propagation)
+6. **Phase 27**: Team + Error Paths (20 team tools CRUD, admin, analytics, vector, insights, relationships, export, backup, cross-tool error propagation)
 
 ---
 
@@ -1150,6 +1209,11 @@ return { cleaned: results.length, details: results }
 - [ ] `team_export_entries` exports JSON and markdown with filters
 - [ ] `team_backup` creates named and auto-named backups
 - [ ] `team_list_backups` returns backup metadata
+- [ ] `team_rebuild_vector_index` indexes team entries via Code Mode
+- [ ] `team_get_vector_index_stats` returns vector stats via Code Mode
+- [ ] `team_semantic_search` with threshold filtering works via Code Mode
+- [ ] `team_add_to_vector_index` succeeds for existing, errors for nonexistent via Code Mode
+- [ ] `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 - [ ] Invalid `entry_type` on team create returns structured error
-- [ ] All 17 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
+- [ ] All 22 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
 - [ ] All test entries cleaned up after Phase 27

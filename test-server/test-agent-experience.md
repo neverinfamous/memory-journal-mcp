@@ -10,7 +10,7 @@ Run **each pass** as a separate conversation with the corresponding `--tool-filt
 |------|-----------------|-------|-----------|
 | Pass 1 | `essential` | Core, Search, Analytics, Relationships (~22) | 1–8 |
 | Pass 2 | `standard` | Essential + Export, Admin, Backup (~28) | 9–13 |
-| Pass 3 | `full` | Standard + GitHub, Team (~57) | 14–21 |
+| Pass 3 | `full` | Standard + GitHub, Team (~62) | 14–21 |
 | Pass 4 | `codemode` | Code Mode only (1) | 22–24 |
 
 > **Important:** Do NOT combine passes. Each pass is a fresh conversation with a clean context. The agent has never used this server before.
@@ -145,7 +145,7 @@ Simulate an end-of-day workflow: review today's entries, summarize accomplishmen
 #### Scenario 20 — Team knowledge sharing
 Create a team entry about a design decision. Search the team database for related entries. Check team statistics to see the contributor breakdown. Export this week's team entries as markdown.
 
-> **What we're testing:** Can the agent discover the expanded team tools (`team_get_statistics`, `team_export_entries`, `team_search_by_date_range`) and compose a cross-tool workflow?
+> **What we're testing:** Can the agent discover the expanded team tools (`team_get_statistics`, `team_export_entries`, `team_search_by_date_range`, `team_semantic_search`, `team_get_cross_project_insights`) and compose a cross-tool workflow?
 
 #### Scenario 21 — Context bundle
 Use the `get-context-bundle` prompt to pull together full session context. Is it comprehensive?

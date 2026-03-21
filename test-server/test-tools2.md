@@ -2,7 +2,7 @@
 
 Exhaustively validate the memory-journal-mcp server's output schemas, error handling, data integrity, boundary values, and implementation correctness.
 
-**Scope:** Cross-cutting validation of all 56 tools and 22 resources — this pass re-exercises tools tested in Pass 1 with different concerns (schema shape, error structure, boundary values, silent bugs). Phases 11, 12, 12b, 13-15.
+**Scope:** Cross-cutting validation of all 61 tools and 22 resources — this pass re-exercises tools tested in Pass 1 with different concerns (schema shape, error structure, boundary values, silent bugs). Phases 11, 12, 12b, 13-15.
 
 **Prerequisites:**
 
@@ -30,7 +30,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 ## Phase 11: outputSchema Validation
 
 > [!NOTE]  
-> **56 tools** now return `structuredContent` validated against Zod output schemas.
+> **61 tools** now return `structuredContent` validated against Zod output schemas.
 > Verify each response is structured JSON (not raw text).
 
 ### 11.1 Original 5 Tools
@@ -128,6 +128,11 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | `team_export_entries`            | `TeamExportOutputSchema`        | `format`, `data`, `count`                                             |
 | `team_backup`                    | `TeamBackupOutputSchema`        | `success`, `filename`, `path`, `sizeBytes`                            |
 | `team_list_backups`              | `TeamBackupsListOutputSchema`   | `backups` array, `total`, `backupsDirectory`                          |
+| `team_semantic_search`           | `TeamSemanticSearchOutputSchema`       | `query`, `entries` (with `similarity`), `count`                |
+| `team_get_vector_index_stats`    | `TeamVectorStatsOutputSchema`          | `available`, `itemCount`, `modelName`, `dimensions`, `success` |
+| `team_rebuild_vector_index`      | `TeamRebuildVectorIndexOutputSchema`   | `success`, `entriesIndexed`, optional `failedEntries`          |
+| `team_add_to_vector_index`       | `TeamAddToVectorIndexOutputSchema`     | `success`, `entryId`                                           |
+| `team_get_cross_project_insights`| `TeamCrossProjectInsightsOutputSchema` | `project_count`, `total_entries`, `projects`                   |
 
 ---
 
@@ -136,7 +141,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | Resource          | URI                          | Test                                                                                                                                              |
 | ----------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Briefing          | `memory://briefing`          | Returns JSON with `userMessage`, `templateResources`, `journal`, `github`, optional `rulesFile`, `skillsDir`, `workflowSummary`, `copilotReviews` |
-| Instructions      | `memory://instructions`      | Full server instructions — verify it references all 56 tools and key resources                                                                    |
+| Instructions      | `memory://instructions`      | Full server instructions — verify it references all 61 tools and key resources                                                                    |
 | Recent entries    | `memory://recent`            | Read, verify 10 entries with typed fields                                                                                                         |
 | Significant       | `memory://significant`       | Verify entries have `importance`, sorted by importance (primary), timestamp (secondary)                                                           |
 | Significant order | `memory://significant`       | Compare adjacent entries: `entries[0].importance >= entries[1].importance` etc.                                                                   |
@@ -157,7 +162,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 ## Phase 12b: Structured Error Response Verification
 
 > [!IMPORTANT]
-> All 56 tools now use deterministic error handling via `formatHandlerError()` in `src/utils/error-helpers.ts`. Each handler is wrapped in a `try/catch` block that catches all errors (including Zod validation) and returns enriched structured responses. This phase verifies that no tool produces raw MCP error frames.
+> All 61 tools now use deterministic error handling via `formatHandlerError()` in `src/utils/error-helpers.ts`. Each handler is wrapped in a `try/catch` block that catches all errors (including Zod validation) and returns enriched structured responses. This phase verifies that no tool produces raw MCP error frames.
 
 ### Structured Error Response Pattern
 
@@ -228,12 +233,15 @@ For each tool group, verify at least one scenario from each applicable row:
 | Nonexistent Kanban project          | github (`get_kanban_board`)              | `project_number: 99999`                                                 |
 | Merge same tag (source = target)    | admin (`merge_tags`)                     | `source_tag: "x", target_tag: "x"`                                      |
 | Merge nonexistent source tag        | admin (`merge_tags`)                     | `source_tag: "nonexistent-xyz", target_tag: "test"`                     |
-| Team DB not configured              | team (all 15 tools)                      | Returns `{ success: false, error: "Team database not configured..." }`  |
+| Team DB not configured              | team (all 20 tools)                      | Returns `{ success: false, error: "Team database not configured..." }`  |
 | Invalid team entry_type             | team (`team_create_entry`)               | `entry_type: "invalid"` → structured error                              |
 | Nonexistent team entry ID           | team (`team_get_entry_by_id`, `team_update_entry`, `team_delete_entry`) | `entry_id: 999999` → structured error            |
 | Invalid team date format            | team (`team_search_by_date_range`)       | `start_date: "Jan 1"` → structured error                                |
 | Merge same team tag                 | team (`team_merge_tags`)                 | `source_tag: "x", target_tag: "x"` → structured error                   |
 | Team link nonexistent               | team (`team_link_entries`)               | `from_entry_id: 999999` → structured error                              |
+| Team vector unavailable             | team (`team_semantic_search`)            | Verify `{ success: false, error: "..." }` not raw throw                 |
+| Team add nonexistent to vector      | team (`team_add_to_vector_index`)        | `entry_id: 999999` → structured error                                   |
+| Team insights empty                 | team (`team_get_cross_project_insights`) | Returns all required schema fields even when empty                      |
 
 ### What to Report
 
@@ -269,6 +277,9 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 | `team_export_entries`        | `limit`                | `team_export_entries({format: "json", limit: "abc"})`                                    |
 | `team_visualize_relationships` | `depth`              | `team_visualize_relationships({entry_id: 1, depth: "abc"})`                              |
 | `get_cross_project_insights` | `min_entries`          | `get_cross_project_insights({min_entries: "abc"})`                                       |
+| `team_semantic_search`            | `limit`                | `team_semantic_search({query: "test", limit: "abc"})`                               |
+| `team_semantic_search`            | `similarity_threshold` | `team_semantic_search({query: "test", similarity_threshold: "abc"})`                |
+| `team_get_cross_project_insights` | `min_entries`          | `team_get_cross_project_insights({min_entries: "abc"})`                              |
 
 ### Reporting Format
 
@@ -383,7 +394,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 
 ## Test Execution Order
 
-1. **Phase 11**: outputSchema Validation (verify structured responses across all 56 tools)
+1. **Phase 11**: outputSchema Validation (verify structured responses across all 61 tools)
 2. **Phase 12**: Static Resources (comprehensive resource check with cross-verification)
 3. **Phase 12b**: Structured Error Response Verification (expanded error path testing for all groups)
 4. **Phase 13**: Data Integrity & Round-Trip Tests (create→read, backup→restore, merge→verify)
@@ -409,7 +420,7 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 - [ ] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
 - [ ] `memory://graph/actions` handles graceful output when no workflow entries exist
 - [ ] `memory://actions/recent` handles graceful output when no workflow entries exist
-- [ ] `memory://instructions` references all 56 tools and key resources
+- [ ] `memory://instructions` references all 61 tools and key resources
 
 ### Structured Error Verification (Phase 12b)
 
