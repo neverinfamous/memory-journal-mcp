@@ -2,7 +2,7 @@
 
 > **Agent-optimized navigation reference.** Read this before searching the codebase. Covers directory layout, handler→tool mapping, resources, prompts, error hierarchy, and key constants.
 >
-> Last updated: March 20, 2026
+> Last updated: March 21, 2026
 
 ---
 
@@ -72,7 +72,7 @@ src/
 │   ├── sandbox.ts                  # SandboxPool lifecycle manager
 │   ├── sandbox-factory.ts          # Sandbox creation factory
 │   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge)
-│   ├── worker-script.ts            # Worker thread entry point (runs inside vm)
+│   ├── worker-script.ts            # Worker thread entry point — builds mj.* API proxy; Proxy trap returns structured errors for readonly mode
 │   ├── api.ts                      # mj.* API bridge (exposes tools to sandbox)
 │   ├── api-constants.ts            # API bridge constants, method→group map, JSON-RPC codes
 │   ├── security.ts                 # Code validation (blocked patterns, injection prevention)
@@ -162,7 +162,7 @@ src/
     │       ├── index.ts            # Core static resources barrel
     │       ├── health.ts           # memory://health resource
     │       ├── instructions.ts     # memory://instructions resource
-    │       ├── utilities.ts        # memory://recent, memory://significant, memory://tags, memory://statistics
+    │       ├── utilities.ts        # memory://recent, memory://significant, memory://tags, memory://statistics, memory://rules, memory://workflows, memory://skills
     │       └── briefing/
     │           ├── index.ts        # memory://briefing resource (assembles sections)
     │           ├── context-section.ts   # Journal context section (entry count, recent entries)
@@ -223,7 +223,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-22 resources total — 15 static + 7 template.
+25 resources total — 18 static + 7 template.
 
 ### Static Resources
 
@@ -232,7 +232,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `core/briefing/index.ts` | `memory://briefing` — session initialization (~300 tokens)                                        |
 | `core/instructions.ts`   | `memory://instructions` — behavioral guidance for AI agents                                       |
 | `core/health.ts`         | `memory://health` — server health & diagnostics                                                   |
-| `core/utilities.ts`      | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics`                 |
+| `core/utilities.ts`      | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics`, `memory://rules`, `memory://workflows`, `memory://skills` |
 | `github.ts`              | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                |
 | `graph.ts`               | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                      |
 | `team.ts`                | `memory://team/recent`, `memory://team/statistics`                                                |
@@ -329,7 +329,7 @@ catch (error) {
 | **Tool Map Cache**         | `getTools()` + `callTool()` share a `Map<string, ToolDefinition>` cache (O(1) lookup). Cache invalidates when context refs change. `mappedToolsCache` avoids re-mapping for unfiltered calls.        |
 | **Code Mode Bridge**       | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). |
 | **Tool Filtering**         | `ToolFilter` parses `--tool-filter` string → whitelist/blacklist of tool names. `codemode` auto-injected unless explicitly excluded. Shortcuts: `starter`, `essential`, `readonly`.                   |
-| **Briefing System**        | `memory://briefing` assembled from modular sections (context, GitHub, user message). Configurable via 11 env vars / CLI flags. Instruction levels: `essential`, `standard`, `full`.                   |
+| **Briefing System**        | `memory://briefing` assembled from modular sections (context, GitHub, user message). Configurable via 12 env vars / CLI flags (incl. `--workflow-summary`/`MEMORY_JOURNAL_WORKFLOW_SUMMARY` for `memory://workflows`). Instruction levels: `essential`, `standard`, `full`.   |
 | **GitHub Split**           | GitHub tools split across 7 handler files by domain (read, issues, kanban, milestones, insights, copilot, mutations). `GitHubIntegration` facade in `github/github-integration/` handles all API calls. |
 | **Database Adapter**       | `IDatabaseAdapter` interface → `SqliteAdapter` (better-sqlite3). Entry operations split into `entries/` subdirectory (crud, search, importance, statistics, shared).                                  |
 | **Vector Search**          | `VectorSearchManager` integrates `sqlite-vec` + `@huggingface/transformers`. Lazy model loading on first use.                                                                                        |
