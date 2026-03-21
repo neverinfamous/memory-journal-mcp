@@ -8,7 +8,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_NOT_CONFIGURED, batchFetchAuthors } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
     TeamSemanticSearchSchema,
     TeamSemanticSearchSchemaMcp,
@@ -47,7 +47,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const input = TeamSemanticSearchSchema.parse(params)
@@ -126,7 +126,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             handler: (_params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { available: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { available: false, error: TEAM_DB_ERROR_RESPONSE.error }
                     }
 
                     if (!teamVectorManager) {
@@ -157,7 +157,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             handler: async (_params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     if (!teamVectorManager) {
@@ -199,7 +199,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { entry_id } = TeamAddToVectorIndexSchema.parse(params)

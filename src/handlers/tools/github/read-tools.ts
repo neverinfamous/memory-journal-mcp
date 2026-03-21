@@ -180,6 +180,10 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Issue #${String(input.issue_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the issue number exists in this repository.',
+                            recoverable: true,
                             owner: resolved.owner,
                             repo: resolved.repo,
                             detectedOwner: resolved.detectedOwner,
@@ -233,6 +237,10 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `PR #${String(input.pr_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the PR number exists in this repository.',
+                            recoverable: true,
                             owner: resolved.owner,
                             repo: resolved.repo,
                             detectedOwner: resolved.detectedOwner,
@@ -263,7 +271,14 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             handler: async (_params: unknown) => {
                 try {
                     if (!context.github) {
-                        return { success: false, error: 'GitHub integration not available' }
+                        return {
+                            success: false,
+                            error: 'GitHub integration not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                            recoverable: true,
+                        }
                     }
 
                     const ctx = await context.github.getRepoContext()

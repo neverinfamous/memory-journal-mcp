@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_NOT_CONFIGURED } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import { TeamBackupSchema, TeamBackupOutputSchema, TeamBackupsListOutputSchema } from './schemas.js'
 
 // ============================================================================
@@ -30,7 +30,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const input = TeamBackupSchema.parse(params)
@@ -60,7 +60,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
             handler: (_params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const backups = teamDb.listBackups()

@@ -6,7 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_NOT_CONFIGURED } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import {
     TeamGetStatisticsSchema,
     TeamGetStatisticsSchemaMcp,
@@ -41,7 +41,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { group_by } = TeamGetStatisticsSchema.parse(params)
@@ -89,7 +89,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const input = TeamCrossProjectInsightsSchema.parse(params)

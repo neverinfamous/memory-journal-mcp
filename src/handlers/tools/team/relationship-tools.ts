@@ -6,7 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_NOT_CONFIGURED } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE } from './helpers.js'
 import {
     TeamLinkEntriesSchema,
     TeamLinkEntriesSchemaMcp,
@@ -36,7 +36,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { from_entry_id, to_entry_id, relationship_type, description } =
@@ -106,7 +106,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { entry_id, tag, depth } =

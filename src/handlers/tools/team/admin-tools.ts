@@ -6,7 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_NOT_CONFIGURED, fetchAuthor } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
 import {
     TeamUpdateEntrySchema,
     TeamUpdateEntrySchemaMcp,
@@ -38,7 +38,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { entry_id, content, entry_type, tags } =
@@ -87,7 +87,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { entry_id } = TeamDeleteEntrySchema.parse(params)
@@ -124,7 +124,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { source_tag, target_tag } = TeamMergeTagsSchema.parse(params)

@@ -24,7 +24,14 @@ export async function resolveOwner(
     if (!context.github) {
         return {
             error: true,
-            response: { success: false, error: 'GitHub integration not available' },
+            response: {
+                success: false,
+                error: 'GitHub integration not available',
+                code: 'CONFIGURATION_ERROR',
+                category: 'configuration',
+                suggestion: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                recoverable: true,
+            },
         }
     }
 
@@ -39,6 +46,9 @@ export async function resolveOwner(
             response: {
                 success: false,
                 error: 'STOP: Could not auto-detect repository owner. DO NOT GUESS. You MUST ask the user to provide the GitHub owner.',
+                code: 'CONFIGURATION_ERROR',
+                category: 'configuration',
+                recoverable: true,
                 requiresUserInput: true,
                 detectedOwner,
                 instruction: entityLabel
@@ -71,7 +81,14 @@ export async function resolveOwnerRepo(
     if (!context.github) {
         return {
             error: true,
-            response: { success: false, error: 'GitHub integration not available' },
+            response: {
+                success: false,
+                error: 'GitHub integration not available',
+                code: 'CONFIGURATION_ERROR',
+                category: 'configuration',
+                suggestion: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                recoverable: true,
+            },
         }
     }
 
@@ -87,6 +104,9 @@ export async function resolveOwnerRepo(
             response: {
                 success: false,
                 error: 'STOP: Could not auto-detect repository. DO NOT GUESS. You MUST ask the user to provide the GitHub owner and repository name.',
+                code: 'CONFIGURATION_ERROR',
+                category: 'configuration',
+                recoverable: true,
                 requiresUserInput: true,
                 detectedOwner,
                 detectedRepo,

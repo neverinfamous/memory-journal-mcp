@@ -6,7 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { TEAM_DB_NOT_CONFIGURED, batchFetchAuthors } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
     TeamSearchSchema,
     TeamSearchSchemaMcp,
@@ -35,7 +35,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { query, tags, limit } = TeamSearchSchema.parse(params)
@@ -101,7 +101,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { start_date, end_date, entry_type, tags, limit } =

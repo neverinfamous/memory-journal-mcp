@@ -9,7 +9,7 @@ import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
-import { TEAM_DB_NOT_CONFIGURED, batchFetchAuthors, fetchAuthor } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
 import {
     TeamCreateEntrySchema,
     TeamCreateEntrySchemaMcp,
@@ -43,7 +43,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const input = TeamCreateEntrySchema.parse(params)
@@ -99,7 +99,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { entry_id, include_relationships } =
@@ -146,7 +146,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { limit } = TeamGetRecentSchema.parse(params)
@@ -179,7 +179,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (_params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const rawTags = teamDb.listTags()

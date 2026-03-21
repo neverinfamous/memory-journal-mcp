@@ -13,6 +13,16 @@ import type { ToolContext } from '../../../types/index.js'
 export const TEAM_DB_NOT_CONFIGURED =
     'Team database not configured. Set TEAM_DB_PATH environment variable to enable team collaboration.'
 
+/** Structured error response for unconfigured team DB — reused by all 20 team tools. */
+export const TEAM_DB_ERROR_RESPONSE = {
+    success: false as const,
+    error: TEAM_DB_NOT_CONFIGURED,
+    code: 'CONFIGURATION_ERROR',
+    category: 'configuration',
+    suggestion: 'Set TEAM_DB_PATH environment variable or --team-db CLI flag to enable team collaboration.',
+    recoverable: true,
+}
+
 // ============================================================================
 // Author Helpers
 // ============================================================================

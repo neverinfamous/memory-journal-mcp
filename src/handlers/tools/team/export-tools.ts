@@ -7,7 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { TEAM_DB_NOT_CONFIGURED, batchFetchAuthors } from './helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
     TeamExportEntriesSchema,
     TeamExportEntriesSchemaMcp,
@@ -34,7 +34,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
-                        return { success: false, error: TEAM_DB_NOT_CONFIGURED }
+                        return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
                     const { format, start_date, end_date, entry_type, tags, limit } =
