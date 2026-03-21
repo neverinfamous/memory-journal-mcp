@@ -2,7 +2,12 @@
 
 ### Changed
 
+- **Deleted stale `tools.json`** — Listed only 14 of 61 tools with no consumers. Authoritative references are `tool-reference.md` and `memory://help/{group}`.
+- **`server.json` author aligned** — Changed author from `Chris LeRoux` to `Adamic.tech` to match `package.json`.
+- **`server.json` description aligned** — Replaced stale description with `package.json` description for consistency across npm and MCP registry.
+- **README architecture diagram resource count** — Fixed `Resources (27)` → `Resources (28)` in the ASCII stack diagram.
 - **Compact JSON for tool responses** — Success-path responses use `JSON.stringify(result)` (no pretty-print) for ~15-20% payload reduction per mcp-builder §3.1. Error responses remain pretty-printed for readability.
+
 - **Server instructions refactor** — Removed ~55% redundant tool parameter tables from `server-instructions.ts` (511→285 lines) and `.md` (371→147 lines). Tool reference now served dynamically via `memory://help/{group}`. Field notes moved to new `memory://help/gotchas` resource. `standard` level now includes help resource pointers. ~33% token savings at `full` instruction level.
 - **mcp-builder skill updates (S1-S5)** — Updated `SKILL.md` with production-tested patterns from memory-journal-mcp: dynamic help resources as preferred Approach A (S1), single-source instructions alternative (S2), `ToolDefinition` vs `ToolRegistration` type distinction with `mapTool()` example (S3), briefing configuration with 12 env vars table (S4), `inferGroupFromName()` workaround for SDK's missing `group` field (S5).
 
