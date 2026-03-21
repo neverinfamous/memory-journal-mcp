@@ -14,7 +14,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools2.md`).
-2. If the plan requires no user decisions, proceed with implementation immediately.
+2. If the plan requires no user decisions, proceed with implementation immediately. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
 5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
@@ -29,7 +29,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 
 ## Phase 11: outputSchema Validation
 
-> [!NOTE]  
+> [!NOTE]
 > **61 tools** now return `structuredContent` validated against Zod output schemas.
 > Verify each response is structured JSON (not raw text).
 
@@ -111,28 +111,28 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 
 ### 11.8 Team Tools
 
-| Tool                             | Schema                          | Verification                                                          |
-| -------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
-| `team_create_entry`              | `TeamCreateOutputSchema`        | `success`, `entry` (with `author`), `author` field                    |
-| `team_get_recent`                | `TeamEntriesListOutputSchema`   | `entries` array (each with `author`), `count`                         |
-| `team_search`                    | `TeamEntriesListOutputSchema`   | `entries` array (each with `author`), `count`                         |
-| `team_get_entry_by_id`           | `TeamEntryDetailOutputSchema`   | `success`, `entry` (with `author`), optional `relationships`, `importance` |
-| `team_list_tags`                 | `TeamTagsListOutputSchema`      | `tags` array with `name`, `count`                                     |
-| `team_search_by_date_range`      | `TeamEntriesListOutputSchema`   | `entries` array (each with `author`), `count`                         |
-| `team_update_entry`              | `TeamUpdateOutputSchema`        | `success`, `entry` (updated)                                          |
-| `team_delete_entry`              | `TeamDeleteOutputSchema`        | `success`, `message`                                                  |
-| `team_merge_tags`                | `TeamMergeTagsOutputSchema`     | `success`, `message`, `entriesUpdated`, `sourceDeleted`               |
-| `team_get_statistics`            | `TeamStatisticsOutputSchema`    | `totalEntries`, `entryTypes`, `topTags`, `authors`                    |
-| `team_link_entries`              | `TeamLinkEntriesOutputSchema`   | `success`, `relationship`, optional `alreadyExists`                   |
-| `team_visualize_relationships`   | `TeamVisualizeOutputSchema`     | `mermaid`, `nodeCount`, `edgeCount`                                   |
-| `team_export_entries`            | `TeamExportOutputSchema`        | `format`, `data`, `count`                                             |
-| `team_backup`                    | `TeamBackupOutputSchema`        | `success`, `filename`, `path`, `sizeBytes`                            |
-| `team_list_backups`              | `TeamBackupsListOutputSchema`   | `backups` array, `total`, `backupsDirectory`                          |
-| `team_semantic_search`           | `TeamSemanticSearchOutputSchema`       | `query`, `entries` (with `similarity`), `count`                |
-| `team_get_vector_index_stats`    | `TeamVectorStatsOutputSchema`          | `available`, `itemCount`, `modelName`, `dimensions`, `success` |
-| `team_rebuild_vector_index`      | `TeamRebuildVectorIndexOutputSchema`   | `success`, `entriesIndexed`, optional `failedEntries`          |
-| `team_add_to_vector_index`       | `TeamAddToVectorIndexOutputSchema`     | `success`, `entryId`                                           |
-| `team_get_cross_project_insights`| `TeamCrossProjectInsightsOutputSchema` | `project_count`, `total_entries`, `projects`                   |
+| Tool                              | Schema                                 | Verification                                                               |
+| --------------------------------- | -------------------------------------- | -------------------------------------------------------------------------- |
+| `team_create_entry`               | `TeamCreateOutputSchema`               | `success`, `entry` (with `author`), `author` field                         |
+| `team_get_recent`                 | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
+| `team_search`                     | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
+| `team_get_entry_by_id`            | `TeamEntryDetailOutputSchema`          | `success`, `entry` (with `author`), optional `relationships`, `importance` |
+| `team_list_tags`                  | `TeamTagsListOutputSchema`             | `tags` array with `name`, `count`                                          |
+| `team_search_by_date_range`       | `TeamEntriesListOutputSchema`          | `entries` array (each with `author`), `count`                              |
+| `team_update_entry`               | `TeamUpdateOutputSchema`               | `success`, `entry` (updated)                                               |
+| `team_delete_entry`               | `TeamDeleteOutputSchema`               | `success`, `message`                                                       |
+| `team_merge_tags`                 | `TeamMergeTagsOutputSchema`            | `success`, `message`, `entriesUpdated`, `sourceDeleted`                    |
+| `team_get_statistics`             | `TeamStatisticsOutputSchema`           | `totalEntries`, `entryTypes`, `topTags`, `authors`                         |
+| `team_link_entries`               | `TeamLinkEntriesOutputSchema`          | `success`, `relationship`, optional `alreadyExists`                        |
+| `team_visualize_relationships`    | `TeamVisualizeOutputSchema`            | `mermaid`, `nodeCount`, `edgeCount`                                        |
+| `team_export_entries`             | `TeamExportOutputSchema`               | `format`, `data`, `count`                                                  |
+| `team_backup`                     | `TeamBackupOutputSchema`               | `success`, `filename`, `path`, `sizeBytes`                                 |
+| `team_list_backups`               | `TeamBackupsListOutputSchema`          | `backups` array, `total`, `backupsDirectory`                               |
+| `team_semantic_search`            | `TeamSemanticSearchOutputSchema`       | `query`, `entries` (with `similarity`), `count`                            |
+| `team_get_vector_index_stats`     | `TeamVectorStatsOutputSchema`          | `available`, `itemCount`, `modelName`, `dimensions`, `success`             |
+| `team_rebuild_vector_index`       | `TeamRebuildVectorIndexOutputSchema`   | `success`, `entriesIndexed`, optional `failedEntries`                      |
+| `team_add_to_vector_index`        | `TeamAddToVectorIndexOutputSchema`     | `success`, `entryId`                                                       |
+| `team_get_cross_project_insights` | `TeamCrossProjectInsightsOutputSchema` | `project_count`, `total_entries`, `projects`                               |
 
 ---
 
@@ -209,39 +209,39 @@ Calling a tool with wrong parameter types or missing required fields triggers a 
 
 For each tool group, verify at least one scenario from each applicable row:
 
-| Error Scenario                      | Tool Groups to Test                      | Example Input                                                           |
-| ----------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
-| Nonexistent entry ID                | core, admin, relationships               | `entry_id: 999999`                                                      |
-| Invalid entry_type enum             | core (`create_entry`, `update_entry`)    | `entry_type: "invalid_type"`                                            |
-| Invalid significance_type enum      | core (`create_entry`)                    | `significance_type: "invalid"`                                          |
-| Invalid date format                 | search (`search_by_date_range`)          | `start_date: "Jan 1"`                                                   |
-| Inverted date range                 | search (`search_by_date_range`)          | `start_date: "2026-12-31", end_date: "2026-01-01"` — verify behavior    |
-| Vector manager unavailable          | search (`semantic_search`)               | Verify `{ success: false, error: "..." }` not raw throw                 |
-| Add nonexistent to vector index     | admin (`add_to_vector_index`)            | `entry_id: 999999`                                                      |
-| Nonexistent backup filename         | backup (`restore_backup`)                | `filename: "nonexistent.db"`                                            |
-| Path traversal in backup name       | backup (`backup_journal`)                | `name: "../../etc/passwd"`                                              |
-| Invalid relationship_type enum      | relationships (`link_entries`)           | `relationship_type: "invalid"`                                          |
-| Missing required params (Zod)       | **Every tool with required params**      | `{}` (empty object — must return handler error, not MCP `-32602` error) |
-| Wrong param type (Zod)              | **Tools with typed params**              | Pass string where number expected, etc.                                 |
-| No GitHub token / unavailable       | github (all 16 tools)                    | Verify structured `{ error, requiresUserInput }` not raw throw          |
-| Nonexistent GitHub issue            | github (`get_github_issue`)              | `issue_number: 999999` → `{ error: "Issue #999999 not found" }`         |
-| Nonexistent GitHub PR               | github (`get_github_pr`)                 | `pr_number: 999999` → `{ error: "PR #999999 not found" }`               |
-| Nonexistent GitHub milestone        | github (`get_github_milestone`)          | `milestone_number: 999999` → `{ error: "Milestone #999999 not found" }` |
-| Close already-closed issue          | github (`close_github_issue_with_entry`) | Close an issue that's already closed                                    |
-| move_to_done without project_number | github (`close_github_issue_with_entry`) | `move_to_done: true` but no `project_number`                            |
-| Invalid Kanban target_status        | github (`move_kanban_item`)              | `target_status: "Nonexistent"` — ⚠️ verify outputSchema compatibility   |
-| Nonexistent Kanban project          | github (`get_kanban_board`)              | `project_number: 99999`                                                 |
-| Merge same tag (source = target)    | admin (`merge_tags`)                     | `source_tag: "x", target_tag: "x"`                                      |
-| Merge nonexistent source tag        | admin (`merge_tags`)                     | `source_tag: "nonexistent-xyz", target_tag: "test"`                     |
-| Team DB not configured              | team (all 20 tools)                      | Returns `{ success: false, error: "Team database not configured..." }`  |
-| Invalid team entry_type             | team (`team_create_entry`)               | `entry_type: "invalid"` → structured error                              |
-| Nonexistent team entry ID           | team (`team_get_entry_by_id`, `team_update_entry`, `team_delete_entry`) | `entry_id: 999999` → structured error            |
-| Invalid team date format            | team (`team_search_by_date_range`)       | `start_date: "Jan 1"` → structured error                                |
-| Merge same team tag                 | team (`team_merge_tags`)                 | `source_tag: "x", target_tag: "x"` → structured error                   |
-| Team link nonexistent               | team (`team_link_entries`)               | `from_entry_id: 999999` → structured error                              |
-| Team vector unavailable             | team (`team_semantic_search`)            | Verify `{ success: false, error: "..." }` not raw throw                 |
-| Team add nonexistent to vector      | team (`team_add_to_vector_index`)        | `entry_id: 999999` → structured error                                   |
-| Team insights empty                 | team (`team_get_cross_project_insights`) | Returns all required schema fields even when empty                      |
+| Error Scenario                      | Tool Groups to Test                                                     | Example Input                                                           |
+| ----------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Nonexistent entry ID                | core, admin, relationships                                              | `entry_id: 999999`                                                      |
+| Invalid entry_type enum             | core (`create_entry`, `update_entry`)                                   | `entry_type: "invalid_type"`                                            |
+| Invalid significance_type enum      | core (`create_entry`)                                                   | `significance_type: "invalid"`                                          |
+| Invalid date format                 | search (`search_by_date_range`)                                         | `start_date: "Jan 1"`                                                   |
+| Inverted date range                 | search (`search_by_date_range`)                                         | `start_date: "2026-12-31", end_date: "2026-01-01"` — verify behavior    |
+| Vector manager unavailable          | search (`semantic_search`)                                              | Verify `{ success: false, error: "..." }` not raw throw                 |
+| Add nonexistent to vector index     | admin (`add_to_vector_index`)                                           | `entry_id: 999999`                                                      |
+| Nonexistent backup filename         | backup (`restore_backup`)                                               | `filename: "nonexistent.db"`                                            |
+| Path traversal in backup name       | backup (`backup_journal`)                                               | `name: "../../etc/passwd"`                                              |
+| Invalid relationship_type enum      | relationships (`link_entries`)                                          | `relationship_type: "invalid"`                                          |
+| Missing required params (Zod)       | **Every tool with required params**                                     | `{}` (empty object — must return handler error, not MCP `-32602` error) |
+| Wrong param type (Zod)              | **Tools with typed params**                                             | Pass string where number expected, etc.                                 |
+| No GitHub token / unavailable       | github (all 16 tools)                                                   | Verify structured `{ error, requiresUserInput }` not raw throw          |
+| Nonexistent GitHub issue            | github (`get_github_issue`)                                             | `issue_number: 999999` → `{ error: "Issue #999999 not found" }`         |
+| Nonexistent GitHub PR               | github (`get_github_pr`)                                                | `pr_number: 999999` → `{ error: "PR #999999 not found" }`               |
+| Nonexistent GitHub milestone        | github (`get_github_milestone`)                                         | `milestone_number: 999999` → `{ error: "Milestone #999999 not found" }` |
+| Close already-closed issue          | github (`close_github_issue_with_entry`)                                | Close an issue that's already closed                                    |
+| move_to_done without project_number | github (`close_github_issue_with_entry`)                                | `move_to_done: true` but no `project_number`                            |
+| Invalid Kanban target_status        | github (`move_kanban_item`)                                             | `target_status: "Nonexistent"` — ⚠️ verify outputSchema compatibility   |
+| Nonexistent Kanban project          | github (`get_kanban_board`)                                             | `project_number: 99999`                                                 |
+| Merge same tag (source = target)    | admin (`merge_tags`)                                                    | `source_tag: "x", target_tag: "x"`                                      |
+| Merge nonexistent source tag        | admin (`merge_tags`)                                                    | `source_tag: "nonexistent-xyz", target_tag: "test"`                     |
+| Team DB not configured              | team (all 20 tools)                                                     | Returns `{ success: false, error: "Team database not configured..." }`  |
+| Invalid team entry_type             | team (`team_create_entry`)                                              | `entry_type: "invalid"` → structured error                              |
+| Nonexistent team entry ID           | team (`team_get_entry_by_id`, `team_update_entry`, `team_delete_entry`) | `entry_id: 999999` → structured error                                   |
+| Invalid team date format            | team (`team_search_by_date_range`)                                      | `start_date: "Jan 1"` → structured error                                |
+| Merge same team tag                 | team (`team_merge_tags`)                                                | `source_tag: "x", target_tag: "x"` → structured error                   |
+| Team link nonexistent               | team (`team_link_entries`)                                              | `from_entry_id: 999999` → structured error                              |
+| Team vector unavailable             | team (`team_semantic_search`)                                           | Verify `{ success: false, error: "..." }` not raw throw                 |
+| Team add nonexistent to vector      | team (`team_add_to_vector_index`)                                       | `entry_id: 999999` → structured error                                   |
+| Team insights empty                 | team (`team_get_cross_project_insights`)                                | Returns all required schema fields even when empty                      |
 
 ### What to Report
 
@@ -259,27 +259,27 @@ For every tool with optional numeric parameters, call the tool with `param: "abc
 
 Unacceptable: Raw MCP error frame with `-32602` code.
 
-| Tool                         | Parameter              | Test Call                                                                                |
-| ---------------------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
-| `get_recent_entries`         | `limit`                | `get_recent_entries({limit: "abc"})`                                                     |
-| `search_entries`             | `limit`                | `search_entries({query: "test", limit: "abc"})`                                          |
-| `search_by_date_range`       | `limit`                | `search_by_date_range({start_date: "2026-01-01", end_date: "2026-12-31", limit: "abc"})` |
-| `semantic_search`            | `limit`                | `semantic_search({query: "test", limit: "abc"})`                                         |
-| `semantic_search`            | `similarity_threshold` | `semantic_search({query: "test", similarity_threshold: "abc"})`                          |
-| `export_entries`             | `limit`                | `export_entries({format: "json", limit: "abc"})`                                         |
-| `cleanup_backups`            | `keep_count`           | `cleanup_backups({keep_count: "abc"})`                                                   |
-| `visualize_relationships`    | `depth`                | `visualize_relationships({entry_id: 1, depth: "abc"})`                                   |
-| `visualize_relationships`    | `limit`                | `visualize_relationships({entry_id: 1, limit: "abc"})`                                   |
-| `get_github_issues`          | `limit`                | `get_github_issues({limit: "abc"})`                                                      |
-| `get_github_prs`             | `limit`                | `get_github_prs({limit: "abc"})`                                                         |
-| `team_get_recent`            | `limit`                | `team_get_recent({limit: "abc"})`                                                        |
-| `team_search_by_date_range`  | `limit`                | `team_search_by_date_range({start_date: "2026-01-01", end_date: "2026-12-31", limit: "abc"})` |
-| `team_export_entries`        | `limit`                | `team_export_entries({format: "json", limit: "abc"})`                                    |
-| `team_visualize_relationships` | `depth`              | `team_visualize_relationships({entry_id: 1, depth: "abc"})`                              |
-| `get_cross_project_insights` | `min_entries`          | `get_cross_project_insights({min_entries: "abc"})`                                       |
-| `team_semantic_search`            | `limit`                | `team_semantic_search({query: "test", limit: "abc"})`                               |
-| `team_semantic_search`            | `similarity_threshold` | `team_semantic_search({query: "test", similarity_threshold: "abc"})`                |
-| `team_get_cross_project_insights` | `min_entries`          | `team_get_cross_project_insights({min_entries: "abc"})`                              |
+| Tool                              | Parameter              | Test Call                                                                                     |
+| --------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------- |
+| `get_recent_entries`              | `limit`                | `get_recent_entries({limit: "abc"})`                                                          |
+| `search_entries`                  | `limit`                | `search_entries({query: "test", limit: "abc"})`                                               |
+| `search_by_date_range`            | `limit`                | `search_by_date_range({start_date: "2026-01-01", end_date: "2026-12-31", limit: "abc"})`      |
+| `semantic_search`                 | `limit`                | `semantic_search({query: "test", limit: "abc"})`                                              |
+| `semantic_search`                 | `similarity_threshold` | `semantic_search({query: "test", similarity_threshold: "abc"})`                               |
+| `export_entries`                  | `limit`                | `export_entries({format: "json", limit: "abc"})`                                              |
+| `cleanup_backups`                 | `keep_count`           | `cleanup_backups({keep_count: "abc"})`                                                        |
+| `visualize_relationships`         | `depth`                | `visualize_relationships({entry_id: 1, depth: "abc"})`                                        |
+| `visualize_relationships`         | `limit`                | `visualize_relationships({entry_id: 1, limit: "abc"})`                                        |
+| `get_github_issues`               | `limit`                | `get_github_issues({limit: "abc"})`                                                           |
+| `get_github_prs`                  | `limit`                | `get_github_prs({limit: "abc"})`                                                              |
+| `team_get_recent`                 | `limit`                | `team_get_recent({limit: "abc"})`                                                             |
+| `team_search_by_date_range`       | `limit`                | `team_search_by_date_range({start_date: "2026-01-01", end_date: "2026-12-31", limit: "abc"})` |
+| `team_export_entries`             | `limit`                | `team_export_entries({format: "json", limit: "abc"})`                                         |
+| `team_visualize_relationships`    | `depth`                | `team_visualize_relationships({entry_id: 1, depth: "abc"})`                                   |
+| `get_cross_project_insights`      | `min_entries`          | `get_cross_project_insights({min_entries: "abc"})`                                            |
+| `team_semantic_search`            | `limit`                | `team_semantic_search({query: "test", limit: "abc"})`                                         |
+| `team_semantic_search`            | `similarity_threshold` | `team_semantic_search({query: "test", similarity_threshold: "abc"})`                          |
+| `team_get_cross_project_insights` | `min_entries`          | `team_get_cross_project_insights({min_entries: "abc"})`                                       |
 
 ### Reporting Format
 

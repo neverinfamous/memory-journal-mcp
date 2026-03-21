@@ -4,15 +4,17 @@
 
 ## Files
 
-| File                                             | Purpose                                                                                                                                                                               | When to Read                                 |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `test-tools.md`                                  | **Pass 1: Core Functionality** — Phases 0-10 covering seed data, happy paths, error paths, and feature verification for all 56 tools, 22 resources, 16 prompts, and scheduler         | Always read first                            |
-| `test-tools2.md`                                 | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes                       |
-| `test-tools-codemode.md`                         | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration              | After Pass 1 completes                       |
-| `test-tools-codemode2.md`                        | **Pass 4: Code Mode Advanced** — Extended Code Mode scenarios                                                                                                                         | After Pass 3 completes                       |
-| `test-preflight.md`                              | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps                                                                                  | Before any test pass                         |
-| `test-agent-experience.md`                       | **Agent experience test** — 23 open-ended scenarios across 4 passes validating instruction sufficiency for cold-start                                                                  | After instruction changes                    |
-| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 56 tools across 10 groups                                                                                                                | Reference                                    |
+| File                                     | Purpose                                                                                                                                                                               | When to Read                                 |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `test-tools.md`                          | **Pass 1: Core Functionality** — Phases 0-8, 10 covering seed data, happy paths, error paths, and feature verification for 41 core tools, 22 resources, 16 prompts, and scheduler     | Always read first                            |
+| `test-tools-team.md`                     | **Pass 1b: Team Collaboration** — Phase 9 covering 20 team tools + 2 team resources                                                                                                   | After Pass 1 completes                       |
+| `test-tools2.md`                         | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes                       |
+| `test-tools-codemode.md`                 | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration              | After Pass 1 completes                       |
+| `test-tools-codemode2.md`               | **Pass 4: Code Mode Advanced** — Extended Code Mode scenarios                                                                                                                         | After Pass 3 completes                       |
+| `test-resources.md`                      | **Resource Testing** — Comprehensive validation of all 22 resources (15 static + 7 template) with expected output shapes and pass criteria                                            | After Pass 1 completes                       |
+| `test-preflight.md`                      | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps                                                                                  | Before any test pass                         |
+| `test-agent-experience.md`               | **Agent experience test** — 23 open-ended scenarios across 4 passes validating instruction sufficiency for cold-start                                                                  | After instruction changes                    |
+| [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 61 tools across 11 groups                                                                                                                | Reference                                    |
 | [`code-map.md`](code-map.md)             | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns                                                      | When debugging source code or making changes |
 
 ## Integration Test Scripts
@@ -27,7 +29,7 @@ These scripts test features that require separate server processes — they **ca
 | Script                        | Tests                                                                  | Transport     | Duration |
 | ----------------------------- | ---------------------------------------------------------------------- | ------------- | -------- |
 | `test-instruction-levels.mjs` | `--instruction-level` essential/standard/full token ordering           | stdio         | ~10s     |
-| `test-tool-annotations.mjs`   | `tools/list` openWorldHint annotation counts (28 false + 16 true = 44) | stdio         | ~5s      |
+| `test-tool-annotations.mjs`   | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61) | stdio         | ~5s      |
 | `test-scheduler.mjs`          | Scheduler job execution (backup, vacuum, rebuild-index)                | HTTP stateful | ~130s    |
 
 ### Quick Run
@@ -76,8 +78,8 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 
 ### Tool Annotations (Phase 1.3B)
 
-- [ ] 56 tools returned, all with `annotations` object
-- [ ] 28 tools with `openWorldHint: false`, 16 with `openWorldHint: true`, 0 missing
+- [ ] 61 tools returned, all with `annotations` object
+- [ ] 45 tools with `openWorldHint: false`, 16 with `openWorldHint: true`, 0 missing
 
 ### Scheduler (Phase 10)
 
@@ -132,8 +134,11 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 4. **Run integration test scripts** for Phase 1.3 (instruction levels, annotations) and Phase 10 (scheduler).
 5. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
 6. Report findings returning proper handler formatting.
-7. (Optional) Run Pass 2 from `test-tools2.md` after Pass 1 completes successfully.
-8. (Optional) Run Pass 3 from `test-tools-codemode.md` for Code Mode sandbox testing.
+7. (Optional) Run Pass 1b from `test-tools-team.md` for team collaboration testing.
+8. (Optional) Run Pass 2 from `test-tools2.md` after Pass 1 completes successfully.
+9. (Optional) Run Pass 3 from `test-tools-codemode.md` for Code Mode sandbox testing.
+10. (Optional) Run Pass 4 from `test-tools-codemode2.md` for advanced Code Mode scenarios.
+11. (Optional) Run resource tests from `test-resources.md` for comprehensive resource validation.
 
 ## Troubleshooting
 
