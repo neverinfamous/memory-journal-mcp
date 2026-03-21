@@ -36,6 +36,7 @@
 
 ### Changed
 
+- **Code Mode Readonly Contract Clarified** — Documentation explicitly defines that calling mutation methods under `--tool-filter readonly` safely halts the sandbox and returns a structured `{ success: false, error: "..." }` response rather than a raw exception.
 - **Code Quality Audit Fixes**: Used `milestoneCompletionPct` helper in milestone tool handlers and extracted `MAX_QUERY_LIMIT` constant/helper in search handlers to DRY up duplication.
 - **npm publish gated behind Docker checks** — npm no longer publishes on release creation; instead `docker-publish.yml` calls `publish-npm.yml` via `workflow_call` after Docker Scout passes and images are pushed. Both artifacts ship together or neither ships. Manual `workflow_dispatch` fallback preserved.
 - **Dependency Updates** — Updated 27 npm packages; `eslint` → `10.1.0`, `jose` → `6.2.2`, `sqlite-vec` → `0.1.7`, `typescript-eslint` → `8.57.1`. 0 vulnerabilities.
