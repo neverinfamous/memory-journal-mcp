@@ -195,6 +195,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         const entry = db.getEntryById(input.entry_id)
                         if (!entry) {
                             return {
+                                success: false,
                                 entry_count: 0,
                                 relationship_count: 0,
                                 root_entry: input.entry_id,
