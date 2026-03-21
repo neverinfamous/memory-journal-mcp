@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **`visualize_relationships` missing success field** — The handler returned a `message` but omitted `success: false` when an entry was not found, violating the common structured error format. Added `success: false` to the failure response.
 - **`team_list_tags` output validation error** — Handler passed raw `listTags()` result with `usageCount` field directly, but `TagOutputSchema` expects `count`. Added mapping to match the personal `list_tags` handler pattern.
 - **FTS5 phrase search (`"error handling"` returns 0 results)** — The porter stemmer indexes `handling` → `handl`, so FTS5 phrase queries requiring exact token sequences never match stemmed content. Added `sanitizeFtsQuery` helper in `search.ts` that detects pure quoted phrases (e.g. `"error handling"`) and rewrites them as AND-joined terms (`error AND handling`), letting the stemmer apply per-word and correctly finding matches.
 - **Sandbox readonly `TypeError`** — Calling a mutation method (e.g. `mj.relationships.linkEntries`) in `readonly: true` mode threw `TypeError: mj.relationships.linkEntries is not a function` because the stripped method was `undefined`. Wrapped each group proxy in a `Proxy` with a `get` trap that returns a structured `{ success: false, error: "Operation '...' is not available..." }` for any unknown method.
