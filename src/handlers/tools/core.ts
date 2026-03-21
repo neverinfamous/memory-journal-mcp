@@ -255,7 +255,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const { entry_id, include_relationships } = GetEntryByIdSchema.parse(params)
                     const entry = db.getEntryById(entry_id)
                     if (!entry) {
-                        return { success: false, error: `Entry ${String(entry_id)} not found` }
+                        return {
+                            success: false,
+                            error: `Entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
+                        }
                     }
                     const { score: importance, breakdown: importanceBreakdown } =
                         db.calculateImportance(entry_id)

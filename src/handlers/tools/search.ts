@@ -282,6 +282,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: 'Semantic search not initialized. Vector search manager is not available.',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                             query: input.query,
                             entries: [],
                             count: 0,
@@ -363,6 +367,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             available: false,
                             error: 'Vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                         }
                     }
                     const stats = vectorManager.getStats()

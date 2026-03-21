@@ -122,6 +122,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Entry ${String(input.entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
                         }
                     }
 
@@ -258,6 +262,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entriesIndexed: 0,
                             error: 'Vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                         }
                     }
                     const { indexed, failed, firstError } = await vectorManager.rebuildIndex(
@@ -294,6 +302,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entryId: entry_id,
                             error: 'Vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                         }
                     }
                     const entry = db.getEntryById(entry_id)
@@ -302,6 +314,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entryId: entry_id,
                             error: `Entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
                         }
                     }
                     const result = await vectorManager.addEntry(entry_id, entry.content)

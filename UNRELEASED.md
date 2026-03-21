@@ -8,6 +8,11 @@
 - **`memory://workflows` resource** — New resource that serves the `MEMORY_JOURNAL_WORKFLOW_SUMMARY` env var value via `BriefingConfig.workflowSummary`. Can also be set via `--workflow-summary` CLI flag. Returns `{ configured: false }` when not set.
 - **`memory://skills` resource** — New resource that scans `SKILLS_DIR_PATH` for `SKILL.md` files and returns a structured skill index with names, paths, and excerpts.
 - **`memory://skills` caching** — Added a 5-minute in-memory TTL cache to prevent expensive synchronous file I/O scans on every read request when the skills directory is large.
+- **Error auto-refinement** — `MemoryJournalMcpError` base class now auto-refines generic codes (e.g., `QUERY_FAILED` → `TABLE_NOT_FOUND`) when the message matches a known pattern from `ERROR_SUGGESTIONS`. New `matchSuggestion()` utility in `src/utils/errors/suggestions.ts`.
+- **`structuredContent` on error responses** — Tool error responses now include `structuredContent` with `code`, `category`, `suggestion`, and `recoverable` fields when the tool has an `outputSchema`, matching the success path behavior.
+- **Query helpers** — New `coerceNumber()`, `coerceBoolean()`, `coerceLimit()`, `buildLimitClause()` utilities in `src/utils/query-helpers.ts` for type-safe MCP input coercion.
+- **Resource annotation presets** — Centralized `HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED` presets in `src/utils/resource-annotations.ts`.
+- **Tool invariant tests** — Added `tool-annotations.test.ts` and `tool-output-schemas.test.ts` verifying all tools have annotations (`readOnlyHint`, `openWorldHint`), `outputSchema`, and `ErrorFieldsMixin` compliance.
 
 ### Fixed
 
@@ -21,6 +26,8 @@
 - **`link_entries` self-loop & validation shapes (BUG-R1/R2)** — The tool no longer allows an entry to link to itself. Non-existent entry errors also now return a structured `{ code: 'NOT_FOUND' }` object instead of a `{ message: '...' }` object matching the project's standardized error formats.
 - **Sandbox readonly mode behavior (BUG-C2/C3)** — Writing functions (e.g. `mj.core.create()`) in a `readonly: true` evaluation now correctly throw a captured Error (via `Promise.reject()`) failing the block immediately instead of silently succeeding with `undefined`. Corrected documentation in `server-instructions.md` indicating that `readonly` methods throw on access. Added missing return shape docs for `mj.core.recent()`.
 - **`team_get_cross_project_insights` scaling trap** — Added a `limit` parameter to the schema (default 100, max 500) and mapped it to the SQL `LIMIT` clauses for active/inactive project aggregations. This bounds the queries, explicitly enforcing the project's internal `MAX_QUERY_LIMIT` architecture, and strictly guarantees the subsequent tag index lookup (`IN (?,?,...)`) can never exceed SQLite's 999 maximum variable bindings, preventing O(n²) memory and parsing overhead during heavy team database load.
+- **Ad-hoc error responses standardized** — 8 handler error responses across `core.ts`, `admin.ts`, and `search.ts` that returned bare `{ success: false, error }` now include `code`, `category`, `suggestion`, and `recoverable` fields.
+- **`formatHandlerError` enriched** — Raw `Error` instances now get matched against `ERROR_SUGGESTIONS` for actionable suggestions and refined error codes instead of always returning bare `INTERNAL_ERROR`.
 
 ### Security
 - **CI/CD Hardening**: Added `--provenance` flag to `npm publish` in `publish-npm.yml` for SLSA Build L3 attestation. Added `id-token: write` permission for OIDC provenance token generation.
@@ -41,3 +48,5 @@
 - **Code Quality Audit Fixes**: Used `milestoneCompletionPct` helper in milestone tool handlers and extracted `MAX_QUERY_LIMIT` constant/helper in search handlers to DRY up duplication.
 - **npm publish gated behind Docker checks** — npm no longer publishes on release creation; instead `docker-publish.yml` calls `publish-npm.yml` via `workflow_call` after Docker Scout passes and images are pushed. Both artifacts ship together or neither ships. Manual `workflow_dispatch` fallback preserved.
 - **Dependency Updates** — Updated 27 npm packages; `eslint` → `10.1.0`, `jose` → `6.2.2`, `sqlite-vec` → `0.1.7`, `typescript-eslint` → `8.57.1`. 0 vulnerabilities.
+- **`relaxedNumber()` type-safe union** — Changed from `z.any()` to `z.union([z.number(), z.string()])` for MCP SDK inputSchema registration. Accepts both native numbers and string-typed numbers while rejecting non-numeric types at the SDK level. `z.preprocess()` was evaluated but caused 192 ESLint `@typescript-eslint/no-unsafe-*` cascading errors due to unresolvable `ZodEffects` generics.
+- **mcp-builder compliance audit** — Complexity tier 4. Audited error handling, input coercion, and tool/resource patterns against mcp-builder standards. Implemented 10 remediation items; deferred `memory://help` resources (R3) to a separate PR.

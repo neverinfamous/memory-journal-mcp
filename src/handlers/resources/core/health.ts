@@ -1,5 +1,6 @@
 import { getAllToolNames } from '../../../filtering/tool-filter.js'
 import { ICON_HEALTH } from '../../../constants/icons.js'
+import { HIGH_PRIORITY } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 
 /**
@@ -18,8 +19,8 @@ export const healthResource: InternalResourceDef = {
     mimeType: 'application/json',
     icons: [ICON_HEALTH],
     annotations: {
+        ...HIGH_PRIORITY,
         audience: ['assistant'],
-        priority: 0.9,
     },
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
         const dbHealth = context.db.getHealthStatus()

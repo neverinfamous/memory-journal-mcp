@@ -273,13 +273,25 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         ],
                     }
                 } catch (error) {
+                    const errorMessage =
+                        error instanceof Error ? error.message : String(error)
+                    const errorResult = {
+                        success: false,
+                        error: errorMessage,
+                        code: 'INTERNAL_ERROR',
+                        category: 'internal',
+                        recoverable: false,
+                    }
                     return {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+                                text: JSON.stringify(errorResult, null, 2),
                             },
                         ],
+                        ...(hasOutputSchema
+                            ? { structuredContent: errorResult }
+                            : {}),
                         isError: true,
                     }
                 }
