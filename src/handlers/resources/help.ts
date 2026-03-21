@@ -287,45 +287,63 @@ function getAllToolDefinitions(context: ResourceContext): MinimalToolDef[] {
 }
 
 /**
- * Infer tool group from the tool name prefix.
- * e.g., 'team_search_entries' → 'team', 'get_entry_by_id' → 'core'
+ * Infer tool group from the tool name.
+ * Exhaustive map of all 61 tools — team_ and mj_ prefixes handled first,
+ * then explicit lookup for the remaining 41 tools.
  */
 function inferGroupFromName(name: string): string {
     if (name.startsWith('team_')) return 'team'
     if (name.startsWith('mj_')) return 'codemode'
-    if (name.startsWith('get_github_') || name.startsWith('get_copilot_')) return 'github'
 
-    // Map known tool names to groups
     const groupMap: Record<string, string> = {
+        // core (6)
         create_entry: 'core',
-        get_recent_entries: 'core',
+        create_entry_minimal: 'core',
         get_entry_by_id: 'core',
+        get_recent_entries: 'core',
         test_simple: 'core',
-        delete_entry: 'core',
-        get_entry_count: 'core',
-
+        list_tags: 'core',
+        // search (4)
         search_entries: 'search',
         search_by_date_range: 'search',
         semantic_search: 'search',
         get_vector_index_stats: 'search',
-
-        get_importance_score: 'analytics',
+        // analytics (2)
         get_statistics: 'analytics',
-
+        get_cross_project_insights: 'analytics',
+        // relationships (2)
         link_entries: 'relationships',
         visualize_relationships: 'relationships',
-
+        // export (1)
         export_entries: 'export',
-
+        // admin (5)
         update_entry: 'admin',
+        delete_entry: 'admin',
+        merge_tags: 'admin',
         rebuild_vector_index: 'admin',
         add_to_vector_index: 'admin',
-        merge_tags: 'admin',
-        list_tags: 'admin',
-
-        create_backup: 'backup',
+        // backup (4)
+        backup_journal: 'backup',
         list_backups: 'backup',
         restore_backup: 'backup',
+        cleanup_backups: 'backup',
+        // github (16)
+        get_github_issues: 'github',
+        get_github_prs: 'github',
+        get_github_issue: 'github',
+        get_github_pr: 'github',
+        get_github_context: 'github',
+        get_github_milestones: 'github',
+        get_github_milestone: 'github',
+        create_github_milestone: 'github',
+        update_github_milestone: 'github',
+        delete_github_milestone: 'github',
+        get_kanban_board: 'github',
+        move_kanban_item: 'github',
+        create_github_issue_with_entry: 'github',
+        close_github_issue_with_entry: 'github',
+        get_repo_insights: 'github',
+        get_copilot_reviews: 'github',
     }
 
     return groupMap[name] ?? 'core'
