@@ -30,6 +30,7 @@
 
 - **Test prompt: incorrect env var** — `test-tools2.md` referenced non-existent `WORKFLOWS_DIR_PATH`; corrected to `MEMORY_JOURNAL_WORKFLOW_SUMMARY` (or `--workflow-summary`).
 - **Test prompt: missing verification row** — `test-tools-codemode2.md` Phase 27.4 table omitted `newTagExists` check despite the test code computing it.
+- **Test prompt: stale counts and missing coverage** — `test-tools.md` instruction token sizes updated from pre-refactor (~1.2K/~1.4K/~6.7K) to post-refactor (~1.5K/~1.7K/~2.7K). `test-tools2.md` resource count 27→28, template count 7→8, and added `memory://help/gotchas` test row.
 - **README/DOCKER_README resource categorization** — `memory://help/{group}` moved from Static to Template resources (19 Static + 8 Template = 27 total).
 
 - **`visualize_relationships` missing success field** — The handler returned a `message` but omitted `success: false` when an entry was not found, violating the common structured error format. Added `success: false` to the failure response.

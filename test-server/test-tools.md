@@ -124,7 +124,7 @@ node test-server/test-tool-annotations.mjs
 
 | Check              | Expected                                                             |
 | ------------------ | -------------------------------------------------------------------- |
-| Instruction levels | essential (~1.2K) < standard (~1.4K) < full (~6.7K tokens)           |
+| Instruction levels | essential (~1.5K) < standard (~1.7K) < full (~2.7K tokens)           |
 | Tool annotations   | 61 tools, all with `annotations`, 45 `false` + 16 `true` = 0 missing |
 
 ### 1.4 GitHub Status Resource
@@ -356,7 +356,7 @@ node test-server/test-scheduler.mjs
 ### Core Functionality
 
 - [ ] All 24 core tools execute without errors on happy paths (GitHub tools tested in `test-tools2.md`, team tools in `test-tools-team.md`)
-- [ ] Server instructions length respects `--instruction-level`: essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
+- [ ] Server instructions length respects `--instruction-level`: essential (~1.5K tokens) < standard (~1.7K) < full (~2.7K)
 - [ ] 45 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (61 total, 0 missing)
 
 ### Entry CRUD

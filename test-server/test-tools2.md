@@ -2,7 +2,7 @@
 
 Exhaustively validate the memory-journal-mcp server's output schemas, error handling, GitHub integration, template/static resources, prompt handlers, data integrity, boundary values, and implementation correctness.
 
-**Scope:** Cross-cutting validation of all 61 tools (60 with outputSchema + Code Mode) and 27 resources — this file covers outputSchema verification, all resource validation, GitHub tool happy paths + lifecycle + cleanup, prompt handler verification, structured error testing, data integrity round-trips, boundary values, and implementation bug detection. Phases 0-7.
+**Scope:** Cross-cutting validation of all 61 tools (60 with outputSchema + Code Mode) and 28 resources — this file covers outputSchema verification, all resource validation, GitHub tool happy paths + lifecycle + cleanup, prompt handler verification, structured error testing, data integrity round-trips, boundary values, and implementation bug detection. Phases 0-7.
 
 **Prerequisites:**
 
@@ -160,6 +160,7 @@ Exhaustively validate the memory-journal-mcp server's output schemas, error hand
 | Team statistics   | `memory://team/statistics`   | `configured: true`, `authors` array with `{ author, count }`, `source: "team"`                                                                    |
 | Help index        | `memory://help`              | Lists all tool groups with counts, descriptions, and `totalTools`                                                                                 |
 | Help group detail | `memory://help/{group}`      | Per-group tool listing with parameters, descriptions, and annotations (test with `memory://help/core`)                                            |
+| Help gotchas      | `memory://help/gotchas`      | Field notes and practical tips (moved from server instructions); verify non-empty content with actionable guidance                                 |
 | Rules             | `memory://rules`             | Rules file content (requires `RULES_FILE_PATH`); graceful empty if not set                                                                        |
 | Workflows         | `memory://workflows`         | Workflow summary (requires `MEMORY_JOURNAL_WORKFLOW_SUMMARY` or `--workflow-summary`); returns `{ configured: false }` when not set                |
 | Skills            | `memory://skills`            | Indexed skills listing (requires `SKILLS_DIR_PATH`); graceful empty if not set                                                                    |
@@ -634,8 +635,8 @@ Unacceptable: Raw MCP error frame with `-32602` code.
 ### Resources (Phase 1)
 
 - [ ] All 20 static resources return valid data
-- [ ] All 7 template resources work with valid parameters
-- [ ] All 7 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- [ ] All 8 template resources work with valid parameters
+- [ ] All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
 - [ ] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
 - [ ] `memory://tags` tag counts match `list_tags` output
 - [ ] `memory://statistics` structured stats match `get_statistics` output
