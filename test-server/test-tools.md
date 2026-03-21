@@ -446,10 +446,23 @@ node test-server/test-tool-annotations.mjs
 
 ## Phase 8: Prompt Handler Verification (16 prompts) [DO NOT SKIP!]
 
-> [!NOTE]
-> Prompts return `GetPromptResult` objects with `messages` arrays. While the _workflows_ prompts describe require a human to act on, the **handlers themselves** are testable via `prompts/get` MCP calls. This phase verifies response shape, argument enforcement, and content generation.
->
-> **How to test:** Call `prompts/get` with the prompt name and arguments. The MCP client should expose this as a callable action, or use the protocol directly.
+> [!IMPORTANT]
+> Prompts return `GetPromptResult` objects with `messages` arrays. Most MCP clients don't expose `prompts/get` as a callable tool — run the script below instead. It handles session init, prompt listing, and shape verification automatically. See `test-server/README.md` for full details.
+
+```powershell
+npm run build
+node test-server/test-prompts.mjs
+```
+
+| Check                   | Expected                                                       |
+| ----------------------- | -------------------------------------------------------------- |
+| Prompts listed          | 16 prompts with correct argument signatures                    |
+| All 18 prompt calls     | PASS — `messages[0].role === 'user'`, non-empty `content.text` |
+| Nonexistent prompt      | MCP error (code `-32602`)                                      |
+| Missing required arg    | Error returned or handled gracefully                           |
+| **Total**               | **20 pass, 0 fail**                                            |
+
+The tables below document what the script tests — use them as a reference for manual verification or when adding new prompts.
 
 ### 8.1 Workflow Prompts (10 prompts)
 
@@ -519,7 +532,6 @@ For **every** prompt response, verify:
 | Message has `content`  | `messages[0].content` is object with `type: 'text'` and `text: string` |
 | Text is non-empty      | `messages[0].content.text.length > 0`                                  |
 
-
 ## Phase 9: Automated Scheduler — Run via Script [DO NOT SKIP!]
 
 > [!IMPORTANT]
@@ -556,7 +568,6 @@ node test-server/test-scheduler.mjs
 7. **Phase 7**: Admin/Backup (test last to avoid data loss)
 8. **Phase 8**: Prompt Handler Verification (verify `prompts/get` response shape for all 16 prompts)
 9. **Phase 9**: Automated Scheduler (HTTP only — manual terminal test)
-   - Team Collaboration tests → see `test-tools-team.md`
 
 ---
 
@@ -660,10 +671,6 @@ node test-server/test-scheduler.mjs
 - [ ] `backup_journal` without `name` generates auto-timestamped backup
 - [ ] `backup_journal` rejects names containing path traversal characters (`../`) with structured errors
 - [ ] `restore_backup` with nonexistent filename returns structured error
-
-### Team Collaboration
-
-See `test-tools-team.md` for team collaboration success criteria (20 tools + 2 resources).
 
 ### Scheduler (Phase 9)
 
