@@ -94,7 +94,7 @@ export const briefingResource: InternalResourceDef = {
                 },
                 userMessage,
                 clientNote:
-                    'For complete tool reference and field notes, read memory://instructions.',
+                    'For full tool reference and field notes, read memory://instructions — only if your client did NOT auto-inject server instructions at session start (most modern clients including AntiGravity do this automatically).',
             },
             annotations: { lastModified: journal.lastModified },
         } satisfies ResourceResult
