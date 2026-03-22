@@ -100,13 +100,13 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 ```js
 // ✅ Correct
 const result = await mj.core.recent({ limit: 5 })
-return result.entries.map(e => e.id)
+return result.entries.map((e) => e.id)
 
 // ❌ Wrong — returns a Promise object, not the entries
 const result = mj.core.recent({ limit: 5 })
 
 // ✅ Discovery
-const help = await mj.help()           // { groups, totalMethods, usage }
+const help = await mj.help() // { groups, totalMethods, usage }
 const groupHelp = await mj.core.help() // { group, methods }
 ```
 
@@ -114,7 +114,7 @@ const groupHelp = await mj.core.help() // { group, methods }
 
 ```js
 const { entries, count } = await mj.core.recent({ limit: 10 })
-return entries.map(e => ({ id: e.id, content: e.content.slice(0, 50) }))
+return entries.map((e) => ({ id: e.id, content: e.content.slice(0, 50) }))
 ```
 
 <!-- SECTION:GITHUB -->

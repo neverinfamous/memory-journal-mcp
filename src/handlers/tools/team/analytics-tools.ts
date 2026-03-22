@@ -146,9 +146,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     // Get top tags per project (batch query instead of N+1)
                     const projectTags: Record<number, { name: string; count: number }[]> = {}
-                    const projectNumbers = projects.map(
-                        (p) => p['project_number'] as number
-                    )
+                    const projectNumbers = projects.map((p) => p['project_number'] as number)
                     if (projectNumbers.length > 0) {
                         const tagPlaceholders = projectNumbers.map(() => '?').join(',')
                         const allTagsResult = teamDb.executeRawQuery(
@@ -180,9 +178,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Find inactive projects (last entry > threshold days ago)
-                    const cutoffDate = new Date(
-                        Date.now() - INACTIVE_THRESHOLD_DAYS * MS_PER_DAY
-                    )
+                    const cutoffDate = new Date(Date.now() - INACTIVE_THRESHOLD_DAYS * MS_PER_DAY)
                         .toISOString()
                         .split('T')[0]
                     const inactiveResult = teamDb.executeRawQuery(
@@ -210,23 +206,19 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             sum + (p['entry_count'] as number),
                         0
                     )
-                    const distribution = projects
-                        .slice(0, 5)
-                        .map((p: Record<string, unknown>) => ({
-                            project_number: p['project_number'] as number,
-                            percentage: (
-                                ((p['entry_count'] as number) / totalEntries) *
-                                100
-                            ).toFixed(1),
-                        }))
+                    const distribution = projects.slice(0, 5).map((p: Record<string, unknown>) => ({
+                        project_number: p['project_number'] as number,
+                        percentage: (((p['entry_count'] as number) / totalEntries) * 100).toFixed(
+                            1
+                        ),
+                    }))
 
                     return {
                         project_count: projects.length,
                         total_entries: totalEntries,
                         projects: projects.map((p) => ({
                             ...p,
-                            top_tags:
-                                projectTags[p['project_number'] as number] ?? [],
+                            top_tags: projectTags[p['project_number'] as number] ?? [],
                         })),
                         inactive_projects: inactiveProjects,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,

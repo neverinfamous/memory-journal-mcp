@@ -56,7 +56,13 @@ describe('generateInstructions', () => {
         })
 
         it('should include Quick Access table', () => {
-            const result = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'essential', ALL_GROUPS)
+            const result = generateInstructions(
+                ALL_TOOLS,
+                TEST_PROMPTS,
+                undefined,
+                'essential',
+                ALL_GROUPS
+            )
             expect(result).toContain('Quick Access')
             expect(result).toContain('memory://health')
             expect(result).toContain('semantic_search')
@@ -244,10 +250,7 @@ describe('generateInstructions', () => {
 
     describe('default level', () => {
         it('should default to standard level', () => {
-            const result = generateInstructions(
-                toolsFromGroups('core', 'github'),
-                TEST_PROMPTS
-            )
+            const result = generateInstructions(toolsFromGroups('core', 'github'), TEST_PROMPTS)
             // Standard includes GitHub and help pointers
             expect(result).toContain('## GitHub Integration')
             expect(result).toContain('## Help Resources')
@@ -258,9 +261,27 @@ describe('generateInstructions', () => {
 
     describe('level ordering', () => {
         it('essential < standard < full in character count', () => {
-            const essential = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'essential', ALL_GROUPS)
-            const standard = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'standard', ALL_GROUPS)
-            const full = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'full', ALL_GROUPS)
+            const essential = generateInstructions(
+                ALL_TOOLS,
+                TEST_PROMPTS,
+                undefined,
+                'essential',
+                ALL_GROUPS
+            )
+            const standard = generateInstructions(
+                ALL_TOOLS,
+                TEST_PROMPTS,
+                undefined,
+                'standard',
+                ALL_GROUPS
+            )
+            const full = generateInstructions(
+                ALL_TOOLS,
+                TEST_PROMPTS,
+                undefined,
+                'full',
+                ALL_GROUPS
+            )
             expect(essential.length).toBeLessThan(standard.length)
             expect(standard.length).toBeLessThan(full.length)
         })
@@ -363,7 +384,13 @@ describe('generateInstructions', () => {
         })
 
         it('filter-aware instructions are smaller than full instructions', () => {
-            const fullResult = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'essential', ALL_GROUPS)
+            const fullResult = generateInstructions(
+                ALL_TOOLS,
+                TEST_PROMPTS,
+                undefined,
+                'essential',
+                ALL_GROUPS
+            )
             const coreOnly = generateInstructions(
                 toolsFromGroups('core'),
                 TEST_PROMPTS,

@@ -264,7 +264,11 @@ export class VectorSearchManager {
                 await this.initialize()
             } catch (initError) {
                 const msg = initError instanceof Error ? initError.message : String(initError)
-                return { indexed: 0, failed: 0, firstError: `Vector search initialization failed: ${msg}` }
+                return {
+                    indexed: 0,
+                    failed: 0,
+                    firstError: `Vector search initialization failed: ${msg}`,
+                }
             }
         }
 

@@ -25,11 +25,7 @@ interface ErrorSuggestion {
 // =============================================================================
 
 /** Codes that can be refined to a more specific code when a pattern matches */
-export const GENERIC_CODES = new Set([
-    'QUERY_FAILED',
-    'INTERNAL_ERROR',
-    'UNKNOWN_ERROR',
-])
+export const GENERIC_CODES = new Set(['QUERY_FAILED', 'INTERNAL_ERROR', 'UNKNOWN_ERROR'])
 
 // =============================================================================
 // Suggestion Table
@@ -56,8 +52,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     // Connection / lock patterns
     {
         pattern: /database is locked/i,
-        suggestion:
-            'The database is locked by another process. Retry after a short delay.',
+        suggestion: 'The database is locked by another process. Retry after a short delay.',
         code: 'CONNECTION_FAILED',
     },
     // Constraint patterns

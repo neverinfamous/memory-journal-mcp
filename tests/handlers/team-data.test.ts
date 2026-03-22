@@ -29,9 +29,27 @@ describe('Team Backup and Export Tool Handlers', () => {
         teamDb.applyTeamSchema()
 
         // Seed entries for export/backup
-        const r1 = await callTool('team_create_entry', { content: 'Export test 1', tags: ['export-1'], entry_type: 'technical_note' }, personalDb, undefined, undefined, undefined, undefined, teamDb) as any
-        const r2 = await callTool('team_create_entry', { content: 'Export test 2', entry_type: 'project_decision' }, personalDb, undefined, undefined, undefined, undefined, teamDb) as any
-        
+        const r1 = (await callTool(
+            'team_create_entry',
+            { content: 'Export test 1', tags: ['export-1'], entry_type: 'technical_note' },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )) as any
+        const r2 = (await callTool(
+            'team_create_entry',
+            { content: 'Export test 2', entry_type: 'project_decision' },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )) as any
+
         expect(r1.success).toBe(true)
         expect(r2.success).toBe(true)
     })
@@ -43,7 +61,7 @@ describe('Team Backup and Export Tool Handlers', () => {
             const fs = require('node:fs')
             if (fs.existsSync(personalDbPath)) fs.unlinkSync(personalDbPath)
             if (fs.existsSync(teamDbPath)) fs.unlinkSync(teamDbPath)
-            
+
             // Clean up team backups directory
             const backupsDir = teamDb.getBackupsDir()
             if (fs.existsSync(backupsDir)) {
@@ -62,7 +80,12 @@ describe('Team Backup and Export Tool Handlers', () => {
             const result = (await callTool(
                 'team_export_entries',
                 { format: 'json' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -77,7 +100,12 @@ describe('Team Backup and Export Tool Handlers', () => {
             const result = (await callTool(
                 'team_export_entries',
                 { format: 'markdown' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -90,7 +118,12 @@ describe('Team Backup and Export Tool Handlers', () => {
             const result = (await callTool(
                 'team_export_entries',
                 { format: 'json', tags: ['export-1'], entry_type: 'technical_note' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             console.error('DEBUG TEAM DATA EXPORT', JSON.stringify(result, null, 2))
@@ -114,22 +147,14 @@ describe('Team Backup and Export Tool Handlers', () => {
 
     describe('team_backup and team_list_backups', () => {
         it('should return error if team DB is not configured for backup', async () => {
-            const result = (await callTool(
-                'team_backup',
-                {},
-                personalDb
-            )) as any
+            const result = (await callTool('team_backup', {}, personalDb)) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
 
         it('should return error if team DB is not configured for list', async () => {
-            const result = (await callTool(
-                'team_list_backups',
-                {},
-                personalDb
-            )) as any
+            const result = (await callTool('team_list_backups', {}, personalDb)) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
@@ -139,7 +164,12 @@ describe('Team Backup and Export Tool Handlers', () => {
             const backupResult = (await callTool(
                 'team_backup',
                 { name: 'test-team-backup' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(backupResult.success).toBe(true)
@@ -149,12 +179,19 @@ describe('Team Backup and Export Tool Handlers', () => {
             const listResult = (await callTool(
                 'team_list_backups',
                 {},
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(listResult.success).toBe(true)
             expect(listResult.total).toBeGreaterThanOrEqual(1)
-            expect(listResult.backups.some((b: any) => b.filename === backupResult.filename)).toBe(true)
+            expect(listResult.backups.some((b: any) => b.filename === backupResult.filename)).toBe(
+                true
+            )
             expect(listResult.hint).toBeUndefined()
         })
     })

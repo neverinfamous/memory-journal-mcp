@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { coerceNumber, coerceBoolean, coerceLimit, buildLimitClause } from '../../src/utils/query-helpers.js'
+import {
+    coerceNumber,
+    coerceBoolean,
+    coerceLimit,
+    buildLimitClause,
+} from '../../src/utils/query-helpers.js'
 
 describe('query-helpers', () => {
     describe('coerceNumber', () => {

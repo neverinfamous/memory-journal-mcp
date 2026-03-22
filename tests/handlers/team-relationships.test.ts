@@ -31,15 +31,42 @@ describe('Team Relationship Tool Handlers', () => {
         teamDb.applyTeamSchema()
 
         // Seed entries for linking
-        const res1 = (await callTool('team_create_entry', { content: 'Node A', tags: ['node-tag'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
-        const res2 = (await callTool('team_create_entry', { content: 'Node B', tags: ['node-tag'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
-        const res3 = (await callTool('team_create_entry', { content: 'Node C' }, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
-        
-        console.error('DEBUG RELATIONS', JSON.stringify({res1, res2, res3}, null, 2))
-        
+        const res1 = (await callTool(
+            'team_create_entry',
+            { content: 'Node A', tags: ['node-tag'] },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )) as any
+        const res2 = (await callTool(
+            'team_create_entry',
+            { content: 'Node B', tags: ['node-tag'] },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )) as any
+        const res3 = (await callTool(
+            'team_create_entry',
+            { content: 'Node C' },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )) as any
+
+        console.error('DEBUG RELATIONS', JSON.stringify({ res1, res2, res3 }, null, 2))
+
         expect(res1.success).toBe(true)
         expect(res2.success).toBe(true)
-        
+
         e1 = res1.entry.id
         e2 = res2.entry.id
         e3 = res3.entry.id
@@ -61,8 +88,18 @@ describe('Team Relationship Tool Handlers', () => {
         it('should link two team entries', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { from_entry_id: e1, to_entry_id: e2, relationship_type: 'blocked_by', description: 'A depends on B' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                {
+                    from_entry_id: e1,
+                    to_entry_id: e2,
+                    relationship_type: 'blocked_by',
+                    description: 'A depends on B',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -77,7 +114,12 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_link_entries',
                 { from_entry_id: e1, to_entry_id: e2, relationship_type: 'blocked_by' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -89,7 +131,12 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_link_entries',
                 { from_entry_id: 999, to_entry_id: e2, relationship_type: 'references' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(false)
@@ -100,7 +147,12 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_link_entries',
                 { from_entry_id: e1, to_entry_id: 999, relationship_type: 'references' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(false)
@@ -121,14 +173,28 @@ describe('Team Relationship Tool Handlers', () => {
 
     describe('team_visualize_relationships', () => {
         beforeAll(async () => {
-            await callTool('team_link_entries', { from_entry_id: e2, to_entry_id: e3, relationship_type: 'caused' }, personalDb, undefined, undefined, undefined, undefined, teamDb)
+            await callTool(
+                'team_link_entries',
+                { from_entry_id: e2, to_entry_id: e3, relationship_type: 'caused' },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )
         })
 
         it('should visualize relationships from entry ID with depth', async () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 { entry_id: e1, depth: 2 },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -143,7 +209,12 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 { tag: 'node-tag' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -159,7 +230,12 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 {},
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -171,7 +247,12 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 { tag: 'nonexistent-tag' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -181,11 +262,7 @@ describe('Team Relationship Tool Handlers', () => {
         })
 
         it('should return error if team DB is not configured', async () => {
-            const result = (await callTool(
-                'team_visualize_relationships',
-                {},
-                personalDb
-            )) as any
+            const result = (await callTool('team_visualize_relationships', {}, personalDb)) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')

@@ -276,7 +276,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                             code: 'CONFIGURATION_ERROR',
                             category: 'configuration',
-                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
                             recoverable: false,
                         }
                     }
@@ -316,7 +317,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             error: 'Vector search not available',
                             code: 'CONFIGURATION_ERROR',
                             category: 'configuration',
-                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
                             recoverable: false,
                         }
                     }

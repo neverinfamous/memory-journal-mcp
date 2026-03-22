@@ -24,10 +24,10 @@ describe('Help Resource Handlers', () => {
 
     it('should generate memory://help listing all groups', async () => {
         const defs = getHelpResourceDefinitions()
-        const rootHelp = defs.find(d => d.uri === 'memory://help')
+        const rootHelp = defs.find((d) => d.uri === 'memory://help')
         expect(rootHelp).toBeDefined()
 
-        const result = await rootHelp!.handler('memory://help', getContext()) as any
+        const result = (await rootHelp!.handler('memory://help', getContext())) as any
         expect(result.data.totalGroups).toBeGreaterThan(0)
         expect(result.data.groups.some((g: any) => g.name === 'core')).toBe(true)
         expect(result.data.groups.some((g: any) => g.name === 'search')).toBe(true)
@@ -35,14 +35,14 @@ describe('Help Resource Handlers', () => {
 
     it('should generate memory://help/{group} for a valid group', async () => {
         const defs = getHelpResourceDefinitions()
-        const groupHelp = defs.find(d => d.uri === 'memory://help/{group}')
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
         expect(groupHelp).toBeDefined()
 
-        const result = await groupHelp!.handler('memory://help/core', getContext()) as any
+        const result = (await groupHelp!.handler('memory://help/core', getContext())) as any
         expect(result.data.group).toBe('core')
         expect(result.data.tools.length).toBeGreaterThan(0)
         expect(result.data.tools.some((t: any) => t.name === 'create_entry')).toBe(true)
-        
+
         // Check that parameters are extracted with correct types and required flags
         const createEntry = result.data.tools.find((t: any) => t.name === 'create_entry')
         expect(createEntry.parameters).toBeDefined()
@@ -62,27 +62,30 @@ describe('Help Resource Handlers', () => {
 
     it('should return error for invalid group in memory://help/{group}', async () => {
         const defs = getHelpResourceDefinitions()
-        const groupHelp = defs.find(d => d.uri === 'memory://help/{group}')
-        
-        const result = await groupHelp!.handler('memory://help/invalid_group_name', getContext()) as any
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler(
+            'memory://help/invalid_group_name',
+            getContext()
+        )) as any
         expect(result.data.error).toContain('not found')
         expect(result.data.availableGroups).toBeDefined()
     })
 
     it('should return error for malformed URI in memory://help/{group}', async () => {
         const defs = getHelpResourceDefinitions()
-        const groupHelp = defs.find(d => d.uri === 'memory://help/{group}')
-        
-        const result = await groupHelp!.handler('memory://help/', getContext()) as any
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/', getContext())) as any
         expect(result.data.error).toContain('Invalid group')
     })
-    
+
     it('should generate memory://help/gotchas', async () => {
         const defs = getHelpResourceDefinitions()
-        const gotchasHelp = defs.find(d => d.uri === 'memory://help/gotchas')
+        const gotchasHelp = defs.find((d) => d.uri === 'memory://help/gotchas')
         expect(gotchasHelp).toBeDefined()
 
-        const result = await gotchasHelp!.handler('memory://help/gotchas', getContext()) as any
+        const result = (await gotchasHelp!.handler('memory://help/gotchas', getContext())) as any
         expect(result.data).toContain('# memory-journal-mcp — Field Notes &')
         expect(gotchasHelp!.mimeType).toBe('text/markdown')
     })

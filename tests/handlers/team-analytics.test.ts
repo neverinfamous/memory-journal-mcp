@@ -29,17 +29,82 @@ describe('Team Analytics Tool Handlers', () => {
         teamDb.applyTeamSchema()
 
         // Seed data for analytics
-        const seed1 = await callTool('team_create_entry', { content: 'Project Alpha init', entry_type: 'technical_note', project_number: 101, project_owner: 'org', tags: ['planning', 'alpha'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)
-        const seed2 = await callTool('team_create_entry', { content: 'Project Alpha task 1', entry_type: 'feature_implementation', project_number: 101, project_owner: 'org', tags: ['task'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)
-        const seed3 = await callTool('team_create_entry', { content: 'Project Alpha task 2', entry_type: 'feature_implementation', project_number: 101, project_owner: 'org', tags: ['task'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)
-        const seed4 = await callTool('team_create_entry', { content: 'Project Beta init', entry_type: 'technical_note', project_number: 202, tags: ['beta'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)
-        console.error('DEBUG SEEDS', JSON.stringify({seed1, seed2, seed3, seed4}, null, 2))
-        
+        const seed1 = await callTool(
+            'team_create_entry',
+            {
+                content: 'Project Alpha init',
+                entry_type: 'technical_note',
+                project_number: 101,
+                project_owner: 'org',
+                tags: ['planning', 'alpha'],
+            },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )
+        const seed2 = await callTool(
+            'team_create_entry',
+            {
+                content: 'Project Alpha task 1',
+                entry_type: 'feature_implementation',
+                project_number: 101,
+                project_owner: 'org',
+                tags: ['task'],
+            },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )
+        const seed3 = await callTool(
+            'team_create_entry',
+            {
+                content: 'Project Alpha task 2',
+                entry_type: 'feature_implementation',
+                project_number: 101,
+                project_owner: 'org',
+                tags: ['task'],
+            },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )
+        const seed4 = await callTool(
+            'team_create_entry',
+            {
+                content: 'Project Beta init',
+                entry_type: 'technical_note',
+                project_number: 202,
+                tags: ['beta'],
+            },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )
+        console.error('DEBUG SEEDS', JSON.stringify({ seed1, seed2, seed3, seed4 }, null, 2))
+
         // Old project for testing inactive threshold
         const oldEntry = teamDb.createEntry({
-            content: 'Old Project Gamma', entryType: 'technical_note', isPersonal: false, projectNumber: 303
+            content: 'Old Project Gamma',
+            entryType: 'technical_note',
+            isPersonal: false,
+            projectNumber: 303,
         })
-        teamDb.executeRawQuery(`UPDATE memory_journal SET timestamp = datetime('now', '-10 days') WHERE id = ?`, [oldEntry.id])
+        teamDb.executeRawQuery(
+            `UPDATE memory_journal SET timestamp = datetime('now', '-10 days') WHERE id = ?`,
+            [oldEntry.id]
+        )
         teamDb.flushSave()
     })
 
@@ -60,7 +125,12 @@ describe('Team Analytics Tool Handlers', () => {
             const result = (await callTool(
                 'team_get_statistics',
                 {},
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(true)
@@ -72,11 +142,7 @@ describe('Team Analytics Tool Handlers', () => {
         })
 
         it('should return error if team DB is not configured', async () => {
-            const result = (await callTool(
-                'team_get_statistics',
-                {},
-                personalDb
-            )) as any
+            const result = (await callTool('team_get_statistics', {}, personalDb)) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
@@ -88,14 +154,19 @@ describe('Team Analytics Tool Handlers', () => {
             const result = (await callTool(
                 'team_get_cross_project_insights',
                 { min_entries: 2 },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.project_count).toBeGreaterThanOrEqual(1)
             expect(result.projects[0].project_number).toBe(101)
             expect(result.projects[0].top_tags).toBeDefined()
             expect(result.projects[0].top_tags.some((t: any) => t.name === 'task')).toBe(true)
-            
+
             expect(result.time_distribution).toBeDefined()
             expect(result.time_distribution.length).toBeGreaterThan(0)
             expect(result.time_distribution[0].percentage).toBeDefined()
@@ -105,7 +176,12 @@ describe('Team Analytics Tool Handlers', () => {
             const result = (await callTool(
                 'team_get_cross_project_insights',
                 { min_entries: 1 },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.inactive_projects).toBeDefined()
@@ -117,7 +193,12 @@ describe('Team Analytics Tool Handlers', () => {
             const result = (await callTool(
                 'team_get_cross_project_insights',
                 { min_entries: 1, start_date: '2050-01-01', end_date: '2050-12-31' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.project_count).toBe(0)

@@ -188,42 +188,42 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ### Tool Handlers (`src/handlers/tools/`)
 
-| Group             | Handler File(s)                    | Tools | Key Exports                                                                                                                          |
-| ----------------- | ---------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **codemode**      | `codemode.ts`                      | 1     | `mj_execute_code`                                                                                                                    |
-| **core**          | `core.ts`                          | 6     | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `create_entry_minimal`, `test_simple`, `list_tags`                          |
-| **search**        | `search.ts`                        | 4     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`                                                |
-| **analytics**     | `analytics.ts`                     | 2     | `get_statistics`, `get_cross_project_insights`                                                                                       |
-| **relationships** | `relationships.ts`                 | 2     | `link_entries`, `visualize_relationships`                                                                                            |
-| **export**        | `export.ts`                        | 1     | `export_entries`                                                                                                                     |
-| **admin**         | `admin.ts`                         | 5     | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`                                          |
-| **github**        | `github/read-tools.ts`             | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context`                                    |
-|                   | `github/issue-tools.ts`            | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                    |
-|                   | `github/kanban-tools.ts`           | 2     | `get_kanban_board`, `move_kanban_item`                                                                                               |
-|                   | `github/milestone-tools.ts`        | 5     | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone`     |
-|                   | `github/insights-tools.ts`         | 1     | `get_repo_insights`                                                                                                                  |
-|                   | `github/copilot-tools.ts`          | 1     | `get_copilot_reviews`                                                                                                                |
-| **backup**        | `backup.ts`                        | 4     | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups`                                                                |
-| **team**          | `team/core-tools.ts`               | 4     | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`                                                     |
-|                   | `team/search-tools.ts`             | 2     | `team_search`, `team_search_by_date_range`                                                                                           |
-|                   | `team/admin-tools.ts`              | 3     | `team_update_entry`, `team_delete_entry`, `team_merge_tags`                                                                          |
-|                   | `team/analytics-tools.ts`          | 2     | `team_get_statistics`, `team_get_cross_project_insights`                                                                             |
-|                   | `team/relationship-tools.ts`       | 2     | `team_link_entries`, `team_visualize_relationships`                                                                                  |
-|                   | `team/export-tools.ts`             | 1     | `team_export_entries`                                                                                                                |
-|                   | `team/backup-tools.ts`             | 2     | `team_backup`, `team_list_backups`                                                                                                   |
-|                   | `team/vector-tools.ts`             | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                       |
+| Group             | Handler File(s)              | Tools | Key Exports                                                                                                                      |
+| ----------------- | ---------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **codemode**      | `codemode.ts`                | 1     | `mj_execute_code`                                                                                                                |
+| **core**          | `core.ts`                    | 6     | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `create_entry_minimal`, `test_simple`, `list_tags`                      |
+| **search**        | `search.ts`                  | 4     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`                                            |
+| **analytics**     | `analytics.ts`               | 2     | `get_statistics`, `get_cross_project_insights`                                                                                   |
+| **relationships** | `relationships.ts`           | 2     | `link_entries`, `visualize_relationships`                                                                                        |
+| **export**        | `export.ts`                  | 1     | `export_entries`                                                                                                                 |
+| **admin**         | `admin.ts`                   | 5     | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`                                      |
+| **github**        | `github/read-tools.ts`       | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue`, `get_github_pr`, `get_github_context`                                 |
+|                   | `github/issue-tools.ts`      | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                |
+|                   | `github/kanban-tools.ts`     | 2     | `get_kanban_board`, `move_kanban_item`                                                                                           |
+|                   | `github/milestone-tools.ts`  | 5     | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` |
+|                   | `github/insights-tools.ts`   | 1     | `get_repo_insights`                                                                                                              |
+|                   | `github/copilot-tools.ts`    | 1     | `get_copilot_reviews`                                                                                                            |
+| **backup**        | `backup.ts`                  | 4     | `backup_journal`, `list_backups`, `restore_backup`, `cleanup_backups`                                                            |
+| **team**          | `team/core-tools.ts`         | 4     | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`                                                 |
+|                   | `team/search-tools.ts`       | 2     | `team_search`, `team_search_by_date_range`                                                                                       |
+|                   | `team/admin-tools.ts`        | 3     | `team_update_entry`, `team_delete_entry`, `team_merge_tags`                                                                      |
+|                   | `team/analytics-tools.ts`    | 2     | `team_get_statistics`, `team_get_cross_project_insights`                                                                         |
+|                   | `team/relationship-tools.ts` | 2     | `team_link_entries`, `team_visualize_relationships`                                                                              |
+|                   | `team/export-tools.ts`       | 1     | `team_export_entries`                                                                                                            |
+|                   | `team/backup-tools.ts`       | 2     | `team_backup`, `team_list_backups`                                                                                               |
+|                   | `team/vector-tools.ts`       | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                   |
 
 ### Utility Files (no tools, shared helpers)
 
-| File                             | Purpose                                                                    |
-| -------------------------------- | -------------------------------------------------------------------------- |
-| `index.ts`                       | `getTools()` / `callTool()` dispatch, O(1) tool map cache, icon mapping    |
-| `schemas.ts`                     | Shared Zod input/output schemas reused across multiple tool groups         |
-| `error-fields-mixin.ts`          | Re-export stub → `utils/errors/error-response-fields.ts` (canonical SSoT)  |
-| `../version.ts`                  | Version SSoT — reads `package.json`, exports `VERSION`                     |
-| `github/helpers.ts`              | GitHub repo auto-detection, error formatting, token scrubbing              |
-| `github/schemas.ts`              | Zod input/output schemas for all 16 GitHub tools                           |
-| `github/mutation-tools.ts`       | GitHub mutation tools barrel (re-exports issue + kanban + milestone tools)  |
+| File                       | Purpose                                                                    |
+| -------------------------- | -------------------------------------------------------------------------- |
+| `index.ts`                 | `getTools()` / `callTool()` dispatch, O(1) tool map cache, icon mapping    |
+| `schemas.ts`               | Shared Zod input/output schemas reused across multiple tool groups         |
+| `error-fields-mixin.ts`    | Re-export stub → `utils/errors/error-response-fields.ts` (canonical SSoT)  |
+| `../version.ts`            | Version SSoT — reads `package.json`, exports `VERSION`                     |
+| `github/helpers.ts`        | GitHub repo auto-detection, error formatting, token scrubbing              |
+| `github/schemas.ts`        | Zod input/output schemas for all 16 GitHub tools                           |
+| `github/mutation-tools.ts` | GitHub mutation tools barrel (re-exports issue + kanban + milestone tools) |
 
 ---
 
@@ -233,33 +233,33 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ### Static Resources
 
-| Handler File             | Resources                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------- |
-| `core/briefing/index.ts` | `memory://briefing` — session initialization (~300 tokens)                                        |
-| `core/instructions.ts`   | `memory://instructions` — behavioral guidance for AI agents                                       |
-| `core/health.ts`         | `memory://health` — server health & diagnostics                                                   |
+| Handler File             | Resources                                                                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/briefing/index.ts` | `memory://briefing` — session initialization (~300 tokens)                                                                                   |
+| `core/instructions.ts`   | `memory://instructions` — behavioral guidance for AI agents                                                                                  |
+| `core/health.ts`         | `memory://health` — server health & diagnostics                                                                                              |
 | `core/utilities.ts`      | `memory://recent`, `memory://significant`, `memory://tags`, `memory://statistics`, `memory://rules`, `memory://workflows`, `memory://skills` |
-| `github.ts`              | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                |
-| `graph.ts`               | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                      |
-| `team.ts`                | `memory://team/recent`, `memory://team/statistics`                                                |
-| `help.ts`                | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details), `memory://help/gotchas` (field notes) |
+| `github.ts`              | `memory://github/status`, `memory://github/insights`, `memory://github/milestones`                                                           |
+| `graph.ts`               | `memory://graph/recent`, `memory://graph/actions`, `memory://actions/recent`                                                                 |
+| `team.ts`                | `memory://team/recent`, `memory://team/statistics`                                                                                           |
+| `help.ts`                | `memory://help` (tool group index), `memory://help/{group}` (per-group tool details), `memory://help/gotchas` (field notes)                  |
 
 ### Template Resources
 
-| Handler File    | Resources                                                                                                                                                                                 |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `templates.ts`  | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram`, `memory://milestones/{number}` |
+| Handler File   | Resources                                                                                                                                                                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram`, `memory://milestones/{number}` |
 
 ### Briefing Assembly (`src/handlers/resources/core/briefing/`)
 
 The `memory://briefing` resource is modular — each section is a separate file:
 
-| File                  | Section                                                        |
-| --------------------- | -------------------------------------------------------------- |
-| `index.ts`            | Assembles all sections, respects instruction level              |
-| `context-section.ts`  | Journal context (entry count, recent entries, team DB)          |
-| `github-section.ts`   | GitHub context (repo, CI, issues, PRs, milestones, insights)   |
-| `user-message.ts`     | User message (rules file, skills directory awareness)           |
+| File                 | Section                                                      |
+| -------------------- | ------------------------------------------------------------ |
+| `index.ts`           | Assembles all sections, respects instruction level           |
+| `context-section.ts` | Journal context (entry count, recent entries, team DB)       |
+| `github-section.ts`  | GitHub context (repo, CI, issues, PRs, milestones, insights) |
+| `user-message.ts`    | User message (rules file, skills directory awareness)        |
 
 ---
 
@@ -267,8 +267,8 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 16 workflow prompts total.
 
-| File          | Prompts                                                                                                                                                                              |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| File          | Prompts                                                                                                                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary` |
 | `github.ts`   | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                    |
 | `index.ts`    | Barrel — re-exports workflow + GitHub prompts, `getPrompt()` / `getPrompts()` dispatch                                                                                                   |
@@ -310,43 +310,43 @@ catch (error) {
 
 ## Key Constants & Config
 
-| What                               | Where                              | Notes                                                                                          |
-| ---------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `GOTCHAS_CONTENT` + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`) |
-| Instruction source markdown        | `src/constants/server-instructions.md` | 6 sections (`CORE`, `COPILOT`, `CODE_MODE`, `GITHUB`, `HELP_POINTERS`, `SERVER_ACCESS`); parsed by `npm run generate:instructions`        |
-| Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating              |
-| Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                |
+| What                               | Where                                  | Notes                                                                                                                                                       |
+| ---------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `GOTCHAS_CONTENT` + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`)                  |
+| Instruction source markdown        | `src/constants/server-instructions.md` | 6 sections (`CORE`, `COPILOT`, `CODE_MODE`, `GITHUB`, `HELP_POINTERS`, `SERVER_ACCESS`); parsed by `npm run generate:instructions`                          |
+| Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating                                |
+| Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                                                                                |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`) |
-| Code Mode API constants            | `src/codemode/api-constants.ts`        | Method→group map, JSON-RPC error codes, sandbox method names                                |
-| Logger                             | `src/utils/logger.ts`                  | Structured JSON logging with severity filtering                                              |
-| Security utilities                 | `src/utils/security-utils.ts`          | Input validation, SQL injection prevention, path traversal protection, token scrubbing       |
-| Error formatter                    | `src/utils/error-helpers.ts`           | `formatHandlerError()` — structured error response builder                                   |
-| Database schema DDL                | `src/database/core/schema.ts`          | Table definitions, indexes, FTS5 virtual table                                               |
-| Database adapter interface         | `src/database/core/interfaces.ts`      | `IDatabaseAdapter` contract (all DB operations)                                              |
-| Default config                     | `src/types/index.ts`                   | `DEFAULT_CONFIG` with default db path, model name, semantic search enabled                   |
-| OAuth scope mapping                | `src/auth/scope-map.ts`               | Tool→scope mapping: `read`, `write`, `admin`                                                 |
+| Code Mode API constants            | `src/codemode/api-constants.ts`        | Method→group map, JSON-RPC error codes, sandbox method names                                                                                                |
+| Logger                             | `src/utils/logger.ts`                  | Structured JSON logging with severity filtering                                                                                                             |
+| Security utilities                 | `src/utils/security-utils.ts`          | Input validation, SQL injection prevention, path traversal protection, token scrubbing                                                                      |
+| Error formatter                    | `src/utils/error-helpers.ts`           | `formatHandlerError()` — structured error response builder                                                                                                  |
+| Database schema DDL                | `src/database/core/schema.ts`          | Table definitions, indexes, FTS5 virtual table                                                                                                              |
+| Database adapter interface         | `src/database/core/interfaces.ts`      | `IDatabaseAdapter` contract (all DB operations)                                                                                                             |
+| Default config                     | `src/types/index.ts`                   | `DEFAULT_CONFIG` with default db path, model name, semantic search enabled                                                                                  |
+| OAuth scope mapping                | `src/auth/scope-map.ts`                | Tool→scope mapping: `read`, `write`, `admin`                                                                                                                |
 
 ---
 
 ## Architecture Patterns (Quick Reference)
 
-| Pattern                    | Description                                                                                                                                                                                          |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Structured Errors**      | Every tool returns `{success: false, error, code, category, suggestion, recoverable}` — never raw exceptions. Uses `formatHandlerError()`.                                                           |
-| **Tool Context**           | `ToolContext` passes `db`, `teamDb?`, `vectorManager?`, `teamVectorManager?`, `github?`, `config?`, `progress?` to all tool group modules. Each group factory receives context and returns `ToolDefinition[]`. |
-| **Tool Map Cache**         | `getTools()` + `callTool()` share a `Map<string, ToolDefinition>` cache (O(1) lookup). Cache invalidates when context refs change. `mappedToolsCache` avoids re-mapping for unfiltered calls.        |
-| **Code Mode Bridge**       | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). Readonly mode halts execution gracefully and returns structured errors via proxy traps. |
-| **Tool Filtering**         | `ToolFilter` parses `--tool-filter` string → whitelist/blacklist of tool names. `codemode` auto-injected unless explicitly excluded. Shortcuts: `starter`, `essential`, `readonly`.                   |
-| **Briefing System**        | `memory://briefing` assembled from modular sections (context, GitHub, user message). Configurable via 12 env vars / CLI flags (incl. `--workflow-summary`/`MEMORY_JOURNAL_WORKFLOW_SUMMARY` for `memory://workflows`). Instruction levels: `essential`, `standard`, `full`.   |
-| **GitHub Split**           | GitHub tools split across 7 handler files by domain (read, issues, kanban, milestones, insights, copilot, mutations). `GitHubIntegration` facade in `github/github-integration/` handles all API calls. |
-| **Database Adapter**       | `IDatabaseAdapter` interface → `SqliteAdapter` (better-sqlite3). Entry operations split into `entries/` subdirectory (crud, search, importance, statistics, shared).                                  |
-| **Vector Search**          | `VectorSearchManager` integrates `sqlite-vec` + `@huggingface/transformers`. Lazy model loading on first use.                                                                                        |
-| **OAuth 2.1**              | RFC 9728/8414 compliant. Scope enforcement via `scope-map.ts` (read/write/admin). JWT/JWKS validation. Optional — falls back to bearer token or no auth.                                             |
-| **HTTP Transport**         | Stateful (Streamable HTTP + legacy SSE) / Stateless (serverless) modes. Security headers, rate limiting (100 req/min), CORS, 1MB body limit, session management.                                     |
-| **Scheduler**              | HTTP-only `setInterval` jobs: automated backup, vacuum, vector index rebuild. Error-isolated — failure in one job doesn't affect others. Status visible via `memory://health`.                        |
-| **ErrorFieldsMixin**       | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation. Canonical SSoT at `utils/errors/error-response-fields.ts`; handler layer re-export stub preserved. |
-| **Barrel Re-exports**      | Every directory has `index.ts` barrel. Import from `./module/index.js` (with `.js` extension for ESM).                                                                                                |
-| **Team Database**          | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 20 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup, vector). Cross-DB isolation with dedicated `teamVectorManager`. |
+| Pattern               | Description                                                                                                                                                                                                                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Structured Errors** | Every tool returns `{success: false, error, code, category, suggestion, recoverable}` — never raw exceptions. Uses `formatHandlerError()`.                                                                                                                                                                |
+| **Tool Context**      | `ToolContext` passes `db`, `teamDb?`, `vectorManager?`, `teamVectorManager?`, `github?`, `config?`, `progress?` to all tool group modules. Each group factory receives context and returns `ToolDefinition[]`.                                                                                            |
+| **Tool Map Cache**    | `getTools()` + `callTool()` share a `Map<string, ToolDefinition>` cache (O(1) lookup). Cache invalidates when context refs change. `mappedToolsCache` avoids re-mapping for unfiltered calls.                                                                                                             |
+| **Code Mode Bridge**  | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). Readonly mode halts execution gracefully and returns structured errors via proxy traps. |
+| **Tool Filtering**    | `ToolFilter` parses `--tool-filter` string → whitelist/blacklist of tool names. `codemode` auto-injected unless explicitly excluded. Shortcuts: `starter`, `essential`, `readonly`.                                                                                                                       |
+| **Briefing System**   | `memory://briefing` assembled from modular sections (context, GitHub, user message). Configurable via 12 env vars / CLI flags (incl. `--workflow-summary`/`MEMORY_JOURNAL_WORKFLOW_SUMMARY` for `memory://workflows`). Instruction levels: `essential`, `standard`, `full`.                               |
+| **GitHub Split**      | GitHub tools split across 7 handler files by domain (read, issues, kanban, milestones, insights, copilot, mutations). `GitHubIntegration` facade in `github/github-integration/` handles all API calls.                                                                                                   |
+| **Database Adapter**  | `IDatabaseAdapter` interface → `SqliteAdapter` (better-sqlite3). Entry operations split into `entries/` subdirectory (crud, search, importance, statistics, shared).                                                                                                                                      |
+| **Vector Search**     | `VectorSearchManager` integrates `sqlite-vec` + `@huggingface/transformers`. Lazy model loading on first use.                                                                                                                                                                                             |
+| **OAuth 2.1**         | RFC 9728/8414 compliant. Scope enforcement via `scope-map.ts` (read/write/admin). JWT/JWKS validation. Optional — falls back to bearer token or no auth.                                                                                                                                                  |
+| **HTTP Transport**    | Stateful (Streamable HTTP + legacy SSE) / Stateless (serverless) modes. Security headers, rate limiting (100 req/min), CORS, 1MB body limit, session management.                                                                                                                                          |
+| **Scheduler**         | HTTP-only `setInterval` jobs: automated backup, vacuum, vector index rebuild. Error-isolated — failure in one job doesn't affect others. Status visible via `memory://health`.                                                                                                                            |
+| **ErrorFieldsMixin**  | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation. Canonical SSoT at `utils/errors/error-response-fields.ts`; handler layer re-export stub preserved.                                                                                |
+| **Barrel Re-exports** | Every directory has `index.ts` barrel. Import from `./module/index.js` (with `.js` extension for ESM).                                                                                                                                                                                                    |
+| **Team Database**     | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 20 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup, vector). Cross-DB isolation with dedicated `teamVectorManager`.                                                         |
 
 ---
 
@@ -363,37 +363,37 @@ catch (error) {
 
 ## Test Infrastructure
 
-| File / Directory                  | Purpose                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------- |
-| `test-server/README.md`           | Agent testing orchestration doc                                                       |
-| `test-server/tool-reference.md`   | Complete 61-tool inventory with descriptions                                          |
-| `test-server/code-map.md`         | This file — agent-optimized codebase navigation                                       |
-| `test-server/test-preflight.md`   | Pre-test verification checklist                                                       |
-| `test-server/test-tools.md`       | Entry-point agent test protocol (main tool tests)                                     |
-| `test-server/test-tools2.md`      | Additional tool test scenarios                                                        |
-| `test-server/test-tools-codemode.md`  | Code mode specific test prompts                                                   |
-| `test-server/test-tools-codemode2.md` | Additional code mode test scenarios                                               |
-| `test-server/test-agent-experience.md` | Open-ended agent experience scenarios                                            |
-| `test-server/test-instruction-levels.mjs`   | Integration test — instruction level (essential/standard/full) token ordering  |\n| `test-server/test-filter-instructions.mjs`  | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
-| `test-server/test-scheduler.mjs`  | Integration test — scheduler behavior                                                 |
-| `test-server/test-tool-annotations.mjs` | Integration test — tool annotation verification                                 |
-| `tests/`                          | Vitest unit/integration tests (13 subdirectories)                                     |
-| `tests/e2e/`                      | Playwright E2E tests — HTTP/SSE transport                                             |
+| File / Directory                          | Purpose                                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------------------- | --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `test-server/README.md`                   | Agent testing orchestration doc                                               |
+| `test-server/tool-reference.md`           | Complete 61-tool inventory with descriptions                                  |
+| `test-server/code-map.md`                 | This file — agent-optimized codebase navigation                               |
+| `test-server/test-preflight.md`           | Pre-test verification checklist                                               |
+| `test-server/test-tools.md`               | Entry-point agent test protocol (main tool tests)                             |
+| `test-server/test-tools2.md`              | Additional tool test scenarios                                                |
+| `test-server/test-tools-codemode.md`      | Code mode specific test prompts                                               |
+| `test-server/test-tools-codemode2.md`     | Additional code mode test scenarios                                           |
+| `test-server/test-agent-experience.md`    | Open-ended agent experience scenarios                                         |
+| `test-server/test-instruction-levels.mjs` | Integration test — instruction level (essential/standard/full) token ordering | \n  | `test-server/test-filter-instructions.mjs` | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
+| `test-server/test-scheduler.mjs`          | Integration test — scheduler behavior                                         |
+| `test-server/test-tool-annotations.mjs`   | Integration test — tool annotation verification                               |
+| `tests/`                                  | Vitest unit/integration tests (13 subdirectories)                             |
+| `tests/e2e/`                              | Playwright E2E tests — HTTP/SSE transport                                     |
 
 ### Test Subdirectories (`tests/`)
 
-| Directory       | Coverage                                           |
-| --------------- | -------------------------------------------------- |
-| `auth/`         | OAuth 2.1 middleware, scopes, token validation      |
-| `codemode/`     | Sandbox security, API bridge, worker lifecycle      |
-| `constants/`    | Server instructions, icons                          |
-| `database/`     | SQLite adapter, entry CRUD, search, tags, backup    |
-| `e2e/`          | Playwright end-to-end (HTTP/SSE transport parity)   |
-| `filtering/`    | Tool filter parsing, group/shortcut resolution      |
-| `github/`       | GitHub integration, issues, PRs, milestones, kanban |
-| `handlers/`     | Tool handlers, resource handlers, prompt handlers   |
-| `security/`     | Input validation, SQL injection, path traversal     |
-| `server/`       | MCP server setup, registration                      |
-| `transports/`   | HTTP transport, sessions, rate limiting              |
-| `utils/`        | Logger, error helpers, security utils               |
-| `vector/`       | Vector search manager, semantic search              |
+| Directory     | Coverage                                            |
+| ------------- | --------------------------------------------------- |
+| `auth/`       | OAuth 2.1 middleware, scopes, token validation      |
+| `codemode/`   | Sandbox security, API bridge, worker lifecycle      |
+| `constants/`  | Server instructions, icons                          |
+| `database/`   | SQLite adapter, entry CRUD, search, tags, backup    |
+| `e2e/`        | Playwright end-to-end (HTTP/SSE transport parity)   |
+| `filtering/`  | Tool filter parsing, group/shortcut resolution      |
+| `github/`     | GitHub integration, issues, PRs, milestones, kanban |
+| `handlers/`   | Tool handlers, resource handlers, prompt handlers   |
+| `security/`   | Input validation, SQL injection, path traversal     |
+| `server/`     | MCP server setup, registration                      |
+| `transports/` | HTTP transport, sessions, rate limiting             |
+| `utils/`      | Logger, error helpers, security utils               |
+| `vector/`     | Vector search manager, semantic search              |

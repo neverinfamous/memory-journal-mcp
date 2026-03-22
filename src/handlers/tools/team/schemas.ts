@@ -335,12 +335,8 @@ export const TeamStatisticsOutputSchema = z
         totalEntries: z.number().optional(),
         periodEntries: z.number().optional(),
         entryTypes: z.record(z.string(), z.number()).optional(),
-        topTags: z
-            .array(z.object({ name: z.string(), count: z.number() }))
-            .optional(),
-        authors: z
-            .array(z.object({ author: z.string(), count: z.number() }))
-            .optional(),
+        topTags: z.array(z.object({ name: z.string(), count: z.number() })).optional(),
+        authors: z.array(z.object({ author: z.string(), count: z.number() })).optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -519,10 +515,7 @@ export const TeamCrossProjectInsightsSchemaMcp = z.object({
         .optional()
         .default(3)
         .describe('Minimum entries to include project'),
-    limit: relaxedNumber()
-        .optional()
-        .default(100)
-        .describe('Max projects to return'),
+    limit: relaxedNumber().optional().default(100).describe('Max projects to return'),
 })
 
 export const TeamProjectSummaryOutputSchema = z
@@ -563,4 +556,3 @@ export const TeamCrossProjectInsightsOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
-
