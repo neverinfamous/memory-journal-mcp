@@ -146,8 +146,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             entryIds.push(...nextFrontier)
                         }
                     } else if (tag) {
-                        // Get entries by tag
-                        const tagEntries = teamDb.searchEntries(tag, { limit: 50 })
+                        // Get entries by tag using an all-time date range to bypass date filtering
+                        const tagEntries = teamDb.searchByDateRange('1970-01-01', '2999-12-31', { tags: [tag], limit: 50 })
                         entryIds = tagEntries.map((e) => e.id)
                     } else {
                         // Default: recent entries
