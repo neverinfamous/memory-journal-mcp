@@ -10,6 +10,7 @@ import { parentPort, workerData } from 'node:worker_threads'
 import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
+import { transformAutoReturn } from './auto-return.js'
 
 // =============================================================================
 // Worker Data
@@ -163,7 +164,7 @@ async function executeCode(): Promise<SandboxResult> {
             name: 'codemode-worker-sandbox',
         })
 
-        const wrappedCode = `(async () => { ${code} })()`
+        const wrappedCode = `(async () => { ${transformAutoReturn(code)} })()`
         const script = new vm.Script(wrappedCode, {
             filename: 'codemode-execution.js',
         })

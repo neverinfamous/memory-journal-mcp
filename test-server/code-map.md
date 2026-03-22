@@ -74,6 +74,7 @@ src/
 ├── codemode/                       # Code Mode sandbox (secure JS execution)
 │   ├── sandbox.ts                  # SandboxPool lifecycle manager
 │   ├── sandbox-factory.ts          # Sandbox creation factory
+│   ├── auto-return.ts              # Last-expression auto-return transform (IIFE helper)
 │   ├── worker-sandbox.ts           # Worker thread sandbox (MessagePort RPC bridge)
 │   ├── worker-script.ts            # Worker thread entry point — builds mj.* API proxy; Proxy trap returns structured errors for readonly mode
 │   ├── api.ts                      # mj.* API bridge (exposes tools to sandbox)
