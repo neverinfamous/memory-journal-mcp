@@ -1,4 +1,4 @@
-<!-- SECTION:ESSENTIAL -->
+<!-- SECTION:CORE -->
 
 # memory-journal-mcp
 
@@ -48,6 +48,15 @@ When you notice the user consistently applies patterns, preferences, or workflow
 - Missing edge cases or exceptions to an existing rule
 - A skill that could be extended with new steps
 
+**How to act:**
+
+- The briefing shows **Rules** and **Skills** paths — use these to locate the files
+- **Always ask the user first** — never create or modify rules/skills silently
+- Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
+- For skills, explain the workflow it would automate and what triggers it
+
+<!-- SECTION:COPILOT -->
+
 ## Copilot Review Patterns
 
 When the user has GitHub Copilot code review enabled:
@@ -63,15 +72,7 @@ When the user has GitHub Copilot code review enabled:
 - Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
 - For skills, explain the workflow it would automate and what triggers it
 
-## Quick Access
-
-| Purpose         | Action                      |
-| --------------- | --------------------------- |
-| Session context | `memory://briefing`         |
-| Recent entries  | `memory://recent`           |
-| Health/time     | `memory://health`           |
-| Semantic search | `semantic_search(query)`    |
-| Full context    | `get-context-bundle` prompt |
+<!-- SECTION:CODE_MODE -->
 
 ## Code Mode (Token-Efficient Multi-Step Operations)
 

@@ -12,10 +12,11 @@
  * Field notes and gotchas are served via memory://help/gotchas.
  *
  * Optimized for token efficiency with tiered instruction levels.
+ * Sections are conditionally included based on enabled tool groups.
  */
 
 import type { ToolGroup } from '../types/index.js'
-import { TOOL_GROUPS } from '../filtering/tool-filter.js'
+import { TOOL_GROUPS, getEnabledGroups } from '../filtering/tool-filter.js'
 
 /**
  * Resource definition for instruction generation
@@ -52,11 +53,15 @@ export interface LatestEntrySnapshot {
  */
 export type InstructionLevel = 'essential' | 'standard' | 'full'
 
+// =============================================================================
+// Composable Instruction Segments
+// =============================================================================
+
 /**
- * Essential behavioral guidance (~200 tokens)
- * Core patterns every AI agent should follow.
+ * Core behavioral guidance — always included regardless of enabled groups.
+ * Session Start, Behaviors, Rule & Skill Suggestions.
  */
-const ESSENTIAL_INSTRUCTIONS = `# memory-journal-mcp
+const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Session Start
 
@@ -104,7 +109,19 @@ When you notice the user consistently applies patterns, preferences, or workflow
 - Missing edge cases or exceptions to an existing rule
 - A skill that could be extended with new steps
 
-## Copilot Review Patterns
+**How to act:**
+
+- The briefing shows **Rules** and **Skills** paths — use these to locate the files
+- **Always ask the user first** — never create or modify rules/skills silently
+- Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
+- For skills, explain the workflow it would automate and what triggers it
+`
+
+/**
+ * Copilot Review Patterns — only when `github` group is enabled.
+ * References `get_copilot_reviews` which is a GitHub tool.
+ */
+const COPILOT_REVIEW_INSTRUCTIONS = `\n## Copilot Review Patterns
 
 When the user has GitHub Copilot code review enabled:
 
@@ -118,7 +135,14 @@ When the user has GitHub Copilot code review enabled:
 - **Always ask the user first** — never create or modify rules/skills silently
 - Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
 - For skills, explain the workflow it would automate and what triggers it
+`
 
+/**
+ * Quick Access table — always included.
+ * The semantic_search row is conditional on the `search` group.
+ */
+function buildQuickAccess(groups: Set<ToolGroup>): string {
+    let table = `
 ## Quick Access
 
 | Purpose         | Action                      |
@@ -126,10 +150,64 @@ When the user has GitHub Copilot code review enabled:
 | Session context | \`memory://briefing\`         |
 | Recent entries  | \`memory://recent\`           |
 | Health/time     | \`memory://health\`           |
-| Semantic search | \`semantic_search(query)\`    |
-| Full context    | \`get-context-bundle\` prompt |
+`
+    if (groups.has('search')) {
+        table += `| Semantic search | \`semantic_search(query)\`    |
+`
+    }
+    table += `| Full context    | \`get-context-bundle\` prompt |
+`
+    return table
+}
 
-## Code Mode (Token-Efficient Multi-Step Operations)
+/**
+ * Code Mode namespace row definitions.
+ * Each maps a tool group to its Code Mode API namespace.
+ */
+const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
+    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
+    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
+    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
+    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
+    { group: 'export', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries("json")`' },
+    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
+    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
+    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
+    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
+]
+
+/**
+ * Code Mode section — only when `codemode` group is enabled.
+ * The namespace table dynamically omits rows for disabled groups.
+ * The behavioral text (await patterns, readonly, return shape) comes from the .md source.
+ */
+function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
+    // Build namespace table with only enabled groups
+    const rows = CODE_MODE_NAMESPACE_ROWS
+        .filter((r) => groups.has(r.group))
+        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
+        .join('\n')
+
+    // Build the static behavioral text from the .md source,
+    // but replace the full namespace table with the filtered version
+    const fullSection = CODE_MODE_FULL_TEXT
+    const tableStart = fullSection.indexOf('| Group')
+    const tableEnd = fullSection.indexOf('\n\n**Features**')
+    if (tableStart === -1 || tableEnd === -1) {
+        // Fallback: return full section if markers not found
+        return '\n' + fullSection
+    }
+    const beforeTable = fullSection.slice(0, tableStart)
+    const headerLine = '| Group         | Namespace            | Example                                            |'
+    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
+    const afterTable = fullSection.slice(tableEnd)
+    return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
+}
+
+/**
+ * Full Code Mode section text from .md source (used as template for filtered version)
+ */
+const CODE_MODE_FULL_TEXT = `## Code Mode (Token-Efficient Multi-Step Operations)
 
 For multi-step workflows (3+ operations), prefer \`mj_execute_code\` over individual tool calls.
 This executes JavaScript in a sandboxed environment with all tools available as \`mj.*\` API:
@@ -175,6 +253,7 @@ return entries.map(e => ({ id: e.id, content: e.content.slice(0, 50) }))
 
 /**
  * GitHub integration patterns (~150 additional tokens)
+ * Only included when `github` group is enabled.
  */
 const GITHUB_INSTRUCTIONS = `\n## GitHub Integration
 
@@ -275,20 +354,45 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 
 /**
- * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry
+ * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
+ *
+ * Sections are conditionally included based on which tool groups are enabled:
+ * - Copilot Review Patterns → only with `github` group
+ * - Code Mode → only with `codemode` group (namespace table only lists enabled groups)
+ * - GitHub Integration → only with `github` group (standard+ level)
+ * - Quick Access semantic_search row → only with `search` group
  *
  * @param enabledTools - Set of enabled tool names
  * @param prompts - Available prompt definitions
  * @param latestEntry - Optional latest entry for context snapshot
  * @param level - Instruction detail level (default: 'standard')
+ * @param enabledGroups - Optional pre-computed enabled groups; derived from enabledTools if omitted
  */
 export function generateInstructions(
     enabledTools: Set<string>,
     prompts: PromptDefinition[],
     latestEntry?: LatestEntrySnapshot,
-    level: InstructionLevel = 'standard'
+    level: InstructionLevel = 'standard',
+    enabledGroups?: Set<ToolGroup>
 ): string {
-    let instructions = ESSENTIAL_INSTRUCTIONS
+    // Derive enabled groups from enabled tools if not provided (backward compat)
+    const groups = enabledGroups ?? getEnabledGroups(enabledTools)
+
+    // Always start with core behavioral guidance
+    let instructions = CORE_INSTRUCTIONS
+
+    // Copilot Review Patterns — only when github group is enabled
+    if (groups.has('github')) {
+        instructions += COPILOT_REVIEW_INSTRUCTIONS
+    }
+
+    // Quick Access — always, but semantic_search row conditional on search group
+    instructions += buildQuickAccess(groups)
+
+    // Code Mode — only when codemode group is enabled
+    if (groups.has('codemode')) {
+        instructions += buildCodeModeInstructions(groups)
+    }
 
     // Add latest entry snapshot for immediate context (compact format)
     if (latestEntry) {
@@ -298,7 +402,9 @@ export function generateInstructions(
 
     // Standard and full levels include GitHub patterns + help pointers
     if (level === 'standard' || level === 'full') {
-        instructions += GITHUB_INSTRUCTIONS
+        if (groups.has('github')) {
+            instructions += GITHUB_INSTRUCTIONS
+        }
         instructions += HELP_POINTERS
     }
 
@@ -348,5 +454,8 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * Static instructions for backward compatibility
  * @deprecated Use generateInstructions() instead for dynamic content
  */
-export const SERVER_INSTRUCTIONS = ESSENTIAL_INSTRUCTIONS + GITHUB_INSTRUCTIONS
+export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS + COPILOT_REVIEW_INSTRUCTIONS +
+    buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
+    buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
+    GITHUB_INSTRUCTIONS
 

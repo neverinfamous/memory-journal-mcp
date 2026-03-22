@@ -18,6 +18,7 @@ import {
     parseToolFilter,
     getToolFilterFromEnv,
     getFilterSummary,
+    getEnabledGroups,
     type ToolFilterConfig,
 } from '../filtering/tool-filter.js'
 import { getTools, callTool } from '../handlers/tools/index.js'
@@ -160,14 +161,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const allToolNames = new Set(allTools.map((t) => t.name))
 
     // Generate dynamic instructions based on enabled tools, prompts, and latest entry
+    const enabledToolSet = filterConfig?.enabledTools ?? allToolNames
+    const enabledGroups = filterConfig ? getEnabledGroups(filterConfig.enabledTools) : undefined
     const instructions = generateInstructions(
-        filterConfig?.enabledTools ?? allToolNames,
+        enabledToolSet,
         prompts.map((p) => {
             const prompt = p as { name: string; description?: string }
             return { name: prompt.name, description: prompt.description }
         }),
         latestEntry,
-        options.instructionLevel ?? 'standard'
+        options.instructionLevel ?? 'standard',
+        enabledGroups
     )
 
     // Create MCP server with capabilities and instructions

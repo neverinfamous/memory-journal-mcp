@@ -124,6 +124,20 @@ export function getToolGroup(toolName: string): ToolGroup | undefined {
 }
 
 /**
+ * Determine which tool groups have at least one enabled tool.
+ * Used by instruction generation to conditionally include/exclude sections.
+ */
+export function getEnabledGroups(enabledTools: Set<string>): Set<ToolGroup> {
+    const groups = new Set<ToolGroup>()
+    for (const [group, tools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
+        if (tools.some((t) => enabledTools.has(t))) {
+            groups.add(group)
+        }
+    }
+    return groups
+}
+
+/**
  * Check if a string is a valid group name
  */
 function isGroup(name: string): name is ToolGroup {

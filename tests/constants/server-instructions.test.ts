@@ -3,7 +3,7 @@
  *
  * Tests the generateInstructions function at all instruction levels
  * with comprehensive content validation for behavioral guidance,
- * help pointers, and GOTCHAS_CONTENT export.
+ * help pointers, filter-aware section inclusion, and GOTCHAS_CONTENT export.
  *
  * Tool parameter reference tables are served dynamically via memory://help/{group}
  * and tested in the help resource tests, not here.
@@ -11,10 +11,14 @@
 
 import { describe, it, expect } from 'vitest'
 import { generateInstructions, GOTCHAS_CONTENT } from '../../src/constants/server-instructions.js'
-import { TOOL_GROUPS, getAllToolNames } from '../../src/filtering/tool-filter.js'
+import { TOOL_GROUPS, getAllToolNames, getEnabledGroups } from '../../src/filtering/tool-filter.js'
+import type { ToolGroup } from '../../src/types/index.js'
 
 /** Full tool set based on TOOL_GROUPS for realistic testing */
 const ALL_TOOLS = new Set(getAllToolNames())
+
+/** All groups enabled */
+const ALL_GROUPS = new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])
 
 /** Minimal tool set for basic testing */
 const TEST_TOOLS = new Set(['create_entry', 'search_entries', 'backup_journal'])
@@ -24,7 +28,18 @@ const TEST_PROMPTS = [{ name: 'test-prompt', description: 'A test prompt' }]
 
 /** Helper to generate full-level instructions with all tools */
 function fullInstructions(): string {
-    return generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'full')
+    return generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'full', ALL_GROUPS)
+}
+
+/** Helper to build a tool set from specific groups */
+function toolsFromGroups(...groups: ToolGroup[]): Set<string> {
+    const tools = new Set<string>()
+    for (const group of groups) {
+        for (const tool of TOOL_GROUPS[group]) {
+            tools.add(tool)
+        }
+    }
+    return tools
 }
 
 describe('generateInstructions', () => {
@@ -41,7 +56,7 @@ describe('generateInstructions', () => {
         })
 
         it('should include Quick Access table', () => {
-            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
+            const result = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'essential', ALL_GROUPS)
             expect(result).toContain('Quick Access')
             expect(result).toContain('memory://health')
             expect(result).toContain('semantic_search')
@@ -76,29 +91,37 @@ describe('generateInstructions', () => {
             expect(result).toContain('Always ask the user first')
         })
 
-        it('should include Code Mode section', () => {
-            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
+        it('should include Code Mode section when codemode group is enabled', () => {
+            const tools = toolsFromGroups('core', 'codemode')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
             expect(result).toContain('Code Mode')
             expect(result).toContain('mj_execute_code')
             expect(result).toContain('mj.core')
             expect(result).toContain('mj.help()')
         })
 
-        it('should include Copilot Review Patterns section', () => {
-            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
+        it('should include Copilot Review Patterns when github group is enabled', () => {
+            const tools = toolsFromGroups('core', 'github')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
             expect(result).toContain('Copilot Review Patterns')
             expect(result).toContain('get_copilot_reviews')
         })
     })
 
     describe('standard level', () => {
-        it('should include GitHub instructions', () => {
-            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'standard')
-            expect(result).toContain('GitHub')
+        it('should include GitHub instructions when github group is enabled', () => {
+            const tools = toolsFromGroups('core', 'github')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'standard', groups)
+            expect(result).toContain('## GitHub Integration')
         })
 
         it('should include GitHub integration patterns', () => {
-            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'standard')
+            const tools = toolsFromGroups('core', 'github')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'standard', groups)
             expect(result).toContain('issue_number')
             expect(result).toContain('pr_number')
             expect(result).toContain('actions-failure-digest')
@@ -175,7 +198,7 @@ describe('generateInstructions', () => {
             expect(result).toContain(`Active Tools (${String(ALL_TOOLS.size)})`)
         })
 
-        it('should list all 9 tool groups in active tools', () => {
+        it('should list all 10 tool groups in active tools', () => {
             const result = fullInstructions()
             const groups = Object.keys(TOOL_GROUPS)
             for (const group of groups) {
@@ -221,9 +244,12 @@ describe('generateInstructions', () => {
 
     describe('default level', () => {
         it('should default to standard level', () => {
-            const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS)
+            const result = generateInstructions(
+                toolsFromGroups('core', 'github'),
+                TEST_PROMPTS
+            )
             // Standard includes GitHub and help pointers
-            expect(result).toContain('GitHub')
+            expect(result).toContain('## GitHub Integration')
             expect(result).toContain('## Help Resources')
             // Standard does NOT include server access
             expect(result).not.toContain('How to Access This Server')
@@ -232,12 +258,149 @@ describe('generateInstructions', () => {
 
     describe('level ordering', () => {
         it('essential < standard < full in character count', () => {
-            const essential = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'essential')
-            const standard = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'standard')
-            const full = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'full')
+            const essential = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'essential', ALL_GROUPS)
+            const standard = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'standard', ALL_GROUPS)
+            const full = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'full', ALL_GROUPS)
             expect(essential.length).toBeLessThan(standard.length)
             expect(standard.length).toBeLessThan(full.length)
         })
+    })
+
+    // =========================================================================
+    // Filter-Aware Section Inclusion
+    // =========================================================================
+
+    describe('filter-aware sections', () => {
+        it('should omit Code Mode section when codemode group is not enabled', () => {
+            const tools = toolsFromGroups('core', 'search')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
+            expect(result).not.toContain('## Code Mode')
+            expect(result).not.toContain('mj_execute_code')
+            expect(result).not.toContain('mj.core')
+        })
+
+        it('should omit Copilot Review section when github group is not enabled', () => {
+            const tools = toolsFromGroups('core', 'search', 'codemode')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
+            expect(result).not.toContain('Copilot Review Patterns')
+            expect(result).not.toContain('get_copilot_reviews')
+        })
+
+        it('should omit GitHub Integration section when github group is not enabled (standard level)', () => {
+            const tools = toolsFromGroups('core', 'search')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'standard', groups)
+            expect(result).not.toContain('## GitHub Integration')
+            // Help pointers are always included at standard+
+            expect(result).toContain('## Help Resources')
+        })
+
+        it('should omit semantic_search from Quick Access without search group', () => {
+            const tools = toolsFromGroups('core')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
+            expect(result).toContain('Quick Access')
+            expect(result).not.toContain('semantic_search')
+            // Other rows should still be present
+            expect(result).toContain('memory://briefing')
+            expect(result).toContain('memory://health')
+            expect(result).toContain('get-context-bundle')
+        })
+
+        it('Code Mode namespace table only shows enabled groups', () => {
+            const tools = toolsFromGroups('core', 'search', 'codemode')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
+            // Should include enabled groups
+            expect(result).toContain('mj.core')
+            expect(result).toContain('mj.search')
+            // Should NOT include disabled groups
+            expect(result).not.toContain('mj.github')
+            expect(result).not.toContain('mj.team')
+            expect(result).not.toContain('mj.admin')
+            expect(result).not.toContain('mj.backup')
+        })
+
+        it('starter shortcut includes Code Mode but not Copilot', () => {
+            // starter = core + search, plus codemode auto-included
+            const tools = toolsFromGroups('core', 'search', 'codemode')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
+            expect(result).toContain('## Code Mode')
+            expect(result).not.toContain('Copilot Review Patterns')
+        })
+
+        it('essential shortcut includes Code Mode but not Copilot', () => {
+            // essential = core, plus codemode auto-included
+            const tools = toolsFromGroups('core', 'codemode')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential', groups)
+            expect(result).toContain('## Code Mode')
+            expect(result).not.toContain('Copilot Review Patterns')
+        })
+
+        it('codemode-only filter includes Code Mode, omits GitHub/Copilot', () => {
+            const tools = toolsFromGroups('codemode')
+            const groups = getEnabledGroups(tools)
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'standard', groups)
+            expect(result).toContain('## Code Mode')
+            expect(result).not.toContain('Copilot Review Patterns')
+            expect(result).not.toContain('## GitHub Integration')
+            // Help resources always included at standard+
+            expect(result).toContain('## Help Resources')
+        })
+
+        it('backward compat: no enabledGroups derives from enabledTools', () => {
+            // When enabledGroups is omitted, it should derive from enabledTools
+            const tools = toolsFromGroups('core', 'codemode')
+            const result = generateInstructions(tools, TEST_PROMPTS, undefined, 'essential')
+            // Should include Code Mode because codemode group is in enabledTools
+            expect(result).toContain('## Code Mode')
+            // Should NOT include Copilot because github group is not in enabledTools
+            expect(result).not.toContain('Copilot Review Patterns')
+        })
+
+        it('filter-aware instructions are smaller than full instructions', () => {
+            const fullResult = generateInstructions(ALL_TOOLS, TEST_PROMPTS, undefined, 'essential', ALL_GROUPS)
+            const coreOnly = generateInstructions(
+                toolsFromGroups('core'),
+                TEST_PROMPTS,
+                undefined,
+                'essential',
+                getEnabledGroups(toolsFromGroups('core'))
+            )
+            expect(coreOnly.length).toBeLessThan(fullResult.length)
+        })
+    })
+})
+
+describe('getEnabledGroups', () => {
+    it('should return all groups for all tools', () => {
+        const groups = getEnabledGroups(ALL_TOOLS)
+        expect(groups.size).toBe(Object.keys(TOOL_GROUPS).length)
+    })
+
+    it('should return correct groups for starter tools', () => {
+        const tools = toolsFromGroups('core', 'search', 'codemode')
+        const groups = getEnabledGroups(tools)
+        expect(groups.has('core')).toBe(true)
+        expect(groups.has('search')).toBe(true)
+        expect(groups.has('codemode')).toBe(true)
+        expect(groups.has('github')).toBe(false)
+        expect(groups.has('team')).toBe(false)
+    })
+
+    it('should return empty set for empty tool set', () => {
+        const groups = getEnabledGroups(new Set())
+        expect(groups.size).toBe(0)
+    })
+
+    it('should detect group from single tool', () => {
+        const groups = getEnabledGroups(new Set(['mj_execute_code']))
+        expect(groups.has('codemode')).toBe(true)
+        expect(groups.size).toBe(1)
     })
 })
 

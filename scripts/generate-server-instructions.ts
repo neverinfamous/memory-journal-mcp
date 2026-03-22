@@ -5,6 +5,10 @@
  * escapes for template literals, and produces the full TypeScript module
  * with types, constants, and the generateInstructions function.
  *
+ * Sections: CORE, COPILOT, CODE_MODE, GITHUB, HELP_POINTERS, SERVER_ACCESS
+ * CORE is always included. COPILOT and CODE_MODE are conditionally included
+ * based on enabled tool groups. GITHUB is conditional at standard+ level.
+ *
  * Usage: node scripts/generate-server-instructions.ts
  */
 
@@ -22,7 +26,7 @@ const tsPath = resolve(projectRoot, 'src/constants/server-instructions.ts')
 const markdown = readFileSync(mdPath, 'utf-8')
 
 // Section names in order
-const SECTION_NAMES = ['ESSENTIAL', 'GITHUB', 'HELP_POINTERS', 'SERVER_ACCESS']
+const SECTION_NAMES = ['CORE', 'COPILOT', 'CODE_MODE', 'GITHUB', 'HELP_POINTERS', 'SERVER_ACCESS']
 
 /**
  * Parse sections from markdown using <!-- SECTION:NAME --> delimiters
@@ -98,10 +102,11 @@ lines.push(' * Tool parameter reference is served dynamically via memory://help/
 lines.push(' * Field notes and gotchas are served via memory://help/gotchas.')
 lines.push(' *')
 lines.push(' * Optimized for token efficiency with tiered instruction levels.')
+lines.push(' * Sections are conditionally included based on enabled tool groups.')
 lines.push(' */')
 lines.push('')
 lines.push("import type { ToolGroup } from '../types/index.js'")
-lines.push("import { TOOL_GROUPS } from '../filtering/tool-filter.js'")
+lines.push("import { TOOL_GROUPS, getEnabledGroups } from '../filtering/tool-filter.js'")
 lines.push('')
 lines.push('/**')
 lines.push(' * Resource definition for instruction generation')
@@ -138,16 +143,108 @@ lines.push(' * - full: ~400 tokens - + active tools/prompts summary')
 lines.push(' */')
 lines.push("export type InstructionLevel = 'essential' | 'standard' | 'full'")
 lines.push('')
+
+// ---- Composable Segments ----
+
+lines.push('// =============================================================================')
+lines.push('// Composable Instruction Segments')
+lines.push('// =============================================================================')
+lines.push('')
 lines.push('/**')
-lines.push(' * Essential behavioral guidance (~200 tokens)')
-lines.push(' * Core patterns every AI agent should follow.')
+lines.push(' * Core behavioral guidance — always included regardless of enabled groups.')
+lines.push(' * Session Start, Behaviors, Rule & Skill Suggestions.')
 lines.push(' */')
 lines.push(
-    'const ESSENTIAL_INSTRUCTIONS = `' + escapeForTemplateLiteral(sections.ESSENTIAL) + '\n`'
+    'const CORE_INSTRUCTIONS = `' + escapeForTemplateLiteral(sections.CORE) + '\n`'
 )
 lines.push('')
 lines.push('/**')
+lines.push(' * Copilot Review Patterns — only when `github` group is enabled.')
+lines.push(' * References `get_copilot_reviews` which is a GitHub tool.')
+lines.push(' */')
+lines.push(
+    'const COPILOT_REVIEW_INSTRUCTIONS = `\\n' + escapeForTemplateLiteral(sections.COPILOT) + '\n`'
+)
+lines.push('')
+lines.push('/**')
+lines.push(' * Quick Access table — always included.')
+lines.push(' * The semantic_search row is conditional on the `search` group.')
+lines.push(' */')
+lines.push("function buildQuickAccess(groups: Set<ToolGroup>): string {")
+lines.push("    let table = `")
+lines.push("## Quick Access")
+lines.push("")
+lines.push("| Purpose         | Action                      |")
+lines.push("| --------------- | --------------------------- |")
+lines.push("| Session context | \\`memory://briefing\\`         |")
+lines.push("| Recent entries  | \\`memory://recent\\`           |")
+lines.push("| Health/time     | \\`memory://health\\`           |")
+lines.push("`")
+lines.push("    if (groups.has('search')) {")
+lines.push("        table += `| Semantic search | \\`semantic_search(query)\\`    |")
+lines.push("`")
+lines.push("    }")
+lines.push("    table += `| Full context    | \\`get-context-bundle\\` prompt |")
+lines.push("`")
+lines.push("    return table")
+lines.push("}")
+lines.push('')
+lines.push('/**')
+lines.push(' * Code Mode namespace row definitions.')
+lines.push(' * Each maps a tool group to its Code Mode API namespace.')
+lines.push(' */')
+lines.push("const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [")
+lines.push("    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry(\"Implemented feature X\")`' },")
+lines.push("    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries(\"performance\")`' },")
+lines.push("    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },")
+lines.push("    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, \"implements\")`' },")
+lines.push("    { group: 'export', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries(\"json\")`' },")
+lines.push("    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },")
+lines.push("    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: \"open\" })`' },")
+lines.push("    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },")
+lines.push("    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry(\"Team update\")`' },")
+lines.push("]")
+lines.push('')
+lines.push('/**')
+lines.push(' * Code Mode section — only when `codemode` group is enabled.')
+lines.push(' * The namespace table dynamically omits rows for disabled groups.')
+lines.push(' * The behavioral text (await patterns, readonly, return shape) comes from the .md source.')
+lines.push(' */')
+lines.push("function buildCodeModeInstructions(groups: Set<ToolGroup>): string {")
+lines.push("    // Build namespace table with only enabled groups")
+lines.push("    const rows = CODE_MODE_NAMESPACE_ROWS")
+lines.push("        .filter((r) => groups.has(r.group))")
+lines.push("        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)")
+lines.push("        .join('\\n')")
+lines.push("")
+lines.push("    // Build the static behavioral text from the .md source,")
+lines.push("    // but replace the full namespace table with the filtered version")
+lines.push("    const fullSection = CODE_MODE_FULL_TEXT")
+lines.push("    const tableStart = fullSection.indexOf('| Group')")
+lines.push("    const tableEnd = fullSection.indexOf('\\n\\n**Features**')")
+lines.push("    if (tableStart === -1 || tableEnd === -1) {")
+lines.push("        // Fallback: return full section if markers not found")
+lines.push("        return '\\n' + fullSection")
+lines.push("    }")
+lines.push("    const beforeTable = fullSection.slice(0, tableStart)")
+lines.push("    const headerLine = '| Group         | Namespace            | Example                                            |'")
+lines.push("    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'")
+lines.push("    const afterTable = fullSection.slice(tableEnd)")
+lines.push("    return '\\n' + beforeTable + headerLine + '\\n' + separatorLine + '\\n' + rows + afterTable")
+lines.push("}")
+lines.push('')
+lines.push('/**')
+lines.push(' * Full Code Mode section text from .md source (used as template for filtered version)')
+lines.push(' */')
+lines.push(
+    'const CODE_MODE_FULL_TEXT = `' + escapeForTemplateLiteral(sections.CODE_MODE) + '\n`'
+)
+lines.push('')
+
+// ---- Original static sections ----
+lines.push('/**')
 lines.push(' * GitHub integration patterns (~150 additional tokens)')
+lines.push(' * Only included when `github` group is enabled.')
 lines.push(' */')
 lines.push('const GITHUB_INSTRUCTIONS = `\\n' + escapeForTemplateLiteral(sections.GITHUB) + '\n`')
 lines.push('')

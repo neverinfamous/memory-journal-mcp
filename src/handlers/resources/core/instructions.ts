@@ -1,4 +1,4 @@
-import { getAllToolNames } from '../../../filtering/tool-filter.js'
+import { getAllToolNames, getEnabledGroups } from '../../../filtering/tool-filter.js'
 import {
     generateInstructions,
     type InstructionLevel,
@@ -21,13 +21,16 @@ export const instructionsResource: InternalResourceDef = {
 
         const allToolNames = new Set(getAllToolNames())
         const enabledTools = context.filterConfig?.enabledTools ?? allToolNames
+        const enabledGroups = context.filterConfig
+            ? getEnabledGroups(context.filterConfig.enabledTools)
+            : undefined
 
         const prompts = getPrompts().map((p) => {
             const prompt = p as { name: string; description?: string }
             return { name: prompt.name, description: prompt.description }
         })
 
-        const instructions = generateInstructions(enabledTools, prompts, undefined, level)
+        const instructions = generateInstructions(enabledTools, prompts, undefined, level, enabledGroups)
 
         return {
             data: instructions,
