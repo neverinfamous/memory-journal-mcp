@@ -100,3 +100,13 @@
 - **`ErrorFieldsMixin` relocated** — Canonical SSoT moved from `handlers/tools/error-fields-mixin.ts` to `utils/errors/error-response-fields.ts`. Old path preserved as re-export stub for backward compatibility.
 - **`title` plumbed through `ToolRegistration`** — Added `title` field to `ToolRegistration` type, `mapTool()` mapping in `handlers/tools/index.ts`, and `registerTool()` options in `mcp-server.ts`. Previously `title` was defined on every tool definition but dropped during the mapping step.
 - **Tool title invariant test** — `tool-annotations.test.ts` now verifies every tool has a non-empty `title` field.
+
+### Tests
+
+- **E2E coverage expansion (+46 tests, 5 new spec files)** — Closed coverage gaps across 5 areas:
+  - `resources-templates.spec.ts` — All 8 template resources (`memory://help/{group}` x5, GitHub-backed templates x7) fetched via HTTP client for the first time; verifies no raw MCP protocol exceptions.
+  - `payloads-codemode-api.spec.ts` — `mj.*` API bridge depth: `mj.search.searchEntries()`, `mj.analytics.getStatistics()`, multi-step create-then-search workflow, `await mj.help()` group discovery.
+  - `payloads-error-contracts.spec.ts` — Structured error field contracts: `VALIDATION_ERROR` on inverted date range (all 6 fields), minimum `code`+`category` on self-loop link, `{ duplicate: true }` naming verified (not `alreadyExists`).
+  - `tool-filtering-presets.spec.ts` — Three filter presets: `essential` (core+codemode, excludes github/team), `codemode`-only (exactly 1 callable tool), `-github` subtractive (45 tools, no github group).
+  - `resources-instructions-levels.spec.ts` — `memory://instructions` tool-filter group gating: `core`-only filter strips Code Mode and GitHub Integration sections; `-github` filter strips GitHub Integration while retaining Code Mode and semantic_search Quick Access row.
+
