@@ -50,9 +50,7 @@ test.describe('Payload Contracts: GitHub Tools (E2E environment)', () => {
         }
     }
 
-    function getText(
-        response: Awaited<ReturnType<typeof client.callTool>>
-    ): string {
+    function getText(response: Awaited<ReturnType<typeof client.callTool>>): string {
         const content = response.content as Array<{ type: string; text: string }>
         return content[0]!.text
     }

@@ -26,7 +26,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
     let jwksServer: Server
     let privateKey: jose.KeyLike
     let publicKey: jose.KeyLike
-    
+
     // JWTs
     let readToken: string
     let writeToken: string
@@ -79,18 +79,24 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             'node',
             [
                 'dist/cli.js',
-                '--transport', 'http',
-                '--port', String(OAUTH_SCOPES_PORT),
-                '--db', './.test-output/e2e/test-oauth-scopes.db',
+                '--transport',
+                'http',
+                '--port',
+                String(OAUTH_SCOPES_PORT),
+                '--db',
+                './.test-output/e2e/test-oauth-scopes.db',
                 '--oauth-enabled',
-                '--oauth-issuer', issuer,
-                '--oauth-audience', audience,
-                '--oauth-jwks-uri', `http://localhost:${JWKS_PORT}/jwks`
+                '--oauth-issuer',
+                issuer,
+                '--oauth-audience',
+                audience,
+                '--oauth-jwks-uri',
+                `http://localhost:${JWKS_PORT}/jwks`,
             ],
             {
                 cwd: process.cwd(),
                 stdio: 'pipe',
-                env: { ...process.env, MCP_RATE_LIMIT_MAX: '10000' }
+                env: { ...process.env, MCP_RATE_LIMIT_MAX: '10000' },
             }
         )
 
@@ -98,7 +104,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             try {
                 const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`)
                 if (res.ok) break
-            } catch { }
+            } catch {}
             await delay(500)
         }
     })
@@ -131,7 +137,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         const base = `http://localhost:${OAUTH_SCOPES_PORT}/mcp`
         const headers = {
             'Content-Type': 'application/json',
-            'Accept': 'application/json, text/event-stream',
+            Accept: 'application/json, text/event-stream',
             Authorization: `Bearer ${token}`,
         }
 
@@ -148,7 +154,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                 }),
             })
             expect(res.status).toBe(403)
-            const body = await res.json() as Record<string, unknown>
+            const body = (await res.json()) as Record<string, unknown>
             expect(body.error).toBe('insufficient_scope')
             return
         }
@@ -214,4 +220,3 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         await executeToolDirectly(adminToken, 'rebuild_vector_index', {}, true)
     })
 })
-

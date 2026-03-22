@@ -10,7 +10,13 @@ export default defineConfig({
             reporter: ['text', 'html'],
             reportsDirectory: '.test-output/coverage',
             include: ['src/**/*.ts'],
-            exclude: ['src/cli.ts', 'src/index.ts', 'src/transports/http.ts', 'src/types/**', 'src/codemode/worker-script.ts'],
+            exclude: [
+                'src/cli.ts',
+                'src/index.ts',
+                'src/transports/http.ts',
+                'src/types/**',
+                'src/codemode/worker-script.ts',
+            ],
         },
     },
     benchmark: {

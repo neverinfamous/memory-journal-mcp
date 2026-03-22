@@ -28,13 +28,13 @@ test.describe('Payload Contracts: Code Mode Abuse', () => {
             name: 'mj_execute_code',
             arguments: {
                 code: 'while(true) {}',
-                timeout: 50 // Very sharp timeout for the test
-            }
+                timeout: 50, // Very sharp timeout for the test
+            },
         })
 
         expect(Array.isArray(response.content)).toBe(true)
         const payload = JSON.parse((response.content as Array<{ text: string }>)[0]!.text)
-        
+
         expect(payload.success).toBe(false)
         expect(payload.error).toContain('timed out')
     })
@@ -44,13 +44,13 @@ test.describe('Payload Contracts: Code Mode Abuse', () => {
             name: 'mj_execute_code',
             arguments: {
                 code: 'await new Promise(() => {})', // Never resolves
-                timeout: 50
-            }
+                timeout: 50,
+            },
         })
 
         expect(Array.isArray(response.content)).toBe(true)
         const payload = JSON.parse((response.content as Array<{ text: string }>)[0]!.text)
-        
+
         expect(payload.success).toBe(false)
         // Unresolving promise causes worker exit (code 1) rather than the named timeout path
         const isTimeoutError = /timed out|Worker exited/i.test(String(payload.error))
@@ -62,13 +62,13 @@ test.describe('Payload Contracts: Code Mode Abuse', () => {
         const response = await client.callTool({
             name: 'mj_execute_code',
             arguments: {
-                code: 'return 1 + 1'  // Must use return; code is wrapped in (async () => { ${code} })()
-            }
+                code: 'return 1 + 1', // Must use return; code is wrapped in (async () => { ${code} })()
+            },
         })
 
         expect(Array.isArray(response.content)).toBe(true)
         const payload = JSON.parse((response.content as Array<{ text: string }>)[0]!.text)
-        
+
         expect(payload.success).toBe(true)
         expect(payload.result).toBe(2)
     })

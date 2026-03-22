@@ -99,7 +99,9 @@ function getActiveToolGroups(enabledTools: Set<string>): { group: ToolGroup; too
  * Static instructions for backward compatibility
  * @deprecated Use generateInstructions() instead for dynamic content
  */
-export const SERVER_INSTRUCTIONS = CORE_INSTRUCTIONS + COPILOT_REVIEW_INSTRUCTIONS +
+export const SERVER_INSTRUCTIONS =
+    CORE_INSTRUCTIONS +
+    COPILOT_REVIEW_INSTRUCTIONS +
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS

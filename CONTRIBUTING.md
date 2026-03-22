@@ -226,8 +226,8 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # 44 tool handlers (10 groups)
-│   ├── resources/              # 22 resource handlers
+│   ├── tools/                  # 61 tool handlers (10 groups)
+│   ├── resources/              # 28 resource handlers
 │   └── prompts/                # 16 prompt handlers
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup

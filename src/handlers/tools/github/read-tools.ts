@@ -276,7 +276,8 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             error: 'GitHub integration not available',
                             code: 'CONFIGURATION_ERROR',
                             category: 'configuration',
-                            suggestion: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                            suggestion:
+                                'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
                             recoverable: true,
                         }
                     }

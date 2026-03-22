@@ -23,9 +23,27 @@ describe('Team Search Tool Handlers', () => {
         await teamDb.initialize()
         teamDb.applyTeamSchema()
 
-        const r1 = await callTool('team_create_entry', { content: 'Strategic Search test 1', tags: ['strategy', 'shared'] }, personalDb, undefined, undefined, undefined, undefined, teamDb) as any
-        const r2 = await callTool('team_create_entry', { content: 'Tactical Search test 2', tags: ['tactics'] }, personalDb, undefined, undefined, undefined, undefined, teamDb) as any
-        
+        const r1 = (await callTool(
+            'team_create_entry',
+            { content: 'Strategic Search test 1', tags: ['strategy', 'shared'] },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )) as any
+        const r2 = (await callTool(
+            'team_create_entry',
+            { content: 'Tactical Search test 2', tags: ['tactics'] },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )) as any
+
         expect(r1.success).toBe(true)
         expect(r2.success).toBe(true)
     })
@@ -41,14 +59,23 @@ describe('Team Search Tool Handlers', () => {
 
     describe('team_search', () => {
         it('should search team entries', async () => {
-            const result = await callTool('team_search', { query: 'Strategic' }, personalDb, undefined, undefined, undefined, undefined, teamDb) as any
+            const result = (await callTool(
+                'team_search',
+                { query: 'Strategic' },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
             expect(result.entries).toBeDefined()
             expect(result.entries.length).toBeGreaterThan(0)
             expect(result.entries[0].content).toContain('Strategic')
         })
 
         it('should return error if no team db', async () => {
-            const result = await callTool('team_search', { query: 'test' }, personalDb) as any
+            const result = (await callTool('team_search', { query: 'test' }, personalDb)) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('not configured')
         })
@@ -56,29 +83,51 @@ describe('Team Search Tool Handlers', () => {
 
     describe('team_search_by_date_range', () => {
         it('should search team entries by date range', async () => {
-            const result = await callTool('team_search_by_date_range', { 
-                start_date: '2020-01-01', 
-                end_date: '2030-01-01',
-                tags: ['shared']
-            }, personalDb, undefined, undefined, undefined, undefined, teamDb) as any
-            
+            const result = (await callTool(
+                'team_search_by_date_range',
+                {
+                    start_date: '2020-01-01',
+                    end_date: '2030-01-01',
+                    tags: ['shared'],
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
             expect(result.entries).toBeDefined()
             expect(result.entries.length).toBe(1)
             expect(result.entries[0].tags).toContain('shared')
         })
 
         it('should return error if inverted date range', async () => {
-            const result = await callTool('team_search_by_date_range', { 
-                start_date: '2030-01-01', 
-                end_date: '2020-01-01'
-            }, personalDb, undefined, undefined, undefined, undefined, teamDb) as any
-            
+            const result = (await callTool(
+                'team_search_by_date_range',
+                {
+                    start_date: '2030-01-01',
+                    end_date: '2020-01-01',
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
+
             expect(result.success).toBe(false)
             expect(result.error).toContain('after end_date')
         })
 
         it('should return error if no team db', async () => {
-            const result = await callTool('team_search_by_date_range', { start_date: '2020-01-01' }, personalDb) as any
+            const result = (await callTool(
+                'team_search_by_date_range',
+                { start_date: '2020-01-01' },
+                personalDb
+            )) as any
             expect(result.success).toBe(false)
         })
     })

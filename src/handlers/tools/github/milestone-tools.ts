@@ -279,7 +279,8 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             error: `Failed to update milestone #${String(input.milestone_number)}. Check that it exists and GITHUB_TOKEN has permissions.`,
                             code: 'GITHUB_API_ERROR',
                             category: 'github',
-                            suggestion: 'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
+                            suggestion:
+                                'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
                             recoverable: true,
                         }
                     }
@@ -350,7 +351,8 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             error: result.error ?? undefined,
                             code: 'GITHUB_API_ERROR',
                             category: 'github',
-                            suggestion: 'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
+                            suggestion:
+                                'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
                             recoverable: true,
                         }
                     }

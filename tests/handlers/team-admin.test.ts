@@ -46,7 +46,12 @@ describe('Team Admin Tool Handlers', () => {
             const createResult = (await callTool(
                 'team_create_entry',
                 { content: 'Original content', entry_type: 'technical_note', tags: ['old-tag'] },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             console.error('DEBUG TEAM ADMIN CREATE ENTRY', JSON.stringify(createResult, null, 2))
@@ -55,8 +60,18 @@ describe('Team Admin Tool Handlers', () => {
 
             const updateResult = (await callTool(
                 'team_update_entry',
-                { entry_id: entryId, content: 'Updated content', entry_type: 'bug_fix', tags: ['new-tag'] },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                {
+                    entry_id: entryId,
+                    content: 'Updated content',
+                    entry_type: 'bug_fix',
+                    tags: ['new-tag'],
+                },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(updateResult.success).toBe(true)
@@ -80,7 +95,12 @@ describe('Team Admin Tool Handlers', () => {
             const result = (await callTool(
                 'team_update_entry',
                 { entry_id: 9999, content: 'test' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(false)
@@ -94,7 +114,12 @@ describe('Team Admin Tool Handlers', () => {
             const createResult = (await callTool(
                 'team_create_entry',
                 { content: 'To be deleted' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             const entryId = createResult.entry.id
@@ -102,7 +127,12 @@ describe('Team Admin Tool Handlers', () => {
             const deleteResult = (await callTool(
                 'team_delete_entry',
                 { entry_id: entryId },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(deleteResult.success).toBe(true)
@@ -112,7 +142,12 @@ describe('Team Admin Tool Handlers', () => {
             const updateResult = (await callTool(
                 'team_update_entry',
                 { entry_id: entryId, content: 'Cannot update deleted' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(updateResult.success).toBe(false)
@@ -134,7 +169,12 @@ describe('Team Admin Tool Handlers', () => {
             const result = (await callTool(
                 'team_delete_entry',
                 { entry_id: 9999 },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(false)
@@ -145,14 +185,46 @@ describe('Team Admin Tool Handlers', () => {
     describe('team_merge_tags', () => {
         it('should merge source tag into target tag for team entries', async () => {
             // Create entries with source tag
-            await callTool('team_create_entry', { content: '1', tags: ['merge-source-tag'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)
-            await callTool('team_create_entry', { content: '2', tags: ['merge-source-tag', 'other-tag'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)
-            await callTool('team_create_entry', { content: '3', tags: ['merge-target-tag'] }, personalDb, undefined, undefined, undefined, undefined, teamDb)
+            await callTool(
+                'team_create_entry',
+                { content: '1', tags: ['merge-source-tag'] },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )
+            await callTool(
+                'team_create_entry',
+                { content: '2', tags: ['merge-source-tag', 'other-tag'] },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )
+            await callTool(
+                'team_create_entry',
+                { content: '3', tags: ['merge-target-tag'] },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )
 
             const mergeResult = (await callTool(
                 'team_merge_tags',
                 { source_tag: 'merge-source-tag', target_tag: 'merge-target-tag' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(mergeResult.success).toBe(true)
@@ -163,16 +235,26 @@ describe('Team Admin Tool Handlers', () => {
             const searchSource = (await callTool(
                 'team_search',
                 { tags: ['merge-source-tag'] },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
-            
+
             expect(searchSource.count).toBe(0)
 
             // Verify search by target tag returns at least 3
             const searchTarget = (await callTool(
                 'team_search',
                 { tags: ['merge-target-tag'] },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(searchTarget.count).toBeGreaterThanOrEqual(3)
@@ -182,7 +264,12 @@ describe('Team Admin Tool Handlers', () => {
             const result = (await callTool(
                 'team_merge_tags',
                 { source_tag: 'same-tag', target_tag: 'same-tag' },
-                personalDb, undefined, undefined, undefined, undefined, teamDb
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
             )) as any
 
             expect(result.success).toBe(false)

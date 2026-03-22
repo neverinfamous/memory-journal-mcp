@@ -5,7 +5,12 @@
  */
 
 import { ICON_GITHUB, ICON_ANALYTICS, ICON_MILESTONE } from '../../constants/icons.js'
-import { withPriority, ASSISTANT_FOCUSED, LOW_PRIORITY, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
+import {
+    withPriority,
+    ASSISTANT_FOCUSED,
+    LOW_PRIORITY,
+    MEDIUM_PRIORITY,
+} from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from './shared.js'
 import { logger } from '../../utils/logger.js'

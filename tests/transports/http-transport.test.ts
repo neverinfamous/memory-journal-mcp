@@ -700,13 +700,13 @@ describe('HttpTransport', () => {
             }
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
-            
+
             // Should register the well-known route
             expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
         })
 
         it('should enforce OAuth scopes on tools/call requests', async () => {
-             const config: HttpTransportConfig = {
+            const config: HttpTransportConfig = {
                 port: 3000,
                 host: '0.0.0.0',
                 corsOrigins: ['*'],
@@ -717,51 +717,53 @@ describe('HttpTransport', () => {
             }
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
-            
-            // The OAuth scope middleware is pushed into mockMiddlewares. 
+
+            // The OAuth scope middleware is pushed into mockMiddlewares.
             // We can find it by passing a request with no `req.auth` and a tool call body, which returns 401.
             let scopeMw: Function | undefined
             for (const mw of mockMiddlewares) {
                 const req = mockReq({
                     method: 'POST',
-                    body: { method: 'tools/call', params: { name: 'mj_execute_code' } }
+                    body: { method: 'tools/call', params: { name: 'mj_execute_code' } },
                 })
                 const res = mockRes()
-                try { mw(req, res, () => {}) } catch {}
+                try {
+                    mw(req, res, () => {})
+                } catch {}
                 if ((res['status'] as any).mock.calls.some((c: any) => c[0] === 401)) {
                     scopeMw = mw
                     break
                 }
             }
             expect(scopeMw).toBeDefined()
-            
+
             // Test non-POST / non-tools/call
             const req1 = mockReq({ method: 'GET' })
             const next1 = vi.fn()
             scopeMw!(req1, mockRes(), next1)
             expect(next1).toHaveBeenCalled()
-            
+
             // Test no params name
             const req2 = mockReq({ method: 'POST', body: { method: 'tools/call' } })
             const next2 = vi.fn()
             scopeMw!(req2, mockRes(), next2)
             expect(next2).toHaveBeenCalled()
-            
+
             // Test sufficient scope
             const req3 = mockReq({
                 method: 'POST',
                 body: { method: 'tools/call', params: { name: 'mj_execute_code' } },
-                auth: { scopes: ['admin'] } // codemode requires admin scope
+                auth: { scopes: ['admin'] }, // codemode requires admin scope
             })
             const next3 = vi.fn()
             scopeMw!(req3, mockRes(), next3)
             expect(next3).toHaveBeenCalled()
-            
+
             // Test insufficient scope
             const req4 = mockReq({
                 method: 'POST',
                 body: { method: 'tools/call', params: { name: 'mj_execute_code' } },
-                auth: { scopes: ['read'] }
+                auth: { scopes: ['read'] },
             })
             const res4 = mockRes()
             scopeMw!(req4, res4, vi.fn())

@@ -198,7 +198,10 @@ describe('JournalApi', () => {
             const tools = [createMockTool('unknown_string_tool', 'core', handler)]
             const testApi = new JournalApi(tools)
             await testApi.core['unknownStringTool']!('some query string')
-            expect(handler).toHaveBeenCalledWith({ content: 'some query string', query: 'some query string' })
+            expect(handler).toHaveBeenCalledWith({
+                content: 'some query string',
+                query: 'some query string',
+            })
         })
 
         it('should return arg[0] if mapping is undefined for multi-arg calls', async () => {
@@ -210,12 +213,19 @@ describe('JournalApi', () => {
         })
 
         it('should map multiple positional args correctly using Array mapping', async () => {
-             const handler = vi.fn().mockResolvedValue({ success: true })
-             const tools = [createMockTool('link_entries', 'relationships', handler)]
-             const testApi = new JournalApi(tools)
-             // POSITIONAL_PARAM_MAP['link_entries'] is ['from_entry_id', 'to_entry_id', 'relationship_type']
-             await testApi.relationships['linkEntries']!(1, 2, 'blocks', { description: 'test options' })
-             expect(handler).toHaveBeenCalledWith({ from_entry_id: 1, to_entry_id: 2, relationship_type: 'blocks', description: 'test options' })
+            const handler = vi.fn().mockResolvedValue({ success: true })
+            const tools = [createMockTool('link_entries', 'relationships', handler)]
+            const testApi = new JournalApi(tools)
+            // POSITIONAL_PARAM_MAP['link_entries'] is ['from_entry_id', 'to_entry_id', 'relationship_type']
+            await testApi.relationships['linkEntries']!(1, 2, 'blocks', {
+                description: 'test options',
+            })
+            expect(handler).toHaveBeenCalledWith({
+                from_entry_id: 1,
+                to_entry_id: 2,
+                relationship_type: 'blocks',
+                description: 'test options',
+            })
         })
 
         it('should merge trailing options correctly for single string mapping with multi-args', async () => {
@@ -239,9 +249,12 @@ describe('JournalApi', () => {
             const handler = vi.fn().mockResolvedValue({ success: true })
             const tools = [createMockTool('search_entries', 'search', handler)]
             const testApi = new JournalApi(tools)
-            await testApi.search['searchEntries']!(['array arg does not become query', 'or options merge in certain branches'])
+            await testApi.search['searchEntries']!([
+                'array arg does not become query',
+                'or options merge in certain branches',
+            ])
             // The first argument is an array, so positional checks might just pass it or fail gracefully. Wait, search_entries maps first arg to "query", but if arg is an array, it skips single-primitive checks and tries to merge if there is a positional param map string.
-            // For a single array arg, it just passes it through right? 
+            // For a single array arg, it just passes it through right?
             expect(handler).toHaveBeenCalled()
         })
     })

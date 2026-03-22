@@ -19,7 +19,8 @@ export const TEAM_DB_ERROR_RESPONSE = {
     error: TEAM_DB_NOT_CONFIGURED,
     code: 'CONFIGURATION_ERROR',
     category: 'configuration',
-    suggestion: 'Set TEAM_DB_PATH environment variable or --team-db CLI flag to enable team collaboration.',
+    suggestion:
+        'Set TEAM_DB_PATH environment variable or --team-db CLI flag to enable team collaboration.',
     recoverable: true,
 }
 
@@ -58,9 +59,8 @@ export function fetchAuthor(
     teamDb: NonNullable<ToolContext['teamDb']>,
     entryId: number
 ): string | null {
-    const result = teamDb.executeRawQuery(
-        'SELECT author FROM memory_journal WHERE id = ?',
-        [entryId]
-    )
+    const result = teamDb.executeRawQuery('SELECT author FROM memory_journal WHERE id = ?', [
+        entryId,
+    ])
     return (result[0]?.values[0]?.[0] as string) ?? null
 }
