@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- **`test-tool-annotations.mjs` always exiting with code 1** — The 15-second safety-timeout was never cancelled when the script successfully processed the `tools/list` response. Captured the timeout handle with `const killTimeout = setTimeout(...)` and added `clearTimeout(killTimeout)` in the success handler before `process.exit(0)`.
+
 - **Code Mode proxy error wording** — Calling a nonexistent method (e.g., `mj.core.nonexistentMethod()`) in default mode no longer says "not available in read-only mode". Now says "not found in group" for groups with methods, or "no methods (read-only mode?)" for fully-stripped groups. Updated `server-instructions.md` accordingly.
 - **Test prompt: incorrect env var** — `test-tools2.md` referenced non-existent `WORKFLOWS_DIR_PATH`; corrected to `MEMORY_JOURNAL_WORKFLOW_SUMMARY` (or `--workflow-summary`).
 - **Test prompt: missing verification row** — `test-tools-codemode2.md` Phase 27.4 table omitted `newTagExists` check despite the test code computing it.
