@@ -23,23 +23,25 @@
 **61 MCP Tools** · **16 Workflow Prompts** · **28 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                        | Description                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments                                                                                                                                                                                     |
-| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                                                                                         |
-| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                                                                                        |
-| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                                                                                    |
-| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 61 capabilities via `mj.*` API. In `readonly` mode, mutations safely halt the sandbox and return structured errors instead of raw exceptions. |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments — no manual copy-pasting between sessions                                                                             |
+| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                           |
+| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                          |
+| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                      |
+| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 61 capabilities via `mj.*` API                    |
 | **Configurable Briefing**      | 12 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, rules/skills awareness, and workflow summary (`memory://workflows`)  |
-| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing threads                                                                                                                                                                             |
-| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking                                                                                                                                                                       |
+| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                             |
+| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                  |
 | **Team Collaboration**         | 20 dedicated team tools providing full functionality parity — including CRUD, isolated semantic vector search, relationship graphs, and cross-project insights via a shared database with author attribution     |
-| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                                                                                |
-| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                                                                                  |
-| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                                                                                 |
-| **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                                                                                               |
-| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                                                                                               |
+| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                  |
+| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                    |
+| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                   |
+| **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                                 |
+| **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals     |
+| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                                 |
 | **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, and IDE agents proactively apply past patterns ([setup guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
-| **Strict TypeScript**          | 100% type-safe codebase with strict mode                                                                                                                                                                                                                                       |
+| **Strict TypeScript**          | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                                                                   |
+| **MCP 2025-03-26 Compliant**   | Full protocol support with tool safety annotations, resource priorities, and progress notifications                                                                                                              |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
@@ -66,6 +68,8 @@
 | **Skills** | 15 available |
 | **Rules** | GEMINI.md (6 KB, updated just now) |
 ```
+
+Include all available context from the briefing: project, branch, CI status, journal/team entry counts, issues, PRs, milestones, insights, copilot reviews, skills, and rules. Omit rows where the data is absent.
 
 ---
 
@@ -304,6 +308,7 @@ For production deployments, enable OAuth 2.1 on the HTTP transport:
 | Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
 | Token Validation            | ✅     | JWT validation with JWKS support                 |
 | Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
+| HTTP Transport              | ✅     | Streamable HTTP with OAuth middleware            |
 
 **Scopes:** `read` (core, search, analytics, relationships, export) · `write` (github, team + read) · `admin` (admin, backup, codemode + all)
 
