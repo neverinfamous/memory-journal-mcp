@@ -27,8 +27,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
         {
             name: 'team_link_entries',
             title: 'Link Team Entries',
-            description:
-                'Create a relationship between two team entries. Requires TEAM_DB_PATH.',
+            description: 'Create a relationship between two team entries. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamLinkEntriesSchemaMcp,
             outputSchema: TeamLinkEntriesOutputSchema,
@@ -117,8 +116,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, tag, depth } =
-                        TeamVisualizeRelationshipsSchema.parse(params)
+                    const { entry_id, tag, depth } = TeamVisualizeRelationshipsSchema.parse(params)
 
                     // Collect entry IDs to visualize
                     let entryIds: number[] = []
@@ -147,7 +145,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     } else if (tag) {
                         // Get entries by tag using an all-time date range to bypass date filtering
-                        const tagEntries = teamDb.searchByDateRange('1970-01-01', '2999-12-31', { tags: [tag], limit: 50 })
+                        const tagEntries = teamDb.searchByDateRange('1970-01-01', '2999-12-31', {
+                            tags: [tag],
+                            limit: 50,
+                        })
                         entryIds = tagEntries.map((e) => e.id)
                     } else {
                         // Default: recent entries

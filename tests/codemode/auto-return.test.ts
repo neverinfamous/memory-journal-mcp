@@ -81,9 +81,7 @@ describe('transformAutoReturn', () => {
         })
 
         it('should not modify throw', () => {
-            expect(transformAutoReturn('throw new Error("fail")')).toBe(
-                'throw new Error("fail")'
-            )
+            expect(transformAutoReturn('throw new Error("fail")')).toBe('throw new Error("fail")')
         })
 
         it('should not modify const declaration', () => {
@@ -109,9 +107,7 @@ describe('transformAutoReturn', () => {
         })
 
         it('should not modify while loop', () => {
-            expect(transformAutoReturn('while (true) { break }')).toBe(
-                'while (true) { break }'
-            )
+            expect(transformAutoReturn('while (true) { break }')).toBe('while (true) { break }')
         })
 
         it('should not modify try/catch', () => {

@@ -70,7 +70,9 @@ test.describe('Code Mode Readonly Enforcement', () => {
         expect(payload.success).toBe(false)
         expect(typeof payload.error).toBe('string')
         // Error message mentions either "not available", "not found in group", or "read-only"
-        expect((payload.error as string).toLowerCase()).toMatch(/not available|not found in group|readonly|read.only/i)
+        expect((payload.error as string).toLowerCase()).toMatch(
+            /not available|not found in group|readonly|read.only/i
+        )
     })
 
     test('mj.admin.deleteEntry raises structured error via readonly=true param', async () => {

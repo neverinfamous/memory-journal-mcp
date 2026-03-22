@@ -46,10 +46,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
      * Assert minimum structured error fields (success, error, code, category).
      * Use for handlers that return inline error objects without suggestion/recoverable.
      */
-    function expectMinimumError(
-        payload: Record<string, unknown>,
-        expectedCode?: string
-    ): void {
+    function expectMinimumError(payload: Record<string, unknown>, expectedCode?: string): void {
         expect(payload.success).toBe(false)
         expect(typeof payload.error).toBe('string')
         expect(typeof payload.code).toBe('string')
@@ -64,10 +61,7 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
      * Assert all 6 structured error fields are present (formatHandlerError paths).
      * Use for tools that route errors through formatHandlerError or MemoryJournalMcpError.
      */
-    function expectFullError(
-        payload: Record<string, unknown>,
-        expectedCode?: string
-    ): void {
+    function expectFullError(payload: Record<string, unknown>, expectedCode?: string): void {
         expectMinimumError(payload, expectedCode)
         expect(typeof payload.suggestion).toBe('string')
         expect(typeof payload.recoverable).toBe('boolean')

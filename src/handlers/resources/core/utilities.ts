@@ -1,7 +1,18 @@
 import type { Tag } from '../../../types/index.js'
-import { ICON_CLOCK, ICON_STAR, ICON_TAG, ICON_ANALYTICS, ICON_BRIEFING } from '../../../constants/icons.js'
+import {
+    ICON_CLOCK,
+    ICON_STAR,
+    ICON_TAG,
+    ICON_ANALYTICS,
+    ICON_BRIEFING,
+} from '../../../constants/icons.js'
 import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../../database/core/entry-columns.js'
-import { withPriority, ASSISTANT_FOCUSED, LOW_PRIORITY, MEDIUM_PRIORITY } from '../../../utils/resource-annotations.js'
+import {
+    withPriority,
+    ASSISTANT_FOCUSED,
+    LOW_PRIORITY,
+    MEDIUM_PRIORITY,
+} from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 import { execQuery, transformEntryRow } from '../shared.js'
 import * as fs from 'node:fs'
@@ -71,15 +82,19 @@ export const significantResource: InternalResourceDef = {
             const entry = transformEntryRow(row)
             const relCount = (row['rel_count'] as number) ?? 0
             const causalCount = (row['causal_count'] as number) ?? 0
-            const daysSince = Math.floor((now - new Date(entry['timestamp'] as string).getTime()) / MS_PER_DAY)
+            const daysSince = Math.floor(
+                (now - new Date(entry['timestamp'] as string).getTime()) / MS_PER_DAY
+            )
             const recency = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
-            const importance = Math.round((
-                1.0 * 0.3 +                                                  // significance (always 1.0 — filtered by IS NOT NULL)
-                Math.min(relCount / MAX_REL_SCORE_AT, 1.0) * 0.35 +          // relationships
-                Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0) * 0.2 +     // causal
-                recency * 0.15                                                // recency
-            ) * 100) / 100
+            const importance =
+                Math.round(
+                    (1.0 * 0.3 + // significance (always 1.0 — filtered by IS NOT NULL)
+                        Math.min(relCount / MAX_REL_SCORE_AT, 1.0) * 0.35 + // relationships
+                        Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0) * 0.2 + // causal
+                        recency * 0.15) * // recency
+                        100
+                ) / 100
 
             return { ...entry, importance } as { timestamp: string; importance: number }
         })
@@ -143,7 +158,8 @@ export const rulesResource: InternalResourceDef = {
             return {
                 data: {
                     configured: false,
-                    message: 'RULES_FILE_PATH is not configured. Set this env var to serve rules content.',
+                    message:
+                        'RULES_FILE_PATH is not configured. Set this env var to serve rules content.',
                 },
             }
         }
@@ -151,7 +167,9 @@ export const rulesResource: InternalResourceDef = {
             const content = fs.readFileSync(rulesPath, 'utf8')
             return {
                 data: content,
-                annotations: { lastModified: new Date(fs.statSync(rulesPath).mtimeMs).toISOString() },
+                annotations: {
+                    lastModified: new Date(fs.statSync(rulesPath).mtimeMs).toISOString(),
+                },
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)

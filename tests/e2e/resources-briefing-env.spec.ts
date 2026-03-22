@@ -28,9 +28,12 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             'node',
             [
                 'dist/cli.js',
-                '--transport', 'http',
-                '--port', String(BRIEFING_PORT),
-                '--db', './.test-output/e2e/test-briefing.db',
+                '--transport',
+                'http',
+                '--port',
+                String(BRIEFING_PORT),
+                '--db',
+                './.test-output/e2e/test-briefing.db',
             ],
             {
                 cwd: process.cwd(),
@@ -38,9 +41,9 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                 env: {
                     ...process.env,
                     MCP_RATE_LIMIT_MAX: '10000',
-                    BRIEFING_ENTRY_COUNT: '2',          // Only 2 entries max
-                    BRIEFING_INCLUDE_TEAM: 'true',      // Force inclusion
-                    BRIEFING_COPILOT_REVIEWS: 'true',   // Adds copilot block
+                    BRIEFING_ENTRY_COUNT: '2', // Only 2 entries max
+                    BRIEFING_INCLUDE_TEAM: 'true', // Force inclusion
+                    BRIEFING_COPILOT_REVIEWS: 'true', // Adds copilot block
                     TEAM_DB_PATH: './.test-output/e2e/test-briefing-team.db',
                 },
             }
@@ -50,7 +53,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             try {
                 const res = await fetch(`${BRIEFING_BASE}/health`)
                 if (res.ok) break
-            } catch { }
+            } catch {}
             await delay(500)
         }
 
@@ -70,29 +73,29 @@ test.describe('Resources: Briefing Environment Configurations', () => {
 
     test('memory://briefing dynamically generates based on ENV limits', async () => {
         // Create 3 entries to exceed the limit of 2
-        for(let i=1; i<=3; i++) {
-            const resp = await client.callTool({ 
-                name: 'create_entry', 
-                arguments: { content: `Briefing test code ${i}`, entry_type: 'test_entry' }
+        for (let i = 1; i <= 3; i++) {
+            const resp = await client.callTool({
+                name: 'create_entry',
+                arguments: { content: `Briefing test code ${i}`, entry_type: 'test_entry' },
             })
             expect(resp.isError).toBeUndefined()
         }
-        
+
         // Also create a team entry to test inclusion
         const t_resp = await client.callTool({
             name: 'team_create_entry',
-            arguments: { content: 'Team insight', entry_type: 'test_entry' }
+            arguments: { content: 'Team insight', entry_type: 'test_entry' },
         })
         expect(t_resp.isError).toBeUndefined()
-        
+
         const response = await client.readResource({ uri: 'memory://briefing' })
-        
+
         expect(response.contents).toBeDefined()
         const contentText = response.contents[0]!.text as string
 
         // The briefing resource yields JSON format
         const briefingObj = JSON.parse(contentText)
-        
+
         // Assert entry limit of 2 is respected
         expect(briefingObj.journal.latestEntries.length).toBe(2)
         // Assert team block is populated

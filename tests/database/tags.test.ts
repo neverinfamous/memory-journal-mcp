@@ -10,7 +10,7 @@ vi.mock('../../src/utils/logger.js', () => ({
 function createTagsManager(): { conn: NativeConnectionManager; manager: TagsManager } {
     const conn = new NativeConnectionManager(':memory:')
     const db = new Database(':memory:')
-    
+
     db.exec(`
         CREATE TABLE IF NOT EXISTS memory_journal (
             id INTEGER PRIMARY KEY AUTOINCREMENT
@@ -26,7 +26,7 @@ function createTagsManager(): { conn: NativeConnectionManager; manager: TagsMana
             PRIMARY KEY(entry_id, tag_id)
         );
     `)
-    
+
     Object.assign(conn, { db, initialized: true })
     const manager = new TagsManager(conn)
     return { conn, manager }
@@ -35,14 +35,14 @@ function createTagsManager(): { conn: NativeConnectionManager; manager: TagsMana
 describe('TagsManager', () => {
     let conn: NativeConnectionManager
     let manager: TagsManager
-    
+
     beforeEach(() => {
         vi.clearAllMocks()
         const setup = createTagsManager()
         conn = setup.conn
         manager = setup.manager
     })
-    
+
     afterEach(() => {
         conn.close()
     })
@@ -50,14 +50,14 @@ describe('TagsManager', () => {
     it('should link tags to entry', () => {
         const db = conn.getRawDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
-        
+
         manager.linkTagsToEntry(1, ['tag1', 'tag2'])
-        
+
         const tags = manager.getTagsForEntry(1)
         expect(tags).toContain('tag1')
         expect(tags).toContain('tag2')
     })
-    
+
     it('should ignore linking zero tags', () => {
         expect(() => manager.linkTagsToEntry(1, [])).not.toThrow()
     })
@@ -66,10 +66,10 @@ describe('TagsManager', () => {
         const db = conn.getRawDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         db.prepare('INSERT INTO memory_journal (id) VALUES (2)').run()
-        
+
         manager.linkTagsToEntry(1, ['tag1'])
         manager.linkTagsToEntry(2, ['tag1', 'tag2'])
-        
+
         const map = manager.batchGetTagsForEntries([1, 2])
         expect(map.get(1)).toContain('tag1')
         expect(map.get(2)).toContain('tag2')
@@ -84,7 +84,7 @@ describe('TagsManager', () => {
         const db = conn.getRawDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         manager.linkTagsToEntry(1, ['tag1', 'tag2'])
-        
+
         const tags = manager.listTags()
         expect(tags.length).toBe(2)
         expect(tags[0]!.name).toBeDefined()
@@ -95,11 +95,11 @@ describe('TagsManager', () => {
         const db = conn.getRawDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         manager.linkTagsToEntry(1, ['sourceTag'])
-        
+
         const result = manager.mergeTags('sourceTag', 'targetTag')
         expect(result.entriesUpdated).toBe(1)
         expect(result.sourceDeleted).toBe(true)
-        
+
         const tags = manager.getTagsForEntry(1)
         expect(tags).not.toContain('sourceTag')
         expect(tags).toContain('targetTag')
@@ -109,10 +109,10 @@ describe('TagsManager', () => {
         const db = conn.getRawDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         db.prepare('INSERT INTO memory_journal (id) VALUES (2)').run()
-        
-        manager.linkTagsToEntry(1, ['sourceTag', 'targetTag']) 
+
+        manager.linkTagsToEntry(1, ['sourceTag', 'targetTag'])
         manager.linkTagsToEntry(2, ['sourceTag'])
-        
+
         const result = manager.mergeTags('sourceTag', 'targetTag')
         expect(result.entriesUpdated).toBe(1) // only entry 2 updated
         expect(manager.getTagsForEntry(1)).toContain('targetTag')
@@ -123,7 +123,7 @@ describe('TagsManager', () => {
         const db = conn.getRawDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         manager.linkTagsToEntry(1, ['sourceTag'])
-        
+
         manager.mergeTags('sourceTag', 'newTargetTag')
         expect(manager.getTagsForEntry(1)).toContain('newTargetTag')
     })

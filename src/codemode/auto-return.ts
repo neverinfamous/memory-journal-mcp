@@ -13,7 +13,8 @@
  */
 
 // Statements that must NOT be prefixed with `return`
-const NON_RETURNABLE = /^\s*(return|throw|const |let |var |if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class |function |\/\/|\/\*|\{|\})/
+const NON_RETURNABLE =
+    /^\s*(return|throw|const |let |var |if\b|else\b|for\b|while\b|do\b|switch\b|try\b|catch\b|finally\b|class |function |\/\/|\/\*|\{|\})/
 
 /**
  * Transform user code so the last expression statement gets an

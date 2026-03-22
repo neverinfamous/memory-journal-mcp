@@ -30,7 +30,13 @@ export const instructionsResource: InternalResourceDef = {
             return { name: prompt.name, description: prompt.description }
         })
 
-        const instructions = generateInstructions(enabledTools, prompts, undefined, level, enabledGroups)
+        const instructions = generateInstructions(
+            enabledTools,
+            prompts,
+            undefined,
+            level,
+            enabledGroups
+        )
 
         return {
             data: instructions,

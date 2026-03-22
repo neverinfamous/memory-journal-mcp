@@ -67,10 +67,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         }
 
         const transport = new StreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`))
-        client = new McpClient(
-            { name: 'team-happy-test', version: '1.0.0' },
-            { capabilities: {} }
-        )
+        client = new McpClient({ name: 'team-happy-test', version: '1.0.0' }, { capabilities: {} })
         await client.connect(transport)
     })
 

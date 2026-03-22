@@ -6,7 +6,11 @@
  */
 
 import { ICON_BRIEFING } from '../../../../constants/icons.js'
-import { withPriority, withSessionInit, ASSISTANT_FOCUSED } from '../../../../utils/resource-annotations.js'
+import {
+    withPriority,
+    withSessionInit,
+    ASSISTANT_FOCUSED,
+} from '../../../../utils/resource-annotations.js'
 import { VERSION } from '../../../../version.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'

@@ -61,7 +61,6 @@ describe('CodeModeSandbox', () => {
         it('should report cache size as a number', () => {
             expect(typeof sandbox.getCacheSize()).toBe('number')
         })
-
     })
 
     // =========================================================================
@@ -70,15 +69,17 @@ describe('CodeModeSandbox', () => {
 
     describe('execute', () => {
         let runInContextSpy: any
-        
+
         beforeEach(() => {
-            runInContextSpy = vi.spyOn(vm.Script.prototype, 'runInContext').mockReturnValue(Promise.resolve(42) as any)
+            runInContextSpy = vi
+                .spyOn(vm.Script.prototype, 'runInContext')
+                .mockReturnValue(Promise.resolve(42) as any)
         })
-        
+
         afterEach(() => {
             if (runInContextSpy) runInContextSpy.mockRestore()
         })
-        
+
         it('should execute code returning a valid result', async () => {
             const result = await sandbox.execute('return 42', {})
             expect(result.success).toBe(true)
@@ -89,7 +90,9 @@ describe('CodeModeSandbox', () => {
         })
 
         it('should catch errors thrown during execution', async () => {
-            runInContextSpy.mockImplementation(() => { throw new Error('VM crash') })
+            runInContextSpy.mockImplementation(() => {
+                throw new Error('VM crash')
+            })
             const result = await sandbox.execute('throw new Error("Crash")', {})
             expect(result.success).toBe(false)
             if (!result.success) {
@@ -100,12 +103,15 @@ describe('CodeModeSandbox', () => {
         it('should provide wrapped console methods', async () => {
             // This will execute against the mock, but the console wrappers are created
             // within the 'execute' setup before runInContext is called.
-            const result = await sandbox.execute(`
+            const result = await sandbox.execute(
+                `
                 console.log("log entry");
                 console.warn("warn entry");
                 console.error("error entry");
                 return true;
-            `, {})
+            `,
+                {}
+            )
             expect(result.success).toBe(true)
         })
 
@@ -164,21 +170,21 @@ describe('SandboxPool', () => {
         expect(result.success).toBe(false)
         expect(result.error).toContain('exhausted')
     })
-    
+
     it('should decrement active count on execution completion', async () => {
         const pool = new SandboxPool({}, { maxInstances: 5 })
         expect(pool.getActiveCount()).toBe(0)
-        
+
         // Mock the actual execution to avoid vm hanging in vitest
         const executeSpy = vi.spyOn(CodeModeSandbox.prototype, 'execute').mockResolvedValue({
             success: true,
             result: 1,
-            metrics: { durationMs: 1, memoryBytes: 0, peakMemoryBytes: 0 }
+            metrics: { durationMs: 1, memoryBytes: 0, peakMemoryBytes: 0 },
         })
-        
+
         await pool.execute('return 1', {})
         expect(pool.getActiveCount()).toBe(0)
-        
+
         executeSpy.mockRestore()
     })
 })

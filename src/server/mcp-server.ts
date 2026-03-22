@@ -157,7 +157,15 @@ export async function createServer(options: ServerOptions): Promise<void> {
         : undefined
 
     // Get all tools once (unfiltered) for both instruction generation and registration
-    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber }, teamDb, teamVectorManager)
+    const allTools = getTools(
+        db,
+        null,
+        vectorManager,
+        github,
+        { defaultProjectNumber },
+        teamDb,
+        teamVectorManager
+    )
     const allToolNames = new Set(allTools.map((t) => t.name))
 
     // Generate dynamic instructions based on enabled tools, prompts, and latest entry
@@ -190,7 +198,15 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Apply filter to get the set of tools to register
     const tools = filterConfig
-        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber }, teamDb, teamVectorManager)
+        ? getTools(
+              db,
+              filterConfig,
+              vectorManager,
+              github,
+              { defaultProjectNumber },
+              teamDb,
+              teamVectorManager
+          )
         : allTools
     for (const tool of tools) {
         // Build tool options matching MCP SDK expectations
@@ -282,8 +298,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         ],
                     }
                 } catch (error) {
-                    const errorMessage =
-                        error instanceof Error ? error.message : String(error)
+                    const errorMessage = error instanceof Error ? error.message : String(error)
                     const errorResult = {
                         success: false,
                         error: errorMessage,
@@ -298,9 +313,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                 text: JSON.stringify(errorResult, null, 2),
                             },
                         ],
-                        ...(hasOutputSchema
-                            ? { structuredContent: errorResult }
-                            : {}),
+                        ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
                         isError: true,
                     }
                 }
