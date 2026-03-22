@@ -63,7 +63,8 @@ proc.stdout.on('data', (chunk) => {
                     console.log(`\nMISSING annotations: ${missingNames.join(', ')}`)
                 }
 
-                proc.kill()
+                clearTimeout(killTimeout)
+                process.exit(0)
             }
         } catch {
             // Not complete JSON yet
@@ -108,7 +109,7 @@ setTimeout(() => {
     }, 500)
 }, 1500)
 
-setTimeout(() => {
+const killTimeout = setTimeout(() => {
     console.log('Timeout — killing process')
     proc.kill()
     process.exit(1)
