@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-95.87%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-96.21%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1679_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-247_passed-brightgreen.svg)
 
@@ -23,25 +23,25 @@
 **61 MCP Tools** · **16 Workflow Prompts** · **28 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                        | Description                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments — no manual copy-pasting between sessions                                                                             |
-| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                           |
-| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                          |
-| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                      |
-| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 61 capabilities via `mj.*` API                    |
-| **Configurable Briefing**      | 12 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, rules/skills awareness, and workflow summary (`memory://workflows`)  |
-| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                             |
-| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                  |
-| **Team Collaboration**         | 20 dedicated team tools providing full functionality parity — including CRUD, isolated semantic vector search, relationship graphs, and cross-project insights via a shared database with author attribution     |
-| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                  |
-| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                    |
-| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                   |
-| **Production-Ready Security**  | SQL injection prevention, input validation, path traversal protection, token scrubbing, security headers, server timeouts, and non-root Docker execution                                                         |
-| **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals     |
-| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments — no manual copy-pasting between sessions                                                                                                                                           |
+| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                                                                                         |
+| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                                                                                        |
+| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                                                                                    |
+| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 61 capabilities via `mj.*` API                                                                                  |
+| **Configurable Briefing**      | 12 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, rules/skills awareness, and workflow summary (`memory://workflows`)                                                |
+| **Session Continuity**         | A quick `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                                                                                           |
+| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                                                                                |
+| **Team Collaboration**         | 20 dedicated team tools providing full functionality parity — including CRUD, isolated semantic vector search, relationship graphs, and cross-project insights via a shared database with author attribution                                                                   |
+| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                                                                                |
+| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                                                                                  |
+| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                                                                                 |
+| **Production-Ready Security**  | SQL injection prevention, input validation, path traversal protection, token scrubbing, security headers, server timeouts, and non-root Docker execution                                                                                                                       |
+| **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals                                                                   |
+| **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                                                                                               |
 | **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, and IDE agents proactively apply past patterns ([setup guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
-| **Strict TypeScript**          | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                                                                   |
-| **MCP 2025-03-26 Compliant**   | Full protocol support with tool safety annotations, resource priorities, and progress notifications                                                                                                              |
+| **Strict TypeScript**          | 100% type-safe codebase with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                                                                                                                                 |
+| **MCP 2025-03-26 Compliant**   | Full protocol support with tool safety annotations, resource priorities, and progress notifications                                                                                                                                                                            |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
@@ -101,17 +101,17 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🛠️ **61 MCP Tools** (10 Groups)
 
-| Group           | Tools | Description                                                                                          |
-| --------------- | ----- | ---------------------------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                              |
-| `core`          | 6     | Entry CRUD, tags, test                                                                               |
-| `search`        | 4     | Text search, date range, semantic, vector stats                                                      |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                   |
-| `relationships` | 2     | Link entries, visualize graphs                                                                       |
-| `export`        | 1     | JSON/Markdown export                                                                                 |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                              |
-| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews** |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                       |
+| Group           | Tools | Description                                                                                                         |
+| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                             |
+| `core`          | 6     | Entry CRUD, tags, test                                                                                              |
+| `search`        | 4     | Text search, date range, semantic, vector stats                                                                     |
+| `analytics`     | 2     | Statistics, cross-project insights                                                                                  |
+| `relationships` | 2     | Link entries, visualize graphs                                                                                      |
+| `export`        | 1     | JSON/Markdown export                                                                                                |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                             |
+| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                                                      |
 | `team`          | 20    | CRUD, search, stats, relationships, export, backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
@@ -186,34 +186,34 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 Restart Cursor or your MCP client and start journaling!
 
-| Environment Variable       | Description                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------- |
-| `DB_PATH`                  | Database location (default: `/app/data/memory_journal.db` in Docker)                              |
-| `TEAM_DB_PATH`             | Team database file location (CLI: `--team-db`)                                                    |
-| `TEAM_AUTHOR`              | Override author name for team entries (default: `git config user.name`)                           |
-| `GITHUB_TOKEN`             | GitHub personal access token for API access                                                       |
-| `GITHUB_REPO_PATH`         | Path to git repo inside container (mount your repo)                                               |
-| `DEFAULT_PROJECT_NUMBER`   | Default GitHub Project number for auto-assignment when creating issues                            |
-| `AUTO_REBUILD_INDEX`       | Set to `true` to rebuild vector index on server startup                                           |
-| `MCP_HOST`                 | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
-| `MCP_AUTH_TOKEN`           | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
-| `MCP_ENABLE_HSTS`          | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)            |
-| `OAUTH_ENABLED`            | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
-| `OAUTH_ISSUER`             | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |
-| `OAUTH_AUDIENCE`           | Expected JWT audience claim                                                                       |
-| `OAUTH_JWKS_URI`           | JWKS endpoint for token signature verification                                                    |
-| `BRIEFING_ENTRY_COUNT`     | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                             |
-| `BRIEFING_INCLUDE_TEAM`    | Include team DB entries in briefing (`true`/`false`; default: `false`)                            |
-| `BRIEFING_ISSUE_COUNT`     | Issues to list in briefing; `0` = count only (default: `0`)                                       |
-| `BRIEFING_PR_COUNT`        | PRs to list in briefing; `0` = count only (default: `0`)                                          |
-| `BRIEFING_PR_STATUS`       | Show PR status breakdown (open/merged/closed; default: `false`)                                   |
-| `BRIEFING_WORKFLOW_COUNT`  | Workflow runs to list in briefing; `0` = status only (default: `0`)                               |
-| `BRIEFING_WORKFLOW_STATUS` | Show workflow status breakdown in briefing (default: `false`)                                     |
-| `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`)                                     |
-| `RULES_FILE_PATH`          | Path to user rules file for agent awareness (CLI: `--rules-file`)                                 |
-| `SKILLS_DIR_PATH`          | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                |
-| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)          |
-| `INSTRUCTION_LEVEL`        | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
+| Environment Variable              | Description                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `DB_PATH`                         | Database location (default: `/app/data/memory_journal.db` in Docker)                              |
+| `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                    |
+| `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                           |
+| `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                       |
+| `GITHUB_REPO_PATH`                | Path to git repo inside container (mount your repo)                                               |
+| `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                            |
+| `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                           |
+| `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
+| `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
+| `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)            |
+| `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
+| `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |
+| `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                       |
+| `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                    |
+| `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                             |
+| `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                            |
+| `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                       |
+| `BRIEFING_PR_COUNT`               | PRs to list in briefing; `0` = count only (default: `0`)                                          |
+| `BRIEFING_PR_STATUS`              | Show PR status breakdown (open/merged/closed; default: `false`)                                   |
+| `BRIEFING_WORKFLOW_COUNT`         | Workflow runs to list in briefing; `0` = status only (default: `0`)                               |
+| `BRIEFING_WORKFLOW_STATUS`        | Show workflow status breakdown in briefing (default: `false`)                                     |
+| `BRIEFING_COPILOT_REVIEWS`        | Aggregate Copilot review state in briefing (default: `false`)                                     |
+| `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                 |
+| `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                |
+| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                   |
+| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 

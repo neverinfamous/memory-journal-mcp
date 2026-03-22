@@ -12,6 +12,7 @@
 import { ICON_BRIEFING } from '../../constants/icons.js'
 import { GOTCHAS_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
+import { logger } from '../../utils/logger.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import type { getTools } from '../../handlers/tools/index.js'
 
@@ -333,7 +334,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             annotations: t.annotations as MinimalToolDef['annotations'],
         }))
     } catch (e: unknown) {
-        console.error('Failed to load tool definitions', e)
+        logger.error('HELP_LOAD_TOOLS_FAILED', { error: e instanceof Error ? e.message : String(e) })
         return []
     }
 }

@@ -7,13 +7,23 @@
 - **`server.json` description aligned** — Replaced stale description with `package.json` description for consistency across npm and MCP registry.
 - **README architecture diagram resource count** — Fixed `Resources (27)` → `Resources (28)` in the ASCII stack diagram.
 - **Compact JSON for tool responses** — Success-path responses use `JSON.stringify(result)` (no pretty-print) for ~15-20% payload reduction per mcp-builder §3.1. Error responses remain pretty-printed for readability.
-
 - **Server instructions refactor** — Removed ~55% redundant tool parameter tables from `server-instructions.ts` (511→285 lines) and `.md` (371→147 lines). Tool reference now served dynamically via `memory://help/{group}`. Field notes moved to new `memory://help/gotchas` resource. `standard` level now includes help resource pointers. ~33% token savings at `full` instruction level.
 - **Filter-aware server instructions** — `generateInstructions()` now conditionally includes instruction sections based on enabled tool groups: Code Mode section (+ namespace table) only when `codemode` is enabled; Copilot Review Patterns only when `github` is enabled; GitHub Integration patterns only when `github` is enabled; `semantic_search` Quick Access row only when `search` is enabled. New `getEnabledGroups(enabledTools)` helper added to `tool-filter.ts`. Codegen pipeline updated to parse 6 sections (`CORE`, `COPILOT`, `CODE_MODE`, `GITHUB`, `HELP_POINTERS`, `SERVER_ACCESS`). Backward-compatible — callers omitting `enabledGroups` derive it from `enabledTools`. 14 new tests added.
 - **`essential` and `starter` shortcuts now include `codemode`** — `META_GROUPS.essential` = `['core', 'codemode']`, `META_GROUPS.starter` = `['core', 'search', 'codemode']`. Matches the documented tool counts (~7 and ~11 respectively) and makes shortcut behavior consistent with the README note that all shortcuts include Code Mode by default. `readonly` unchanged (`['core', 'search', 'analytics', 'relationships', 'export']`).
 - **mcp-builder skill updates (S1-S5)** — Updated `SKILL.md` with production-tested patterns from memory-journal-mcp: dynamic help resources as preferred Approach A (S1), single-source instructions alternative (S2), `ToolDefinition` vs `ToolRegistration` type distinction with `mapTool()` example (S3), briefing configuration with 12 env vars table (S4), `inferGroupFromName()` workaround for SDK's missing `group` field (S5).
 - **`memory://significant` batched importance (P-R1)** — Replaced N+1 `calculateImportance()` per-entry loop with a single SQL query using LEFT JOIN aggregations for relationship and causal counts. Eliminates N serial subqueries.
 - **`help.ts` cached `require()` (P-R2)** — Cached the dynamic `require()` module reference in a module-level variable with `??=` so the circular-dep workaround only resolves the module once.
+- **Code Mode Readonly Contract Clarified** — Documentation explicitly defines that calling mutation methods under `--tool-filter readonly` safely halts the sandbox and returns a structured `{ success: false, error: "..." }` response rather than a raw exception.
+- **Comprehensive Code Quality Audit** — Completed March 2026 zero-regression code quality baseline audit. Validated 100% adherence to architectural standards, typed error boundaries (`MemoryJournalMcpError`), strict schema constraints (`z.object({}).strict()`), and sanitized SQL parameterization. Overall codebase quality certified as **A+**.
+- **Code Quality Audit Fixes**: Used `milestoneCompletionPct` helper in milestone tool handlers and extracted `MAX_QUERY_LIMIT` constant/helper in search handlers to DRY up duplication.
+- **npm publish gated behind Docker checks** — npm no longer publishes on release creation; instead `docker-publish.yml` calls `publish-npm.yml` via `workflow_call` after Docker Scout passes and images are pushed. Both artifacts ship together or neither ships. Manual `workflow_dispatch` fallback preserved.
+- **Dependency Updates** — Updated 27 npm packages; `eslint` → `10.1.0`, `jose` → `6.2.2`, `sqlite-vec` → `0.1.7`, `typescript-eslint` → `8.57.1`. 0 vulnerabilities.
+- **`relaxedNumber()` type-safe union** — Changed from `z.any()` to `z.union([z.number(), z.string()])` for MCP SDK inputSchema registration. Accepts both native numbers and string-typed numbers while rejecting non-numeric types at the SDK level. `z.preprocess()` was evaluated but caused 192 ESLint `@typescript-eslint/no-unsafe-*` cascading errors due to unresolvable `ZodEffects` generics.
+- **mcp-builder compliance audit** — Complexity tier 4. Audited error handling, input coercion, and tool/resource patterns against mcp-builder standards. Implemented 10 remediation items including dynamic help resources (R3) and resource annotation preset migration (R2).
+- **Version SSoT (`src/version.ts`)** — Created centralized `VERSION` constant. Updated 4 consumers (`cli.ts`, `mcp-server.ts`, `http/handlers.ts`, `briefing/index.ts`) to import from SSoT instead of directly reading `package.json`. Added `VERSION` to public barrel export.
+- **`ErrorFieldsMixin` relocated** — Canonical SSoT moved from `handlers/tools/error-fields-mixin.ts` to `utils/errors/error-response-fields.ts`. Old path preserved as re-export stub for backward compatibility.
+- **`title` plumbed through `ToolRegistration`** — Added `title` field to `ToolRegistration` type, `mapTool()` mapping in `handlers/tools/index.ts`, and `registerTool()` options in `mcp-server.ts`. Previously `title` was defined on every tool definition but dropped during the mapping step.
+- **Tool title invariant test** — `tool-annotations.test.ts` now verifies every tool has a non-empty `title` field.
 
 ### Added
 
@@ -29,13 +39,14 @@
 - **Resource annotation presets** — Centralized `HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED` presets in `src/utils/resource-annotations.ts`.
 - **Dynamic help resources** — `memory://help` (lists all tool groups with descriptions and tool counts) and `memory://help/{group}` (per-group tool reference with parameters and annotations). Content generated at runtime from live tool definitions — stays in sync automatically.
 - **Tool invariant tests** — Added `tool-annotations.test.ts` and `tool-output-schemas.test.ts` verifying all tools have annotations (`readOnlyHint`, `openWorldHint`), `outputSchema`, and `ErrorFieldsMixin` compliance.
+- **Test coverage expansion** — Achieved 91.6% global line coverage by adding comprehensive test suites for Code Mode (`mj_execute_code`), team-core, team-search tools, and utility helpers (`query-helpers.ts`).
+- **Vitest Code Mode coverage mock** — Fixed 0% test coverage on `mj_execute_code` routing paths resulting from `node:vm` async IIFEs failing to resolve under Vitest by providing an isolated `createSandboxPool` mock mapping for unit test environments.
+- **Per-tool OAuth scope enforcement middleware** — `src/transports/http/server/index.ts` now wires an Express middleware after the OAuth token validator that intercepts `POST /mcp` requests with `method: "tools/call"`, reads the tool name from `params.name`, looks up the required scope via `getRequiredScope()`, and returns HTTP 403 `insufficient_scope` when the token lacks it. This activates the scope-map infrastructure (`scope-map.ts`, auth-context) that previously existed but was not connected to the request pipeline.
 
 ### Fixed
 
 - **`export_entries` JSON response missing `count` field** — The `json` format response returned `{ format, entries }` but omitted `count`, unlike `team_export_entries` which includes `count: entries.length`. Added `count` to both the handler return and `ExportEntriesOutputSchema`.
-
 - **`test-tool-annotations.mjs` always exiting with code 1** — The 15-second safety-timeout was never cancelled when the script successfully processed the `tools/list` response. Captured the timeout handle with `const killTimeout = setTimeout(...)` and added `clearTimeout(killTimeout)` in the success handler before `process.exit(0)`.
-
 - **Code Mode proxy error wording** — Calling a nonexistent method (e.g., `mj.core.nonexistentMethod()`) in default mode no longer says "not available in read-only mode". Now says "not found in group" for groups with methods, or "no methods (read-only mode?)" for fully-stripped groups. Updated `server-instructions.md` accordingly.
 - **Test prompt: incorrect env var** — `test-tools2.md` referenced non-existent `WORKFLOWS_DIR_PATH`; corrected to `MEMORY_JOURNAL_WORKFLOW_SUMMARY` (or `--workflow-summary`).
 - **Code Mode last-expression auto-return (CM-1)** — Bare expressions like `mj.help()` now correctly surface their return value from `mj_execute_code`. Previously, the async IIFE wrapper `(async () => { code })()` silently returned `undefined` for non-`return` statements. New `transformAutoReturn()` utility prepends `return` to the last expression statement, mimicking Node REPL semantics. Applied to both VM and Worker sandbox paths.
@@ -43,7 +54,6 @@
 - **Test prompt: stale counts and missing coverage** — `test-tools.md` instruction token sizes updated from pre-refactor (~1.2K/~1.4K/~6.7K) to post-refactor (~1.5K/~1.7K/~2.7K). `test-tools2.md` resource count 27→28, template count 7→8, and added `memory://help/gotchas` test row.
 - **Test prompt: stale expectations in `test-tools.md`** — Updated 5 test rows following exhaustive Phase 0–5 core test run: (1) FTS5 `architecture` single-word search clarified to note BM25 may rank team entry first; (2) FTS5 phrase search note added about literal-quote requirement in query param; (3) `visualize_relationships` response shape corrected from "raw text" to JSON object with `mermaid` string field; (4) Post-seed verification cross-DB assertion relaxed to match real rank ordering; (5) Inverted date range updated from "empty results (no validation)" to VALIDATION_ERROR structured response reflecting new server-side guard.
 - **README/DOCKER_README resource categorization** — `memory://help/{group}` moved from Static to Template resources (19 Static + 8 Template = 27 total).
-
 - **`visualize_relationships` missing success field** — The handler returned a `message` but omitted `success: false` when an entry was not found, violating the common structured error format. Added `success: false` to the failure response.
 - **`team_list_tags` output validation error** — Handler passed raw `listTags()` result with `usageCount` field directly, but `TagOutputSchema` expects `count`. Added mapping to match the personal `list_tags` handler pattern.
 - **FTS5 phrase search (`"error handling"` returns 0 results)** — The porter stemmer indexes `handling` → `handl`, so FTS5 phrase queries requiring exact token sequences never match stemmed content. Added `sanitizeFtsQuery` helper in `search.ts` that detects pure quoted phrases (e.g. `"error handling"`) and rewrites them as AND-joined terms (`error AND handling`), letting the stemmer apply per-word and correctly finding matches.
@@ -76,12 +86,8 @@
 - **`help.ts` dynamic import type safety** — Fixed ESLint/TypeScript errors associated with the dynamic schema import cache by using precise `typeof import()` structures without unsafe `any` or `Record<string, unknown>` fallback type casting.
 - **`team_export_entries` filter-then-limit ordering** — When `entry_type` or `tags` filters were used without `start_date`/`end_date`, the handler fetched only `limit` entries via `getRecentEntries(limit)` then post-filtered, silently returning fewer results than expected. Now uses `searchByDateRange` with sentinel dates and a larger fetch batch (500) when filters are active, matching the individual `export_entries` fix pattern.
 
-### Added
-
-- **Test coverage expansion** — Achieved 91.6% global line coverage by adding comprehensive test suites for Code Mode (`mj_execute_code`), team-core, team-search tools, and utility helpers (`query-helpers.ts`).
-- **Vitest Code Mode coverage mock** — Fixed 0% test coverage on `mj_execute_code` routing paths resulting from `node:vm` async IIFEs failing to resolve under Vitest by providing an isolated `createSandboxPool` mock mapping for unit test environments.
-
 ### Security
+
 - **CI/CD Hardening**: Added `--provenance` flag to `npm publish` in `publish-npm.yml` for SLSA Build L3 attestation. Added `id-token: write` permission for OIDC provenance token generation.
 - **CI/CD Harmonization**:
   - Added `dependabot-auto-merge.yml` (auto-squash patch/minor, manual review for major)
@@ -93,20 +99,6 @@
   - `actions/upload-artifact` in `docker-publish.yml` corrected from `v6` → `v7` (SHA-pinned, resolves upload/download mismatch)
   - `github/gh-aw/actions/setup-cli` mutable semver tag replaced with pinned SHA (supply-chain hardening)
 
-### Changed
-
-- **Code Mode Readonly Contract Clarified** — Documentation explicitly defines that calling mutation methods under `--tool-filter readonly` safely halts the sandbox and returns a structured `{ success: false, error: "..." }` response rather than a raw exception.
-- **Comprehensive Code Quality Audit** — Completed March 2026 zero-regression code quality baseline audit. Validated 100% adherence to architectural standards, typed error boundaries (`MemoryJournalMcpError`), strict schema constraints (`z.object({}).strict()`), and sanitized SQL parameterization. Overall codebase quality certified as **A+**.
-- **Code Quality Audit Fixes**: Used `milestoneCompletionPct` helper in milestone tool handlers and extracted `MAX_QUERY_LIMIT` constant/helper in search handlers to DRY up duplication.
-- **npm publish gated behind Docker checks** — npm no longer publishes on release creation; instead `docker-publish.yml` calls `publish-npm.yml` via `workflow_call` after Docker Scout passes and images are pushed. Both artifacts ship together or neither ships. Manual `workflow_dispatch` fallback preserved.
-- **Dependency Updates** — Updated 27 npm packages; `eslint` → `10.1.0`, `jose` → `6.2.2`, `sqlite-vec` → `0.1.7`, `typescript-eslint` → `8.57.1`. 0 vulnerabilities.
-- **`relaxedNumber()` type-safe union** — Changed from `z.any()` to `z.union([z.number(), z.string()])` for MCP SDK inputSchema registration. Accepts both native numbers and string-typed numbers while rejecting non-numeric types at the SDK level. `z.preprocess()` was evaluated but caused 192 ESLint `@typescript-eslint/no-unsafe-*` cascading errors due to unresolvable `ZodEffects` generics.
-- **mcp-builder compliance audit** — Complexity tier 4. Audited error handling, input coercion, and tool/resource patterns against mcp-builder standards. Implemented 10 remediation items including dynamic help resources (R3) and resource annotation preset migration (R2).
-- **Version SSoT (`src/version.ts`)** — Created centralized `VERSION` constant. Updated 4 consumers (`cli.ts`, `mcp-server.ts`, `http/handlers.ts`, `briefing/index.ts`) to import from SSoT instead of directly reading `package.json`. Added `VERSION` to public barrel export.
-- **`ErrorFieldsMixin` relocated** — Canonical SSoT moved from `handlers/tools/error-fields-mixin.ts` to `utils/errors/error-response-fields.ts`. Old path preserved as re-export stub for backward compatibility.
-- **`title` plumbed through `ToolRegistration`** — Added `title` field to `ToolRegistration` type, `mapTool()` mapping in `handlers/tools/index.ts`, and `registerTool()` options in `mcp-server.ts`. Previously `title` was defined on every tool definition but dropped during the mapping step.
-- **Tool title invariant test** — `tool-annotations.test.ts` now verifies every tool has a non-empty `title` field.
-
 ### Tests
 
 - **E2E coverage expansion (+46 tests, 5 new spec files)** — Closed coverage gaps across 5 areas:
@@ -117,7 +109,3 @@
   - `resources-instructions-levels.spec.ts` — `memory://instructions` tool-filter group gating: `core`-only filter strips Code Mode and GitHub Integration sections; `-github` filter strips GitHub Integration while retaining Code Mode and semantic_search Quick Access row.
   - `oauth-scopes.spec.ts` — 3 tests verifying per-tool HTTP-level scope gating: `read` tokens blocked from `write`-group tools, `write` tokens blocked from `admin`-group tools, `admin` tokens permitted full access. Uses raw-fetch session handshake for success paths and bare `tools/call` for 403 interception.
   - `codemode-abuse.spec.ts` — Broadened assertion for unresolving-Promise worker exit to match both `timed out` and `Worker exited` messages. Fixed recovery test to `return 1 + 1` (sandbox wraps code in an async IIFE).
-
-### Added
-
-- **Per-tool OAuth scope enforcement middleware** — `src/transports/http/server/index.ts` now wires an Express middleware after the OAuth token validator that intercepts `POST /mcp` requests with `method: "tools/call"`, reads the tool name from `params.name`, looks up the required scope via `getRequiredScope()`, and returns HTTP 403 `insufficient_scope` when the token lacks it. This activates the scope-map infrastructure (`scope-map.ts`, auth-context) that previously existed but was not connected to the request pipeline.
