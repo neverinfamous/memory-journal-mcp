@@ -36,7 +36,7 @@
 | **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                  |
 | **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                    |
 | **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                   |
-| **Production-Ready Security**  | SQL injection prevention, input validation (Zod), path traversal protection, token scrubbing, 7 security headers, server timeouts, and non-root Docker execution                                                 |
+| **Production-Ready Security**  | SQL injection prevention, input validation, path traversal protection, token scrubbing, security headers, server timeouts, and non-root Docker execution                                                         |
 | **Structured Error Handling**  | Every tool returns rich `{success, error, code, category, suggestion, recoverable}` responses — no raw exceptions. Agents get error classification, actionable remediation hints, and recoverability signals     |
 | **Rule & Skill Suggestions**   | Agents offer to codify your recurring patterns into reusable rules and skills with your approval                                                                                                                 |
 | **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, and IDE agents proactively apply past patterns ([setup guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
@@ -217,7 +217,7 @@ Restart Cursor or your MCP client and start journaling!
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 
-**Fallback:** With `GITHUB_REPO_PATH` set, tools auto-detect `owner`/`repo` from the mounted repo's git remote. Without it, provide `owner` and `repo` parameters explicitly. Mount read-only: `-v /path/to/repo:/app/repo:ro`.
+**Fallback:** With `GITHUB_REPO_PATH` set, tools auto-detect `owner`/`repo` from git config. Without it, provide `owner` and `repo` args explicitly. Mount read-only: `-v /path/to/repo:/app/repo:ro`.
 
 ### 🔄 Session Management
 
@@ -351,4 +351,4 @@ Then use `memory-journal-mcp-local` as the image name in your MCP config (see Qu
 
 MIT License - See [LICENSE](https://github.com/neverinfamous/memory-journal-mcp/blob/main/LICENSE)
 
-_Migrating from v2.x?_ Your existing database is fully compatible. The TypeScript version uses the same schema and data format.
+_Migrating from v2.x?_ Your existing database is fully compatible.
