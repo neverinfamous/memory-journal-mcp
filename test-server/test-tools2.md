@@ -14,10 +14,10 @@ Exhaustively validate the memory-journal-mcp server's output schemas, resource h
 **Workflow after testing:**
 
 1. Create a plan to implement any fixes and/or improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools2.md`).
-2. If the plan requires no user decisions, proceed with implementation immediately. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
-4. Re-test fixes with direct MCP calls.
-5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
+3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After verification, re-test fixes with direct MCP calls.
+5. Provide a final summary.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**
@@ -339,23 +339,23 @@ Exhaustively validate the memory-journal-mcp server's output schemas, resource h
 
 ### Bugs / Schema Gaps
 
-| ID | Severity | Tool | Issue | Status |
-| --- | --- | --- | --- | --- |
-| **F-MK1** | Medium | `move_kanban_item` | Output schema missing `itemId`, `projectNumber`, `message` fields (only `success`, `newStatus`, `previousStatus` in structuredContent) | Open |
-| **F-TVS1** | Low | `team_get_vector_index_stats` | Missing `success` field in output (personal version has it) | Open |
+| ID         | Severity | Tool                          | Issue                                                                                                                                  | Status |
+| ---------- | -------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| **F-MK1**  | Medium   | `move_kanban_item`            | Output schema missing `itemId`, `projectNumber`, `message` fields (only `success`, `newStatus`, `previousStatus` in structuredContent) | Open   |
+| **F-TVS1** | Low      | `team_get_vector_index_stats` | Missing `success` field in output (personal version has it)                                                                            | Open   |
 
 ### Improvements / Observations
 
-| ID | Priority | Area | Observation |
-| --- | --- | --- | --- |
-| **F-KS1** | Low | `memory://github/status` | `kanbanSummary` keys are `"Todo"`, `"In Progress"`, `"Done"` but actual board column is `"In progress"` (lowercase 'p') — all counts show as 0 despite board having items |
-| **F-HP1** | Low | `memory://help/{group}` | All tool parameter types show as `"unknown"` and all `required` flags are `true` — types are not extracted from Zod schemas |
+| ID        | Priority | Area                     | Observation                                                                                                                                                               |
+| --------- | -------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F-KS1** | Low      | `memory://github/status` | `kanbanSummary` keys are `"Todo"`, `"In Progress"`, `"Done"` but actual board column is `"In progress"` (lowercase 'p') — all counts show as 0 despite board having items |
+| **F-HP1** | Low      | `memory://help/{group}`  | All tool parameter types show as `"unknown"` and all `required` flags are `true` — types are not extracted from Zod schemas                                               |
 
 ### Already Fixed (in prior sessions)
 
-| ID | Fix | Session |
-| --- | --- | --- |
-| F1 | Reverse relationships now allowed (not treated as duplicates) | Prior sessions |
-| F2 | Team duplicate field correctly named `duplicate` (not `alreadyExists`) | Prior sessions |
-| F3 | Team tools now return standardized error shapes | Prior sessions |
-| F4 | FTS5 ghost entries cleaned up on server startup | Prior sessions |
+| ID  | Fix                                                                    | Session        |
+| --- | ---------------------------------------------------------------------- | -------------- |
+| F1  | Reverse relationships now allowed (not treated as duplicates)          | Prior sessions |
+| F2  | Team duplicate field correctly named `duplicate` (not `alreadyExists`) | Prior sessions |
+| F3  | Team tools now return standardized error shapes                        | Prior sessions |
+| F4  | FTS5 ghost entries cleaned up on server startup                        | Prior sessions |

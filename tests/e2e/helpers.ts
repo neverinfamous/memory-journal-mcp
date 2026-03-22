@@ -13,6 +13,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { expect } from '@playwright/test'
 import { type ChildProcess, spawn } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
+import { join } from 'node:path'
 
 const BASE_URL = 'http://localhost:3100/mcp'
 
@@ -85,23 +86,24 @@ const managedServers = new Map<number, ManagedServer>()
 export async function startServer(
     port: number,
     args: string[] = [],
-    dbSuffix?: string
+    dbSuffix?: string,
+    options?: { cwd?: string }
 ): Promise<void> {
     const suffix = dbSuffix ?? String(port)
     const serverProcess = spawn(
         'node',
         [
-            'dist/cli.js',
+            join(process.cwd(), 'dist/cli.js'),
             '--transport',
             'http',
             '--port',
             String(port),
             '--db',
-            `./.test-output/e2e/test-e2e-${suffix}.db`,
+            join(process.cwd(), '.test-output', 'e2e', `test-e2e-${suffix}.db`),
             ...args,
         ],
         {
-            cwd: process.cwd(),
+            cwd: options?.cwd ?? process.cwd(),
             stdio: 'pipe',
             env: {
                 ...process.env,

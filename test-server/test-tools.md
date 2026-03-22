@@ -15,7 +15,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 **Workflow after testing:**
 
 1. Create a plan to implement any fixes and/or improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools.md`).
-2. If the plan requires no user decisions, proceed with implementation immediately. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
 5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
@@ -75,32 +75,32 @@ These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) ret
 
 **Personal journal — complete project #5 to 3 entries:**
 
-| #   | Tool           | Params                                                                                                                                                                                                | Enables Tests                                                                   |
-| --- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| S13 | `create_entry` | `content: "Completed sprint planning for project #5: scoped auth and deploy milestones"`, `entry_type: "planning"`, `project_number: 5`, `tags: ["planning", "sprint"]`                               | `project_number: 5` filter, `get_cross_project_insights` non-zero `project_count` |
-| S14 | `create_entry` | `content: "Project #5 retrospective: identified bottlenecks in deployment pipeline and action items"`, `entry_type: "personal_reflection"`, `project_number: 5`, `tags: ["retrospective", "deploy"]` | `get_cross_project_insights` — 3rd entry to meet `min_entries: 3` for project 5 |
+| #   | Tool           | Params                                                                                                                                                                                               | Enables Tests                                                                     |
+| --- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| S13 | `create_entry` | `content: "Completed sprint planning for project #5: scoped auth and deploy milestones"`, `entry_type: "planning"`, `project_number: 5`, `tags: ["planning", "sprint"]`                              | `project_number: 5` filter, `get_cross_project_insights` non-zero `project_count` |
+| S14 | `create_entry` | `content: "Project #5 retrospective: identified bottlenecks in deployment pipeline and action items"`, `entry_type: "personal_reflection"`, `project_number: 5`, `tags: ["retrospective", "deploy"]` | `get_cross_project_insights` — 3rd entry to meet `min_entries: 3` for project 5   |
 
 **Team DB — seed 3 project-linked entries:**
 
-| #   | Tool                | Params                                                                                                                                                                                              | Enables Tests                                                                        |
-| --- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| S15 | `team_create_entry` | `content: "Team kickoff for project #5: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["kickoff", "project"]`                                      | `team_get_cross_project_insights` non-zero `project_count`                           |
-| S16 | `team_create_entry` | `content: "Project #5 mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["standup", "project"]`                   | `team_get_cross_project_insights` — 2nd team entry for project 5                    |
+| #   | Tool                | Params                                                                                                                                                                                              | Enables Tests                                                                         |
+| --- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| S15 | `team_create_entry` | `content: "Team kickoff for project #5: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["kickoff", "project"]`                                      | `team_get_cross_project_insights` non-zero `project_count`                            |
+| S16 | `team_create_entry` | `content: "Project #5 mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["standup", "project"]`                   | `team_get_cross_project_insights` — 2nd team entry for project 5                      |
 | S17 | `team_create_entry` | `content: "Project #5 release review: all acceptance criteria met, feature flags enabled for rollout"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["release", "project", "team-shared"]` | `team_get_cross_project_insights` — 3rd team entry to meet `min_entries: 3` threshold |
 
 ### 0.4 Post-Seed Verification
 
 After creating all 17 entries, verify the seed data is searchable:
 
-| Check                         | Command                                                              | Expected                                                                       |
-| ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| FTS5 indexed                  | `search_entries(query: "architecture")`                              | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
-| Filters work                  | `search_entries(issue_number: 44)`                                   | ≥ 1 result (S7)                                                                |
-| Cross-DB merged               | `search_entries(query: "architecture")`                              | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs |
-| Rebuild vector index          | `rebuild_vector_index`                                               | `entriesIndexed` > 0                                                           |
-| Semantic search               | `semantic_search(query: "improving performance")`                    | ≥ 1 result (S7, S10 should be semantically similar)                            |
-| Cross-project insights        | `get_cross_project_insights({})`                                     | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                  |
-| Team cross-project insights   | `team_get_cross_project_insights({})`                                | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                  |
+| Check                       | Command                                           | Expected                                                                                                            |
+| --------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| FTS5 indexed                | `search_entries(query: "architecture")`           | ≥ 1 result (S1 or S11 depending on BM25 rank); use phrase `"authentication architecture"` to ensure S1 specifically |
+| Filters work                | `search_entries(issue_number: 44)`                | ≥ 1 result (S7)                                                                                                     |
+| Cross-DB merged             | `search_entries(query: "architecture")`           | At least 1 result includes `source: 'team'` (S11); use `auth*` for cross-DB results spanning both DBs               |
+| Rebuild vector index        | `rebuild_vector_index`                            | `entriesIndexed` > 0                                                                                                |
+| Semantic search             | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar)                                                                 |
+| Cross-project insights      | `get_cross_project_insights({})`                  | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
+| Team cross-project insights | `team_get_cross_project_insights({})`             | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                                                       |
 
 ---
 
@@ -210,28 +210,28 @@ node test-server/test-tool-annotations.mjs
 
 ### 3.1 Text Search
 
-| Test                  | Command/Action                                                                                   | Expected Result                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| FTS5 search           | `search_entries(query: "architecture")`                                                          | ≥ 1 result — S1 and S11 both indexed; BM25 may rank team entry first; use `search_entries(query: "authentication architecture")` to target S1 specifically |
-| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                    | ≥ 1 result (S2) — exact phrase match only; the query param value must contain the literal quotes as part of the string: `"error handling"` (not JSON escape sequences) |
-| FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | ≥ 2 results (S1, S8) — matches "authentication", "authorization", etc.    |
-| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns S3, S11 but NOT S5 (S5 contains "staging")                        |
-| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 2 results (S3, S4, S5 expected)                                         |
-| FTS5 fallback         | `search_entries(query: "test's")`                                                                | ≥ 1 result (S6) — LIKE fallback, single quotes are FTS5-unsafe            |
-| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | ≥ 1 result (S6) — LIKE fallback, `%` is FTS5-unsafe                       |
-| Date range            | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-01-31")`                         | Returns `structuredContent` array                                         |
-| Cross-DB search       | `search_entries(query: "test")`                                                                  | Results include `source: 'personal' \| 'team'` marker on each entry       |
-| Cross-DB date         | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31")`                         | Results include `source` marker merging personal + team entries           |
-| Invalid date fmt      | `search_by_date_range(start_date: "Jan 1", end_date: "Jan 31")`                                  | Structured error: `{ success: false, error: "..." }` with YYYY-MM-DD hint |
-| Filter by issue       | `search_entries(issue_number: 44)`                                                               | Returns entries linked to issue #44                                       |
-| Filter by PR status   | `search_entries(pr_status: "merged")`                                                            | Returns entries with `prStatus: "merged"`                                 |
-| Filter by workflow    | `search_entries(workflow_run_id: <N>)`                                                           | Returns entries linked to workflow run                                    |
-| Filter by project     | `search_entries(project_number: 5)`                                                              | Returns entries linked to project #5                                      |
-| Filter by is_personal | `search_entries(query: "test", is_personal: true)`                                               | Only personal entries returned                                            |
-| Date range + type     | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "planning")` | Only "planning" entries in date range                                     |
-| Date range + tags     | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", tags: ["test"])`         | Only entries with "test" tag in date range                                |
-| Date range + personal | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", is_personal: true)`      | Only personal entries in date range                                       |
-| Date range + project  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", project_number: 5)`      | Only project #5 entries in date range                                     |
+| Test                  | Command/Action                                                                                   | Expected Result                                                                                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FTS5 search           | `search_entries(query: "architecture")`                                                          | ≥ 1 result — S1 and S11 both indexed; BM25 may rank team entry first; use `search_entries(query: "authentication architecture")` to target S1 specifically                                    |
+| FTS5 phrase           | `search_entries(query: "\"error handling\"")`                                                    | ≥ 1 result (S2) — exact phrase match only; the query param value must contain the literal quotes as part of the string: `"error handling"` (not JSON escape sequences)                        |
+| FTS5 prefix           | `search_entries(query: "auth*")`                                                                 | ≥ 2 results (S1, S8) — matches "authentication", "authorization", etc.                                                                                                                        |
+| FTS5 boolean NOT      | `search_entries(query: "deploy NOT staging")`                                                    | Returns S3, S11 but NOT S5 (S5 contains "staging")                                                                                                                                            |
+| FTS5 boolean OR       | `search_entries(query: "deploy OR release")`                                                     | ≥ 2 results (S3, S4, S5 expected)                                                                                                                                                             |
+| FTS5 fallback         | `search_entries(query: "test's")`                                                                | ≥ 1 result (S6) — LIKE fallback, single quotes are FTS5-unsafe                                                                                                                                |
+| FTS5 special chars    | `search_entries(query: "100%")`                                                                  | ≥ 1 result (S6) — LIKE fallback, `%` is FTS5-unsafe                                                                                                                                           |
+| Date range            | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-01-31")`                         | Returns `structuredContent` array                                                                                                                                                             |
+| Cross-DB search       | `search_entries(query: "test")`                                                                  | Results include `source: 'personal' \| 'team'` marker on each entry                                                                                                                           |
+| Cross-DB date         | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31")`                         | Results include `source` marker merging personal + team entries                                                                                                                               |
+| Invalid date fmt      | `search_by_date_range(start_date: "Jan 1", end_date: "Jan 31")`                                  | Structured error: `{ success: false, error: "..." }` with YYYY-MM-DD hint                                                                                                                     |
+| Filter by issue       | `search_entries(issue_number: 44)`                                                               | Returns entries linked to issue #44                                                                                                                                                           |
+| Filter by PR status   | `search_entries(pr_status: "merged")`                                                            | Returns entries with `prStatus: "merged"`                                                                                                                                                     |
+| Filter by workflow    | `search_entries(workflow_run_id: <N>)`                                                           | Returns entries linked to workflow run                                                                                                                                                        |
+| Filter by project     | `search_entries(project_number: 5)`                                                              | Returns entries linked to project #5                                                                                                                                                          |
+| Filter by is_personal | `search_entries(query: "test", is_personal: true)`                                               | Only personal entries returned                                                                                                                                                                |
+| Date range + type     | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", entry_type: "planning")` | Only "planning" entries in date range                                                                                                                                                         |
+| Date range + tags     | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", tags: ["test"])`         | Only entries with "test" tag in date range                                                                                                                                                    |
+| Date range + personal | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", is_personal: true)`      | Only personal entries in date range                                                                                                                                                           |
+| Date range + project  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", project_number: 5)`      | Only project #5 entries in date range                                                                                                                                                         |
 | Inverted date range   | `search_by_date_range(start_date: "2026-12-31", end_date: "2026-01-01")`                         | Returns `{ success: false, error: "Invalid date range: start_date (...) is after end_date (...)", code: "VALIDATION_ERROR", suggestion: "Ensure start_date is before or equal to end_date" }` |
 
 > [!NOTE]
@@ -253,17 +253,17 @@ node test-server/test-tool-annotations.mjs
 
 ### 3.3 Analytics & Index Management
 
-| Test                     | Command/Action                                                                 | Expected Result                                                 |
-| ------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| Stats group by month     | `get_statistics(group_by: "month")`                                            | Periods grouped by month                                        |
-| Stats group by day       | `get_statistics(group_by: "day")`                                              | Periods grouped by day                                          |
-| Stats with dates         | `get_statistics(start_date: "2026-01-01", end_date: "2026-03-01")`             | Returns `dateRange` in response; results filtered to date range |
-| Stats project breakdown  | `get_statistics(project_breakdown: true)`                                      | Returns `projectBreakdown` array with per-project stats         |
+| Test                     | Command/Action                                                                 | Expected Result                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Stats group by month     | `get_statistics(group_by: "month")`                                            | Periods grouped by month                                                                 |
+| Stats group by day       | `get_statistics(group_by: "day")`                                              | Periods grouped by day                                                                   |
+| Stats with dates         | `get_statistics(start_date: "2026-01-01", end_date: "2026-03-01")`             | Returns `dateRange` in response; results filtered to date range                          |
+| Stats project breakdown  | `get_statistics(project_breakdown: true)`                                      | Returns `projectBreakdown` array with per-project stats                                  |
 | Cross-project insights   | `get_cross_project_insights`                                                   | `project_count ≥ 1`, `projects` array with project 5 (entry_count ≥ 3, top_tags present) |
-| Insights with dates      | `get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered project insights — project 5 visible if S7/S13/S14 within range   |
-| Insights min_entries     | `get_cross_project_insights(min_entries: 1)`                                   | Same or more projects than default (min_entries: 3)                              |
-| Add to vector index      | `add_to_vector_index(entry_id: <existing_id>)`                                 | `success: true`, `entryId` in response                          |
-| Add nonexistent to index | `add_to_vector_index(entry_id: 999999)`                                        | Returns `{ success: false, error: "..." }`                      |
+| Insights with dates      | `get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered project insights — project 5 visible if S7/S13/S14 within range            |
+| Insights min_entries     | `get_cross_project_insights(min_entries: 1)`                                   | Same or more projects than default (min_entries: 3)                                      |
+| Add to vector index      | `add_to_vector_index(entry_id: <existing_id>)`                                 | `success: true`, `entryId` in response                                                   |
+| Add nonexistent to index | `add_to_vector_index(entry_id: 999999)`                                        | Returns `{ success: false, error: "..." }`                                               |
 
 ---
 
@@ -271,20 +271,20 @@ node test-server/test-tool-annotations.mjs
 
 ### 4.1 Basic Relationships
 
-| Test                    | Command/Action                                                                                                            | Expected Result                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                                         |
-| Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship                                  |
-| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: 999999, to: <B>)"` |
-| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: <A>, to: 999999)"` |
+| Test                    | Command/Action                                                                                                            | Expected Result                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                                                      |
+| Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship                                               |
+| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: 999999, to: <B>)"`              |
+| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, message: `"One or both entries not found (from: <A>, to: 999999)"`              |
 | Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | JSON object with `mermaid` string field containing diagram, `entry_count`, `relationship_count`, `legend` |
-| Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                                                |
-| Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)                            |
-| Visualize nonexistent   | `visualize_relationships(entry_id: 999999)`                                                                               | Returns `message: "Entry 999999 not found"`                                                  |
-| Visualize by tags       | `visualize_relationships(tags: ["test"])`                                                                                 | Diagram scoped to entries with "test" tag                                                    |
-| Visualize depth 3       | `visualize_relationships(entry_id: <A>, depth: 3)`                                                                        | Deeper traversal than default `depth: 2`                                                     |
-| Visualize custom limit  | `visualize_relationships(entry_id: <A>, limit: 5)`                                                                        | Diagram limited to 5 entries                                                                 |
-| Graph resource          | Read `memory://graph/recent`                                                                                              | Raw Mermaid text (`text/plain` MIME), arrows harmonized with `visualize_relationships`       |
+| Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                                                             |
+| Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)                                         |
+| Visualize nonexistent   | `visualize_relationships(entry_id: 999999)`                                                                               | Returns `message: "Entry 999999 not found"`                                                               |
+| Visualize by tags       | `visualize_relationships(tags: ["test"])`                                                                                 | Diagram scoped to entries with "test" tag                                                                 |
+| Visualize depth 3       | `visualize_relationships(entry_id: <A>, depth: 3)`                                                                        | Deeper traversal than default `depth: 2`                                                                  |
+| Visualize custom limit  | `visualize_relationships(entry_id: <A>, limit: 5)`                                                                        | Diagram limited to 5 entries                                                                              |
+| Graph resource          | Read `memory://graph/recent`                                                                                              | Raw Mermaid text (`text/plain` MIME), arrows harmonized with `visualize_relationships`                    |
 
 ### 4.2 Causal Relationship Types
 
