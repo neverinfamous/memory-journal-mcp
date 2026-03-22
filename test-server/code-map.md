@@ -30,7 +30,7 @@ src/
 ├── constants/
 │   ├── icons.ts                    # MCP icon definitions per tool group (CDN SVG URLs)
 │   ├── server-instructions.md      # Source markdown for behavioral instruction levels
-│   └── server-instructions.ts      # Behavioral guidance + GOTCHAS_CONTENT export + generateInstructions()
+│   └── server-instructions.ts      # Behavioral guidance + GOTCHAS_CONTENT export + generateInstructions() + composable segment builders (buildQuickAccess, buildCodeModeInstructions)
 │
 ├── filtering/
 │   └── tool-filter.ts              # ToolFilter class — parse/apply --tool-filter expressions, group/shortcut/tool resolution
@@ -311,10 +311,10 @@ catch (error) {
 
 | What                               | Where                              | Notes                                                                                          |
 | ---------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Behavioral guidance + `GOTCHAS_CONTENT` export + `generateInstructions()` (`essential`, `standard`, `full`) |
-| Instruction source markdown        | `src/constants/server-instructions.md` | Source content for behavioral instruction levels (tool reference served via `memory://help/{group}`)        |
+| Server instructions (agent prompt) | `src/constants/server-instructions.ts` | Filter-aware composable segments; `GOTCHAS_CONTENT` + `generateInstructions()` (`essential`, `standard`, `full`, optional `enabledGroups`) |
+| Instruction source markdown        | `src/constants/server-instructions.md` | 6 sections (`CORE`, `COPILOT`, `CODE_MODE`, `GITHUB`, `HELP_POINTERS`, `SERVER_ACCESS`); parsed by `npm run generate:instructions`        |
+| Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist + `getEnabledGroups()` for instruction section gating              |
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                |
-| Tool filter logic                  | `src/filtering/tool-filter.ts`         | `ToolFilter` class — shortcuts, groups, tool-level whitelist/blacklist                      |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`) |
 | Code Mode API constants            | `src/codemode/api-constants.ts`        | Method→group map, JSON-RPC error codes, sandbox method names                                |
 | Logger                             | `src/utils/logger.ts`                  | Structured JSON logging with severity filtering                                              |
