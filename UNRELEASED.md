@@ -98,6 +98,11 @@
   - `github/codeql-action` (`init`, `autobuild`, `analyze`, `upload-sarif`) bumped from pre-v4.33.0 SHA → `v4.33.0` (SHA-pinned, all steps in sync)
   - `actions/upload-artifact` in `docker-publish.yml` corrected from `v6` → `v7` (SHA-pinned, resolves upload/download mismatch)
   - `github/gh-aw/actions/setup-cli` mutable semver tag replaced with pinned SHA (supply-chain hardening)
+- **Trivy false-positive dismissals** (`.trivyignore`):
+  - `CVE-2026-32767` (CRITICAL) — Mislabeled/poisoned CVE: SiYuan Note application-level authorization bypass incorrectly attributed to `libexpat` in Trivy's advisory feed (supply chain data corruption). Not a real libexpat vulnerability.
+  - `CVE-2026-32777` (MEDIUM) — Legitimate libexpat DoS (infinite loop in DTD parsing), but no attack surface: project is TypeScript/Node.js, no XML/DTD parsing. `libexpat` is a transitive Alpine system dependency only.
+  - `CVE-2026-32778` (MEDIUM) — Legitimate libexpat DoS (NULL pointer dereference after OOM), same no-attack-surface rationale.
+- **`flatted` 3.4.2** — Prototype Pollution via `parse()` (transitive devDependency via `eslint` → `flat-cache`). Already resolved in local `package-lock.json`; zero production exposure (`npm ci --omit=dev` in Dockerfile).
 
 ### Tests
 

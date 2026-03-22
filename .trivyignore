@@ -5,3 +5,17 @@
 # 3. Not applicable to our use case
 
 # Format: CVE-YYYY-NNNNN
+
+# libexpat — No attack surface. This project is TypeScript/Node.js and does not
+# parse untrusted XML/DTD content. libexpat is a transitive Alpine system dependency.
+
+# CRITICAL — Mislabeled/poisoned CVE (supply chain data corruption in advisory feed).
+# Description is a SiYuan Note application-level authorization bypass (Go web app)
+# that was incorrectly attributed to the libexpat package. Not a real libexpat vuln.
+CVE-2026-32767
+
+# MEDIUM — DoS via infinite loop in DTD content parsing. No XML attack surface.
+CVE-2026-32777
+
+# MEDIUM — DoS via NULL pointer dereference after OOM. No XML attack surface.
+CVE-2026-32778
