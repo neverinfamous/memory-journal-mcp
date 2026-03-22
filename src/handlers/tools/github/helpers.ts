@@ -29,7 +29,8 @@ export async function resolveOwner(
                 error: 'GitHub integration not available',
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
-                suggestion: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                suggestion:
+                    'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
                 recoverable: true,
             },
         }
@@ -86,7 +87,8 @@ export async function resolveOwnerRepo(
                 error: 'GitHub integration not available',
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
-                suggestion: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                suggestion:
+                    'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
                 recoverable: true,
             },
         }

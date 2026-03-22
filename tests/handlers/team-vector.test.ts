@@ -38,14 +38,26 @@ describe('Team Vector Tool Handlers', () => {
             },
             getStats: () => ({ itemCount: 10, modelName: 'test-model', dimensions: 384 }),
             rebuildIndex: async () => ({ indexed: 10, failed: 0 }),
-            addEntry: async (id: number) => ({ success: id !== 999, error: id === 999 ? 'Failed' : undefined }),
+            addEntry: async (id: number) => ({
+                success: id !== 999,
+                error: id === 999 ? 'Failed' : undefined,
+            }),
             initialize: async () => {},
             deleteEntry: async () => {},
-            close: async () => {}
+            close: async () => {},
         } as unknown as VectorSearchManager
 
         // Create the entry that the mock returns
-        await callTool('team_create_entry', { content: 'Vector matched' }, personalDb, undefined, undefined, undefined, undefined, teamDb)
+        await callTool(
+            'team_create_entry',
+            { content: 'Vector matched' },
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
+        )
     })
 
     afterAll(() => {
@@ -61,8 +73,18 @@ describe('Team Vector Tool Handlers', () => {
     })
 
     // Helper to get tools
-    const callTeamTool = async (name: string, args: any) => 
-        callTool(name, args, personalDb, undefined, undefined, undefined, undefined, teamDb, vectorManager)
+    const callTeamTool = async (name: string, args: any) =>
+        callTool(
+            name,
+            args,
+            personalDb,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb,
+            vectorManager
+        )
 
     describe('team_semantic_search', () => {
         it('should return semantic search results', async () => {
@@ -82,13 +104,26 @@ describe('Team Vector Tool Handlers', () => {
         })
 
         it('should require vector manager', async () => {
-            const result = (await callTool('team_semantic_search', { query: 'test' }, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
+            const result = (await callTool(
+                'team_semantic_search',
+                { query: 'test' },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team vector search not available')
         })
 
         it('should require team DB', async () => {
-            const result = (await callTool('team_semantic_search', { query: 'test' }, personalDb)) as any
+            const result = (await callTool(
+                'team_semantic_search',
+                { query: 'test' },
+                personalDb
+            )) as any
             expect(result.error).toContain('Team database not configured')
         })
     })
@@ -102,7 +137,16 @@ describe('Team Vector Tool Handlers', () => {
         })
 
         it('should require vector manager', async () => {
-            const result = (await callTool('team_get_vector_index_stats', {}, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
+            const result = (await callTool(
+                'team_get_vector_index_stats',
+                {},
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
             expect(result.available).toBe(false)
             expect(result.error).toContain('Team vector search not available')
         })
@@ -117,7 +161,16 @@ describe('Team Vector Tool Handlers', () => {
         })
 
         it('should require vector manager', async () => {
-            const result = (await callTool('team_rebuild_vector_index', {}, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
+            const result = (await callTool(
+                'team_rebuild_vector_index',
+                {},
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team vector search not available')
         })
@@ -134,14 +187,25 @@ describe('Team Vector Tool Handlers', () => {
         it('should handle failure', async () => {
             // we mocked entry 999 to fail returning an error, but it first checks DB.
             // Let's create entry 999 manually. Wait, sqlite auto-increments. Let's just create a new entry and check.
-            const result = (await callTeamTool('team_add_to_vector_index', { entry_id: 9999 })) as any
+            const result = (await callTeamTool('team_add_to_vector_index', {
+                entry_id: 9999,
+            })) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('not found') // DB lookup fails first
         })
 
         it('should require vector manager', async () => {
-            const result = (await callTool('team_add_to_vector_index', { entry_id: 1 }, personalDb, undefined, undefined, undefined, undefined, teamDb)) as any
+            const result = (await callTool(
+                'team_add_to_vector_index',
+                { entry_id: 1 },
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team vector search not available')
         })

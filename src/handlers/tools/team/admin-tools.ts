@@ -29,8 +29,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_update_entry',
             title: 'Update Team Entry',
-            description:
-                'Update a team entry (content, type, or tags). Requires TEAM_DB_PATH.',
+            description: 'Update a team entry (content, type, or tags). Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamUpdateEntrySchemaMcp,
             outputSchema: TeamUpdateOutputSchema,

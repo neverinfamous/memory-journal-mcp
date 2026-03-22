@@ -102,8 +102,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, include_relationships } =
-                        TeamGetEntryByIdSchema.parse(params)
+                    const { entry_id, include_relationships } = TeamGetEntryByIdSchema.parse(params)
                     const entry = teamDb.getEntryById(entry_id)
 
                     if (!entry) {

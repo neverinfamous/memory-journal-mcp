@@ -173,8 +173,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             error: isFkError
                                 ? `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`
                                 : errMsg,
-                            code: 'NOT_FOUND',
-                            category: 'not_found',
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify both entry IDs exist before linking',
+                            recoverable: true,
                         }
                     }
                     return formatHandlerError(error)

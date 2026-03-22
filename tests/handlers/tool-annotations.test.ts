@@ -30,10 +30,7 @@ describe('Tool Annotations Invariant', () => {
 
     it('every tool must have annotations', () => {
         for (const tool of tools) {
-            expect(
-                tool.annotations,
-                `Tool "${tool.name}" is missing annotations`
-            ).toBeDefined()
+            expect(tool.annotations, `Tool "${tool.name}" is missing annotations`).toBeDefined()
         }
     })
 
@@ -68,9 +65,7 @@ describe('Tool Annotations Invariant', () => {
     })
 
     it('0 tools should be missing openWorldHint', () => {
-        const missing = tools.filter(
-            (t) => t.annotations?.openWorldHint === undefined
-        )
+        const missing = tools.filter((t) => t.annotations?.openWorldHint === undefined)
         expect(
             missing.length,
             `Tools missing openWorldHint: ${missing.map((t) => t.name).join(', ')}`
@@ -79,10 +74,7 @@ describe('Tool Annotations Invariant', () => {
 
     it('every tool must have a non-empty title', () => {
         for (const tool of tools) {
-            expect(
-                tool.title,
-                `Tool "${tool.name}" is missing title`
-            ).toBeTruthy()
+            expect(tool.title, `Tool "${tool.name}" is missing title`).toBeTruthy()
             expect(tool.title!.length).toBeGreaterThan(0)
         }
     })

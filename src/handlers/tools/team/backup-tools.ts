@@ -21,8 +21,7 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_backup',
             title: 'Backup Team Database',
-            description:
-                'Create a timestamped backup of the team database. Requires TEAM_DB_PATH.',
+            description: 'Create a timestamped backup of the team database. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamBackupSchema,
             outputSchema: TeamBackupOutputSchema,

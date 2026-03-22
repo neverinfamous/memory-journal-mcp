@@ -4,9 +4,9 @@ Agent-optimized reference documentation for memory-journal-mcp internals.
 
 ## Files
 
-| Document                             | Purpose                                                  | Read When                                   |
-| ------------------------------------ | -------------------------------------------------------- | ------------------------------------------- |
-| [copilot-setup.md](copilot-setup.md) | GitHub Copilot ↔ memory-journal-mcp bridge setup         | Configuring Copilot code review integration |
+| Document                             | Purpose                                          | Read When                                   |
+| ------------------------------------ | ------------------------------------------------ | ------------------------------------------- |
+| [copilot-setup.md](copilot-setup.md) | GitHub Copilot ↔ memory-journal-mcp bridge setup | Configuring Copilot code review integration |
 
 ## See Also
 

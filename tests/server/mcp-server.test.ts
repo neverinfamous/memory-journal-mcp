@@ -389,7 +389,7 @@ describe('McpServer', () => {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
-                teamDbPath: './team.db'
+                teamDbPath: './team.db',
             })
             // Since mockDbInitialize is shared, it should be called twice (once for main, once for team)
             expect(mockDbInitialize).toHaveBeenCalledTimes(2)
@@ -399,7 +399,7 @@ describe('McpServer', () => {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
-                sandboxMode: 'isolate' as const
+                sandboxMode: 'isolate' as const,
             })
             // Assert server creation succeeded
             expect(mockConnect).toHaveBeenCalled()
@@ -614,7 +614,7 @@ describe('McpServer', () => {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
-                briefingConfig: { defaultProjectNumber: 1337 } // Also tests passing explicit briefingConfig
+                briefingConfig: { defaultProjectNumber: 1337 }, // Also tests passing explicit briefingConfig
             })
 
             // Find a static resource handler (e.g., memory://health is a simple one)
@@ -648,7 +648,7 @@ describe('McpServer', () => {
             })
 
             expect(mockSigintHandlers.length).toBeGreaterThan(0)
-            
+
             // Execute the last registered SIGINT handler
             const handler = mockSigintHandlers[mockSigintHandlers.length - 1]
             if (handler) {
@@ -1226,28 +1226,37 @@ describe('McpServer', () => {
 
         it('should execute registered tools successfully', async () => {
             await createServer({ dbPath: './test-server.db' })
-            
+
             // Verify tool registration occurred
-            const toolCall = mockRegisterTool.mock.calls.find((c: any[]) => typeof c[0] === 'string' && (c[0] === 'create_entry' || c[0] === 'mj_create_entry'))
+            const toolCall = mockRegisterTool.mock.calls.find(
+                (c: any[]) =>
+                    typeof c[0] === 'string' &&
+                    (c[0] === 'create_entry' || c[0] === 'mj_create_entry')
+            )
             expect(toolCall).toBeDefined()
-            
+
             const handler = toolCall[2]
-            
+
             // Success path — callTool dispatches to the group handler which calls db.createEntry
             mockCreateEntry.mockReturnValueOnce({ id: 99, content: 'passed' })
-            const successResult = await handler({ content: 'test', entry_type: 'personal_reflection' }, {})
+            const successResult = await handler(
+                { content: 'test', entry_type: 'personal_reflection' },
+                {}
+            )
             expect(successResult.isError).toBeUndefined()
             expect(successResult.content).toBeDefined()
         })
 
         it('should execute registered resources successfully', async () => {
             await createServer({ dbPath: './test-server.db' })
-            
-            const resCall = mockRegisterResource.mock.calls.find((c: any[]) => c[0].endsWith('recent')) || mockRegisterResource.mock.calls[0]
+
+            const resCall =
+                mockRegisterResource.mock.calls.find((c: any[]) => c[0].endsWith('recent')) ||
+                mockRegisterResource.mock.calls[0]
             expect(resCall).toBeDefined()
-            
+
             const handler = resCall[2]
-            
+
             try {
                 // If it requires a URL
                 const url = new URL('memory://recent')

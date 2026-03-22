@@ -24,7 +24,9 @@ test.describe('E2E Prompts: Expanded Coverage', () => {
         await client.close()
     })
 
-    function expectValidPrompt(response: { messages: Array<{ role: string; content: unknown }> }): void {
+    function expectValidPrompt(response: {
+        messages: Array<{ role: string; content: unknown }>
+    }): void {
         expect(response.messages).toBeDefined()
         expect(Array.isArray(response.messages)).toBe(true)
         expect(response.messages.length).toBeGreaterThan(0)

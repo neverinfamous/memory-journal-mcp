@@ -68,8 +68,12 @@ const ZOD_TYPE_DISPLAY: Record<string, string> = {
 
 /** Wrapper type names that make a field optional or supply a default */
 const ZOD_OPTIONAL_WRAPPERS = new Set([
-    'ZodOptional', 'ZodDefault', 'ZodNullable',
-    'optional', 'default', 'nullable'
+    'ZodOptional',
+    'ZodDefault',
+    'ZodNullable',
+    'optional',
+    'default',
+    'nullable',
 ])
 
 /**
@@ -213,7 +217,8 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             uri: 'memory://help/{group}',
             name: 'Help — Tool Group Detail',
             title: 'Per-Group Tool Reference',
-            description: 'Detailed tool reference for a specific group with parameters and annotations.',
+            description:
+                'Detailed tool reference for a specific group with parameters and annotations.',
             mimeType: 'application/json',
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
@@ -322,7 +327,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
     try {
         toolIndexModule ??= await import('../../handlers/tools/index.js')
         if (toolIndexModule === null) return []
-        
+
         const tools = toolIndexModule.getTools(context.db, null)
         return tools.map((t) => ({
             name: t.name,
@@ -334,7 +339,9 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             annotations: t.annotations as MinimalToolDef['annotations'],
         }))
     } catch (e: unknown) {
-        logger.error('HELP_LOAD_TOOLS_FAILED', { error: e instanceof Error ? e.message : String(e) })
+        logger.error('HELP_LOAD_TOOLS_FAILED', {
+            error: e instanceof Error ? e.message : String(e),
+        })
         return []
     }
 }
