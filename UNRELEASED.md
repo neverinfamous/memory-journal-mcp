@@ -63,6 +63,13 @@
 - **`team_link_entries` duplicate field standardized** — `team_link_entries` returned `alreadyExists: true` for duplicate relationships while `link_entries` (personal journal) returned `duplicate: true`. Both now return `duplicate: true`. Updated `TeamLinkEntriesOutputSchema` accordingly.
 - **Test doc: `entry_type` casing** — Phase 22.2 of `test-tools-codemode2.md` used `e.entry_type` (snake_case) to map `getRecentEntries` results; the API returns `entryType` (camelCase). Corrected to `e.entryType`.
 - **FTS5 ghost entry cleanup on startup** — `migrateSchema()` now detects when the FTS5 index has more rows than active journal entries (indicating ghost entries from hard deletes before the `fts_content_ad` trigger was added) and triggers `INSERT INTO fts_content(fts_content) VALUES('rebuild')` to remove stale tokens. Prevents `searchEntries` from returning IDs that no longer exist.
+- **SQLite database path collision in tests** — Addressed test isolation issues that caused intermittent test failures in team tool tests by implementing `beforeAll` cleanup hooks to delete SQLite cache files before each test suite.
+- **`help.ts` dynamic import type safety** — Fixed ESLint/TypeScript errors associated with the dynamic schema import cache by using precise `typeof import()` structures without unsafe `any` or `Record<string, unknown>` fallback type casting.
+
+### Added
+
+- **Test coverage expansion** — Achieved 91.6% global line coverage by adding comprehensive test suites for Code Mode (`mj_execute_code`), team-core, team-search tools, and utility helpers (`query-helpers.ts`).
+- **Vitest Code Mode coverage mock** — Fixed 0% test coverage on `mj_execute_code` routing paths resulting from `node:vm` async IIFEs failing to resolve under Vitest by providing an isolated `createSandboxPool` mock mapping for unit test environments.
 
 ### Security
 - **CI/CD Hardening**: Added `--provenance` flag to `npm publish` in `publish-npm.yml` for SLSA Build L3 attestation. Added `id-token: write` permission for OIDC provenance token generation.

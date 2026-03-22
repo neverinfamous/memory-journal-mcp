@@ -13,6 +13,7 @@ import { ICON_BRIEFING } from '../../constants/icons.js'
 import { GOTCHAS_CONTENT } from '../../constants/server-instructions.js'
 import { ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import type { getTools } from '../../handlers/tools/index.js'
 
 // ============================================================================
 // Group Metadata
@@ -125,8 +126,8 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
-            handler: (_uri: string, context: ResourceContext): ResourceResult => {
-                const tools = getAllToolDefinitions(context)
+            handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+                const tools = await getAllToolDefinitionsAsync(context)
 
                 // Group tools by their group field
                 const groups = new Map<string, { names: string[]; readOnly: boolean }>()
@@ -174,7 +175,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_BRIEFING],
             annotations: ASSISTANT_FOCUSED,
-            handler: (uri: string, context: ResourceContext): ResourceResult => {
+            handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/help\/([a-z]+)/.exec(uri)
                 const groupName = match?.[1]
 
@@ -187,7 +188,7 @@ export function getHelpResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const tools = getAllToolDefinitions(context)
+                const tools = await getAllToolDefinitionsAsync(context)
                 const groupTools = tools.filter((t) => t.group === groupName)
 
                 if (groupTools.length === 0) {
@@ -267,43 +268,31 @@ interface MinimalToolDef {
 }
 
 /**
- * Cached reference to handlers/tools/index.js to avoid per-read require() overhead.
- * The module is loaded lazily on first use to break the circular dependency.
+ * Cached reference to handlers/tools/index.js to avoid per-import overhead.
  */
-let toolIndexModule: {
-    getTools: (
-        db: unknown,
-        filterConfig: unknown,
-        vectorManager?: unknown
-    ) => { name: string; description: string; annotations: unknown }[]
-} | null = null
+let toolIndexModule: { getTools: typeof getTools } | null = null
 
 /**
  * Get all tool definitions from the context's database.
  * Uses lazy dynamic import to avoid circular dependency with tools/index.ts.
- * The module reference is cached after first load.
  */
-function getAllToolDefinitions(context: ResourceContext): MinimalToolDef[] {
+async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<MinimalToolDef[]> {
     try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        toolIndexModule ??= require('../../handlers/tools/index.js') as typeof toolIndexModule
-        if (!toolIndexModule) return []
-
-        // getTools returns ToolRegistration[] which doesn't include `group`.
-        // We need access to the internal tool map instead.
-        // Workaround: call getTools with no filter to get all tools, but we
-        // lose the `group` field. We'll reconstruct it from the tool name prefix.
+        toolIndexModule ??= await import('../../handlers/tools/index.js')
+        if (toolIndexModule === null) return []
+        
         const tools = toolIndexModule.getTools(context.db, null)
         return tools.map((t) => ({
             name: t.name,
-            title: (t as Record<string, unknown>)['title'] as string ?? t.name,
+            title: t.title ?? t.name,
             description: t.description,
             group: inferGroupFromName(t.name),
-            inputSchema: (t as Record<string, unknown>)['inputSchema'],
-            outputSchema: (t as Record<string, unknown>)['outputSchema'],
+            inputSchema: t.inputSchema,
+            outputSchema: t.outputSchema,
             annotations: t.annotations as MinimalToolDef['annotations'],
         }))
-    } catch {
+    } catch (e: unknown) {
+        console.error('Failed to load tool definitions', e)
         return []
     }
 }
