@@ -4,6 +4,8 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 **Scope:** 24 core tools (entry CRUD, search, analytics, relationships, admin, backup), seed data — this file covers happy paths, core error paths, and feature verification (Phases 0-6). GitHub tools (16 tools), all 27 resources, and prompt handlers are tested in `test-tools2.md`. Team tools (20 tools) are tested in `test-tools-team.md`.
 
+**Seed data:** S1–S12 are general-purpose seeds. S13–S14 are personal journal entries for `project_number: 5` (needed alongside S7 to reach the `min_entries: 3` threshold for `get_cross_project_insights`). S15–S17 are team DB entries for `project_number: 5` (needed for `team_get_cross_project_insights`).
+
 **Constraints:**
 
 - Confirm MCP server instructions were auto-received before starting.
@@ -66,17 +68,39 @@ These entries ensure cross-DB search merging (`source: 'personal' | 'team'`) ret
 | S11 | `create_entry`      | `content: "Architecture decision: adopted event-driven design for webhook processing"`, `entry_type: "project_decision"`, `share_with_team: true`, `tags: ["architecture", "team-shared"]` | Cross-DB `search_entries` with `source` marker, team search, `architecture` FTS5 |
 | S12 | `team_create_entry` | `content: "Team standup: discussed authorization flow improvements and deploy pipeline"`, `entry_type: "standup"`, `tags: ["standup", "auth", "deploy"]`                                   | Team-only search, cross-DB date range, `auth*` and `deploy` in team DB           |
 
+### 0.5 Cross-Project Insights Seed
+
+> [!IMPORTANT]
+> `get_cross_project_insights` and `team_get_cross_project_insights` require a **minimum of 3 entries** sharing the same `project_number` before they appear in results (default `min_entries: 3`). S7 already has `project_number: 5` — add S13–S14 to reach the threshold in the personal journal. S15–S17 seed the team DB with project-linked entries.
+
+**Personal journal — complete project #5 to 3 entries:**
+
+| #   | Tool           | Params                                                                                                                                                                                                | Enables Tests                                                                   |
+| --- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| S13 | `create_entry` | `content: "Completed sprint planning for project #5: scoped auth and deploy milestones"`, `entry_type: "planning"`, `project_number: 5`, `tags: ["planning", "sprint"]`                               | `project_number: 5` filter, `get_cross_project_insights` non-zero `project_count` |
+| S14 | `create_entry` | `content: "Project #5 retrospective: identified bottlenecks in deployment pipeline and action items"`, `entry_type: "personal_reflection"`, `project_number: 5`, `tags: ["retrospective", "deploy"]` | `get_cross_project_insights` — 3rd entry to meet `min_entries: 3` for project 5 |
+
+**Team DB — seed 3 project-linked entries:**
+
+| #   | Tool                | Params                                                                                                                                                                                              | Enables Tests                                                                        |
+| --- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| S15 | `team_create_entry` | `content: "Team kickoff for project #5: aligned on goals and delivery timeline"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["kickoff", "project"]`                                      | `team_get_cross_project_insights` non-zero `project_count`                           |
+| S16 | `team_create_entry` | `content: "Project #5 mid-sprint check-in: auth module ahead of schedule, deploy pipeline at risk"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["standup", "project"]`                   | `team_get_cross_project_insights` — 2nd team entry for project 5                    |
+| S17 | `team_create_entry` | `content: "Project #5 release review: all acceptance criteria met, feature flags enabled for rollout"`, `entry_type: "standup"`, `project_number: 5`, `tags: ["release", "project", "team-shared"]` | `team_get_cross_project_insights` — 3rd team entry to meet `min_entries: 3` threshold |
+
 ### 0.4 Post-Seed Verification
 
-After creating all 12 entries, verify the seed data is searchable:
+After creating all 17 entries, verify the seed data is searchable:
 
-| Check                | Command                                           | Expected                                                          |
-| -------------------- | ------------------------------------------------- | ----------------------------------------------------------------- |
-| FTS5 indexed         | `search_entries(query: "architecture")`           | ≥ 2 results (S1, S11)                                             |
-| Filters work         | `search_entries(issue_number: 44)`                | ≥ 1 result (S7)                                                   |
-| Cross-DB merged      | `search_entries(query: "architecture")`           | Results include `source: 'personal'` and `source: 'team'` entries |
-| Rebuild vector index | `rebuild_vector_index`                            | `entriesIndexed` > 0                                              |
-| Semantic search      | `semantic_search(query: "improving performance")` | ≥ 1 result (S7, S10 should be semantically similar)               |
+| Check                         | Command                                                              | Expected                                                                       |
+| ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| FTS5 indexed                  | `search_entries(query: "architecture")`                              | ≥ 2 results (S1, S11)                                                          |
+| Filters work                  | `search_entries(issue_number: 44)`                                   | ≥ 1 result (S7)                                                                |
+| Cross-DB merged               | `search_entries(query: "architecture")`                              | Results include `source: 'personal'` and `source: 'team'` entries              |
+| Rebuild vector index          | `rebuild_vector_index`                                               | `entriesIndexed` > 0                                                           |
+| Semantic search               | `semantic_search(query: "improving performance")`                    | ≥ 1 result (S7, S10 should be semantically similar)                            |
+| Cross-project insights        | `get_cross_project_insights({})`                                     | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                  |
+| Team cross-project insights   | `team_get_cross_project_insights({})`                                | `project_count ≥ 1`, project 5 appears with `entry_count ≥ 3`                  |
 
 ---
 
@@ -235,9 +259,9 @@ node test-server/test-tool-annotations.mjs
 | Stats group by day       | `get_statistics(group_by: "day")`                                              | Periods grouped by day                                          |
 | Stats with dates         | `get_statistics(start_date: "2026-01-01", end_date: "2026-03-01")`             | Returns `dateRange` in response; results filtered to date range |
 | Stats project breakdown  | `get_statistics(project_breakdown: true)`                                      | Returns `projectBreakdown` array with per-project stats         |
-| Cross-project insights   | `get_cross_project_insights`                                                   | Returns `project_count`, `total_entries`, `projects` array      |
-| Insights with dates      | `get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered project insights                                  |
-| Insights min_entries     | `get_cross_project_insights(min_entries: 1)`                                   | Lower threshold includes more projects                          |
+| Cross-project insights   | `get_cross_project_insights`                                                   | `project_count ≥ 1`, `projects` array with project 5 (entry_count ≥ 3, top_tags present) |
+| Insights with dates      | `get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered project insights — project 5 visible if S7/S13/S14 within range   |
+| Insights min_entries     | `get_cross_project_insights(min_entries: 1)`                                   | Same or more projects than default (min_entries: 3)                              |
 | Add to vector index      | `add_to_vector_index(entry_id: <existing_id>)`                                 | `success: true`, `entryId` in response                          |
 | Add nonexistent to index | `add_to_vector_index(entry_id: 999999)`                                        | Returns `{ success: false, error: "..." }`                      |
 
@@ -379,7 +403,9 @@ node test-server/test-scheduler.mjs
 - [ ] Cross-DB merging includes `source: 'personal' | 'team'` marker
 - [ ] `semantic_search` with custom `similarity_threshold` affects result count
 - [ ] `get_statistics` returns all 4 enhanced analytics metrics with correct groupings
-- [ ] `get_cross_project_insights` returns all required schema fields even when empty
+- [ ] `get_cross_project_insights` returns `project_count ≥ 1` with seed entries S7, S13, S14 present (project 5 has 3 entries, meeting `min_entries: 3`)
+- [ ] `get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
+- [ ] `get_cross_project_insights` returns all required schema fields (including `projects: []`) when empty (tested with `min_entries: 9999`)
 
 ### Relationships
 

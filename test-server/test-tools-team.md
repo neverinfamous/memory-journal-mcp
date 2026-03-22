@@ -11,6 +11,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 - Use the MCP server directly for all tests — not the terminal or scripts.
 - Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`.
 - Seed entries S11 and S12 from `test-tools.md` Phase 0 must exist (cross-DB search depends on them).
+- Seed entries S15, S16, S17 from `test-tools.md` Phase 0.5 must exist (`team_get_cross_project_insights` requires ≥ 3 team entries with `project_number: 5` to return a non-empty result).
 
 **Workflow after testing:**
 
@@ -119,11 +120,12 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 
 ### 10.9 Team Cross-Project Insights
 
-| Test                 | Command/Action                                                                      | Expected Result                                    |
-| -------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Default insights     | `team_get_cross_project_insights`                                                   | `project_count`, `total_entries`, `projects` array |
-| Insights with dates  | `team_get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered project insights                     |
-| Insights min_entries | `team_get_cross_project_insights(min_entries: 1)`                                   | Lower threshold includes more projects             |
+| Test                 | Command/Action                                                                      | Expected Result                                                                           |
+| -------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Default insights     | `team_get_cross_project_insights`                                                   | `project_count ≥ 1`, project 5 with `entry_count ≥ 3`, `top_tags` and `time_distribution` |
+| Insights with dates  | `team_get_cross_project_insights(start_date: "2026-01-01", end_date: "2026-03-01")` | Date-filtered — project 5 visible if S15–S17 fall within range                          |
+| Insights min_entries | `team_get_cross_project_insights(min_entries: 1)`                                   | Same or more projects than default (`min_entries: 3`)                                     |
+| Empty result         | `team_get_cross_project_insights(min_entries: 9999)`                                | `project_count: 0`, `projects: []`, `message` present                                    |
 
 ### 10.10 Team Relationships
 
@@ -203,7 +205,9 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 - [ ] `team_get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
 - [ ] `team_semantic_search` returns semantically similar entries with `similarity` scores
 - [ ] `team_add_to_vector_index` succeeds for existing entries, errors for nonexistent
-- [ ] `team_get_cross_project_insights` returns `project_count`, `total_entries`, `projects` array
+- [ ] `team_get_cross_project_insights` returns `project_count ≥ 1` with seed entries S15–S17 present (project 5 has 3 entries, meeting `min_entries: 3`)
+- [ ] `team_get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
+- [ ] `team_get_cross_project_insights` returns `project_count: 0`, `projects: []`, and `message` when no projects meet the threshold
 - [ ] All 20 team tools return structured errors when `TEAM_DB_PATH` not configured
 - [ ] `memory://team/recent` returns author-enriched entries with `source: "team"`
 - [ ] `memory://team/statistics` returns `configured: true`, `authors` array with `{ author, count }`

@@ -7,7 +7,7 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 **Prerequisites:**
 
 - Pass 3 (`test-tools-codemode.md`) must pass first — sandbox, security, core CRUD, and search verified.
-- Pass 1 seed data (S1-S12) must exist.
+- Pass 1 seed data (S1-S17) must exist — S13–S14 are personal journal entries with `project_number: 5`, S15–S17 are team DB entries with `project_number: 5`, all required for `get_cross_project_insights` / `team_get_cross_project_insights` to return non-empty results.
 - Confirm MCP server instructions were auto-received before starting.
 - Use the MCP server directly for all tests — not the terminal or scripts.
 - Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.
@@ -981,16 +981,18 @@ return {
 }
 ```
 
-| Check                 | Expected   |
-| --------------------- | ---------- |
-| `rebuildSuccess`      | `true`     |
-| `entriesIndexed`      | Number > 0 |
-| `vectorAvailable`     | `true`     |
-| `searchCount`         | ≥ 1        |
-| `strictFewer`         | `true`     |
-| `addSuccess`          | `true`     |
-| `addBadError`         | `true`     |
-| `insightsHasProjects` | `true`     |
+| Check                    | Expected                                                                  |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `rebuildSuccess`         | `true`                                                                    |
+| `entriesIndexed`         | Number > 0                                                                |
+| `vectorAvailable`        | `true`                                                                    |
+| `searchCount`            | ≥ 1                                                                       |
+| `strictFewer`            | `true`                                                                    |
+| `addSuccess`             | `true`                                                                    |
+| `addBadError`            | `true`                                                                    |
+| `insightsHasProjects`    | `true`                                                                    |
+| `insightsProjectCount`   | ≥ 1 (project 5 visible with seed entries S15–S17; 0 if team seed missing) |
+| `filteredInsights`       | `project_count ≥ 0` (≥ 1 if S15–S17 fall within date range)              |
 
 ### 27.10 Cross-Tool Error Path Verification (via Code Mode)
 
