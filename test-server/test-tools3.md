@@ -15,10 +15,10 @@ Exhaustively validate the memory-journal-mcp server's prompt handlers, structure
 **Workflow after testing:**
 
 1. Create a plan to implement any fixes and/or improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools3.md`).
-2. If the plan requires no user decisions, proceed with implementation immediately. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
-4. Re-test fixes with direct MCP calls.
-5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
+3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completed verification, re-test fixes with direct MCP calls.
+5. Provide a brief final summary — after re-testing if fixes were needed, or immediately if no issues were found.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**

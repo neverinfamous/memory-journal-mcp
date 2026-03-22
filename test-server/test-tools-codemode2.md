@@ -15,10 +15,10 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 **Workflow after testing:**
 
 1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-codemode2.md`).
-2. If the plan requires no user decisions, proceed with implementation immediately.
-3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
-4. Re-test fixes with direct MCP calls.
-5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
+3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completed verification, re-test fixes with direct MCP calls.
+5. Provide a brief final summary — after re-testing if fixes were needed, or immediately if no issues were found.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**
@@ -43,7 +43,7 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 | Test                 | Code                                                                                                                                                                                | Expected Result                     |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Conditional on stats | `const s = await mj.analytics.getStatistics({}); if (s.totalEntries > 0) { return { status: "has entries", count: s.totalEntries }; } else { return { status: "empty journal" }; }` | Returns either branch based on data |
-| Loop over entries    | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entryType, len: e.content?.length ?? 0 })); return summaries;`    | Array of summary objects            |
+| Loop over entries    | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entryType, len: e.content?.length ?? 0 })); return summaries;`     | Array of summary objects            |
 
 ### 22.3 Create + Read Round-Trip (via Code Mode)
 
@@ -981,18 +981,18 @@ return {
 }
 ```
 
-| Check                    | Expected                                                                  |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `rebuildSuccess`         | `true`                                                                    |
-| `entriesIndexed`         | Number > 0                                                                |
-| `vectorAvailable`        | `true`                                                                    |
-| `searchCount`            | ≥ 1                                                                       |
-| `strictFewer`            | `true`                                                                    |
-| `addSuccess`             | `true`                                                                    |
-| `addBadError`            | `true`                                                                    |
-| `insightsHasProjects`    | `true`                                                                    |
-| `insightsProjectCount`   | ≥ 1 (project 5 visible with seed entries S15–S17; 0 if team seed missing) |
-| `filteredInsights`       | `project_count ≥ 0` (≥ 1 if S15–S17 fall within date range)              |
+| Check                  | Expected                                                                  |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `rebuildSuccess`       | `true`                                                                    |
+| `entriesIndexed`       | Number > 0                                                                |
+| `vectorAvailable`      | `true`                                                                    |
+| `searchCount`          | ≥ 1                                                                       |
+| `strictFewer`          | `true`                                                                    |
+| `addSuccess`           | `true`                                                                    |
+| `addBadError`          | `true`                                                                    |
+| `insightsHasProjects`  | `true`                                                                    |
+| `insightsProjectCount` | ≥ 1 (project 5 visible with seed entries S15–S17; 0 if team seed missing) |
+| `filteredInsights`     | `project_count ≥ 0` (≥ 1 if S15–S17 fall within date range)               |
 
 ### 27.10 Cross-Tool Error Path Verification (via Code Mode)
 
