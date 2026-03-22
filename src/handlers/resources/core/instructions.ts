@@ -1,10 +1,11 @@
-import { getAllToolNames } from '../../../filtering/tool-filter.js'
+import { getAllToolNames, getEnabledGroups } from '../../../filtering/tool-filter.js'
 import {
     generateInstructions,
     type InstructionLevel,
 } from '../../../constants/server-instructions.js'
 import { getPrompts } from '../../prompts/index.js'
 import { ICON_BRIEFING } from '../../../constants/icons.js'
+import { withPriority, ASSISTANT_FOCUSED } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
 
 export const instructionsResource: InternalResourceDef = {
@@ -14,22 +15,28 @@ export const instructionsResource: InternalResourceDef = {
     description: 'Full server instructions for AI agents.',
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
-    annotations: {
-        audience: ['assistant'],
-        priority: 0.95,
-    },
+    annotations: withPriority(0.95, ASSISTANT_FOCUSED),
     handler: (_uri: string, context: ResourceContext): ResourceResult => {
         const level: InstructionLevel = 'full'
 
         const allToolNames = new Set(getAllToolNames())
         const enabledTools = context.filterConfig?.enabledTools ?? allToolNames
+        const enabledGroups = context.filterConfig
+            ? getEnabledGroups(context.filterConfig.enabledTools)
+            : undefined
 
         const prompts = getPrompts().map((p) => {
             const prompt = p as { name: string; description?: string }
             return { name: prompt.name, description: prompt.description }
         })
 
-        const instructions = generateInstructions(enabledTools, prompts, undefined, level)
+        const instructions = generateInstructions(
+            enabledTools,
+            prompts,
+            undefined,
+            level,
+            enabledGroups
+        )
 
         return {
             data: instructions,

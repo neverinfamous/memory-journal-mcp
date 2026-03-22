@@ -9,6 +9,7 @@
 import { ZodError } from 'zod'
 import { MemoryJournalMcpError } from '../types/errors.js'
 import { ErrorCategory, type ErrorResponse } from '../types/error-types.js'
+import { matchSuggestion } from './errors/suggestions.js'
 
 /**
  * Extract human-readable messages from a ZodError instead of raw JSON array.
@@ -28,7 +29,8 @@ export function formatZodError(error: ZodError): string {
  *
  * Returns structured error information including code, category,
  * suggestion, and recoverable flag. Handles MemoryJournalMcpError
- * (full context), ZodError (validation), and raw errors (internal).
+ * (full context), ZodError (validation), and raw errors (internal
+ * with pattern-matched suggestions from ERROR_SUGGESTIONS).
  *
  * Use as the single catch block for all tool handlers:
  *
@@ -62,13 +64,15 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         }
     }
 
-    // Unknown / raw errors
+    // Unknown / raw errors — enrich via ERROR_SUGGESTIONS pattern matching
     const message = err instanceof Error ? err.message : String(err)
+    const matched = matchSuggestion(message)
     return {
         success: false,
         error: message,
-        code: 'INTERNAL_ERROR',
+        code: matched?.code ?? 'INTERNAL_ERROR',
         category: ErrorCategory.INTERNAL,
         recoverable: false,
+        ...(matched?.suggestion ? { suggestion: matched.suggestion } : {}),
     }
 }

@@ -108,8 +108,13 @@ ENV DB_PATH=/app/data/memory_journal.db
 # Switch to non-root user
 USER appuser
 
-# Health check - validates Node.js is responsive
-# For HTTP mode, override with: HEALTHCHECK CMD curl -f http://localhost:3000/mcp || exit 1
+# Health check — validates Node.js runtime is responsive (sufficient for stdio mode,
+# which is the default transport). For HTTP mode, override in docker-compose.yml with:
+#   healthcheck:
+#     test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#     interval: 30s
+#     timeout: 10s
+#     retries: 3
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD node -e "process.exit(0)" || exit 1
 

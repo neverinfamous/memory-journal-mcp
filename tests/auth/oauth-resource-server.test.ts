@@ -148,5 +148,26 @@ describe('OAuthResourceServer', () => {
             const handler = server.getMetadataHandler()
             expect(typeof handler).toBe('function')
         })
+
+        it('should serve metadata with correct headers', () => {
+            const server = new OAuthResourceServer(config)
+            const handler = server.getMetadataHandler()
+
+            const mockReq = {} as any
+            const mockRes = {
+                setHeader: vi.fn(),
+                json: vi.fn(),
+            } as any
+
+            handler(mockReq, mockRes, vi.fn())
+
+            expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json')
+            expect(mockRes.setHeader).toHaveBeenCalledWith('Cache-Control', 'public, max-age=3600')
+            expect(mockRes.json).toHaveBeenCalled()
+
+            // Check that it sent the actual metadata
+            const metadata = mockRes.json.mock.calls[0][0]
+            expect(metadata.resource).toBe(config.resource)
+        })
     })
 })

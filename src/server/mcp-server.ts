@@ -18,6 +18,7 @@ import {
     parseToolFilter,
     getToolFilterFromEnv,
     getFilterSummary,
+    getEnabledGroups,
     type ToolFilterConfig,
 } from '../filtering/tool-filter.js'
 import { getTools, callTool } from '../handlers/tools/index.js'
@@ -35,7 +36,7 @@ import {
     type PromptDefinition,
     type ResourceReadHandler,
 } from './registration.js'
-import pkg from '../../package.json' with { type: 'json' }
+import { VERSION } from '../version.js'
 
 export interface ServerOptions {
     transport: 'stdio' | 'http'
@@ -97,6 +98,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const vectorManager = new VectorSearchManager(db)
     logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
 
+    // Initialize team vector search manager if team DB is configured
+    let teamVectorManager: VectorSearchManager | undefined
+    if (teamDb) {
+        teamVectorManager = new VectorSearchManager(teamDb)
+        logger.info('Team vector search manager created', { module: 'McpServer' })
+    }
+
     // Auto-rebuild vector index if enabled
     if (options.autoRebuildIndex) {
         logger.info('Auto-rebuilding vector index on startup...', { module: 'McpServer' })
@@ -149,25 +157,36 @@ export async function createServer(options: ServerOptions): Promise<void> {
         : undefined
 
     // Get all tools once (unfiltered) for both instruction generation and registration
-    const allTools = getTools(db, null, vectorManager, github, { defaultProjectNumber }, teamDb)
+    const allTools = getTools(
+        db,
+        null,
+        vectorManager,
+        github,
+        { defaultProjectNumber },
+        teamDb,
+        teamVectorManager
+    )
     const allToolNames = new Set(allTools.map((t) => t.name))
 
     // Generate dynamic instructions based on enabled tools, prompts, and latest entry
+    const enabledToolSet = filterConfig?.enabledTools ?? allToolNames
+    const enabledGroups = filterConfig ? getEnabledGroups(filterConfig.enabledTools) : undefined
     const instructions = generateInstructions(
-        filterConfig?.enabledTools ?? allToolNames,
+        enabledToolSet,
         prompts.map((p) => {
             const prompt = p as { name: string; description?: string }
             return { name: prompt.name, description: prompt.description }
         }),
         latestEntry,
-        options.instructionLevel ?? 'standard'
+        options.instructionLevel ?? 'standard',
+        enabledGroups
     )
 
     // Create MCP server with capabilities and instructions
     const server = new McpServer(
         {
             name: 'memory-journal-mcp',
-            version: pkg.version,
+            version: VERSION,
         },
         {
             capabilities: {
@@ -179,12 +198,25 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Apply filter to get the set of tools to register
     const tools = filterConfig
-        ? getTools(db, filterConfig, vectorManager, github, { defaultProjectNumber }, teamDb)
+        ? getTools(
+              db,
+              filterConfig,
+              vectorManager,
+              github,
+              { defaultProjectNumber },
+              teamDb,
+              teamVectorManager
+          )
         : allTools
     for (const tool of tools) {
         // Build tool options matching MCP SDK expectations
         const toolOptions: Record<string, unknown> = {
             description: tool.description,
+        }
+
+        // MCP 2025-11-25: Pass title for human-readable display
+        if (tool.title) {
+            toolOptions['title'] = tool.title
         }
 
         if (tool.inputSchema !== undefined) {
@@ -234,18 +266,19 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         github,
                         { defaultProjectNumber },
                         progressContext,
-                        teamDb
+                        teamDb,
+                        teamVectorManager
                     )
 
                     // MCP 2025-11-25: If tool has outputSchema, return both:
                     // - structuredContent: validated JSON for clients that support it
-                    // - content: formatted text fallback for clients that don't (e.g., AntiGravity)
+                    // - content: compact text fallback (~15-20% payload reduction per §3.1)
                     if (hasOutputSchema) {
                         return {
                             content: [
                                 {
                                     type: 'text' as const,
-                                    text: JSON.stringify(result, null, 2),
+                                    text: JSON.stringify(result),
                                 },
                             ],
                             structuredContent: result as Record<string, unknown>,
@@ -265,13 +298,22 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         ],
                     }
                 } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error)
+                    const errorResult = {
+                        success: false,
+                        error: errorMessage,
+                        code: 'INTERNAL_ERROR',
+                        category: 'internal',
+                        recoverable: false,
+                    }
                     return {
                         content: [
                             {
                                 type: 'text' as const,
-                                text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+                                text: JSON.stringify(errorResult, null, 2),
                             },
                         ],
+                        ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
                         isError: true,
                     }
                 }
@@ -311,6 +353,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
             annotations?: Record<string, unknown>
         }[]
     }> => {
+        const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
+            ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
+            // Ensure defaultProjectNumber is available to resource handlers
+            // (may come via briefingConfig from CLI, or directly from server options)
+            defaultProjectNumber:
+                options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
+        }
         const result = await readResource(
             uri.href,
             db,
@@ -319,7 +368,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             github,
             scheduler,
             teamDb,
-            options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+            activeBriefingConfig
         )
         const dataStr =
             typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)

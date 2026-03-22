@@ -6,6 +6,7 @@
  */
 
 import { ErrorCategory, type ErrorResponse } from './error-types.js'
+import { matchSuggestion, GENERIC_CODES } from '../utils/errors/suggestions.js'
 
 // =============================================================================
 // Base Error Options
@@ -33,6 +34,10 @@ interface ErrorOptions {
  * Base error class for all memory-journal-mcp errors.
  * Provides structured error responses with category, suggestion,
  * and recoverable fields for agent-friendly error handling.
+ *
+ * Auto-refinement: when constructed with a generic code (e.g., QUERY_FAILED)
+ * and the message matches a known pattern from ERROR_SUGGESTIONS, the code
+ * is refined to a more specific value (e.g., TABLE_NOT_FOUND).
  */
 export class MemoryJournalMcpError extends Error {
     /** Module-prefixed error code */
@@ -53,11 +58,20 @@ export class MemoryJournalMcpError extends Error {
     constructor(message: string, code: string, category: ErrorCategory, options?: ErrorOptions) {
         super(message, options?.cause ? { cause: options.cause } : undefined)
         this.name = 'MemoryJournalMcpError'
-        this.code = code
         this.category = category
-        this.suggestion = options?.suggestion
         this.recoverable = options?.recoverable ?? false
         this.details = options?.details
+
+        // Auto-refinement: refine generic codes to specific ones via pattern matching
+        const matched = matchSuggestion(message)
+        if (GENERIC_CODES.has(code) && matched?.code) {
+            this.code = matched.code
+        } else {
+            this.code = code
+        }
+
+        // Apply suggestion: explicit > matched > none
+        this.suggestion = options?.suggestion ?? matched?.suggestion
     }
 
     /**

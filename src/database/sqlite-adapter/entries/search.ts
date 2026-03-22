@@ -47,6 +47,8 @@ export function searchEntries(
         projectNumber?: number
         issueNumber?: number
         prNumber?: number
+        prStatus?: string
+        workflowRunId?: number
     }
 ): JournalEntry[] {
     const { db, tagsMgr } = context
@@ -82,6 +84,8 @@ function buildSearchQuery(
               projectNumber?: number
               issueNumber?: number
               prNumber?: number
+              prStatus?: string
+              workflowRunId?: number
           }
         | undefined,
     useFts: boolean
@@ -105,7 +109,7 @@ function buildSearchQuery(
     if (queryStr.length > 0) {
         if (useFts) {
             conditions.push(`fts_content MATCH ?`)
-            params.push(queryStr)
+            params.push(sanitizeFtsQuery(queryStr))
         } else {
             conditions.push(`e.content LIKE '%' || ? || '%'`)
             params.push(queryStr)
@@ -130,6 +134,16 @@ function buildSearchQuery(
     if (options?.prNumber !== undefined) {
         conditions.push(`e.pr_number = ?`)
         params.push(options.prNumber)
+    }
+
+    if (options?.prStatus !== undefined) {
+        conditions.push(`e.pr_status = ?`)
+        params.push(options.prStatus)
+    }
+
+    if (options?.workflowRunId !== undefined) {
+        conditions.push(`e.workflow_run_id = ?`)
+        params.push(options.workflowRunId)
     }
 
     if (conditions.length > 0) {
@@ -233,4 +247,48 @@ export function searchByDateRange(
     const rows = stmt.all(params)
 
     return rowsToEntries(tagsMgr, rows)
+}
+
+// ============================================================================
+// FTS5 Helpers
+// ============================================================================
+
+/**
+ * Sanitize an FTS5 query string to handle porter-stemmer phrase mismatch.
+ *
+ * FTS5 phrase queries (e.g. `"error handling"`) require exact token sequences.
+ * However the porter stemmer stores stems: `handling` → `handl`, so the phrase
+ * `"error handling"` never matches even when the content contains "error handling".
+ *
+ * Fix: detect a *pure* quoted phrase (the entire query is one quoted phrase)
+ * and rewrite it as AND-joined individual terms. This lets the stemmer apply
+ * to each word and correctly finds documents containing all the terms.
+ *
+ * Non-phrase queries are passed through unchanged.
+ *
+ * Examples:
+ *   `"error handling"` → `error AND handling`
+ *   `deploy OR release` → `deploy OR release` (unchanged)
+ *   `auth*` → `auth*` (unchanged)
+ *   `deploy NOT staging` → `deploy NOT staging` (unchanged)
+ */
+function sanitizeFtsQuery(query: string): string {
+    const trimmed = query.trim()
+    // Pure phrase: starts and ends with double-quote, no other quotes inside
+    if (
+        trimmed.startsWith('"') &&
+        trimmed.endsWith('"') &&
+        trimmed.length > 2 &&
+        !trimmed.slice(1, -1).includes('"')
+    ) {
+        const inner = trimmed.slice(1, -1).trim()
+        // Split on whitespace, drop empty tokens, join with AND
+        const words = inner.split(/\s+/).filter(Boolean)
+        if (words.length > 1) {
+            return words.join(' AND ')
+        }
+        // Single-word phrase: strip quotes (no AND needed)
+        return inner
+    }
+    return query
 }

@@ -8,6 +8,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { milestoneCompletionPct } from '../../resources/shared.js'
 import {
     GitHubMilestonesListOutputSchema,
     GitHubMilestoneResultOutputSchema,
@@ -70,9 +71,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         input.limit
                     )
                     const milestonesWithPercentage = milestones.map((ms) => {
-                        const total = ms.openIssues + ms.closedIssues
-                        const completionPercentage =
-                            total > 0 ? Math.round((ms.closedIssues / total) * 100) : 0
+                        const completionPercentage = milestoneCompletionPct(
+                            ms.openIssues,
+                            ms.closedIssues
+                        )
                         return { ...ms, completionPercentage }
                     })
 
@@ -128,6 +130,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         return {
                             success: false,
                             error: `Milestone #${String(input.milestone_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the milestone number exists in this repository.',
+                            recoverable: true,
                             owner: resolved.owner,
                             repo: resolved.repo,
                             detectedOwner: resolved.detectedOwner,
@@ -135,9 +141,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         }
                     }
 
-                    const total = milestone.openIssues + milestone.closedIssues
-                    const completionPercentage =
-                        total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+                    const completionPercentage = milestoneCompletionPct(
+                        milestone.openIssues,
+                        milestone.closedIssues
+                    )
 
                     return {
                         milestone: { ...milestone, completionPercentage },
@@ -198,6 +205,10 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         return {
                             success: false,
                             error: 'Failed to create milestone. Check GITHUB_TOKEN permissions.',
+                            code: 'GITHUB_API_ERROR',
+                            category: 'github',
+                            suggestion: 'Verify GITHUB_TOKEN has repo scope and try again.',
+                            recoverable: true,
                         }
                     }
 
@@ -266,12 +277,18 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                         return {
                             success: false,
                             error: `Failed to update milestone #${String(input.milestone_number)}. Check that it exists and GITHUB_TOKEN has permissions.`,
+                            code: 'GITHUB_API_ERROR',
+                            category: 'github',
+                            suggestion:
+                                'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
+                            recoverable: true,
                         }
                     }
 
-                    const total = milestone.openIssues + milestone.closedIssues
-                    const completionPercentage =
-                        total > 0 ? Math.round((milestone.closedIssues / total) * 100) : 0
+                    const completionPercentage = milestoneCompletionPct(
+                        milestone.openIssues,
+                        milestone.closedIssues
+                    )
 
                     return {
                         success: true,
@@ -332,6 +349,11 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                             milestoneNumber: input.milestone_number,
                             message: `Failed to delete milestone #${String(input.milestone_number)}`,
                             error: result.error ?? undefined,
+                            code: 'GITHUB_API_ERROR',
+                            category: 'github',
+                            suggestion:
+                                'Verify the milestone exists and GITHUB_TOKEN has repo scope.',
+                            recoverable: true,
                         }
                     }
 

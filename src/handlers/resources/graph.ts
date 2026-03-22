@@ -6,6 +6,7 @@
 
 import { ICON_GRAPH, ICON_GITHUB } from '../../constants/icons.js'
 import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
+import { MEDIUM_PRIORITY, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
 import { execQuery, transformEntryRow } from './shared.js'
 
@@ -21,10 +22,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             description: 'Live Mermaid diagram of recent relationships',
             mimeType: 'text/plain',
             icons: [ICON_GRAPH],
-            annotations: {
-                audience: ['user', 'assistant'],
-                priority: 0.5,
-            },
+            annotations: MEDIUM_PRIORITY,
             handler: (_uri: string, context: ResourceContext) => {
                 const relationships = execQuery(
                     context.db,
@@ -109,10 +107,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                 'CI/CD narrative graph: commits → runs → failures → entries → fixes → deployments',
             mimeType: 'text/plain',
             icons: [ICON_GITHUB],
-            annotations: {
-                audience: ['user', 'assistant'],
-                priority: 0.5,
-            },
+            annotations: MEDIUM_PRIORITY,
             handler: async (_uri: string, context: ResourceContext) => {
                 if (!context.github) {
                     return 'graph LR\n  NoGitHub["GitHub integration not available — set GITHUB_TOKEN and GITHUB_REPO_PATH"]'
@@ -174,10 +169,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             description: 'Recent workflow runs with CI status',
             mimeType: 'application/json',
             icons: [ICON_GITHUB],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.5,
-            },
+            annotations: ASSISTANT_FOCUSED,
             handler: async (_uri: string, context: ResourceContext) => {
                 if (context.github) {
                     try {

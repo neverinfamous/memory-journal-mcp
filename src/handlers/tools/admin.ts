@@ -122,6 +122,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Entry ${String(input.entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
                         }
                     }
 
@@ -155,6 +159,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             entryId: entry_id,
                             permanent,
                             error: `Entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
                         }
                     }
 
@@ -206,6 +214,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             sourceDeleted: false,
                             message: 'Source and target tags cannot be the same',
                             error: 'Source and target tags must be different',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Provide two different tag names',
+                            recoverable: true,
                         }
                     }
 
@@ -236,6 +248,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             sourceDeleted: false,
                             message: 'Tag merge failed',
                             error: error instanceof Error ? error.message : 'Unknown error',
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the source tag exists using list_tags',
+                            recoverable: true,
                         }
                     } catch {
                         return formatHandlerError(error)
@@ -258,6 +274,11 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entriesIndexed: 0,
                             error: 'Vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                         }
                     }
                     const { indexed, failed, firstError } = await vectorManager.rebuildIndex(
@@ -294,6 +315,11 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entryId: entry_id,
                             error: 'Vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                         }
                     }
                     const entry = db.getEntryById(entry_id)
@@ -302,6 +328,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entryId: entry_id,
                             error: `Entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the entry ID and try again',
+                            recoverable: true,
                         }
                     }
                     const result = await vectorManager.addEntry(entry_id, entry.content)

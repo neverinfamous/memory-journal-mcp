@@ -7,6 +7,11 @@
  */
 
 import { ICON_CLOCK, ICON_TEAM } from '../../constants/icons.js'
+import {
+    withPriority,
+    ASSISTANT_FOCUSED,
+    MEDIUM_PRIORITY,
+} from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 
 // ============================================================================
@@ -49,10 +54,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 'Recent entries from the team database. Requires TEAM_DB_PATH configuration.',
             mimeType: 'application/json',
             icons: [ICON_CLOCK],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.7,
-            },
+            annotations: withPriority(0.7, ASSISTANT_FOCUSED),
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
                 if (!context.teamDb) {
                     return {
@@ -85,10 +87,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
             description: 'Entry counts, types, and contributor breakdown for the team database.',
             mimeType: 'application/json',
             icons: [ICON_TEAM],
-            annotations: {
-                audience: ['assistant'],
-                priority: 0.6,
-            },
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
                 if (!context.teamDb) {
                     return {

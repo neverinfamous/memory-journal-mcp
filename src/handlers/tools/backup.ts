@@ -94,7 +94,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Custom backup name (optional, defaults to timestamp)'),
             }),
             outputSchema: BackupResultOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const input = z
@@ -151,7 +151,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .string()
                     .describe('Backup filename to restore from (e.g., backup_2025-01-01.db)'),
                 confirm: z
-                    .literal(true)
+                    .boolean()
                     .describe('Must be set to true to confirm the restore operation'),
             }),
             outputSchema: RestoreResultOutputSchema,
@@ -166,9 +166,20 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     const input = z
                         .object({
                             filename: z.string(),
-                            confirm: z.literal(true),
+                            confirm: z.boolean(),
                         })
                         .parse(params)
+
+                    if (!input.confirm) {
+                        return {
+                            success: false,
+                            error: 'Restore requires confirm: true. This operation replaces all current data.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Set confirm: true to proceed with restore',
+                            recoverable: false,
+                        }
+                    }
 
                     // Capture progress context values BEFORE any async operations
                     const progressServer = progress?.server

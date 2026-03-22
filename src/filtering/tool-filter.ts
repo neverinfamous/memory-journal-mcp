@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 44 tools are categorized here for filtering support.
+ * All 61 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -54,7 +54,28 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'get_copilot_reviews',
     ],
     backup: ['backup_journal', 'list_backups', 'restore_backup', 'cleanup_backups'],
-    team: ['team_create_entry', 'team_get_recent', 'team_search'],
+    team: [
+        'team_create_entry',
+        'team_get_entry_by_id',
+        'team_get_recent',
+        'team_list_tags',
+        'team_search',
+        'team_search_by_date_range',
+        'team_update_entry',
+        'team_delete_entry',
+        'team_merge_tags',
+        'team_get_statistics',
+        'team_link_entries',
+        'team_visualize_relationships',
+        'team_export_entries',
+        'team_backup',
+        'team_list_backups',
+        'team_semantic_search',
+        'team_get_vector_index_stats',
+        'team_rebuild_vector_index',
+        'team_add_to_vector_index',
+        'team_get_cross_project_insights',
+    ],
     codemode: ['mj_execute_code'],
 }
 
@@ -62,8 +83,8 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
  * Meta-group definitions mapping shortcuts to groups
  */
 export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
-    starter: ['core', 'search'],
-    essential: ['core'],
+    starter: ['core', 'search', 'codemode'],
+    essential: ['core', 'codemode'],
     full: [
         'core',
         'search',
@@ -100,6 +121,20 @@ export function getToolGroup(toolName: string): ToolGroup | undefined {
         }
     }
     return undefined
+}
+
+/**
+ * Determine which tool groups have at least one enabled tool.
+ * Used by instruction generation to conditionally include/exclude sections.
+ */
+export function getEnabledGroups(enabledTools: Set<string>): Set<ToolGroup> {
+    const groups = new Set<ToolGroup>()
+    for (const [group, tools] of Object.entries(TOOL_GROUPS) as [ToolGroup, string[]][]) {
+        if (tools.some((t) => enabledTools.has(t))) {
+            groups.add(group)
+        }
+    }
+    return groups
 }
 
 /**

@@ -15,6 +15,7 @@ import {
     type SandboxResult,
     type ExecutionMetrics,
 } from './types.js'
+import { transformAutoReturn } from './auto-return.js'
 
 // =============================================================================
 // Compilation Cache (LRU)
@@ -113,7 +114,7 @@ export class CodeModeSandbox {
             // Compile or retrieve from cache
             let script = this.scriptCache.get(code)
             if (!script) {
-                const wrappedCode = `(async () => { ${code} })()`
+                const wrappedCode = `(async () => { ${transformAutoReturn(code)} })()`
                 script = new vm.Script(wrappedCode, {
                     filename: 'codemode-execution.js',
                 })

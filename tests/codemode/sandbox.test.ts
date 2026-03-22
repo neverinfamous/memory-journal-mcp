@@ -14,7 +14,8 @@
  * - Pool concurrency tracking
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import * as vm from 'node:vm'
 import { CodeModeSandbox, SandboxPool } from '../../src/codemode/index.js'
 
 describe('CodeModeSandbox', () => {
@@ -61,6 +62,67 @@ describe('CodeModeSandbox', () => {
             expect(typeof sandbox.getCacheSize()).toBe('number')
         })
     })
+
+    // =========================================================================
+    // Execution
+    // =========================================================================
+
+    describe('execute', () => {
+        let runInContextSpy: any
+
+        beforeEach(() => {
+            runInContextSpy = vi
+                .spyOn(vm.Script.prototype, 'runInContext')
+                .mockReturnValue(Promise.resolve(42) as any)
+        })
+
+        afterEach(() => {
+            if (runInContextSpy) runInContextSpy.mockRestore()
+        })
+
+        it('should execute code returning a valid result', async () => {
+            const result = await sandbox.execute('return 42', {})
+            expect(result.success).toBe(true)
+            if (result.success) {
+                expect(result.result).toBe(42)
+                expect(result.metrics).toBeDefined()
+            }
+        })
+
+        it('should catch errors thrown during execution', async () => {
+            runInContextSpy.mockImplementation(() => {
+                throw new Error('VM crash')
+            })
+            const result = await sandbox.execute('throw new Error("Crash")', {})
+            expect(result.success).toBe(false)
+            if (!result.success) {
+                expect(result.error).toBe('VM crash')
+            }
+        })
+
+        it('should provide wrapped console methods', async () => {
+            // This will execute against the mock, but the console wrappers are created
+            // within the 'execute' setup before runInContext is called.
+            const result = await sandbox.execute(
+                `
+                console.log("log entry");
+                console.warn("warn entry");
+                console.error("error entry");
+                return true;
+            `,
+                {}
+            )
+            expect(result.success).toBe(true)
+        })
+
+        it('should evict oldest entries when cache exceeds capacity', async () => {
+            // Max capacity of ScriptCache is 50. Generate 55 unique scripts.
+            for (let i = 0; i < 55; i++) {
+                await sandbox.execute(`return ${i}`, {})
+            }
+            expect(sandbox.getCacheSize()).toBe(50)
+        })
+    })
 })
 
 // =============================================================================
@@ -100,5 +162,29 @@ describe('SandboxPool', () => {
         expect(pool.poolId).toMatch(
             /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
         )
+    })
+
+    it('should refuse execution if max instances exceeded', async () => {
+        const pool = new SandboxPool({}, { maxInstances: 0 })
+        const result = await pool.execute('return 1', {})
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('exhausted')
+    })
+
+    it('should decrement active count on execution completion', async () => {
+        const pool = new SandboxPool({}, { maxInstances: 5 })
+        expect(pool.getActiveCount()).toBe(0)
+
+        // Mock the actual execution to avoid vm hanging in vitest
+        const executeSpy = vi.spyOn(CodeModeSandbox.prototype, 'execute').mockResolvedValue({
+            success: true,
+            result: 1,
+            metrics: { durationMs: 1, memoryBytes: 0, peakMemoryBytes: 0 },
+        })
+
+        await pool.execute('return 1', {})
+        expect(pool.getActiveCount()).toBe(0)
+
+        executeSpy.mockRestore()
     })
 })

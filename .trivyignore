@@ -1,14 +1,21 @@
-# Trivy Ignore File
-# See: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+# Trivy CVE Ignore List for memory-journal-mcp
+# Add CVEs here that are:
+# 1. False positives
+# 2. Upstream issues with no fix available
+# 3. Not applicable to our use case
 
-# ============================================================================
-# Alpine Base Image - No upstream fix available
-# ============================================================================
+# Format: CVE-YYYY-NNNNN
 
-# CVE-2026-22184: zlib vulnerability (CRITICAL)
-# No fix version released by Alpine yet - zlib 1.3.1.3 not packaged
-CVE-2026-22184
+# libexpat — No attack surface. This project is TypeScript/Node.js and does not
+# parse untrusted XML/DTD content. libexpat is a transitive Alpine system dependency.
 
-# CVE-2025-60876: busybox wget CRLF injection (MEDIUM)
-# Patch submitted to busybox upstream but not in a release yet
-CVE-2025-60876
+# CRITICAL — Mislabeled/poisoned CVE (supply chain data corruption in advisory feed).
+# Description is a SiYuan Note application-level authorization bypass (Go web app)
+# that was incorrectly attributed to the libexpat package. Not a real libexpat vuln.
+CVE-2026-32767
+
+# MEDIUM — DoS via infinite loop in DTD content parsing. No XML attack surface.
+CVE-2026-32777
+
+# MEDIUM — DoS via NULL pointer dereference after OOM. No XML attack surface.
+CVE-2026-32778

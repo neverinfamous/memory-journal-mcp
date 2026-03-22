@@ -194,6 +194,7 @@ export class Scheduler {
             runCount: 0,
         }
 
+        jobTimer.timer.unref()
         this.timers.push(jobTimer)
     }
 

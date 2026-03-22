@@ -112,6 +112,8 @@ export interface IDatabaseAdapter {
             projectNumber?: number
             issueNumber?: number
             prNumber?: number
+            prStatus?: string
+            workflowRunId?: number
         }
     ): JournalEntry[]
     searchByDateRange(

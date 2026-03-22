@@ -116,10 +116,23 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = LinkEntriesSchema.parse(params)
 
-                    // Check for existing duplicate relationship
+                    // Guard: self-referential links are not meaningful
+                    if (input.from_entry_id === input.to_entry_id) {
+                        return {
+                            success: false,
+                            error: 'Cannot link an entry to itself',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                        }
+                    }
+
+                    // Check for existing duplicate relationship (exact direction only).
+                    // Reverse direction (B→A when A→B exists) is intentionally allowed
+                    // so agents can model bidirectional relationships explicitly.
                     const existingRelationships = db.getRelationships(input.from_entry_id)
                     const existing = existingRelationships.find(
                         (r) =>
+                            r.fromEntryId === input.from_entry_id &&
                             r.toEntryId === input.to_entry_id &&
                             r.relationshipType === input.relationship_type
                     )
@@ -155,19 +168,15 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     if (input) {
                         const errMsg = error instanceof Error ? error.message : 'Unknown error'
                         const isFkError = errMsg.includes('FOREIGN KEY constraint failed')
-                        return {
-                            success: false,
-                            relationship: {
-                                id: 0,
-                                fromEntryId: input.from_entry_id,
-                                toEntryId: input.to_entry_id,
-                                relationshipType: input.relationship_type,
-                                description: input.description ?? null,
-                                createdAt: '',
-                            },
-                            message: isFkError
-                                ? `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`
-                                : errMsg,
+                        if (isFkError) {
+                            return {
+                                success: false,
+                                error: `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                suggestion: 'Verify both entry IDs exist before linking',
+                                recoverable: true,
+                            }
                         }
                     }
                     return formatHandlerError(error)
@@ -191,6 +200,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         const entry = db.getEntryById(input.entry_id)
                         if (!entry) {
                             return {
+                                success: false,
                                 entry_count: 0,
                                 relationship_count: 0,
                                 root_entry: input.entry_id,

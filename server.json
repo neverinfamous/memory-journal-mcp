@@ -2,13 +2,13 @@
     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
     "name": "io.github.neverinfamous/memory-journal-mcp",
     "title": "Memory Journal MCP",
-    "description": "MCP server– Project memory system with GitHub-aware context, knowledge graphs, and CI/PR timelines",
-    "version": "6.0.1",
+    "description": "Persistent knowledge graphs and intelligent context recall across AI threads",
+    "version": "6.1.0",
     "packages": [
         {
             "registryType": "oci",
-            "identifier": "docker.io/writenotenow/memory-journal-mcp:v6.0.1",
-            "version": "6.0.1",
+            "identifier": "docker.io/writenotenow/memory-journal-mcp:v6.1.0",
+            "version": "6.1.0",
             "transport": {
                 "type": "stdio"
             }
@@ -29,7 +29,7 @@
         "semantic-search"
     ],
     "author": {
-        "name": "Chris LeRoux",
+        "name": "Adamic.tech",
         "email": "writenotenow@gmail.com"
     },
     "homepage": "https://github.com/neverinfamous/memory-journal-mcp",

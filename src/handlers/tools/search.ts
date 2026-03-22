@@ -18,13 +18,20 @@ import {
 } from './schemas.js'
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/** Maximum entries returned by any single search query */
+const MAX_QUERY_LIMIT = 500
+
+// ============================================================================
 // Input Schemas
 // ============================================================================
 
 /** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
     query: z.string().optional(),
-    limit: z.number().max(500).optional().default(10),
+    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
     issue_number: z.number().optional(),
@@ -56,7 +63,7 @@ const SearchByDateRangeSchema = z.object({
     issue_number: z.number().optional(),
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
-    limit: z.number().max(500).optional().default(500),
+    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(500),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -76,7 +83,7 @@ const SearchByDateRangeSchemaMcp = z.object({
 /** Strict schema — used inside handler for structured Zod errors */
 const SemanticSearchSchema = z.object({
     query: z.string(),
-    limit: z.number().max(500).optional().default(10),
+    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     is_personal: z.boolean().optional(),
     hint_on_empty: z
@@ -152,12 +159,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.project_number !== undefined ||
                         input.issue_number !== undefined ||
                         input.pr_number !== undefined ||
+                        input.pr_status !== undefined ||
+                        input.workflow_run_id !== undefined ||
                         input.is_personal !== undefined
 
                     // When merging across DBs, fetch more per-DB so BM25 ranking
                     // in one DB doesn't silently drop entries before the merge.
                     // The actual user limit is applied by mergeAndDedup.
-                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
+                    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
 
                     let personalEntries
                     if (!input.query && !hasFilters) {
@@ -169,6 +178,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             projectNumber: input.project_number,
                             issueNumber: input.issue_number,
                             prNumber: input.pr_number,
+                            prStatus: input.pr_status,
+                            workflowRunId: input.workflow_run_id,
                         })
                     }
 
@@ -184,6 +195,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 projectNumber: input.project_number,
                                 issueNumber: input.issue_number,
                                 prNumber: input.pr_number,
+                                prStatus: input.pr_status,
+                                workflowRunId: input.workflow_run_id,
                             })
                         }
                         const merged = mergeAndDedup(
@@ -211,7 +224,20 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
-                    const perDbLimit = teamDb ? Math.min(input.limit * 2, 500) : input.limit
+
+                    // Validate date range order (YYYY-MM-DD sorts lexicographically)
+                    if (input.start_date > input.end_date) {
+                        return {
+                            success: false,
+                            error: `Invalid date range: start_date (${input.start_date}) is after end_date (${input.end_date})`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Ensure start_date is before or equal to end_date',
+                            recoverable: true,
+                        }
+                    }
+
+                    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
                     const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,
                         tags: input.tags,
@@ -269,6 +295,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: 'Semantic search not initialized. Vector search manager is not available.',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                             query: input.query,
                             entries: [],
                             count: 0,
@@ -350,6 +381,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             available: false,
                             error: 'Vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: false,
                         }
                     }
                     const stats = vectorManager.getStats()
@@ -368,6 +404,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
 /** Number of leading characters used as deduplication key */
 const DEDUP_KEY_LENGTH = 200
+
+/**
+ * When merging across personal + team DBs, fetch more per-DB so BM25
+ * ranking in one DB doesn't silently drop entries before the merge.
+ */
+function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
+    return hasTeamDb ? Math.min(limit * 2, MAX_QUERY_LIMIT) : limit
+}
 
 interface EntryWithSource {
     content: string

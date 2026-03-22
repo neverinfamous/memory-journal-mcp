@@ -1,0 +1,261 @@
+/**
+ * Team Vector Tools - 4 tools
+ *
+ * Tools: team_semantic_search, team_get_vector_index_stats,
+ *        team_rebuild_vector_index, team_add_to_vector_index
+ */
+
+import { z } from 'zod'
+import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
+import {
+    TeamSemanticSearchSchema,
+    TeamSemanticSearchSchemaMcp,
+    TeamSemanticSearchOutputSchema,
+    TeamVectorStatsOutputSchema,
+    TeamRebuildVectorIndexOutputSchema,
+    TeamAddToVectorIndexSchema,
+    TeamAddToVectorIndexSchemaMcp,
+    TeamAddToVectorIndexOutputSchema,
+} from './schemas.js'
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Quality floor — below this, results are treated as noise */
+const QUALITY_FLOOR = 0.5
+
+// ============================================================================
+// Tool Definitions
+// ============================================================================
+
+export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
+    const { teamDb, teamVectorManager, progress } = context
+
+    return [
+        {
+            name: 'team_semantic_search',
+            title: 'Team Semantic Search',
+            description:
+                'Perform semantic/vector search on team entries using AI embeddings. Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: TeamSemanticSearchSchemaMcp,
+            outputSchema: TeamSemanticSearchOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            handler: async (params: unknown) => {
+                try {
+                    if (!teamDb) {
+                        return { ...TEAM_DB_ERROR_RESPONSE }
+                    }
+
+                    const input = TeamSemanticSearchSchema.parse(params)
+
+                    if (!teamVectorManager) {
+                        return {
+                            success: false,
+                            error: 'Team vector search not available. Ensure TEAM_DB_PATH is configured and semantic search is enabled.',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: true,
+                            query: input.query,
+                            entries: [],
+                            count: 0,
+                        }
+                    }
+
+                    const results = await teamVectorManager.search(
+                        input.query,
+                        input.limit ?? 10,
+                        input.similarity_threshold ?? 0.25
+                    )
+
+                    // Batch-fetch all entries (instead of N+1 getEntryById calls)
+                    const entryIds = results.map((r) => r.entryId)
+                    const entriesMap = teamDb.getEntriesByIds(entryIds)
+
+                    // Batch-fetch authors
+                    const authorMap = batchFetchAuthors(teamDb, entryIds)
+
+                    const entries = results
+                        .map((r) => {
+                            const entry = entriesMap.get(r.entryId)
+                            if (!entry) return null
+                            return {
+                                ...entry,
+                                author: authorMap.get(r.entryId) ?? null,
+                                similarity: Math.round(r.score * 100) / 100,
+                            }
+                        })
+                        .filter((e): e is NonNullable<typeof e> => e !== null)
+
+                    const stats = teamVectorManager.getStats()
+                    const isIndexEmpty = stats.itemCount === 0
+                    const includeHint = input.hint_on_empty ?? true
+
+                    const bestSimilarity = entries[0]?.similarity ?? 0
+                    const allNoise = entries.length > 0 && bestSimilarity < QUALITY_FLOOR
+
+                    const hint =
+                        isIndexEmpty && includeHint
+                            ? 'No entries in team vector index. Use team_rebuild_vector_index to index existing entries.'
+                            : entries.length === 0 && includeHint
+                              ? `No entries matched your query above the similarity threshold (${String(input.similarity_threshold ?? 0.25)}). Try lowering similarity_threshold (e.g., 0.15) for broader matches.`
+                              : allNoise
+                                ? `Results may be noise — best similarity (${String(bestSimilarity)}) is below quality floor (${String(QUALITY_FLOOR)}). Try a more specific query or raise similarity_threshold to filter weak matches.`
+                                : undefined
+
+                    return {
+                        query: input.query,
+                        entries,
+                        count: entries.length,
+                        ...(hint !== undefined ? { hint } : {}),
+                    }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_get_vector_index_stats',
+            title: 'Team Vector Index Stats',
+            description:
+                'Get statistics about the team vector search index (item count, model, dimensions). Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: z.object({}).strict(),
+            outputSchema: TeamVectorStatsOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            handler: (_params: unknown) => {
+                try {
+                    if (!teamDb) {
+                        return { available: false, error: TEAM_DB_ERROR_RESPONSE.error }
+                    }
+
+                    if (!teamVectorManager) {
+                        return { available: false, error: 'Team vector search not available' }
+                    }
+
+                    const stats = teamVectorManager.getStats()
+                    return {
+                        success: true,
+                        available: true,
+                        itemCount: stats.itemCount,
+                        modelName: stats.modelName,
+                        dimensions: stats.dimensions,
+                    }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_rebuild_vector_index',
+            title: 'Rebuild Team Vector Index',
+            description:
+                'Rebuild the team semantic search vector index from all existing team entries. Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: z.object({}).strict(),
+            outputSchema: TeamRebuildVectorIndexOutputSchema,
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+            handler: async (_params: unknown) => {
+                try {
+                    if (!teamDb) {
+                        return { ...TEAM_DB_ERROR_RESPONSE }
+                    }
+
+                    if (!teamVectorManager) {
+                        return {
+                            success: false,
+                            entriesIndexed: 0,
+                            error: 'Team vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: true,
+                        }
+                    }
+
+                    const { indexed, failed, firstError } = await teamVectorManager.rebuildIndex(
+                        teamDb,
+                        progress
+                    )
+                    const success = indexed > 0 || failed === 0
+                    return {
+                        success,
+                        entriesIndexed: indexed,
+                        ...(failed > 0 ? { failedEntries: failed } : {}),
+                        ...(!success
+                            ? {
+                                  error: firstError ?? 'All entries failed to generate embeddings',
+                              }
+                            : {}),
+                    }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_add_to_vector_index',
+            title: 'Add Team Entry to Vector Index',
+            description:
+                'Add a specific team entry to the semantic search vector index. Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: TeamAddToVectorIndexSchemaMcp,
+            outputSchema: TeamAddToVectorIndexOutputSchema,
+            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            handler: async (params: unknown) => {
+                try {
+                    if (!teamDb) {
+                        return { ...TEAM_DB_ERROR_RESPONSE }
+                    }
+
+                    const { entry_id } = TeamAddToVectorIndexSchema.parse(params)
+
+                    if (!teamVectorManager) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: 'Team vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: true,
+                        }
+                    }
+
+                    const entry = teamDb.getEntryById(entry_id)
+                    if (!entry) {
+                        return {
+                            success: false,
+                            entryId: entry_id,
+                            error: `Team entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
+                        }
+                    }
+
+                    const result = await teamVectorManager.addEntry(entry_id, entry.content)
+                    return {
+                        success: result.success,
+                        entryId: entry_id,
+                        ...(result.success
+                            ? {}
+                            : {
+                                  error: result.error ?? 'Failed to generate or store embedding',
+                              }),
+                    }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+    ]
+}

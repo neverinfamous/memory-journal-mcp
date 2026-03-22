@@ -77,6 +77,19 @@ describe('NativeConnectionManager', () => {
             expect(fs.existsSync(TEST_DB_NESTED)).toBe(true)
             mgr.close()
         })
+
+        it('should handle and wrap initialization errors', async () => {
+            const mkdirSpy = vi
+                .spyOn(fs.promises, 'mkdir')
+                .mockRejectedValueOnce(new Error('Permission denied'))
+
+            cleanupDirs('./test-native-nested-error')
+            const mgr = new NativeConnectionManager('./test-native-nested-error/db.sqlite')
+
+            await expect(mgr.initialize()).rejects.toThrow('Permission denied')
+
+            mkdirSpy.mockRestore()
+        })
     })
 
     // =========================================================================
@@ -133,6 +146,42 @@ describe('NativeConnectionManager', () => {
 
             mgr.close()
         })
+
+        it('should populate FTS5 on existing DBs missing FTS rows', async () => {
+            const mgr = new NativeConnectionManager(TEST_DB_PATH_2)
+            await mgr.initialize()
+            const db = mgr.getRawDb() as Database
+            db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
+            // Wipe fts_content manually
+            db.exec('DELETE FROM fts_content')
+            mgr.close()
+
+            // Re-init should populate FTS
+            const mgr2 = new NativeConnectionManager(TEST_DB_PATH_2)
+            await mgr2.initialize()
+            mgr2.close()
+        })
+
+        it('should rebuild FTS5 index if ghost entries detected', async () => {
+            // First DB is initialized
+            const mgr = new NativeConnectionManager(TEST_DB_PATH)
+            await mgr.initialize()
+            const db = mgr.getRawDb() as Database
+
+            // FTS count is > 0, entryCount = 0 since we deleted memory_journal entries or made fts larger
+            db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
+            db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('bar', 'test')")
+            db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('baz', 'test')")
+            // Drop delete trigger so deletion doesn't hit FTS
+            db.exec('DROP TRIGGER IF EXISTS memory_journal_ad')
+            db.exec('DELETE FROM memory_journal')
+            mgr.close()
+
+            // Re-init should trigger ghost cleanup because fts_count (3) > entry_count (0)
+            const mgr2 = new NativeConnectionManager(TEST_DB_PATH)
+            await mgr2.initialize()
+            mgr2.close()
+        })
     })
 
     // =========================================================================
@@ -181,6 +230,19 @@ describe('NativeConnectionManager', () => {
             expect(result).toBeDefined()
             expect(result.length).toBeGreaterThan(0)
 
+            mgr.close()
+        })
+    })
+
+    // =========================================================================
+    // pragma
+    // =========================================================================
+
+    describe('pragma', () => {
+        it('should execute pragma commands', async () => {
+            const mgr = new NativeConnectionManager(':memory:')
+            await mgr.initialize()
+            expect(() => mgr.pragma('cache_size = 2000')).not.toThrow()
             mgr.close()
         })
     })

@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import * as fs from 'node:fs'
 import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
-import pkg from '../package.json' with { type: 'json' }
+import { VERSION } from './version.js'
 
 // Smart Database Resolution: Check root, then test-server, then default to root
 function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
@@ -26,7 +26,7 @@ const program = new Command()
 program
     .name('memory-journal-mcp')
     .description('Project context management for AI-assisted development')
-    .version(pkg.version)
+    .version(VERSION)
     .option('--transport <type>', 'Transport type: stdio or http', 'stdio')
     .option('--port <number>', 'HTTP port (for http transport)', '3000')
     .option('--server-host <host>', 'Server bind host for HTTP transport (default: localhost)')
@@ -123,6 +123,10 @@ program
         '--briefing-copilot',
         'Aggregate Copilot review state across recent PRs in briefing (env: BRIEFING_COPILOT_REVIEWS)'
     )
+    .option(
+        '--workflow-summary <text>',
+        'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
+    )
     .action(
         async (options: {
             transport: string
@@ -158,6 +162,7 @@ program
             briefingWorkflows: string
             briefingWorkflowStatus?: boolean
             briefingCopilot?: boolean
+            workflowSummary?: string
             instructionLevel: string
         }) => {
             // Set log level
@@ -244,6 +249,15 @@ program
                         copilotReviews:
                             options.briefingCopilot ??
                             process.env['BRIEFING_COPILOT_REVIEWS'] === 'true',
+                        workflowSummary:
+                            options.workflowSummary ??
+                            process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] ??
+                            undefined,
+                        defaultProjectNumber: options.defaultProject
+                            ? parseInt(options.defaultProject, 10)
+                            : process.env['DEFAULT_PROJECT_NUMBER']
+                              ? parseInt(process.env['DEFAULT_PROJECT_NUMBER'], 10)
+                              : undefined,
                     },
                     instructionLevel: (options.instructionLevel !== 'standard'
                         ? options.instructionLevel

@@ -69,17 +69,20 @@ export const DATE_FORMAT_REGEX = /^\d{4}-\d{2}-\d{2}$/
 export const DATE_FORMAT_MESSAGE = 'Date must be YYYY-MM-DD format'
 
 /**
- * Relaxed number schema for MCP SDK inputSchema registration.
+ * Relaxed numeric schema for MCP SDK inputSchema registration.
  *
- * Uses `z.any()` so the SDK's Zod validation accepts any value (including
- * strings like `"abc"`). The handler's strict schema (`z.number()`) then
- * rejects invalid values and produces structured `{success: false, error}`
- * responses via `formatHandlerError()`.
+ * Uses `z.union([z.number(), z.string()])` so the SDK's Zod validation
+ * accepts both native numbers and string-typed numbers (e.g., `"42"`).
+ * The handler's strict schema (`z.number()`) then validates and coerces
+ * the value, producing structured `{success: false, error}` responses
+ * via `formatHandlerError()` for invalid input.
  *
- * Without this, `z.number()` rejects strings at the SDK level with raw
- * MCP `-32602` errors that bypass the handler's try-catch.
+ * NOTE: `z.preprocess()` was attempted but its `ZodEffects` return type
+ * is too complex for ESLint's strict type resolver, causing cascading
+ * `@typescript-eslint/no-unsafe-*` errors across all call sites.
  */
-export const relaxedNumber = (): z.ZodAny => z.any()
+export const relaxedNumber = (): z.ZodUnion<[z.ZodNumber, z.ZodString]> =>
+    z.union([z.number(), z.string()])
 
 // ============================================================================
 // Cross-Group Output Schemas

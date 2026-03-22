@@ -193,6 +193,7 @@ export const MoveKanbanItemOutputSchema = z
         error: z.string().optional(),
         requiresUserInput: z.boolean().optional(),
         hint: z.string().optional(),
+        availableStatuses: z.array(z.string()).optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 

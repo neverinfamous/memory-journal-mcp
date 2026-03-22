@@ -7,18 +7,18 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 **Prerequisites:**
 
 - Pass 3 (`test-tools-codemode.md`) must pass first — sandbox, security, core CRUD, and search verified.
-- Pass 1 seed data (S1-S12) must exist.
+- Pass 1 seed data (S1-S17) must exist — S13–S14 are personal journal entries with `project_number: 5`, S15–S17 are team DB entries with `project_number: 5`, all required for `get_cross_project_insights` / `team_get_cross_project_insights` to return non-empty results.
 - Confirm MCP server instructions were auto-received before starting.
 - Use the MCP server directly for all tests — not the terminal or scripts.
 - Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-codemode2.md`).
-2. If the plan requires no user decisions, proceed with implementation immediately.
-3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
-4. Re-test fixes with direct MCP calls.
-5. Provide a final summary — after re-testing if fixes were needed, or immediately if no issues were found.
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-codemode2.md`).
+2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
+3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. After user completes verification, re-test fixes with direct MCP calls.
+5. Provide a very brief final summary.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**
@@ -43,7 +43,7 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 | Test                 | Code                                                                                                                                                                                | Expected Result                     |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Conditional on stats | `const s = await mj.analytics.getStatistics({}); if (s.totalEntries > 0) { return { status: "has entries", count: s.totalEntries }; } else { return { status: "empty journal" }; }` | Returns either branch based on data |
-| Loop over entries    | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entry_type, len: e.content?.length ?? 0 })); return summaries;`    | Array of summary objects            |
+| Loop over entries    | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entryType, len: e.content?.length ?? 0 })); return summaries;`     | Array of summary objects            |
 
 ### 22.3 Create + Read Round-Trip (via Code Mode)
 
@@ -679,6 +679,8 @@ return {
 
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured. If not configured, all team tools should return structured `{ success: false, error: "Team database not configured..." }`.
+>
+> **`team_delete_entry` is soft-delete only** — no `permanent` flag.
 
 ### 27.1 Team CRUD
 
@@ -702,6 +704,14 @@ const combined = await mj.team.teamSearch({
 })
 const noArgs = await mj.team.teamSearch({})
 
+// New: get by ID, list tags
+const detail = await mj.team.teamGetEntryById({ entry_id: created.entry.id })
+const detailNoRels = await mj.team.teamGetEntryById({
+  entry_id: created.entry.id,
+  include_relationships: false,
+})
+const tags = await mj.team.teamListTags({})
+
 return {
   createSuccess: created.success,
   createAuthor: created.entry?.author,
@@ -712,6 +722,10 @@ return {
   tagSearchCount: tagSearch.entries?.length ?? 0,
   combinedCount: combined.entries?.length ?? 0,
   noArgsCount: noArgs.entries?.length ?? 0,
+  detailHasEntry: !!detail.entry,
+  detailHasImportance: !!detail.importance,
+  detailNoRelsEmpty: !detailNoRels.relationships?.length,
+  tagCount: tags.tags?.length ?? 0,
 }
 ```
 
@@ -723,14 +737,264 @@ return {
 | `recentHasAuthor` | `true`                            |
 | `searchCount`     | ≥ 1                               |
 | `tagSearchCount`  | ≥ 1                               |
+| `detailHasEntry`  | `true`                            |
+| `tagCount`        | ≥ 1                               |
 
 ### 27.2 Team Error Paths
 
-| Test               | Code                                                                                | Expected Result                    |
-| ------------------ | ----------------------------------------------------------------------------------- | ---------------------------------- |
-| Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid" });` | `{ success: false, error: "..." }` |
+| Test               | Code                                                                                                                | Expected Result                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid" });`                                 | `{ success: false, error: "..." }` |
+| Nonexistent get    | `return await mj.team.teamGetEntryById({ entry_id: 999999 });`                                                      | `{ success: false, error: "..." }` |
+| Nonexistent update | `return await mj.team.teamUpdateEntry({ entry_id: 999999, content: "x" });`                                         | `{ success: false, error: "..." }` |
+| Nonexistent delete | `return await mj.team.teamDeleteEntry({ entry_id: 999999 });`                                                       | `{ success: false, error: "..." }` |
+| Invalid date range | `return await mj.team.teamSearchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });`                          | `{ success: false, error: "..." }` |
+| Merge same tag     | `return await mj.team.teamMergeTags({ source_tag: "x", target_tag: "x" });`                                         | `{ success: false, error: "..." }` |
+| Link nonexistent   | `return await mj.team.teamLinkEntries({ from_entry_id: 999999, to_entry_id: 1, relationship_type: "references" });` | `{ success: false, error: "..." }` |
 
-### 27.3 Cross-Tool Error Path Verification (via Code Mode)
+### 27.3 Team Date Range Search
+
+```javascript
+// Test code:
+const results = await mj.team.teamSearchByDateRange({
+  start_date: '2026-01-01',
+  end_date: '2026-12-31',
+})
+const typed = await mj.team.teamSearchByDateRange({
+  start_date: '2026-01-01',
+  end_date: '2026-12-31',
+  entry_type: 'standup',
+})
+const tagged = await mj.team.teamSearchByDateRange({
+  start_date: '2026-01-01',
+  end_date: '2026-12-31',
+  tags: ['codemode4-team-test'],
+})
+return {
+  hasEntries: Array.isArray(results.entries),
+  count: results.count ?? 0,
+  typedFiltered: typed.entries?.every((e) => e.entryType === 'standup') ?? true,
+  taggedCount: tagged.entries?.length ?? 0,
+}
+```
+
+| Check           | Expected |
+| --------------- | -------- |
+| `hasEntries`    | `true`   |
+| `typedFiltered` | `true`   |
+
+### 27.4 Team Admin
+
+```javascript
+// Test code:
+const r = await mj.team.teamGetRecent({ limit: 1 })
+const id = r.entries[0].id
+
+const updated = await mj.team.teamUpdateEntry({
+  entry_id: id,
+  content: 'CM4 updated team content',
+  tags: ['cm4-updated-team'],
+})
+const verify = await mj.team.teamGetEntryById({ entry_id: id })
+
+// Merge tags
+await mj.team.teamCreateEntry({ content: 'CM4 merge source', tags: ['cm4-team-old'] })
+const merged = await mj.team.teamMergeTags({
+  source_tag: 'cm4-team-old',
+  target_tag: 'cm4-team-new',
+})
+const afterTags = await mj.team.teamListTags({})
+const oldGone = !afterTags.tags?.some((t) => t.name === 'cm4-team-old')
+const newExists = afterTags.tags?.some((t) => t.name === 'cm4-team-new')
+
+// Soft delete
+const toDelete = await mj.team.teamCreateEntry({ content: 'CM4 delete me' })
+const deleted = await mj.team.teamDeleteEntry({ entry_id: toDelete.entry.id })
+
+return {
+  updateSuccess: updated.success,
+  contentUpdated: verify.entry?.content === 'CM4 updated team content',
+  mergeSuccess: merged.success,
+  oldTagGone: oldGone,
+  newTagExists: newExists,
+  deleteSuccess: deleted.success,
+}
+```
+
+| Check            | Expected |
+| ---------------- | -------- |
+| `updateSuccess`  | `true`   |
+| `contentUpdated` | `true`   |
+| `mergeSuccess`   | `true`   |
+| `oldTagGone`     | `true`   |
+| `newTagExists`   | `true`   |
+| `deleteSuccess`  | `true`   |
+
+### 27.5 Team Analytics
+
+```javascript
+// Test code:
+const stats = await mj.team.teamGetStatistics({})
+const monthly = await mj.team.teamGetStatistics({ group_by: 'month' })
+return {
+  hasTotalEntries: typeof stats.totalEntries === 'number',
+  hasEntriesByType: !!stats.entriesByType,
+  hasAuthors: Array.isArray(stats.authors),
+  monthlyHasPeriods: Array.isArray(monthly.entriesByPeriod),
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `hasTotalEntries`   | `true`   |
+| `hasEntriesByType`  | `true`   |
+| `hasAuthors`        | `true`   |
+| `monthlyHasPeriods` | `true`   |
+
+### 27.6 Team Relationships
+
+```javascript
+// Test code:
+const r = await mj.team.teamGetRecent({ limit: 2 })
+const [a, b] = r.entries.map((e) => e.id)
+
+const linked = await mj.team.teamLinkEntries({
+  from_entry_id: a,
+  to_entry_id: b,
+  relationship_type: 'references',
+  description: 'CM4 team link test',
+})
+const dup = await mj.team.teamLinkEntries({
+  from_entry_id: a,
+  to_entry_id: b,
+  relationship_type: 'references',
+})
+const viz = await mj.team.teamVisualizeRelationships({ entry_id: a })
+const vizTag = await mj.team.teamVisualizeRelationships({ tag: 'codemode4-team-test' })
+
+return {
+  linkSuccess: linked.success,
+  hasDescription: !!linked.relationship?.description,
+  dupDetected: dup.duplicate === true,
+  hasMermaid: typeof viz.mermaid === 'string' && viz.mermaid.length > 0,
+  nodeCount: viz.nodeCount,
+  tagVizHasMermaid: typeof vizTag.mermaid === 'string',
+}
+```
+
+| Check            | Expected |
+| ---------------- | -------- |
+| `linkSuccess`    | `true`   |
+| `hasDescription` | `true`   |
+| `dupDetected`    | `true`   |
+| `hasMermaid`     | `true`   |
+
+### 27.7 Team Export
+
+```javascript
+// Test code:
+const jsonExport = await mj.team.teamExportEntries({ format: 'json', limit: 5 })
+const mdExport = await mj.team.teamExportEntries({ format: 'markdown', limit: 5 })
+const tagExport = await mj.team.teamExportEntries({
+  format: 'json',
+  tags: ['codemode4-team-test'],
+  limit: 10,
+})
+return {
+  jsonHasData: typeof jsonExport.data === 'string',
+  jsonCount: jsonExport.count ?? 0,
+  mdHasData: typeof mdExport.data === 'string',
+  tagFilteredCount: tagExport.count ?? 0,
+}
+```
+
+| Check         | Expected |
+| ------------- | -------- |
+| `jsonHasData` | `true`   |
+| `mdHasData`   | `true`   |
+| `jsonCount`   | ≥ 1      |
+
+### 27.8 Team Backup
+
+```javascript
+// Test code:
+const named = await mj.team.teamBackup({ name: 'cm4-team-backup' })
+const auto = await mj.team.teamBackup({})
+const list = await mj.team.teamListBackups({})
+return {
+  namedSuccess: named.success,
+  namedFilename: named.filename,
+  namedHasPath: !!named.path,
+  namedHasSize: typeof named.sizeBytes === 'number',
+  autoSuccess: auto.success,
+  listTotal: list.total,
+  listHasBackups: Array.isArray(list.backups),
+}
+```
+
+| Check            | Expected |
+| ---------------- | -------- |
+| `namedSuccess`   | `true`   |
+| `namedHasPath`   | `true`   |
+| `namedHasSize`   | `true`   |
+| `autoSuccess`    | `true`   |
+| `listHasBackups` | `true`   |
+
+### 27.9 Team Vector & Cross-Project Insights
+
+```javascript
+// Test code:
+const rebuild = await mj.team.teamRebuildVectorIndex({})
+const stats = await mj.team.teamGetVectorIndexStats({})
+
+const search = await mj.team.teamSemanticSearch({ query: 'standup' })
+const strict = await mj.team.teamSemanticSearch({
+  query: 'standup',
+  similarity_threshold: 0.5,
+})
+
+const recent = await mj.team.teamGetRecent({ limit: 1 })
+const addResult = await mj.team.teamAddToVectorIndex({
+  entry_id: recent.entries[0].id,
+})
+const addBad = await mj.team.teamAddToVectorIndex({ entry_id: 999999 })
+
+const insights = await mj.team.teamGetCrossProjectInsights({})
+const insightsFiltered = await mj.team.teamGetCrossProjectInsights({
+  start_date: '2026-01-01',
+  end_date: '2026-03-01',
+  min_entries: 1,
+})
+
+return {
+  rebuildSuccess: rebuild.success,
+  entriesIndexed: rebuild.entriesIndexed,
+  vectorAvailable: stats.available,
+  vectorItemCount: stats.itemCount,
+  searchCount: search.entries?.length ?? 0,
+  strictFewer: (strict.entries?.length ?? 0) <= (search.entries?.length ?? 0),
+  addSuccess: addResult.success,
+  addBadError: addBad.success === false,
+  insightsProjectCount: insights.project_count,
+  insightsHasProjects: Array.isArray(insights.projects),
+  filteredInsights: insightsFiltered.project_count >= 0,
+}
+```
+
+| Check                  | Expected                                                                  |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `rebuildSuccess`       | `true`                                                                    |
+| `entriesIndexed`       | Number > 0                                                                |
+| `vectorAvailable`      | `true`                                                                    |
+| `searchCount`          | ≥ 1                                                                       |
+| `strictFewer`          | `true`                                                                    |
+| `addSuccess`           | `true`                                                                    |
+| `addBadError`          | `true`                                                                    |
+| `insightsHasProjects`  | `true`                                                                    |
+| `insightsProjectCount` | ≥ 1 (project 5 visible with seed entries S15–S17; 0 if team seed missing) |
+| `filteredInsights`     | `project_count ≥ 0` (≥ 1 if S15–S17 fall within date range)               |
+
+### 27.10 Cross-Tool Error Path Verification (via Code Mode)
 
 > [!IMPORTANT]
 > Verify that tool errors propagate as structured handler errors through the Code Mode API bridge — not as raw MCP errors or unhandled exceptions.
@@ -772,6 +1036,19 @@ errors.mergeNonexistent = await mj.admin.mergeTags({
 })
 errors.addVectorBad = await mj.admin.addToVectorIndex({ entry_id: 999999 })
 
+// Team errors
+errors.teamGetNotFound = await mj.team.teamGetEntryById({ entry_id: 999999 })
+errors.teamUpdateNotFound = await mj.team.teamUpdateEntry({ entry_id: 999999, content: 'x' })
+errors.teamDeleteNotFound = await mj.team.teamDeleteEntry({ entry_id: 999999 })
+errors.teamLinkBad = await mj.team.teamLinkEntries({
+  from_entry_id: 999999,
+  to_entry_id: 1,
+  relationship_type: 'references',
+})
+
+// Team vector errors (only true error paths)
+errors.teamAddVectorBad = await mj.team.teamAddToVectorIndex({ entry_id: 999999 })
+
 // Verify all errors are structured (not raw throws)
 const allStructured = Object.entries(errors).every(([key, val]) => {
   return (
@@ -799,7 +1076,7 @@ return {
 
 | Check           | Expected                                            |
 | --------------- | --------------------------------------------------- |
-| `testedCount`   | 13                                                  |
+| `testedCount`   | 18                                                  |
 | `allStructured` | `true` — no raw exceptions through Code Mode bridge |
 
 ---
@@ -832,6 +1109,15 @@ for (const e of cmEntries.entries) {
   }
 }
 
+// Clean up team entries created during Phase 27
+const teamEntries = await mj.team.teamSearch({ query: 'CM4', limit: 50 })
+for (const e of teamEntries.entries ?? []) {
+  if (e.content?.includes('CM4')) {
+    const del = await mj.team.teamDeleteEntry({ entry_id: e.id })
+    results.push({ id: e.id, source: 'team', deleted: del.success })
+  }
+}
+
 return { cleaned: results.length, details: results }
 ```
 
@@ -844,7 +1130,7 @@ return { cleaned: results.length, details: results }
 3. **Phase 24**: Relationships & Visualization (all types, duplicates, visualization variants, error paths)
 4. **Phase 25**: GitHub (16 tools — context, issues, PRs, Kanban, milestones, insights, copilot + cleanup)
 5. **Phase 26**: Admin, Backup & Export (tags, merge, export filters, backup lifecycle)
-6. **Phase 27**: Team + Error Paths (team CRUD, cross-tool error propagation)
+6. **Phase 27**: Team + Error Paths (20 team tools CRUD, admin, analytics, vector, insights, relationships, export, backup, cross-tool error propagation)
 
 ---
 
@@ -910,6 +1196,23 @@ return { cleaned: results.length, details: results }
 - [ ] `team_create_entry` with auto-detected and explicit `author` works
 - [ ] `team_get_recent` returns entries with `author` field
 - [ ] `team_search` filters by text, tags, and combined
+- [ ] `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
+- [ ] `team_list_tags` returns tag list from team database
+- [ ] `team_search_by_date_range` filters by date range, entry_type, and tags
+- [ ] `team_update_entry` updates content, tags, and entry_type
+- [ ] `team_delete_entry` soft-deletes team entries
+- [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
+- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
+- [ ] `team_link_entries` creates relationships with duplicate detection
+- [ ] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
+- [ ] `team_export_entries` exports JSON and markdown with filters
+- [ ] `team_backup` creates named and auto-named backups
+- [ ] `team_list_backups` returns backup metadata
+- [ ] `team_rebuild_vector_index` indexes team entries via Code Mode
+- [ ] `team_get_vector_index_stats` returns vector stats via Code Mode
+- [ ] `team_semantic_search` with threshold filtering works via Code Mode
+- [ ] `team_add_to_vector_index` succeeds for existing, errors for nonexistent via Code Mode
+- [ ] `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 - [ ] Invalid `entry_type` on team create returns structured error
-- [ ] All 13 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
+- [ ] All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
 - [ ] All test entries cleaned up after Phase 27

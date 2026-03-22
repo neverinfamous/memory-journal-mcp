@@ -379,10 +379,12 @@ describe('Tool Handlers', () => {
             const result = (await callTool('export_entries', { format: 'json' }, db)) as {
                 format: string
                 entries: unknown[]
+                count: number
             }
 
             expect(result.format).toBe('json')
             expect(result.entries.length).toBeGreaterThan(0)
+            expect(result.count).toBe(result.entries.length)
         })
 
         it('should export as markdown', async () => {

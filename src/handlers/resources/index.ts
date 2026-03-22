@@ -21,6 +21,7 @@ import { getGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
 import { getTeamResourceDefinitions } from './team.js'
+import { getHelpResourceDefinitions } from './help.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 
@@ -137,5 +138,6 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
         ...getTeamResourceDefinitions(),
+        ...getHelpResourceDefinitions(),
     ]
 }

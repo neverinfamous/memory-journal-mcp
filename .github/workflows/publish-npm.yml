@@ -1,17 +1,23 @@
 name: Publish to NPM
 
+# npm publish is gated behind Docker security checks:
+# - Triggered by docker-publish.yml after Docker Scout + image push succeeds
+# - Manual dispatch available as fallback
 on:
-  release:
-    types: [published]
+  workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (must match VERSION file or package.json)'
+        description: 'Version to publish (must match package.json)'
         required: false
         default: ''
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -24,8 +30,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          # For release events, checkout the tag; for workflow_dispatch, use ref input or default to latest tag
-          ref: ${{ github.event.release.tag_name || format('v{0}', github.event.inputs.version) || github.ref }}
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -40,39 +45,41 @@ jobs:
       - name: Read version
         id: version
         run: |
-          if [ -f "VERSION" ]; then
-            VERSION=$(head -1 VERSION | tr -d '[:space:]')
-          fi
-          if [ -z "$VERSION" ]; then
-            VERSION=$(node -p "require('./package.json').version")
-          fi
+          VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Detected version: $VERSION"
 
-      - name: Verify version matches release tag
-        if: github.event_name == 'release'
+      - name: Check if version already published
+        id: check
         run: |
-          RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
-          RELEASE_VERSION="${RELEASE_VERSION#v}"
           PKG_VERSION="${{ steps.version.outputs.version }}"
-          echo "Package version: $PKG_VERSION"
-          echo "Release version: $RELEASE_VERSION"
-          if [ "$PKG_VERSION" != "$RELEASE_VERSION" ]; then
-            echo "Error: Version mismatch!"
-            echo "Expected: $PKG_VERSION"
-            echo "Got: $RELEASE_VERSION"
-            exit 1
+          PUBLISHED=$(npm view memory-journal-mcp version 2>/dev/null || echo "none")
+          echo "published=$PUBLISHED" >> $GITHUB_OUTPUT
+          if [ "$PUBLISHED" = "$PKG_VERSION" ]; then
+            echo "Version $PKG_VERSION already published, skipping"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Publishing version $PKG_VERSION (current published: $PUBLISHED)"
+            echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Build package
+        if: steps.check.outputs.skip != 'true'
         run: npm run build
 
       - name: Publish to NPM
-        run: npm publish --access public
+        if: steps.check.outputs.skip != 'true'
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Verify publication
+        if: steps.check.outputs.skip != 'true'
         run: |
           sleep 10
-          npm view memory-journal-mcp version
+          PUBLISHED=$(npm view memory-journal-mcp version)
+          EXPECTED="${{ steps.version.outputs.version }}"
+          echo "Published: $PUBLISHED | Expected: $EXPECTED"
+          if [ "$PUBLISHED" != "$EXPECTED" ]; then
+            echo "::warning::Version mismatch after publish"
+          fi

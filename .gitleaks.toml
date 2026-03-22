@@ -1,0 +1,9 @@
+# Gitleaks Configuration
+# https://github.com/gitleaks/gitleaks#configuration
+
+title = "memory-journal-mcp gitleaks config"
+
+# Allowlist for known false positives in test fixtures
+[allowlist]
+  description = "Test fixtures containing intentionally fake secrets"
+  paths = []

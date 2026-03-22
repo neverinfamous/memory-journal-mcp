@@ -7,7 +7,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
-import pkg from '../../../package.json' with { type: 'json' }
+import { VERSION } from '../../version.js'
 
 // =============================================================================
 // Health Check
@@ -33,7 +33,7 @@ export function handleHealthCheck(_req: Request, res: Response): void {
 export function handleRootInfo(_req: Request, res: Response): void {
     res.status(200).json({
         name: 'memory-journal-mcp',
-        version: pkg.version,
+        version: VERSION,
         description: 'Project context management for AI-assisted development',
         endpoints: {
             'POST /mcp': 'JSON-RPC requests (Streamable HTTP, MCP 2025-03-26)',

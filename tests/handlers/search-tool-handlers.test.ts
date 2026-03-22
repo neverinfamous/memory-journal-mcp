@@ -41,6 +41,21 @@ describe('Search Tool Handlers - Coverage', () => {
             tags: ['beta'],
             isPersonal: true,
         })
+        // BUG-S1 seed: entry with pr_status for filter regression test
+        db.createEntry({
+            content: 'Merged PR entry for filter test',
+            entryType: 'code_review',
+            prNumber: 10,
+            prStatus: 'merged',
+        })
+        // BUG-S2 seed: entry with workflowRunId for filter regression test
+        db.createEntry({
+            content: 'CI run entry for filter test',
+            entryType: 'technical_note',
+            workflowRunId: 9999,
+            workflowName: 'ci',
+            workflowStatus: 'success',
+        })
 
         // Seed team entries
         teamDb.createEntry({
@@ -190,6 +205,34 @@ describe('Search Tool Handlers - Coverage', () => {
 
             expect(result.count).toBeGreaterThan(0)
         })
+
+        it('[BUG-S1] should filter by pr_status alone (regression)', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { pr_status: 'merged', limit: 50 },
+                db
+            )) as { entries: { prStatus: string }[]; count: number }
+
+            expect(result.count).toBeGreaterThan(0)
+            // Every returned entry must have pr_status = 'merged'
+            for (const entry of result.entries) {
+                expect(entry.prStatus).toBe('merged')
+            }
+        })
+
+        it('[BUG-S2] should filter by workflow_run_id alone (regression)', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { workflow_run_id: 9999, limit: 50 },
+                db
+            )) as { entries: { workflowRunId: number }[]; count: number }
+
+            expect(result.count).toBeGreaterThan(0)
+            // Every returned entry must have workflowRunId = 9999
+            for (const entry of result.entries) {
+                expect(entry.workflowRunId).toBe(9999)
+            }
+        })
     })
 
     // ========================================================================
@@ -267,6 +310,70 @@ describe('Search Tool Handlers - Coverage', () => {
             )) as { error: string }
 
             expect(result.error).toBeDefined()
+        })
+    })
+
+    // ========================================================================
+    // search_entries — FTS5 phrase query (porter-stemmer sanitization)
+    // ========================================================================
+
+    describe('search_entries FTS5 phrase query', () => {
+        it('should match entries when using a quoted phrase query', async () => {
+            // Seed an entry with the phrase "error handling"
+            db.createEntry({
+                content: 'Improved error handling without breaking the API',
+                entryType: 'bug_fix',
+                tags: ['fts5-phrase-test'],
+            })
+
+            // Unquoted — should match
+            const unquoted = (await callTool(
+                'search_entries',
+                { query: 'error handling', limit: 10 },
+                db
+            )) as { entries: { content: string }[]; count: number }
+            expect(unquoted.count).toBeGreaterThan(0)
+
+            // Quoted phrase — should also match after sanitizeFtsQuery rewrites it
+            const quoted = (await callTool(
+                'search_entries',
+                { query: '"error handling"', limit: 10 },
+                db
+            )) as { entries: { content: string }[]; count: number }
+            expect(quoted.count).toBeGreaterThan(0)
+
+            // Both should find the same entry
+            const unquotedContents = unquoted.entries.map((e) => e.content)
+            const quotedContents = quoted.entries.map((e) => e.content)
+            const phraseEntry = 'Improved error handling without breaking the API'
+            expect(unquotedContents).toContain(phraseEntry)
+            expect(quotedContents).toContain(phraseEntry)
+        })
+
+        it('should pass through non-phrase queries unchanged', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'deploy OR release', limit: 10 },
+                db
+            )) as { entries: unknown[]; count: number }
+            // Should not throw and may return results
+            expect(result).toBeDefined()
+            expect(typeof result.count).toBe('number')
+        })
+
+        it('should handle single-word quoted phrase', async () => {
+            db.createEntry({
+                content: 'Architecture decision for the backend',
+                entryType: 'project_decision',
+                tags: ['fts5-single-word-test'],
+            })
+
+            const result = (await callTool(
+                'search_entries',
+                { query: '"architecture"', limit: 10 },
+                db
+            )) as { entries: { content: string }[]; count: number }
+            expect(result.count).toBeGreaterThan(0)
         })
     })
 })

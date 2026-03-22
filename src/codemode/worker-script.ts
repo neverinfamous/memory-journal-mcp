@@ -10,6 +10,7 @@ import { parentPort, workerData } from 'node:worker_threads'
 import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
+import { transformAutoReturn } from './auto-return.js'
 
 // =============================================================================
 // Worker Data
@@ -87,7 +88,31 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
                 methods: methodNames,
             })
 
-        api[group] = groupProxy
+        // Wrap in a Proxy so that calling an undefined method (e.g. a mutation
+        // that was stripped in readonly mode) throws a rejected Promise instead of
+        // silently returning { success: false } — this halts control flow in the
+        // sandbox and surfaces a proper error to the caller.
+        const groupProxyWrapped = new Proxy(groupProxy, {
+            get(target, prop) {
+                // Symbols (Symbol.toPrimitive, Symbol.iterator, etc.) — pass through
+                if (typeof prop === 'symbol') return undefined
+                const key = prop
+                if (key in target) return target[key]
+                // `then` must return undefined so the Proxy is never treated as a
+                // thenable. Without this, `return mj.core` would trigger Promise
+                // resolution → `.then()` → immediate reject with a misleading error.
+                if (key === 'then') return undefined
+                // Unknown/stripped method — reject so the sandbox try/catch catches it
+                const available = methodNames.join(', ') || 'none'
+                const reason =
+                    methodNames.length === 0
+                        ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
+                        : `Operation '${key}' is not found in group. Available: ${available}.`
+                return (..._args: unknown[]) => Promise.reject(new Error(reason))
+            },
+        })
+
+        api[group] = groupProxyWrapped
     }
 
     // Top-level help()
@@ -145,7 +170,7 @@ async function executeCode(): Promise<SandboxResult> {
             name: 'codemode-worker-sandbox',
         })
 
-        const wrappedCode = `(async () => { ${code} })()`
+        const wrappedCode = `(async () => { ${transformAutoReturn(code)} })()`
         const script = new vm.Script(wrappedCode, {
             filename: 'codemode-execution.js',
         })

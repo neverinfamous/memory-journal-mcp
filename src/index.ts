@@ -8,6 +8,9 @@
 export { createServer } from './server/mcp-server.js'
 export type { SqliteAdapter } from './server/mcp-server.js'
 
+// Version
+export { VERSION } from './version.js'
+
 // Types
 export type {
     ToolGroup,

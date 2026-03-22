@@ -37,7 +37,7 @@ test.describe('Tool Filtering', () => {
 
         expect(response.tools).toBeDefined()
         expect(Array.isArray(response.tools)).toBe(true)
-        // Starter preset has ~10 tools, not the full 44
+        // Starter preset has ~11 tools (core+search+codemode), not the full 44+
         expect(response.tools.length).toBeLessThan(20)
         expect(response.tools.length).toBeGreaterThan(3)
     })
@@ -50,12 +50,12 @@ test.describe('Tool Filtering', () => {
         expect(names).toContain('get_recent_entries')
     })
 
-    test('should exclude codemode from starter preset', async () => {
+    test('should include codemode in starter preset', async () => {
         const response = await client.listTools()
         const names = response.tools.map((t) => t.name)
 
-        // Codemode is in the 'full' preset, not 'starter'
-        expect(names).not.toContain('mj_execute_code')
+        // starter = ['core', 'search', 'codemode'] — codemode is always auto-injected into shortcuts
+        expect(names).toContain('mj_execute_code')
     })
 
     test('should exclude github tools in starter preset', async () => {

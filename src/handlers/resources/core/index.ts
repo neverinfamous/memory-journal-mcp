@@ -7,6 +7,9 @@ import {
     significantResource,
     tagsResource,
     statisticsResource,
+    rulesResource,
+    workflowsResource,
+    skillsResource,
 } from './utilities.js'
 
 /**
@@ -20,6 +23,9 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
         significantResource,
         tagsResource,
         statisticsResource,
+        rulesResource,
+        workflowsResource,
+        skillsResource,
         healthResource,
     ]
 }

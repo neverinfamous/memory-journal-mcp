@@ -49,6 +49,11 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             projectNumber: input.project_number,
                             owner: resolved.owner,
                             hint: 'Projects can be at user, repository, or organization level.',
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion:
+                                'Verify the project number and owner. Use GitHub to check project settings.',
+                            recoverable: true,
                         }
                     }
 
@@ -98,6 +103,10 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Project #${String(input.project_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the project number and owner.',
+                            recoverable: true,
                         }
                     }
 
@@ -111,6 +120,10 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             error: `Status "${input.target_status}" not found`,
                             availableStatuses: board.statusOptions.map((o) => o.name),
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Use one of the available status column names.',
+                            recoverable: true,
                         }
                     }
 
@@ -123,7 +136,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: result.success,
+                        itemId: input.item_id,
                         newStatus: statusOption.name,
+                        projectNumber: input.project_number,
+                        message: result.success
+                            ? `Moved item to "${statusOption.name}"`
+                            : undefined,
                         error: result.error,
                     }
                 } catch (err) {

@@ -149,7 +149,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
           path: /tmp/digests/*
@@ -237,7 +237,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./DOCKER_README.md
-          short-description: 'MCP server — Persistent AI project memory with GitHub integration, knowledge graphs & search.'
+          short-description: 'MCP Server — Persistent AI Project Memory with GitHub Integration, Knowledge Graphs & Search.'
 
       - name: Deployment Summary
         if: github.ref == 'refs/heads/main'
@@ -247,3 +247,14 @@ jobs:
           echo "🏷️ Tags: ${{ steps.meta.outputs.tags }}"
           echo "📝 Commit: ${{ github.sha }}"
           echo "👤 Published by: ${{ github.actor }}"
+
+  # Publish to npm AFTER Docker images are successfully pushed
+  # This ensures npm and Docker releases are always in sync:
+  # - If Docker Scout blocks → npm doesn't publish → no burned version
+  # - If Lint/Test fails → nothing publishes
+  npm-publish:
+    needs: [merge-and-push]
+    if: always() && needs.merge-and-push.result == 'success' && github.event.workflow_run.head_branch == 'main'
+    uses: ./.github/workflows/publish-npm.yml
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

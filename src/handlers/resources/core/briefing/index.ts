@@ -6,7 +6,12 @@
  */
 
 import { ICON_BRIEFING } from '../../../../constants/icons.js'
-import pkg from '../../../../../package.json' with { type: 'json' }
+import {
+    withPriority,
+    withSessionInit,
+    ASSISTANT_FOCUSED,
+} from '../../../../utils/resource-annotations.js'
+import { VERSION } from '../../../../version.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
@@ -27,10 +32,8 @@ export const briefingResource: InternalResourceDef = {
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: {
-        audience: ['assistant'],
-        priority: 1.0,
+        ...withSessionInit(withPriority(1.0, ASSISTANT_FOCUSED)),
         autoRead: true,
-        sessionInit: true,
     },
     handler: async (_uri: string, context: ResourceContext) => {
         const config = context.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
@@ -61,7 +64,7 @@ export const briefingResource: InternalResourceDef = {
 
         return {
             data: {
-                version: pkg.version,
+                version: VERSION,
                 serverTime: new Date().toISOString(),
                 journal: {
                     totalEntries: journal.totalEntries,
@@ -95,7 +98,7 @@ export const briefingResource: InternalResourceDef = {
                 },
                 userMessage,
                 clientNote:
-                    'For complete tool reference and field notes, read memory://instructions.',
+                    'For full tool reference and field notes, read memory://instructions — only if your client did NOT auto-inject server instructions at session start (most modern clients including AntiGravity do this automatically).',
             },
             annotations: { lastModified: journal.lastModified },
         } satisfies ResourceResult

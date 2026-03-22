@@ -59,6 +59,7 @@ const ExportEntriesOutputSchema = z
     .object({
         format: z.enum(['json', 'markdown']).optional(),
         entries: z.array(EntryOutputSchema).optional(),
+        count: z.number().optional(),
         content: z.string().optional(),
         success: z.boolean().optional(),
         error: z.string().optional(),
@@ -139,7 +140,7 @@ export function getExportTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     await sendProgress(progress, 2, 2, 'Export complete')
-                    return { format: 'json', entries }
+                    return { format: 'json', entries, count: entries.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
