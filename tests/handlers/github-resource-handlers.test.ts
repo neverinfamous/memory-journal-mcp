@@ -899,7 +899,10 @@ describe('GitHub Resource Handlers', () => {
                 db,
                 undefined,
                 undefined,
-                github
+                github,
+                undefined,
+                undefined,
+                { entryCount: 3, includeTeam: false, issueCount: 0, prCount: 0, prStatusBreakdown: false, workflowCount: 0, workflowStatusBreakdown: false, copilotReviews: false, defaultProjectNumber: 1 }
             )
 
             const data = result.data as {

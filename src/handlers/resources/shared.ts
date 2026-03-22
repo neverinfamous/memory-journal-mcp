@@ -102,6 +102,8 @@ export interface BriefingConfig {
     copilotReviews: boolean
     /** Workflow summary string for the memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY) */
     workflowSummary?: string
+    /** Default GitHub Project number for Kanban resources and issue tools (env: DEFAULT_PROJECT_NUMBER) */
+    defaultProjectNumber?: number
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */

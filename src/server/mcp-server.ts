@@ -340,6 +340,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
             annotations?: Record<string, unknown>
         }[]
     }> => {
+        const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
+            ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
+            // Ensure defaultProjectNumber is available to resource handlers
+            // (may come via briefingConfig from CLI, or directly from server options)
+            defaultProjectNumber:
+                options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
+        }
         const result = await readResource(
             uri.href,
             db,
@@ -348,7 +355,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             github,
             scheduler,
             teamDb,
-            options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+            activeBriefingConfig
         )
         const dataStr =
             typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)

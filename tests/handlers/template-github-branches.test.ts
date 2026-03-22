@@ -540,7 +540,10 @@ describe('GitHub resources — branch coverage', () => {
             const resource = resources.find((r) => r.uri === 'memory://github/status')!
             const result = (await resource.handler(
                 'memory://github/status',
-                createMockContext({ github }) as never
+                createMockContext({
+                    github,
+                    briefingConfig: { entryCount: 3, includeTeam: false, issueCount: 0, prCount: 0, prStatusBreakdown: false, workflowCount: 0, workflowStatusBreakdown: false, copilotReviews: false, defaultProjectNumber: 1 },
+                }) as never
             )) as Record<string, unknown>
             const data = result.data as Record<string, unknown>
             const kanban = data.kanbanSummary as Record<string, number>

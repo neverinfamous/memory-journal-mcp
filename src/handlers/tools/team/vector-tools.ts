@@ -139,6 +139,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
 
                     const stats = teamVectorManager.getStats()
                     return {
+                        success: true,
                         available: true,
                         itemCount: stats.itemCount,
                         modelName: stats.modelName,

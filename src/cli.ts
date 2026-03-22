@@ -253,6 +253,11 @@ program
                             options.workflowSummary ??
                             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] ??
                             undefined,
+                        defaultProjectNumber: options.defaultProject
+                            ? parseInt(options.defaultProject, 10)
+                            : process.env['DEFAULT_PROJECT_NUMBER']
+                              ? parseInt(process.env['DEFAULT_PROJECT_NUMBER'], 10)
+                              : undefined,
                     },
                     instructionLevel: (options.instructionLevel !== 'standard'
                         ? options.instructionLevel

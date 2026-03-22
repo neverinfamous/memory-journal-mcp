@@ -135,7 +135,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: result.success,
+                        itemId: input.item_id,
                         newStatus: statusOption.name,
+                        projectNumber: input.project_number,
+                        message: result.success
+                            ? `Moved item to "${statusOption.name}"`
+                            : undefined,
                         error: result.error,
                     }
                 } catch (err) {
