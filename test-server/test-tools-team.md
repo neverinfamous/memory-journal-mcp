@@ -14,7 +14,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvements, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-team.md`).
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-team.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
@@ -98,8 +98,8 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 
 ### 10.7 Team Analytics
 
-| Test             | Command/Action                           | Expected Result                                          |
-| ---------------- | ---------------------------------------- | -------------------------------------------------------- |
+| Test             | Command/Action                           | Expected Result                                                     |
+| ---------------- | ---------------------------------------- | ------------------------------------------------------------------- |
 | Default stats    | `team_get_statistics`                    | `totalEntries`, `entriesByType`, `entriesByPeriod`, `authors` array |
 | Group by month   | `team_get_statistics(group_by: "month")` | `entriesByPeriod` periods grouped by month                          |
 | Group by day     | `team_get_statistics(group_by: "day")`   | `entriesByPeriod` periods grouped by day                            |
@@ -114,8 +114,8 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Team semantic query     | `team_semantic_search(query: "team standup")`                    | ≥ 1 result with `similarity` score                  |
 | Team semantic threshold | `team_semantic_search(query: "test", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)         |
 
-| Team add to index       | `team_add_to_vector_index(entry_id: <team_entry_id>)`            | `success: true`, `entryId` in response              |
-| Team add nonexistent    | `team_add_to_vector_index(entry_id: 999999)`                     | `{ success: false, error: "..." }`                  |
+| Team add to index | `team_add_to_vector_index(entry_id: <team_entry_id>)` | `success: true`, `entryId` in response |
+| Team add nonexistent | `team_add_to_vector_index(entry_id: 999999)` | `{ success: false, error: "..." }` |
 
 ### 10.9 Team Cross-Project Insights
 

@@ -14,7 +14,7 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-codemode2.md`).
+1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-codemode2.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
@@ -742,14 +742,14 @@ return {
 
 ### 27.2 Team Error Paths
 
-| Test               | Code                                                                                | Expected Result                    |
-| ------------------ | ----------------------------------------------------------------------------------- | ---------------------------------- |
-| Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid" });` | `{ success: false, error: "..." }` |
-| Nonexistent get    | `return await mj.team.teamGetEntryById({ entry_id: 999999 });`                      | `{ success: false, error: "..." }` |
-| Nonexistent update | `return await mj.team.teamUpdateEntry({ entry_id: 999999, content: "x" });`         | `{ success: false, error: "..." }` |
-| Nonexistent delete | `return await mj.team.teamDeleteEntry({ entry_id: 999999 });`                       | `{ success: false, error: "..." }` |
-| Invalid date range | `return await mj.team.teamSearchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });` | `{ success: false, error: "..." }` |
-| Merge same tag     | `return await mj.team.teamMergeTags({ source_tag: "x", target_tag: "x" });`         | `{ success: false, error: "..." }` |
+| Test               | Code                                                                                                                | Expected Result                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid" });`                                 | `{ success: false, error: "..." }` |
+| Nonexistent get    | `return await mj.team.teamGetEntryById({ entry_id: 999999 });`                                                      | `{ success: false, error: "..." }` |
+| Nonexistent update | `return await mj.team.teamUpdateEntry({ entry_id: 999999, content: "x" });`                                         | `{ success: false, error: "..." }` |
+| Nonexistent delete | `return await mj.team.teamDeleteEntry({ entry_id: 999999 });`                                                       | `{ success: false, error: "..." }` |
+| Invalid date range | `return await mj.team.teamSearchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });`                          | `{ success: false, error: "..." }` |
+| Merge same tag     | `return await mj.team.teamMergeTags({ source_tag: "x", target_tag: "x" });`                                         | `{ success: false, error: "..." }` |
 | Link nonexistent   | `return await mj.team.teamLinkEntries({ from_entry_id: 999999, to_entry_id: 1, relationship_type: "references" });` | `{ success: false, error: "..." }` |
 
 ### 27.3 Team Date Range Search
@@ -882,12 +882,12 @@ return {
 }
 ```
 
-| Check           | Expected |
-| --------------- | -------- |
-| `linkSuccess`   | `true`   |
-| `hasDescription`| `true`   |
-| `dupDetected`   | `true`   |
-| `hasMermaid`    | `true`   |
+| Check            | Expected |
+| ---------------- | -------- |
+| `linkSuccess`    | `true`   |
+| `hasDescription` | `true`   |
+| `dupDetected`    | `true`   |
+| `hasMermaid`     | `true`   |
 
 ### 27.7 Team Export
 
@@ -908,11 +908,11 @@ return {
 }
 ```
 
-| Check        | Expected |
-| ------------ | -------- |
-| `jsonHasData`| `true`   |
-| `mdHasData`  | `true`   |
-| `jsonCount`  | ≥ 1      |
+| Check         | Expected |
+| ------------- | -------- |
+| `jsonHasData` | `true`   |
+| `mdHasData`   | `true`   |
+| `jsonCount`   | ≥ 1      |
 
 ### 27.8 Team Backup
 
@@ -981,16 +981,16 @@ return {
 }
 ```
 
-| Check                 | Expected |
-| --------------------- | -------- |
-| `rebuildSuccess`      | `true`   |
+| Check                 | Expected   |
+| --------------------- | ---------- |
+| `rebuildSuccess`      | `true`     |
 | `entriesIndexed`      | Number > 0 |
-| `vectorAvailable`     | `true`   |
-| `searchCount`         | ≥ 1      |
-| `strictFewer`         | `true`   |
-| `addSuccess`          | `true`   |
-| `addBadError`         | `true`   |
-| `insightsHasProjects` | `true`   |
+| `vectorAvailable`     | `true`     |
+| `searchCount`         | ≥ 1        |
+| `strictFewer`         | `true`     |
+| `addSuccess`          | `true`     |
+| `addBadError`         | `true`     |
+| `insightsHasProjects` | `true`     |
 
 ### 27.10 Cross-Tool Error Path Verification (via Code Mode)
 
@@ -1109,7 +1109,7 @@ for (const e of cmEntries.entries) {
 
 // Clean up team entries created during Phase 27
 const teamEntries = await mj.team.teamSearch({ query: 'CM4', limit: 50 })
-for (const e of (teamEntries.entries ?? [])) {
+for (const e of teamEntries.entries ?? []) {
   if (e.content?.includes('CM4')) {
     const del = await mj.team.teamDeleteEntry({ entry_id: e.id })
     results.push({ id: e.id, source: 'team', deleted: del.success })

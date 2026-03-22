@@ -12,7 +12,7 @@ Exhaustively test the memory-journal-mcp server's core functionality using the p
 
 **Workflow after testing:**
 
-1. Create a plan to implement any fixes and/or improvements/optimizations needed, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools.md`).
+1. Create a plan to implement any fixes and/or improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools.md`).
 2. If the plan requires no user decisions, proceed with implementation immediately. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. After implementation: run `npm run lint && npm run typecheck`, fix any issues, run `npx vitest run`, fix broken tests, update `UNRELEASED.md`, and commit without pushing.
 4. Re-test fixes with direct MCP calls.
