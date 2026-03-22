@@ -126,14 +126,14 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Check for existing duplicate relationship (both directions)
+                    // Check for existing duplicate relationship (exact direction only).
+                    // Reverse direction (B→A when A→B exists) is intentionally allowed
+                    // so agents can model bidirectional relationships explicitly.
                     const existingRelationships = db.getRelationships(input.from_entry_id)
                     const existing = existingRelationships.find(
                         (r) =>
-                            ((r.fromEntryId === input.from_entry_id &&
-                                r.toEntryId === input.to_entry_id) ||
-                                (r.fromEntryId === input.to_entry_id &&
-                                    r.toEntryId === input.from_entry_id)) &&
+                            r.fromEntryId === input.from_entry_id &&
+                            r.toEntryId === input.to_entry_id &&
                             r.relationshipType === input.relationship_type
                     )
 

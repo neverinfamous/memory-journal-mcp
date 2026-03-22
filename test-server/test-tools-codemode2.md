@@ -43,7 +43,7 @@ Test multi-step workflows, cross-group orchestration, and the remaining tool gro
 | Test                 | Code                                                                                                                                                                                | Expected Result                     |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Conditional on stats | `const s = await mj.analytics.getStatistics({}); if (s.totalEntries > 0) { return { status: "has entries", count: s.totalEntries }; } else { return { status: "empty journal" }; }` | Returns either branch based on data |
-| Loop over entries    | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entry_type, len: e.content?.length ?? 0 })); return summaries;`    | Array of summary objects            |
+| Loop over entries    | `const r = await mj.core.getRecentEntries({limit: 5}); const summaries = r.entries.map(e => ({ id: e.id, type: e.entryType, len: e.content?.length ?? 0 })); return summaries;`    | Array of summary objects            |
 
 ### 22.3 Create + Read Round-Trip (via Code Mode)
 

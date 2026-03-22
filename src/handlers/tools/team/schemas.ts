@@ -349,7 +349,7 @@ export const TeamLinkEntriesOutputSchema = z
     .object({
         success: z.boolean().optional(),
         relationship: RelationshipOutputSchema.optional(),
-        alreadyExists: z.boolean().optional(),
+        duplicate: z.boolean().optional().describe('True if relationship already existed'),
         message: z.string().optional(),
         error: z.string().optional(),
     })

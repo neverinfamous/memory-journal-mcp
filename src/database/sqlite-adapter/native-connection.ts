@@ -140,7 +140,13 @@ export class NativeConnectionManager implements IDatabaseConnection {
         if (ftsCount === 0 && entryCount > 0) {
             db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
             added.push('fts5:populated')
+        } else if (ftsCount > entryCount) {
+            // Ghost entries: FTS has more rows than the journal (hard deletes before the
+            // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
+            db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
+            added.push('fts5:rebuilt-ghost-cleanup')
         }
+
 
         if (added.length > 0) {
             logger.info('Schema migrated', {

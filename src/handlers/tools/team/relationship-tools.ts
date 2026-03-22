@@ -66,21 +66,20 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
 
-                    // Check for existing relationship
+                    // Check for existing relationship (exact direction only).
+                    // Reverse direction is allowed to model bidirectional relationships.
                     const existing = teamDb.getRelationships(from_entry_id)
                     const duplicate = existing.find(
                         (r) =>
-                            ((r.fromEntryId === from_entry_id &&
-                                r.toEntryId === to_entry_id) ||
-                            (r.fromEntryId === to_entry_id &&
-                                r.toEntryId === from_entry_id)) &&
+                            r.fromEntryId === from_entry_id &&
+                            r.toEntryId === to_entry_id &&
                             r.relationshipType === relationship_type
                     )
 
                     if (duplicate) {
                         return {
                             success: true,
-                            alreadyExists: true,
+                            duplicate: true,
                             relationship: duplicate,
                             message: 'Relationship already exists',
                         }
