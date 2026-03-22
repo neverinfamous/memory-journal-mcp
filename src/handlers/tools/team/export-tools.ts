@@ -55,6 +55,12 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                         if (entry_type) {
                             entries = entries.filter((e) => e.entryType === entry_type)
                         }
+                        if (tags && tags.length > 0) {
+                            const tagSet = new Set(tags)
+                            entries = entries.filter((e) =>
+                                e.tags?.some((t) => tagSet.has(t))
+                            )
+                        }
                     }
 
                     await sendProgress(progress, 2, 3, 'Formatting export data...')

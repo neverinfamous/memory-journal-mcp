@@ -1074,7 +1074,7 @@ return {
 
 | Check           | Expected                                            |
 | --------------- | --------------------------------------------------- |
-| `testedCount`   | 19                                                  |
+| `testedCount`   | 18                                                  |
 | `allStructured` | `true` — no raw exceptions through Code Mode bridge |
 
 ---
@@ -1212,5 +1212,5 @@ return { cleaned: results.length, details: results }
 - [ ] `team_add_to_vector_index` succeeds for existing, errors for nonexistent via Code Mode
 - [ ] `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 - [ ] Invalid `entry_type` on team create returns structured error
-- [ ] All 19 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
+- [ ] All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
 - [ ] All test entries cleaned up after Phase 27
