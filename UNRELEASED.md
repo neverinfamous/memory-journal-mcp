@@ -73,6 +73,7 @@
 - **FTS5 ghost entry cleanup on startup** — `migrateSchema()` now detects when the FTS5 index has more rows than active journal entries (indicating ghost entries from hard deletes before the `fts_content_ad` trigger was added) and triggers `INSERT INTO fts_content(fts_content) VALUES('rebuild')` to remove stale tokens. Prevents `searchEntries` from returning IDs that no longer exist.
 - **SQLite database path collision in tests** — Addressed test isolation issues that caused intermittent test failures in team tool tests by implementing `beforeAll` cleanup hooks to delete SQLite cache files before each test suite.
 - **`help.ts` dynamic import type safety** — Fixed ESLint/TypeScript errors associated with the dynamic schema import cache by using precise `typeof import()` structures without unsafe `any` or `Record<string, unknown>` fallback type casting.
+- **`team_export_entries` filter-then-limit ordering** — When `entry_type` or `tags` filters were used without `start_date`/`end_date`, the handler fetched only `limit` entries via `getRecentEntries(limit)` then post-filtered, silently returning fewer results than expected. Now uses `searchByDateRange` with sentinel dates and a larger fetch batch (500) when filters are active, matching the individual `export_entries` fix pattern.
 
 ### Added
 

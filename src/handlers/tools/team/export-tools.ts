@@ -7,6 +7,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
+import { DATE_MIN_SENTINEL, DATE_MAX_SENTINEL } from '../schemas.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
     TeamExportEntriesSchema,
@@ -42,25 +43,38 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 3, 'Fetching team entries...')
 
+                    // When entry_type or tags filters are active, fetch a larger
+                    // batch so post-filtering doesn't silently return too few results.
+                    const hasTypeFilter = !!entry_type
+                    const hasTagFilter = tags && tags.length > 0
+                    const fetchLimit = hasTypeFilter || hasTagFilter ? 500 : limit
+
                     // Fetch entries with optional filters
                     let entries
                     if (start_date && end_date) {
                         entries = teamDb.searchByDateRange(start_date, end_date, {
                             entryType: entry_type,
                             tags,
-                            limit,
+                            limit: fetchLimit,
                         })
+                    } else if (hasTypeFilter || hasTagFilter) {
+                        // Use wide date range to scan the full database
+                        entries = teamDb.searchByDateRange(
+                            DATE_MIN_SENTINEL,
+                            DATE_MAX_SENTINEL,
+                            { entryType: entry_type, tags, limit: fetchLimit }
+                        )
                     } else {
-                        entries = teamDb.getRecentEntries(limit)
-                        if (entry_type) {
-                            entries = entries.filter((e) => e.entryType === entry_type)
-                        }
-                        if (tags && tags.length > 0) {
-                            const tagSet = new Set(tags)
-                            entries = entries.filter((e) =>
-                                e.tags?.some((t) => tagSet.has(t))
-                            )
-                        }
+                        entries = teamDb.getRecentEntries(fetchLimit)
+                    }
+
+                    // Post-filter by entry_type if searchByDateRange
+                    // doesn't natively support it, then cap to requested limit
+                    if (hasTypeFilter && entries.length > limit) {
+                        entries = entries.slice(0, limit)
+                    }
+                    if (hasTagFilter && entries.length > limit) {
+                        entries = entries.slice(0, limit)
                     }
 
                     await sendProgress(progress, 2, 3, 'Formatting export data...')
