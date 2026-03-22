@@ -107,6 +107,18 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { start_date, end_date, entry_type, tags, limit } =
                         TeamSearchByDateRangeSchema.parse(params)
 
+                    // Validate date range order (YYYY-MM-DD sorts lexicographically)
+                    if (start_date > end_date) {
+                        return {
+                            success: false,
+                            error: `Invalid date range: start_date (${start_date}) is after end_date (${end_date})`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Ensure start_date is before or equal to end_date',
+                            recoverable: true,
+                        }
+                    }
+
                     const entries = teamDb.searchByDateRange(start_date, end_date, {
                         entryType: entry_type,
                         tags,

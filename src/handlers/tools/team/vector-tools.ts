@@ -56,6 +56,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: 'Team vector search not available. Ensure TEAM_DB_PATH is configured and semantic search is enabled.',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: true,
                             query: input.query,
                             entries: [],
                             count: 0,
@@ -165,6 +169,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entriesIndexed: 0,
                             error: 'Team vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: true,
                         }
                     }
 
@@ -209,6 +217,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entryId: entry_id,
                             error: 'Team vector search not available',
+                            code: 'CONFIGURATION_ERROR',
+                            category: 'configuration',
+                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            recoverable: true,
                         }
                     }
 
@@ -218,6 +230,10 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             success: false,
                             entryId: entry_id,
                             error: `Team entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
                         }
                     }
 

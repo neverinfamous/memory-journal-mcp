@@ -48,6 +48,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return {
                             success: false,
                             error: `Team entry ${String(from_entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
                         }
                     }
                     const toEntry = teamDb.getEntryById(to_entry_id)
@@ -55,6 +59,10 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return {
                             success: false,
                             error: `Team entry ${String(to_entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
                         }
                     }
 
@@ -62,10 +70,11 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const existing = teamDb.getRelationships(from_entry_id)
                     const duplicate = existing.find(
                         (r) =>
-                            (r.fromEntryId === from_entry_id &&
+                            ((r.fromEntryId === from_entry_id &&
                                 r.toEntryId === to_entry_id) ||
                             (r.fromEntryId === to_entry_id &&
-                                r.toEntryId === from_entry_id)
+                                r.toEntryId === from_entry_id)) &&
+                            r.relationshipType === relationship_type
                     )
 
                     if (duplicate) {

@@ -54,6 +54,9 @@
 - **Vector search lazy init error handling** — Wrapped lazy `initialize()` calls in `addEntry()`, `search()`, and `rebuildIndex()` with try/catch so `better-sqlite3` connection errors return structured responses instead of crashing.
 - **`MoveKanbanItemOutputSchema` missing `availableStatuses`** — The `move_kanban_item` handler returns `availableStatuses: string[]` in the status-not-found error path, but this field was missing from the output schema. Could cause `-32602` under strict `structuredContent` validation.
 - **Kanban + admin error enrichment** — 5 error responses in `delete_entry`, `merge_tags` (same-tag and domain error), `get_kanban_board` (not-found), and `move_kanban_item` (project/status not-found) now include `code`, `category`, `suggestion`, and `recoverable` fields, matching the `formatHandlerError()` pattern.
+- **Team tool error responses enriched** — 10 bare `{success: false, error}` responses across `team/core-tools.ts`, `team/admin-tools.ts`, `team/relationship-tools.ts`, and `team/vector-tools.ts` now include `code`, `category`, `suggestion`, and `recoverable` fields (RESOURCE_NOT_FOUND, VALIDATION_ERROR, or CONFIGURATION_ERROR as appropriate).
+- **Reverse-direction relationship duplicate detection** — `link_entries` now detects A→B as a duplicate when B→A already exists with the same `relationshipType`, preventing semantically redundant bidirectional entries. `team_link_entries` duplicate check also aligned to include `relationshipType` matching.
+- **Inverted date range validation** — `search_by_date_range` and `team_search_by_date_range` now return a structured `VALIDATION_ERROR` when `start_date > end_date` instead of silently returning empty results.
 
 ### Security
 - **CI/CD Hardening**: Added `--provenance` flag to `npm publish` in `publish-npm.yml` for SLSA Build L3 attestation. Added `id-token: write` permission for OIDC provenance token generation.

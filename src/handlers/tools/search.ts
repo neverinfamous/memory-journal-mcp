@@ -224,6 +224,19 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = SearchByDateRangeSchema.parse(params)
+
+                    // Validate date range order (YYYY-MM-DD sorts lexicographically)
+                    if (input.start_date > input.end_date) {
+                        return {
+                            success: false,
+                            error: `Invalid date range: start_date (${input.start_date}) is after end_date (${input.end_date})`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'Ensure start_date is before or equal to end_date',
+                            recoverable: true,
+                        }
+                    }
+
                     const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
                     const personalEntries = db.searchByDateRange(input.start_date, input.end_date, {
                         entryType: input.entry_type,

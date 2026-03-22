@@ -110,6 +110,10 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the team entry ID and try again',
+                            recoverable: true,
                         }
                     }
 
