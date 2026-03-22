@@ -373,7 +373,7 @@ catch (error) {
 | `test-server/test-tools-codemode.md`  | Code mode specific test prompts                                                   |
 | `test-server/test-tools-codemode2.md` | Additional code mode test scenarios                                               |
 | `test-server/test-agent-experience.md` | Open-ended agent experience scenarios                                            |
-| `test-server/test-instruction-levels.mjs` | Integration test — instruction level generation                              |
+| `test-server/test-instruction-levels.mjs`   | Integration test — instruction level (essential/standard/full) token ordering  |\n| `test-server/test-filter-instructions.mjs`  | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
 | `test-server/test-scheduler.mjs`  | Integration test — scheduler behavior                                                 |
 | `test-server/test-tool-annotations.mjs` | Integration test — tool annotation verification                                 |
 | `tests/`                          | Vitest unit/integration tests (13 subdirectories)                                     |

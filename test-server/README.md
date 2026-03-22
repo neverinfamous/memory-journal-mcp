@@ -28,10 +28,11 @@ These scripts test features that require separate server processes — they **ca
 
 | Script                        | Tests                                                                  | Transport     | Duration |
 | ----------------------------- | ---------------------------------------------------------------------- | ------------- | -------- |
-| `test-instruction-levels.mjs` | `--instruction-level` essential/standard/full token ordering           | stdio         | ~10s     |
-| `test-tool-annotations.mjs`   | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61) | stdio         | ~5s      |
-| `test-prompts.mjs`            | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)     | stdio         | ~10s     |
-| `test-scheduler.mjs`          | Scheduler job execution (backup, vacuum, rebuild-index)                | HTTP stateful | ~130s    |
+| `test-instruction-levels.mjs`   | `--instruction-level` essential/standard/full token ordering                                          | stdio         | ~10s     |
+| `test-filter-instructions.mjs`  | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio | ~90s |
+| `test-tool-annotations.mjs`     | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61)                               | stdio         | ~5s      |
+| `test-prompts.mjs`              | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)                                   | stdio         | ~10s     |
+| `test-scheduler.mjs`            | Scheduler job execution (backup, vacuum, rebuild-index)                                               | HTTP stateful | ~130s    |
 
 ### Quick Run
 
@@ -42,7 +43,10 @@ npm run build
 # Phase 1.3A — Instruction levels
 node test-server/test-instruction-levels.mjs
 
-# Phase 1.3B — Tool annotations
+# Phase 1.3B — Filter-aware instruction sections + token estimates
+node test-server/test-filter-instructions.mjs
+
+# Phase 1.3C — Tool annotations
 node test-server/test-tool-annotations.mjs
 
 # Phase 8 — Prompt handlers
@@ -80,7 +84,19 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 - [ ] essential (~1.2K tokens) < standard (~1.4K) < full (~6.7K)
 - [ ] No runtime errors in server logs
 
-### Tool Annotations (Phase 1.3B)
+### Filter-Aware Instructions (Phase 1.3B)
+
+- [ ] 9/9 filter configs pass section presence/absence checks
+- [ ] `full` includes CORE + COPILOT + CODE_MODE + GITHUB_INTEGRATION + SEARCH_ROW (~1790 tokens)
+- [ ] `codemode` omits COPILOT + GITHUB_INTEGRATION + SEARCH_ROW (~1190 tokens)
+- [ ] `essential` / `core` — CORE only (~759 tokens)
+- [ ] `starter` — CORE + SEARCH_ROW only (~771 tokens)
+- [ ] `full -codemode` — COPILOT + GITHUB_INTEGRATION + SEARCH_ROW, no CODE_MODE (~1147 tokens)
+- [ ] `full -github` — CODE_MODE + SEARCH_ROW, no COPILOT/GITHUB_INTEGRATION (~1391 tokens)
+- [ ] `readonly` — CORE + SEARCH_ROW, no CODE_MODE/COPILOT/GITHUB_INTEGRATION (~771 tokens)
+- [ ] `full --instruction-level essential` — omits GITHUB_INTEGRATION but keeps COPILOT + CODE_MODE (~1582 tokens)
+
+### Tool Annotations (Phase 1.3C)
 
 - [ ] 61 tools returned, all with `annotations` object
 - [ ] 45 tools with `openWorldHint: false`, 16 with `openWorldHint: true`, 0 missing
