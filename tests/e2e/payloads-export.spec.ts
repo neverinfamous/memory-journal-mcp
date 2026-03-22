@@ -22,7 +22,7 @@ test.describe('Payload Contracts: Export', () => {
         await client.close()
     })
 
-    test('export_entries (json) returns { format, entries }', async () => {
+    test('export_entries (json) returns { format, entries, count }', async () => {
         const payload = await callToolAndParse(client, 'export_entries', {
             format: 'json',
             limit: 5,
@@ -30,6 +30,8 @@ test.describe('Payload Contracts: Export', () => {
         expectSuccess(payload)
         expect(payload.format).toBe('json')
         expect(Array.isArray(payload.entries)).toBe(true)
+        expect(typeof payload.count).toBe('number')
+        expect(payload.count).toBe(payload.entries.length)
     })
 
     test('export_entries (markdown) returns { format, content }', async () => {

@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- **`export_entries` JSON response missing `count` field** — The `json` format response returned `{ format, entries }` but omitted `count`, unlike `team_export_entries` which includes `count: entries.length`. Added `count` to both the handler return and `ExportEntriesOutputSchema`.
+
 - **`test-tool-annotations.mjs` always exiting with code 1** — The 15-second safety-timeout was never cancelled when the script successfully processed the `tools/list` response. Captured the timeout handle with `const killTimeout = setTimeout(...)` and added `clearTimeout(killTimeout)` in the success handler before `process.exit(0)`.
 
 - **Code Mode proxy error wording** — Calling a nonexistent method (e.g., `mj.core.nonexistentMethod()`) in default mode no longer says "not available in read-only mode". Now says "not found in group" for groups with methods, or "no methods (read-only mode?)" for fully-stripped groups. Updated `server-instructions.md` accordingly.
