@@ -99,8 +99,8 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
                 const available = methodNames.join(', ') || 'none'
                 const reason =
                     methodNames.length === 0
-                        ? `Operation '${key}' is not available — this group has no methods in read-only mode. Available: ${available}.`
-                        : `Operation '${key}' is not available in read-only mode. Available: ${available}.`
+                        ? `Operation '${key}' is not available — this group has no methods (read-only mode?). Available: ${available}.`
+                        : `Operation '${key}' is not found in group. Available: ${available}.`
                 return (..._args: unknown[]) => Promise.reject(new Error(reason))
             },
         })

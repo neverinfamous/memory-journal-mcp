@@ -147,7 +147,7 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Team          | \`mj.team.*\`          | \`mj.team.teamCreateEntry("Team update")\`           |
 
 **Features**: Positional args (\`createEntry("note")\`), aliases (\`mj.core.create\`), \`mj.help()\` for discovery.
-**Readonly mode**: \`readonly: true\` restricts to read-only tools only. Calling a mutation method (e.g., \`mj.core.create(...)\`) in readonly mode throws an error that halts execution — the sandbox returns \`{ success: false, error: "Operation '...' is not available in read-only mode" }\`.
+**Readonly mode**: \`readonly: true\` restricts to read-only tools only. Calling a mutation method (e.g., \`mj.core.create(...)\`) in readonly mode throws an error that halts execution — the sandbox returns \`{ success: false, error: "Operation '...' is not found in group" }\`. If a group has no methods at all (fully stripped), the error says \`"no methods (read-only mode?)"\`.
 **Returns**: Last expression value. Errors return \`{ success: false, error: "..." }\`.
 
 **Important — all \`mj.*\` methods return Promises. Always \`await\` them:**

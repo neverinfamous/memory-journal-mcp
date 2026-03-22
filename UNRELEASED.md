@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- **Code Mode proxy error wording** — Calling a nonexistent method (e.g., `mj.core.nonexistentMethod()`) in default mode no longer says "not available in read-only mode". Now says "not found in group" for groups with methods, or "no methods (read-only mode?)" for fully-stripped groups. Updated `server-instructions.md` accordingly.
 - **Test prompt: incorrect env var** — `test-tools2.md` referenced non-existent `WORKFLOWS_DIR_PATH`; corrected to `MEMORY_JOURNAL_WORKFLOW_SUMMARY` (or `--workflow-summary`).
 - **Test prompt: missing verification row** — `test-tools-codemode2.md` Phase 27.4 table omitted `newTagExists` check despite the test code computing it.
 - **Test prompt: stale counts and missing coverage** — `test-tools.md` instruction token sizes updated from pre-refactor (~1.2K/~1.4K/~6.7K) to post-refactor (~1.5K/~1.7K/~2.7K). `test-tools2.md` resource count 27→28, template count 7→8, and added `memory://help/gotchas` test row.

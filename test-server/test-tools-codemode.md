@@ -159,7 +159,7 @@ Test the Code Mode sandbox (`mj_execute_code`) and exercise core tool groups (CR
 | Syntax error         | `{{{`                                       | `{ success: false, error: "..." }` with syntax error message |
 | ReferenceError       | `return nonexistentVariable;`               | `{ success: false, error: "..." }` with ReferenceError       |
 | TypeError in code    | `null.foo()`                                | `{ success: false, error: "..." }` with TypeError            |
-| RPC method not found | `return await mj.core.nonexistentMethod();` | `{ success: false }` — method doesn't exist on proxy         |
+| RPC method not found | `return await mj.core.nonexistentMethod();` | `{ success: false }` — method not found in group  |
 
 ### 19.4 Nulled Globals
 
