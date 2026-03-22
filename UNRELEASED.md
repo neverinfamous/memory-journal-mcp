@@ -109,4 +109,9 @@
   - `payloads-error-contracts.spec.ts` — Structured error field contracts: `VALIDATION_ERROR` on inverted date range (all 6 fields), minimum `code`+`category` on self-loop link, `{ duplicate: true }` naming verified (not `alreadyExists`).
   - `tool-filtering-presets.spec.ts` — Three filter presets: `essential` (core+codemode, excludes github/team), `codemode`-only (exactly 1 callable tool), `-github` subtractive (45 tools, no github group).
   - `resources-instructions-levels.spec.ts` — `memory://instructions` tool-filter group gating: `core`-only filter strips Code Mode and GitHub Integration sections; `-github` filter strips GitHub Integration while retaining Code Mode and semantic_search Quick Access row.
+  - `oauth-scopes.spec.ts` — 3 tests verifying per-tool HTTP-level scope gating: `read` tokens blocked from `write`-group tools, `write` tokens blocked from `admin`-group tools, `admin` tokens permitted full access. Uses raw-fetch session handshake for success paths and bare `tools/call` for 403 interception.
+  - `codemode-abuse.spec.ts` — Broadened assertion for unresolving-Promise worker exit to match both `timed out` and `Worker exited` messages. Fixed recovery test to `return 1 + 1` (sandbox wraps code in an async IIFE).
 
+### Added
+
+- **Per-tool OAuth scope enforcement middleware** — `src/transports/http/server/index.ts` now wires an Express middleware after the OAuth token validator that intercepts `POST /mcp` requests with `method: "tools/call"`, reads the tool name from `params.name`, looks up the required scope via `getRequiredScope()`, and returns HTTP 403 `insufficient_scope` when the token lacks it. This activates the scope-map infrastructure (`scope-map.ts`, auth-context) that previously existed but was not connected to the request pipeline.

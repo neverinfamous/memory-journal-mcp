@@ -35,8 +35,11 @@ import {
     createOAuthResourceServer,
     createAuthMiddleware as createOAuthMiddleware,
     oauthErrorHandler,
+    InsufficientScopeError,
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
+import { getRequiredScope } from '../../../auth/scope-map.js'
+import { hasScope } from '../../../auth/scopes.js'
 import {
     hostHeaderValidation,
     localhostHostValidation,
@@ -208,6 +211,57 @@ export class HttpTransport {
 
             // OAuth error handler
             this.app.use(oauthErrorHandler)
+
+            // Per-tool scope enforcement for tools/call requests
+            // Applied after auth middleware so req.auth is already populated.
+            this.app.use((req: Request, res: Response, next: () => void): void => {
+                interface JsonRpcBody { method?: string; params?: { name?: string } }
+                const body = req.body as JsonRpcBody | null | undefined
+                if (req.method !== 'POST' || body?.method !== 'tools/call') {
+                    next()
+                    return
+                }
+
+                const toolName = body.params?.name
+                if (!toolName) {
+                    next()
+                    return
+                }
+
+                const auth = req.auth
+                if (!auth) {
+                    // Auth middleware should have rejected already; defensive guard
+                    res.status(401).json({
+                        error: 'unauthorized',
+                        error_description: 'Authentication required',
+                    })
+                    return
+                }
+
+                const requiredScope = getRequiredScope(toolName)
+                const granted = hasScope(auth.scopes, requiredScope)
+
+                if (!granted) {
+                    const err = new InsufficientScopeError(`Tool access: ${toolName}`, auth.scopes)
+                    logger.warning(`Insufficient scope for tool: ${toolName}`, {
+                        module: 'AUTH',
+                        operation: 'scope-check',
+                        entityId: toolName,
+                    })
+                    res.status(err.httpStatus)
+                    if (err.wwwAuthenticate) {
+                        res.setHeader('WWW-Authenticate', err.wwwAuthenticate)
+                    }
+                    res.json({
+                        error: 'insufficient_scope',
+                        error_description: `Access to tool '${toolName}' denied`,
+                        tool: toolName,
+                    })
+                    return
+                }
+
+                next()
+            })
 
             logger.info('OAuth 2.1 authentication enabled', {
                 module: 'HTTP',
