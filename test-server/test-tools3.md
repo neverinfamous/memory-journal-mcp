@@ -18,7 +18,7 @@ Exhaustively validate the memory-journal-mcp server's prompt handlers, structure
 2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completed verification, re-test fixes with direct MCP calls.
-5. Provide a brief final summary — after re-testing if fixes were needed, or immediately if no issues were found.
+5. Provide a very brief final summary.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**
