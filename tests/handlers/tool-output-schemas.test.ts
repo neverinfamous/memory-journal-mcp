@@ -64,7 +64,14 @@ describe('Tool Output Schemas Invariant', () => {
             const result = schema.safeParse(errorResponse)
             if (!result.success) {
                 // Check if every issue path is OUTSIDE ErrorFieldsMixin shape
-                const mixinKeys = new Set(['success', 'error', 'code', 'category', 'recoverable', 'suggestion'])
+                const mixinKeys = new Set([
+                    'success',
+                    'error',
+                    'code',
+                    'category',
+                    'recoverable',
+                    'suggestion',
+                ])
                 const hasMixinFailure = result.error.issues.some(
                     (issue) => issue.path.length === 1 && mixinKeys.has(String(issue.path[0]))
                 )

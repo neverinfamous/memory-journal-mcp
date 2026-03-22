@@ -217,7 +217,15 @@ export function callTool(
     // When progress context is provided, rebuild the handler with it.
     // This is rare (only MCP server calls with progress tokens, not benchmarked).
     if (progress) {
-        const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config, progress }
+        const context: ToolContext = {
+            db,
+            teamDb,
+            vectorManager,
+            teamVectorManager,
+            github,
+            config,
+            progress,
+        }
         const freshTools = getAllToolDefinitions(context)
         const freshTool = freshTools.find((t) => t.name === name)
         if (freshTool) {

@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { startServer, stopServer, callToolAndParse, expectSuccess } from './helpers.js'
+import { callToolAndParse, expectSuccess } from './helpers.js'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -67,10 +67,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
         }
 
         const transport = new StreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`))
-        client = new McpClient(
-            { name: 'team-happy-test', version: '1.0.0' },
-            { capabilities: {} }
-        )
+        client = new McpClient({ name: 'team-happy-test', version: '1.0.0' }, { capabilities: {} })
         await client.connect(transport)
     })
 

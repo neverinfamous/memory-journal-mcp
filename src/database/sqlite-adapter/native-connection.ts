@@ -147,7 +147,6 @@ export class NativeConnectionManager implements IDatabaseConnection {
             added.push('fts5:rebuilt-ghost-cleanup')
         }
 
-
         if (added.length > 0) {
             logger.info('Schema migrated', {
                 module: 'NativeConnectionManager',

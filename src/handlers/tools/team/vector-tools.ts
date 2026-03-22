@@ -58,7 +58,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             error: 'Team vector search not available. Ensure TEAM_DB_PATH is configured and semantic search is enabled.',
                             code: 'CONFIGURATION_ERROR',
                             category: 'configuration',
-                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
                             recoverable: true,
                             query: input.query,
                             entries: [],
@@ -172,13 +173,16 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             error: 'Team vector search not available',
                             code: 'CONFIGURATION_ERROR',
                             category: 'configuration',
-                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
                             recoverable: true,
                         }
                     }
 
-                    const { indexed, failed, firstError } =
-                        await teamVectorManager.rebuildIndex(teamDb, progress)
+                    const { indexed, failed, firstError } = await teamVectorManager.rebuildIndex(
+                        teamDb,
+                        progress
+                    )
                     const success = indexed > 0 || failed === 0
                     return {
                         success,
@@ -186,8 +190,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         ...(failed > 0 ? { failedEntries: failed } : {}),
                         ...(!success
                             ? {
-                                  error:
-                                      firstError ?? 'All entries failed to generate embeddings',
+                                  error: firstError ?? 'All entries failed to generate embeddings',
                               }
                             : {}),
                     }
@@ -220,7 +223,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             error: 'Team vector search not available',
                             code: 'CONFIGURATION_ERROR',
                             category: 'configuration',
-                            suggestion: 'Enable semantic search with --auto-rebuild-index or set up the vector manager',
+                            suggestion:
+                                'Enable semantic search with --auto-rebuild-index or set up the vector manager',
                             recoverable: true,
                         }
                     }
@@ -245,8 +249,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         ...(result.success
                             ? {}
                             : {
-                                  error:
-                                      result.error ?? 'Failed to generate or store embedding',
+                                  error: result.error ?? 'Failed to generate or store embedding',
                               }),
                     }
                 } catch (err) {

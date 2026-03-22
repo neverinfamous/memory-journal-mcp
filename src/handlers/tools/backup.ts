@@ -94,7 +94,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Custom backup name (optional, defaults to timestamp)'),
             }),
             outputSchema: BackupResultOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     const input = z

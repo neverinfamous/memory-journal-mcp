@@ -21,12 +21,11 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'team_backup',
             title: 'Backup Team Database',
-            description:
-                'Create a timestamped backup of the team database. Requires TEAM_DB_PATH.',
+            description: 'Create a timestamped backup of the team database. Requires TEAM_DB_PATH.',
             group: 'team',
             inputSchema: TeamBackupSchema,
             outputSchema: TeamBackupOutputSchema,
-            annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+            annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {

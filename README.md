@@ -121,27 +121,7 @@ flowchart TB
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read `memory://briefing` and **present the briefing to the user as a two-column markdown table** (Context | Value). This format is strongly preferred over bullet lists for scannability. Example:
-
-```
-📋 **Session Context Loaded**
-
-| Context | Value |
-|---------|-------|
-| **Project** | neverinfamous/memory-journal-mcp |
-| **Branch** | main |
-| **CI** | ✅ passing |
-| **Journal** | 414 entries |
-| **Team DB** | 2 entries |
-| **Issues** | 0 open |
-| **PRs** | 1 open · 2 merged |
-| **Milestones** | Add GitHub Projects Integration (100%) |
-| **Insights** | ⭐ 11 · 🍴 3 · 📦 1,058 clones · 👁️ 365 views (14d) |
-| **Skills** | 15 available |
-| **Rules** | GEMINI.md (6 KB, updated just now) |
-```
-
-Include all available context from the briefing: project, branch, CI status, journal/team entry counts, issues, PRs, milestones, insights, copilot reviews, skills, and rules. Omit rows where the data is absent.
+**REQUIRED**: Before processing any user request, read `memory://briefing` and **present the briefing to the user as a two-column markdown table** (Context | Value). Include all available context fields. Omit rows where the data is absent. **[Full example →](https://github.com/neverinfamous/memory-journal-mcp#rule-add-to-agentsmd-geminimd-etc)**
 
 ---
 

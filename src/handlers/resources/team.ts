@@ -7,7 +7,11 @@
  */
 
 import { ICON_CLOCK, ICON_TEAM } from '../../constants/icons.js'
-import { withPriority, ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
+import {
+    withPriority,
+    ASSISTANT_FOCUSED,
+    MEDIUM_PRIORITY,
+} from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 
 // ============================================================================

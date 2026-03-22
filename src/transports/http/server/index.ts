@@ -215,7 +215,10 @@ export class HttpTransport {
             // Per-tool scope enforcement for tools/call requests
             // Applied after auth middleware so req.auth is already populated.
             this.app.use((req: Request, res: Response, next: () => void): void => {
-                interface JsonRpcBody { method?: string; params?: { name?: string } }
+                interface JsonRpcBody {
+                    method?: string
+                    params?: { name?: string }
+                }
                 const body = req.body as JsonRpcBody | null | undefined
                 if (req.method !== 'POST' || body?.method !== 'tools/call') {
                     next()

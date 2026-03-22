@@ -94,8 +94,14 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
         // sandbox and surfaces a proper error to the caller.
         const groupProxyWrapped = new Proxy(groupProxy, {
             get(target, prop) {
-                const key = String(prop)
+                // Symbols (Symbol.toPrimitive, Symbol.iterator, etc.) — pass through
+                if (typeof prop === 'symbol') return undefined
+                const key = prop
                 if (key in target) return target[key]
+                // `then` must return undefined so the Proxy is never treated as a
+                // thenable. Without this, `return mj.core` would trigger Promise
+                // resolution → `.then()` → immediate reject with a misleading error.
+                if (key === 'then') return undefined
                 // Unknown/stripped method — reject so the sandbox try/catch catches it
                 const available = methodNames.join(', ') || 'none'
                 const reason =

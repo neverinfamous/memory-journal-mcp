@@ -51,7 +51,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             hint: 'Projects can be at user, repository, or organization level.',
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the project number and owner. Use GitHub to check project settings.',
+                            suggestion:
+                                'Verify the project number and owner. Use GitHub to check project settings.',
                             recoverable: true,
                         }
                     }

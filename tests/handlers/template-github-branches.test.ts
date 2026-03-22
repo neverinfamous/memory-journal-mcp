@@ -542,7 +542,17 @@ describe('GitHub resources — branch coverage', () => {
                 'memory://github/status',
                 createMockContext({
                     github,
-                    briefingConfig: { entryCount: 3, includeTeam: false, issueCount: 0, prCount: 0, prStatusBreakdown: false, workflowCount: 0, workflowStatusBreakdown: false, copilotReviews: false, defaultProjectNumber: 1 },
+                    briefingConfig: {
+                        entryCount: 3,
+                        includeTeam: false,
+                        issueCount: 0,
+                        prCount: 0,
+                        prStatusBreakdown: false,
+                        workflowCount: 0,
+                        workflowStatusBreakdown: false,
+                        copilotReviews: false,
+                        defaultProjectNumber: 1,
+                    },
                 }) as never
             )) as Record<string, unknown>
             const data = result.data as Record<string, unknown>

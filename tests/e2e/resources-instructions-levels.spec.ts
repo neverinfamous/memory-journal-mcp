@@ -21,8 +21,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { startServer, stopServer } from './helpers.js'
 
-const CORE_ONLY_PORT = 3110   // --tool-filter core  (no codemode, no github, no search)
-const NO_GITHUB_PORT = 3111   // --tool-filter -github (all except github)
+const CORE_ONLY_PORT = 3110 // --tool-filter core  (no codemode, no github, no search)
+const NO_GITHUB_PORT = 3111 // --tool-filter -github (all except github)
 
 /** Read memory://instructions text from a client */
 async function readInstructions(client: Client): Promise<string> {
@@ -44,7 +44,10 @@ test.describe('memory://instructions: core-only filter gating', () => {
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${CORE_ONLY_PORT}/mcp`)
         )
-        client = new Client({ name: 'instr-core-only-test', version: '1.0.0' }, { capabilities: {} })
+        client = new Client(
+            { name: 'instr-core-only-test', version: '1.0.0' },
+            { capabilities: {} }
+        )
         await client.connect(transport)
     })
 
@@ -98,7 +101,10 @@ test.describe('memory://instructions: -github filter gating', () => {
         const transport = new StreamableHTTPClientTransport(
             new URL(`http://localhost:${NO_GITHUB_PORT}/mcp`)
         )
-        client = new Client({ name: 'instr-no-github-test', version: '1.0.0' }, { capabilities: {} })
+        client = new Client(
+            { name: 'instr-no-github-test', version: '1.0.0' },
+            { capabilities: {} }
+        )
         await client.connect(transport)
     })
 

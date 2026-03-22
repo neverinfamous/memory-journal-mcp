@@ -168,13 +168,15 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     if (input) {
                         const errMsg = error instanceof Error ? error.message : 'Unknown error'
                         const isFkError = errMsg.includes('FOREIGN KEY constraint failed')
-                        return {
-                            success: false,
-                            error: isFkError
-                                ? `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`
-                                : errMsg,
-                            code: 'NOT_FOUND',
-                            category: 'not_found',
+                        if (isFkError) {
+                            return {
+                                success: false,
+                                error: `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                suggestion: 'Verify both entry IDs exist before linking',
+                                recoverable: true,
+                            }
                         }
                     }
                     return formatHandlerError(error)

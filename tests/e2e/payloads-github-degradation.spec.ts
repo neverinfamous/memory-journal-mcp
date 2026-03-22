@@ -22,10 +22,10 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
         // Strip out GITHUB_REPO_PATH and GITHUB_TOKEN so auto-detect fails
         const oldRepo = process.env.GITHUB_REPO_PATH
         const oldToken = process.env.GITHUB_TOKEN
-        
+
         delete process.env.GITHUB_REPO_PATH
         delete process.env.GITHUB_TOKEN
-        
+
         // startServer propagates the current process.env
         try {
             const startOpts = { cwd: tmpdir() }
@@ -47,7 +47,7 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
     test('get_github_issues returns requiresUserInput: true without auto-detect env', async () => {
         const response = await client.callTool({
             name: 'get_github_issues',
-            arguments: {} // Empty properties to fail auto-detect
+            arguments: {}, // Empty properties to fail auto-detect
         })
 
         expect(Array.isArray(response.content)).toBe(true)
@@ -60,7 +60,7 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
     test('get_github_context degrades gracefully to returning missing state', async () => {
         const response = await client.callTool({
             name: 'get_github_context',
-            arguments: {}
+            arguments: {},
         })
 
         expect(Array.isArray(response.content)).toBe(true)

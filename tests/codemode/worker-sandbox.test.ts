@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'node:child_process'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
@@ -11,7 +11,9 @@ beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
     // worker_threads cannot run .ts files directly in this vitest setup
     if (!fs.existsSync(workerScriptJs)) {
-        execSync(`npx esbuild ${workerScriptSrc} --bundle --platform=node --format=esm --outfile=${workerScriptJs}`)
+        execSync(
+            `npx esbuild ${workerScriptSrc} --bundle --platform=node --format=esm --outfile=${workerScriptJs}`
+        )
     }
 })
 
@@ -35,8 +37,8 @@ describe('WorkerSandbox', () => {
         const sandbox = new WorkerSandbox()
         const bindings = {
             core: {
-                testFunc: async (x: number) => x * 2
-            }
+                testFunc: async (x: number) => x * 2,
+            },
         }
         const code = 'return await mj.core.testFunc(21)'
         const result = await sandbox.execute(code, bindings)
@@ -47,7 +49,7 @@ describe('WorkerSandbox', () => {
     it('should handle top-level bindings correctly', async () => {
         const sandbox = new WorkerSandbox()
         const bindings = {
-            testFunc: async (x: number) => x * 3
+            testFunc: async (x: number) => x * 3,
         }
         const code = 'return await mj.testFunc(14)'
         const result = await sandbox.execute(code, bindings)
@@ -87,11 +89,11 @@ describe('WorkerSandboxPool', () => {
 
     it('should enforce max instances exhaustion', async () => {
         const pool = new WorkerSandboxPool({}, { maxInstances: 1 })
-        
+
         // Start one long-running execution that won't finish immediately
         const slowCode = 'await new Promise(r => setTimeout(r, 200)); return 1;'
-        const exec1 = pool.execute(slowCode, {}).catch(e => null)
-        
+        const exec1 = pool.execute(slowCode, {}).catch((e) => null)
+
         // Pool is now at 1/1 active count
         // Attempting a second execution should fail immediately with an exhausted error
         const result2 = await pool.execute('return 2', {})

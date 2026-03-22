@@ -37,39 +37,36 @@ class Logger {
         return LOG_LEVELS[level] <= this.minLevel
     }
 
-    private formatMessage(level: LogLevel, message: string, context?: LogContext): string {
-        const timestamp = new Date().toISOString()
-        const levelUpper = level.toUpperCase().padEnd(8)
-        const module = context?.module ? `[${context.module}]` : ''
-        const operation = context?.operation ? `[${context.operation}]` : ''
-
-        let formatted = `[${timestamp}] [${levelUpper}] ${module}${operation} ${message}`
-
-        // Add context as JSON if there are additional fields
-        const extras = { ...context }
-        delete extras.module
-        delete extras.operation
-
-        if (Object.keys(extras).length > 0) {
-            formatted += ` ${JSON.stringify(extras)}`
-        }
-
-        return formatted
-    }
-
     private log(level: LogLevel, message: string, context?: LogContext): void {
         if (!this.shouldLog(level)) return
 
-        // Sanitize error fields to prevent token leakage in logs
-        let sanitizedContext = context
-        if (context?.['error'] != null && typeof context['error'] === 'string') {
-            sanitizedContext = { ...context, error: sanitizeErrorForLogging(context['error']) }
+        // Sanitize all user-controlled inputs to prevent log injection (CodeQL js/log-injection).
+        // Each .replace() must be applied inline — CodeQL cannot track sanitization through method calls.
+        const safeMessage = message.replace(/\n|\r/g, '')
+        const timestamp = new Date().toISOString()
+        const levelUpper = level.toUpperCase().padEnd(8)
+
+        const mod = context?.module ? `[${context.module.replace(/\n|\r/g, '')}]` : ''
+        const op = context?.operation ? `[${context.operation.replace(/\n|\r/g, '')}]` : ''
+
+        let line = `[${timestamp}] [${levelUpper}] ${mod}${op} ${safeMessage}`
+
+        // Add context as JSON if there are additional fields
+        const extras: Record<string, unknown> = { ...context }
+        delete extras['module']
+        delete extras['operation']
+
+        // Sanitize error fields to prevent token leakage
+        if (extras['error'] != null && typeof extras['error'] === 'string') {
+            extras['error'] = sanitizeErrorForLogging(extras['error'])
         }
 
-        const formatted = this.formatMessage(level, message, sanitizedContext)
+        if (Object.keys(extras).length > 0) {
+            line += ` ${JSON.stringify(extras).replace(/\n|\r/g, '')}`
+        }
 
         // Always write to stderr (stdout is reserved for MCP protocol)
-        console.error(formatted)
+        console.error(line)
     }
 
     debug(message: string, context?: LogContext): void {
