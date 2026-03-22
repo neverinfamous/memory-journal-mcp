@@ -48,18 +48,18 @@ const TEST_CONFIGS = [
         expect: { CORE: true, COPILOT: false, CODE_MODE: true, GITHUB_INTEGRATION: false, SEARCH_ROW: false },
     },
     {
-        label: 'essential (core only — no codemode, no github)',
+        label: 'essential (core+codemode — no github)',
         filter: 'essential',
         level: 'standard',
-        // META_GROUPS.essential = ['core'] — no codemode, no github, no search
-        expect: { CORE: true, COPILOT: false, CODE_MODE: false, GITHUB_INTEGRATION: false, SEARCH_ROW: false },
+        // META_GROUPS.essential = ['core', 'codemode'] — no github, no search
+        expect: { CORE: true, COPILOT: false, CODE_MODE: true, GITHUB_INTEGRATION: false, SEARCH_ROW: false },
     },
     {
-        label: 'starter (core+search — no codemode, no github)',
+        label: 'starter (core+search+codemode — no github)',
         filter: 'starter',
         level: 'standard',
-        // META_GROUPS.starter = ['core', 'search'] — codemode excluded unless explicitly added
-        expect: { CORE: true, COPILOT: false, CODE_MODE: false, GITHUB_INTEGRATION: false, SEARCH_ROW: true },
+        // META_GROUPS.starter = ['core', 'search', 'codemode']
+        expect: { CORE: true, COPILOT: false, CODE_MODE: true, GITHUB_INTEGRATION: false, SEARCH_ROW: true },
     },
     {
         label: 'core only (no codemode, no github, no search)',

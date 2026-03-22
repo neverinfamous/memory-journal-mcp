@@ -89,8 +89,9 @@ The scheduler activates in **both** HTTP modes. The test script handles SSE resp
 - [ ] 9/9 filter configs pass section presence/absence checks
 - [ ] `full` includes CORE + COPILOT + CODE_MODE + GITHUB_INTEGRATION + SEARCH_ROW (~1790 tokens)
 - [ ] `codemode` omits COPILOT + GITHUB_INTEGRATION + SEARCH_ROW (~1190 tokens)
-- [ ] `essential` / `core` — CORE only (~759 tokens)
-- [ ] `starter` — CORE + SEARCH_ROW only (~771 tokens)
+- [ ] `essential` — CORE + CODE_MODE only (~1214 tokens)
+- [ ] `starter` — CORE + CODE_MODE + SEARCH_ROW (~1250 tokens)
+- [ ] `core` — CORE only (~759 tokens)
 - [ ] `full -codemode` — COPILOT + GITHUB_INTEGRATION + SEARCH_ROW, no CODE_MODE (~1147 tokens)
 - [ ] `full -github` — CODE_MODE + SEARCH_ROW, no COPILOT/GITHUB_INTEGRATION (~1391 tokens)
 - [ ] `readonly` — CORE + SEARCH_ROW, no CODE_MODE/COPILOT/GITHUB_INTEGRATION (~771 tokens)

@@ -43,12 +43,12 @@ describe('TOOL_GROUPS', () => {
 })
 
 describe('META_GROUPS', () => {
-    it('should define starter as core + search', () => {
-        expect(META_GROUPS.starter).toEqual(['core', 'search'])
+    it('should define starter as core + search + codemode', () => {
+        expect(META_GROUPS.starter).toEqual(['core', 'search', 'codemode'])
     })
 
-    it('should define essential as core only', () => {
-        expect(META_GROUPS.essential).toEqual(['core'])
+    it('should define essential as core + codemode', () => {
+        expect(META_GROUPS.essential).toEqual(['core', 'codemode'])
     })
 
     it('should define full with all groups', () => {
@@ -141,9 +141,10 @@ describe('parseToolFilter', () => {
 
     it('should parse meta-groups', () => {
         const config = parseToolFilter('starter')
-        // starter = core + search
+        // starter = core + search + codemode
         expect(config.enabledTools.has('create_entry')).toBe(true)
         expect(config.enabledTools.has('search_entries')).toBe(true)
+        expect(config.enabledTools.has('mj_execute_code')).toBe(true)
     })
 
     it('should parse group exclusion', () => {
@@ -288,10 +289,11 @@ describe('parseToolFilter edge cases', () => {
 
     it('should handle meta-group in non-first position', () => {
         const config = parseToolFilter('backup,starter')
-        // starter = core + search, plus backup group
+        // starter = core + search + codemode, plus backup group
         expect(config.enabledTools.has('create_entry')).toBe(true)
         expect(config.enabledTools.has('search_entries')).toBe(true)
         expect(config.enabledTools.has('backup_journal')).toBe(true)
+        expect(config.enabledTools.has('mj_execute_code')).toBe(true)
     })
 
     it('should handle combined meta-group with tool exclusion', () => {

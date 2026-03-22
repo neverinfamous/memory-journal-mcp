@@ -83,8 +83,8 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
  * Meta-group definitions mapping shortcuts to groups
  */
 export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
-    starter: ['core', 'search'],
-    essential: ['core'],
+    starter: ['core', 'search', 'codemode'],
+    essential: ['core', 'codemode'],
     full: [
         'core',
         'search',
