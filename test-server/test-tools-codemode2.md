@@ -875,7 +875,7 @@ const vizTag = await mj.team.teamVisualizeRelationships({ tag: 'codemode4-team-t
 return {
   linkSuccess: linked.success,
   hasDescription: !!linked.relationship?.description,
-  dupDetected: dup.alreadyExists === true,
+  dupDetected: dup.duplicate === true,
   hasMermaid: typeof viz.mermaid === 'string' && viz.mermaid.length > 0,
   nodeCount: viz.nodeCount,
   tagVizHasMermaid: typeof vizTag.mermaid === 'string',
