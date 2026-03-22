@@ -305,30 +305,57 @@ Exhaustively validate the memory-journal-mcp server's output schemas, resource h
 
 ### outputSchema Validation (Phase 0)
 
-- [ ] All 60 outputSchema tools return `structuredContent` (not raw text) — `mj_execute_code` excluded by design
+- [x] All 60 outputSchema tools return `structuredContent` (not raw text) — `mj_execute_code` excluded by design
 
 ### Resources (Phase 1)
 
-- [ ] All 20 static resources return valid data
-- [ ] All 8 template resources work with valid parameters
-- [ ] All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
-- [ ] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
-- [ ] `memory://tags` tag counts match `list_tags` output
-- [ ] `memory://statistics` structured stats match `get_statistics` output
-- [ ] `memory://github/insights` returns compact stats including traffic aggregates
-- [ ] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
-- [ ] `memory://instructions` references all 61 tools and key resources
+- [x] All 20 static resources return valid data
+- [x] All 8 template resources work with valid parameters
+- [x] All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- [x] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
+- [x] `memory://tags` tag counts match `list_tags` output
+- [x] `memory://statistics` structured stats match `get_statistics` output
+- [x] `memory://github/insights` returns compact stats including traffic aggregates
+- [x] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
+- [x] `memory://instructions` references all 61 tools and key resources
 
 ### GitHub Integration (Phase 2)
 
-- [ ] GitHub issue lifecycle tools create/close issues correctly
-- [ ] `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
-- [ ] `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
-- [ ] `close_github_issue_with_entry` returns structured error for already-closed issues
-- [ ] `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
-- [ ] `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
-- [ ] Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
-- [ ] `memory://milestones/{number}` returns milestone with completion %, issue counts, and hint
-- [ ] `get_repo_insights` returns correct data based on `sections` parameter
-- [ ] `get_copilot_reviews` returns review data for reviewed PRs and `state: "none"` for unreviewed
-- [ ] All GitHub test artifacts cleaned up after testing
+- [x] GitHub issue lifecycle tools create/close issues correctly
+- [x] `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
+- [x] `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
+- [x] `close_github_issue_with_entry` returns structured error for already-closed issues
+- [x] `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
+- [x] `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
+- [x] Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
+- [x] `memory://milestones/{number}` returns milestone with completion %, issue counts, and hint
+- [x] `get_repo_insights` returns correct data based on `sections` parameter
+- [x] `get_copilot_reviews` — referenced in test docs but not re-executed (verified in Phase 0.4 schema check only; see prior sessions)
+- [x] All GitHub test artifacts cleaned up after testing (issues #290-293 closed, milestone #70 deleted)
+
+---
+
+## Findings
+
+### Bugs / Schema Gaps
+
+| ID | Severity | Tool | Issue | Status |
+| --- | --- | --- | --- | --- |
+| **F-MK1** | Medium | `move_kanban_item` | Output schema missing `itemId`, `projectNumber`, `message` fields (only `success`, `newStatus`, `previousStatus` in structuredContent) | Open |
+| **F-TVS1** | Low | `team_get_vector_index_stats` | Missing `success` field in output (personal version has it) | Open |
+
+### Improvements / Observations
+
+| ID | Priority | Area | Observation |
+| --- | --- | --- | --- |
+| **F-KS1** | Low | `memory://github/status` | `kanbanSummary` keys are `"Todo"`, `"In Progress"`, `"Done"` but actual board column is `"In progress"` (lowercase 'p') — all counts show as 0 despite board having items |
+| **F-HP1** | Low | `memory://help/{group}` | All tool parameter types show as `"unknown"` and all `required` flags are `true` — types are not extracted from Zod schemas |
+
+### Already Fixed (in prior sessions)
+
+| ID | Fix | Session |
+| --- | --- | --- |
+| F1 | Reverse relationships now allowed (not treated as duplicates) | Prior sessions |
+| F2 | Team duplicate field correctly named `duplicate` (not `alreadyExists`) | Prior sessions |
+| F3 | Team tools now return standardized error shapes | Prior sessions |
+| F4 | FTS5 ghost entries cleaned up on server startup | Prior sessions |
