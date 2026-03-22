@@ -43,16 +43,21 @@ describe('Help Resource Handlers', () => {
         expect(result.data.tools.length).toBeGreaterThan(0)
         expect(result.data.tools.some((t: any) => t.name === 'create_entry')).toBe(true)
         
-        // Check schema introspection parsing
+        // Check that parameters are extracted with correct types and required flags
         const createEntry = result.data.tools.find((t: any) => t.name === 'create_entry')
         expect(createEntry.parameters).toBeDefined()
-        expect(createEntry.parameters.some((p: any) => p.name === 'content')).toBe(true)
-        // Check that parameters are extracted
+
+        // content is z.string() — required
         const contentParam = createEntry.parameters.find((p: any) => p.name === 'content')
         expect(contentParam).toBeDefined()
-        
+        expect(contentParam.type).toBe('string')
+        expect(contentParam.required).toBe(true)
+
+        // tags is z.array(z.string()).optional() — not required
         const tagsParam = createEntry.parameters.find((p: any) => p.name === 'tags')
         expect(tagsParam).toBeDefined()
+        expect(tagsParam.type).toBe('array')
+        expect(tagsParam.required).toBe(false)
     })
 
     it('should return error for invalid group in memory://help/{group}', async () => {

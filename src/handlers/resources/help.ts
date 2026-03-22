@@ -44,6 +44,72 @@ interface ParameterInfo {
     description?: string
 }
 
+/** Friendly display names for Zod primitive type names */
+const ZOD_TYPE_DISPLAY: Record<string, string> = {
+    ZodString: 'string',
+    ZodNumber: 'number',
+    ZodBoolean: 'boolean',
+    ZodArray: 'array',
+    ZodObject: 'object',
+    ZodEnum: 'enum',
+    ZodNativeEnum: 'enum',
+    ZodLiteral: 'literal',
+    ZodUnion: 'union',
+    ZodIntersection: 'intersection',
+    ZodRecord: 'record',
+    ZodTuple: 'tuple',
+    ZodAny: 'any',
+    ZodUnknown: 'unknown',
+    ZodNull: 'null',
+    ZodUndefined: 'undefined',
+    ZodVoid: 'void',
+}
+
+/** Wrapper type names that make a field optional or supply a default */
+const ZOD_OPTIONAL_WRAPPERS = new Set([
+    'ZodOptional', 'ZodDefault', 'ZodNullable',
+    'optional', 'default', 'nullable'
+])
+
+/**
+ * Recursively peel ZodOptional / ZodDefault / ZodNullable wrappers from a
+ * Zod `_def` object to discover the innermost concrete type, whether the
+ * field is optional to callers, and the description (first `_def` that has
+ * one, scanning outer → inner). Supports both Zod 3 and Zod 4 shape.
+ */
+function peelZodType(def: Record<string, unknown>): {
+    typeName: string
+    isOptional: boolean
+    description: string | undefined
+} {
+    let isOptional = false
+    let description: string | undefined
+    let current = def
+
+    for (;;) {
+        if (description === undefined && typeof current['description'] === 'string') {
+            description = current['description']
+        }
+
+        // Zod 3 uses .typeName ('ZodString'), Zod 4 uses .type ('string')
+        const tn = (current['typeName'] ?? current['type']) as string | undefined
+        if (!tn) break
+
+        if (ZOD_OPTIONAL_WRAPPERS.has(tn)) {
+            isOptional = true
+            const inner = current['innerType'] as { _def?: Record<string, unknown> } | undefined
+            if (!inner?._def) break
+            current = inner._def
+        } else {
+            const normalized = tn.replace('Zod', '').toLowerCase()
+            const displayName = ZOD_TYPE_DISPLAY[tn] ?? normalized
+            return { typeName: displayName, isOptional, description }
+        }
+    }
+
+    return { typeName: 'unknown', isOptional, description }
+}
+
 /**
  * Extract parameter info from a Zod schema's shape.
  * Works with z.object() schemas that have a `.shape` property.
@@ -67,35 +133,10 @@ function extractParameters(inputSchema: unknown): ParameterInfo[] {
             continue
         }
         const field = fieldSchema as Record<string, unknown>
-        const rawDef: unknown = field['_def']
+        const rawDef = field['_def'] as Record<string, unknown> | undefined
+        if (!rawDef) continue
 
-        // Determine if optional by checking for ZodOptional wrapper
-        const isOptional =
-            rawDef !== undefined &&
-            rawDef !== null &&
-            typeof rawDef === 'object' &&
-            (rawDef as Record<string, unknown>)['typeName'] === 'ZodOptional'
-
-        // Extract description from _def.description
-        let description: string | undefined
-        if (rawDef !== undefined && rawDef !== null && typeof rawDef === 'object') {
-            const def = rawDef as Record<string, unknown>
-            description = typeof def['description'] === 'string' ? def['description'] : undefined
-        }
-
-        // Determine type name
-        let typeName = 'unknown'
-        if (rawDef !== undefined && rawDef !== null && typeof rawDef === 'object') {
-            const def = rawDef as Record<string, unknown>
-            const tn: unknown = def['typeName']
-            if (typeof tn === 'string') {
-                typeName = tn
-                    .replace('Zod', '')
-                    .replace('Optional', '')
-                    .replace('Default', '')
-                    .toLowerCase()
-            }
-        }
+        const { typeName, isOptional, description } = peelZodType(rawDef)
 
         params.push({
             name,
