@@ -232,6 +232,50 @@ describe('NativeConnectionManager', () => {
 
             mgr.close()
         })
+
+        it('should handle mutations (INSERT/UPDATE/DELETE) via exec', async () => {
+            const mgr = new NativeConnectionManager(':memory:')
+            await mgr.initialize()
+
+            // INSERT via exec
+            const insertResult = mgr.exec(
+                "INSERT INTO memory_journal (entry_type, content, timestamp, is_personal) VALUES ('exec_test', 'exec content', datetime('now'), 1)",
+                []
+            )
+            expect(insertResult).toBeDefined()
+
+            // UPDATE via exec
+            const updateResult = mgr.exec(
+                "UPDATE memory_journal SET content = 'updated' WHERE entry_type = 'exec_test'",
+                []
+            )
+            expect(updateResult).toBeDefined()
+
+            // DELETE via exec
+            const deleteResult = mgr.exec(
+                "DELETE FROM memory_journal WHERE entry_type = 'exec_test'",
+                []
+            )
+            expect(deleteResult).toBeDefined()
+
+            mgr.close()
+        })
+
+        it('should handle SELECT with no matching rows', async () => {
+            const mgr = new NativeConnectionManager(':memory:')
+            await mgr.initialize()
+
+            const result = mgr.exec('SELECT * FROM memory_journal WHERE id = -1', [])
+            expect(result).toBeDefined()
+            // Empty result set — either empty array or array with no values
+            if (result.length > 0) {
+                expect(result[0].values.length).toBe(0)
+            } else {
+                expect(result.length).toBe(0)
+            }
+
+            mgr.close()
+        })
     })
 
     // =========================================================================
@@ -247,3 +291,4 @@ describe('NativeConnectionManager', () => {
         })
     })
 })
+

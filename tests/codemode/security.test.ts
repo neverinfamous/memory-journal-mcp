@@ -190,6 +190,25 @@ describe('CodeModeSecurityManager', () => {
             // The entry should still exist since it hasn't expired
             expect(security.checkRateLimit('cleanup-test')).toBe(true)
         })
+
+        it('should remove entries past their reset time', () => {
+            const mgr = new CodeModeSecurityManager({ maxExecutionsPerMinute: 1 })
+            // Exhaust the rate limit
+            mgr.checkRateLimit('expired-client')
+            expect(mgr.checkRateLimit('expired-client')).toBe(false)
+
+            // Manually fast-forward: replace the resetTime to be in the past
+            // Access the internal rateLimits map via any cast
+            const limitsMap = (mgr as any).rateLimits as Map<string, { count: number; resetTime: number }>
+            const entry = limitsMap.get('expired-client')
+            if (entry) {
+                entry.resetTime = Date.now() - 1000
+            }
+
+            mgr.cleanupRateLimits()
+            // After cleanup, the expired entry is removed → next call creates fresh entry
+            expect(mgr.checkRateLimit('expired-client')).toBe(true)
+        })
     })
 
     // =========================================================================
@@ -216,6 +235,21 @@ describe('CodeModeSecurityManager', () => {
             const result = security.validateResultSize(circular)
             expect(result.valid).toBe(false)
             expect(result.errors[0]).toContain('serialized')
+        })
+
+        it('should handle RangeError from V8 string length limits', () => {
+            // Mock JSON.stringify to throw a RangeError simulating V8 limits
+            const origStringify = JSON.stringify
+            JSON.stringify = () => {
+                throw new RangeError('Invalid string length')
+            }
+            try {
+                const result = security.validateResultSize({ data: 'test' })
+                expect(result.valid).toBe(false)
+                expect(result.errors[0]).toContain('V8 string length')
+            } finally {
+                JSON.stringify = origStringify
+            }
         })
     })
 

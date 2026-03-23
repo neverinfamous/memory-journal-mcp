@@ -81,6 +81,91 @@ describe('WorkerSandbox', () => {
         expect(result.success).toBe(false)
         expect(result.error).toContain('test abort')
     })
+
+    it('should handle RPC calls to non-existent groups gracefully', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                echo: async (x: string) => x,
+            },
+        }
+        // Non-existent group: the worker proxy doesn't create nested proxies
+        // for unknown groups, so accessing mj.nonexistent returns undefined
+        const code = `
+            try {
+                await mj.nonexistent.method();
+            } catch(e) {
+                return e.message;
+            }
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        // TypeError because mj.nonexistent is undefined
+        expect(String(result.result)).toContain('Cannot read properties of undefined')
+    })
+
+    it('should handle RPC calls to non-existent methods within a valid group', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                echo: async (x: string) => x,
+            },
+        }
+        const code = `
+            try {
+                await mj.core.doesNotExist();
+            } catch(e) {
+                return e.message;
+            }
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(String(result.result)).toContain('is not found in group')
+    })
+
+    it('should handle RPC errors thrown by api bindings', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                failingMethod: async () => {
+                    throw new Error('binding threw')
+                },
+            },
+        }
+        const code = `
+            try {
+                await mj.core.failingMethod();
+            } catch(e) {
+                return e.message;
+            }
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(String(result.result)).toContain('binding threw')
+    })
+
+    it('should handle custom timeout parameter', async () => {
+        const sandbox = new WorkerSandbox({ timeoutMs: 30000 })
+        const result = await sandbox.execute('return "ok"', {}, 5000)
+        expect(result.success).toBe(true)
+        expect(result.result).toBe('ok')
+    })
+
+    it('should skip non-function and non-object bindings in serialization', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                echo: async (x: string) => x,
+            },
+            // These should be silently skipped (not functions or objects)
+            stringVal: 'hello' as unknown,
+            numberVal: 42 as unknown,
+        }
+        const code = 'return await mj.core.echo("test")'
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(result.result).toBe('test')
+    })
 })
 
 describe('WorkerSandboxPool', () => {

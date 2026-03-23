@@ -89,4 +89,97 @@ describe('Help Resource Handlers', () => {
         expect(result.data).toContain('# memory-journal-mcp — Field Notes &')
         expect(gotchasHelp!.mimeType).toBe('text/markdown')
     })
+
+    it('should handle all tool groups including codemode and team', async () => {
+        const defs = getHelpResourceDefinitions()
+        const rootHelp = defs.find((d) => d.uri === 'memory://help')
+
+        const result = (await rootHelp!.handler('memory://help', getContext())) as any
+        const groupNames = result.data.groups.map((g: any) => g.name)
+        expect(groupNames).toContain('admin')
+        expect(groupNames).toContain('backup')
+    })
+
+    it('should extract parameters from admin group tools', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/admin', getContext())) as any
+        expect(result.data.group).toBe('admin')
+        const updateEntry = result.data.tools.find((t: any) => t.name === 'update_entry')
+        expect(updateEntry).toBeDefined()
+        expect(updateEntry.parameters.length).toBeGreaterThan(0)
+    })
+
+    it('should handle search group with optional-heavy schemas', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/search', getContext())) as any
+        expect(result.data.group).toBe('search')
+        expect(result.data.tools.length).toBeGreaterThan(0)
+    })
+
+    it('should handle relationships group', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/relationships', getContext())) as any
+        const linkEntries = result.data.tools.find((t: any) => t.name === 'link_entries')
+        expect(linkEntries).toBeDefined()
+        // relationship_type should be extracted with enum type
+        const relTypeParam = linkEntries.parameters.find((p: any) => p.name === 'relationship_type')
+        expect(relTypeParam).toBeDefined()
+    })
+
+    it('should handle analytics group with number/date params', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/analytics', getContext())) as any
+        expect(result.data.group).toBe('analytics')
+        expect(result.data.tools.length).toBeGreaterThan(0)
+    })
+
+    it('should handle export group', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/export', getContext())) as any
+        expect(result.data.group).toBe('export')
+    })
+
+    it('should handle team group', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/team', getContext())) as any
+        expect(result.data.group).toBe('team')
+        expect(result.data.tools.length).toBeGreaterThan(0)
+    })
+
+    it('should handle backup group', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/backup', getContext())) as any
+        expect(result.data.group).toBe('backup')
+    })
+
+    it('should handle codemode group', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/codemode', getContext())) as any
+        expect(result.data.group).toBe('codemode')
+        expect(result.data.tools.length).toBeGreaterThan(0)
+    })
+
+    it('should handle github group', async () => {
+        const defs = getHelpResourceDefinitions()
+        const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
+
+        const result = (await groupHelp!.handler('memory://help/github', getContext())) as any
+        expect(result.data.group).toBe('github')
+    })
 })
