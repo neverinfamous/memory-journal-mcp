@@ -16,6 +16,7 @@ flowchart LR
 
     subgraph CI["CI"]
         LT["lint-and-test"]
+        DAM["dependabot-auto-merge"]
     end
 
     subgraph Security["Security"]
@@ -39,6 +40,7 @@ flowchart LR
 
     Push --> LT
     PR --> LT
+    PR --> DAM
     Push --> CQL
     Push --> SS
     Push --> SU
@@ -64,9 +66,10 @@ flowchart LR
 
 ### CI
 
-| File                                   | Trigger             | Purpose                                                                 |
-| -------------------------------------- | ------------------- | ----------------------------------------------------------------------- |
-| [lint-and-test.yml](lint-and-test.yml) | push / PR to `main` | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit |
+| File                                                   | Trigger                | Purpose                                                                 |
+| ------------------------------------------------------ | ---------------------- | ----------------------------------------------------------------------- |
+| [lint-and-test.yml](lint-and-test.yml)                 | push / PR to `main`    | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit |
+| [dependabot-auto-merge.yml](dependabot-auto-merge.yml) | PR (`dependabot[bot]`) | Auto-merges patch/minor Dependabot PRs, warns on major updates          |
 
 ### Security
 
