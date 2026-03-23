@@ -11,7 +11,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 ![Coverage](https://img.shields.io/badge/Coverage-96%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-1679_passed-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-1767_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.

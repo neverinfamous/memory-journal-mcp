@@ -48,6 +48,9 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             error: 'Cannot link an entry to itself',
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
+                            suggestion:
+                                'Choose a different target entry to create a meaningful relationship',
+                            recoverable: true,
                         }
                     }
 

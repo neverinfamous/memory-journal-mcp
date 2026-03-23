@@ -237,6 +237,9 @@ src/
 ├── types/                      # TypeScript type definitions
 ├── utils/                      # Logger, error helpers, progress
 └── vector/                     # Semantic search (sqlite-vec + transformers)
+
+skills/                             # Bundled agent skills (shipped with npm)
+└── github-commander/               # GitHub workflow skills (triage, review, audits)
 ```
 
 ## 🤝 Community

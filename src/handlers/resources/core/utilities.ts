@@ -220,12 +220,13 @@ export const workflowsResource: InternalResourceDef = {
 
 let cachedSkills: { name: string; path: string; excerpt: string; source: string }[] | null = null
 let lastScanTime = 0
+let lastScanDirs: string | null = null // cache key: serialized dir paths
 const SKILLS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 /** Resolve the package's own skills/ directory (ships with npm package). */
 function getShippedSkillsDir(): string | undefined {
     try {
-        // __dirname equivalent for ESM: two levels up from src/handlers/resources/core/
+        // __dirname equivalent for ESM: four levels up from src/handlers/resources/core/
         const thisFile = fileURLToPath(import.meta.url)
         const packageRoot = path.resolve(path.dirname(thisFile), '..', '..', '..', '..')
         const shipped = path.join(packageRoot, 'skills')
@@ -266,8 +267,7 @@ export const skillsResource: InternalResourceDef = {
     uri: 'memory://skills',
     name: 'Skills',
     title: 'Agent Skills Index',
-    description:
-        'Index of available agent skills (shipped + user-configured via SKILLS_DIR_PATH)',
+    description: 'Index of available agent skills (shipped + user-configured via SKILLS_DIR_PATH)',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
@@ -280,14 +280,19 @@ export const skillsResource: InternalResourceDef = {
             return {
                 data: {
                     configured: false,
-                    message:
-                        'No skills available. Set SKILLS_DIR_PATH to index user skills.',
+                    message: 'No skills available. Set SKILLS_DIR_PATH to index user skills.',
                 },
             }
         }
 
         try {
-            if (cachedSkills && Date.now() - lastScanTime < SKILLS_CACHE_TTL_MS) {
+            const currentDirs = `${userSkillsDir ?? ''}|${shippedSkillsDir ?? ''}`
+
+            if (
+                cachedSkills &&
+                Date.now() - lastScanTime < SKILLS_CACHE_TTL_MS &&
+                lastScanDirs === currentDirs
+            ) {
                 return {
                     data: {
                         configured: true,
@@ -317,12 +322,11 @@ export const skillsResource: InternalResourceDef = {
                 }
             }
 
-            const skills = [...skillMap.values()].sort((a, b) =>
-                a.name.localeCompare(b.name)
-            )
+            const skills = [...skillMap.values()].sort((a, b) => a.name.localeCompare(b.name))
 
             cachedSkills = skills
             lastScanTime = Date.now()
+            lastScanDirs = currentDirs
 
             return {
                 data: {
