@@ -229,11 +229,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
             ) {
                 // .partial() makes all fields optional so the SDK accepts `{}`.
                 // .passthrough() preserves unrecognized keys so handler can normalize.
-                toolOptions['inputSchema'] = (
-                    schema as { partial: () => { passthrough: () => z.ZodType } }
-                )
-                    .partial()
-                    .passthrough()
+                // Wrapped in try/catch: if partial() returns something without passthrough()
+                // (non-ZodObject wrapper), fall back to the original schema to avoid
+                // a startup throw.
+                try {
+                    const relaxed = (schema as { partial: () => { passthrough?: () => z.ZodType } }).partial()
+                    toolOptions['inputSchema'] = typeof relaxed.passthrough === 'function'
+                        ? relaxed.passthrough()
+                        : schema
+                } catch {
+                    toolOptions['inputSchema'] = schema
+                }
             } else {
                 toolOptions['inputSchema'] = schema
             }

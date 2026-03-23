@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-94%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-96%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1767_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
 
@@ -179,6 +179,9 @@ Restart Cursor or your MCP client and start journaling!
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                           |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
+| `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: `*`)                           |
+| `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                 |
+| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)             |
 | `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)            |
 | `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
 | `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |

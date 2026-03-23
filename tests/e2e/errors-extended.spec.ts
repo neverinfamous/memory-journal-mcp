@@ -74,7 +74,8 @@ test.describe('Errors: Core', () => {
                 const parsed = JSON.parse(text)
                 expect(parsed.success).toBe(false)
             } catch {
-                // Raw MCP error is acceptable for invalid enum
+                // Non-JSON response: must NOT be a raw MCP -32602 leak
+                expect(text).not.toContain('-32602')
                 expect(text.toLowerCase()).toContain('error')
             }
         } finally {
