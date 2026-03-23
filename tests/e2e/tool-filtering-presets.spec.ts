@@ -4,7 +4,7 @@
  * Validates tool filter presets not covered by tool-filtering.spec.ts:
  * - `essential`: includes core + codemode, excludes github and team
  * - `codemode`: exactly 1 tool (mj_execute_code), which is callable
- * - `-github`: all 61 tools minus 16 github = 45 tools
+ * - `-github`: all tools minus github group
  *
  * Also verifies the fix: essential and starter now auto-include codemode.
  *
@@ -15,6 +15,11 @@ import { test, expect } from '@playwright/test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { startServer, stopServer } from './helpers.js'
+import { getAllToolNames, TOOL_GROUPS } from '../../src/filtering/tool-filter.js'
+
+/** Derived counts — avoids hardcoding tool totals that change when tools are added/removed */
+const TOTAL_TOOLS = getAllToolNames().length
+const GITHUB_TOOLS = TOOL_GROUPS.github.length
 
 const ESSENTIAL_PORT = 3105
 const CODEMODE_PORT = 3106
@@ -139,7 +144,7 @@ test.describe('Tool Filter: codemode-only preset', () => {
 })
 
 // ============================================================================
-// -github subtractive filter: all 61 tools minus 16 github = 45 tools
+// -github subtractive filter: all tools minus github group
 // ============================================================================
 
 test.describe('Tool Filter: -github subtractive filter', () => {
@@ -163,10 +168,9 @@ test.describe('Tool Filter: -github subtractive filter', () => {
         stopServer(MINUS_GITHUB_PORT)
     })
 
-    test('-github: exposes 45 tools (61 minus 16 github)', async () => {
+    test(`-github: exposes ${TOTAL_TOOLS - GITHUB_TOOLS} tools (${TOTAL_TOOLS} minus ${GITHUB_TOOLS} github)`, async () => {
         const response = await client.listTools()
-        // 61 total - 16 github = 45
-        expect(response.tools.length).toBe(45)
+        expect(response.tools.length).toBe(TOTAL_TOOLS - GITHUB_TOOLS)
     })
 
     test('-github: no github tools are present', async () => {

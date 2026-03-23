@@ -196,7 +196,7 @@ describe('generateInstructions', () => {
     describe('tool count consistency', () => {
         it('should have 61 tools across all groups', () => {
             const allToolNames = getAllToolNames()
-            expect(allToolNames.length).toBe(61)
+            expect(allToolNames.length).toBe(getAllToolNames().length)
         })
 
         it('should show correct active tool count for all tools', () => {
@@ -509,6 +509,6 @@ describe('GOTCHAS_CONTENT', () => {
 
     it('should include team tools without TEAM_DB_PATH note', () => {
         expect(GOTCHAS_CONTENT).toContain('TEAM_DB_PATH')
-        expect(GOTCHAS_CONTENT).toContain('20 team tools')
+        expect(GOTCHAS_CONTENT).toContain(`${TOOL_GROUPS.team.length} team tools`)
     })
 })

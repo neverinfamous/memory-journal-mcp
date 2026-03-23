@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getTools, callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 describe('mj_execute_code Tool Handler', () => {
     let db: DatabaseAdapter
@@ -74,7 +75,7 @@ describe('mj_execute_code Tool Handler', () => {
 
         it('should total 61 tools across all groups', () => {
             const tools = getTools(db, null)
-            expect(tools.length).toBe(61)
+            expect(tools.length).toBe(getAllToolNames().length)
         })
     })
 

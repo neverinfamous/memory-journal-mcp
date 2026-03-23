@@ -164,66 +164,16 @@ function buildQuickAccess(groups: Set<ToolGroup>): string {
  * Code Mode namespace row definitions.
  * Each maps a tool group to its Code Mode API namespace.
  */
-const CODE_MODE_NAMESPACE_ROWS: {
-    group: ToolGroup
-    label: string
-    namespace: string
-    example: string
-}[] = [
-    {
-        group: 'core',
-        label: 'Core',
-        namespace: '`mj.core.*`',
-        example: '`mj.core.createEntry("Implemented feature X")`',
-    },
-    {
-        group: 'search',
-        label: 'Search',
-        namespace: '`mj.search.*`',
-        example: '`mj.search.searchEntries("performance")`',
-    },
-    {
-        group: 'analytics',
-        label: 'Analytics',
-        namespace: '`mj.analytics.*`',
-        example: '`mj.analytics.getStatistics()`',
-    },
-    {
-        group: 'relationships',
-        label: 'Relationships',
-        namespace: '`mj.relationships.*`',
-        example: '`mj.relationships.linkEntries(1, 2, "implements")`',
-    },
-    {
-        group: 'export',
-        label: 'Export',
-        namespace: '`mj.export.*`',
-        example: '`mj.export.exportEntries("json")`',
-    },
-    {
-        group: 'admin',
-        label: 'Admin',
-        namespace: '`mj.admin.*`',
-        example: '`mj.admin.rebuildVectorIndex()`',
-    },
-    {
-        group: 'github',
-        label: 'GitHub',
-        namespace: '`mj.github.*`',
-        example: '`mj.github.getGithubIssues({ state: "open" })`',
-    },
-    {
-        group: 'backup',
-        label: 'Backup',
-        namespace: '`mj.backup.*`',
-        example: '`mj.backup.backupJournal()`',
-    },
-    {
-        group: 'team',
-        label: 'Team',
-        namespace: '`mj.team.*`',
-        example: '`mj.team.teamCreateEntry("Team update")`',
-    },
+const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
+    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
+    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
+    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
+    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
+    { group: 'export', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries("json")`' },
+    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
+    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
+    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
+    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
 ]
 
 /**
@@ -233,10 +183,9 @@ const CODE_MODE_NAMESPACE_ROWS: {
  */
 function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
     // Build namespace table with only enabled groups
-    const rows = CODE_MODE_NAMESPACE_ROWS.filter((r) => groups.has(r.group))
-        .map(
-            (r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`
-        )
+    const rows = CODE_MODE_NAMESPACE_ROWS
+        .filter((r) => groups.has(r.group))
+        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
         .join('\n')
 
     // Build the static behavioral text from the .md source,
@@ -249,10 +198,8 @@ function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
         return '\n' + fullSection
     }
     const beforeTable = fullSection.slice(0, tableStart)
-    const headerLine =
-        '| Group         | Namespace            | Example                                            |'
-    const separatorLine =
-        '| ------------- | -------------------- | -------------------------------------------------- |'
+    const headerLine = '| Group         | Namespace            | Example                                            |'
+    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
     const afterTable = fullSection.slice(tableEnd)
     return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
 }
@@ -286,13 +233,13 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 \`\`\`js
 // ✅ Correct
 const result = await mj.core.recent({ limit: 5 })
-return result.entries.map(e => e.id)
+return result.entries.map((e) => e.id)
 
 // ❌ Wrong — returns a Promise object, not the entries
 const result = mj.core.recent({ limit: 5 })
 
 // ✅ Discovery
-const help = await mj.help()           // { groups, totalMethods, usage }
+const help = await mj.help() // { groups, totalMethods, usage }
 const groupHelp = await mj.core.help() // { group, methods }
 \`\`\`
 
@@ -300,7 +247,7 @@ const groupHelp = await mj.core.help() // { group, methods }
 
 \`\`\`js
 const { entries, count } = await mj.core.recent({ limit: 10 })
-return entries.map(e => ({ id: e.id, content: e.content.slice(0, 50) }))
+return entries.map((e) => ({ id: e.id, content: e.content.slice(0, 50) }))
 \`\`\`
 `
 
@@ -362,6 +309,10 @@ Fetch \`memory://health\` to verify server status, database stats, and tool avai
 /**
  * Field notes and gotchas — served via memory://help/gotchas resource.
  * Exported so the help resource handler can access it.
+ *
+ * NOTE: This file is inlined verbatim by scripts/generate-server-instructions.ts
+ * into src/constants/server-instructions.ts, which already imports TOOL_GROUPS.
+ * Do NOT add import statements here — they would appear as raw text in the output.
  */
 export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
@@ -402,8 +353,9 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 - **Team cross-database search**: \`search_entries\` and \`search_by_date_range\` automatically merge team DB results when \`TEAM_DB_PATH\` is configured. Results include a \`source\` field ("personal" or "team").
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
-- **Team tools without \`TEAM_DB_PATH\`**: All 20 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
+- **Team tools without \`TEAM_DB_PATH\`**: All ${TOOL_GROUPS.team.length} team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
+
 
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
@@ -512,3 +464,4 @@ export const SERVER_INSTRUCTIONS =
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS
+
