@@ -9,7 +9,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import * as jose from 'jose'
 import Database from 'better-sqlite3'
 
 vi.mock('../../src/utils/logger.js', () => ({

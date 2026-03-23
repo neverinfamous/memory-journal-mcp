@@ -5,7 +5,17 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.1.1...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.1.2...HEAD)
+
+## [6.1.2](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.1.2) - 2026-03-22
+
+### Security
+
+- **Docker Workflow** — Removed `ref: ${{ github.event.workflow_run.head_sha }}` from `docker-publish.yml` checkout steps; CodeQL does not accept `persist-credentials: false` as mitigation for untrusted-checkout alerts (#145, #146, #161).
+
+### Fixed
+
+- **Unused Import** — Removed orphaned `jose` import from `entries-auth-branches.test.ts` (#162), cascading from v6.1.1 `err` variable removal.
 
 ## [6.1.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.1.1) - 2026-03-22
 
