@@ -9,12 +9,12 @@ Generalized for any package manager (npm, yarn, pnpm, bun).
 
 2. Update dependencies using the detected package manager:
 
-   | Package Manager | Update Command | Audit Command |
-   |---|---|---|
-   | npm | `npm update` | `npm audit` |
-   | yarn | `yarn upgrade` | `yarn audit` |
-   | pnpm | `pnpm update` | `pnpm audit` |
-   | bun | `bun update` | _(no built-in audit)_ |
+   | Package Manager | Update Command | Audit Command         |
+   | --------------- | -------------- | --------------------- |
+   | npm             | `npm update`   | `npm audit`           |
+   | yarn            | `yarn upgrade` | `yarn audit`          |
+   | pnpm            | `pnpm update`  | `pnpm audit`          |
+   | bun             | `bun update`   | _(no built-in audit)_ |
 
 3. Run dependency audit (if available for the package manager)
 
@@ -25,6 +25,7 @@ Generalized for any package manager (npm, yarn, pnpm, bun).
    - Journal each vulnerability found
 
 5. Check for remaining outdated packages:
+
    ```bash
    # npm
    npm outdated
@@ -70,6 +71,7 @@ Journal each gate result. Fix any failures caused by dependency updates.
 ## Phase 4 — Journal & Changelog
 
 1. Journal the update:
+
    ```
    create_entry({
      content: "Updated dependencies: <list of packages updated>. Audit: <clean/N vulnerabilities>.",
@@ -86,6 +88,7 @@ Journal each gate result. Fix any failures caused by dependency updates.
 ## Phase 5 — Human Checkpoint
 
 Present to the human:
+
 - List of updated packages with old → new versions
 - Any vulnerabilities found and their status (fixed/unfixable)
 - Gate results
@@ -96,6 +99,7 @@ Wait for human approval before committing.
 ## Phase 6 — Commit
 
 Stage only the files changed by this workflow:
+
 ```bash
 git add package.json package-lock.json <changelog> <Dockerfile if changed>
 git diff --cached --stat

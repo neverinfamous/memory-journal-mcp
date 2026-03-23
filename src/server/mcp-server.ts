@@ -220,7 +220,23 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
 
         if (tool.inputSchema !== undefined) {
-            toolOptions['inputSchema'] = tool.inputSchema
+            const schema = tool.inputSchema
+            if (
+                typeof schema === 'object' &&
+                schema !== null &&
+                'partial' in schema &&
+                typeof (schema as { partial: unknown }).partial === 'function'
+            ) {
+                // .partial() makes all fields optional so the SDK accepts `{}`.
+                // .passthrough() preserves unrecognized keys so handler can normalize.
+                toolOptions['inputSchema'] = (
+                    schema as { partial: () => { passthrough: () => z.ZodType } }
+                )
+                    .partial()
+                    .passthrough()
+            } else {
+                toolOptions['inputSchema'] = schema
+            }
         }
 
         // MCP 2025-11-25: Pass outputSchema for structured responses

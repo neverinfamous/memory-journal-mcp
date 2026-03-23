@@ -49,7 +49,7 @@ export const TeamCreateEntrySchema = z.object({
 
 /** team_create_entry — relaxed for MCP SDK */
 export const TeamCreateEntrySchemaMcp = z.object({
-    content: z.string().min(1).max(MAX_CONTENT_LENGTH),
+    content: z.string().optional(),
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     significance_type: z.string().optional(),
@@ -95,7 +95,7 @@ export const TeamGetEntryByIdSchema = z.object({
 
 /** team_get_entry_by_id — relaxed */
 export const TeamGetEntryByIdSchemaMcp = z.object({
-    entry_id: relaxedNumber(),
+    entry_id: relaxedNumber().optional(),
     include_relationships: z.boolean().optional().default(true),
 })
 
@@ -114,8 +114,8 @@ export const TeamSearchByDateRangeSchema = z.object({
 
 /** team_search_by_date_range — relaxed */
 export const TeamSearchByDateRangeSchemaMcp = z.object({
-    start_date: z.string().describe('Start date (YYYY-MM-DD)'),
-    end_date: z.string().describe('End date (YYYY-MM-DD)'),
+    start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     limit: relaxedNumber().optional().default(50),
@@ -135,7 +135,7 @@ export const TeamUpdateEntrySchema = z.object({
 
 /** team_update_entry — relaxed */
 export const TeamUpdateEntrySchemaMcp = z.object({
-    entry_id: relaxedNumber(),
+    entry_id: relaxedNumber().optional(),
     content: z.string().optional(),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
@@ -148,13 +148,19 @@ export const TeamDeleteEntrySchema = z.object({
 
 /** team_delete_entry — relaxed */
 export const TeamDeleteEntrySchemaMcp = z.object({
-    entry_id: relaxedNumber(),
+    entry_id: relaxedNumber().optional(),
 })
 
 /** team_merge_tags — strict */
 export const TeamMergeTagsSchema = z.object({
     source_tag: z.string().min(1),
     target_tag: z.string().min(1),
+})
+
+/** team_merge_tags — relaxed */
+export const TeamMergeTagsSchemaMcp = z.object({
+    source_tag: z.string().optional(),
+    target_tag: z.string().optional(),
 })
 
 // ============================================================================
@@ -197,8 +203,8 @@ export const TeamLinkEntriesSchema = z.object({
 
 /** team_link_entries — relaxed */
 export const TeamLinkEntriesSchemaMcp = z.object({
-    from_entry_id: relaxedNumber(),
-    to_entry_id: relaxedNumber(),
+    from_entry_id: relaxedNumber().optional(),
+    to_entry_id: relaxedNumber().optional(),
     relationship_type: z.string().optional().default('references'),
     description: z.string().optional(),
 })
@@ -420,7 +426,7 @@ export const TeamSemanticSearchSchema = z.object({
 
 /** team_semantic_search — relaxed */
 export const TeamSemanticSearchSchemaMcp = z.object({
-    query: z.string(),
+    query: z.string().optional(),
     limit: relaxedNumber().optional().default(10),
     similarity_threshold: relaxedNumber().optional().default(0.25),
     hint_on_empty: z
@@ -437,7 +443,7 @@ export const TeamAddToVectorIndexSchema = z.object({
 
 /** team_add_to_vector_index — relaxed */
 export const TeamAddToVectorIndexSchemaMcp = z.object({
-    entry_id: relaxedNumber(),
+    entry_id: relaxedNumber().optional(),
 })
 
 // ============================================================================

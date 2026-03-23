@@ -32,8 +32,8 @@ async function assertNumericCoercion(toolName: string, args: Record<string, unkn
             // Non-JSON response: verify it's not a raw MCP -32602 error frame.
             expect(
                 text,
-                `${toolName}: expected MCP validation error (-32602) but got: ${text}`
-            ).toContain('-32602')
+                `${toolName}: raw MCP -32602 error leaked through: ${text}`
+            ).not.toContain('-32602')
             return
         }
 

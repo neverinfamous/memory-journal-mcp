@@ -28,7 +28,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                 'Create a GitHub issue AND automatically create a linked journal entry documenting the issue creation.',
             group: 'github',
             inputSchema: z.object({
-                title: z.string().min(1).describe('Issue title'),
+                title: z.string().optional().describe('Issue title'),
                 body: z.string().optional().describe('Issue body/description'),
                 labels: z.array(z.string()).optional().describe('Labels to apply'),
                 assignees: z.array(z.string()).optional().describe('Users to assign'),

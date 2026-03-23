@@ -32,6 +32,7 @@ findings.
 ## Phase 2 — Code Review
 
 1. Check out the PR branch locally:
+
    ```bash
    gh pr checkout <N>
    ```
@@ -62,6 +63,7 @@ Compile all findings into a structured report:
 4. **Copilot findings** — any issues flagged by Copilot reviews
 
 Journal each significant finding:
+
 ```
 create_entry({
   content: "PR #<N> finding: <severity> - <description>. File: <path>:<lines>.",
@@ -73,6 +75,7 @@ create_entry({
 
 **HITL checkpoint**: Present the full findings report to the human. Ask for
 review decision:
+
 - **Approve** — no blocking issues found
 - **Request changes** — blocking issues identified
 - **Comment** — non-blocking suggestions
@@ -82,21 +85,25 @@ review decision:
 Based on human's decision:
 
 ### Approve
+
 ```bash
 gh pr review <N> --approve --body "LGTM. All validation gates passed. <summary>"
 ```
 
 ### Request Changes
+
 ```bash
 gh pr review <N> --request-changes --body "<findings summary with specific file/line references>"
 ```
 
 ### Comment
+
 ```bash
 gh pr review <N> --comment --body "<non-blocking suggestions>"
 ```
 
 Journal review completion:
+
 ```
 create_entry({
   content: "Completed review of PR #<N>: <decision>. Findings: <count>. Gates: <summary>.",
@@ -109,6 +116,7 @@ create_entry({
 ## Phase 5 — Session Summary
 
 Run `/session-summary` to capture:
+
 - PR reviewed with decision
 - All findings by category
 - Gate results

@@ -55,6 +55,7 @@ and a concrete fix suggestion. Group findings by category:
 ## HITL Checkpoint
 
 Present findings to the human:
+
 - Summary table with counts per category
 - Overall quality score
 - Top critical findings with fix suggestions
@@ -64,6 +65,7 @@ Wait for approval before applying any fixes.
 ## Apply Fixes
 
 After human approval:
+
 1. Fix critical issues first, then moderate, then low
 2. Run validation gates after all fixes:
    - Gate 1: Lint + Typecheck

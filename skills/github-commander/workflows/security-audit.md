@@ -25,11 +25,13 @@ npm audit --json
 ```
 
 Report:
+
 - Total vulnerabilities by severity (critical / high / moderate / low)
 - Whether each is fixable via `npm audit fix` or requires manual intervention
 - Any overrides/resolutions in the manifest that may mask unfixed vulnerabilities
 
 For non-Node.js projects, use the equivalent tool:
+
 - Python: `pip audit --format json`
 - Rust: `cargo audit --json`
 - Go: `govulncheck ./...`
@@ -71,11 +73,13 @@ Skip unless `PROJECT_HAS_DOCKERFILE` is `true` or a Dockerfile is detected.
 ### Trivy (if available)
 
 Filesystem scan:
+
 ```bash
 trivy fs --severity HIGH,CRITICAL --format json .
 ```
 
 Image scan (if image is built):
+
 ```bash
 trivy image --severity HIGH,CRITICAL --format json <image-name>
 ```
@@ -116,6 +120,7 @@ If GitHub Actions workflows exist (`.github/workflows/`):
 ## Phase 8 — Findings Report
 
 Journal all findings:
+
 ```
 create_entry({
   content: "Security audit finding: <severity> — <description>. Tool: <tool>. File: <path>.",
@@ -126,16 +131,17 @@ create_entry({
 
 Produce a structured summary:
 
-| Category | Risk Level | Findings | Critical |
-|---|---|---|---|
-| Dependency Vulnerabilities | | | |
-| Static Analysis (SAST) | | | |
-| Secret Exposure | | | |
-| Container Security | | | |
-| Source Code Patterns | | | |
-| CI/CD Pipeline | | | |
+| Category                   | Risk Level | Findings | Critical |
+| -------------------------- | ---------- | -------- | -------- |
+| Dependency Vulnerabilities |            |          |          |
+| Static Analysis (SAST)     |            |          |          |
+| Secret Exposure            |            |          |          |
+| Container Security         |            |          |          |
+| Source Code Patterns       |            |          |          |
+| CI/CD Pipeline             |            |          |          |
 
 **HITL checkpoint**: Present findings report to the human with:
+
 - An overall security posture score (A–F)
 - Top 3 most urgent remediations
 - Whether any findings are auto-fixable
@@ -154,6 +160,7 @@ After human approves the fix plan:
 ## Phase 10 — Commit
 
 Stage and commit security fixes:
+
 ```bash
 git add <fixed files> <changelog>
 git diff --cached --stat

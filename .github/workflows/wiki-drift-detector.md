@@ -64,6 +64,7 @@ Examine the files in `/tmp/wiki` against the PR diff and unreleased changes:
 ## Step 4: Cross-Document Consistency
 
 Compare the wiki files for consistency:
+
 - Feature descriptions and tool/resource counts across `Tools.md`, `Resources.md`, and `Home.md`.
 - Environment variable documentation.
 

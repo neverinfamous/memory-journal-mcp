@@ -54,11 +54,13 @@ Run `PROJECT_LINT_CMD` (default: `npm run lint`).
 Run `PROJECT_TYPECHECK_CMD` (default: `npm run typecheck`).
 
 On failure:
+
 - Attempt auto-fix (run lint with `--fix` if available)
 - Re-run the gate
 - If still failing after 2 attempts → **HITL checkpoint**
 
 Journal result:
+
 ```
 create_entry({
   content: "Gate 1 (Lint + Typecheck): PASSED/FAILED. Details: <output>.",
@@ -80,6 +82,7 @@ On failure → attempt fix → **HITL checkpoint** after 2 attempts.
 Run `PROJECT_TEST_CMD` (default: `npm run test`).
 
 On failure:
+
 - Analyze test output to determine if failure is related to the fix
 - If related: attempt to fix the test or the code
 - If unrelated (pre-existing failure): journal and flag for human
@@ -141,6 +144,7 @@ trivy fs --severity HIGH,CRITICAL --format json .
 ```
 
 For Docker projects (`PROJECT_HAS_DOCKERFILE=true`):
+
 ```bash
 trivy image --severity HIGH,CRITICAL --format json <image-name>
 ```
@@ -183,26 +187,31 @@ Wait for human approval before proceeding to Phase 5.
 ## Phase 5 — Submit PR
 
 1. Create a feature branch:
+
    ```bash
    git checkout -b <COMMANDER_BRANCH_PREFIX>/issue-<N>
    ```
 
 2. Stage changed files selectively (**never `git add -A`**):
+
    ```bash
    git add <file1> <file2> ...
    ```
 
 3. Verify staged files:
+
    ```bash
    git diff --cached --stat
    ```
 
 4. Commit with descriptive message:
+
    ```bash
    git commit -m "fix: <description> (closes #<N>)"
    ```
 
 5. Push and create PR:
+
    ```bash
    git push origin <COMMANDER_BRANCH_PREFIX>/issue-<N>
    gh pr create --base main --title "fix: <description>" --body "Closes #<N>\n\n<summary of changes>"
@@ -222,6 +231,7 @@ Wait for human approval before proceeding to Phase 5.
 ## Phase 6 — Session Summary
 
 Run `/session-summary` to capture:
+
 - Issue triaged and fixed
 - All gate results
 - Security findings (if any)

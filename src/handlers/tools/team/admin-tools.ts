@@ -13,6 +13,7 @@ import {
     TeamDeleteEntrySchema,
     TeamDeleteEntrySchemaMcp,
     TeamMergeTagsSchema,
+    TeamMergeTagsSchemaMcp,
     TeamUpdateOutputSchema,
     TeamDeleteOutputSchema,
     TeamMergeTagsOutputSchema,
@@ -125,7 +126,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
             description:
                 'Merge a source tag into a target tag in the team database. All entries with the source tag will be re-tagged with the target tag. Requires TEAM_DB_PATH.',
             group: 'team',
-            inputSchema: TeamMergeTagsSchema,
+            inputSchema: TeamMergeTagsSchemaMcp,
             outputSchema: TeamMergeTagsOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
             handler: (params: unknown) => {

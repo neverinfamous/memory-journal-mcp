@@ -8,6 +8,7 @@ patterns, test suite speed, and database/IO efficiency.
 Measure compilation speed and identify bottlenecks.
 
 For TypeScript projects:
+
 ```bash
 npx tsc --noEmit --diagnostics
 ```
@@ -15,6 +16,7 @@ npx tsc --noEmit --diagnostics
 If a bundler is configured, also run `PROJECT_BUILD_CMD` and report build time.
 
 Report:
+
 - Total compilation time
 - Files compiled, lines of code
 - Memory usage
@@ -30,6 +32,7 @@ Analyze the compiled output for size and optimization opportunities:
 - Flag output files that include source maps in production builds
 
 For frontend projects, additionally check:
+
 - Code-splitting effectiveness
 - Asset optimization (images, fonts, CSS)
 - Tree-shaking gaps
@@ -50,6 +53,7 @@ pnpm list --prod
 ```
 
 Report:
+
 - Total production dependency count (direct + transitive)
 - Top 5 heaviest dependencies
 - Duplicate packages (different versions of same dep)
@@ -74,11 +78,13 @@ Static analysis pass for runtime performance issues:
 ## 5. Test Suite Performance
 
 Run tests with verbose output:
+
 ```bash
 <PROJECT_TEST_CMD> -- --reporter=verbose
 ```
 
 Report:
+
 - Total suite duration
 - Top 5 slowest test files
 - Top 5 slowest individual tests
@@ -99,6 +105,7 @@ If the project interacts with databases or performs significant I/O:
 ## Findings Report
 
 Journal each finding:
+
 ```
 create_entry({
   content: "Performance finding: <severity> — <description>. File: <path>:<lines>. Expected improvement: <estimate>.",
@@ -109,14 +116,14 @@ create_entry({
 
 Produce a structured summary:
 
-| Category | Score (A–F) | Findings | Critical |
-|---|---|---|---|
-| Build Performance | | | |
-| Bundle & Output | | | |
-| Dependency Weight | | | |
-| Runtime Performance | | | |
-| Test Suite Speed | | | |
-| Database & I/O | | | |
+| Category            | Score (A–F) | Findings | Critical |
+| ------------------- | ----------- | -------- | -------- |
+| Build Performance   |             |          |          |
+| Bundle & Output     |             |          |          |
+| Dependency Weight   |             |          |          |
+| Runtime Performance |             |          |          |
+| Test Suite Speed    |             |          |          |
+| Database & I/O      |             |          |          |
 
 Assign an **overall performance score (A–F)** and list the top 3 highest-impact
 improvements.
@@ -128,6 +135,7 @@ Present findings to the human. Wait for approval before applying any fixes.
 ## Apply Fixes
 
 After approval:
+
 1. Apply fixes in impact order (highest improvement first)
 2. Run validation gates
 3. Update changelog

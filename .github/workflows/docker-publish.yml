@@ -1,11 +1,14 @@
 name: Build and Push Docker Images
 
 on:
-  # Only run after lint-and-test completes successfully
-  workflow_run:
-    workflows: ['Lint and Test']
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+      NPM_TOKEN:
+        required: true
 
 env:
   REGISTRY: docker.io

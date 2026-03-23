@@ -35,16 +35,16 @@ Load this skill when any of these apply:
 
 ## Quick Reference
 
-| Workflow | File | Purpose |
-|---|---|---|
-| **Issue Triage** | `workflows/issue-triage.md` | Fix a single GitHub issue end-to-end |
-| **PR Review** | `workflows/pr-review.md` | Review a PR with validation pipeline |
-| **Milestone Sprint** | `workflows/milestone-sprint.md` | Work through milestone issues sequentially |
-| **Update Dependencies** | `workflows/update-deps.md` | Dependency update with audit trail |
-| **Security Audit** | `workflows/security-audit.md` | Auto-detected security scanning |
-| **Code Quality Audit** | `workflows/code-quality-audit.md` | Static code quality analysis |
-| **Performance Audit** | `workflows/perf-audit.md` | Build, bundle, runtime, test speed analysis |
-| **Full Audit** | `workflows/full-audit.md` | Unified quality + perf + security audit |
+| Workflow                | File                              | Purpose                                     |
+| ----------------------- | --------------------------------- | ------------------------------------------- |
+| **Issue Triage**        | `workflows/issue-triage.md`       | Fix a single GitHub issue end-to-end        |
+| **PR Review**           | `workflows/pr-review.md`          | Review a PR with validation pipeline        |
+| **Milestone Sprint**    | `workflows/milestone-sprint.md`   | Work through milestone issues sequentially  |
+| **Update Dependencies** | `workflows/update-deps.md`        | Dependency update with audit trail          |
+| **Security Audit**      | `workflows/security-audit.md`     | Auto-detected security scanning             |
+| **Code Quality Audit**  | `workflows/code-quality-audit.md` | Static code quality analysis                |
+| **Performance Audit**   | `workflows/perf-audit.md`         | Build, bundle, runtime, test speed analysis |
+| **Full Audit**          | `workflows/full-audit.md`         | Unified quality + perf + security audit     |
 
 ## Prerequisites
 
@@ -58,18 +58,18 @@ Load this skill when any of these apply:
 All commands are configurable via environment variables. Defaults assume a
 Node.js project. Override for other ecosystems (Python, Rust, Go, etc.).
 
-| Variable | Default | Description |
-|---|---|---|
-| `PROJECT_LINT_CMD` | `npm run lint` | Lint command |
-| `PROJECT_TYPECHECK_CMD` | `npm run typecheck` | Type-check command (empty = skip) |
-| `PROJECT_BUILD_CMD` | `npm run build` | Build command (empty = skip) |
-| `PROJECT_TEST_CMD` | `npm run test` | Unit/integration test command |
-| `PROJECT_E2E_CMD` | _(empty = skip)_ | E2E test command |
-| `PROJECT_PACKAGE_MANAGER` | _(auto-detect)_ | `npm`, `yarn`, `pnpm`, or `bun` |
-| `PROJECT_HAS_DOCKERFILE` | _(auto-detect)_ | `true` to enable Docker audit steps |
-| `COMMANDER_HITL_FILE_THRESHOLD` | `10` | HITL if changes touch > N files |
-| `COMMANDER_SECURITY_TOOLS` | _(auto-detect)_ | Comma-separated override list |
-| `COMMANDER_BRANCH_PREFIX` | `fix` | Branch naming prefix |
+| Variable                        | Default             | Description                         |
+| ------------------------------- | ------------------- | ----------------------------------- |
+| `PROJECT_LINT_CMD`              | `npm run lint`      | Lint command                        |
+| `PROJECT_TYPECHECK_CMD`         | `npm run typecheck` | Type-check command (empty = skip)   |
+| `PROJECT_BUILD_CMD`             | `npm run build`     | Build command (empty = skip)        |
+| `PROJECT_TEST_CMD`              | `npm run test`      | Unit/integration test command       |
+| `PROJECT_E2E_CMD`               | _(empty = skip)_    | E2E test command                    |
+| `PROJECT_PACKAGE_MANAGER`       | _(auto-detect)_     | `npm`, `yarn`, `pnpm`, or `bun`     |
+| `PROJECT_HAS_DOCKERFILE`        | _(auto-detect)_     | `true` to enable Docker audit steps |
+| `COMMANDER_HITL_FILE_THRESHOLD` | `10`                | HITL if changes touch > N files     |
+| `COMMANDER_SECURITY_TOOLS`      | _(auto-detect)_     | Comma-separated override list       |
+| `COMMANDER_BRANCH_PREFIX`       | `fix`               | Branch naming prefix                |
 
 ### Package Manager Auto-Detection
 
@@ -85,14 +85,14 @@ If `PROJECT_PACKAGE_MANAGER` is not set, detect by lockfile:
 
 When `COMMANDER_SECURITY_TOOLS` is not set, each tool is detected independently:
 
-| Tool | Detection | What It Scans |
-|---|---|---|
-| `npm-audit` | Always (Node.js project) | Dependency vulnerabilities |
-| `codeql` | `codeql` CLI or `gh codeql` | Static analysis (SAST) |
-| `trivy` | `trivy --version` succeeds | Container images, filesystems |
-| `docker-scout` | `docker scout version` succeeds | Docker image CVEs |
-| `gitleaks` | `gitleaks version` succeeds | Secrets in git history |
-| `trufflehog` | `trufflehog --version` succeeds | Secrets (verified only) |
+| Tool           | Detection                       | What It Scans                 |
+| -------------- | ------------------------------- | ----------------------------- |
+| `npm-audit`    | Always (Node.js project)        | Dependency vulnerabilities    |
+| `codeql`       | `codeql` CLI or `gh codeql`     | Static analysis (SAST)        |
+| `trivy`        | `trivy --version` succeeds      | Container images, filesystems |
+| `docker-scout` | `docker scout version` succeeds | Docker image CVEs             |
+| `gitleaks`     | `gitleaks version` succeeds     | Secrets in git history        |
+| `trufflehog`   | `trufflehog --version` succeeds | Secrets (verified only)       |
 
 Missing tools are skipped with a journal note — never a failure.
 
@@ -136,16 +136,16 @@ The agent pauses and requests human approval when:
 
 These entry types are used by Commander workflows for structured audit trails:
 
-| Type | Used By | Purpose |
-|---|---|---|
-| `triage` | issue-triage | Issue context gathered, analysis complete |
-| `implementation` | issue-triage | Fix implemented |
-| `gate_pass` | all | Validation gate passed |
-| `gate_fail` | all | Validation gate failed (with error details) |
-| `security_finding` | security-audit | Security scan finding |
-| `pr_submitted` | issue-triage | PR created and pushed |
-| `review_start` | pr-review | PR review initiated |
-| `review_complete` | pr-review | PR review completed |
-| `milestone_sprint_start` | milestone-sprint | Sprint started |
-| `deps_update` | update-deps | Dependency update completed |
-| `audit_finding` | all audits | Code quality or perf finding |
+| Type                     | Used By          | Purpose                                     |
+| ------------------------ | ---------------- | ------------------------------------------- |
+| `triage`                 | issue-triage     | Issue context gathered, analysis complete   |
+| `implementation`         | issue-triage     | Fix implemented                             |
+| `gate_pass`              | all              | Validation gate passed                      |
+| `gate_fail`              | all              | Validation gate failed (with error details) |
+| `security_finding`       | security-audit   | Security scan finding                       |
+| `pr_submitted`           | issue-triage     | PR created and pushed                       |
+| `review_start`           | pr-review        | PR review initiated                         |
+| `review_complete`        | pr-review        | PR review completed                         |
+| `milestone_sprint_start` | milestone-sprint | Sprint started                              |
+| `deps_update`            | update-deps      | Dependency update completed                 |
+| `audit_finding`          | all audits       | Code quality or perf finding                |

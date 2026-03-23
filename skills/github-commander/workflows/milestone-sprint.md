@@ -35,9 +35,11 @@ For each open issue in the milestone (in priority order):
 2. If human approves: run the full **issue-triage.md** workflow for this issue
 
 3. After each issue is complete, update the sprint progress:
+
    ```
    get_github_milestone({ milestone_number: <N> })
    ```
+
    Report updated completion percentage.
 
 4. Repeat for next issue until:
@@ -56,12 +58,15 @@ After all issues are processed (or sprint is stopped):
    - PRs submitted
 
 2. Report milestone delta:
+
    ```
    get_github_milestone({ milestone_number: <N> })
    ```
+
    Show completion percentage before and after sprint.
 
 3. Journal sprint summary:
+
    ```
    create_entry({
      content: "Milestone sprint complete: <title>. Issues fixed: <N>/<total>. Milestone: <before>% → <after>%. PRs: <list>.",

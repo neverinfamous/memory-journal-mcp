@@ -32,8 +32,8 @@ Follow `security-audit.md` phases 2–7. Tag every finding with `[SEC]`.
 
 Produce **one** consolidated table sorted by severity:
 
-| # | Tag | Severity | File | Lines | Finding | Suggested Fix |
-|---|-----|----------|------|-------|---------|---------------|
+| #   | Tag | Severity | File | Lines | Finding | Suggested Fix |
+| --- | --- | -------- | ---- | ----- | ------- | ------------- |
 
 **Do not apply any fixes yet.**
 
@@ -43,19 +43,19 @@ Review the raw ledger and identify findings that interact across domains.
 
 ### Conflict Types
 
-| Type | Example |
-|------|---------|
-| **Security ↔ Quality** | A `[SEC]` fix (adding validation) could introduce duplication flagged by `[CQ]` |
-| **Security ↔ Performance** | A `[SEC]` fix (parameterized queries, hashing) could degrade `[PERF]` |
-| **Performance ↔ Quality** | A `[PERF]` fix (inlining, caching) could increase complexity flagged by `[CQ]` |
-| **Performance ↔ Security** | A `[PERF]` fix (caching, skipping validation) could weaken a `[SEC]` boundary |
-| **Shared Root Cause** | Multiple findings trace to the same underlying issue |
-| **Fix Dependency** | One finding must be fixed before another |
+| Type                       | Example                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| **Security ↔ Quality**     | A `[SEC]` fix (adding validation) could introduce duplication flagged by `[CQ]` |
+| **Security ↔ Performance** | A `[SEC]` fix (parameterized queries, hashing) could degrade `[PERF]`           |
+| **Performance ↔ Quality**  | A `[PERF]` fix (inlining, caching) could increase complexity flagged by `[CQ]`  |
+| **Performance ↔ Security** | A `[PERF]` fix (caching, skipping validation) could weaken a `[SEC]` boundary   |
+| **Shared Root Cause**      | Multiple findings trace to the same underlying issue                            |
+| **Fix Dependency**         | One finding must be fixed before another                                        |
 
 ### Cross-Reference Table
 
 | Linked Findings | Conflict Type | Resolution Strategy |
-|-----------------|---------------|---------------------|
+| --------------- | ------------- | ------------------- |
 
 If no cross-references are found, state that explicitly.
 
@@ -74,7 +74,7 @@ Produce an **ordered fix plan** that avoids cascading regressions:
 ### Fix Plan Table
 
 | Order | Finding(s) | Fix Description | Domains Resolved |
-|-------|------------|-----------------|------------------|
+| ----- | ---------- | --------------- | ---------------- |
 
 ## HITL Gate — User Approval
 
@@ -82,6 +82,7 @@ Produce an **ordered fix plan** that avoids cascading regressions:
 plan to the human for review. Do not proceed until explicitly approved.
 
 Journal the audit state:
+
 ```
 create_entry({
   content: "Full audit complete. Findings: <N total> (<CQ count> CQ, <PERF count> PERF, <SEC count> SEC). Cross-references: <N>. Awaiting approval for fix plan.",
@@ -95,6 +96,7 @@ create_entry({
 Apply fixes in the approved order. After **all** fixes:
 
 Run validation gates:
+
 - Gate 1: Lint + Typecheck
 - Gate 2: Build
 - Gate 3: Tests
@@ -105,11 +107,11 @@ If any validation fails, identify which fix group caused it and revise.
 
 ### Summary Table
 
-| Domain | Score (A–F) | Findings | Critical | Cross-Referenced |
-|--------|-------------|----------|----------|------------------|
-| Code Quality | | | | |
-| Performance | | | | |
-| Security | | | | |
+| Domain       | Score (A–F) | Findings | Critical | Cross-Referenced |
+| ------------ | ----------- | -------- | -------- | ---------------- |
+| Code Quality |             |          |          |                  |
+| Performance  |             |          |          |                  |
+| Security     |             |          |          |                  |
 
 ### Metrics
 

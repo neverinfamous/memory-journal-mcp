@@ -199,7 +199,10 @@ describe('CodeModeSecurityManager', () => {
 
             // Manually fast-forward: replace the resetTime to be in the past
             // Access the internal rateLimits map via any cast
-            const limitsMap = (mgr as any).rateLimits as Map<string, { count: number; resetTime: number }>
+            const limitsMap = (mgr as any).rateLimits as Map<
+                string,
+                { count: number; resetTime: number }
+            >
             const entry = limitsMap.get('expired-client')
             if (entry) {
                 entry.resetTime = Date.now() - 1000

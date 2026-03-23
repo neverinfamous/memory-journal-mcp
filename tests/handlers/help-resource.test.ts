@@ -51,11 +51,11 @@ describe('Help Resource Handlers', () => {
         const createEntry = result.data.tools.find((t: any) => t.name === 'create_entry')
         expect(createEntry.parameters).toBeDefined()
 
-        // content is z.string() — required
+        // content is z.string().optional() (relaxed) — not required at SDK level
         const contentParam = createEntry.parameters.find((p: any) => p.name === 'content')
         expect(contentParam).toBeDefined()
         expect(contentParam.type).toBe('string')
-        expect(contentParam.required).toBe(true)
+        expect(contentParam.required).toBe(false)
 
         // tags is z.array(z.string()).optional() — not required
         const tagsParam = createEntry.parameters.find((p: any) => p.name === 'tags')

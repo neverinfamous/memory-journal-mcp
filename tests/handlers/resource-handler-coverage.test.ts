@@ -248,7 +248,9 @@ describe('Resource Handler Coverage', () => {
             // Shipped skills are always discovered
             expect(data.configured).toBe(true)
             expect(data.skills.length).toBeGreaterThanOrEqual(1)
-            expect(data.skills.some((s) => s.name === 'github-commander' && s.source === 'shipped')).toBe(true)
+            expect(
+                data.skills.some((s) => s.name === 'github-commander' && s.source === 'shipped')
+            ).toBe(true)
 
             // Restore
             if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv

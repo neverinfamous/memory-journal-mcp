@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-94%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1767_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
 
@@ -35,7 +35,7 @@
 | **Backup & Restore**      | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                                      |
 | **Security & Transport**  | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                                         |
 | **Agent Collaboration**   | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
-| **GitHub Commander**      | Issue triage, PR review, milestone sprint, and audit skills with journal trails ([docs](https://github.com/neverinfamous/memory-journal-mcp/blob/main/skills/github-commander/SKILL.md)) |
+| **GitHub Commander**      | Issue triage, PR review, milestone sprint, and audit skills with journal trails ([docs](https://github.com/neverinfamous/memory-journal-mcp/blob/main/skills/github-commander/SKILL.md))                                   |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 

@@ -55,7 +55,7 @@ test.describe('Integration: Core → Search → Analytics Pipeline', () => {
             expectSuccess(stats)
             // get_statistics returns flat object: { totalEntries, entriesByType, ... }
             expect(typeof stats.totalEntries).toBe('number')
-            expect((stats.totalEntries as number)).toBeGreaterThanOrEqual(3)
+            expect(stats.totalEntries as number).toBeGreaterThanOrEqual(3)
         } finally {
             await client.close()
         }

@@ -29,8 +29,7 @@ const DEFAULT_PORT = 3100
  */
 export function getBaseURL(testInfo: TestInfo): string {
     return (
-        (testInfo.project.use as { baseURL?: string }).baseURL ??
-        `http://localhost:${DEFAULT_PORT}`
+        (testInfo.project.use as { baseURL?: string }).baseURL ?? `http://localhost:${DEFAULT_PORT}`
     )
 }
 

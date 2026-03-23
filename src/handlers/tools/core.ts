@@ -52,7 +52,7 @@ const CreateEntrySchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const CreateEntrySchemaMcp = z.object({
-    content: z.string(),
+    content: z.string().optional(),
     entry_type: z.string().optional().default('personal_reflection'),
     tags: z.array(z.string()).optional().default([]),
     is_personal: z.boolean().optional().default(true),
@@ -78,7 +78,7 @@ const GetEntryByIdSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
 const GetEntryByIdSchemaMcp = z.object({
-    entry_id: relaxedNumber(),
+    entry_id: relaxedNumber().optional(),
     include_relationships: z.boolean().optional().default(true),
 })
 
@@ -99,7 +99,7 @@ const CreateEntryMinimalSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const CreateEntryMinimalSchemaMcp = z.object({
-    content: z.string(),
+    content: z.string().optional(),
 })
 
 const TestSimpleSchema = z.object({
