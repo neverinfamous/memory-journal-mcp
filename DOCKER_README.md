@@ -8,9 +8,9 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96.1%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-1679_passed-brightgreen.svg)
-![E2E Tests](https://img.shields.io/badge/E2E_Tests-247_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-96%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-1767_passed-brightgreen.svg)
+![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -20,33 +20,38 @@
 
 ### What Sets Us Apart
 
-**61 MCP Tools** · **16 Workflow Prompts** · **28 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**61 MCP Tools** · **16 Workflow Prompts** · **28 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
-| Feature                        | Description                                                                                                                                                                                                                                                                |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments                                                                                                                                                                                 |
-| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                                                                                     |
-| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                                                                                    |
-| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                                                                                |
-| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 61 capabilities via `mj.*` API                                                                              |
-| **Configurable Briefing**      | 12 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, rules/skills awareness, and workflow summary (`memory://workflows`)                                            |
-| **Session Continuity**         | `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                                                                                               |
-| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                                                                            |
-| **Team Collaboration**         | 20 dedicated team tools providing full functionality parity — including CRUD, isolated semantic vector search, relationship graphs, and cross-project insights via a shared database with author attribution                                                               |
-| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                                                                            |
-| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                                                                              |
-| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                                                                             |
-| **Production-Ready Security**  | SQL injection prevention, input validation, path traversal protection, token scrubbing, security headers, and non-root Docker execution                                                                                                                                    |
-| **Rule & Skill Suggestions**   | Agents offer to codify recurring patterns into reusable rules and skills with your approval                                                                                                                                                                                |
-| **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, IDE agents proactively apply past patterns ([setup guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
+| Feature                   | Description                                                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session Intelligence**  | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary`                                                                                             |
+| **GitHub Integration**    | 16 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                                            |
+| **Knowledge Graphs**      | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                                              |
+| **Triple Search**         | Full-text (FTS5), semantic (`@huggingface/transformers` + `sqlite-vec`), and date-range search                                                                                                                             |
+| **Code Mode**             | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                                                 |
+| **Configurable Briefing** | 12 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness                                                                                                               |
+| **Reports & Analytics**   | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                                                   |
+| **Team Collaboration**    | 20 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution                                                                                                           |
+| **Backup & Restore**      | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                                      |
+| **Security & Transport**  | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                                         |
+| **Agent Collaboration**   | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
+| **GitHub Commander**      | Issue triage, PR review, milestone sprint, and audit skills with journal trails ([docs](https://github.com/neverinfamous/memory-journal-mcp/blob/main/skills/github-commander/SKILL.md))                                   |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
-## Rule (Add to AGENTS.md, GEMINI.md, etc)
+---
 
-## Session Start
+## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-**REQUIRED**: Before processing any user request, read `memory://briefing` and **present the briefing to the user as a two-column markdown table** (Context | Value). Include all available context fields. Omit rows where the data is absent. **[Full example →](https://github.com/neverinfamous/memory-journal-mcp#rule-add-to-agentsmd-geminimd-etc)**
+**PERFORM AT START OF CHATS**: Read `memory://briefing`, present as two-column markdown table (Context | Value). Include all available fields; omit absent rows.
+
+**CREATE JOURNAL ENTRIES** at natural checkpoints:
+
+- After pushing to main (`milestone` or `technical_note`, tag with version)
+- After significant design decisions or learnings (`project_decision`)
+- After resolving non-trivial bugs (`bug_fix`, link to issue number)
+
+**SUGGEST CREATING OR IMPROVING RULES AND SKILLS** as you notice workflow opportunities.
 
 ---
 
@@ -174,6 +179,9 @@ Restart Cursor or your MCP client and start journaling!
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                           |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
+| `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: `*`)                           |
+| `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                 |
+| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)             |
 | `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)            |
 | `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
 | `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |
@@ -191,6 +199,16 @@ Restart Cursor or your MCP client and start journaling!
 | `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                |
 | `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                   |
 | `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
+| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `npm run lint`)              |
+| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `npm run typecheck`; empty = skip)                            |
+| `PROJECT_BUILD_CMD`               | Project build command (default: `npm run build`; empty = skip)                                    |
+| `PROJECT_TEST_CMD`                | Project test command (default: `npm run test`)                                                    |
+| `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                  |
+| `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)       |
+| `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                  |
+| `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                           |
+| `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                     |
+| `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                     |
 
 **Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
 

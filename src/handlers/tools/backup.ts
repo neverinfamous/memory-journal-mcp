@@ -152,6 +152,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Backup filename to restore from (e.g., backup_2025-01-01.db)'),
                 confirm: z
                     .boolean()
+                    .optional()
                     .describe('Must be set to true to confirm the restore operation'),
             }),
             outputSchema: RestoreResultOutputSchema,
@@ -166,7 +167,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     const input = z
                         .object({
                             filename: z.string(),
-                            confirm: z.boolean(),
+                            confirm: z.boolean().optional(),
                         })
                         .parse(params)
 
@@ -177,7 +178,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'Set confirm: true to proceed with restore',
-                            recoverable: false,
+                            recoverable: true,
                         }
                     }
 

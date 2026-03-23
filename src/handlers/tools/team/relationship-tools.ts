@@ -41,6 +41,19 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     const { from_entry_id, to_entry_id, relationship_type, description } =
                         TeamLinkEntriesSchema.parse(params)
 
+                    // Guard: self-referential links are not meaningful
+                    if (from_entry_id === to_entry_id) {
+                        return {
+                            success: false,
+                            error: 'Cannot link an entry to itself',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion:
+                                'Choose a different target entry to create a meaningful relationship',
+                            recoverable: true,
+                        }
+                    }
+
                     // Verify both entries exist
                     const fromEntry = teamDb.getEntryById(from_entry_id)
                     if (!fromEntry) {

@@ -5,7 +5,56 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.1.2...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.2.1...HEAD)
+
+## [6.2.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.2.1) - 2026-03-23
+
+### Added
+
+- Add **CI Gatekeeper** workflow (`.github/workflows/gatekeeper.yml`) — sequential security gate that blocks deployment until CodeQL, Trivy, TruffleHog, and Docker Scout all pass
+- Add **Dual-Schema pattern** documentation to `code-map.md` — prominent section explaining SDK input validation, the root cause of `-32602` errors, and non-negotiable rules for schema definitions
+- Add `esbuild` to `devDependencies` — satisfies Copilot review requirement and ensures build tool availability
+
+### Fixed
+
+- Fix raw MCP `-32602` errors leaking through `create_entry`, `create_entry_minimal`, `get_entry_by_id`, and 27 other tools — relax SDK-facing `inputSchema` fields to `.optional()` while keeping strict handler-internal validation
+- Fix `create_github_issue_with_entry` and `create_github_milestone` SDK-level rejection — remove `.min(1)` from SDK-facing `inputSchema` title fields
+- Fix `Code-Mode.md` wiki documentation drift — correct `mj.relationships.linkEntries` parameter names from `source_id`/`target_id` to `from_entry_id`/`to_entry_id`
+
+### Changed
+
+- Refine GitHub Commander skill and 8 associated workflow files with improved security scan integration and MCP-specific patterns
+- Update Wiki Drift Detector workflow with enhanced lock file
+- Improve test reliability in `security.test.ts`, `native-connection.test.ts`, `helpers.ts`, `integration-workflows.spec.ts`, and `resource-handler-coverage.test.ts`
+
+## [6.2.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.2.0) - 2026-03-23
+
+### Added
+
+- Add 7 new Playwright E2E spec files: `zod-sweep`, `boundary`, `errors-extended`, `numeric-coercion`, `help-resources`, `integration-workflows`, `streamable-http` (~115 new tests)
+- Add `codemode-groups.spec.ts` E2E spec: systematic per-group Code Mode API surface validation (25 tests covering help(), representative calls, method aliases) — ported from db-mcp/postgres-mcp patterns
+- Add `callToolRaw`, `getBaseURL`, `expectHandlerError` helpers to E2E test infrastructure
+- Add `TEAM_DB_PATH` to Playwright test server config — enables functional E2E coverage of all team tools
+- Add **GitHub Commander** skill system: 8 shipped workflow files teaching agents structured issue triage, PR review, milestone sprints, and security/quality/performance audits — with configurable validation gates, auto-detected security scanning, journal audit trails, and HITL checkpoints
+- Add shipped skills auto-discovery: `memory://skills` resource now scans the package's own `skills/` directory in addition to user-configured `SKILLS_DIR_PATH`
+- Add **Wiki Drift Detector**: new GitHub Action (`.github/workflows/wiki-drift-detector.md`) that clones the `.wiki` repository during PR logic to flag and suggest updates for outdated wiki documentation (Tools, Resources, Configuration).
+
+### Fixed
+
+- Fix `restore_backup` returning MCP-level `isError: true` instead of structured handler error when `confirm` is omitted — relax inputSchema so validation reaches handler
+- Fix `team_link_entries` allowing self-referential links — add self-loop guard matching personal `link_entries`
+
+### Changed
+
+- Add `files` field to `package.json` — npm tarball now ships `dist/`, `skills/`, `LICENSE`, and `README.md`
+- Override `onnxruntime-web` with empty stub — eliminates 90 MB unused browser WASM runtime from dependency tree
+- Override `sharp` with empty stub — removes unused image processing transitive dependency from `@huggingface/transformers`
+
+### Dependencies
+
+- Bump `trufflesecurity/trufflehog` from 3.93.8 to 3.94.0
+- Bump `docker/scout-action` from 1.20.2 to 1.20.3
+- Bump `github/codeql-action` from 4.33.0 to 4.34.1
 
 ## [6.1.2](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.1.2) - 2026-03-22
 

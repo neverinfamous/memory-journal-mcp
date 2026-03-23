@@ -1,11 +1,14 @@
 name: Build and Push Docker Images
 
 on:
-  # Only run after lint-and-test completes successfully
-  workflow_run:
-    workflows: ['Lint and Test']
-    types: [completed]
-    branches: [main]
+  workflow_call:
+    secrets:
+      DOCKER_USERNAME:
+        required: true
+      DOCKER_PASSWORD:
+        required: true
+      NPM_TOKEN:
+        required: true
 
 env:
   REGISTRY: docker.io
@@ -23,7 +26,7 @@ jobs:
   # Security scan BEFORE any images are pushed
   # This ensures no vulnerable images reach Docker Hub
   security-scan:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -56,7 +59,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Docker Scout security scan
-        uses: docker/scout-action@1128f02d1e60f339af7306e0e62b9fdc13d9fab9 # v1.20.2
+        uses: docker/scout-action@8910519cee8ac046f3ee99686b0dc6654d5ba1a7 # v1.20.3
         timeout-minutes: 10
         with:
           command: cves
@@ -206,8 +209,8 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.event.workflow_run.head_branch == 'main' }}
-            type=raw,value=latest,enable=${{ github.event.workflow_run.head_branch == 'main' }}
+            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
             type=sha,prefix=sha-,format=short
 
       - name: Create and push manifest
@@ -248,7 +251,7 @@ jobs:
   # - If Lint/Test fails → nothing publishes
   npm-publish:
     needs: [merge-and-push]
-    if: always() && needs.merge-and-push.result == 'success' && github.event.workflow_run.head_branch == 'main'
+    if: always() && needs.merge-and-push.result == 'success' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     uses: ./.github/workflows/publish-npm.yml
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,6 +1,10 @@
 /**
  * Field notes and gotchas — served via memory://help/gotchas resource.
  * Exported so the help resource handler can access it.
+ *
+ * NOTE: This file is inlined verbatim by scripts/generate-server-instructions.ts
+ * into src/constants/server-instructions.ts, which already imports TOOL_GROUPS.
+ * Do NOT add import statements here — they would appear as raw text in the output.
  */
 export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
@@ -41,5 +45,5 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 - **Team cross-database search**: \`search_entries\` and \`search_by_date_range\` automatically merge team DB results when \`TEAM_DB_PATH\` is configured. Results include a \`source\` field ("personal" or "team").
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
-- **Team tools without \`TEAM_DB_PATH\`**: All 20 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
+- **Team tools without \`TEAM_DB_PATH\`**: All ${TOOL_GROUPS.team.length} team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `

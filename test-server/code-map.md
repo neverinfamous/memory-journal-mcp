@@ -328,11 +328,72 @@ catch (error) {
 
 ---
 
+## ⚠️ CRITICAL: SDK Input Schema Validation (Read This First)
+
+**If you see a raw MCP `-32602` error, the problem is ALWAYS in our schema definition. It is NEVER an AntiGravity/client issue. Do not hallucinate client-side causes.**
+
+### The Problem
+
+The MCP SDK validates tool inputs **before** our handler code runs. If a required field in our `inputSchema` receives `undefined` or an empty string, the SDK throws a raw `-32602 InvalidParams` error that bypasses our structured error handling entirely. The user sees an ugly protocol error instead of our clean `{success: false, error, code, category}` response.
+
+### The Solution: Dual-Schema Pattern
+
+Every tool has **two** schemas — one relaxed (SDK-facing) and one strict (handler-internal):
+
+```typescript
+{
+    name: 'create_entry',
+    // SDK-FACING SCHEMA: All fields optional, NO .min() constraints.
+    // This lets {} pass through to our handler without -32602.
+    inputSchema: z.object({
+        content: z.string().optional().describe('Entry content'),
+        //                 ^^^^^^^^^^
+        // MUST be .optional() here — even if logically required.
+    }),
+    handler: async (params: unknown) => {
+        try {
+            // HANDLER SCHEMA: Strict validation with .min(1), required fields, etc.
+            // This is where real validation happens, producing structured errors.
+            const input = z.object({
+                content: z.string().min(1).max(MAX_CONTENT_LENGTH),
+                //                  ^^^^^^^
+                // Enforcement happens HERE, caught by formatHandlerError()
+            }).parse(params)
+            // ... tool logic ...
+        } catch (err) {
+            return formatHandlerError(err)  // → structured {success: false, ...}
+        }
+    },
+}
+```
+
+### Rules (Non-Negotiable)
+
+1. **SDK-facing `inputSchema`**: Every field MUST be `.optional()`. NO `.min(1)`, NO bare `z.string()` or `z.number()` without `.optional()`. NO `z.literal(true)` without `.optional()`.
+2. **Handler-internal schema** (inside `try`): Use full strict validation — `.min(1)`, required fields, `.literal(true)`, etc. Errors are caught by `formatHandlerError()`.
+3. **`mcp-server.ts` also applies `.partial().passthrough()`** at registration time as a safety net, but this does NOT remove `.min()` constraints — it only makes fields optional.
+4. **When adding a new tool**: Follow this pattern. If the E2E zod-sweep test fails, the fix is in your `inputSchema`, not the client.
+
+### What NOT To Do
+
+- ❌ **Do NOT blame AntiGravity or the MCP client** — the client sends what the schema allows. If validation fails at the SDK level, it's our schema's fault.
+- ❌ **Do NOT add `.partial()` or `.passthrough()` to fix individual tools** — the registration layer already handles this. Fix the `inputSchema` field definitions instead.
+- ❌ **Do NOT use `z.string().min(1)` in `inputSchema`** — empty string `""` will trigger SDK-level rejection before your handler runs.
+- ❌ **Do NOT assume esbuild tree-shaking removed your code** — if a `-32602` occurs, check the actual schema definition first.
+- ❌ **Do NOT revert test assertions** from `not.toContain('-32602')` to `toContain('-32602')` — the test is correct; fix the schema.
+
+### Verification
+
+The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and asserts **no** `-32602` errors leak. If it fails, the tool's SDK-facing `inputSchema` has a non-optional required field.
+
+---
+
 ## Architecture Patterns (Quick Reference)
 
 | Pattern               | Description                                                                                                                                                                                                                                                                                               |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Structured Errors** | Every tool returns `{success: false, error, code, category, suggestion, recoverable}` — never raw exceptions. Uses `formatHandlerError()`.                                                                                                                                                                |
+| **Dual-Schema**       | SDK-facing `inputSchema` is fully optional (no `.min()`, all `.optional()`). Handler-internal schema (inside `try`) enforces strict validation. See § SDK Input Schema Validation above — **this is the #1 recurring issue**.                                                                             |
 | **Tool Context**      | `ToolContext` passes `db`, `teamDb?`, `vectorManager?`, `teamVectorManager?`, `github?`, `config?`, `progress?` to all tool group modules. Each group factory receives context and returns `ToolDefinition[]`.                                                                                            |
 | **Tool Map Cache**    | `getTools()` + `callTool()` share a `Map<string, ToolDefinition>` cache (O(1) lookup). Cache invalidates when context refs change. `mappedToolsCache` avoids re-mapping for unfiltered calls.                                                                                                             |
 | **Code Mode Bridge**  | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). Readonly mode halts execution gracefully and returns structured errors via proxy traps. |

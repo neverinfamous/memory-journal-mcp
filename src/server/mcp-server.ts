@@ -220,7 +220,29 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
 
         if (tool.inputSchema !== undefined) {
-            toolOptions['inputSchema'] = tool.inputSchema
+            const schema = tool.inputSchema
+            if (
+                typeof schema === 'object' &&
+                schema !== null &&
+                'partial' in schema &&
+                typeof (schema as { partial: unknown }).partial === 'function'
+            ) {
+                // .partial() makes all fields optional so the SDK accepts `{}`.
+                // .passthrough() preserves unrecognized keys so handler can normalize.
+                // Wrapped in try/catch: if partial() returns something without passthrough()
+                // (non-ZodObject wrapper), fall back to the original schema to avoid
+                // a startup throw.
+                try {
+                    const relaxed = (schema as { partial: () => { passthrough?: () => z.ZodType } }).partial()
+                    toolOptions['inputSchema'] = typeof relaxed.passthrough === 'function'
+                        ? relaxed.passthrough()
+                        : schema
+                } catch {
+                    toolOptions['inputSchema'] = schema
+                }
+            } else {
+                toolOptions['inputSchema'] = schema
+            }
         }
 
         // MCP 2025-11-25: Pass outputSchema for structured responses

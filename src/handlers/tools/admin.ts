@@ -26,7 +26,7 @@ const UpdateEntrySchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const UpdateEntrySchemaMcp = z.object({
-    entry_id: relaxedNumber(),
+    entry_id: relaxedNumber().optional(),
     content: z.string().optional(),
     entry_type: z.string().optional(),
     is_personal: z.boolean().optional(),
@@ -40,7 +40,7 @@ const DeleteEntrySchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so type coercion errors reach the handler */
 const DeleteEntrySchemaMcp = z.object({
-    entry_id: relaxedNumber(),
+    entry_id: relaxedNumber().optional(),
     permanent: z.boolean().optional().default(false),
 })
 
@@ -188,10 +188,10 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                 'Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.',
             group: 'admin',
             inputSchema: z.object({
-                source_tag: z.string().min(1).describe('Tag to merge from (will be deleted)'),
+                source_tag: z.string().optional().describe('Tag to merge from (will be deleted)'),
                 target_tag: z
                     .string()
-                    .min(1)
+                    .optional()
                     .describe('Tag to merge into (will be created if not exists)'),
             }),
             outputSchema: MergeTagsOutputSchema,
@@ -304,7 +304,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             title: 'Add Entry to Vector Index',
             description: 'Add a specific entry to the semantic search vector index',
             group: 'admin',
-            inputSchema: z.object({ entry_id: relaxedNumber() }),
+            inputSchema: z.object({ entry_id: relaxedNumber().optional() }),
             outputSchema: AddToVectorIndexOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
             handler: async (params: unknown) => {

@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { getResources, readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import { getAllToolNames } from '../../src/filtering/tool-filter.js'
 
 describe('Resource Handlers', () => {
     let db: DatabaseAdapter
@@ -121,7 +122,7 @@ describe('Resource Handlers', () => {
             const result = await readResource('memory://instructions', db, undefined, null)
 
             const text = result.data as string
-            expect(text).toContain('Active Tools (61)')
+            expect(text).toContain(`Active Tools (${getAllToolNames().length})`)
         })
 
         it('should read memory://recent', async () => {

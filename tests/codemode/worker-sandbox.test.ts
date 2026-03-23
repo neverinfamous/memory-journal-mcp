@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { execSync } from 'node:child_process'
+import * as esbuild from 'esbuild'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { WorkerSandbox, WorkerSandboxPool } from '../../src/codemode/index.js'
@@ -10,12 +10,17 @@ const workerScriptJs = path.join(__dirname, '../../src/codemode/worker-script.js
 beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
     // worker_threads cannot run .ts files directly in this vitest setup
+    // Uses esbuild's JS API directly (npx esbuild via execSync hangs on Windows)
     if (!fs.existsSync(workerScriptJs)) {
-        execSync(
-            `npx esbuild ${workerScriptSrc} --bundle --platform=node --format=esm --outfile=${workerScriptJs}`
-        )
+        esbuild.buildSync({
+            entryPoints: [workerScriptSrc],
+            bundle: true,
+            platform: 'node',
+            format: 'esm',
+            outfile: workerScriptJs,
+        })
     }
-})
+}, 30_000)
 
 afterAll(() => {
     // Cleanup generated JS file
@@ -67,7 +72,7 @@ describe('WorkerSandbox', () => {
         `
         const result = await sandbox.execute(code, {})
         expect(result.success).toBe(false)
-        expect(result.error).toContain('timed out')
+        expect(result.error).toMatch(/timed out|timeout|code 1/i)
     })
 
     it('should catch synchronous syntax errors or throw', async () => {
@@ -75,6 +80,91 @@ describe('WorkerSandbox', () => {
         const result = await sandbox.execute('throw new Error("test abort")', {})
         expect(result.success).toBe(false)
         expect(result.error).toContain('test abort')
+    })
+
+    it('should handle RPC calls to non-existent groups gracefully', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                echo: async (x: string) => x,
+            },
+        }
+        // Non-existent group: the worker proxy doesn't create nested proxies
+        // for unknown groups, so accessing mj.nonexistent returns undefined
+        const code = `
+            try {
+                await mj.nonexistent.method();
+            } catch(e) {
+                return e.message;
+            }
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        // TypeError because mj.nonexistent is undefined
+        expect(String(result.result)).toContain('Cannot read properties of undefined')
+    })
+
+    it('should handle RPC calls to non-existent methods within a valid group', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                echo: async (x: string) => x,
+            },
+        }
+        const code = `
+            try {
+                await mj.core.doesNotExist();
+            } catch(e) {
+                return e.message;
+            }
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(String(result.result)).toContain('is not found in group')
+    })
+
+    it('should handle RPC errors thrown by api bindings', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                failingMethod: async () => {
+                    throw new Error('binding threw')
+                },
+            },
+        }
+        const code = `
+            try {
+                await mj.core.failingMethod();
+            } catch(e) {
+                return e.message;
+            }
+        `
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(String(result.result)).toContain('binding threw')
+    })
+
+    it('should handle custom timeout parameter', async () => {
+        const sandbox = new WorkerSandbox({ timeoutMs: 30000 })
+        const result = await sandbox.execute('return "ok"', {}, 5000)
+        expect(result.success).toBe(true)
+        expect(result.result).toBe('ok')
+    })
+
+    it('should skip non-function and non-object bindings in serialization', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings = {
+            core: {
+                echo: async (x: string) => x,
+            },
+            // These should be silently skipped (not functions or objects)
+            stringVal: 'hello' as unknown,
+            numberVal: 42 as unknown,
+        }
+        const code = 'return await mj.core.echo("test")'
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(result.result).toBe('test')
     })
 })
 

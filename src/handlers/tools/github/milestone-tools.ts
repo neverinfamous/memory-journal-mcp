@@ -165,7 +165,7 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                 'Create a new GitHub milestone for tracking progress toward a project goal.',
             group: 'github',
             inputSchema: z.object({
-                title: z.string().min(1).describe('Milestone title'),
+                title: z.string().optional().describe('Milestone title'),
                 description: z.string().optional().describe('Milestone description'),
                 due_on: z.string().optional().describe('Due date in YYYY-MM-DD format (optional)'),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect'),

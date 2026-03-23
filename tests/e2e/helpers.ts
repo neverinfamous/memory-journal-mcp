@@ -4,16 +4,34 @@
  * Provides:
  * - createClient() — Streamable HTTP client factory
  * - callToolAndParse() — call tool + parse JSON response
+ * - callToolRaw() — call tool + return raw MCP response (no JSON parsing)
  * - expectSuccess() — assert payload is not a structured error
+ * - expectHandlerError() — assert payload IS a structured handler error
+ * - getBaseURL() — resolve base URL from Playwright testInfo
  * - startServer() / stopServer() — managed child-process server lifecycle
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
 import { type ChildProcess, spawn } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
+
+const DEFAULT_PORT = 3100
+
+// ─── Base URL resolution ────────────────────────────────────────────────────
+
+/**
+ * Resolve the base URL from Playwright test info.
+ * Falls back to http://localhost:3100 if not set in project config.
+ */
+export function getBaseURL(testInfo: TestInfo): string {
+    return (
+        (testInfo.project.use as { baseURL?: string }).baseURL ?? `http://localhost:${DEFAULT_PORT}`
+    )
+}
 
 /**
  * Create and connect a Streamable HTTP MCP client.
@@ -62,6 +80,49 @@ export function expectSuccess(payload: Record<string, unknown>): void {
     }
 }
 
+// ─── Raw tool call ──────────────────────────────────────────────────────────
+
+/**
+ * Call a tool and return the raw MCP response (without JSON parsing).
+ * Useful for inspecting isError, checking raw text, or handling non-JSON.
+ */
+export async function callToolRaw(
+    client: Client,
+    toolName: string,
+    args: Record<string, unknown>
+): Promise<{
+    content: Array<{ type: string; text: string }>
+    isError?: boolean
+}> {
+    const response = await client.callTool({ name: toolName, arguments: args })
+    return response as {
+        content: Array<{ type: string; text: string }>
+        isError?: boolean
+    }
+}
+
+// ─── Error assertion ────────────────────────────────────────────────────────
+
+/**
+ * Assert that a payload IS a structured handler error.
+ * Checks for `{ success: false, error: "..." }` shape.
+ */
+export function expectHandlerError(
+    payload: Record<string, unknown>,
+    expectedMessage?: string | RegExp
+): void {
+    expect(payload.success, `Expected handler error, got: ${JSON.stringify(payload)}`).toBe(false)
+    expect(typeof payload.error, `Missing error string in: ${JSON.stringify(payload)}`).toBe(
+        'string'
+    )
+
+    if (expectedMessage instanceof RegExp) {
+        expect(payload.error as string).toMatch(expectedMessage)
+    } else if (typeof expectedMessage === 'string') {
+        expect((payload.error as string).toLowerCase()).toContain(expectedMessage.toLowerCase())
+    }
+}
+
 // =============================================================================
 // Server Process Management
 // =============================================================================
@@ -85,7 +146,7 @@ export async function startServer(
     port: number,
     args: string[] = [],
     dbSuffix?: string,
-    options?: { cwd?: string }
+    options?: { cwd?: string; env?: Record<string, string | undefined> }
 ): Promise<void> {
     const suffix = dbSuffix ?? String(port)
     const serverProcess = spawn(
@@ -103,12 +164,15 @@ export async function startServer(
         {
             cwd: options?.cwd ?? process.cwd(),
             stdio: 'pipe',
-            env: {
-                ...process.env,
-                MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
-                    ? undefined
-                    : '10000',
-            },
+            env: Object.fromEntries(
+                Object.entries({
+                    ...process.env,
+                    MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
+                        ? undefined
+                        : '10000',
+                    ...options?.env,
+                }).filter(([, v]) => v !== undefined)
+            ),
         }
     )
 

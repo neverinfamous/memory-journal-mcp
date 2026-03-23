@@ -1,0 +1,40 @@
+name: CI/CD Pipeline
+
+permissions:
+  actions: read
+  contents: write
+  packages: write
+  security-events: write
+  issues: write
+  pull-requests: write
+  id-token: write
+  attestations: write
+  deployments: write
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint-and-test.yml
+
+  codeql:
+    uses: ./.github/workflows/codeql.yml
+
+  secrets:
+    uses: ./.github/workflows/secrets-scanning.yml
+
+  trivy:
+    uses: ./.github/workflows/security-update.yml
+
+  publish:
+    needs: [lint, codeql, secrets, trivy]
+    # Publish only after ALL security gates pass (fan-out: runs in parallel, gates publish)
+    if: always() && needs.lint.result == 'success' && needs.codeql.result == 'success' && needs.secrets.result == 'success' && needs.trivy.result == 'success'
+    uses: ./.github/workflows/docker-publish.yml
+    secrets:
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
