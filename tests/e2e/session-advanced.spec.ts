@@ -19,8 +19,6 @@ test.describe('Advanced Session Management', () => {
             { capabilities: {} }
         )
 
-        let sseSessionId: string | undefined
-
         try {
             await sseClient.connect(sseTransport)
 

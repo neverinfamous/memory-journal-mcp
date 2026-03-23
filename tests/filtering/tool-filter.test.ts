@@ -4,7 +4,7 @@
  * Tests the tool filtering system: groups, meta-groups, parsing, filtering.
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import {
     TOOL_GROUPS,
     META_GROUPS,

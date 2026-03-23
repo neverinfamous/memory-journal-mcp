@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Hoisted mocks
 // ============================================================================
 
-const { MockSSEServerTransport, mockHandlePostMessage } = vi.hoisted(() => {
+const { MockSSEServerTransport } = vi.hoisted(() => {
     const handlePostMessage = vi.fn().mockResolvedValue(undefined)
 
     class SSEMock {

@@ -13,8 +13,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ============================================================================
 
 const {
-    mockHandleRequest,
-    mockTransportClose,
     mockRoutes,
     mockMiddlewares,
     mockApp,

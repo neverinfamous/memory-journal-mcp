@@ -15,8 +15,6 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
-const BASE_URL = 'http://localhost:3100/mcp'
-
 /**
  * Create and connect a Streamable HTTP MCP client.
  * Caller is responsible for calling client.close() in afterAll.

@@ -5,7 +5,18 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.1.0...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.1.1...HEAD)
+
+## [6.1.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.1.1) - 2026-03-22
+
+### Security
+
+- **Docker Workflow Hardening** — Removed explicit `ref: ${{ github.event.workflow_run.head_sha }}` from `docker-publish.yml` checkout steps to resolve CodeQL "untrusted checkout in trusted context" alerts (#145, #146, #147). The workflow only triggers on completed `Lint and Test` runs on main, so the default checkout is safe.
+
+### Fixed
+
+- **Useless Assignment** — Removed dead initial assignment `= 'unknown'` on `status` variable in `github-section.ts` (#148).
+- **Unused Variables** — Removed 12 unused variables, imports, and constants across test files flagged by CodeQL (#149–#160).
 
 ## [6.1.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.1.0) - 2026-03-22
 

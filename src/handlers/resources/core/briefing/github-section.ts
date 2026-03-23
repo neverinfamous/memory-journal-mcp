@@ -128,7 +128,7 @@ async function fetchCiStatus(
         if (runs.length === 0) return { status: 'unknown' }
 
         const latestRun = runs[0]
-        let status: CiResult['status'] = 'unknown'
+        let status: CiResult['status']
         if (!latestRun) {
             status = 'unknown'
         } else if (latestRun.status !== 'completed') {

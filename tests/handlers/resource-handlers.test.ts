@@ -28,7 +28,7 @@ describe('Resource Handlers', () => {
             projectNumber: 42,
             issueNumber: 7,
         })
-        const e3 = db.createEntry({
+        db.createEntry({
             content: 'Resource test entry gamma',
             prNumber: 15,
         })

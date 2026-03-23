@@ -1,5 +1,4 @@
 import { spawn } from 'child_process'
-import { join } from 'path'
 
 const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
 const proc = spawn('node', ['dist/cli.js', '--instruction-level', 'essential'], {
