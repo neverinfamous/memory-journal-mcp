@@ -1,5 +1,12 @@
 name: CI/CD Pipeline
 
+permissions:
+  actions: read
+  contents: write
+  security-events: write
+  issues: write
+  pull-requests: write
+
 on:
   push:
     branches: [main]
@@ -8,13 +15,13 @@ on:
 jobs:
   lint:
     uses: ./.github/workflows/lint-and-test.yml
-  
+
   codeql:
     uses: ./.github/workflows/codeql.yml
-  
+
   secrets:
     uses: ./.github/workflows/secrets-scanning.yml
-  
+
   trivy:
     uses: ./.github/workflows/security-update.yml
 
