@@ -113,8 +113,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     beforeAll(async () => {
         try {
             const fs = require('node:fs')
-            if (fs.existsSync('./test-team-catchblk-main.db')) fs.unlinkSync('./test-team-catchblk-main.db')
-            if (fs.existsSync('./test-team-catchblk-team.db')) fs.unlinkSync('./test-team-catchblk-team.db')
+            if (fs.existsSync('./test-team-catchblk-main.db'))
+                fs.unlinkSync('./test-team-catchblk-main.db')
+            if (fs.existsSync('./test-team-catchblk-team.db'))
+                fs.unlinkSync('./test-team-catchblk-team.db')
         } catch {
             /* ignore */
         }

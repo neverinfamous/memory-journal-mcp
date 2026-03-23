@@ -164,13 +164,15 @@ export async function startServer(
         {
             cwd: options?.cwd ?? process.cwd(),
             stdio: 'pipe',
-            env: {
-                ...process.env,
-                MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
-                    ? undefined
-                    : '10000',
-                ...options?.env,
-            },
+            env: Object.fromEntries(
+                Object.entries({
+                    ...process.env,
+                    MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
+                        ? undefined
+                        : '10000',
+                    ...options?.env,
+                }).filter(([, v]) => v !== undefined)
+            ),
         }
     )
 

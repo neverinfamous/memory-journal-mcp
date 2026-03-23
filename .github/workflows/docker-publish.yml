@@ -26,7 +26,7 @@ jobs:
   # Security scan BEFORE any images are pushed
   # This ensures no vulnerable images reach Docker Hub
   security-scan:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -209,8 +209,8 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.event.workflow_run.head_branch == 'main' }}
-            type=raw,value=latest,enable=${{ github.event.workflow_run.head_branch == 'main' }}
+            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
 
       - name: Create and push manifest
@@ -251,7 +251,7 @@ jobs:
   # - If Lint/Test fails → nothing publishes
   npm-publish:
     needs: [merge-and-push]
-    if: always() && needs.merge-and-push.result == 'success' && github.event.workflow_run.head_branch == 'main'
+    if: always() && needs.merge-and-push.result == 'success' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/publish-npm.yml
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
