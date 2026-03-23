@@ -36,10 +36,9 @@ async function assertZodHandlerError(toolName: string) {
             parsed = JSON.parse(text)
         } catch {
             // Non-JSON response: verify it's not a raw MCP -32602 error frame.
-            expect(
-                text,
-                `${toolName}: raw MCP -32602 error leaked through: ${text}`
-            ).not.toContain('-32602')
+            expect(text, `${toolName}: raw MCP -32602 error leaked through: ${text}`).not.toContain(
+                '-32602'
+            )
             return
         }
 

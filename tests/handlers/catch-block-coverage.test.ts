@@ -33,17 +33,23 @@ describe('Handler catch blocks via Zod validation errors', () => {
     // admin.ts catch blocks — L180, L236, L257, L298, L346
     it('update_entry: invalid params triggers catch', async () => {
         const result = (await callTool('update_entry', { entry_id: 'not-a-number' }, db)) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     it('delete_entry: invalid params triggers catch', async () => {
         const result = (await callTool('delete_entry', { entry_id: 'bad' }, db)) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     it('merge_tags: empty params triggers catch', async () => {
         const result = (await callTool('merge_tags', {}, db)) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     it('rebuild_vector_index: returns structured error without vectorManager', async () => {
@@ -54,13 +60,17 @@ describe('Handler catch blocks via Zod validation errors', () => {
 
     it('add_to_vector_index: invalid params triggers catch', async () => {
         const result = (await callTool('add_to_vector_index', { entry_id: 'bad' }, db)) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     // core.ts catch blocks — L279, L297, L319, L336, L354
     it('get_entry_by_id: invalid params triggers catch', async () => {
         const result = (await callTool('get_entry_by_id', { entry_id: 'bad' }, db)) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     it('create_entry: invalid entry_type triggers catch', async () => {
@@ -69,12 +79,16 @@ describe('Handler catch blocks via Zod validation errors', () => {
             { content: 'test', entry_type: 'TOTALLY_INVALID_TYPE' },
             db
         )) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     it('create_entry_minimal: no content triggers catch', async () => {
         const result = (await callTool('create_entry_minimal', {}, db)) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     // relationships.ts catch blocks — L326, L361, L385
@@ -84,7 +98,9 @@ describe('Handler catch blocks via Zod validation errors', () => {
             { from_entry_id: 'bad', to_entry_id: 'bad' },
             db
         )) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     // search.ts catch blocks — L230, L328, L394
@@ -102,7 +118,9 @@ describe('Handler catch blocks via Zod validation errors', () => {
     // codemode.ts catch blocks — L145, L173
     it('mj_execute_code: no code param triggers catch', async () => {
         const result = (await callTool('mj_execute_code', {}, db)) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 })
 
@@ -113,8 +131,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
     beforeAll(async () => {
         try {
             const fs = require('node:fs')
-            if (fs.existsSync('./test-team-catchblk-main.db')) fs.unlinkSync('./test-team-catchblk-main.db')
-            if (fs.existsSync('./test-team-catchblk-team.db')) fs.unlinkSync('./test-team-catchblk-team.db')
+            if (fs.existsSync('./test-team-catchblk-main.db'))
+                fs.unlinkSync('./test-team-catchblk-main.db')
+            if (fs.existsSync('./test-team-catchblk-team.db'))
+                fs.unlinkSync('./test-team-catchblk-team.db')
         } catch {
             /* ignore */
         }
@@ -212,7 +232,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
             undefined,
             teamDb
         )) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     it('team_delete_entry: invalid params triggers catch', async () => {
@@ -226,7 +248,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
             undefined,
             teamDb
         )) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     it('team_merge_tags: missing params triggers catch', async () => {
@@ -240,7 +264,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
             undefined,
             teamDb
         )) as any
-        expect(result.error).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(typeof result.error).toBe('string')
+        expect(result.code).toBeDefined()
     })
 
     // team/backup-tools.ts catch blocks — L46, L78
