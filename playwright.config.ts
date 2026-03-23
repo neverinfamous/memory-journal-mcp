@@ -25,6 +25,8 @@ export default defineConfig({
             ...process.env,
             // Prevent 429s during E2E runs with many client connections
             MCP_RATE_LIMIT_MAX: '10000',
+            // Enable team DB so team tools get functional E2E coverage
+            TEAM_DB_PATH: './.test-output/e2e/test-e2e-team.db',
         },
         url: 'http://localhost:3100/health',
         reuseExistingServer: !process.env.CI,

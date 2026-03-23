@@ -287,7 +287,7 @@ test.describe('Errors: Team', () => {
                 start_date: '2030-12-31',
                 end_date: '2020-01-01',
             })
-            expectHandlerError(p)
+            expectHandlerError(p, /date|range|before|after/i)
         } finally {
             await client.close()
         }
@@ -296,15 +296,21 @@ test.describe('Errors: Team', () => {
     test('team_link_entries self-loop → structured error', async () => {
         const client = await createClient()
         try {
-            // Team DB may not be configured in test env — use fake IDs.
-            // Accept any structured error (config error or self-loop error)
+            // Create a team entry so the self-loop test hits the domain check,
+            // not a "not found" error
+            const create = await callToolAndParse(client, 'team_create_entry', {
+                content: 'Team self-loop test entry',
+                entry_type: 'test_entry',
+            })
+            expectSuccess(create)
+            const entryId = (create.entry as Record<string, unknown>).id as number
+
             const p = await callToolAndParse(client, 'team_link_entries', {
-                from_entry_id: 1,
-                to_entry_id: 1,
+                from_entry_id: entryId,
+                to_entry_id: entryId,
                 relationship_type: 'references',
             })
-            expect(p.success).toBe(false)
-            expect(typeof p.error).toBe('string')
+            expectHandlerError(p, /itself/i)
         } finally {
             await client.close()
         }

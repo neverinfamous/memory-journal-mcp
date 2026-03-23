@@ -147,7 +147,7 @@ export async function startServer(
     port: number,
     args: string[] = [],
     dbSuffix?: string,
-    options?: { cwd?: string }
+    options?: { cwd?: string; env?: Record<string, string | undefined> }
 ): Promise<void> {
     const suffix = dbSuffix ?? String(port)
     const serverProcess = spawn(
@@ -170,6 +170,7 @@ export async function startServer(
                 MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
                     ? undefined
                     : '10000',
+                ...options?.env,
             },
         }
     )

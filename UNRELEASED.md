@@ -4,6 +4,12 @@
 
 - Add 7 new Playwright E2E spec files: `zod-sweep`, `boundary`, `errors-extended`, `numeric-coercion`, `help-resources`, `integration-workflows`, `streamable-http` (~115 new tests)
 - Add `callToolRaw`, `getBaseURL`, `expectHandlerError` helpers to E2E test infrastructure
+- Add `TEAM_DB_PATH` to Playwright test server config — enables functional E2E coverage of all team tools
+
+### Fixed
+
+- Fix `restore_backup` returning MCP-level `isError: true` instead of structured handler error when `confirm` is omitted — relax inputSchema so validation reaches handler
+- Fix `team_link_entries` allowing self-referential links — add self-loop guard matching personal `link_entries`
 
 ### Changed
 

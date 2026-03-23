@@ -8,19 +8,27 @@
 
 import { test, expect } from '@playwright/test'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { createClient, callToolAndParse } from './helpers.js'
+import { createClient, callToolAndParse, startServer, stopServer } from './helpers.js'
 
 test.describe.configure({ mode: 'serial' })
+
+/** Port for the isolated server WITHOUT TEAM_DB_PATH */
+const NO_TEAM_PORT = 3108
 
 test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     let client: Client
 
     test.beforeAll(async () => {
-        client = await createClient()
+        // Start a dedicated server WITHOUT TEAM_DB_PATH to test config error path
+        await startServer(NO_TEAM_PORT, [], 'payloads-team', {
+            env: { TEAM_DB_PATH: undefined },
+        })
+        client = await createClient(NO_TEAM_PORT)
     })
 
     test.afterAll(async () => {
         await client.close()
+        await stopServer(NO_TEAM_PORT)
     })
 
     function expectConfigError(payload: Record<string, unknown>): void {

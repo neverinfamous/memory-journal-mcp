@@ -152,6 +152,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     .describe('Backup filename to restore from (e.g., backup_2025-01-01.db)'),
                 confirm: z
                     .boolean()
+                    .optional()
                     .describe('Must be set to true to confirm the restore operation'),
             }),
             outputSchema: RestoreResultOutputSchema,
