@@ -13,7 +13,7 @@ import { createClient, callToolAndParse, startServer, stopServer } from './helpe
 test.describe.configure({ mode: 'serial' })
 
 /** Port for the isolated server WITHOUT TEAM_DB_PATH */
-const NO_TEAM_PORT = 3108
+const NO_TEAM_PORT = 3116
 
 test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     let client: Client

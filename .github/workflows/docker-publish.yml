@@ -56,7 +56,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Docker Scout security scan
-        uses: docker/scout-action@1128f02d1e60f339af7306e0e62b9fdc13d9fab9 # v1.20.2
+        uses: docker/scout-action@8910519cee8ac046f3ee99686b0dc6654d5ba1a7 # v1.20.3
         timeout-minutes: 10
         with:
           command: cves
