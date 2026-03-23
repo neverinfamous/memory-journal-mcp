@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { execSync } from 'node:child_process'
+import * as esbuild from 'esbuild'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { WorkerSandbox, WorkerSandboxPool } from '../../src/codemode/index.js'
@@ -10,10 +10,15 @@ const workerScriptJs = path.join(__dirname, '../../src/codemode/worker-script.js
 beforeAll(() => {
     // Compile worker-script.ts to .js specifically for test execution
     // worker_threads cannot run .ts files directly in this vitest setup
+    // Uses esbuild's JS API directly (npx esbuild via execSync hangs on Windows)
     if (!fs.existsSync(workerScriptJs)) {
-        execSync(
-            `npx esbuild ${workerScriptSrc} --bundle --platform=node --format=esm --outfile=${workerScriptJs}`
-        )
+        esbuild.buildSync({
+            entryPoints: [workerScriptSrc],
+            bundle: true,
+            platform: 'node',
+            format: 'esm',
+            outfile: workerScriptJs,
+        })
     }
 }, 30_000)
 
