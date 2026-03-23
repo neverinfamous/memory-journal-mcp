@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96.21%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-96.1%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1679_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-247_passed-brightgreen.svg)
 

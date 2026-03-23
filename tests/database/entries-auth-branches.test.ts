@@ -129,7 +129,6 @@ describe('TokenValidator — branch coverage', () => {
         })
 
         it('should handle JWTExpired', async () => {
-            const err = new jose.errors.JWTExpired('expired')
             // Access private handleValidationError via validate path
             const result = await validator.validate('invalid.token.here')
             expect(result.valid).toBe(false)

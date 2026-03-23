@@ -48,18 +48,6 @@ const INJECTION_PAYLOADS = [
     "'; load_extension('malicious.so'); --",
 ]
 
-/**
- * Safe inputs that should be accepted
- */
-const SAFE_INPUTS = [
-    'Normal search query',
-    "It's a valid apostrophe",
-    'SELECT is just a word here',
-    'test@email.com',
-    '100% success rate',
-    'user_name with underscore',
-]
-
 // ============================================================================
 // Security Utility Tests
 // ============================================================================

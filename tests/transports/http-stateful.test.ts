@@ -11,36 +11,34 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // Hoisted mocks
 // ============================================================================
 
-const { mockHandleRequest, mockTransportClose, MockStreamableHTTPServerTransport } = vi.hoisted(
-    () => {
-        const handleRequest = vi.fn().mockResolvedValue(undefined)
-        const transportClose = vi.fn().mockResolvedValue(undefined)
+const { mockHandleRequest, MockStreamableHTTPServerTransport } = vi.hoisted(() => {
+    const handleRequest = vi.fn().mockResolvedValue(undefined)
+    const transportClose = vi.fn().mockResolvedValue(undefined)
 
-        class StreamableMock {
-            sessionId = 'test-session-id'
-            handleRequest = handleRequest
-            close = transportClose
-            onclose: (() => void) | null = null
+    class StreamableMock {
+        sessionId = 'test-session-id'
+        handleRequest = handleRequest
+        close = transportClose
+        onclose: (() => void) | null = null
 
-            constructor(opts?: {
-                sessionIdGenerator?: () => string
-                onsessioninitialized?: (sid: string) => void
-            }) {
-                this.sessionId = opts?.sessionIdGenerator?.() ?? 'test-session-id'
-                if (opts?.onsessioninitialized) {
-                    // Auto-fire after construction to simulate SDK behavior
-                    setTimeout(() => opts.onsessioninitialized?.(this.sessionId), 0)
-                }
+        constructor(opts?: {
+            sessionIdGenerator?: () => string
+            onsessioninitialized?: (sid: string) => void
+        }) {
+            this.sessionId = opts?.sessionIdGenerator?.() ?? 'test-session-id'
+            if (opts?.onsessioninitialized) {
+                // Auto-fire after construction to simulate SDK behavior
+                setTimeout(() => opts.onsessioninitialized?.(this.sessionId), 0)
             }
         }
-
-        return {
-            mockHandleRequest: handleRequest,
-            mockTransportClose: transportClose,
-            MockStreamableHTTPServerTransport: StreamableMock,
-        }
     }
-)
+
+    return {
+        mockHandleRequest: handleRequest,
+        mockTransportClose: transportClose,
+        MockStreamableHTTPServerTransport: StreamableMock,
+    }
+})
 
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
     StreamableHTTPServerTransport: MockStreamableHTTPServerTransport,
