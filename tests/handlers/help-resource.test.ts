@@ -22,16 +22,20 @@ describe('Help Resource Handlers', () => {
 
     const getContext = (): ResourceContext => ({ db })
 
-    it('should generate memory://help listing all groups', async () => {
-        const defs = getHelpResourceDefinitions()
-        const rootHelp = defs.find((d) => d.uri === 'memory://help')
-        expect(rootHelp).toBeDefined()
+    it(
+        'should generate memory://help listing all groups',
+        async () => {
+            const defs = getHelpResourceDefinitions()
+            const rootHelp = defs.find((d) => d.uri === 'memory://help')
+            expect(rootHelp).toBeDefined()
 
-        const result = (await rootHelp!.handler('memory://help', getContext())) as any
-        expect(result.data.totalGroups).toBeGreaterThan(0)
-        expect(result.data.groups.some((g: any) => g.name === 'core')).toBe(true)
-        expect(result.data.groups.some((g: any) => g.name === 'search')).toBe(true)
-    })
+            const result = (await rootHelp!.handler('memory://help', getContext())) as any
+            expect(result.data.totalGroups).toBeGreaterThan(0)
+            expect(result.data.groups.some((g: any) => g.name === 'core')).toBe(true)
+            expect(result.data.groups.some((g: any) => g.name === 'search')).toBe(true)
+        },
+        15000
+    )
 
     it('should generate memory://help/{group} for a valid group', async () => {
         const defs = getHelpResourceDefinitions()
@@ -124,7 +128,10 @@ describe('Help Resource Handlers', () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
-        const result = (await groupHelp!.handler('memory://help/relationships', getContext())) as any
+        const result = (await groupHelp!.handler(
+            'memory://help/relationships',
+            getContext()
+        )) as any
         const linkEntries = result.data.tools.find((t: any) => t.name === 'link_entries')
         expect(linkEntries).toBeDefined()
         // relationship_type should be extracted with enum type

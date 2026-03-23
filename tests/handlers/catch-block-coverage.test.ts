@@ -46,9 +46,10 @@ describe('Handler catch blocks via Zod validation errors', () => {
         expect(result.error).toBeDefined()
     })
 
-    it('rebuild_vector_index: passes with valid empty params', async () => {
+    it('rebuild_vector_index: returns structured error without vectorManager', async () => {
         const result = (await callTool('rebuild_vector_index', {}, db)) as any
-        expect(result).toBeDefined()
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('not available')
     })
 
     it('add_to_vector_index: invalid params triggers catch', async () => {
@@ -87,10 +88,15 @@ describe('Handler catch blocks via Zod validation errors', () => {
     })
 
     // search.ts catch blocks — L230, L328, L394
-    it('search_entries: invalid params triggers catch', async () => {
+    it('search_entries: numeric query coerced or rejected', async () => {
         const result = (await callTool('search_entries', { query: 123 as any }, db)) as any
-        // Covers the handler code path — may succeed or error depending on coercion
-        expect(result).toBeDefined()
+        // SQLite may coerce the number to string and succeed, or Zod may reject it
+        if (result.success === false) {
+            expect(typeof result.error).toBe('string')
+        } else {
+            // Coerced to '123' and searched — valid behavior
+            expect(result.entries).toBeDefined()
+        }
     })
 
     // codemode.ts catch blocks — L145, L173
@@ -105,6 +111,13 @@ describe('Team tools with teamDb but no vectorManager', () => {
     let teamDb: DatabaseAdapter
 
     beforeAll(async () => {
+        try {
+            const fs = require('node:fs')
+            if (fs.existsSync('./test-team-catchblk-main.db')) fs.unlinkSync('./test-team-catchblk-main.db')
+            if (fs.existsSync('./test-team-catchblk-team.db')) fs.unlinkSync('./test-team-catchblk-team.db')
+        } catch {
+            /* ignore */
+        }
         db = new DatabaseAdapter('./test-team-catchblk-main.db')
         await db.initialize()
         teamDb = new DatabaseAdapter('./test-team-catchblk-team.db')
@@ -119,8 +132,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         db.close()
         teamDb.close()
         const fs = require('node:fs')
-        try { fs.unlinkSync('./test-team-catchblk-main.db') } catch {}
-        try { fs.unlinkSync('./test-team-catchblk-team.db') } catch {}
+        try {
+            fs.unlinkSync('./test-team-catchblk-main.db')
+        } catch {}
+        try {
+            fs.unlinkSync('./test-team-catchblk-team.db')
+        } catch {}
     })
 
     // team/vector-tools.ts — no vectorManager branch (L55-68, L137-138, L169-180, L219-230)
@@ -128,7 +145,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_semantic_search',
             { query: 'test' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(false)
         expect(result.error).toContain('not available')
@@ -138,7 +160,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_get_vector_index_stats',
             {},
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.available).toBe(false)
     })
@@ -147,7 +174,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_rebuild_vector_index',
             {},
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(false)
         expect(result.error).toContain('not available')
@@ -157,7 +189,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_add_to_vector_index',
             { entry_id: 1 },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(false)
         expect(result.error).toContain('not available')
@@ -168,7 +205,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_update_entry',
             { entry_id: 'bad' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.error).toBeDefined()
     })
@@ -177,7 +219,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_delete_entry',
             { entry_id: 'bad' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.error).toBeDefined()
     })
@@ -186,7 +233,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_merge_tags',
             {},
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.error).toBeDefined()
     })
@@ -196,7 +248,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_backup',
             {},
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(true)
     })
@@ -205,7 +262,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_list_backups',
             {},
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(true)
         expect(result.total).toBeGreaterThanOrEqual(0)
@@ -216,7 +278,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             { format: 'json', start_date: '2020-01-01', end_date: '2030-12-31' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         // Covers the code path — may succeed or hit catch depending on date format
         expect(result).toBeDefined()
@@ -226,7 +293,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             { format: 'markdown', entry_type: 'personal_reflection', limit: 5 },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result).toBeDefined()
     })
@@ -235,7 +307,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             { format: 'json', tags: ['catch-test'], limit: 5 },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result).toBeDefined()
     })
@@ -244,7 +321,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             { format: 'json' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result).toBeDefined()
     })
@@ -254,7 +336,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_update_entry',
             { entry_id: 99999, content: 'test' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(false)
         expect(result.error).toContain('not found')
@@ -264,7 +351,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_delete_entry',
             { entry_id: 99999 },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(false)
         expect(result.error).toContain('not found')
@@ -275,7 +367,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_merge_tags',
             { source_tag: 'same', target_tag: 'same' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(false)
         expect(result.error).toContain('different')
@@ -286,7 +383,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_merge_tags',
             { source_tag: 'extra', target_tag: 'catch-test' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(true)
     })
@@ -296,7 +398,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_update_entry',
             { entry_id: 1, content: 'Updated team content' },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         // Covers the update code path
         expect(result).toBeDefined()
@@ -306,7 +413,12 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_delete_entry',
             { entry_id: 2 },
-            db, undefined, undefined, undefined, undefined, teamDb
+            db,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            teamDb
         )) as any
         expect(result.success).toBe(true)
     })

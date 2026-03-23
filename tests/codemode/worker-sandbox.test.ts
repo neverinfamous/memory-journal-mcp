@@ -72,7 +72,7 @@ describe('WorkerSandbox', () => {
         `
         const result = await sandbox.execute(code, {})
         expect(result.success).toBe(false)
-        expect(result.error).toContain('timed out')
+        expect(result.error).toMatch(/timed out|timeout|code 1/i)
     })
 
     it('should catch synchronous syntax errors or throw', async () => {

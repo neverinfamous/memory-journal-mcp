@@ -29,8 +29,11 @@ async function assertNumericCoercion(toolName: string, args: Record<string, unkn
         try {
             parsed = JSON.parse(text)
         } catch {
-            // Raw MCP error string — SDK caught the Zod validation.
-            // This is acceptable: the tool properly rejected bad input.
+            // Non-JSON response: verify it's not a raw MCP -32602 error frame.
+            expect(
+                text,
+                `${toolName}: expected MCP validation error (-32602) but got: ${text}`
+            ).toContain('-32602')
             return
         }
 

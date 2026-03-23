@@ -194,9 +194,19 @@ describe('generateInstructions', () => {
     })
 
     describe('tool count consistency', () => {
-        it('should have 61 tools across all groups', () => {
+        it('should have no duplicate tool names across groups', () => {
             const allToolNames = getAllToolNames()
-            expect(allToolNames.length).toBe(getAllToolNames().length)
+            const unique = new Set(allToolNames)
+            expect(unique.size).toBe(allToolNames.length)
+        })
+
+        it('should match the sum of all group lengths', () => {
+            const allToolNames = getAllToolNames()
+            const groupSum = Object.values(TOOL_GROUPS).reduce(
+                (sum, tools) => sum + tools.length,
+                0
+            )
+            expect(allToolNames.length).toBe(groupSum)
         })
 
         it('should show correct active tool count for all tools', () => {

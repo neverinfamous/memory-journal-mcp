@@ -167,7 +167,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     const input = z
                         .object({
                             filename: z.string(),
-                            confirm: z.boolean(),
+                            confirm: z.boolean().optional(),
                         })
                         .parse(params)
 

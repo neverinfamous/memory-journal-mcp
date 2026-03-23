@@ -38,6 +38,12 @@ describe('Targeted Gap Closure — Batch 2', () => {
     const testDbPath = './test-gaps-2.db'
 
     beforeAll(async () => {
+        try {
+            const fs = require('node:fs')
+            if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath)
+        } catch {
+            /* ignore */
+        }
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
 
@@ -73,11 +79,10 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('delete_entry should return not found for invalid ID', async () => {
-            const result = (await callTool(
-                'delete_entry',
-                { entry_id: 99999 },
-                db
-            )) as { success: boolean; error: string }
+            const result = (await callTool('delete_entry', { entry_id: 99999 }, db)) as {
+                success: boolean
+                error: string
+            }
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('not found')
@@ -99,29 +104,31 @@ describe('Targeted Gap Closure — Batch 2', () => {
                 'merge_tags',
                 { source_tag: 'nonexistent-xyz-tag', target_tag: 'gap2-test' },
                 db
-            )) as Record<string, unknown>
+            )) as { success: boolean; entriesMerged?: number; error?: string }
 
-            // Should succeed or return error — covers the merge logic path
-            expect(result).toBeDefined()
+            // Should succeed with 0 merged entries or return a structured error
+            if (result.success) {
+                expect(result.entriesMerged).toBe(0)
+            } else {
+                expect(typeof result.error).toBe('string')
+            }
         })
 
         it('rebuild_vector_index should return error without vectorManager', async () => {
-            const result = (await callTool(
-                'rebuild_vector_index',
-                {},
-                db
-            )) as { success: boolean; error: string }
+            const result = (await callTool('rebuild_vector_index', {}, db)) as {
+                success: boolean
+                error: string
+            }
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('not available')
         })
 
         it('add_to_vector_index should return error without vectorManager', async () => {
-            const result = (await callTool(
-                'add_to_vector_index',
-                { entry_id: 1 },
-                db
-            )) as { success: boolean; error: string }
+            const result = (await callTool('add_to_vector_index', { entry_id: 1 }, db)) as {
+                success: boolean
+                error: string
+            }
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('not available')
@@ -219,22 +226,20 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('visualize_relationships with nonexistent entry_id should return not found', async () => {
-            const result = (await callTool(
-                'visualize_relationships',
-                { entry_id: 99999 },
-                db
-            )) as { success: boolean; message: string }
+            const result = (await callTool('visualize_relationships', { entry_id: 99999 }, db)) as {
+                success: boolean
+                message: string
+            }
 
             expect(result.success).toBe(false)
             expect(result.message).toContain('not found')
         })
 
         it('visualize_relationships with no filters should return graph', async () => {
-            const result = (await callTool(
-                'visualize_relationships',
-                {},
-                db
-            )) as Record<string, unknown>
+            const result = (await callTool('visualize_relationships', {}, db)) as Record<
+                string,
+                unknown
+            >
 
             expect(result).toBeDefined()
         })
@@ -246,41 +251,34 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team vector tools without teamDb', () => {
         it('team_semantic_search should return error', async () => {
-            const result = (await callTool(
-                'team_semantic_search',
-                { query: 'test' },
-                db
-            )) as { error: string }
+            const result = (await callTool('team_semantic_search', { query: 'test' }, db)) as {
+                error: string
+            }
 
             expect(result.error).toContain('Team database not configured')
         })
 
         it('team_get_vector_index_stats should return error', async () => {
-            const result = (await callTool(
-                'team_get_vector_index_stats',
-                {},
-                db
-            )) as { available: boolean; error: string }
+            const result = (await callTool('team_get_vector_index_stats', {}, db)) as {
+                available: boolean
+                error: string
+            }
 
             expect(result.available).toBe(false)
         })
 
         it('team_rebuild_vector_index should return error', async () => {
-            const result = (await callTool(
-                'team_rebuild_vector_index',
-                {},
-                db
-            )) as { error: string }
+            const result = (await callTool('team_rebuild_vector_index', {}, db)) as {
+                error: string
+            }
 
             expect(result.error).toContain('Team database not configured')
         })
 
         it('team_add_to_vector_index should return error', async () => {
-            const result = (await callTool(
-                'team_add_to_vector_index',
-                { entry_id: 1 },
-                db
-            )) as { error: string }
+            const result = (await callTool('team_add_to_vector_index', { entry_id: 1 }, db)) as {
+                error: string
+            }
 
             expect(result.error).toContain('Team database not configured')
         })
@@ -292,21 +290,13 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team backup tools without teamDb', () => {
         it('team_backup should return error', async () => {
-            const result = (await callTool(
-                'team_backup',
-                {},
-                db
-            )) as { error: string }
+            const result = (await callTool('team_backup', {}, db)) as { error: string }
 
             expect(result.error).toContain('Team database not configured')
         })
 
         it('team_list_backups should return error', async () => {
-            const result = (await callTool(
-                'team_list_backups',
-                {},
-                db
-            )) as { error: string }
+            const result = (await callTool('team_list_backups', {}, db)) as { error: string }
 
             expect(result.error).toContain('Team database not configured')
         })
@@ -318,11 +308,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team export tools without teamDb', () => {
         it('team_export_entries should return error', async () => {
-            const result = (await callTool(
-                'team_export_entries',
-                { format: 'json' },
-                db
-            )) as { error: string }
+            const result = (await callTool('team_export_entries', { format: 'json' }, db)) as {
+                error: string
+            }
 
             expect(result.error).toContain('Team database not configured')
         })
@@ -344,11 +332,9 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('team_delete_entry should return error', async () => {
-            const result = (await callTool(
-                'team_delete_entry',
-                { entry_id: 1 },
-                db
-            )) as { error: string }
+            const result = (await callTool('team_delete_entry', { entry_id: 1 }, db)) as {
+                error: string
+            }
 
             expect(result.error).toContain('Team database not configured')
         })
@@ -441,10 +427,7 @@ describe('Auth Context', () => {
     })
 
     it('getAuthenticatedScopes should return empty for unauthenticated context', () => {
-        const result = runWithAuthContext(
-            { authenticated: false },
-            () => getAuthenticatedScopes()
-        )
+        const result = runWithAuthContext({ authenticated: false }, () => getAuthenticatedScopes())
         expect(result).toEqual([])
     })
 })

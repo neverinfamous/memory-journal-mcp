@@ -35,8 +35,12 @@ async function assertZodHandlerError(toolName: string) {
         try {
             parsed = JSON.parse(text)
         } catch {
-            // Raw MCP error string — the SDK caught the Zod validation.
-            // This is acceptable: the tool properly rejected empty args.
+            // Non-JSON response: verify it's not a raw MCP -32602 error frame.
+            // The SDK may return a plain-text error string; that's acceptable as
+            // long as it's not the specific protocol-level error this spec guards against.
+            expect(text, `${toolName}: expected MCP validation error (-32602) but got: ${text}`).toContain(
+                '-32602'
+            )
             return
         }
 
