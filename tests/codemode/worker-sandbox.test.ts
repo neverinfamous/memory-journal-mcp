@@ -15,7 +15,7 @@ beforeAll(() => {
             `npx esbuild ${workerScriptSrc} --bundle --platform=node --format=esm --outfile=${workerScriptJs}`
         )
     }
-})
+}, 30_000)
 
 afterAll(() => {
     // Cleanup generated JS file
