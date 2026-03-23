@@ -1,9 +1,14 @@
 ---
 name: github-commander
 description: |
-  Structured workflows for triaging GitHub issues, reviewing PRs, and sprinting
-  through milestones — with configurable validation gates, auto-detected security
-  scanning, journal audit trails, and human-in-the-loop checkpoints.
+  Structured workflows for triaging GitHub issues, reviewing PRs, sprinting
+  through milestones, and running security/quality/performance audits — with
+  configurable validation gates, auto-detected security scanning, journal audit
+  trails, and human-in-the-loop checkpoints. Use this skill whenever you are
+  working on a GitHub issue, reviewing or submitting a PR, running any kind of
+  code audit, updating dependencies, or working through a milestone. Also use
+  when the user mentions issue numbers, PR numbers, milestone names, or
+  asks you to "fix", "triage", "audit", "review", or "update deps".
 ---
 
 # GitHub Commander
@@ -12,14 +17,21 @@ Structured, configurable workflows that teach AI agents to triage GitHub issues,
 review PRs, and sprint through milestones. Every action is journaled for full
 audit trails, and human-in-the-loop checkpoints keep you in control.
 
+The reason every step journals its results is that it creates a searchable audit
+trail — future sessions can find exactly what was tried, what passed, and what
+failed, without the human needing to remember or repeat context.
+
 ## When to Load
 
-Load this skill when:
+Load this skill when any of these apply:
 
-- You are assigned a GitHub issue to fix
-- You need to review a pull request
+- You are assigned or asked to fix a GitHub issue
+- You need to review or submit a pull request
 - You need to work through issues in a milestone
 - You want to run dependency updates, security audits, or code quality audits
+- The user mentions an issue number (e.g., "fix #42") or PR number
+- The user says "triage", "audit", "review", "update deps", or similar
+- You are about to push code and want a structured validation pipeline
 
 ## Quick Reference
 
