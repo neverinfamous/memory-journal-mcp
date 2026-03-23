@@ -241,7 +241,13 @@ describe('Targeted Gap Closure — Batch 2', () => {
                 unknown
             >
 
-            expect(result).toBeDefined()
+            if (result.success === false) {
+                expect(typeof result.error).toBe('string')
+            } else {
+                expect(typeof result.entry_count).toBe('number')
+                // mermaid may be a string diagram or null when no relationships exist
+                expect(result.mermaid === null || typeof result.mermaid === 'string').toBe(true)
+            }
         })
     })
 

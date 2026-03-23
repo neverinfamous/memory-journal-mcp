@@ -178,7 +178,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'Set confirm: true to proceed with restore',
-                            recoverable: false,
+                            recoverable: true,
                         }
                     }
 
