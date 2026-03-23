@@ -235,27 +235,38 @@ describe('Resource Handler Coverage', () => {
     })
 
     describe('core resources — memory://skills', () => {
-        it('should return configured:false when SKILLS_DIR_PATH is not set', async () => {
+        it('should return shipped skills even when SKILLS_DIR_PATH is not set', async () => {
             const originalEnv = process.env['SKILLS_DIR_PATH']
             delete process.env['SKILLS_DIR_PATH']
 
             const result = await readResource('memory://skills', db)
-            const data = result.data as { configured: boolean; message: string }
-            expect(data.configured).toBe(false)
-            expect(data.message).toContain('SKILLS_DIR_PATH')
+            const data = result.data as {
+                configured: boolean
+                skills: { name: string; source: string }[]
+                count: number
+            }
+            // Shipped skills are always discovered
+            expect(data.configured).toBe(true)
+            expect(data.skills.length).toBeGreaterThanOrEqual(1)
+            expect(data.skills.some((s) => s.name === 'github-commander' && s.source === 'shipped')).toBe(true)
 
             // Restore
             if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv
         })
 
-        it('should return error when SKILLS_DIR_PATH points to nonexistent directory', async () => {
+        it('should return shipped skills when SKILLS_DIR_PATH points to nonexistent directory', async () => {
             process.env['SKILLS_DIR_PATH'] = '/nonexistent/skills/dir'
 
             const result = await readResource('memory://skills', db)
-            const data = result.data as { configured: boolean; skills: unknown[]; count: number }
+            const data = result.data as {
+                configured: boolean
+                skills: { name: string; source: string }[]
+                count: number
+            }
             expect(data.configured).toBe(true)
-            expect(data.skills).toEqual([])
-            expect(data.count).toBe(0)
+            // User dir is invalid but shipped skills still appear
+            expect(data.skills.length).toBeGreaterThanOrEqual(1)
+            expect(data.skills.some((s) => s.source === 'shipped')).toBe(true)
 
             delete process.env['SKILLS_DIR_PATH']
         })

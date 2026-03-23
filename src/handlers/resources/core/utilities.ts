@@ -17,6 +17,7 @@ import type { InternalResourceDef, ResourceContext, ResourceResult } from '../sh
 import { execQuery, transformEntryRow } from '../shared.js'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -217,72 +218,108 @@ export const workflowsResource: InternalResourceDef = {
     },
 }
 
-let cachedSkills: { name: string; path: string; excerpt: string }[] | null = null
+let cachedSkills: { name: string; path: string; excerpt: string; source: string }[] | null = null
 let lastScanTime = 0
 const SKILLS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+/** Resolve the package's own skills/ directory (ships with npm package). */
+function getShippedSkillsDir(): string | undefined {
+    try {
+        // __dirname equivalent for ESM: two levels up from src/handlers/resources/core/
+        const thisFile = fileURLToPath(import.meta.url)
+        const packageRoot = path.resolve(path.dirname(thisFile), '..', '..', '..', '..')
+        const shipped = path.join(packageRoot, 'skills')
+        return fs.existsSync(shipped) ? shipped : undefined
+    } catch {
+        return undefined
+    }
+}
+
+/** Scan a single skills directory and return skill entries. */
+function scanSkillsDir(
+    dir: string,
+    source: string
+): { name: string; path: string; excerpt: string; source: string }[] {
+    if (!fs.existsSync(dir)) return []
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const skills: { name: string; path: string; excerpt: string; source: string }[] = []
+
+    for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        const skillMdPath = path.join(dir, entry.name, 'SKILL.md')
+        if (!fs.existsSync(skillMdPath)) continue
+
+        const content = fs.readFileSync(skillMdPath, 'utf8')
+        // Extract first non-empty non-header line as excerpt (up to 160 chars)
+        const lines = content.split('\n')
+        const excerptLine = lines.find(
+            (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
+        )
+        const excerpt = excerptLine ? excerptLine.trim().slice(0, 160) : ''
+
+        skills.push({ name: entry.name, path: skillMdPath, excerpt, source })
+    }
+    return skills
+}
 
 export const skillsResource: InternalResourceDef = {
     uri: 'memory://skills',
     name: 'Skills',
     title: 'Agent Skills Index',
-    description: 'Index of available agent skills from the configured SKILLS_DIR_PATH',
+    description:
+        'Index of available agent skills (shipped + user-configured via SKILLS_DIR_PATH)',
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
     handler: (_uri: string, _context: ResourceContext): ResourceResult => {
-        const skillsDir = process.env['SKILLS_DIR_PATH']
-        if (!skillsDir) {
+        const userSkillsDir = process.env['SKILLS_DIR_PATH']
+        const shippedSkillsDir = getShippedSkillsDir()
+        const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
+
+        if (!hasAnySource) {
             return {
                 data: {
                     configured: false,
-                    message: 'SKILLS_DIR_PATH is not configured. Set this env var to index skills.',
+                    message:
+                        'No skills available. Set SKILLS_DIR_PATH to index user skills.',
                 },
             }
         }
-        try {
-            if (!fs.existsSync(skillsDir)) {
-                return {
-                    data: {
-                        configured: true,
-                        error: `Skills directory not found: ${skillsDir}`,
-                        skills: [],
-                        count: 0,
-                    },
-                }
-            }
 
+        try {
             if (cachedSkills && Date.now() - lastScanTime < SKILLS_CACHE_TTL_MS) {
                 return {
                     data: {
                         configured: true,
-                        skillsDir,
+                        ...(userSkillsDir ? { skillsDir: userSkillsDir } : {}),
+                        ...(shippedSkillsDir ? { shippedSkillsDir } : {}),
                         skills: cachedSkills,
                         count: cachedSkills.length,
                     },
                 }
             }
 
-            // Find all SKILL.md files one level deep (each skill is a directory)
-            const entries = fs.readdirSync(skillsDir, { withFileTypes: true })
-            const skills: { name: string; path: string; excerpt: string }[] = []
+            // Scan shipped skills first, then user skills.
+            // User skills override shipped skills with the same name.
+            const skillMap = new Map<
+                string,
+                { name: string; path: string; excerpt: string; source: string }
+            >()
 
-            for (const entry of entries) {
-                if (!entry.isDirectory()) continue
-                const skillMdPath = path.join(skillsDir, entry.name, 'SKILL.md')
-                if (!fs.existsSync(skillMdPath)) continue
-
-                const content = fs.readFileSync(skillMdPath, 'utf8')
-                // Extract first non-empty non-header line as excerpt (up to 160 chars)
-                const lines = content.split('\n')
-                const excerptLine = lines.find(
-                    (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
-                )
-                const excerpt = excerptLine ? excerptLine.trim().slice(0, 160) : ''
-
-                skills.push({ name: entry.name, path: skillMdPath, excerpt })
+            if (shippedSkillsDir) {
+                for (const skill of scanSkillsDir(shippedSkillsDir, 'shipped')) {
+                    skillMap.set(skill.name, skill)
+                }
+            }
+            if (userSkillsDir) {
+                for (const skill of scanSkillsDir(userSkillsDir, 'user')) {
+                    skillMap.set(skill.name, skill) // user overrides shipped
+                }
             }
 
-            skills.sort((a, b) => a.name.localeCompare(b.name))
+            const skills = [...skillMap.values()].sort((a, b) =>
+                a.name.localeCompare(b.name)
+            )
 
             cachedSkills = skills
             lastScanTime = Date.now()
@@ -290,7 +327,8 @@ export const skillsResource: InternalResourceDef = {
             return {
                 data: {
                     configured: true,
-                    skillsDir,
+                    ...(userSkillsDir ? { skillsDir: userSkillsDir } : {}),
+                    ...(shippedSkillsDir ? { shippedSkillsDir } : {}),
                     skills,
                     count: skills.length,
                 },
