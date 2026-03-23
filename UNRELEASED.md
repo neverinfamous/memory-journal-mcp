@@ -7,6 +7,7 @@
 - Add `TEAM_DB_PATH` to Playwright test server config — enables functional E2E coverage of all team tools
 - Add **GitHub Commander** skill system: 8 shipped workflow files teaching agents structured issue triage, PR review, milestone sprints, and security/quality/performance audits — with configurable validation gates, auto-detected security scanning, journal audit trails, and HITL checkpoints
 - Add shipped skills auto-discovery: `memory://skills` resource now scans the package's own `skills/` directory in addition to user-configured `SKILLS_DIR_PATH`
+- Add **Wiki Drift Detector**: new GitHub Action (`.github/workflows/wiki-drift-detector.md`) that clones the `.wiki` repository during PR logic to flag and suggest updates for outdated wiki documentation (Tools, Resources, Configuration).
 
 ### Fixed
 
