@@ -1,5 +1,8 @@
 name: CI/CD Pipeline
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -8,13 +11,13 @@ on:
 jobs:
   lint:
     uses: ./.github/workflows/lint-and-test.yml
-  
+
   codeql:
     uses: ./.github/workflows/codeql.yml
-  
+
   secrets:
     uses: ./.github/workflows/secrets-scanning.yml
-  
+
   trivy:
     uses: ./.github/workflows/security-update.yml
 
