@@ -22,24 +22,20 @@
 
 **61 MCP Tools** · **16 Workflow Prompts** · **28 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
-| Feature                        | Description                                                                                                                                                                                                                                                                                              |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dynamic Context Management** | AI agents automatically query your project history and create entries at the right moments                                                                                                                                                                                                               |
-| **GitHub Integration**         | 16 tools covering Issues, PRs, Actions, Kanban boards, Milestones with completion %, Copilot Reviews, and 14-day repository Insights (stars, clones, views, referrers)                                                                                                                                   |
-| **Knowledge Graphs**           | 8 relationship types linking specs → implementations → tests → PRs with automatic Mermaid visualization                                                                                                                                                                                                  |
-| **Triple Search**              | Full-text (FTS5), semantic (AI-powered via `@huggingface/transformers` + `sqlite-vec`), and date-range search in one server                                                                                                                                                                              |
-| **Code Mode**                  | **Massive Token Savings:** Execute complex, multi-step operations inside a secure JavaScript sandbox — reducing token overhead by up to 90% while exposing all 61 capabilities via `mj.*` API                                                                                                            |
-| **Configurable Briefing**      | 12 env vars / CLI flags to customize `memory://briefing` — control entry count, team inclusion, issue/PR/workflow detail level, Copilot review aggregation, rules/skills awareness, and workflow summary (`memory://workflows`)                                                                          |
-| **Session Continuity**         | `/session-summary` captures progress and feeds it into the next session's briefing — context flows seamlessly across disconnected AI threads                                                                                                                                                             |
-| **Reports & Analytics**        | Generate standups, retrospectives, PR summaries, weekly digests, period analyses, and milestone tracking from your journal data                                                                                                                                                                          |
-| **Team Collaboration**         | 20 dedicated team tools providing full functionality parity — including CRUD, isolated semantic vector search, relationship graphs, and cross-project insights via a shared database with author attribution                                                                                             |
-| **Backup & Restore**           | One-command backup/restore with automated scheduling, retention policies, and auto-backup-on-restore safety net                                                                                                                                                                                          |
-| **OAuth 2.1 + Access Control** | Enterprise-ready security with RFC 9728/8414 compliance, granular scopes (`read`, `write`, `admin`), JWT/JWKS validation, and Keycloak-compatible integration                                                                                                                                            |
-| **HTTP Streaming Transport**   | Dual-protocol HTTP with Streamable HTTP + Legacy SSE, security headers, rate limiting, CORS, and stateless mode for serverless                                                                                                                                                                           |
-| **Production-Ready Security**  | SQL injection prevention, input validation, path traversal protection, token scrubbing, security headers, and non-root Docker execution                                                                                                                                                                  |
-| **Rule & Skill Suggestions**   | Agents offer to codify recurring patterns into reusable rules and skills with your approval                                                                                                                                                                                                              |
-| **Cross-Agent Memory**         | IDE agents and GitHub Copilot share context through journal entries — Copilot review findings become searchable knowledge, IDE agents proactively apply past patterns ([setup guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md))                               |
-| **GitHub Commander**           | Skill files teaching agents to triage issues, review PRs, sprint milestones, and run security/quality/performance audits — with configurable validation gates, auto-detected security scanning, journal audit trails, and human-in-the-loop checkpoints ([skill docs](skills/github-commander/SKILL.md)) |
+| Feature | Description |
+| --- | --- |
+| **Session Intelligence** | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` |
+| **GitHub Integration** | 16 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights |
+| **Knowledge Graphs** | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization |
+| **Triple Search** | Full-text (FTS5), semantic (`@huggingface/transformers` + `sqlite-vec`), and date-range search |
+| **Code Mode** | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API |
+| **Configurable Briefing** | 12 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness |
+| **Reports & Analytics** | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking |
+| **Team Collaboration** | 20 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution |
+| **Backup & Restore** | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups |
+| **Security & Transport** | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker |
+| **Agent Collaboration** | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)) |
+| **GitHub Commander** | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
@@ -55,7 +51,7 @@
 - After significant design decisions or learnings (`project_decision`)
 - After resolving non-trivial bugs (`bug_fix`, link to issue number)
 
-**SUGGEST CREATING RULES AND-OR SKILLS** as you notice patterns that would benefit.
+**SUGGEST CREATING OR IMPROVING RULES AND SKILLS** as you notice workflow opportunities.
 
 ---
 
