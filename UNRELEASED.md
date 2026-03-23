@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Added
+
+- Add 7 new Playwright E2E spec files: `zod-sweep`, `boundary`, `errors-extended`, `numeric-coercion`, `help-resources`, `integration-workflows`, `streamable-http` (~115 new tests)
+- Add `callToolRaw`, `getBaseURL`, `expectHandlerError` helpers to E2E test infrastructure
+
 ### Changed
 
 - Add `files` field to `package.json` — npm tarball now ships only `dist/`, `LICENSE`, and `README.md` (93% size reduction from 3.9 MB to ~250 KB)
