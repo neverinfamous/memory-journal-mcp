@@ -51,6 +51,10 @@
 - After significant design decisions or learnings (`project_decision`)
 - After resolving non-trivial bugs (`bug_fix`, link to issue number)
 
+**USE PROJECT AND CROSS-PROJECT INSIGHTS** when appropriate:
+- Run `get_cross_project_insights` before defining major architectures, new abstractions, or starting cross-cutting work to align with broader repository patterns.
+- Fetch `memory://github/insights` or run `get_repo_insights` to gauge project traction, health, and recent traffic.
+
 **SUGGEST CREATING OR IMPROVING RULES AND SKILLS** as you notice workflow opportunities.
 
 ---
@@ -334,13 +338,6 @@ docker build -f Dockerfile -t memory-journal-mcp-local .
 ```
 
 Then use `memory-journal-mcp-local` as the image name in your MCP config (see Quick Start above).
-
-## 📚 Documentation & Resources
-
-- **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
-- **[Copilot Setup Guide](https://github.com/neverinfamous/memory-journal-mcp/blob/main/docs/copilot-setup.md)** - Cross-agent memory bridge between IDE agents and GitHub Copilot
-- **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution
-- **[Issues](https://github.com/neverinfamous/memory-journal-mcp/issues)** - Bug reports & feature requests
 
 ## 📄 License
 
