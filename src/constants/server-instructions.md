@@ -22,6 +22,7 @@
 
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context
+- **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) before defining architectures or cross-cutting abstractions. Use repo insights (`memory://github/insights`) to gauge traction.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
 ## Rule & Skill Suggestions
