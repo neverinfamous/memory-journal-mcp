@@ -229,7 +229,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-28 resources total — 20 static + 8 template.
+33 resources total — 20 static + 13 template.
 
 ### Static Resources
 
@@ -248,7 +248,8 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 | Handler File   | Resources                                                                                                                                                                                                                                                                |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram`, `memory://milestones/{number}` |
+| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram` |
+| `github.ts`    | `memory://github/status/{repo}`, `memory://github/insights/{repo}`, `memory://github/milestones/{repo}`, `memory://milestones/{number}`, `memory://milestones/{repo}/{number}` |
 
 ### Briefing Assembly (`src/handlers/resources/core/briefing/`)
 

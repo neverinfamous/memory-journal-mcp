@@ -10,9 +10,10 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-1767_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-96.7%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
+[![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/lint-and-test.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/lint-and-test.yml)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -27,7 +28,7 @@
 
 ### What Sets Us Apart
 
-**61 MCP Tools** · **17 Workflow Prompts** · **28 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**61 MCP Tools** · **17 Workflow Prompts** · **33 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -200,7 +201,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **28 Resources** (20 Static + 8 Template)
+### 📡 **33 Resources** (20 Static + 13 Template)
 
 **Static Resources** (appear in resource lists):
 
@@ -227,6 +228,10 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Template Resources** (require parameters, fetch directly by URI):
 
+- `memory://github/status/{repo}` - Repository status targeted by repo
+- `memory://github/insights/{repo}` - Repository insights targeted by repo
+- `memory://github/milestones/{repo}` - Open milestones targeted by repo
+- `memory://milestones/{repo}/{number}` - Milestone detail targeted by repo
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
 - `memory://prs/{pr_number}/entries` - Entries linked to PR
@@ -609,7 +614,7 @@ flowchart TB
 
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 61 Tools"]
-        Resources["📡 28 Resources"]
+        Resources["📡 33 Resources"]
         Prompts["💬 17 Prompts"]
     end
 
