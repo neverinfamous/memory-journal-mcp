@@ -354,6 +354,38 @@ describe('VectorSearchManager', () => {
             expect(result.failed).toBe(1)
             expect(result.firstError).toBe('Embedding failed')
         })
+
+        it('should return initialization error if initialize fails', async () => {
+            const { pipeline: pipelineMock } = await import('@huggingface/transformers')
+            ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                new Error('Pipeline broke')
+            )
+            const result = await vm.rebuildIndex({} as any)
+            expect(result.firstError).toContain('Vector search initialization failed: Pipeline broke')
+        })
+
+        it('should handle insert statement failure during rebuild', async () => {
+            await initManager(vm)
+            mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
+            
+            // Mock run to throw ONLY on the second insert (after DELETE)
+            mockRun.mockImplementationOnce(() => undefined) // DELETE
+                   .mockImplementationOnce(() => undefined) // 1st INSERT
+                   .mockImplementationOnce(() => { throw new Error('Insert failed!!') }) // 2nd INSERT
+            
+            const mockDb = {
+                getActiveEntryCount: vi.fn().mockReturnValue(2),
+                getEntriesPage: vi.fn().mockReturnValue([
+                    { id: 1, content: 'Good entry' },
+                    { id: 2, content: 'Will fail insert' },
+                ]),
+            }
+
+            const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
+            expect(result.indexed).toBe(1)
+            expect(result.failed).toBe(1)
+            expect(result.firstError).toBe('Insert failed!!')
+        })
     })
 
     // ========================================================================
