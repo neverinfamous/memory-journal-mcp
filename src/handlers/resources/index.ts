@@ -113,7 +113,10 @@ export async function readResource(
     // Check for template matches (also use base URI)
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
-            const pattern = resource.uri.replace(/\{[^}]+\}/g, '([^/]+)')
+            // Use (.+) for {repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
+            const pattern = resource.uri.replace(/\{([^}]+)\}/g, (_match, paramName) => {
+                return paramName === 'repo' ? '(.+)' : '([^/]+)'
+            })
             const regex = new RegExp(`^${pattern}$`)
             if (regex.test(baseUri)) {
                 const result = await Promise.resolve(resource.handler(uri, context))
