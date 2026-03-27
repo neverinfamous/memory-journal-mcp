@@ -305,30 +305,30 @@ Exhaustively validate the memory-journal-mcp server's output schemas, resource h
 
 ### outputSchema Validation (Phase 0)
 
-- [x] All 60 outputSchema tools return `structuredContent` (not raw text) — `mj_execute_code` excluded by design
+- [] All 60 outputSchema tools return `structuredContent` (not raw text) — `mj_execute_code` excluded by design
 
 ### Resources (Phase 1)
 
-- [x] All 20 static resources return valid data
-- [x] All 8 template resources work with valid parameters
-- [x] All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
-- [x] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
-- [x] `memory://tags` tag counts match `list_tags` output
-- [x] `memory://statistics` structured stats match `get_statistics` output
-- [x] `memory://github/insights` returns compact stats including traffic aggregates
-- [x] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
-- [x] `memory://instructions` references all 61 tools and key resources
+- [] All 20 static resources return valid data
+- [] All 8 template resources work with valid parameters
+- [] All 8 template resources handle invalid/nonexistent IDs gracefully (no crashes)
+- [] `memory://significant` includes `importance` field and is sorted by importance (primary) then timestamp (secondary)
+- [] `memory://tags` tag counts match `list_tags` output
+- [] `memory://statistics` structured stats match `get_statistics` output
+- [] `memory://github/insights` returns compact stats including traffic aggregates
+- [] `memory://graph/recent` uses harmonized arrows (`-->`, `==>`, `-.->`, `--x`, `<-->`)
+- [] `memory://instructions` references all 61 tools and key resources
 
 ### GitHub Integration (Phase 2)
 
-- [x] GitHub issue lifecycle tools create/close issues correctly
-- [x] `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
-- [x] `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
-- [x] `close_github_issue_with_entry` returns structured error for already-closed issues
-- [x] `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
-- [x] `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
-- [x] Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
-- [x] `memory://milestones/{number}` returns milestone with completion %, issue counts, and hint
-- [x] `get_repo_insights` returns correct data based on `sections` parameter
-- [x] `get_copilot_reviews` — referenced in test docs but not re-executed (verified in Phase 0.4 schema check only; see prior sessions)
-- [x] All GitHub test artifacts cleaned up after testing (issues #290-293 closed, milestone #70 deleted)
+- [] GitHub issue lifecycle tools create/close issues correctly
+- [] `create_github_issue_with_entry` with `body`, `labels`, `initial_status`, `entry_content` works
+- [] `create_github_issue_with_entry` with `milestone_number` assigns issue to milestone
+- [] `close_github_issue_with_entry` returns structured error for already-closed issues
+- [] `close_github_issue_with_entry` with `move_to_done: true` behavior correct with/without `DEFAULT_PROJECT_NUMBER`
+- [] `get_github_issues` and `get_github_prs` with `state: "closed"` and `state: "all"` work
+- [] Milestone CRUD lifecycle works end-to-end (create → update → close → delete)
+- [] `memory://milestones/{number}` returns milestone with completion %, issue counts, and hint
+- [] `get_repo_insights` returns correct data based on `sections` parameter
+- [] `get_copilot_reviews` — referenced in test docs but not re-executed (verified in Phase 0.4 schema check only; see prior sessions)
+- [] All GitHub test artifacts cleaned up after testing (issues #290-293 closed, milestone #70 deleted)
