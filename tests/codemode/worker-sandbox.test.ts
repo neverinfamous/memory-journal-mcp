@@ -166,8 +166,51 @@ describe('WorkerSandbox', () => {
         expect(result.success).toBe(true)
         expect(result.result).toBe('test')
     })
-})
 
+    it('should handle unknown RPC method (e.g. method removed after serialization)', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings: Record<string, any> = {}
+        
+        let accessed = false
+        Object.defineProperty(bindings, 'testGroup', {
+            get: () => {
+                if (!accessed) {
+                    accessed = true
+                    // Phase 1: Serialization by WorkerSandbox grabs this
+                    return { doBad: async () => 'ok' }
+                }
+                // Phase 2: RPC request processing grabs this 
+                return {} 
+            },
+            enumerable: true
+        })
+        
+        const code = 'try { await mj.testGroup.doBad(); } catch(e) { return e.message; }'
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(String(result.result)).toContain('Unknown method: testGroup.doBad')
+    })
+
+    it('should handle top-level unknown RPC method', async () => {
+        const sandbox = new WorkerSandbox()
+        const bindings: Record<string, any> = {}
+        let accessed = false
+        Object.defineProperty(bindings, 'topFunc', {
+            get: () => {
+                if (!accessed) {
+                    accessed = true
+                    return async () => 'ok'
+                }
+                return 'not a function'
+            },
+            enumerable: true
+        })
+        const code = 'try { await mj.topFunc(); } catch(e) { return e.message; }'
+        const result = await sandbox.execute(code, bindings)
+        expect(result.success).toBe(true)
+        expect(String(result.result)).toContain('Unknown method: _topLevel.topFunc')
+    })
+})
 describe('WorkerSandboxPool', () => {
     it('should create and execute using pool', async () => {
         const pool = new WorkerSandboxPool({}, { maxInstances: 2 })

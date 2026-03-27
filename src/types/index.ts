@@ -158,12 +158,19 @@ export interface ToolRegistration {
     icons?: { iconUrl: string; title: string; description: string }
 }
 
+export interface ProjectRegistryEntry {
+    path: string
+    project_number?: number
+}
+
 /**
  * Tool handler configuration options
  */
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
+    /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
+    projectRegistry?: Record<string, ProjectRegistryEntry>
 }
 
 /**
@@ -258,6 +265,9 @@ export interface ServerConfig {
 
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
+
+    /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
+    projectRegistry?: Record<string, ProjectRegistryEntry>
 
     /** Enable semantic search */
     enableSemanticSearch: boolean

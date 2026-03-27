@@ -7,7 +7,7 @@ This directory contains all GitHub Actions workflows for the **memory-journal-mc
 ```mermaid
 flowchart LR
     subgraph Triggers["Triggers"]
-        Push["push to main"]
+        Push["push to main / tag v*"]
         PR["pull_request"]
         Tag["release published"]
         Sched["schedule (cron)"]
@@ -15,6 +15,7 @@ flowchart LR
     end
 
     subgraph CI["CI"]
+        GK["gatekeeper (orchestrator)"]
         LT["lint-and-test"]
         DAM["dependabot-auto-merge"]
     end
@@ -38,22 +39,30 @@ flowchart LR
         AM["agentics-maintenance"]
     end
 
-    Push --> LT
+    Push --> GK
+    GK -->|workflow_call| LT
+    GK -->|workflow_call| CQL
+    GK -->|workflow_call| SS
+    GK -->|workflow_call| SU
+    GK -->|all gates pass| DP
+    DP -->|after Docker push| NPM
+
     PR --> LT
+    PR --> CQL
+    PR --> SS
     PR --> DAM
-    Push --> CQL
-    Push --> SS
-    Push --> SU
-    LT -->|workflow_run success| DP
+    PR --> DDD
+
     Push -->|commit contains '[deps]'| AR
     AR -->|creates release| NPM
     Tag --> NPM
+
     Sched --> CQL
     Sched --> SU
     Sched --> DM
     Sched --> CHM
     Sched --> AM
-    PR --> DDD
+
     Manual --> SU
     Manual --> DM
     Manual --> CHM
@@ -64,28 +73,29 @@ flowchart LR
 
 ## Workflows
 
-### CI
+### CI / Orchestration
 
-| File                                                   | Trigger                | Purpose                                                                 |
-| ------------------------------------------------------ | ---------------------- | ----------------------------------------------------------------------- |
-| [lint-and-test.yml](lint-and-test.yml)                 | push / PR to `main`    | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit |
-| [dependabot-auto-merge.yml](dependabot-auto-merge.yml) | PR (`dependabot[bot]`) | Auto-merges patch/minor Dependabot PRs, warns on major updates          |
+| File                                                   | Trigger                        | Purpose                                                                                  |
+| ------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------- |
+| [gatekeeper.yml](gatekeeper.yml)                       | push to `main` / tag `v*`      | Orchestrates CI/CD: fans out lint + security scans, gates docker-publish on all passing  |
+| [lint-and-test.yml](lint-and-test.yml)                 | PR to `main` / `workflow_call` | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit                 |
+| [dependabot-auto-merge.yml](dependabot-auto-merge.yml) | PR (`dependabot[bot]`)         | Auto-merges patch/minor Dependabot PRs, warns on major updates                           |
 
 ### Security
 
-| File                                         | Trigger                                                             | Purpose                                                                                            |
-| -------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [codeql.yml](codeql.yml)                     | push / PR / weekly (Mon 02:23 UTC)                                  | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
-| [secrets-scanning.yml](secrets-scanning.yml) | push / PR                                                           | TruffleHog (verified secrets) + Gitleaks scanning                                                  |
-| [security-update.yml](security-update.yml)   | push (Dockerfile/package changes) / weekly (Sun 02:00 UTC) / manual | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
+| File                                         | Trigger                                                              | Purpose                                                                                            |
+| -------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [codeql.yml](codeql.yml)                     | PR / weekly (Mon 02:23 UTC) / `workflow_call`                        | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
+| [secrets-scanning.yml](secrets-scanning.yml) | PR / `workflow_call`                                                 | TruffleHog (verified secrets) + Gitleaks scanning                                                  |
+| [security-update.yml](security-update.yml)   | weekly (Sun 02:00 UTC) / manual / `workflow_call`                    | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
 
 ### Release & Publishing
 
-| File                                     | Trigger                                        | Purpose                                                                                                   |
-| ---------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [auto-release.yml](auto-release.yml)     | push to `main` with `[deps]` in commit message | Creates git tag + GitHub release for dependency-maintenance patch bumps                                   |
-| [publish-npm.yml](publish-npm.yml)       | release published / manual                     | Publishes to npm with version verification                                                                |
-| [docker-publish.yml](docker-publish.yml) | `lint-and-test` workflow_run success on `main` | Multi-arch Docker build (amd64 + arm64), Docker Scout scan, manifest merge, Docker Hub description update |
+| File                                     | Trigger                                                        | Purpose                                                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [auto-release.yml](auto-release.yml)     | push to `main` with `[deps]` in commit message                 | Creates git tag + GitHub release for dependency-maintenance patch bumps                                   |
+| [publish-npm.yml](publish-npm.yml)       | release published / manual / `workflow_call` from docker-publish | Publishes to npm with version verification                                                                |
+| [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (after all security gates pass) | Multi-arch Docker build (amd64 + arm64), Docker Scout scan, manifest merge, Docker Hub description update |
 
 ### Agentic Workflows (GitHub Copilot)
 
@@ -102,19 +112,20 @@ These are AI-powered workflows using [GitHub Copilot Coding Agent](https://docs.
 
 ## Release Pipeline
 
-The full release flow for dependency updates:
+The full release flow for pushes to `main` (including dependency updates):
 
 ```
-dependency-maintenance (Copilot)
-  → creates PR with [deps] prefix
-    → lint-and-test runs on PR
-      → Copilot reviews + human merge
-        → auto-release (creates tag + GitHub release)
-          → publish-npm (triggered by release event)
-          → docker-publish (triggered by lint-and-test on main)
+push to main / tag v*
+  → gatekeeper (orchestrator)
+      ├── lint-and-test  ──┐
+      ├── codeql           ├── all must pass
+      ├── secrets-scanning ┤
+      └── security-update ─┘
+            ↓ all gates pass
+          docker-publish (multi-arch build + Docker Scout + npm publish)
 ```
 
-For manual releases (feature/breaking changes), the maintainer runs `/bump-deploy` locally which pushes a tag and creates a GitHub release, triggering npm and Docker publish.
+For manual feature releases, the maintainer runs `/bump-deploy` locally which pushes a tag, triggering the gatekeeper pipeline.
 
 ---
 

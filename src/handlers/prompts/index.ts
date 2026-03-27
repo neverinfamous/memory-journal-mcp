@@ -34,7 +34,7 @@ export interface InternalPromptDef {
         required?: boolean
     }[]
     icons?: McpIcon[]
-    handler: (args: Record<string, string>, db: IDatabaseAdapter) => { messages: PromptMessage[] }
+    handler: (args: Record<string, string>, db: IDatabaseAdapter, teamDb?: IDatabaseAdapter) => { messages: PromptMessage[] }
 }
 
 /**
@@ -77,7 +77,8 @@ export function getPrompts(): object[] {
 export function getPrompt(
     name: string,
     args: Record<string, string>,
-    db: IDatabaseAdapter
+    db: IDatabaseAdapter,
+    teamDb?: IDatabaseAdapter
 ): { messages: PromptMessage[] } {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
@@ -86,7 +87,7 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return prompt.handler(args, db)
+    return prompt.handler(args, db, teamDb)
 }
 
 /**

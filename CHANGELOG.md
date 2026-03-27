@@ -5,7 +5,33 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.2.1...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.3.0...HEAD)
+
+## [6.3.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.3.0) - 2026-03-27
+
+### Added
+
+- Added `team_get_cross_project_insights` to the `admin` tool group in addition to the `team` group for specialized cluster-management roles.
+- Documented `PROJECT_REGISTRY` in `README.md` and `DOCKER_README.md` to formally support Multi-Project Workspaces.
+- Added "Dynamic Context Resolution & Auto-Detection" section detailing the multi-project routing behavior to READMEs.
+- Added `get_github_context` support for explicit `owner` and `repo` arguments, enabling dynamic physical directory mounting via `PROJECT_REGISTRY`.
+- Added dynamically resolved `memory://briefing/{repo}` resource to allow explicit repo selection when multiple projects are registered.
+- Created `session-summary` workflow prompt documentation focusing on `team-session-summary` cross-session handoff patterns.
+- Expanded the E2E verification suite (`integration-workflows.spec.ts`) to validate multi-project context resolution capabilities under high-load.
+
+### Changed
+
+- Enhanced `github-section` context builder to dynamically iterate over all registered `PROJECT_REGISTRY` entries and append sectioned repository briefings.
+- Updated documentation resource counts in README/DOCKER_README to `33` to reflect template expansion via dynamic `{repo}` params.
+- Handlers mapped to GitHub API paths now perform contextual lookups matching explicit `repo` params against `PROJECT_REGISTRY` before attempting git-cli operations.
+
+### Fixed
+
+- Fixed `memory://briefing` returning stale context when `PROJECT_REGISTRY` was enabled without a fallback default repo.
+- Fixed `issueUrl` tracking anomaly where the URL field incorrectly populated from the PR branch API instead of the Issue API during combined operations.
+- Resolved Zod boundary exceptions in `create_github_milestone` resulting from malformed ISO date coercions when parsing incomplete markdown strings.
+- Fixed raw MCP `-32602` errors leaking through `update_entry` validation layers when encountering unexpectedly long `description` strings.
+- Fixed `get_kanban_board` column mapping failure caused by legacy `status` string mismatches when retrieving v2 boards.
 
 ## [6.2.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v6.2.1) - 2026-03-23
 

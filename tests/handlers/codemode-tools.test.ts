@@ -15,6 +15,9 @@ vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
                 if (code.includes('mj.core.create_entry')) {
                     return { success: true, result: 'undefined' }
                 }
+                if (code.includes('huge')) {
+                    return { success: true, result: 'a'.repeat(11 * 1024 * 1024) }
+                }
                 return { success: true, result: 2 }
             },
         }),
@@ -81,5 +84,38 @@ describe('Code Mode Tool Handlers', () => {
         )) as any
         expect(result.success).toBe(false)
         expect(result.error).toContain('test error')
+    })
+
+    it('should inject github context based on repo parameter', async () => {
+        // Construct a ToolContext that mimics what the server builds
+        const context = Object.assign(Object.create(Object.getPrototypeOf(personalDb)), personalDb, {
+            config: {
+                defaultProjectNumber: 1,
+                projectRegistry: {
+                    testrepo: { path: '.', project_number: 99 }
+                }
+            }
+        })
+        
+        const result = (await callTool(
+            'mj_execute_code',
+            { code: 'return 1', repo: 'testrepo' },
+            context
+        )) as any
+        
+        expect(result.success).toBe(true)
+        expect(result.result).toBe(2)
+    })
+
+    it('should reject extremely large result payloads', async () => {
+        const result = (await callTool(
+            'mj_execute_code',
+            { code: 'return "huge"' },
+            personalDb
+        )) as any
+        
+        // Noisy test, removing log.
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('Result exceeds')
     })
 })

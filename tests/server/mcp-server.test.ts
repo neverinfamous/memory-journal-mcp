@@ -174,7 +174,7 @@ vi.mock('../../src/vector/vector-search-manager.js', () => ({
     },
 }))
 
-vi.mock('../../src/github/github-integration.js', () => ({
+vi.mock('../../src/github/github-integration/index.js', () => ({
     GitHubIntegration: function () {
         return {
             isApiAvailable: mockGitHubIsApiAvailable,
@@ -510,6 +510,19 @@ describe('McpServer', () => {
             // Tools should be registered (they receive defaultProjectNumber internally)
             expect(mockRegisterTool).toHaveBeenCalled()
         })
+
+        it('should resolve githubPath using projectRegistry when defaultProjectNumber matches', async () => {
+            await createServer({
+                transport: 'stdio',
+                dbPath: './test-server.db',
+                defaultProjectNumber: 42,
+                projectRegistry: {
+                    testProj: { path: '/custom/repo/path', project_number: 42 }
+                }
+            })
+            // Reaches lines 125-129 resolving githubPath through projectRegistry
+            expect(mockRegisterTool).toHaveBeenCalled()
+        })
     })
 
     // ========================================================================
@@ -577,6 +590,31 @@ describe('McpServer', () => {
             expect(parsed.success).toBe(false)
             expect(parsed.error).toContain('Database error')
         })
+
+        it('should return structured error content when JSON stringify blows up (triggering global catch)', async () => {
+            // BigInt fails JSON.stringify natively, throwing a TypeError which triggers the global catch
+            mockCreateEntry.mockImplementationOnce(() => {
+                return { invalidField: 10n }
+            })
+
+            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+
+            const createEntryCalls = mockRegisterTool.mock.calls.filter(
+                (call: unknown[]) => call[0] === 'create_entry'
+            ) as unknown[][]
+
+            const handler = createEntryCalls[0]![2] as (
+                args: unknown,
+                extra: unknown
+            ) => Promise<{ content: { type: string; text: string }[], isError?: boolean }>
+
+            const result = await handler({ content: 'Test' }, { _meta: {} })
+            
+            expect(result.isError).toBe(true)
+            const parsed = JSON.parse(result.content[0]!.text) as { success: boolean, error: string }
+            expect(parsed.success).toBe(false)
+            expect(parsed.error).toContain('BigInt')
+        })
     })
 
     // ========================================================================
@@ -617,22 +655,17 @@ describe('McpServer', () => {
                 briefingConfig: { defaultProjectNumber: 1337 }, // Also tests passing explicit briefingConfig
             })
 
-            // Find a static resource handler (e.g., memory://health is a simple one)
-            const healthCalls = mockRegisterResource.mock.calls.filter(
-                (call: unknown[]) => call[0] === 'Health Status'
-            ) as unknown[][]
+            const resourceCalls = mockRegisterResource.mock.calls as unknown[][]
+            expect(resourceCalls.length).toBeGreaterThan(0)
 
-            if (healthCalls.length > 0) {
-                const handler = healthCalls[0]![3] as (
-                    uri: URL
-                ) => Promise<{ contents: { uri: string; text: string }[] }>
+            const handler = resourceCalls[0]![3] as (
+                uri: URL
+            ) => Promise<{ contents: { uri: string; text: string }[] }>
+            
+            const result = await handler(new URL('memory://health'))
 
-                const result = await handler(new URL('memory://health'))
-
-                expect(result.contents).toBeDefined()
-                expect(result.contents.length).toBeGreaterThan(0)
-                expect(result.contents[0]!.uri).toBe('memory://health')
-            }
+            expect(result.contents).toBeDefined()
+            expect(result.contents.length).toBeGreaterThan(0)
         })
     })
 

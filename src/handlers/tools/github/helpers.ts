@@ -3,7 +3,22 @@
  */
 
 import type { ToolContext } from '../../../types/index.js'
-import type { GitHubIntegration } from '../../../github/github-integration/index.js'
+import { GitHubIntegration } from '../../../github/github-integration/index.js'
+
+/**
+ * Resolve project number explicitly or via ProjectRegistry mapping
+ */
+export function resolveProjectNumber(
+    context: ToolContext,
+    repo: string | undefined,
+    explicitProjectNumber?: number
+): number | undefined {
+    if (explicitProjectNumber !== undefined) return explicitProjectNumber
+    if (repo && context.config?.projectRegistry?.[repo]?.project_number !== undefined) {
+        return context.config.projectRegistry[repo].project_number
+    }
+    return context.config?.defaultProjectNumber
+}
 
 /**
  * Resolve owner (owner-only, no repo required)
@@ -79,7 +94,18 @@ export async function resolveOwnerRepo(
       }
     | { error: true; response: Record<string, unknown> }
 > {
-    if (!context.github) {
+    let toolGithub: GitHubIntegration | undefined
+    const registryEntry = input.repo && context.config?.projectRegistry
+        ? context.config.projectRegistry[input.repo]
+        : undefined
+
+    if (registryEntry) {
+        toolGithub = new GitHubIntegration(registryEntry.path)
+    } else if (context.github) {
+        toolGithub = context.github
+    }
+
+    if (!toolGithub) {
         return {
             error: true,
             response: {
@@ -94,9 +120,10 @@ export async function resolveOwnerRepo(
         }
     }
 
-    const repoInfo = await context.github.getRepoInfo()
+    const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
+
     const owner = input.owner ?? detectedOwner ?? undefined
     const repo = input.repo ?? detectedRepo ?? undefined
 
@@ -121,5 +148,5 @@ export async function resolveOwnerRepo(
         }
     }
 
-    return { owner, repo, detectedOwner, detectedRepo, github: context.github }
+    return { owner, repo, detectedOwner, detectedRepo, github: toolGithub }
 }

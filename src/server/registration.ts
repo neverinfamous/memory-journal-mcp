@@ -103,7 +103,8 @@ export function registerResources(
 export function registerPrompts(
     server: McpServer,
     prompts: PromptDefinition[],
-    db: IDatabaseAdapter
+    db: IDatabaseAdapter,
+    teamDb?: IDatabaseAdapter
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
@@ -126,7 +127,7 @@ export function registerPrompts(
             },
             (providedArgs) => {
                 const args = providedArgs as Record<string, string>
-                const promptResult = getPrompt(promptDef.name, args, db)
+                const promptResult = getPrompt(promptDef.name, args, db, teamDb)
                 // Map to MCP SDK expected format
                 const result = {
                     messages: promptResult.messages.map((m) => ({

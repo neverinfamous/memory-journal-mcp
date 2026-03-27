@@ -136,9 +136,12 @@ After creating all 17 entries, verify the seed data is searchable:
 ### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
 
 > [!IMPORTANT]
-> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. See `test-server/README.md` for full details and script locations.
+> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. Ensure the project is built first. See `test-server/README.md` for full details.
 
 ```powershell
+# Ensure latest build
+npm run build
+
 # Test A — Instruction levels (essential < standard < full)
 node test-server/test-instruction-levels.mjs
 
@@ -153,11 +156,11 @@ node test-server/test-tool-annotations.mjs
 
 ### 1.4 GitHub Status Resource
 
-| Test              | Command/Action                | Expected Result                                                  |
-| ----------------- | ----------------------------- | ---------------------------------------------------------------- |
-| Read status       | Read `memory://github/status` | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
-| CI status mapping | Verify CI status value        | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
-| Milestone data    | Inspect status data           | Includes milestones summary (open count, completion percentages) |
+| Test              | Command/Action                                                                               | Expected Result                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Read status       | Read `memory://github/status` (use `memory://github/status/{repo}` for multi-project setups) | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
+| CI status mapping | Verify CI status value                                                                       | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
+| Milestone data    | Inspect status data                                                                          | Includes milestones summary (open count, completion percentages) |
 
 ---
 

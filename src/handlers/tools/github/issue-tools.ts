@@ -16,7 +16,7 @@ import {
     CreateGitHubIssueWithEntryOutputSchema,
     CloseGitHubIssueWithEntryOutputSchema,
 } from './schemas.js'
-import { resolveOwnerRepo } from './helpers.js'
+import { resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 
 export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
     const { db } = context
@@ -100,8 +100,11 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const projectNumber =
-                        input.project_number ?? context.config?.defaultProjectNumber
+                    const projectNumber = resolveProjectNumber(
+                        context,
+                        resolved.repo,
+                        input.project_number
+                    )
 
                     let projectResult = undefined
                     if (projectNumber !== undefined && issue.nodeId) {
@@ -324,8 +327,11 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         | { moved: boolean; error?: string; projectNumber?: number }
                         | undefined
                     if (input.move_to_done) {
-                        const projectNum =
-                            input.project_number ?? context.config?.defaultProjectNumber
+                        const projectNum = resolveProjectNumber(
+                            context,
+                            resolved.repo,
+                            input.project_number
+                        )
                         if (projectNum === undefined) {
                             kanbanResult = {
                                 moved: false,
@@ -391,9 +397,11 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                                 kanbanResult = {
                                     moved: false,
                                     error: err instanceof Error ? err.message : String(err),
-                                    projectNumber:
-                                        input.project_number ??
-                                        context.config?.defaultProjectNumber,
+                                    projectNumber: resolveProjectNumber(
+                                        context,
+                                        resolved.repo,
+                                        input.project_number
+                                    ),
                                 }
                             }
                         }

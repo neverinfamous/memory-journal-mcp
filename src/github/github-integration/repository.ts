@@ -33,6 +33,10 @@ export class RepositoryManager {
         return this.client.cachedRepoInfo
     }
 
+    setCachedRepoInfo(info: RepoInfo): void {
+        this.client.cachedRepoInfo = info
+    }
+
     private parseRemoteUrl(remoteUrl: string | null): {
         owner: string | null
         repo: string | null

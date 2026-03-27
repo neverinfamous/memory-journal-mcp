@@ -26,7 +26,7 @@ test.describe('E2E Prompts (via MCP SDK Client)', () => {
 
         expect(response.prompts).toBeDefined()
         expect(Array.isArray(response.prompts)).toBe(true)
-        expect(response.prompts.length).toBeGreaterThanOrEqual(16)
+        expect(response.prompts.length).toBeGreaterThanOrEqual(17)
 
         const promptNames = response.prompts.map((p) => p.name)
         expect(promptNames).toContain('prepare-standup')
@@ -34,6 +34,7 @@ test.describe('E2E Prompts (via MCP SDK Client)', () => {
         expect(promptNames).toContain('weekly-digest')
         expect(promptNames).toContain('find-related')
         expect(promptNames).toContain('confirm-briefing')
+        expect(promptNames).toContain('team-session-summary')
     })
 
     test('should get a specific prompt (prepare-standup)', async () => {

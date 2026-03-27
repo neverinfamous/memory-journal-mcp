@@ -176,7 +176,7 @@ src/
     │
     └── prompts/                    # Prompt handlers
         ├── index.ts                # Prompt registration barrel
-        ├── workflow.ts             # 10 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
+        ├── workflow.ts             # 11 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
         └── github.ts              # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
 ```
 
@@ -229,7 +229,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 ## Resources (`src/handlers/resources/`)
 
-28 resources total — 20 static + 8 template.
+33 resources total — 20 static + 13 template.
 
 ### Static Resources
 
@@ -248,7 +248,8 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 | Handler File   | Resources                                                                                                                                                                                                                                                                |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram`, `memory://milestones/{number}` |
+| `templates.ts` | `memory://projects/{number}/timeline`, `memory://issues/{issue_number}/entries`, `memory://prs/{pr_number}/entries`, `memory://prs/{pr_number}/timeline`, `memory://kanban/{project_number}`, `memory://kanban/{project_number}/diagram` |
+| `github.ts`    | `memory://github/status/{repo}`, `memory://github/insights/{repo}`, `memory://github/milestones/{repo}`, `memory://milestones/{number}`, `memory://milestones/{repo}/{number}` |
 
 ### Briefing Assembly (`src/handlers/resources/core/briefing/`)
 
@@ -265,11 +266,11 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-16 workflow prompts total.
+17 workflow prompts total.
 
 | File          | Prompts                                                                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary` |
+| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary`, `team-session-summary` |
 | `github.ts`   | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                    |
 | `index.ts`    | Barrel — re-exports workflow + GitHub prompts, `getPrompt()` / `getPrompts()` dispatch                                                                                                   |
 
@@ -399,7 +400,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | **Code Mode Bridge**  | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). Readonly mode halts execution gracefully and returns structured errors via proxy traps. |
 | **Tool Filtering**    | `ToolFilter` parses `--tool-filter` string → whitelist/blacklist of tool names. `codemode` auto-injected unless explicitly excluded. Shortcuts: `starter`, `essential`, `readonly`.                                                                                                                       |
 | **Briefing System**   | `memory://briefing` assembled from modular sections (context, GitHub, user message). Configurable via 12 env vars / CLI flags (incl. `--workflow-summary`/`MEMORY_JOURNAL_WORKFLOW_SUMMARY` for `memory://workflows`). Instruction levels: `essential`, `standard`, `full`.                               |
-| **GitHub Split**      | GitHub tools split across 7 handler files by domain (read, issues, kanban, milestones, insights, copilot, mutations). `GitHubIntegration` facade in `github/github-integration/` handles all API calls.                                                                                                   |
+| **GitHub Split**      | GitHub tools split across 7 handler files by domain. `GitHubIntegration` facade handles all API calls. Tools dynamically instantiate local `GitHubIntegration` bounds to the target project's physical path via `PROJECT_REGISTRY` if explicitly requested. |
 | **Database Adapter**  | `IDatabaseAdapter` interface → `SqliteAdapter` (better-sqlite3). Entry operations split into `entries/` subdirectory (crud, search, importance, statistics, shared).                                                                                                                                      |
 | **Vector Search**     | `VectorSearchManager` integrates `sqlite-vec` + `@huggingface/transformers`. Lazy model loading on first use.                                                                                                                                                                                             |
 | **OAuth 2.1**         | RFC 9728/8414 compliant. Scope enforcement via `scope-map.ts` (read/write/admin). JWT/JWKS validation. Optional — falls back to bearer token or no auth.                                                                                                                                                  |

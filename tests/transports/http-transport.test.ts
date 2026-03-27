@@ -50,7 +50,7 @@ const {
         }),
         listen: vi.fn().mockImplementation((_port: number, _host: string, cb?: () => void) => {
             if (cb) cb()
-            return { close: vi.fn(), on: vi.fn() }
+            return { close: vi.fn(), on: vi.fn(), setTimeout: vi.fn() }
         }),
     }
 
@@ -622,6 +622,67 @@ describe('HttpTransport', () => {
             await transport.stop(mockScheduler as unknown as Parameters<HttpTransport['stop']>[0])
 
             expect(mockScheduler.stop).toHaveBeenCalled()
+        })
+
+        it('should catch errors when closing active transports and SSE transports', async () => {
+            const config: HttpTransportConfig = { port: 3000, host: '0.0.0.0', corsOrigins: ['*'], stateless: true }
+            const transport = new HttpTransport(config)
+            await transport.start(mockServer, null)
+
+            transport.transports.set('dummy-1', { close: vi.fn().mockRejectedValue(new Error('dummy close error')) } as any)
+            transport.sseTransports.set('dummy-2', { close: vi.fn().mockRejectedValue(new Error('dummy sse close error')) } as any)
+
+            // Should gracefully catch and log without throwing
+            await transport.stop(null)
+            expect(transport.transports.size).toBe(0)
+            expect(transport.sseTransports.size).toBe(0)
+        })
+    })
+
+    // ========================================================================
+    // Rate limiter middleware
+    // ========================================================================
+    
+    describe('rate limiter middleware', () => {
+        it('should enforce rate limits and bypass health check', async () => {
+            const config: HttpTransportConfig = {
+                port: 3000,
+                host: '0.0.0.0',
+                corsOrigins: ['*'],
+                stateless: true,
+                enableRateLimit: true,
+            }
+            const transport = new HttpTransport(config)
+            await transport.start(mockServer, null)
+
+            let rateLimiterMw: Function | undefined
+            for (const mw of mockMiddlewares) {
+                const res = mockRes()
+                try {
+                    // Send 101 requests from the same IP
+                    for(let i=0; i<101; i++) {
+                        mw(mockReq({ path: '/mcp', ip: '10.0.0.5' }), res, () => {})
+                    }
+                } catch { /* skip */ }
+                
+                if ((res['status'] as any).mock.calls.some((c: any) => c[0] === 429)) {
+                    rateLimiterMw = mw
+                    break
+                }
+            }
+            expect(rateLimiterMw).toBeDefined()
+
+            // Verify a health check bypasses it even if rate limited
+            const healthRes = mockRes()
+            let nextCalled = false
+            rateLimiterMw!(mockReq({ path: '/health', ip: '10.0.0.5' }), healthRes, () => {
+                nextCalled = true
+            })
+            expect(nextCalled).toBe(true)
+            expect((healthRes['status'] as any)).not.toHaveBeenCalledWith(429)
+
+            // Cleanup any intervals started by HttpTransport for rate limiting
+            await transport.stop(null)
         })
     })
 

@@ -10,9 +10,10 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96%25-brightgreen.svg)
-![Tests](https://img.shields.io/badge/Tests-1767_passed-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-96.7%25-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
+[![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -27,12 +28,13 @@
 
 ### What Sets Us Apart
 
-**61 MCP Tools** · **16 Workflow Prompts** · **28 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**61 MCP Tools** · **17 Workflow Prompts** · **33 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary`                                 |
+| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`      |
 | **GitHub Integration**        | 16 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                |
+| **Dynamic Project Routing**   | Seamlessly switch contexts and access CI/Issue tracking across multiple repositories using a single server instance via `PROJECT_REGISTRY`                     |
 | **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                  |
 | **Triple Search**             | Full-text (FTS5), semantic (`@huggingface/transformers` + `sqlite-vec`), and date-range search                                                                 |
 | **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                     |
@@ -43,8 +45,6 @@
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                             |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals      |
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))   |
-| **Strict TypeScript**         | 100% type-safe with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                          |
-| **MCP 2025-03-26 Compliant**  | Tool safety annotations, resource priorities, and progress notifications                                                                                       |
 | **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
 
 ---
@@ -116,13 +116,19 @@ flowchart TB
 
 ## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-**PERFORM AT START OF CHATS**: Read `memory://briefing`, present as two-column markdown table (Context | Value). Include all available fields; omit absent rows.
+**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing` by default and present the `userMessage` to the user as a formatted bullet list of key facts, including all available fields. When the user prompt or existing briefing clearly indicates a specific repository, additionally read `memory://briefing/{repo}` for that repo.
 
 **CREATE JOURNAL ENTRIES** at natural checkpoints:
 
 - After pushing to main (`milestone` or `technical_note`, tag with version)
 - After significant design decisions or learnings (`project_decision`)
 - After resolving non-trivial bugs (`bug_fix`, link to issue number)
+- Entries should only cover work done in present thread.
+
+**USE PROJECT AND CROSS-PROJECT INSIGHTS** when appropriate:
+
+- Run `get_cross_project_insights` before defining major architectures, new abstractions, or starting cross-cutting work to align with broader repository patterns.
+- Fetch `memory://github/insights` or run `get_repo_insights` to gauge project traction, health, and recent traffic.
 
 **SUGGEST CREATING OR IMPROVING RULES AND SKILLS** as you notice workflow opportunities.
 
@@ -173,7 +179,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
-### 🎯 **16 Workflow Prompts**
+### 🎯 **17 Workflow Prompts**
 
 - `find-related` - Discover connected entries via semantic similarity
 - `prepare-standup` - Daily standup summaries
@@ -191,14 +197,15 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `project-milestone-tracker` - Milestone progress tracking
 - `confirm-briefing` - Acknowledge session context to user
 - `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
+- `team-session-summary` - Create a retrospective team session summary entry securely isolated to the team database
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **28 Resources** (20 Static + 8 Template)
+### 📡 **33 Resources** (20 Static + 13 Template)
 
 **Static Resources** (appear in resource lists):
 
-- `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
+- `memory://briefing` / `memory://briefing/{repo}` - **Session initialization**: compact context for AI agents (~300 tokens)
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
@@ -221,6 +228,10 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Template Resources** (require parameters, fetch directly by URI):
 
+- `memory://github/status/{repo}` - Repository status targeted by repo
+- `memory://github/insights/{repo}` - Repository insights targeted by repo
+- `memory://github/milestones/{repo}` - Open milestones targeted by repo
+- `memory://milestones/{repo}/{number}` - Milestone detail targeted by repo
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
 - `memory://prs/{pr_number}/entries` - Entries linked to PR
@@ -294,6 +305,8 @@ npm run build
 
 Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
+### Basic Configuration
+
 ```json
 {
   "mcpServers": {
@@ -301,7 +314,40 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
       "command": "memory-journal-mcp",
       "env": {
         "GITHUB_TOKEN": "ghp_your_token_here",
-        "GITHUB_REPO_PATH": "/path/to/your/git/repo"
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/your/git/repo\",\"project_number\":1}}"
+      }
+    }
+  }
+}
+```
+
+### Advanced Configuration (Recommended)
+
+Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "memory-journal-mcp",
+      "env": {
+        "DB_PATH": "/path/to/your/memory_journal.db",
+        "TEAM_DB_PATH": "/path/to/shared/team.db",
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
+        "AUTO_REBUILD_INDEX": "true",
+        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "BRIEFING_ENTRY_COUNT": "3",
+        "BRIEFING_INCLUDE_TEAM": "true",
+        "BRIEFING_ISSUE_COUNT": "1",
+        "BRIEFING_PR_COUNT": "1",
+        "BRIEFING_PR_STATUS": "true",
+        "BRIEFING_WORKFLOW_COUNT": "1",
+        "BRIEFING_WORKFLOW_STATUS": "true",
+        "BRIEFING_COPILOT_REVIEWS": "true",
+        "RULES_FILE_PATH": "/path/to/your/RULES.md",
+        "SKILLS_DIR_PATH": "/path/to/your/skills",
+        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan"
       }
     }
   }
@@ -424,6 +470,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                       |
 | `GITHUB_REPO_PATH`                | Path to the git repository for auto-detecting owner/repo                                          |
 | `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                            |
+| `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing      |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                           |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
@@ -458,25 +505,23 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                     |
 | `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                     |
 
-**Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
+**Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`** and omit `GITHUB_REPO_PATH`.
 
-#### Fallback Behavior
+#### Dynamic Context Resolution & Auto-Detection
 
-When GitHub tools cannot auto-detect repository information:
+When executing GitHub tools (issues, PRs, context, etc.), the server resolves repository context in this order:
 
-1. **With `GITHUB_REPO_PATH` set**: Tools auto-detect `owner` and `repo` from git remote URL
-2. **Without `GITHUB_REPO_PATH`**: Tools return structured response with `requiresUserInput: true` and instructions to provide `owner` and `repo` parameters
-3. **With explicit parameters**: Always preferred - specify `owner` and `repo` directly in tool calls
+1. **Dynamic Project Routing**: If the agent passes a `repo` string that matches a key in your `PROJECT_REGISTRY`, the server dynamically mounts the physical directory mapped to that project. It executes git commands locally and automatically infers the `owner`.
+2. **Explicit Override**: If the agent provides both `owner` and `repo` explicitly, those values override auto-detection for API calls.
+3. **Missing Context**: Without `PROJECT_REGISTRY` or explicit parameters, the server blocks execution and returns `{requiresUserInput: true}` to prompt the agent.
 
-**Example response when auto-detection fails:**
+#### Automatic Project Routing (Kanban / Issues)
 
-```json
-{
-  "error": "Could not auto-detect repository",
-  "requiresUserInput": true,
-  "instruction": "Please provide owner and repo parameters"
-}
-```
+When opening an issue or viewing/moving a Kanban card, the server needs a GitHub Project number. It determines this via:
+
+1. Exploring the raw `project_number` argument passed by the agent.
+2. Checking if the `repo` string precisely matches an entry in your **`PROJECT_REGISTRY`**, seamlessly mapping it to its pre-configured `project_number`.
+3. Falling back to the globally defined `DEFAULT_PROJECT_NUMBER` if set.
 
 ### 🔐 OAuth 2.1 Authentication
 
@@ -521,7 +566,7 @@ memory-journal-mcp --transport http --port 3000
 
 ### 🔄 Session Management
 
-1. **Session start** → agent reads `memory://briefing` and shows project context
+1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{repo}`) and shows project context
 2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
 
@@ -569,8 +614,8 @@ flowchart TB
 
     subgraph MCP["Memory Journal MCP Server"]
         Tools["🛠️ 61 Tools"]
-        Resources["📡 28 Resources"]
-        Prompts["💬 16 Prompts"]
+        Resources["📡 33 Resources"]
+        Prompts["💬 17 Prompts"]
     end
 
     subgraph Storage["Persistence Layer"]
@@ -597,7 +642,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (61)      │  │ Resources (28)  │  │ Prompts (16)│  │
+│  │ Tools (61)      │  │ Resources (33)  │  │ Prompts (17)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤

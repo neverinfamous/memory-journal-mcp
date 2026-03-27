@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { KanbanBoardOutputSchema, MoveKanbanItemOutputSchema } from './schemas.js'
-import { resolveOwner } from './helpers.js'
+import { resolveOwner, resolveProjectNumber } from './helpers.js'
 
 export function getKanbanTools(context: ToolContext): ToolDefinition[] {
     return [
@@ -19,8 +19,12 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.',
             group: 'github',
             inputSchema: z.object({
-                project_number: z.number().describe('GitHub Project number'),
+                project_number: z
+                    .number()
+                    .optional()
+                    .describe('GitHub Project number (optional if repo is registered)'),
                 owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
+                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: KanbanBoardOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -28,25 +32,42 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            project_number: z.number(),
+                            project_number: z.number().optional(),
                             owner: z.string().optional(),
+                            repo: z.string().optional(),
                         })
                         .parse(params)
 
                     const resolved = await resolveOwner(context, input.owner)
                     if ('error' in resolved) return resolved.response
 
+                    // Fallback to explicit repo param if auto-detect failed (resolveOwner uses getRepoInfo)
+                    const effectiveRepo = input.repo ?? resolved.repo
+                    const projectNum = resolveProjectNumber(context, effectiveRepo, input.project_number)
+
+                    if (projectNum === undefined) {
+                        return {
+                            success: false,
+                            error: 'project_number is required and could not be resolved from registry. Please supply it explicitly.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true,
+                            requiresUserInput: true,
+                            instruction: 'Ask the user: "What is the GitHub Project number for this repository? (Usually found in the URL: projects/<number>)"'
+                        }
+                    }
+
                     const board = await resolved.github.getProjectKanban(
                         resolved.owner,
-                        input.project_number,
-                        resolved.repo
+                        projectNum,
+                        effectiveRepo
                     )
 
                     if (!board) {
                         return {
                             success: false,
-                            error: `Project #${String(input.project_number)} not found or Status field not configured`,
-                            projectNumber: input.project_number,
+                            error: `Project #${String(projectNum)} not found or Status field not configured`,
+                            projectNumber: projectNum,
                             owner: resolved.owner,
                             hint: 'Projects can be at user, repository, or organization level.',
                             code: 'RESOURCE_NOT_FOUND',
@@ -70,12 +91,16 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 'Move a Kanban item to a different status column. Requires the project board to have a Status field.',
             group: 'github',
             inputSchema: z.object({
-                project_number: z.number().describe('GitHub Project number'),
+                project_number: z
+                    .number()
+                    .optional()
+                    .describe('GitHub Project number (optional if repo is registered)'),
                 item_id: z.string().describe('Project item ID (from get_kanban_board)'),
                 target_status: z
                     .string()
                     .describe('Target status column name (e.g., "In Progress", "Done")'),
                 owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
+                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: MoveKanbanItemOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
@@ -83,26 +108,40 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = z
                         .object({
-                            project_number: z.number(),
+                            project_number: z.number().optional(),
                             item_id: z.string(),
                             target_status: z.string(),
                             owner: z.string().optional(),
+                            repo: z.string().optional(),
                         })
                         .parse(params)
 
                     const resolved = await resolveOwner(context, input.owner)
                     if ('error' in resolved) return resolved.response
 
+                    const effectiveRepo = input.repo ?? resolved.repo
+                    const projectNum = resolveProjectNumber(context, effectiveRepo, input.project_number)
+
+                    if (projectNum === undefined) {
+                        return {
+                            success: false,
+                            error: 'project_number is required and could not be resolved from registry. Please supply it explicitly.',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            recoverable: true,
+                        }
+                    }
+
                     const board = await resolved.github.getProjectKanban(
                         resolved.owner,
-                        input.project_number,
-                        resolved.repo
+                        projectNum,
+                        effectiveRepo
                     )
 
                     if (!board) {
                         return {
                             success: false,
-                            error: `Project #${String(input.project_number)} not found`,
+                            error: `Project #${String(projectNum)} not found`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
                             suggestion: 'Verify the project number and owner.',
@@ -138,7 +177,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         success: result.success,
                         itemId: input.item_id,
                         newStatus: statusOption.name,
-                        projectNumber: input.project_number,
+                        projectNumber: projectNum,
                         message: result.success
                             ? `Moved item to "${statusOption.name}"`
                             : undefined,

@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
 import { VERSION } from './version.js'
+import type { ProjectRegistryEntry } from './types/index.js'
 
 // Smart Database Resolution: Check root, then test-server, then default to root
 function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
@@ -215,6 +216,20 @@ program
                     oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
                     oauthClockTolerance: parseInt(options.oauthClockTolerance, 10),
+                    // Project Registry
+                    projectRegistry: (() => {
+                        const raw = process.env['PROJECT_REGISTRY']
+                        if (!raw) return undefined
+                        try {
+                            return JSON.parse(raw) as Record<string, ProjectRegistryEntry>
+                        } catch (e: unknown) {
+                            const errName = e instanceof Error ? e.message : String(e)
+                            throw new Error(
+                                `Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON: ${errName}`,
+                                { cause: e }
+                            )
+                        }
+                    })(),
                     // Briefing configuration
                     briefingConfig: {
                         entryCount: parseInt(

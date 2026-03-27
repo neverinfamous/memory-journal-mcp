@@ -16,6 +16,7 @@ import {
     GitHubContextOutputSchema,
 } from './schemas.js'
 import { resolveOwnerRepo } from './helpers.js'
+import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 
 // ============================================================================
 // Tool Definitions
@@ -263,26 +264,40 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             name: 'get_github_context',
             title: 'Get GitHub Repository Context',
             description:
-                'Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).',
+                'Get current repository context including branch, open issues, and open PRs. IMPORTANT: Leave owner/repo empty to auto-detect from git, OR specify the repository name if working in a multi-project registry.',
             group: 'github',
-            inputSchema: z.object({}).strict(),
+            inputSchema: z.object({
+                owner: z.string().optional().describe('Repository owner'),
+                repo: z.string().optional().describe('Repository name (use this to switch projects dynamically)'),
+            }),
             outputSchema: GitHubContextOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
-            handler: async (_params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
-                    if (!context.github) {
-                        return {
-                            success: false,
-                            error: 'GitHub integration not available',
-                            code: 'CONFIGURATION_ERROR',
-                            category: 'configuration',
-                            suggestion:
-                                'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
-                            recoverable: true,
-                        }
+                    const input = z
+                        .object({
+                            owner: z.string().optional(),
+                            repo: z.string().optional(),
+                        })
+                        .parse(params)
+
+                    const resolved = await resolveOwnerRepo(
+                        context,
+                        input,
+                        'would you like the context for'
+                    )
+                    
+                    let targetGithub: GitHubIntegration
+                    if ('error' in resolved) {
+                        // Maintain strict payload contract: gracefully degrade instead of erroring
+                        // when no specific repo input is provided and auto-detect fails.
+                        if (!context.github) return resolved.response
+                        targetGithub = context.github
+                    } else {
+                        targetGithub = resolved.github
                     }
 
-                    const ctx = await context.github.getRepoContext()
+                    const ctx = await targetGithub.getRepoContext()
                     return {
                         repoName: ctx.repoName,
                         branch: ctx.branch,

@@ -353,6 +353,20 @@ return {
 
 ## Phase 21: Search & Semantics via Code Mode
 
+> [!NOTE]
+> To ensure deterministic test results, execute the following setup snippet to guarantee cases for FTS5 fallback and search filters:
+>
+> ```javascript
+> await mj.core.createEntry({
+>   content: "This is a test's string with 100% coverage",
+>   issue_number: 44,
+>   pr_status: 'merged',
+>   workflow_run_id: 12345,
+>   project_number: 5,
+>   is_personal: true,
+> })
+> ```
+
 ### 21.1 FTS5 Search Patterns
 
 | Test          | Code                                                                     | Expected Result          |

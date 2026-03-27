@@ -1,5 +1,5 @@
 import type { InternalResourceDef } from '../shared.js'
-import { briefingResource } from './briefing/index.js'
+import { briefingResource, dynamicBriefingResource } from './briefing/index.js'
 import { instructionsResource } from './instructions.js'
 import { healthResource } from './health.js'
 import {
@@ -18,6 +18,7 @@ import {
 export function getCoreResourceDefinitions(): InternalResourceDef[] {
     return [
         briefingResource,
+        dynamicBriefingResource,
         instructionsResource,
         recentResource,
         significantResource,

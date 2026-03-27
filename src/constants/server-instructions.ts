@@ -65,12 +65,13 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read \`memory://briefing\` and **present the \`userMessage\` to the user as a formatted bullet list of key facts:**
+**REQUIRED**: Before processing any user request, read \`memory://briefing/{repo_name}\` inferring \`repo_name\` strictly from the context of the user's prompt and present the \`userMessage\` to the user as a formatted bullet list of key facts, with all available fields, including:
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs
 - Milestone progress (if any)
 - Template resources count
+- Registered Workspaces (if available - provides automatic repo-to-project routing)
 - Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
 
 **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
@@ -81,8 +82,10 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Behaviors
 
+- **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context
+- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures or cross-cutting abstractions. Use repo insights (\`memory://github/insights\`) to gauge traction.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
 ## Rule & Skill Suggestions
@@ -228,6 +231,8 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 **Readonly mode**: \`readonly: true\` restricts to read-only tools only. Calling a mutation method (e.g., \`mj.core.create(...)\`) in readonly mode throws an error that halts execution — the sandbox returns \`{ success: false, error: "Operation '...' is not found in group" }\`. If a group has no methods at all (fully stripped), the error says \`"no methods (read-only mode?)"\`.
 **Returns**: Last expression value. Errors return \`{ success: false, error: "..." }\`.
 
+**GitHub Context Injection**: You can pass \`repo: 'my-repo'\` directly to \`mj_execute_code\` (e.g., \`mj_execute_code({ code, repo: 'memory-journal-mcp' })\`) to instantly bind that repository and its default Kanban board to all GitHub and Kanban tools running inside the sandbox, avoiding the need to pass \`owner\`/\`repo\` manually to individual methods inside.
+
 **Important — all \`mj.*\` methods return Promises. Always \`await\` them:**
 
 \`\`\`js
@@ -260,9 +265,12 @@ const GITHUB_INSTRUCTIONS = `\n## GitHub Integration
 - Include \`issue_number\`/\`pr_number\` in \`create_entry\` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
-- Kanban: \`get_kanban_board(project_number)\` → \`move_kanban_item\` → document completion
+- Kanban: \`get_kanban_board\` → \`move_kanban_item\` → document completion (project_number auto-resolves if repo is registered)
 - Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
-- GitHub tools auto-detect owner/repo from git context; specify explicitly if null
+- **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces":
+  - **Tools**: Pass a \`repo\` parameter to ALL GitHub tools (including \`get_github_context\`) to explicitly target a specific project.
+  - **Resources**: You MUST use the dynamic \`{repo}\` variants for resources (e.g., \`memory://github/status/{repo}\`, \`memory://github/insights/{repo}\`) rather than the base URI (\`memory://github/status\`), which will fail with a detection error.
+  - **Dynamic Briefings**: You can explicitly request the briefing for a specific project by reading \`memory://briefing/{repo}\` instead of the global \`memory://briefing\` resource.
 `
 
 /**

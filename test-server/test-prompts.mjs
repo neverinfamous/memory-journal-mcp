@@ -6,6 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectDir = join(__dirname, '..')
 const proc = spawn('node', ['dist/cli.js', '--instruction-level', 'essential'], {
     cwd: projectDir,
+    env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db' },
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
@@ -79,6 +80,7 @@ async function main() {
         { name: 'get-context-bundle', args: {}, expect: 'context' },
         { name: 'confirm-briefing', args: {}, expect: 'session' },
         { name: 'session-summary', args: {}, expect: 'session' },
+        { name: 'team-session-summary', args: {}, expect: 'team session' },
         // 8.1 Required-argument prompts
         { name: 'find-related', args: { query: 'architecture' }, expect: 'architecture' },
         {

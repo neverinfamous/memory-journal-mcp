@@ -97,6 +97,12 @@ describe('Prompt Handlers - Coverage', () => {
             )
         })
 
+        it('should throw ConfigurationError if teamDb is missing for team-session-summary', () => {
+            expect(() => getPrompt('team-session-summary', {}, db)).toThrow(
+                'Team database not configured'
+            )
+        })
+
         it('should return messages for a valid prompt', () => {
             const prompts = getPrompts()
             const firstName = (prompts[0] as { name: string }).name
