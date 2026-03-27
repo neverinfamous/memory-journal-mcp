@@ -11,9 +11,14 @@ import type { RelationshipType } from '../../src/types/index.js'
 
 describe('DatabaseAdapter', () => {
     let db: DatabaseAdapter
-    const testDbPath = './test-adapter.db'
+    const testDir = './test-adapter-dir'
+    const testDbPath = `${testDir}/test-adapter.db`
 
     beforeAll(async () => {
+        const fs = require('node:fs')
+        if (!fs.existsSync(testDir)) {
+            fs.mkdirSync(testDir, { recursive: true })
+        }
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
     })
@@ -22,8 +27,8 @@ describe('DatabaseAdapter', () => {
         db.close()
         try {
             const fs = require('node:fs')
-            if (fs.existsSync(testDbPath)) {
-                fs.unlinkSync(testDbPath)
+            if (fs.existsSync(testDir)) {
+                fs.rmSync(testDir, { recursive: true, force: true })
             }
         } catch {
             // Ignore cleanup errors
@@ -559,8 +564,7 @@ describe('DatabaseAdapter', () => {
             // Cleanup
             const backups = db.listBackups()
             for (const b of backups) {
-                const path = require('node:path').join('backups', b.filename)
-                if (fs.existsSync(path)) fs.unlinkSync(path)
+                if (fs.existsSync(b.path)) fs.unlinkSync(b.path)
             }
         })
 

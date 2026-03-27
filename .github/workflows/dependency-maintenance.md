@@ -33,6 +33,9 @@ safe-outputs:
     expires: 14
     fallback-as-issue: true
     if-no-changes: 'ignore'
+    allowed-files:
+      - package.json
+      - package-lock.json
 
 timeout-minutes: 30
 concurrency: dependency-maintenance
