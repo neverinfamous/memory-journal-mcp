@@ -97,6 +97,8 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 **Readonly mode**: `readonly: true` restricts to read-only tools only. Calling a mutation method (e.g., `mj.core.create(...)`) in readonly mode throws an error that halts execution — the sandbox returns `{ success: false, error: "Operation '...' is not found in group" }`. If a group has no methods at all (fully stripped), the error says `"no methods (read-only mode?)"`.
 **Returns**: Last expression value. Errors return `{ success: false, error: "..." }`.
 
+**GitHub Context Injection**: You can pass `repo: 'my-repo'` directly to `mj_execute_code` (e.g., `mj_execute_code({ code, repo: 'memory-journal-mcp' })`) to instantly bind that repository and its default Kanban board to all `mj.github.*` tools running inside the sandbox, avoiding the need to pass `owner`/`repo` manually to individual methods inside.
+
 **Important — all `mj.*` methods return Promises. Always `await` them:**
 
 ```js

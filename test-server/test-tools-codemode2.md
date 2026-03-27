@@ -315,7 +315,7 @@ return {
 ### 25.1 Read-Only GitHub Tools
 
 ```javascript
-// Test code:
+// Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const ctx = await mj.github.getGithubContext({})
 const issues = await mj.github.getGithubIssues({ limit: 3 })
 const closedIssues = await mj.github.getGithubIssues({ state: 'closed', limit: 2 })
@@ -362,7 +362,7 @@ return {
 ### 25.3 Kanban Tools
 
 ```javascript
-// Test code:
+// Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const board = await mj.github.getKanbanBoard({ project_number: 5 })
 const hasItems = board.columns?.some((c) => c.items?.length > 0)
 const itemId = board.columns?.flatMap((c) => c.items ?? []).find((i) => i)?.id
@@ -406,7 +406,7 @@ return {
 > Creates and closes real GitHub issues and milestones. Clean up in Phase 25.6.
 
 ```javascript
-// Test code — Issue Lifecycle:
+// Test code — Issue Lifecycle (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const created = await mj.github.createGithubIssueWithEntry({
   title: 'CM4 Test: Code Mode Issue',
   body: 'Created via Code Mode test',
@@ -450,7 +450,7 @@ return {
 | `alreadyClosedError` | `true`   |
 
 ```javascript
-// Test code — Milestone CRUD:
+// Test code — Milestone CRUD (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const ms = await mj.github.createGithubMilestone({
   title: 'CM4 Test Milestone',
   description: 'Created via Code Mode',
@@ -497,7 +497,7 @@ return {
 ### 25.5 Repo Insights & Copilot Reviews
 
 ```javascript
-// Test code:
+// Test code (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const stars = await mj.github.getRepoInsights({})
 const traffic = await mj.github.getRepoInsights({ sections: 'traffic' })
 const all = await mj.github.getRepoInsights({ sections: 'all' })

@@ -23,6 +23,7 @@ import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
+import { GitHubIntegration } from '../../github/github-integration/index.js'
 
 // =============================================================================
 // Input / Output Schemas
@@ -32,6 +33,7 @@ const ExecuteCodeSchema = z.object({
     code: z.string().min(1),
     timeout: z.number().max(30000).optional().default(30000),
     readonly: z.boolean().optional().default(false),
+    repo: z.string().optional(),
 })
 
 /** Relaxed schema for MCP registration */
@@ -42,6 +44,12 @@ const ExecuteCodeSchemaMcp = z.object({
         .default(30000)
         .describe('Execution timeout in ms (max 30000)'),
     readonly: z.boolean().optional().default(false).describe('Restrict to read-only operations'),
+    repo: z
+        .string()
+        .optional()
+        .describe(
+            'Target repository name to set as default context for all github/kanban tools executed in this sandbox (e.g., "memory-journal-mcp").'
+        ),
 })
 
 // No outputSchema — Code Mode returns dynamic result types (z.unknown()) which
@@ -128,6 +136,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         code,
                         timeout,
                         readonly: readonlyMode,
+                        repo,
                     } = ExecuteCodeSchema.parse(params)
 
                     // Security validation
@@ -148,8 +157,24 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Context injection for GitHub / Kanban routing
+                    let sessionContext = context
+                    if (repo && context.config?.projectRegistry) {
+                        const registryEntry = context.config.projectRegistry[repo]
+                        if (registryEntry) {
+                            sessionContext = {
+                                ...context,
+                                github: new GitHubIntegration(registryEntry.path),
+                                config: {
+                                    ...context.config,
+                                    defaultProjectNumber: registryEntry.project_number ?? context.config.defaultProjectNumber
+                                }
+                            }
+                        }
+                    }
+
                     // Build tool list (excluding codemode to prevent recursion)
-                    const allTools = collectNonCodeModeTools(context)
+                    const allTools = collectNonCodeModeTools(sessionContext)
 
                     // Filter out write operations if readonly mode
                     const tools = readonlyMode
