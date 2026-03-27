@@ -45,7 +45,7 @@
 
 ## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-**PERFORM AT START OF CHATS**: Read `memory://briefing` (or `memory://briefing/{repo_name}` if working in a specific project within a multi-project registry, inferring `repo_name` from your workspace), present as two-column markdown table (Context | Value). Include all available fields; omit absent rows.
+**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing/{repo_name}` inferring `repo_name` strictly from the context of the user's prompt. Include all available fields and **present the `userMessage` to the user as a formatted bullet list of key facts:**
 
 **CREATE JOURNAL ENTRIES** at natural checkpoints:
 
