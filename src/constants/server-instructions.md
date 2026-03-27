@@ -4,7 +4,7 @@
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read `memory://briefing` (or `memory://briefing/{repo}` if working in a specific project within a multi-project registry) and **present the `userMessage` to the user as a formatted bullet list of key facts:**
+**REQUIRED**: Before processing any user request, Read `memory://briefing/{repo_name}` inferring `repo_name` from your workspace and present as two-column markdown table (Context | Value). Include all available fields and **present the `userMessage` to the user as a formatted bullet list of key facts:**
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs
