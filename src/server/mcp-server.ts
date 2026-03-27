@@ -120,7 +120,16 @@ export async function createServer(options: ServerOptions): Promise<void> {
     }
 
     // Initialize GitHub integration
-    const github = new GitHubIntegration()
+    let githubPath = '.'
+    if (options.defaultProjectNumber !== undefined && options.projectRegistry) {
+        const defaultEntry = Object.values(options.projectRegistry).find(
+            (r) => r.project_number === options.defaultProjectNumber
+        )
+        if (defaultEntry?.path) {
+            githubPath = defaultEntry.path
+        }
+    }
+    const github = new GitHubIntegration(githubPath)
     try {
         // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
         await github.getRepoInfo()
