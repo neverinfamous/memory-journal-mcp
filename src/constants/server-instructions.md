@@ -21,7 +21,7 @@
 
 ## Behaviors
 
-- **Personal vs Team**: **ALWAYS use the personal journal** (`create_entry` / `mj.core.createEntry`) by default. ONLY save to the team journal (`team_create_entry` / `mj.team.*`) if the user explicitly requests it.
+- **Personal vs Team**: **ALWAYS use the personal journal** (e.g., `create_entry`) by default. ONLY save to the team journal (e.g., `team_create_entry`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context
 - **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) before defining architectures or cross-cutting abstractions. Use repo insights (`memory://github/insights`) to gauge traction.
