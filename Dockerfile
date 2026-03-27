@@ -14,22 +14,22 @@ RUN apk add --no-cache python3 make g++ && \
 # Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
 RUN npm install -g npm@latest --force && npm cache clean --force
 
-# Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff@8.0.2 to 8.0.3
-# npm hasn't released a version with diff@8.0.3 yet, so we patch it directly
+# Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff to 8.0.4
+# npm hasn't released a version with diff@8.0.4 yet, so we patch it directly
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack diff@8.0.3 && \
+    npm pack diff@8.0.4 && \
     rm -rf node_modules/diff && \
-    tar -xzf diff-8.0.3.tgz && \
+    tar -xzf diff-8.0.4.tgz && \
     mv package node_modules/diff && \
-    rm diff-8.0.3.tgz
+    rm diff-8.0.4.tgz
 
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.11
+# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.13
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.11 && \
+    npm pack tar@7.5.13 && \
     rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.11.tgz && \
+    tar -xzf tar-7.5.13.tgz && \
     mv package node_modules/tar && \
-    rm tar-7.5.11.tgz
+    rm tar-7.5.13.tgz
 
 # Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.4
 RUN cd /usr/local/lib/node_modules/npm && \

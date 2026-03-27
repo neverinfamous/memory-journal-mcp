@@ -1,6 +1,19 @@
 ## [Unreleased]
 
-### Added
+### Security
+
+- Updated `tar` to 7.5.13 in Dockerfile to patch CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96
+- Updated npm-bundled `diff` to 8.0.4 in Dockerfile to patch GHSA-73rr-hh4g-fpgx
+- Resolved moderate severity vulnerabilities via lockfile updates (`npm audit fix`)
+
+### Changed
+
+**Dependency Updates**
+
+- `esbuild`: `^0.25.0` → `^0.27.4`
+- `typescript-eslint` tools: `v8.57.0` → `v8.57.2`
+- `@modelcontextprotocol/sdk`: `1.27.1` → `1.28.0`
+- `vitest` and `@vitest/coverage-v8`: `4.1.0` → `4.1.2`### Added
 
 - **Configuration**: Added `PROJECT_REGISTRY` environment variable (JSON object mapping repository names to file paths and project numbers), enabling dynamic, multi-project context loading to replace single-repo limitations.
 - **GitHub routing**: Issue creation and Kanban tools now auto-resolve project IDs organically via `PROJECT_REGISTRY` mapping before defaulting to `DEFAULT_PROJECT_NUMBER`.
