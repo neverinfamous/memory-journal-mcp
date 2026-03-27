@@ -301,9 +301,7 @@ When opening an issue or viewing/moving a Kanban card, the server needs a GitHub
 
 ### HTTP/SSE Transport (Remote Access)
 
-For remote access, web-based clients, or HTTP-compatible MCP hosts:
-
-**Stateful Mode (default):**
+For remote access, web-based clients, or HTTP-compatible MCP hosts. The server supports both stateful (SSE) and stateless (serverless) modes.
 
 ```bash
 docker run --rm -p 3000:3000 \
@@ -312,91 +310,20 @@ docker run --rm -p 3000:3000 \
   --transport http --port 3000 --server-host 0.0.0.0
 ```
 
-**Stateless Mode (serverless):**
+- **Features**: OAuth 2.1, 7 Security Headers, Rate Limiting, CORS, and more.
+- **Stateless Mode**: Add `--stateless` to the command above.
 
-```bash
-docker run --rm -p 3000:3000 \
-  -v ./data:/app/data \
-  writenotenow/memory-journal-mcp:latest \
-  --transport http --port 3000 --server-host 0.0.0.0 --stateless
-```
-
-**Endpoints:**
-
-| Endpoint                                    | Description                                      | Mode     |
-| ------------------------------------------- | ------------------------------------------------ | -------- |
-| `GET /`                                     | Server info and available endpoints              | Both     |
-| `POST /mcp`                                 | JSON-RPC requests (initialize, tools/call, etc.) | Both     |
-| `GET /mcp`                                  | SSE stream for server-to-client notifications    | Stateful |
-| `DELETE /mcp`                               | Session termination                              | Stateful |
-| `GET /sse`                                  | Legacy SSE connection (MCP 2024-11-05)           | Stateful |
-| `POST /messages`                            | Legacy SSE message endpoint                      | Stateful |
-| `GET /health`                               | Health check (`{ status, timestamp }`)           | Both     |
-| `GET /.well-known/oauth-protected-resource` | RFC 9728 Protected Resource Metadata             | Both     |
-
-**Session Management:** In stateful mode, include the `mcp-session-id` header (returned from initialization) in subsequent requests.
-
-- **OAuth 2.1** — RFC 9728/8414, JWT/JWKS, granular scopes (opt-in via `--oauth-enabled`)
-- **7 Security Headers** — CSP, HSTS (opt-in), X-Frame-Options, and more
-- **Rate Limiting** — 100 req/min per IP · **CORS** — configurable multi-origin (exact-match) · **1MB body limit**
-- **Server Timeouts** — Request (120s), keep-alive (65s), headers (66s) · **404 handler** · **Cross-protocol guard**
-- **Build Provenance** · **SBOM** · **Supply Chain Attestations** · **Non-root execution**
-
-| Mode                      | Progress Notifications | Legacy SSE | Serverless |
-| ------------------------- | ---------------------- | ---------- | ---------- |
-| Stateful (default)        | ✅ Yes                 | ✅ Yes     | ⚠️ Complex |
-| Stateless (`--stateless`) | ❌ No                  | ❌ No      | ✅ Native  |
+**[See the full HTTP/SSE Transport & Endpoints documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Server-and-Production)**
 
 #### Automated Scheduling (HTTP Only)
 
-Enable periodic maintenance jobs for long-running containers. These jobs run in-process on `setInterval` — no external cron needed.
-
-> **Note:** These flags only work with HTTP/SSE transport. Stdio sessions (IDE integrations) are short-lived — use `backup_journal` and `cleanup_backups` tools manually instead.
-
-```bash
-docker run --rm -p 3000:3000 \
-  -v ./data:/app/data \
-  writenotenow/memory-journal-mcp:latest \
-  --transport http --port 3000 --server-host 0.0.0.0 \
-  --backup-interval 60 --keep-backups 10 \
-  --vacuum-interval 1440 \
-  --rebuild-index-interval 720
-```
-
-| Flag                             | Default | Description                                                          |
-| -------------------------------- | ------- | -------------------------------------------------------------------- |
-| `--backup-interval <min>`        | 0 (off) | Create timestamped database backups and prune old ones automatically |
-| `--keep-backups <count>`         | 5       | Max backups retained during automated cleanup                        |
-| `--vacuum-interval <min>`        | 0 (off) | Run `PRAGMA optimize` and flush database to disk                     |
-| `--rebuild-index-interval <min>` | 0 (off) | Full vector index rebuild to maintain semantic search quality        |
-
-Each job is error-isolated — a failure in one job won't affect the others. Scheduler status (last run, result, next run) is visible via `memory://health`.
+Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
 
 ## 🔐 OAuth 2.1 Authentication
 
-For production deployments, enable OAuth 2.1 on the HTTP transport:
+For production deployments, enable full OAuth 2.1 support on the HTTP transport (opt-in via `--oauth-enabled`). Features include RFC 9728/8414 discovery, JWKS token validation, and granular scopes. 
 
-| Component                   | Status | Description                                      |
-| --------------------------- | ------ | ------------------------------------------------ |
-| Protected Resource Metadata | ✅     | RFC 9728 `/.well-known/oauth-protected-resource` |
-| Auth Server Discovery       | ✅     | RFC 8414 metadata discovery with caching         |
-| Token Validation            | ✅     | JWT validation with JWKS support                 |
-| Scope Enforcement           | ✅     | Granular `read`, `write`, `admin` scopes         |
-| HTTP Transport              | ✅     | Streamable HTTP with OAuth middleware            |
-
-**Scopes:** `read` (core, search, analytics, relationships, export) · `write` (github, team + read) · `admin` (admin, backup, codemode + all)
-
-```bash
-docker run --rm -p 3000:3000 \
-  -v ./data:/app/data \
-  -e OAUTH_ENABLED=true \
-  -e OAUTH_ISSUER=https://auth.example.com/realms/mcp \
-  -e OAUTH_AUDIENCE=memory-journal-mcp \
-  writenotenow/memory-journal-mcp:latest \
-  --transport http --port 3000 --server-host 0.0.0.0
-```
-
-> **Note:** OAuth is opt-in. When not enabled, the server falls back to simple token authentication via `MCP_AUTH_TOKEN`, or runs without authentication.
+**[See the OAuth 2.1 Setup Guide in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/HTTP-Server-and-Production#oauth-21-authentication)**
 
 ## 🔧 Configuration
 
