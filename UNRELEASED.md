@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Verified
+
+- Executed and passed all 55 scenarios for Pass 3 Code Mode testing over Sandbox execution, CRUD operations, Search, and Analytics. Parity confirmed between direct capabilities and dynamic API bridge.
+
 ### Security
 
 - Updated `tar` to 7.5.13 in Dockerfile to patch CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96
