@@ -130,7 +130,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 idempotentHint: false,
                 openWorldHint: false,
             },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const {
                         code,
@@ -162,9 +162,16 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     if (repo && context.config?.projectRegistry) {
                         const registryEntry = context.config.projectRegistry[repo]
                         if (registryEntry) {
+                            const injectedGithub = new GitHubIntegration(registryEntry.path)
+                            try {
+                                // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
+                                await injectedGithub.getRepoInfo()
+                            } catch {
+                                // Ignore failing silently if repo is invalid
+                            }
                             sessionContext = {
                                 ...context,
-                                github: new GitHubIntegration(registryEntry.path),
+                                github: injectedGithub,
                                 config: {
                                     ...context.config,
                                     defaultProjectNumber: registryEntry.project_number ?? context.config.defaultProjectNumber
@@ -190,20 +197,19 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
-                    return pool.execute(code, bindings, timeout).then((result) => {
-                        // Validate result size
-                        if (result.success && result.result !== undefined) {
-                            const sizeCheck = security.validateResultSize(result.result)
-                            if (!sizeCheck.valid) {
-                                return {
-                                    success: false,
-                                    error: sizeCheck.errors.join('; '),
-                                    metrics: result.metrics,
-                                }
+                    const result = await pool.execute(code, bindings, timeout)
+                    // Validate result size
+                    if (result.success && result.result !== undefined) {
+                        const sizeCheck = security.validateResultSize(result.result)
+                        if (!sizeCheck.valid) {
+                            return {
+                                success: false,
+                                error: sizeCheck.errors.join('; '),
+                                metrics: result.metrics,
                             }
                         }
-                        return result
-                    })
+                    }
+                    return result
                 } catch (err) {
                     return formatHandlerError(err)
                 }

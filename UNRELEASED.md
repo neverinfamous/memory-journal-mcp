@@ -33,6 +33,7 @@
 ### Fixed
 
 - **Code Mode GitHub Context**: Implemented a `repo` context injection parameter for the `mj_execute_code` sandbox, restoring complete GitHub and Kanban parity with direct tool calls by dynamically mapping `PROJECT_REGISTRY` values.
+- **GitHub Issue URL Resolution**: Fixed an issue where `create_entry` generated `issueUrl: null` in multi-project registry setups. The GitHub integration now accurately pre-populates its cache on startup and correctly hydrates injected sandbox contexts, guaranteeing reliable issue URL auto-population for both direct tools and Code Mode execution.
 - **Code Mode & Resources**: Fixed a routing collision in resource template parsing where the `memory://briefing/{repo}` dynamic resource rejected project identifiers containing slashes (e.g., `neverinfamous/memory-journal-mcp`).
 - **GitHub Context Resolution**: Fixed an issue where tools like `get_github_context` failed to execute git commands in multi-project registry setups. Tools now accept a repository parameter and dynamically instantiate a local GitHub integration bound to the target project's physical path.
 - Fixed an issue where the `memory://briefing` resource would return an empty GitHub section in multi-project registry setups running outside a git repository.

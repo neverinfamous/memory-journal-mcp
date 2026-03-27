@@ -121,6 +121,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize GitHub integration
     const github = new GitHubIntegration()
+    try {
+        // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
+        await github.getRepoInfo()
+    } catch {
+        // Ignore failing silently if not within a git repository workspace
+    }
+    
     logger.info('GitHub integration initialized', {
         module: 'McpServer',
         hasToken: github.isApiAvailable(),
