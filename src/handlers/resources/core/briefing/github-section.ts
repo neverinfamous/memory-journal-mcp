@@ -55,7 +55,7 @@ export async function buildGitHubSection(
     if (!github) return null
 
     try {
-        const resolved = await resolveGitHubRepo(github)
+        const resolved = await resolveGitHubRepo(github, config)
         if (isResourceError(resolved)) return null
         const { owner, repo } = resolved
 

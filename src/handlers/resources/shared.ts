@@ -8,7 +8,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
-import type { GitHubIntegration } from '../../github/github-integration/index.js'
+import { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 
 // ============================================================================
@@ -34,7 +34,8 @@ export interface GitHubRepoResolved {
  * @returns Resolved repo info, or a ResourceResult error to return directly
  */
 export async function resolveGitHubRepo(
-    github: GitHubIntegration | null | undefined
+    github: GitHubIntegration | null | undefined,
+    config?: BriefingConfig
 ): Promise<GitHubRepoResolved | ResourceResult> {
     const lastModified = new Date().toISOString()
 
@@ -48,7 +49,30 @@ export async function resolveGitHubRepo(
         }
     }
 
-    const repoInfo = await github.getRepoInfo()
+    let repoInfo = await github.getRepoInfo()
+    let activeGithub = github
+
+    // Fallback: If no repo found in cwd, and we have a project registry,
+    // default to the primary project to ensure the briefing has context
+    if ((!repoInfo.owner || !repoInfo.repo) && config?.projectRegistry) {
+        let primaryProject = null
+        if (config.defaultProjectNumber !== undefined && config.defaultProjectNumber !== null) {
+            primaryProject = Object.values(config.projectRegistry).find(
+                (p) => p.project_number === config.defaultProjectNumber
+            )
+        }
+        if (!primaryProject) {
+            const projects = Object.values(config.projectRegistry)
+            if (projects.length > 0) {
+                primaryProject = projects[0]
+            }
+        }
+        if (primaryProject?.path) {
+            activeGithub = new GitHubIntegration(primaryProject.path)
+            repoInfo = await activeGithub.getRepoInfo()
+        }
+    }
+
     const owner = repoInfo.owner
     const repo = repoInfo.repo
 
@@ -63,7 +87,7 @@ export async function resolveGitHubRepo(
         }
     }
 
-    return { owner, repo, branch: repoInfo.branch ?? null, lastModified, github }
+    return { owner, repo, branch: repoInfo.branch ?? null, lastModified, github: activeGithub }
 }
 
 /**

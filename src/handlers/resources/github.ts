@@ -45,7 +45,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_GITHUB],
             annotations: withPriority(0.7, ASSISTANT_FOCUSED),
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const resolved = await resolveGitHubRepo(context.github)
+                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, branch, lastModified, github } = resolved
 
@@ -214,7 +214,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_ANALYTICS],
             annotations: { ...LOW_PRIORITY, audience: ['assistant'] },
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const resolved = await resolveGitHubRepo(context.github)
+                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
 
@@ -259,7 +259,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_MILESTONE],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-                const resolved = await resolveGitHubRepo(context.github)
+                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
 
@@ -309,7 +309,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const resolved = await resolveGitHubRepo(context.github)
+                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig)
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, github } = resolved
 
