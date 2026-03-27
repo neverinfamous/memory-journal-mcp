@@ -506,8 +506,7 @@ When executing GitHub tools (issues, PRs, context, etc.), the server resolves re
 
 1. **Dynamic Project Routing**: If the agent passes a `repo` string that matches a key in your `PROJECT_REGISTRY`, the server dynamically mounts the physical directory mapped to that project. It executes git commands locally and automatically infers the `owner`.
 2. **Explicit Override**: If the agent provides both `owner` and `repo` explicitly, those values override auto-detection for API calls.
-3. **Single-Repo Fallback**: If no parameters are passed, the server attempts to auto-detect the owner and repo from the default IDE root or `GITHUB_REPO_PATH`.
-4. **Missing Context**: Without `GITHUB_REPO_PATH` or explicit parameters, the server blocks execution and returns `{requiresUserInput: true}` to prompt the agent.
+3. **Missing Context**: Without `PROJECT_REGISTRY` or explicit parameters, the server blocks execution and returns `{requiresUserInput: true}` to prompt the agent.
 
 #### Automatic Project Routing (Kanban / Issues)
 

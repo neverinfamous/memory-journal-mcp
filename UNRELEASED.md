@@ -6,7 +6,6 @@
 - **GitHub routing**: Issue creation and Kanban tools now auto-resolve project IDs organically via `PROJECT_REGISTRY` mapping before defaulting to `DEFAULT_PROJECT_NUMBER`.
 - **Briefing Context**: Added `registeredWorkspaces` injection to the `memory://briefing` resource to automatically provide AI agents with a map of tracked projects and Kanban boards at session start.
 - Created dynamic version of the session briefing resource (`memory://briefing/{repo}`) allowing agents to explicitly fetch repo context.
-- Added automatic fallback to `defaultProjectNumber` (or the first registered workspace) for GitHub integrations when no global `cwd` is detected.
 - **Documentation**: Overhauled `README.md` and `DOCKER_README.md` configuration tables and examples to systematically compare Basic vs Advanced server setups and explicitly document legacy vs modern variables.
 
 ### Fixed
