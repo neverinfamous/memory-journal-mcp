@@ -65,7 +65,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read \`memory://briefing/{repo_name}\` inferring \`repo_name\` strictly from the context of the user's prompt. Include all available fields and **present the \`userMessage\` to the user as a formatted bullet list of key facts:**
+**REQUIRED**: Before processing any user request, read \`memory://briefing/{repo_name}\` inferring \`repo_name\` strictly from the context of the user's prompt andand present the \`userMessage\` to the user as a formatted bullet list of key facts, including all available fields.
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs
