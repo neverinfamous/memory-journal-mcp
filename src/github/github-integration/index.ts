@@ -63,6 +63,10 @@ export class GitHubIntegration {
         return this.repositoryManager.getCachedRepoInfo()
     }
 
+    setCachedRepoInfo(info: RepoInfo): void {
+        this.repositoryManager.setCachedRepoInfo(info)
+    }
+
     async getIssues(
         owner: string,
         repo: string,

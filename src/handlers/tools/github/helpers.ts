@@ -121,6 +121,14 @@ export async function resolveOwnerRepo(
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
+    
+    // HYDRATE GLOBAL CACHE FOR SUBSEQUENT SYNCHRONOUS TOOLS (e.g. create_entry)
+    // This ensures that when an agent switches contexts via get_github_context(repo),
+    // the global cache is primed for the current repository.
+    if (registryEntry && context.github) {
+        context.github.setCachedRepoInfo(repoInfo)
+    }
+
     const owner = input.owner ?? detectedOwner ?? undefined
     const repo = input.repo ?? detectedRepo ?? undefined
 
