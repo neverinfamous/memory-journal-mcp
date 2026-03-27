@@ -75,6 +75,7 @@ export const briefingResource: InternalResourceDef = {
                 ...(team?.teamLatestEntries ? { teamLatestEntries: team.teamLatestEntries } : {}),
                 ...(rulesFile ? { rulesFile } : {}),
                 ...(skillsDir ? { skillsDir } : {}),
+                ...(config.projectRegistry ? { registeredWorkspaces: config.projectRegistry } : {}),
                 behaviors: {
                     create: 'implementations, decisions, bug-fixes, milestones',
                     search: 'before decisions, referencing prior work',
@@ -98,7 +99,8 @@ export const briefingResource: InternalResourceDef = {
                 },
                 userMessage,
                 clientNote:
-                    'For full tool reference and field notes, read memory://instructions — only if your client did NOT auto-inject server instructions at session start (most modern clients including AntiGravity do this automatically).',
+                    'For full tool reference and field notes, read memory://instructions — only if your client did NOT auto-inject server instructions at session start (most modern clients including AntiGravity do this automatically).\\n' +
+                    (config.projectRegistry ? '\\nMulti-project registry detected. To retrieve CI status, branch, and issues for a specific project, use the get_github_context tool with the repository name.' : ''),
             },
             annotations: { lastModified: journal.lastModified },
         } satisfies ResourceResult

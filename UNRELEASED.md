@@ -9,6 +9,8 @@
 
 ### Fixed
 
+- **GitHub Context Resolution**: Fixed an issue where tools like `get_github_context` failed to execute git commands in multi-project registry setups. Tools now accept a repository parameter and dynamically instantiate a local GitHub integration bound to the target project's physical path.
+- **Briefing Context**: Fixed `memory://briefing` `clientNote` to explicitly instruct agents on how to use dynamic context tracking.
 - `workflows/README.md` — Updated Mermaid diagram and all table entries to reflect the new gatekeeper architecture (fan-out + gate pattern replacing stale `workflow_run` and direct-push triggers)
 
 ### CI/CD
