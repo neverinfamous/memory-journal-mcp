@@ -21,6 +21,8 @@
 
 ### Added
 
+- **Team Prompts**: Added `team-session-summary` prompt handler to support retrospective session summaries in the team journal domain. Safely isolates execution context by threading `teamDb` through the prompt registration architecture.
+
 - **Configuration**: Added `PROJECT_REGISTRY` environment variable (JSON object mapping repository names to file paths and project numbers), enabling dynamic, multi-project context loading to replace single-repo limitations.
 - **GitHub routing**: Issue creation and Kanban tools now auto-resolve project IDs organically via `PROJECT_REGISTRY` mapping before defaulting to `DEFAULT_PROJECT_NUMBER`.
 - **Briefing Context**: Added `registeredWorkspaces` injection to the `memory://briefing` resource to automatically provide AI agents with a map of tracked projects and Kanban boards at session start.
