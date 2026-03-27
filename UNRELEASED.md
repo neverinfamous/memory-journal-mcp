@@ -13,7 +13,9 @@
 - `esbuild`: `^0.25.0` → `^0.27.4`
 - `typescript-eslint` tools: `v8.57.0` → `v8.57.2`
 - `@modelcontextprotocol/sdk`: `1.27.1` → `1.28.0`
-- `vitest` and `@vitest/coverage-v8`: `4.1.0` → `4.1.2`### Added
+- `vitest` and `@vitest/coverage-v8`: `4.1.0` → `4.1.2`
+
+### Added
 
 - **Configuration**: Added `PROJECT_REGISTRY` environment variable (JSON object mapping repository names to file paths and project numbers), enabling dynamic, multi-project context loading to replace single-repo limitations.
 - **GitHub routing**: Issue creation and Kanban tools now auto-resolve project IDs organically via `PROJECT_REGISTRY` mapping before defaulting to `DEFAULT_PROJECT_NUMBER`.
@@ -27,8 +29,10 @@
 - Fixed an issue where the `memory://briefing` resource would return an empty GitHub section in multi-project registry setups running outside a git repository.
 - **Briefing Context**: Fixed `memory://briefing` `clientNote` to explicitly instruct agents on how to use dynamic context tracking.
 - `workflows/README.md` — Updated Mermaid diagram and all table entries to reflect the new gatekeeper architecture (fan-out + gate pattern replacing stale `workflow_run` and direct-push triggers)
+- **Testing**: Fixed sporadic `ResourceNotFoundError: Backup not found` failures in `sqlite-adapter.test.ts` by fully isolating the test database directory to prevent parallel test execution interference.
 
 ### CI/CD
 
 - `secrets-scanning.yml` — Opted `gitleaks/gitleaks-action@v2.3.9` into Node.js 24 via `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` ahead of June 2026 GitHub Actions deprecation deadline
 - `security-update.yml` — Opted `actions/cache` (invoked transitively by docker/build-push-action) into Node.js 24 via job-level `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true`
+- `dependency-maintenance.md` — Explicitly whitelisted `package.json` and `package-lock.json` in the `safe-outputs.allowed-files` list to unblock PR generation by the dependency maintenance agent
