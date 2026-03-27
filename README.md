@@ -115,13 +115,14 @@ flowchart TB
 
 ## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing/{repo_name}` inferring `repo_name` strictly from the context of the user's prompt. Include all available fields and **present the `userMessage` to the user as a formatted bullet list of key facts:**
+**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing/{repo_name}` inferring `repo_name` strictly from the context of the user's prompt and present the `userMessage` to the user as a formatted bullet list of key facts, including all available fields.
 
 **CREATE JOURNAL ENTRIES** at natural checkpoints:
 
 - After pushing to main (`milestone` or `technical_note`, tag with version)
 - After significant design decisions or learnings (`project_decision`)
 - After resolving non-trivial bugs (`bug_fix`, link to issue number)
+- Entries should only cover work done in present thread.
 
 **USE PROJECT AND CROSS-PROJECT INSIGHTS** when appropriate:
 
