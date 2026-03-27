@@ -16,7 +16,7 @@ export async function resolveIssueUrl(
     existingUrl: string | undefined
 ): Promise<string | undefined> {
     if (existingUrl) return existingUrl
-    if (issueNumber === undefined || !context.github) return undefined
+    if (issueNumber === undefined) return undefined
 
     // 1. Dynamic Project Registry Resolution
     if (projectNumber !== undefined && context.config?.projectRegistry) {
@@ -39,9 +39,11 @@ export async function resolveIssueUrl(
     }
 
     // 2. Fallback to globally cached repo info
-    const cachedRepo = context.github.getCachedRepoInfo()
-    if (cachedRepo?.owner && cachedRepo?.repo) {
-        return `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(issueNumber)}`
+    if (context.github) {
+        const cachedRepo = context.github.getCachedRepoInfo()
+        if (cachedRepo?.owner && cachedRepo?.repo) {
+            return `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(issueNumber)}`
+        }
     }
 
     return undefined
