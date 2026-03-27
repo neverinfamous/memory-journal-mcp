@@ -16,7 +16,7 @@ vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
                     return { success: true, result: 'undefined' }
                 }
                 if (code.includes('huge')) {
-                    return { success: true, result: 'a'.repeat(5 * 1024 * 1024) }
+                    return { success: true, result: 'a'.repeat(11 * 1024 * 1024) }
                 }
                 return { success: true, result: 2 }
             },

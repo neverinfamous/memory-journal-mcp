@@ -224,7 +224,7 @@ program
                             return JSON.parse(raw) as Record<string, ProjectRegistryEntry>;
                         } catch (e: unknown) {
                             const errName = e instanceof Error ? e.message : String(e);
-                            throw new Error(`Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON: ${errName}`);
+                            throw new Error(`Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON: ${errName}`, { cause: e });
                         }
                     })(),
                     // Briefing configuration

@@ -94,9 +94,6 @@ export async function resolveOwnerRepo(
       }
     | { error: true; response: Record<string, unknown> }
 > {
-    if (!context.github) {
-        return {
-            error: true,
     let toolGithub: GitHubIntegration | undefined
     const registryEntry = input.repo && context.config?.projectRegistry
         ? context.config.projectRegistry[input.repo]
