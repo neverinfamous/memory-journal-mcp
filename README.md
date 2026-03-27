@@ -43,8 +43,6 @@
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                             |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals      |
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))   |
-| **Strict TypeScript**         | 100% type-safe with strict mode, typed error classes, and no `eslint-disable` pragmas                                                                          |
-| **MCP 2025-03-26 Compliant**  | Tool safety annotations, resource priorities, and progress notifications                                                                                       |
 | **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
 
 ---
@@ -125,6 +123,7 @@ flowchart TB
 - After resolving non-trivial bugs (`bug_fix`, link to issue number)
 
 **USE PROJECT AND CROSS-PROJECT INSIGHTS** when appropriate:
+
 - Run `get_cross_project_insights` before defining major architectures, new abstractions, or starting cross-cutting work to align with broader repository patterns.
 - Fetch `memory://github/insights` or run `get_repo_insights` to gauge project traction, health, and recent traffic.
 
