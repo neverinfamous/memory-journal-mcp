@@ -156,11 +156,11 @@ node test-server/test-tool-annotations.mjs
 
 ### 1.4 GitHub Status Resource
 
-| Test              | Command/Action                | Expected Result                                                  |
-| ----------------- | ----------------------------- | ---------------------------------------------------------------- |
-| Read status       | Read `memory://github/status` | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
-| CI status mapping | Verify CI status value        | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
-| Milestone data    | Inspect status data           | Includes milestones summary (open count, completion percentages) |
+| Test              | Command/Action                                                                               | Expected Result                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Read status       | Read `memory://github/status` (use `memory://github/status/{repo}` for multi-project setups) | Compact JSON with repo, branch, CI, issues, PRs, Kanban summary  |
+| CI status mapping | Verify CI status value                                                                       | Shows `passing`, `failing`, `pending`, `cancelled`, or `unknown` |
+| Milestone data    | Inspect status data                                                                          | Includes milestones summary (open count, completion percentages) |
 
 ---
 
