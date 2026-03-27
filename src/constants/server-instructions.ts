@@ -82,7 +82,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Behaviors
 
-- **Personal vs Team**: **ALWAYS use the personal journal** (\`create_entry\` / \`mj.core.createEntry\`) by default. ONLY save to the team journal (\`team_create_entry\` / \`mj.team.*\`) if the user explicitly requests it.
+- **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures or cross-cutting abstractions. Use repo insights (\`memory://github/insights\`) to gauge traction.
@@ -267,8 +267,10 @@ const GITHUB_INSTRUCTIONS = `\n## GitHub Integration
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
 - Kanban: \`get_kanban_board\` → \`move_kanban_item\` → document completion (project_number auto-resolves if repo is registered)
 - Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
-- **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces", all GitHub tools (including \`get_github_context\`) can accept a \`repo\` parameter to explicitly target that specific project. The server will dynamically mount the correct local directory for git operations.
-- **Dynamic Briefings**: You can explicitly request the briefing for a specific project by reading \`memory://briefing/{repo}\` instead of the global \`memory://briefing\` resource.
+- **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces":
+  - **Tools**: Pass a \`repo\` parameter to ALL GitHub tools (including \`get_github_context\`) to explicitly target a specific project.
+  - **Resources**: You MUST use the dynamic \`{repo}\` variants for resources (e.g., \`memory://github/status/{repo}\`, \`memory://github/insights/{repo}\`) rather than the base URI (\`memory://github/status\`), which will fail with a detection error.
+  - **Dynamic Briefings**: You can explicitly request the briefing for a specific project by reading \`memory://briefing/{repo}\` instead of the global \`memory://briefing\` resource.
 `
 
 /**

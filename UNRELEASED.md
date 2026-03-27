@@ -36,6 +36,7 @@
 - **Code Mode & Resources**: Fixed a routing collision in resource template parsing where the `memory://briefing/{repo}` dynamic resource rejected project identifiers containing slashes (e.g., `neverinfamous/memory-journal-mcp`).
 - **GitHub Context Resolution**: Fixed an issue where tools like `get_github_context` failed to execute git commands in multi-project registry setups. Tools now accept a repository parameter and dynamically instantiate a local GitHub integration bound to the target project's physical path.
 - Fixed an issue where the `memory://briefing` resource would return an empty GitHub section in multi-project registry setups running outside a git repository.
+- **GitHub Status Resources**: Added dynamic `{repo}` routing variants for all GitHub resources (`status`, `insights`, `milestones`) to allow explicit repository targeting in multi-project registry setups, fixing "Could not detect repository" errors.
 - **Briefing Context**: Fixed `memory://briefing` `clientNote` to explicitly instruct agents on how to use dynamic context tracking.
 - `workflows/README.md` — Updated Mermaid diagram and all table entries to reflect the new gatekeeper architecture (fan-out + gate pattern replacing stale `workflow_run` and direct-push triggers)
 - **Testing**: Fixed sporadic `ResourceNotFoundError: Backup not found` failures in `sqlite-adapter.test.ts` by fully isolating the test database directory to prevent parallel test execution interference.

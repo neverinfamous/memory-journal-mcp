@@ -109,6 +109,10 @@ async function buildBriefingData(context: ResourceContext, targetRepo?: string):
                 link: 'implementation→spec, bugfix→issue',
             },
             templateResources: [
+                'memory://github/status/{repo}',
+                'memory://github/insights/{repo}',
+                'memory://github/milestones/{repo}',
+                'memory://milestones/{repo}/{number}',
                 'memory://projects/{number}/timeline',
                 'memory://issues/{issue_number}/entries',
                 'memory://prs/{pr_number}/entries',
@@ -127,7 +131,7 @@ async function buildBriefingData(context: ResourceContext, targetRepo?: string):
             userMessage,
             clientNote:
                 'For full tool reference and field notes, read memory://instructions — only if your client did NOT auto-inject server instructions at session start (most modern clients including AntiGravity do this automatically).\\n' +
-                (config.projectRegistry ? '\\nMulti-project registry detected. To retrieve CI status, branch, and issues for a specific project, use the get_github_context tool with the repository name.' : ''),
+                (config.projectRegistry ? '\\nMulti-project registry detected. To retrieve CI status, branch, and issues for a specific project, use the get_github_context tool or dynamic resources (e.g. memory://github/status/{repo}) with the repository name.' : ''),
         },
         annotations: { lastModified: journal.lastModified },
     } satisfies ResourceResult

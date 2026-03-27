@@ -8,7 +8,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
 import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
-import type { GitHubIntegration } from '../../github/github-integration/index.js'
+import { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 
 // ============================================================================
@@ -31,15 +31,24 @@ export interface GitHubRepoResolved {
  * Encapsulates the three-step guard pattern used by all GitHub resource
  * handlers: check github integration → getRepoInfo → validate owner/repo.
  *
+ * @param github - The default GitHub integration instance
+ * @param config - The briefing configuration containing project registry
+ * @param targetRepo - Optional target repository name to dynamically resolve
  * @returns Resolved repo info, or a ResourceResult error to return directly
  */
 export async function resolveGitHubRepo(
     github: GitHubIntegration | null | undefined,
-    _config?: BriefingConfig
+    config?: BriefingConfig,
+    targetRepo?: string
 ): Promise<GitHubRepoResolved | ResourceResult> {
     const lastModified = new Date().toISOString()
 
-    if (!github) {
+    let activeGithub = github
+    if (targetRepo && config?.projectRegistry?.[targetRepo]) {
+        activeGithub = new GitHubIntegration(config.projectRegistry[targetRepo].path)
+    }
+
+    if (!activeGithub) {
         return {
             data: {
                 error: 'GitHub integration not available',
@@ -49,8 +58,7 @@ export async function resolveGitHubRepo(
         }
     }
 
-    const repoInfo = await github.getRepoInfo()
-    const activeGithub = github
+    const repoInfo = await activeGithub.getRepoInfo()
 
     const owner = repoInfo.owner
     const repo = repoInfo.repo
