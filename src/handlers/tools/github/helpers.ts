@@ -125,7 +125,7 @@ export async function resolveOwnerRepo(
     // HYDRATE GLOBAL CACHE FOR SUBSEQUENT SYNCHRONOUS TOOLS (e.g. create_entry)
     // This ensures that when an agent switches contexts via get_github_context(repo),
     // the global cache is primed for the current repository.
-    if (registryEntry && context.github) {
+    if (registryEntry) {
         context.github.setCachedRepoInfo(repoInfo)
     }
 
