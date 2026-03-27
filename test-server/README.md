@@ -13,7 +13,6 @@
 | `test-tools-codemode2.md` | **Pass 4: Code Mode Advanced** — Extended Code Mode scenarios                                                                                                                         | After Pass 3 completes |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
-| `test-agent-experience.md` | **Agent experience test** — 23 open-ended scenarios across 4 passes validating instruction sufficiency for cold-start | After instruction changes |
 | [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 61 tools across 11 groups | Reference |
 | [`code-map.md`](code-map.md) | **Source Code Map** — Directory tree, handler→tool mapping, type locations, error hierarchy, key constants, architecture patterns | When debugging source code or making changes |
 
