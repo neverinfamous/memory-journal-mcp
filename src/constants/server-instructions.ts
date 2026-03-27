@@ -65,7 +65,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read \`memory://briefing\` and **present the \`userMessage\` to the user as a formatted bullet list of key facts:**
+**REQUIRED**: Before processing any user request, read \`memory://briefing\` (or \`memory://briefing/{repo}\` if working in a specific project within a multi-project registry) and **present the \`userMessage\` to the user as a formatted bullet list of key facts:**
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs
@@ -265,7 +265,8 @@ const GITHUB_INSTRUCTIONS = `\n## GitHub Integration
 - Kanban: \`get_kanban_board\` → \`move_kanban_item\` → document completion (project_number auto-resolves if repo is registered)
 - Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
 - **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces", all GitHub tools (including \`get_github_context\`) can accept a \`repo\` parameter to explicitly target that specific project. The server will dynamically mount the correct local directory for git operations.
-- Single-repo fallback: If \`repo\` is not passed, tools auto-detect owner/repo from the current working directory's git context.
+- **Dynamic Briefings**: You can explicitly request the briefing for a specific project by reading \`memory://briefing/{repo}\` instead of the global \`memory://briefing\` resource.
+- Single-repo fallback: If \`repo\` is not passed, tools auto-detect owner/repo from the current working directory's git context, or fallback to the master project definition.
 `
 
 /**
