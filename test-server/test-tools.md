@@ -136,9 +136,12 @@ After creating all 17 entries, verify the seed data is searchable:
 ### 1.3 Protocol Validation — Run via Scripts - DO NOT SKIP!
 
 > [!IMPORTANT]
-> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. See `test-server/README.md` for full details and script locations.
+> These tests require **separate server starts** — they cannot be run via MCP tool calls. Run the scripts below in a terminal. Ensure the project is built first. See `test-server/README.md` for full details.
 
 ```powershell
+# Ensure latest build
+npm run build
+
 # Test A — Instruction levels (essential < standard < full)
 node test-server/test-instruction-levels.mjs
 

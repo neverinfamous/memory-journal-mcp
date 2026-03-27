@@ -2,6 +2,7 @@
 
 ### Verified
 
+- Executed and passed all exhaustive scenarios for Phase 0-6 Core & Mutation testing (`test-tools.md`), verifying FTS5 logic, date boundaries, causal relationships, analytics, semantic search similarity, index rebuilding, and tag administration with zero functional regressions.
 - Executed and passed all 55 scenarios for Pass 3 Code Mode testing over Sandbox execution, CRUD operations, Search, and Analytics. Parity confirmed between direct capabilities and dynamic API bridge.
 
 ### Security
