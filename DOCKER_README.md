@@ -43,7 +43,7 @@
 
 ## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-**PERFORM AT START OF CHATS**: Read `memory://briefing`, present as two-column markdown table (Context | Value). Include all available fields; omit absent rows.
+**PERFORM AT START OF CHATS**: Read `memory://briefing` (or `memory://briefing/{repo_name}` if working in a specific project within a multi-project registry, inferring `repo_name` from your workspace), present as two-column markdown table (Context | Value). Include all available fields; omit absent rows.
 
 **CREATE JOURNAL ENTRIES** at natural checkpoints:
 
@@ -109,7 +109,7 @@ Standups, retrospectives, PR summaries, weekly digests, period analysis, milesto
 
 ### 📡 **28 Resources** (20 Static + 8 Template)
 
-20 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://help/gotchas`, GitHub status/insights, team stats, and more) plus 8 template resources for project timelines, issue/PR entries, Kanban boards, milestone details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+20 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://help/gotchas`, GitHub status/insights, team stats, and more) plus 9 template resources for dynamic briefings (`memory://briefing/{repo}`), project timelines, issue/PR entries, Kanban boards, milestone details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## 🚀 Quick Start (2 Minutes)
 
@@ -293,7 +293,7 @@ When opening an issue or viewing/moving a Kanban card, the server needs a GitHub
 
 ### 🔄 Session Management
 
-1. **Session start** → agent reads `memory://briefing` and shows project context
+1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{repo}`) and shows project context
 2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
 

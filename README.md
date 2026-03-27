@@ -116,7 +116,7 @@ flowchart TB
 
 ## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-**PERFORM AT START OF CHATS**: Read `memory://briefing`, present as two-column markdown table (Context | Value). Include all available fields; omit absent rows.
+**PERFORM AT START OF CHATS**: Read `memory://briefing` (or `memory://briefing/{repo_name}` if working in a specific project within a multi-project registry, inferring `repo_name` from your workspace), present as two-column markdown table (Context | Value). Include all available fields; omit absent rows.
 
 **CREATE JOURNAL ENTRIES** at natural checkpoints:
 
@@ -202,7 +202,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Static Resources** (appear in resource lists):
 
-- `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
+- `memory://briefing` / `memory://briefing/{repo}` - **Session initialization**: compact context for AI agents (~300 tokens)
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
@@ -560,7 +560,7 @@ memory-journal-mcp --transport http --port 3000
 
 ### 🔄 Session Management
 
-1. **Session start** → agent reads `memory://briefing` and shows project context
+1. **Session start** → agent reads `memory://briefing` (or `memory://briefing/{repo}`) and shows project context
 2. **Session summary** → use `/session-summary` to capture progress and next-session context
 3. Next session's briefing includes the previous summary — context flows seamlessly
 
