@@ -228,7 +228,7 @@ src/
 ├── handlers/
 │   ├── tools/                  # 61 tool handlers (10 groups)
 │   ├── resources/              # 28 resource handlers
-│   └── prompts/                # 16 prompt handlers
+│   └── prompts/                # 17 prompt handlers
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration

@@ -176,7 +176,7 @@ src/
     │
     └── prompts/                    # Prompt handlers
         ├── index.ts                # Prompt registration barrel
-        ├── workflow.ts             # 10 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
+        ├── workflow.ts             # 11 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
         └── github.ts              # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
 ```
 
@@ -265,11 +265,11 @@ The `memory://briefing` resource is modular — each section is a separate file:
 
 ## Prompts (`src/handlers/prompts/`)
 
-16 workflow prompts total.
+17 workflow prompts total.
 
 | File          | Prompts                                                                                                                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary` |
+| `workflow.ts` | `find-related`, `prepare-standup`, `prepare-retro`, `weekly-digest`, `analyze-period`, `goal-tracker`, `get-context-bundle`, `get-recent-entries`, `confirm-briefing`, `session-summary`, `team-session-summary` |
 | `github.ts`   | `project-status-summary`, `pr-summary`, `code-review-prep`, `pr-retrospective`, `actions-failure-digest`, `project-milestone-tracker`                                                    |
 | `index.ts`    | Barrel — re-exports workflow + GitHub prompts, `getPrompt()` / `getPrompts()` dispatch                                                                                                   |
 
