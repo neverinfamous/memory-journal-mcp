@@ -131,6 +131,8 @@ mkdir data
 
 Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
+### Basic Configuration
+
 ```json
 {
   "mcpServers": {
@@ -145,13 +147,63 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
         "-e",
         "GITHUB_TOKEN",
         "-e",
-        "GITHUB_REPO_PATH=/app/repo",
+        "PROJECT_REGISTRY={\"my-repo\":{\"path\":\"/app/repo\",\"project_number\":1}}",
         "-v",
         "/path/to/your/repo:/app/repo:ro",
         "writenotenow/memory-journal-mcp:latest"
       ],
       "env": {
         "GITHUB_TOKEN": "ghp_your_token_here"
+      }
+    }
+  }
+}
+```
+
+### Advanced Configuration (Recommended)
+
+Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-v",
+        "./data:/app/data",
+        "-e",
+        "GITHUB_TOKEN",
+        "-v",
+        "/path/to/shared/team.db:/app/data/team.db:rw",
+        "-v",
+        "/path/to/your/projects:/app/projects:ro",
+        "-v",
+        "/path/to/rules.md:/app/rules.md:ro",
+        "-v",
+        "/path/to/skills:/app/skills:ro",
+        "writenotenow/memory-journal-mcp:latest"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "TEAM_DB_PATH": "/app/data/team.db",
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/app/projects/repo1\",\"project_number\":1},\"other-repo\":{\"path\":\"/app/projects/repo2\",\"project_number\":5}}",
+        "AUTO_REBUILD_INDEX": "true",
+        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "BRIEFING_ENTRY_COUNT": "3",
+        "BRIEFING_INCLUDE_TEAM": "true",
+        "BRIEFING_ISSUE_COUNT": "1",
+        "BRIEFING_PR_COUNT": "1",
+        "BRIEFING_PR_STATUS": "true",
+        "BRIEFING_WORKFLOW_COUNT": "1",
+        "BRIEFING_WORKFLOW_STATUS": "true",
+        "BRIEFING_COPILOT_REVIEWS": "true",
+        "RULES_FILE_PATH": "/app/rules.md",
+        "SKILLS_DIR_PATH": "/app/skills",
+        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan"
       }
     }
   }

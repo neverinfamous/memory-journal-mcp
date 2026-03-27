@@ -298,6 +298,8 @@ npm run build
 
 Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
+### Basic Configuration
+
 ```json
 {
   "mcpServers": {
@@ -305,7 +307,40 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
       "command": "memory-journal-mcp",
       "env": {
         "GITHUB_TOKEN": "ghp_your_token_here",
-        "GITHUB_REPO_PATH": "/path/to/your/git/repo"
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/your/git/repo\",\"project_number\":1}}"
+      }
+    }
+  }
+}
+```
+
+### Advanced Configuration (Recommended)
+
+Showcasing the full power of the server, including Multi-Project Routing, Team Collaboration, Copilot awareness, and Context Injections.
+
+```json
+{
+  "mcpServers": {
+    "memory-journal-mcp": {
+      "command": "memory-journal-mcp",
+      "env": {
+        "DB_PATH": "/path/to/your/memory_journal.db",
+        "TEAM_DB_PATH": "/path/to/shared/team.db",
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
+        "AUTO_REBUILD_INDEX": "true",
+        "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "BRIEFING_ENTRY_COUNT": "3",
+        "BRIEFING_INCLUDE_TEAM": "true",
+        "BRIEFING_ISSUE_COUNT": "1",
+        "BRIEFING_PR_COUNT": "1",
+        "BRIEFING_PR_STATUS": "true",
+        "BRIEFING_WORKFLOW_COUNT": "1",
+        "BRIEFING_WORKFLOW_STATUS": "true",
+        "BRIEFING_COPILOT_REVIEWS": "true",
+        "RULES_FILE_PATH": "/path/to/your/RULES.md",
+        "SKILLS_DIR_PATH": "/path/to/your/skills",
+        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan"
       }
     }
   }
