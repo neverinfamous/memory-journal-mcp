@@ -31,6 +31,7 @@
 - **Briefing Context**: Fixed `memory://briefing` `clientNote` to explicitly instruct agents on how to use dynamic context tracking.
 - `workflows/README.md` — Updated Mermaid diagram and all table entries to reflect the new gatekeeper architecture (fan-out + gate pattern replacing stale `workflow_run` and direct-push triggers)
 - **Testing**: Fixed sporadic `ResourceNotFoundError: Backup not found` failures in `sqlite-adapter.test.ts` by fully isolating the test database directory to prevent parallel test execution interference.
+- **Testing**: Added explicit seeding instruction to Phase 21 of `test-tools-codemode.md` to guarantee deterministic Core CRUD search outcomes.
 
 ### CI/CD
 
