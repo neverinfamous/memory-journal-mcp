@@ -150,7 +150,7 @@ const TagsListOutputSchema = z
 // ============================================================================
 
 export function getCoreTools(context: ToolContext): ToolDefinition[] {
-    const { db, teamDb, vectorManager, github } = context
+    const { db, teamDb, vectorManager } = context
     return [
         {
             name: 'create_entry',
@@ -161,13 +161,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
                     // Auto-populate issueUrl if issue_number provided without issueUrl
-                    const resolvedIssueUrl = resolveIssueUrl(
-                        github,
+                    const resolvedIssueUrl = await resolveIssueUrl(
+                        context,
+                        input.project_number,
                         input.issue_number,
                         input.issue_url
                     )
