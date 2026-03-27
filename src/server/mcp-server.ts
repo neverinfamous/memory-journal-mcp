@@ -29,6 +29,7 @@ import { Scheduler, type SchedulerOptions } from './scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
 import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
 import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
+import type { ProjectRegistryEntry } from '../types/index.js'
 import {
     registerResources,
     registerPrompts,
@@ -61,6 +62,8 @@ export interface ServerOptions {
     oauthClockTolerance?: number
     // Briefing configuration
     briefingConfig?: BriefingConfig
+    // Project Registry
+    projectRegistry?: Record<string, ProjectRegistryEntry>
     // Instruction level
     instructionLevel?: 'essential' | 'standard' | 'full'
 }
@@ -156,13 +159,18 @@ export async function createServer(options: ServerOptions): Promise<void> {
           }
         : undefined
 
+    const customToolHandlerConfig = {
+        defaultProjectNumber,
+        projectRegistry: options.projectRegistry,
+    }
+
     // Get all tools once (unfiltered) for both instruction generation and registration
     const allTools = getTools(
         db,
         null,
         vectorManager,
         github,
-        { defaultProjectNumber },
+        customToolHandlerConfig,
         teamDb,
         teamVectorManager
     )
@@ -203,7 +211,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
               filterConfig,
               vectorManager,
               github,
-              { defaultProjectNumber },
+              customToolHandlerConfig,
               teamDb,
               teamVectorManager
           )
@@ -286,7 +294,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         db,
                         vectorManager,
                         github,
-                        { defaultProjectNumber },
+                        customToolHandlerConfig,
                         progressContext,
                         teamDb,
                         teamVectorManager
@@ -381,6 +389,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             // (may come via briefingConfig from CLI, or directly from server options)
             defaultProjectNumber:
                 options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
+            projectRegistry: options.projectRegistry,
         }
         const result = await readResource(
             uri.href,

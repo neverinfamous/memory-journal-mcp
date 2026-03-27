@@ -7,7 +7,7 @@
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../vector/vector-search-manager.js'
 import type { ToolFilterConfig } from '../../filtering/tool-filter.js'
-import type { McpIcon } from '../../types/index.js'
+import type { McpIcon, ProjectRegistryEntry } from '../../types/index.js'
 import type { GitHubIntegration } from '../../github/github-integration/index.js'
 import type { Scheduler } from '../../server/scheduler.js'
 
@@ -104,6 +104,8 @@ export interface BriefingConfig {
     workflowSummary?: string
     /** Default GitHub Project number for Kanban resources and issue tools (env: DEFAULT_PROJECT_NUMBER) */
     defaultProjectNumber?: number
+    /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
+    projectRegistry?: Record<string, ProjectRegistryEntry>
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */
