@@ -10,22 +10,29 @@ import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 describe('Prompt Handlers', () => {
     let db: DatabaseAdapter
+    let teamDb: DatabaseAdapter
     const testDbPath = './test-prompts.db'
+    const testTeamDbPath = './test-team-prompts.db'
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
         // Seed some data for prompts that read from the DB
         db.createEntry({ content: 'Test entry for prompts', tags: ['test-tag'] })
+
+        teamDb = new DatabaseAdapter(testTeamDbPath)
+        await teamDb.initialize()
+        teamDb.applyTeamSchema()
+        teamDb.createEntry({ content: 'Team test entry', tags: ['team'] })
     })
 
     afterAll(() => {
         db.close()
+        teamDb.close()
         try {
             const fs = require('node:fs')
-            if (fs.existsSync(testDbPath)) {
-                fs.unlinkSync(testDbPath)
-            }
+            if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath)
+            if (fs.existsSync(testTeamDbPath)) fs.unlinkSync(testTeamDbPath)
         } catch {
             // Ignore cleanup errors
         }
@@ -71,7 +78,7 @@ describe('Prompt Handlers', () => {
             const names = prompts.map((p) => (p as { name: string }).name)
 
             for (const name of names) {
-                const result = getPrompt(name, {}, db)
+                const result = getPrompt(name, {}, db, teamDb)
                 expect(result.messages).toBeDefined()
                 expect(Array.isArray(result.messages)).toBe(true)
                 expect(result.messages.length).toBeGreaterThan(0)
@@ -126,6 +133,16 @@ describe('Prompt Handlers', () => {
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
+        })
+
+        it('should return messages for team-session-summary prompt', () => {
+            const result = getPrompt('team-session-summary', {}, db, teamDb)
+
+            expect(result.messages).toBeDefined()
+            expect(result.messages.length).toBeGreaterThan(0)
+            const text = (result.messages[0]?.content as { text: string }).text
+            expect(text).toContain('Team test entry')
+            expect(text).toContain('mj.team.create')
         })
     })
 })
