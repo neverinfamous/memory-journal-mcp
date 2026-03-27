@@ -28,7 +28,7 @@ import {
 // ============================================================================
 
 export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
-    const { teamDb, github } = context
+    const { teamDb } = context
 
     return [
         {
@@ -40,7 +40,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: TeamCreateEntrySchemaMcp,
             outputSchema: TeamCreateOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     if (!teamDb) {
                         return { ...TEAM_DB_ERROR_RESPONSE }
@@ -49,8 +49,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const input = TeamCreateEntrySchema.parse(params)
                     const author = input.author ?? resolveAuthor()
 
-                    const resolvedIssueUrl = resolveIssueUrl(
-                        github,
+                    const resolvedIssueUrl = await resolveIssueUrl(
+                        context,
+                        input.project_number,
                         input.issue_number,
                         input.issue_url
                     )
