@@ -3,6 +3,7 @@
 ### Verified
 
 - Executed and passed all exhaustive scenarios for Phase 0-6 Core & Mutation testing (`test-tools.md`), verifying FTS5 logic, date boundaries, causal relationships, analytics, semantic search similarity, index rebuilding, and tag administration with zero functional regressions.
+- Executed and passed the Phase 6 Automated Scheduler script via HTTP/SSE transport, verifying that all background cleanup and maintenance jobs fire successfully according to their configured intervals without interrupting protocol stability.
 - Executed and passed all 55 scenarios for Pass 3 Code Mode testing over Sandbox execution, CRUD operations, Search, and Analytics. Parity confirmed between direct capabilities and dynamic API bridge.
 - Executed and passed all exhaustive scenarios for Phase 0-2 Schemas, Resources, & GitHub testing (`test-tools.md`), verifying outputSchema compliance, multi-project resource routing, and integration lifecycle tools (issue and milestone management).
 - Executed and passed all exhaustive scenarios for Phase 3-7 Error Handling, Integrity & Edge Cases (`test-tools3.md`), verifying structured error responses, data isolation, backup/restore parity, boundary constraints, and ensuring zero raw MCP error leaks.
