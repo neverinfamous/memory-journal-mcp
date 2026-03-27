@@ -217,9 +217,16 @@ program
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
                     oauthClockTolerance: parseInt(options.oauthClockTolerance, 10),
                     // Project Registry
-                    projectRegistry: process.env['PROJECT_REGISTRY']
-                        ? (JSON.parse(process.env['PROJECT_REGISTRY']) as Record<string, ProjectRegistryEntry>)
-                        : undefined,
+                    projectRegistry: (() => {
+                        const raw = process.env['PROJECT_REGISTRY'];
+                        if (!raw) return undefined;
+                        try {
+                            return JSON.parse(raw) as Record<string, ProjectRegistryEntry>;
+                        } catch (e: unknown) {
+                            const errName = e instanceof Error ? e.message : String(e);
+                            throw new Error(`Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON: ${errName}`);
+                        }
+                    })(),
                     // Briefing configuration
                     briefingConfig: {
                         entryCount: parseInt(

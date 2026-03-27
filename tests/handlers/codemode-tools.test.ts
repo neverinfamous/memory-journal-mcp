@@ -16,7 +16,7 @@ vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
                     return { success: true, result: 'undefined' }
                 }
                 if (code.includes('huge')) {
-                    return { success: true, result: 'a'.repeat(50 * 1024 * 1024) }
+                    return { success: true, result: 'a'.repeat(5 * 1024 * 1024) }
                 }
                 return { success: true, result: 2 }
             },
@@ -114,7 +114,7 @@ describe('Code Mode Tool Handlers', () => {
             personalDb
         )) as any
         
-        console.log('HUGE TEST RESULT:', result)
+        // Noisy test, removing log.
         expect(result.success).toBe(false)
         expect(result.error).toContain('Result exceeds')
     })

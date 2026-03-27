@@ -11,7 +11,7 @@
 ![Coverage](https://img.shields.io/badge/Coverage-96.7%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
-[![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/lint-and-test.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/lint-and-test.yml)
+[![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
 
@@ -46,7 +46,7 @@
 
 ## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
 
-**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing/{repo_name}` inferring `repo_name` strictly from the context of the user's prompt and present the `userMessage` to the user as a formatted bullet list of key facts, including all available fields.
+**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing` by default and present the `userMessage` to the user as a formatted bullet list of key facts, including all available fields. When the user prompt or existing briefing clearly indicates a specific repository, additionally read `memory://briefing/{repo}` for that repo.
 
 **CREATE JOURNAL ENTRIES** at natural checkpoints:
 

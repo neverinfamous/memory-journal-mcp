@@ -97,6 +97,20 @@ export async function resolveOwnerRepo(
     if (!context.github) {
         return {
             error: true,
+    let toolGithub: GitHubIntegration | undefined
+    const registryEntry = input.repo && context.config?.projectRegistry
+        ? context.config.projectRegistry[input.repo]
+        : undefined
+
+    if (registryEntry) {
+        toolGithub = new GitHubIntegration(registryEntry.path)
+    } else if (context.github) {
+        toolGithub = context.github
+    }
+
+    if (!toolGithub) {
+        return {
+            error: true,
             response: {
                 success: false,
                 error: 'GitHub integration not available',
@@ -109,25 +123,9 @@ export async function resolveOwnerRepo(
         }
     }
 
-    let toolGithub: GitHubIntegration = context.github
-    const registryEntry = input.repo && context.config?.projectRegistry
-        ? context.config.projectRegistry[input.repo]
-        : undefined
-
-    if (registryEntry) {
-        toolGithub = new GitHubIntegration(registryEntry.path)
-    }
-
     const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
-    
-    // HYDRATE GLOBAL CACHE FOR SUBSEQUENT SYNCHRONOUS TOOLS (e.g. create_entry)
-    // This ensures that when an agent switches contexts via get_github_context(repo),
-    // the global cache is primed for the current repository.
-    if (registryEntry) {
-        context.github.setCachedRepoInfo(repoInfo)
-    }
 
     const owner = input.owner ?? detectedOwner ?? undefined
     const repo = input.repo ?? detectedRepo ?? undefined

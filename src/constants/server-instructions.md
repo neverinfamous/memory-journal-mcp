@@ -4,7 +4,7 @@
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read `memory://briefing/{repo_name}` inferring `repo_name` strictly from the context of the user's prompt andand present the `userMessage` to the user as a formatted bullet list of key facts, with all available fields, including:
+**REQUIRED**: Before processing any user request, read `memory://briefing` to get the current session context. Only read `memory://briefing/{repo_name}` when (a) the user explicitly requests a specific repo/project or (b) the base briefing indicates a multi-project registry and you need to target a specific entry. After reading, present the `userMessage` to the user as a formatted bullet list of key facts, with all available fields, including:
 
 - Entry counts (journal + team)
 - GitHub: repo, branch, CI status, open issues/PRs
