@@ -428,6 +428,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                       |
 | `GITHUB_REPO_PATH`                | Path to the git repository for auto-detecting owner/repo                                          |
 | `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                            |
+| `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing      |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                           |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
@@ -462,25 +463,23 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                     |
 | `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                     |
 
-**Without `GITHUB_REPO_PATH`**: You'll need to explicitly provide `owner` and `repo` parameters when calling GitHub tools.
+**Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`** and omit `GITHUB_REPO_PATH`.
 
-#### Fallback Behavior
+#### Fallback Behavior & Auto-Detection
 
-When GitHub tools cannot auto-detect repository information:
+When executing GitHub tools (issues, PRs, etc.), the server resolves repository context in this order:
 
-1. **With `GITHUB_REPO_PATH` set**: Tools auto-detect `owner` and `repo` from git remote URL
-2. **Without `GITHUB_REPO_PATH`**: Tools return structured response with `requiresUserInput: true` and instructions to provide `owner` and `repo` parameters
-3. **With explicit parameters**: Always preferred - specify `owner` and `repo` directly in tool calls
+1. **Explicit parameters (Always preferred)**: The agent specifies `owner` and `repo` explicitly. This allows for full multi-project agility.
+2. **With `GITHUB_REPO_PATH` set**: The server auto-detects `owner` and `repo` from that single directory's git remote. Ideal for simple, single-repo setups.
+3. **Without `GITHUB_REPO_PATH`**: The server returns a structured response with `requiresUserInput: true`, safely blocking the execution and prompting the agent to provide `owner` and `repo` parameters.
 
-**Example response when auto-detection fails:**
+#### Automatic Project Routing (Kanban / Issues)
 
-```json
-{
-  "error": "Could not auto-detect repository",
-  "requiresUserInput": true,
-  "instruction": "Please provide owner and repo parameters"
-}
-```
+When opening an issue or viewing/moving a Kanban card, the server needs a GitHub Project number. It determines this via:
+
+1. Exploring the raw `project_number` argument passed by the agent.
+2. Checking if the `repo` string precisely matches an entry in your **`PROJECT_REGISTRY`**, seamlessly mapping it to its pre-configured `project_number`.
+3. Falling back to the globally defined `DEFAULT_PROJECT_NUMBER` if set.
 
 ### 🔐 OAuth 2.1 Authentication
 

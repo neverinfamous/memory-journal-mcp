@@ -52,6 +52,7 @@
 - After resolving non-trivial bugs (`bug_fix`, link to issue number)
 
 **USE PROJECT AND CROSS-PROJECT INSIGHTS** when appropriate:
+
 - Run `get_cross_project_insights` before defining major architectures, new abstractions, or starting cross-cutting work to align with broader repository patterns.
 - Fetch `memory://github/insights` or run `get_repo_insights` to gauge project traction, health, and recent traffic.
 
@@ -172,14 +173,19 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
 
 Restart Cursor or your MCP client and start journaling!
 
+### GitHub Integration Configuration
+
+The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `GITHUB_REPO_PATH` is configured (shown in the Quick Start config above).
+
 | Environment Variable              | Description                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `DB_PATH`                         | Database location (default: `/app/data/memory_journal.db` in Docker)                              |
+| `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                              |
 | `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                    |
 | `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                           |
 | `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                       |
-| `GITHUB_REPO_PATH`                | Path to git repo inside container (mount your repo)                                               |
+| `GITHUB_REPO_PATH`                | Path to the git repository for auto-detecting owner/repo                                          |
 | `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                            |
+| `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing      |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                           |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
 | `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
@@ -214,9 +220,23 @@ Restart Cursor or your MCP client and start journaling!
 | `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                     |
 | `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                     |
 
-**Without `GITHUB_REPO_PATH`**: Explicitly provide `owner` and `repo` when calling GitHub tools.
+**Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`** and omit `GITHUB_REPO_PATH`.
 
-**Fallback:** With `GITHUB_REPO_PATH` set, tools auto-detect `owner`/`repo` from git config. Without it, provide `owner` and `repo` args explicitly. Mount read-only: `-v /path/to/repo:/app/repo:ro`.
+#### Fallback Behavior & Auto-Detection
+
+When executing GitHub tools (issues, PRs, etc.), the server resolves repository context in this order:
+
+1. **Explicit parameters (Always preferred)**: The agent specifies `owner` and `repo` explicitly. This allows for full multi-project agility.
+2. **With `GITHUB_REPO_PATH` set**: The server auto-detects `owner` and `repo` from that single directory's git remote. Ideal for simple, single-repo setups.
+3. **Without `GITHUB_REPO_PATH`**: The server returns a structured response with `requiresUserInput: true`, safely blocking the execution and prompting the agent to provide `owner` and `repo` parameters.
+
+#### Automatic Project Routing (Kanban / Issues)
+
+When opening an issue or viewing/moving a Kanban card, the server needs a GitHub Project number. It determines this via:
+
+1. Exploring the raw `project_number` argument passed by the agent.
+2. Checking if the `repo` string precisely matches an entry in your **`PROJECT_REGISTRY`**, seamlessly mapping it to its pre-configured `project_number`.
+3. Falling back to the globally defined `DEFAULT_PROJECT_NUMBER` if set.
 
 ### 🔄 Session Management
 
