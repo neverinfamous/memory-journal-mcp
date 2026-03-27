@@ -71,6 +71,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 - GitHub: repo, branch, CI status, open issues/PRs
 - Milestone progress (if any)
 - Template resources count
+- Registered Workspaces (if available - provides automatic repo-to-project routing)
 - Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
 
 **Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
@@ -261,9 +262,10 @@ const GITHUB_INSTRUCTIONS = `\n## GitHub Integration
 - Include \`issue_number\`/\`pr_number\` in \`create_entry\` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
-- Kanban: \`get_kanban_board(project_number)\` → \`move_kanban_item\` → document completion
+- Kanban: \`get_kanban_board\` → \`move_kanban_item\` → document completion (project_number auto-resolves if repo is registered)
 - Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
-- GitHub tools auto-detect owner/repo from git context; specify explicitly if null
+- **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces", all GitHub tools (including \`get_github_context\`) can accept a \`repo\` parameter to explicitly target that specific project. The server will dynamically mount the correct local directory for git operations.
+- Single-repo fallback: If \`repo\` is not passed, tools auto-detect owner/repo from the current working directory's git context.
 `
 
 /**
