@@ -500,13 +500,14 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`** and omit `GITHUB_REPO_PATH`.
 
-#### Fallback Behavior & Auto-Detection
+#### Dynamic Context Resolution & Auto-Detection
 
-When executing GitHub tools (issues, PRs, etc.), the server resolves repository context in this order:
+When executing GitHub tools (issues, PRs, context, etc.), the server resolves repository context in this order:
 
-1. **Explicit parameters (Always preferred)**: The agent specifies `owner` and `repo` explicitly. This allows for full multi-project agility.
-2. **With `GITHUB_REPO_PATH` set**: The server auto-detects `owner` and `repo` from that single directory's git remote. Ideal for simple, single-repo setups.
-3. **Without `GITHUB_REPO_PATH`**: The server returns a structured response with `requiresUserInput: true`, safely blocking the execution and prompting the agent to provide `owner` and `repo` parameters.
+1. **Dynamic Project Routing**: If the agent passes a `repo` string that matches a key in your `PROJECT_REGISTRY`, the server dynamically mounts the physical directory mapped to that project. It executes git commands locally and automatically infers the `owner`.
+2. **Explicit Override**: If the agent provides both `owner` and `repo` explicitly, those values override auto-detection for API calls.
+3. **Single-Repo Fallback**: If no parameters are passed, the server attempts to auto-detect the owner and repo from the default IDE root or `GITHUB_REPO_PATH`.
+4. **Missing Context**: Without `GITHUB_REPO_PATH` or explicit parameters, the server blocks execution and returns `{requiresUserInput: true}` to prompt the agent.
 
 #### Automatic Project Routing (Kanban / Issues)
 
