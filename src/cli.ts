@@ -218,13 +218,16 @@ program
                     oauthClockTolerance: parseInt(options.oauthClockTolerance, 10),
                     // Project Registry
                     projectRegistry: (() => {
-                        const raw = process.env['PROJECT_REGISTRY'];
-                        if (!raw) return undefined;
+                        const raw = process.env['PROJECT_REGISTRY']
+                        if (!raw) return undefined
                         try {
-                            return JSON.parse(raw) as Record<string, ProjectRegistryEntry>;
+                            return JSON.parse(raw) as Record<string, ProjectRegistryEntry>
                         } catch (e: unknown) {
-                            const errName = e instanceof Error ? e.message : String(e);
-                            throw new Error(`Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON: ${errName}`, { cause: e });
+                            const errName = e instanceof Error ? e.message : String(e)
+                            throw new Error(
+                                `Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON: ${errName}`,
+                                { cause: e }
+                            )
                         }
                     })(),
                     // Briefing configuration

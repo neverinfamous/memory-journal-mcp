@@ -24,11 +24,8 @@ export async function resolveIssueUrl(
             ([_, v]) => v.project_number === projectNumber
         )
         if (entry) {
-            // Re-import locally to avoid circular dependencies if needed, but we already have the type
-            // Actually, we need the constructor. 
-            // We can dynamically resolve the repo info if we instantiate a new GitHubIntegration for that path
-            // But to avoid circular deps or importing the class, we can just return what we expect if we know owner/repo
-            // Wait, we need to know the owner/repo for that project path!
+            // Dynamically import and instantiate GitHubIntegration for the resolved path
+            // to extract the correct owner/repo directly from the target filesystem
             const { GitHubIntegration } = await import('../github/github-integration/index.js')
             const targetGithub = new GitHubIntegration(entry[1].path)
             const repoInfo = await targetGithub.getRepoInfo()
