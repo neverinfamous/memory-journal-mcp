@@ -65,16 +65,18 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Session Start
 
-**REQUIRED**: Before processing any user request, read \`memory://briefing/{repo_name}\` inferring \`repo_name\` strictly from the context of the user's prompt and present the \`userMessage\` to the user as a formatted bullet list of key facts, with all available fields, including:
+**SESSION STARTS**: Before processing any user request at the start of a chat, you MUST read the \`memory://briefing/{repo_name}\`. **Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).** Infer the \`repo_name\` from the user's prompt or your active workspace context.
 
+Once read, present the \`userMessage\` from the briefing to the user as a formatted bullet list containing the key facts for all available fields including:
+
+- Project Name:
 - Entry counts (journal + team)
-- GitHub: repo, branch, CI status, open issues/PRs
+- Latest Entry (journal + team):
+- GitHub: repo, branch, CI status, open issues/PRs, insights
 - Milestone progress (if any)
 - Template resources count
 - Registered Workspaces (if available - provides automatic repo-to-project routing)
 - Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
-
-**Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
 
 - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
 - **Cursor**: Tools are \`user-{name}-{tool}\` → server name = \`user-memory-journal-mcp\`
@@ -82,13 +84,15 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Behaviors
 
+### memory-journal-mcp Behaviors
+
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures or cross-cutting abstractions. Use repo insights (\`memory://github/insights\`) to gauge traction.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
-## Rule & Skill Suggestions
+### Rule & Skill Suggestions
 
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
 
