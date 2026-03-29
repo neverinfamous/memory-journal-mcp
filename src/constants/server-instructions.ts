@@ -63,9 +63,12 @@ export type InstructionLevel = 'essential' | 'standard' | 'full'
  */
 const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
-## Session Start
+## ESSENTIAL SESSION START!**
 
-**ESSENTIAL**: Before processing any user request at the start of a chat, you MUST read the \`memory://briefing/{repo_name}\`. **Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).** Infer the \`repo_name\` from the user's prompt or your active workspace context. Once read, present the \`userMessage\` from the briefing to the user as a formatted bullet list containing the key facts for all available fields including:
+1. You **MUST** read the \`memory://briefing/{repo_name}\` at the start of each chat!
+2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
+3. Infer the \`repo_name\` from the user's prompt or your active workspace context.
+4. Once read, present the \`userMessage\` from the briefing to the user as a formatted bullet list containing the key facts for all available fields including:
 
 - Project Name:
 - Entry counts (journal + team)
