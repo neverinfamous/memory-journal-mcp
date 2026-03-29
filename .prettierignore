@@ -19,3 +19,4 @@ pnpm-lock.yaml
 # Database files
 *.db
 *.sqlite
+tmp/
