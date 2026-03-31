@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
 ![Coverage](https://img.shields.io/badge/Coverage-96.7%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
-![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
+![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
 🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
@@ -28,7 +28,7 @@
 
 ### What Sets Us Apart
 
-**61 MCP Tools** · **17 Workflow Prompts** · **33 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**61 MCP Tools** · **17 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -131,6 +131,15 @@ flowchart TB
 - Run `get_cross_project_insights` before defining major architectures, new abstractions, or starting cross-cutting work to align with broader repository patterns.
 - Fetch `memory://github/insights` or run `get_repo_insights` to gauge project traction, health, and recent traffic.
 
+**MONITOR OBSERVABILITY RESOURCES** to understand agent efficiency and audit tool usage:
+
+- Read `memory://metrics/summary` at the start of long sessions or before cost-sensitive workflows — it shows total call counts, error rate, and cumulative token estimates since server start.
+- Read `memory://metrics/tokens` to identify which tools are consuming the most context window; use this to select Code Mode (`mj_execute_code`) for high-frequency hot paths.
+- Read `memory://metrics/system` for process memory, uptime, and runtime environment — useful when diagnosing unexpected server behavior or performance regressions.
+- Read `memory://audit` to review the last 50 write and admin tool invocations (available only when `AUDIT_LOG_PATH` is configured).
+
+> **Note:** `memory://metrics/*` resources accumulate since server start and reset on restart. They are MEDIUM or HIGH priority resources intended for assistant consumption — not end-user display.
+
 **SUGGEST CREATING OR IMPROVING RULES AND SKILLS** as you notice workflow opportunities.
 
 ---
@@ -202,7 +211,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **33 Resources** (20 Static + 13 Template)
+### 📡 **38 Resources** (25 Static + 13 Template)
 
 **Static Resources** (appear in resource lists):
 
@@ -226,6 +235,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://team/statistics` - Team entry counts, types, and author breakdown
 - `memory://help` - Tool group index with descriptions and tool counts
 - `memory://help/gotchas` - Field notes, edge cases, and critical usage patterns
+- `memory://metrics/summary` - Aggregate tool call metrics since server start (calls, errors, token estimates, duration) — HIGH priority
+- `memory://metrics/tokens` - Per-tool token usage breakdown sorted by output token cost — MEDIUM priority
+- `memory://metrics/system` - Process-level metrics: memory (MB), uptime (s), Node.js version, platform — MEDIUM priority
+- `memory://metrics/users` - Per-user call counts (populated when OAuth user identifiers are present) — LOW priority
+- `memory://audit` - Last 50 write/admin tool call entries from the JSONL audit log (requires `AUDIT_LOG_PATH`)
 
 **Template Resources** (require parameters, fetch directly by URI):
 
@@ -505,6 +519,9 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                           |
 | `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                     |
 | `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                     |
+| `AUDIT_LOG_PATH`                  | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable audit logging. |
+| `AUDIT_REDACT`                    | Set to `true` to omit tool arguments from audit log entries for privacy (default: `false`)        |
+| `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)              |
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`** and omit `GITHUB_REPO_PATH`.
 
@@ -643,7 +660,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (61)      │  │ Resources (33)  │  │ Prompts (17)│  │
+│  │ Tools (61)      │  │ Resources (38)  │  │ Prompts (17)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
