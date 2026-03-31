@@ -16,6 +16,10 @@
   - `memory://health` now includes a `metrics` subsection with aggregate call/error/token counts.
 
 ### Changed
+- **Dependency Updates**:
+  - Updated `@huggingface/transformers` to `^4.0.0`
+  - Updated `typescript` to `^6.0.2`
+  - Updated minor and patch versions across all dependencies via `npm update`
 - Refactored and modularized the monolithic `search.ts` handler into a dedicated `src/handlers/tools/search/` directory for better maintainability.
 - Added `searchMode` and fusion scoring exposure to the `EntriesListOutputSchema` for greater agentic observability.
 - Wrapped `callTool()` dispatch in `src/handlers/tools/index.ts` with a metrics interceptor — every tool handler is instrumented at cache-build time with zero handler-code changes.
@@ -36,4 +40,5 @@
 - Prevented early return in `resolveIssueUrl` from blocking project registry resolution when `context.github` is not initialized.
 
 ### Security
+- Pinned `minimatch` to `10.2.5` in Dockerfile and overrides to ensure up-to-date transitive dependencies.
 - Updated Dockerfile to `node:24.14.1-alpine` to fix CVE vulnerabilities in the base image.
