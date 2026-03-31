@@ -1,6 +1,6 @@
 # Memory Journal MCP Server - TypeScript Version
 # Multi-stage build for optimized production image
-FROM node:24.14.1-alpine AS builder
+FROM node:25.8.2-alpine AS builder
 
 WORKDIR /app
 
@@ -74,7 +74,7 @@ RUN rm -rf /app/prod_modules/node_modules/onnxruntime-web \
            /app/prod_modules/node_modules/onnxruntime-node/bin/napi-v3/win32
 
 # Production stage
-FROM node:24.14.1-alpine
+FROM node:25.8.2-alpine
 
 WORKDIR /app
 
