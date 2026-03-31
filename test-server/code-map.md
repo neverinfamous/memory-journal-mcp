@@ -454,8 +454,10 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/test-preflight.md`           | Pre-test verification checklist                                               |
 | `test-server/test-tools.md`               | Entry-point agent test protocol (main tool tests)                             |
 | `test-server/test-tools2.md`              | Additional tool test scenarios                                                |
-| `test-server/test-tools-codemode.md`      | Code mode specific test prompts                                               |
-| `test-server/test-tools-codemode2.md`     | Additional code mode test scenarios                                           |
+| `test-server/test-tools-codemode-1.md`      | Code mode test prompts (Part 1: Foundations & Security)                       |
+| `test-server/test-tools-codemode-2.md`      | Code mode test prompts (Part 2: Core Data Operations)                         |
+| `test-server/test-tools-codemode-3.md`      | Code mode test prompts (Part 3: Workflows & Relationships)                    |
+| `test-server/test-tools-codemode-4.md`      | Code mode test prompts (Part 4: External, Admin & Team)                       |
 | `test-server/test-agent-experience.md`    | Open-ended agent experience scenarios                                         |
 | `test-server/test-instruction-levels.mjs` | Integration test — instruction level (essential/standard/full) token ordering | \n  | `test-server/test-filter-instructions.mjs` | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
 | `test-server/test-scheduler.mjs`          | Integration test — scheduler behavior                                         |

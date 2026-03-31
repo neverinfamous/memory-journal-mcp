@@ -26,6 +26,7 @@
 - Reduced `DOCKER_README.md` from 24,344 to 23,475 bytes (93.9% of Docker Hub 25,000-char limit) by shortening the tagline to meet the 100-char short description limit and collapsing duplicated routing sections.
 - Updated `test-server/code-map.md` handler map (`search.ts` → `search/index.ts`) and last-updated date.
 - Added `PROJECT_REGISTRY` and `TEAM_DB_PATH` placeholders to `mcp-config-example.json`.
+- Refactored monolithic Code Mode test files into four distinct, modular testing prompts (`test-tools-codemode-[1-4].md`) to reduce context window strain.
 
 
 ### Fixed
