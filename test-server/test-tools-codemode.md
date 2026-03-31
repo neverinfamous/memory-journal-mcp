@@ -374,10 +374,12 @@ return {
 | Basic query   | `return await mj.search.searchEntries({ query: "architecture" });`       | ≥ 2 results (S1, S11)    |
 | Phrase        | `return await mj.search.searchEntries({ query: '"error handling"' });`   | ≥ 1 result (S2)          |
 | Prefix        | `return await mj.search.searchEntries({ query: "auth*" });`              | ≥ 2 results (S1, S8)     |
-| Boolean NOT   | `return await mj.search.searchEntries({ query: "deploy NOT staging" });` | Returns S3 but NOT S5    |
-| Boolean OR    | `return await mj.search.searchEntries({ query: "deploy OR release" });`  | ≥ 2 results (S3, S4, S5) |
-| LIKE fallback | `return await mj.search.searchEntries({ query: "test's" });`             | ≥ 1 result (S6)          |
-| Special chars | `return await mj.search.searchEntries({ query: "100%" });`               | ≥ 1 result (S6)          |
+| FTS5 NOT      | `return await mj.search.searchEntries({ query: "deploy NOT staging", mode: "fts" });` | Returns S3 but NOT S5    |
+| FTS5 OR       | `return await mj.search.searchEntries({ query: "deploy OR release", mode: "fts" });`  | ≥ 2 results (S3, S4, S5) |
+| LIKE fallback | `return await mj.search.searchEntries({ query: "test's", mode: "fts" });`             | ≥ 1 result (S6)          |
+| Special chars | `return await mj.search.searchEntries({ query: "100%", mode: "fts" });`               | ≥ 1 result (S6)          |
+| Hybrid auto   | `return await mj.search.searchEntries({ query: "how did we fix performance" });`      | Heuristic RRF triggering S7 |
+| Forced semantic| `return await mj.search.searchEntries({ query: "improving performance", mode: "semantic" });` | Vector similarity bypassing FTS |
 
 ### 21.2 Search Filters
 
@@ -388,12 +390,18 @@ const byPr = await mj.search.searchEntries({ pr_status: 'merged' })
 const byWorkflow = await mj.search.searchEntries({ workflow_run_id: 12345 })
 const byProject = await mj.search.searchEntries({ project_number: 5 })
 const personal = await mj.search.searchEntries({ query: 'test', is_personal: true })
+const tagged = await mj.search.searchEntries({ tags: ['testing'] })
+const typed = await mj.search.searchEntries({ entry_type: 'planning' })
+const dated = await mj.search.searchEntries({ start_date: '2026-01-01', end_date: '2026-12-31' })
 return {
   issueResults: byIssue.entries.length,
   prResults: byPr.entries.length,
   workflowResults: byWorkflow.entries.length,
   projectResults: byProject.entries.length,
   personalResults: personal.entries.length,
+  taggedResults: tagged.entries.length,
+  typedResults: typed.entries.length,
+  datedResults: dated.entries.length,
   allPersonal: personal.entries.every((e) => e.isPersonal === true || e.is_personal === true),
 }
 ```
@@ -404,6 +412,9 @@ return {
 | `prResults`       | ≥ 1 (S8) |
 | `workflowResults` | ≥ 1 (S9) |
 | `projectResults`  | ≥ 1 (S7) |
+| `taggedResults`   | ≥ 1      |
+| `typedResults`    | ≥ 1      |
+| `datedResults`    | ≥ 1      |
 | `allPersonal`     | `true`   |
 
 ### 21.3 Cross-DB Search
@@ -474,14 +485,17 @@ return {
 
 ```javascript
 // Test code:
+const related = await mj.core.getRecentEntries({ limit: 1 })
 const basic = await mj.search.semanticSearch({ query: 'improving performance' })
+const byId = await mj.search.semanticSearch({ entry_id: related.entries[0].id })
 const strict = await mj.search.semanticSearch({
   query: 'performance',
   similarity_threshold: 0.5,
 })
-const personal = await mj.search.semanticSearch({
+const filtered = await mj.search.semanticSearch({
   query: 'test',
   is_personal: true,
+  tags: ['testing'],
 })
 const noHint = await mj.search.semanticSearch({
   query: 'xyznonexistent',
@@ -490,10 +504,11 @@ const noHint = await mj.search.semanticSearch({
 const stats = await mj.search.getVectorIndexStats({})
 return {
   basicCount: basic.entries?.length ?? 0,
+  byIdCount: byId.entries?.length ?? 0,
   strictCount: strict.entries?.length ?? 0,
   strictFewer: (strict.entries?.length ?? 0) <= (basic.entries?.length ?? 0),
-  personalFiltered:
-    personal.entries?.every((e) => e.isPersonal === true || e.is_personal === true) ?? true,
+  filteredCorrectly:
+    filtered.entries?.every((e) => (e.isPersonal || e.is_personal) && e.tags.includes('testing')) ?? true,
   noHintHasQualityHint: !!noHint.hint,
   vectorAvailable: stats.available,
   vectorItemCount: stats.itemCount,
@@ -503,6 +518,7 @@ return {
 | Check                  | Expected                                |
 | ---------------------- | --------------------------------------- |
 | `basicCount`           | ≥ 1                                     |
+| `byIdCount`            | ≥ 1                                     |
 | `strictFewer`          | `true`                                  |
 | `noHintHasQualityHint` | `true` (quality gate hint always shown) |
 | `vectorAvailable`      | `true`                                  |
@@ -632,12 +648,16 @@ After testing, remove test entries created during Phases 18 and 20:
 
 ### Search & Semantics (Phase 21)
 
+- [ ] `search_entries` respects `mode: 'fts'` and `mode: 'semantic'` explicitly via Code Mode
+- [ ] `search_entries` auto-mode correctly evaluates conversational RRF heuristic via Code Mode
 - [ ] FTS5 phrase, prefix, boolean NOT, boolean OR all return correct results via Code Mode
 - [ ] FTS5 LIKE fallback works for special characters (`test's`, `100%`)
-- [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`
+- [ ] `search_entries` filters work: `issue_number`, `pr_status`, `workflow_run_id`, `project_number`, `is_personal`, `tags`, `entry_type`, `start_date`, `end_date`
 - [ ] Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
 - [ ] `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
 - [ ] `search_by_date_range` rejects invalid date format with structured error
+- [ ] `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
+- [ ] `semantic_search` correctly filters results downstream using `tags` and `is_personal`
 - [ ] `semantic_search` with custom threshold returns fewer results
 - [ ] `semantic_search` quality gate hint shown even with `hint_on_empty: false`
 - [ ] `get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`

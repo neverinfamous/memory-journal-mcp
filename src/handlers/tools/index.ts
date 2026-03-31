@@ -24,7 +24,7 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
 import { getCoreTools } from './core.js'
-import { getSearchTools } from './search.js'
+import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
 import { getExportTools } from './export.js'

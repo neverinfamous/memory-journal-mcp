@@ -124,7 +124,12 @@ src/
     │   ├── schemas.ts              # Shared Zod input schemas (reused across groups)
     │   ├── error-fields-mixin.ts   # Re-export stub → canonical SSoT at utils/errors/error-response-fields.ts
     │   ├── core.ts                 # Core tool group (6 tools)
-    │   ├── search.ts               # Search tool group (4 tools)
+    │   ├── search/                 # Search tool group (4 tools)
+    │   │   ├── index.ts            # Barrel — connects 4 search tools
+    │   │   ├── helpers.ts          # Search helper functions
+    │   │   ├── auto.ts             # Auto-mode query heuristic classifier
+    │   │   ├── fts.ts              # FTS5 search logic
+    │   │   └── hybrid.ts           # RRF (Reciprocal Rank Fusion) hybrid logic
     │   ├── analytics.ts            # Analytics tool group (2 tools)
     │   ├── relationships.ts        # Relationships tool group (2 tools)
     │   ├── export.ts               # Export tool group (1 tool)

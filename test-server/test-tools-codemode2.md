@@ -702,6 +702,8 @@ const combined = await mj.team.teamSearch({
   query: 'team',
   tags: ['codemode4-team-test'],
 })
+const hybridAuto = await mj.team.teamSearch({ query: 'how did we fix performance' })
+const forcedFts = await mj.team.teamSearch({ query: 'CM4', mode: 'fts' })
 const noArgs = await mj.team.teamSearch({})
 
 // New: get by ID, list tags
@@ -721,6 +723,8 @@ return {
   searchCount: search.entries?.length ?? 0,
   tagSearchCount: tagSearch.entries?.length ?? 0,
   combinedCount: combined.entries?.length ?? 0,
+  hybridAutoCount: hybridAuto.entries?.length ?? 0,
+  forcedFtsCount: forcedFts.entries?.length ?? 0,
   noArgsCount: noArgs.entries?.length ?? 0,
   detailHasEntry: !!detail.entry,
   detailHasImportance: !!detail.importance,
@@ -737,6 +741,8 @@ return {
 | `recentHasAuthor` | `true`                            |
 | `searchCount`     | ≥ 1                               |
 | `tagSearchCount`  | ≥ 1                               |
+| `hybridAutoCount` | ≥ 0                               |
+| `forcedFtsCount`  | ≥ 1                               |
 | `detailHasEntry`  | `true`                            |
 | `tagCount`        | ≥ 1                               |
 
@@ -947,17 +953,18 @@ return {
 const rebuild = await mj.team.teamRebuildVectorIndex({})
 const stats = await mj.team.teamGetVectorIndexStats({})
 
-const search = await mj.team.teamSemanticSearch({ query: 'standup' })
-const strict = await mj.team.teamSemanticSearch({
-  query: 'standup',
-  similarity_threshold: 0.5,
-})
-
 const recent = await mj.team.teamGetRecent({ limit: 1 })
 const addResult = await mj.team.teamAddToVectorIndex({
   entry_id: recent.entries[0].id,
 })
 const addBad = await mj.team.teamAddToVectorIndex({ entry_id: 999999 })
+
+const search = await mj.team.teamSemanticSearch({ query: 'standup' })
+const relatedById = await mj.team.teamSemanticSearch({ entry_id: recent.entries[0].id })
+const strict = await mj.team.teamSemanticSearch({
+  query: 'standup',
+  similarity_threshold: 0.5,
+})
 
 const insights = await mj.team.teamGetCrossProjectInsights({})
 const insightsFiltered = await mj.team.teamGetCrossProjectInsights({
@@ -972,6 +979,7 @@ return {
   vectorAvailable: stats.available,
   vectorItemCount: stats.itemCount,
   searchCount: search.entries?.length ?? 0,
+  relatedCount: relatedById.entries?.length ?? 0,
   strictFewer: (strict.entries?.length ?? 0) <= (search.entries?.length ?? 0),
   addSuccess: addResult.success,
   addBadError: addBad.success === false,
@@ -987,6 +995,7 @@ return {
 | `entriesIndexed`       | Number > 0                                                                |
 | `vectorAvailable`      | `true`                                                                    |
 | `searchCount`          | ≥ 1                                                                       |
+| `relatedCount`         | ≥ 1                                                                       |
 | `strictFewer`          | `true`                                                                    |
 | `addSuccess`           | `true`                                                                    |
 | `addBadError`          | `true`                                                                    |

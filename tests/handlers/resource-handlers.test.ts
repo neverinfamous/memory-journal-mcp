@@ -113,7 +113,7 @@ describe('Resource Handlers', () => {
 
             expect(result.data).toBeDefined()
             expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('Session Start')
+            expect(result.data as string).toContain('SESSION START!**')
         })
 
         it('should show all tools in memory://instructions when no filter is set', async () => {
