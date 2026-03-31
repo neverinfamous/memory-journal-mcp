@@ -2,7 +2,7 @@
 
 > **Agent-optimized navigation reference.** Read this before searching the codebase. Covers directory layout, handler→tool mapping, resources, prompts, error hierarchy, and key constants.
 >
-> Last updated: March 21, 2026
+> Last updated: March 31, 2026
 
 ---
 
@@ -197,7 +197,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | ----------------- | ---------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------- |
 | **codemode**      | `codemode.ts`                | 1     | `mj_execute_code`                                                                                                                |
 | **core**          | `core.ts`                    | 6     | `create_entry`, `get_entry_by_id`, `get_recent_entries`, `create_entry_minimal`, `test_simple`, `list_tags`                      |
-| **search**        | `search.ts`                  | 4     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`                                            |
+| **search**        | `search/index.ts`            | 4     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`                                            |
 | **analytics**     | `analytics.ts`               | 2     | `get_statistics`, `get_cross_project_insights`                                                                                   |
 | **relationships** | `relationships.ts`           | 2     | `link_entries`, `visualize_relationships`                                                                                        |
 | **export**        | `export.ts`                  | 1     | `export_entries`                                                                                                                 |

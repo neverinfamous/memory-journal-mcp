@@ -4,6 +4,7 @@
 
 ### Added
 
+- Playwright E2E spec (`tests/e2e/payloads-observability.spec.ts`) covering all 5 Phase 2 resources (`memory://metrics/*`, `memory://audit`), `_meta.tokenEstimate` injection on tool responses, and the `memory://health` metrics subsection.
 - Hybrid Reciprocal Rank Fusion (RRF) search combining FTS5 and vector similarity scoring to `search_entries`.
 - Heuristic query classification (`auto`, `fts`, `semantic`, `hybrid`) via `mode` parameter in `search_entries`.
 - Find-related execution bypass via `entry_id` lookup in `semantic_search`.
@@ -14,6 +15,7 @@
 - 5 observability and audit MCP resources (`memory://metrics/*`, `memory://audit`).
 - Aggregate call, error, and token counts in the `memory://health` metrics section.
 - `searchMode` and fusion scoring exposure on `EntriesListOutputSchema`.
+- `.env.example` with all environment variables grouped by category for local development setup.
 
 ### Changed
 
@@ -21,6 +23,10 @@
 - Post-processed `callTool()` results asynchronously to inject token estimates.
 - Updated `@huggingface/transformers` to `^4.0.0` and `typescript` to `^6.0.2`.
 - Updated all minor and patch cross-dependencies via `npm update`.
+- Reduced `DOCKER_README.md` from 24,344 to 23,475 bytes (93.9% of Docker Hub 25,000-char limit) by shortening the tagline to meet the 100-char short description limit and collapsing duplicated routing sections.
+- Updated `test-server/code-map.md` handler map (`search.ts` → `search/index.ts`) and last-updated date.
+- Added `PROJECT_REGISTRY` and `TEAM_DB_PATH` placeholders to `mcp-config-example.json`.
+
 
 ### Fixed
 
