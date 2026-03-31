@@ -34,6 +34,8 @@ import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getCodeModeTools } from './codemode.js'
 
+import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
+
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
 
@@ -187,7 +189,20 @@ function ensureToolCache(
     }
 
     const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
-    toolMapCache = new Map(getAllToolDefinitions(context).map((t) => [t.name, t]))
+    const rawDefs = getAllToolDefinitions(context)
+
+    // Wrap every handler with the metrics interceptor at cache-build time.
+    // This is O(n) once per cache miss — production cost is negligible.
+    const instrumentedDefs: ToolDefinition[] = rawDefs.map((t) => ({
+        ...t,
+        handler: wrapWithMetrics(
+            t.name,
+            (args: Record<string, unknown>) => Promise.resolve(t.handler(args)),
+            globalMetrics
+        ) as (params: unknown) => unknown,
+    }))
+
+    toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
     mappedToolsCache = null // Invalidate mapped cache when definitions change
     cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
 }
@@ -195,7 +210,7 @@ function ensureToolCache(
 /**
  * Call a tool by name
  */
-export function callTool(
+export async function callTool(
     name: string,
     args: Record<string, unknown>,
     db: IDatabaseAdapter,
@@ -229,11 +244,17 @@ export function callTool(
         const freshTools = getAllToolDefinitions(context)
         const freshTool = freshTools.find((t) => t.name === name)
         if (freshTool) {
-            return Promise.resolve(freshTool.handler(args))
+            const freshResult = await Promise.resolve(freshTool.handler(args))
+            // Skip injection when outputSchema is defined — the MCP SDK validates
+            // structured content against outputSchema and rejects extra properties.
+            return freshTool.outputSchema != null ? freshResult : injectTokenEstimate(freshResult)
         }
     }
 
-    return Promise.resolve(tool.handler(args))
+    const result = await Promise.resolve(tool.handler(args))
+    // Skip injection when outputSchema is defined — the MCP SDK validates
+    // structured content against outputSchema and rejects extra properties.
+    return tool.outputSchema != null ? result : injectTokenEstimate(result)
 }
 
 /**

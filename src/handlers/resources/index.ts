@@ -24,6 +24,7 @@ import { getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
+import { getAuditResourceDef } from '../../audit/index.js'
 
 /**
  * Get all resource definitions for MCP list
@@ -142,5 +143,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
         ...getTemplateResourceDefinitions(),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
+        // Audit resource — logPath resolved from env var at runtime
+        getAuditResourceDef(process.env['AUDIT_LOG_PATH']),
     ]
 }
