@@ -44,23 +44,26 @@
 
 ---
 
-## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
+Suggested Rule (Add to AGENTS.md, GEMINI.md, etc):
 
-**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing` by default and present the `userMessage` to the user as a formatted bullet list of key facts, including all available fields. When the user prompt or existing briefing clearly indicates a specific repository, additionally read `memory://briefing/{repo}` for that repo.
+🛑 MANDATORY SESSION START ROUTINE
 
-**CREATE JOURNAL ENTRIES** at natural checkpoints:
+Execute BEFORE fulfilling any user request in a new session:
 
-- After pushing to main (`milestone` or `technical_note`, tag with version)
-- After significant design decisions or learnings (`project_decision`)
-- After resolving non-trivial bugs (`bug_fix`, link to issue number)
-- Entries should only cover work done in present thread.
-
-**USE PROJECT AND CROSS-PROJECT INSIGHTS** when appropriate:
-
-- Run `get_cross_project_insights` before defining major architectures, new abstractions, or starting cross-cutting work to align with broader repository patterns.
-- Fetch `memory://github/insights` or run `get_repo_insights` to gauge project traction, health, and recent traffic.
-
-**SUGGEST CREATING OR IMPROVING RULES AND SKILLS** as you notice workflow opportunities.
+1. **TARGET**: Infer `repo_name` from the active workspace context or user prompt.
+2. **FETCH**: Use the MCP `read_resource` tool (Server: `memory-journal-mcp`) to read `memory://briefing/{repo_name}`.
+   - **RESTRICTION**: Do NOT use `execute_code` for this step.
+3. **RENDER TABLE**: Extract `userMessage` and output it EXCLUSIVELY as a Markdown Table.
+   - **RESTRICTION**: NO bulleted lists. NO truncation of arrays or lists.
+   - **REQUIRED MAP**: Output all data comprehensively. Map these fields to rows/columns:
+     - Project Name
+     - Entry Counts (Journal & Team)
+     - Latest Entry (Journal & Team)
+     - GitHub (Repo, Branch, CI Status, Issues/PRs, Insights)
+     - Milestone Progress
+     - Template Resources (Output count only, not URLs)
+     - Registered Workspaces (Output FULL list for correct routing)
+     - List number of available Rules, Skills, and Workflows
 
 ---
 
@@ -278,13 +281,11 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`** and omit `GITHUB_REPO_PATH`.
 
-
 #### Context Resolution & Project Routing
 
 **Context resolution order**: Dynamic `PROJECT_REGISTRY` routing → explicit `owner`/`repo` → blocks with `{requiresUserInput: true}`. Kanban/issue project numbers resolve via passed argument → `PROJECT_REGISTRY` lookup → global `DEFAULT_PROJECT_NUMBER`.
 
 **[Full routing & auto-detection docs →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
-
 
 ### 🔄 Session Management
 
