@@ -73,9 +73,9 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 ## Success Criteria
 
-- [ ] Simple expressions return correct types: integer, string, object, null, boolean
-- [ ] Async/await resolves correctly inside sandbox
-- [ ] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
-- [ ] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
-- [ ] Custom `timeout` parameter accepted and enforced
-- [ ] Infinite loop terminated with structured error (not hang or crash)
+- [x] Simple expressions return correct types: integer, string, object, null, boolean
+- [x] Async/await resolves correctly inside sandbox
+- [x] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
+- [x] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
+- [x] Custom `timeout` parameter accepted and enforced
+- [x] Infinite loop terminated with structured error (not hang or crash)
