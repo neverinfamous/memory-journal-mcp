@@ -24,6 +24,7 @@
 - `searchMode` and fusion scoring exposure on `EntriesListOutputSchema`.
 - `.env.example` with all environment variables grouped by category for local development setup.
 - Verification of Phase 26 Admin, Backup & Export Code Mode tests with 100% test pass rate.
+- Verification of Phase 25 GitHub Tools Code Mode tests (16 tools) with 100% test pass rate.
 
 ### Changed
 
