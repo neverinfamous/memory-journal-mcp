@@ -471,10 +471,20 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/standard/test-errors.md`                | Prompt handlers, structured error verification, numeric coercion              |
 | `test-server/standard/test-integrity.md`             | Data integrity, boundary values, implementation bug detection                 |
 | `test-server/standard/test-team.md`                  | Team collaboration (20 tools + 2 resources)                                   |
-| `test-server/codemode/test-tools-codemode-1.md`      | Code mode test prompts (Part 1: Foundations & Security)                       |
-| `test-server/codemode/test-tools-codemode-2.md`      | Code mode test prompts (Part 2: Core Data Operations)                         |
-| `test-server/codemode/test-tools-codemode-3.md`      | Code mode test prompts (Part 3: Workflows & Relationships)                    |
-| `test-server/codemode/test-tools-codemode-4.md`      | Code mode test prompts (Part 4: External, Admin & Team)                       |
+| `test-server/codemode/test-cm-sandbox-basics.md`     | Code mode — Phase 16: Sandbox basics (expressions, async, metrics, timeout)   |
+| `test-server/codemode/test-cm-api-discovery.md`      | Code mode — Phase 17: API discoverability (help, aliases, positional args)    |
+| `test-server/codemode/test-cm-readonly.md`           | Code mode — Phase 18: Readonly mode (read succeed, writes blocked)            |
+| `test-server/codemode/test-cm-security.md`           | Code mode — Phase 19: Error handling & security (blocked patterns, globals)   |
+| `test-server/codemode/test-cm-crud.md`               | Code mode — Phase 20: Core CRUD (create, read, update, delete, error paths)   |
+| `test-server/codemode/test-cm-search.md`             | Code mode — Phase 21: Search & semantics (FTS5, filters, analytics, vector)   |
+| `test-server/codemode/test-cm-workflows.md`          | Code mode — Phase 22: Multi-step workflows (pipelines, branching, round-trip) |
+| `test-server/codemode/test-cm-orchestration.md`      | Code mode — Phase 23: Cross-group orchestration (health, tags, full pipeline) |
+| `test-server/codemode/test-cm-relationships.md`      | Code mode — Phase 24: Relationships & visualization (link, duplicate, Mermaid)|
+| `test-server/codemode/test-cm-github.md`             | Code mode — Phase 25: GitHub tools (16 tools: read, Kanban, lifecycle, CRUD)  |
+| `test-server/codemode/test-cm-admin-backup.md`       | Code mode — Phase 26: Admin, backup & export (tags, export, backup lifecycle) |
+| `test-server/codemode/test-cm-team-crud.md`          | Code mode — Phase 27.1-3: Team CRUD, error paths, date range search           |
+| `test-server/codemode/test-cm-team-admin.md`         | Code mode — Phase 27.4-8: Team admin, analytics, relationships, export, backup|
+| `test-server/codemode/test-cm-team-vector-errors.md` | Code mode — Phase 27.9-10: Team vector, insights, cross-tool error verification|
 | `test-server/test-agent-experience.md`      | Open-ended agent experience scenarios                                         |
 | `test-server/scripts/test-instruction-levels.mjs` | Integration test — instruction level (essential/standard/full) token ordering | \n  | `test-server/scripts/test-filter-instructions.mjs` | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
 | `test-server/scripts/test-scheduler.mjs`          | Integration test — scheduler behavior                                         |
