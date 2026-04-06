@@ -192,7 +192,11 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     )
                     if ('error' in resolved) return resolved.response
 
-                    const dueOn = input.due_on ? `${input.due_on}T08:00:00Z` : undefined
+                    const dueOn = input.due_on
+                        ? input.due_on.includes('T')
+                            ? input.due_on
+                            : `${input.due_on}T08:00:00Z`
+                        : undefined
                     const milestone = await resolved.github.createMilestone(
                         resolved.owner,
                         resolved.repo,
@@ -260,7 +264,11 @@ export function getGitHubMilestoneTools(context: ToolContext): ToolDefinition[] 
                     )
                     if ('error' in resolved) return resolved.response
 
-                    const dueOn = input.due_on ? `${input.due_on}T08:00:00Z` : undefined
+                    const dueOn = input.due_on
+                        ? input.due_on.includes('T')
+                            ? input.due_on
+                            : `${input.due_on}T08:00:00Z`
+                        : undefined
                     const milestone = await resolved.github.updateMilestone(
                         resolved.owner,
                         resolved.repo,

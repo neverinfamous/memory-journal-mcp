@@ -51,6 +51,7 @@
 
 ### Fixed
 
+- GitHub API payload generation bug in `create_github_milestone` and `update_github_milestone` causing failures when processing full ISO 8601 strings.
 - Interceptor schemas failing with `-32602` validation errors by bypassing strict output checks.
 - Shared context data bleeding in GitHub integration helpers.
 - Faulty early returns blocking project registry execution when GitHub context is uninitialized.
