@@ -73,3 +73,12 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
 4. Continue with Phases 20–26 in any order (all independent after 16–19).
 5. Run Phase 27 files sequentially (CRUD → Admin → Vector/Errors).
 6. Cleanup is included in Phase 24 (for 22-24) and Phase 27.9-10 (for 25-27).
+
+## Token Estimate Reporting
+
+All test workflows in `test-server/codemode/` require the agent to track and report the token estimate used during the test pass. 
+
+**How to calculate:**
+- Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values.
+- *Alternatively*, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
+- Always provide this **Total Token Estimate** clearly in your final test report summary so the user can track context window consumption.
