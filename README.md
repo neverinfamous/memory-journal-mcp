@@ -133,7 +133,7 @@ Execute BEFORE fulfilling any user request in a new session:
      - GitHub (Repo, Branch, CI Status, Issues/PRs, Insights)
      - Milestone Progress
      - Template Resources (Output count only, not URLs)
-     - Registered Workspaces (Output FULL list for correct routing)
+     - Registered Workspaces (Output FULL list of project names)
      - List number of available Rules, Skills, and Workflows
 
 ---
