@@ -12,6 +12,13 @@
 - Byte-length token estimation (`estimateTokens`, `injectTokenEstimate`) for agent context-window awareness via `_meta.tokenEstimate`.
 - In-memory `MetricsAccumulator` and interception logging.
 - Enterprise JSONL `AuditLogger` with 10 MB rotating file archives and configurable argument redaction.
+- Audit interceptor wiring all write/admin tool calls to the JSONL audit trail with scope-based filtering, token estimation, and duration timing.
+- CLI flags `--audit-log`, `--audit-redact`, `--audit-reads`, `--audit-log-max-size` and matching `AUDIT_LOG_PATH`, `AUDIT_REDACT`, `AUDIT_READS`, `AUDIT_LOG_MAX_SIZE` environment variables.
+- stderr audit mode (`--audit-log stderr`) for containerised deployments.
+- Configurable read-scope auditing via `--audit-reads` flag.
+- `AuditLogger.recent()` streaming tail-read (64KB window) for O(1) audit resource access.
+- Graceful `AuditLogger.close()` lifecycle for clean shutdown flush.
+- Session summary (token totals, error count, duration) in the `memory://audit` resource.
 - 5 observability and audit MCP resources (`memory://metrics/*`, `memory://audit`).
 - Aggregate call, error, and token counts in the `memory://health` metrics section.
 - `searchMode` and fusion scoring exposure on `EntriesListOutputSchema`.
@@ -19,6 +26,10 @@
 
 ### Changed
 
+- Refactored `AuditLogger` from synchronous `appendFileSync` to async-buffered writes (50-entry high-water mark, 100ms auto-flush) for non-blocking audit I/O.
+- Refactored `memory://audit` resource to use `AuditLogger.recent()` instead of full-file I/O.
+- Added `AuditConfig` type with `enabled`, `logPath`, `redact`, `auditReads`, `maxSizeBytes` fields.
+- Replaced `NullAuditLogger` with `enabled: false` config flag on `AuditLogger`.
 - Refactored `search.ts` handler into dedicated `/src/handlers/tools/search/` modules.
 - Post-processed `callTool()` results asynchronously to inject token estimates.
 - Updated `@huggingface/transformers` to `^4.0.0` and `typescript` to `^6.0.2`.
@@ -43,6 +54,7 @@
 - CI badges correctly targeting `gatekeeper.yml`.
 - Render issues with markdown checklists in `test-tools2.md` instructions.
 - Prioritization of dynamic briefing resolution in server instruction loading.
+- `callTool()` progress-token path bypassing both metrics and audit interceptors — fresh handlers from `getAllToolDefinitions()` were invoked raw, skipping all instrumentation. Both cached and progress paths now apply identical metrics + audit wrapping.
 
 ### Security
 

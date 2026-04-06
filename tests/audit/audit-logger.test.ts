@@ -1,223 +1,353 @@
 /**
  * Tests for src/audit/audit-logger.ts
+ *
+ * Validates the async-buffered JSONL audit writer:
+ *   - Buffered writes and flush lifecycle
+ *   - close() and graceful shutdown
+ *   - recent() streaming tail-read
+ *   - stderr mode
+ *   - Log rotation
+ *   - Non-throwing error resilience
+ *   - Disabled mode
  */
 
-import { describe, it, expect, afterEach } from 'vitest'
-import fs from 'node:fs'
-import path from 'node:path'
-import os from 'node:os'
-import { AuditLogger, NullAuditLogger, createAuditLogger } from '../../src/audit/audit-logger.js'
+import { describe, it, expect, afterEach, beforeEach } from 'vitest'
+import { readFile, rm, mkdtemp, stat, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { AuditLogger } from '../../src/audit/audit-logger.js'
+import type { AuditEntry, AuditConfig } from '../../src/audit/types.js'
 
-// Helper: create a temp directory and return its path
-function makeTempDir(): string {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'mj-audit-test-'))
+/** Helper: create a unique temp directory */
+async function createTempDir(): Promise<string> {
+    return mkdtemp(join(tmpdir(), 'mj-audit-test-'))
 }
 
-// Helper: read all lines from a file
-function readLines(filePath: string): string[] {
-    try {
-        return fs.readFileSync(filePath, 'utf8').split('\n').filter((l) => l.trim().length > 0)
-    } catch {
-        return []
+/** Helper: build a minimal valid AuditEntry */
+function fakeEntry(overrides: Partial<AuditEntry> = {}): AuditEntry {
+    return {
+        timestamp: new Date().toISOString(),
+        requestId: 'req-001',
+        tool: 'create_entry',
+        category: 'write',
+        scope: 'write',
+        user: null,
+        scopes: [],
+        durationMs: 42,
+        success: true,
+        ...overrides,
     }
 }
 
-const MOCK_ENTRY = {
-    timestamp: '2026-03-31T00:00:00.000Z',
-    toolName: 'create_entry',
-    scope: 'write' as const,
-    durationMs: 42,
-    inputTokens: 10,
-    outputTokens: 20,
-    isError: false,
-    args: { content: 'test content' },
+/** Helper: build a standard enabled config */
+function enabledConfig(dir: string, overrides: Partial<AuditConfig> = {}): AuditConfig {
+    return {
+        enabled: true,
+        logPath: join(dir, 'audit.jsonl'),
+        redact: false,
+        auditReads: false,
+        maxSizeBytes: 0,
+        ...overrides,
+    }
 }
 
 describe('AuditLogger', () => {
-    const temps: string[] = []
+    let dir: string
 
-    afterEach(() => {
-        // Clean up temp dirs after each test
-        for (const dir of temps) {
-            try {
-                fs.rmSync(dir, { recursive: true, force: true })
-            } catch {
-                // ignore cleanup errors
-            }
+    beforeEach(async () => {
+        dir = await createTempDir()
+    })
+
+    afterEach(async () => {
+        await rm(dir, { recursive: true, force: true })
+    })
+
+    it('should write JSONL entries to file', async () => {
+        const config = enabledConfig(dir)
+        const logger = new AuditLogger(config)
+
+        logger.log(fakeEntry({ tool: 'create_entry' }))
+        logger.log(fakeEntry({ tool: 'update_entry' }))
+        await logger.close()
+
+        const content = await readFile(config.logPath, 'utf-8')
+        const lines = content.trim().split('\n')
+
+        expect(lines).toHaveLength(2)
+        const first = JSON.parse(lines[0]!) as AuditEntry
+        const second = JSON.parse(lines[1]!) as AuditEntry
+        expect(first.tool).toBe('create_entry')
+        expect(second.tool).toBe('update_entry')
+    })
+
+    it('should include args when redact is false', async () => {
+        const config = enabledConfig(dir)
+        const logger = new AuditLogger(config)
+
+        logger.log(fakeEntry({ args: { content: 'test data' } }))
+        await logger.close()
+
+        const content = await readFile(config.logPath, 'utf-8')
+        const entry = JSON.parse(content.trim()) as AuditEntry
+        expect(entry.args).toEqual({ content: 'test data' })
+    })
+
+    it('should faithfully write entries with args undefined (redact mode)', async () => {
+        const config = enabledConfig(dir, { redact: true })
+        const logger = new AuditLogger(config)
+
+        // The logger writes whatever it receives — redaction happens in interceptor
+        logger.log(fakeEntry({ args: undefined }))
+        await logger.close()
+
+        const content = await readFile(config.logPath, 'utf-8')
+        const entry = JSON.parse(content.trim()) as AuditEntry
+        expect(entry.args).toBeUndefined()
+        expect(entry.tool).toBe('create_entry')
+    })
+
+    it('should create parent directories if they do not exist', async () => {
+        const logPath = join(dir, 'nested', 'deep', 'audit.jsonl')
+        const logger = new AuditLogger({ ...enabledConfig(dir), logPath })
+
+        logger.log(fakeEntry())
+        await logger.close()
+
+        const content = await readFile(logPath, 'utf-8')
+        expect(content.trim()).toBeTruthy()
+    })
+
+    it('should not write when disabled', async () => {
+        const config = enabledConfig(dir, { enabled: false })
+        const logger = new AuditLogger(config)
+
+        logger.log(fakeEntry())
+        await logger.close()
+
+        // File should not have been created
+        await expect(readFile(config.logPath, 'utf-8')).rejects.toThrow()
+    })
+
+    it('should flush remaining entries on close', async () => {
+        const config = enabledConfig(dir)
+        const logger = new AuditLogger(config)
+
+        // Log multiple entries rapidly
+        for (let i = 0; i < 10; i++) {
+            logger.log(fakeEntry({ requestId: `req-${String(i)}` }))
         }
-        temps.length = 0
+
+        await logger.close()
+
+        const content = await readFile(config.logPath, 'utf-8')
+        const lines = content.trim().split('\n')
+        expect(lines).toHaveLength(10)
     })
 
-    it('creates the log file on first write', () => {
-        const dir = makeTempDir()
-        temps.push(dir)
-        const logPath = path.join(dir, 'audit.jsonl')
+    it('should record error entries with success=false', async () => {
+        const config = enabledConfig(dir)
+        const logger = new AuditLogger(config)
 
-        const logger = new AuditLogger({ logPath, redact: false })
-        logger.log(MOCK_ENTRY)
+        logger.log(
+            fakeEntry({
+                success: false,
+                error: 'database is locked',
+            })
+        )
+        await logger.close()
 
-        expect(fs.existsSync(logPath)).toBe(true)
+        const content = await readFile(config.logPath, 'utf-8')
+        const entry = JSON.parse(content.trim()) as AuditEntry
+        expect(entry.success).toBe(false)
+        expect(entry.error).toBe('database is locked')
     })
 
-    it('creates nested directories if they do not exist', () => {
-        const dir = makeTempDir()
-        temps.push(dir)
-        const logPath = path.join(dir, 'nested', 'deep', 'audit.jsonl')
+    it('should preserve user=null when OAuth is not configured', async () => {
+        const config = enabledConfig(dir)
+        const logger = new AuditLogger(config)
 
-        const logger = new AuditLogger({ logPath, redact: false })
-        logger.log(MOCK_ENTRY)
+        logger.log(fakeEntry({ user: null, scopes: [] }))
+        await logger.close()
 
-        expect(fs.existsSync(logPath)).toBe(true)
+        const content = await readFile(config.logPath, 'utf-8')
+        const entry = JSON.parse(content.trim()) as AuditEntry
+        expect(entry.user).toBeNull()
+        expect(entry.scopes).toEqual([])
     })
 
-    it('writes valid JSONL entries', () => {
-        const dir = makeTempDir()
-        temps.push(dir)
-        const logPath = path.join(dir, 'audit.jsonl')
+    describe('recent()', () => {
+        it('should return the last N entries', async () => {
+            const config = enabledConfig(dir)
+            const logger = new AuditLogger(config)
 
-        const logger = new AuditLogger({ logPath, redact: false })
-        logger.log(MOCK_ENTRY)
+            for (let i = 0; i < 20; i++) {
+                logger.log(fakeEntry({ requestId: `req-${String(i)}` }))
+            }
+            await logger.flush()
 
-        const lines = readLines(logPath)
-        expect(lines).toHaveLength(1)
+            const recent = await logger.recent(5)
+            expect(recent).toHaveLength(5)
+            expect(recent[0]!.requestId).toBe('req-15')
+            expect(recent[4]!.requestId).toBe('req-19')
 
-        const parsed = JSON.parse(lines[0]!) as Record<string, unknown>
-        expect(parsed['toolName']).toBe('create_entry')
-        expect(parsed['scope']).toBe('write')
-        expect(parsed['durationMs']).toBe(42)
-        expect(parsed['args']).toEqual({ content: 'test content' })
+            await logger.close()
+        })
+
+        it('should return empty array when file does not exist', async () => {
+            const logPath = join(dir, 'nonexistent.jsonl')
+            const logger = new AuditLogger({
+                ...enabledConfig(dir),
+                logPath,
+            })
+
+            const recent = await logger.recent()
+            expect(recent).toEqual([])
+
+            await logger.close()
+        })
+
+        it('should return all entries when fewer than count exist', async () => {
+            const config = enabledConfig(dir)
+            const logger = new AuditLogger(config)
+
+            logger.log(fakeEntry({ requestId: 'only-one' }))
+            await logger.flush()
+
+            const recent = await logger.recent(50)
+            expect(recent).toHaveLength(1)
+            expect(recent[0]!.requestId).toBe('only-one')
+
+            await logger.close()
+        })
     })
 
-    it('appends multiple entries as separate JSONL lines', () => {
-        const dir = makeTempDir()
-        temps.push(dir)
-        const logPath = path.join(dir, 'audit.jsonl')
+    describe('stderr mode', () => {
+        it('should write JSONL entries to stderr', async () => {
+            const logger = new AuditLogger({
+                ...enabledConfig(dir),
+                logPath: 'stderr',
+            })
 
-        const logger = new AuditLogger({ logPath, redact: false })
-        logger.log(MOCK_ENTRY)
-        logger.log({ ...MOCK_ENTRY, toolName: 'update_entry', scope: 'admin' as const })
-        logger.log({ ...MOCK_ENTRY, toolName: 'delete_entry', isError: true })
+            const chunks: string[] = []
+            const originalWrite = process.stderr.write
+            process.stderr.write = ((chunk: string) => {
+                chunks.push(chunk)
+                return true
+            }) as typeof process.stderr.write
 
-        const lines = readLines(logPath)
-        expect(lines).toHaveLength(3)
+            try {
+                logger.log(fakeEntry({ tool: 'create_entry' }))
+                await logger.flush()
 
-        const parsed2 = JSON.parse(lines[1]!) as Record<string, unknown>
-        expect(parsed2['toolName']).toBe('update_entry')
-    })
+                expect(chunks.length).toBeGreaterThan(0)
+                const entry = JSON.parse(chunks[0]!.trim()) as AuditEntry
+                expect(entry.tool).toBe('create_entry')
+            } finally {
+                process.stderr.write = originalWrite
+                await logger.close()
+            }
+        })
 
-    it('omits args when redact: true', () => {
-        const dir = makeTempDir()
-        temps.push(dir)
-        const logPath = path.join(dir, 'audit.jsonl')
+        it('should return empty from recent() in stderr mode', async () => {
+            const logger = new AuditLogger({
+                ...enabledConfig(dir),
+                logPath: 'stderr',
+            })
 
-        const logger = new AuditLogger({ logPath, redact: true })
-        logger.log(MOCK_ENTRY)
+            // Suppress stderr output during test
+            const originalWrite = process.stderr.write
+            process.stderr.write = (() => true) as typeof process.stderr.write
 
-        const lines = readLines(logPath)
-        const parsed = JSON.parse(lines[0]!) as Record<string, unknown>
-        expect(parsed['args']).toBeUndefined()
-        expect(parsed['toolName']).toBe('create_entry')
-    })
+            try {
+                logger.log(fakeEntry())
+                await logger.flush()
 
-    it('includes all required fields in each entry', () => {
-        const dir = makeTempDir()
-        temps.push(dir)
-        const logPath = path.join(dir, 'audit.jsonl')
+                const recent = await logger.recent()
+                expect(recent).toEqual([])
+            } finally {
+                process.stderr.write = originalWrite
+                await logger.close()
+            }
+        })
 
-        const logger = new AuditLogger({ logPath, redact: false })
-        logger.log(MOCK_ENTRY)
+        it('should be case-insensitive for stderr sentinel', async () => {
+            const logger = new AuditLogger({
+                ...enabledConfig(dir),
+                logPath: 'STDERR',
+            })
 
-        const lines = readLines(logPath)
-        const parsed = JSON.parse(lines[0]!) as Record<string, unknown>
-        expect(parsed).toHaveProperty('timestamp')
-        expect(parsed).toHaveProperty('toolName')
-        expect(parsed).toHaveProperty('scope')
-        expect(parsed).toHaveProperty('durationMs')
-        expect(parsed).toHaveProperty('inputTokens')
-        expect(parsed).toHaveProperty('outputTokens')
-        expect(parsed).toHaveProperty('isError')
+            const chunks: string[] = []
+            const originalWrite = process.stderr.write
+            process.stderr.write = ((chunk: string) => {
+                chunks.push(chunk)
+                return true
+            }) as typeof process.stderr.write
+
+            try {
+                logger.log(fakeEntry({ tool: 'backup_journal' }))
+                await logger.flush()
+
+                expect(chunks.length).toBeGreaterThan(0)
+            } finally {
+                process.stderr.write = originalWrite
+                await logger.close()
+            }
+        })
     })
 
     describe('log rotation', () => {
-        it('rotates when file exceeds 10MB', () => {
-            const dir = makeTempDir()
-            temps.push(dir)
-            const logPath = path.join(dir, 'audit.jsonl')
+        it('should rotate the log file when maxSizeBytes is exceeded', async () => {
+            const config = enabledConfig(dir, { maxSizeBytes: 500 })
+            const logger = new AuditLogger(config)
 
-            // Pre-populate file to just over 10MB
-            const ELEVEN_MB = 11 * 1024 * 1024
-            fs.writeFileSync(logPath, 'x'.repeat(ELEVEN_MB))
-
-            const logger = new AuditLogger({ logPath, redact: false })
-            logger.log(MOCK_ENTRY)
-
-            // Original should be archived as .1
-            expect(fs.existsSync(`${logPath}.1`)).toBe(true)
-            // New file should now just contain the fresh entry
-            const lines = readLines(logPath)
-            expect(lines).toHaveLength(1)
-        })
-
-        it('shifts archives in order (.4→.5, .3→.4, …)', () => {
-            const dir = makeTempDir()
-            temps.push(dir)
-            const logPath = path.join(dir, 'audit.jsonl')
-
-            // Pre-create archives .1 through .4
-            for (let i = 1; i <= 4; i++) {
-                fs.writeFileSync(`${logPath}.${i}`, `archive-${i}`)
+            // Write enough entries to exceed 500 bytes
+            for (let i = 0; i < 10; i++) {
+                logger.log(
+                    fakeEntry({
+                        tool: 'create_entry',
+                        requestId: `rotation-${String(i)}`,
+                    })
+                )
             }
+            await logger.flush()
 
-            // Make current file over 10MB
-            fs.writeFileSync(logPath, 'x'.repeat(11 * 1024 * 1024))
+            // Write more to trigger rotation on next flush
+            for (let i = 10; i < 12; i++) {
+                logger.log(
+                    fakeEntry({
+                        tool: 'create_entry',
+                        requestId: `rotation-${String(i)}`,
+                    })
+                )
+            }
+            await logger.flush()
 
-            const logger = new AuditLogger({ logPath, redact: false })
-            logger.log(MOCK_ENTRY)
+            // The rotated file should exist
+            const rotatedPath = `${config.logPath}.1`
+            const rotatedStat = await stat(rotatedPath)
+            expect(rotatedStat.size).toBeGreaterThan(0)
 
-            // .4 → .5
-            expect(fs.readFileSync(`${logPath}.5`, 'utf8')).toBe('archive-4')
-            // .3 → .4
-            expect(fs.readFileSync(`${logPath}.4`, 'utf8')).toBe('archive-3')
-            // current → .1
-            expect(fs.existsSync(`${logPath}.1`)).toBe(true)
+            // The current log should be smaller than the rotated one
+            const currentStat = await stat(config.logPath)
+            expect(currentStat.size).toBeLessThan(rotatedStat.size)
+
+            await logger.close()
         })
 
-        it('does not rotate when file is under 10MB', () => {
-            const dir = makeTempDir()
-            temps.push(dir)
-            const logPath = path.join(dir, 'audit.jsonl')
+        it('should not rotate when maxSizeBytes is 0 (disabled)', async () => {
+            const config = enabledConfig(dir, { maxSizeBytes: 0 })
+            const logger = new AuditLogger(config)
 
-            // Write a small file
-            fs.writeFileSync(logPath, 'small content\n')
+            // Pre-write a large file
+            await writeFile(config.logPath, 'x'.repeat(1024))
 
-            const logger = new AuditLogger({ logPath, redact: false })
-            logger.log(MOCK_ENTRY)
+            logger.log(fakeEntry())
+            await logger.flush()
 
-            // No archive should be created
-            expect(fs.existsSync(`${logPath}.1`)).toBe(false)
+            // No rotation should occur
+            await expect(stat(`${config.logPath}.1`)).rejects.toThrow()
+
+            await logger.close()
         })
-    })
-})
-
-describe('NullAuditLogger', () => {
-    it('is a no-op and never throws', () => {
-        const logger = new NullAuditLogger()
-        expect(() => logger.log(MOCK_ENTRY)).not.toThrow()
-    })
-})
-
-describe('createAuditLogger', () => {
-    it('returns NullAuditLogger when logPath is undefined', () => {
-        const logger = createAuditLogger(undefined, false)
-        expect(logger).toBeInstanceOf(NullAuditLogger)
-    })
-
-    it('returns AuditLogger when logPath is provided', () => {
-        const dir = makeTempDir()
-        const logPath = path.join(dir, 'audit.jsonl')
-        const logger = createAuditLogger(logPath, false)
-        expect(logger).toBeInstanceOf(AuditLogger)
-        // Clean up
-        try { fs.rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ }
     })
 })

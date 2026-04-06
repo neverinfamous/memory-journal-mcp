@@ -2,7 +2,7 @@
 
 > **Agent-optimized navigation reference.** Read this before searching the codebase. Covers directory layout, handler→tool mapping, resources, prompts, error hierarchy, and key constants.
 >
-> Last updated: March 31, 2026
+> Last updated: April 6, 2026
 
 ---
 
@@ -113,9 +113,11 @@ src/
 │   └── interceptor.ts              # wrapWithMetrics() — post-callTool() async timing + recording
 │
 ├── audit/                          # Phase 2: JSONL audit logging for write/admin operations
-│   ├── index.ts                    # Barrel — exports AuditLogger, NullAuditLogger, createAuditLogger()
-│   ├── audit-logger.ts             # AuditLogger: JSONL writes, 10 MB rotation (5 archives), arg redaction
-│   └── audit-resource.ts           # memory://audit resource handler (last 50 entries, YAML-style text)
+│   ├── index.ts                    # Barrel — exports AuditLogger, createAuditInterceptor, types
+│   ├── types.ts                    # AuditEntry, AuditConfig, AuditCategory types
+│   ├── audit-logger.ts             # AuditLogger: async-buffered JSONL writes (50-entry HWM, 100ms flush), 10 MB rotation (5 archives), recent() tail-read, stderr mode, configurable arg redaction
+│   ├── interceptor.ts              # createAuditInterceptor() — scope-based filtering, token estimation, duration timing, error capture
+│   └── audit-resource.ts           # memory://audit resource handler (last 50 entries via recent(), session summary)
 │
 ├── github/
 │   └── github-integration/
@@ -233,7 +235,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 
 | File                       | Purpose                                                                    |
 | -------------------------- | -------------------------------------------------------------------------- |
-| `index.ts`                 | `getTools()` / `callTool()` dispatch, O(1) tool map cache, icon mapping    |
+| `index.ts`                 | `getTools()` / `callTool()` dispatch, O(1) tool map cache, icon mapping, audit interceptor + metrics wrapping (both cached and progress-path) |
 | `schemas.ts`               | Shared Zod input/output schemas reused across multiple tool groups         |
 | `error-fields-mixin.ts`    | Re-export stub → `utils/errors/error-response-fields.ts` (canonical SSoT)  |
 | `../version.ts`            | Version SSoT — reads `package.json`, exports `VERSION`                     |
@@ -337,7 +339,9 @@ catch (error) {
 | Tool group icon mapping            | `src/constants/icons.ts`               | CDN SVG URLs per tool group (used in `tools/list` responses)                                                                                                |
 | Resource annotation presets        | `src/utils/resource-annotations.ts`    | Centralized presets (`HIGH_PRIORITY`, `MEDIUM_PRIORITY`, `LOW_PRIORITY`, `ASSISTANT_FOCUSED`) + helpers (`withPriority`, `withAutoRead`, `withSessionInit`) |
 | Global metrics accumulator         | `src/observability/metrics.ts`         | `MetricsAccumulator` singleton (`globalMetrics`) — per-tool call counts, error counts, total/avg duration, input/output token estimates; exposes `getSummary()`, `getTokenBreakdown()`, `getSystemMetrics()`, `getUserBreakdown()` |
-| Audit logger                       | `src/audit/audit-logger.ts`            | `AuditLogger` (JSONL, 10 MB rotation, 5 archives, configurable arg redaction via `AUDIT_REDACT`) + `NullAuditLogger` (no-op when unconfigured) + `createAuditLogger()` factory (reads `AUDIT_LOG_PATH`) |
+| Audit logger                       | `src/audit/audit-logger.ts`            | `AuditLogger` (async-buffered JSONL, 50-entry HWM, 100ms auto-flush, 10 MB rotation, 5 archives, configurable arg redaction via `AUDIT_REDACT`, stderr mode via `--audit-log stderr`) with graceful `close()` lifecycle and `recent()` streaming tail-read (64KB window) |
+| Audit types                        | `src/audit/types.ts`                   | `AuditEntry`, `AuditConfig` (`enabled`, `logPath`, `redact`, `auditReads`, `maxSizeBytes`), `AuditCategory` (`read` \| `write` \| `admin`) |
+| Audit interceptor                  | `src/audit/interceptor.ts`             | `createAuditInterceptor()` — scope-based filtering (write/admin by default, read opt-in via `--audit-reads`), token estimation, duration timing, error capture, compact read format |
 | Code Mode API constants            | `src/codemode/api-constants.ts`        | Method→group map, JSON-RPC error codes, sandbox method names                                                                                                |
 | Logger                             | `src/utils/logger.ts`                  | Structured JSON logging with severity filtering                                                                                                             |
 | Security utilities                 | `src/utils/security-utils.ts`          | Input validation, SQL injection prevention, path traversal protection, token scrubbing                                                                      |
@@ -426,7 +430,8 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | **OAuth 2.1**         | RFC 9728/8414 compliant. Scope enforcement via `scope-map.ts` (read/write/admin). JWT/JWKS validation. Optional — falls back to bearer token or no auth.                                                                                                                                                  |
 | **HTTP Transport**    | Stateful (Streamable HTTP + legacy SSE) / Stateless (serverless) modes. Security headers, rate limiting (100 req/min), CORS, 1MB body limit, session management.                                                                                                                                          |
 | **Scheduler**         | HTTP-only `setInterval` jobs: automated backup, vacuum, vector index rebuild. Error-isolated — failure in one job doesn't affect others. Status visible via `memory://health`.                                                                                                                            |
-| **Metrics Interceptor** | `wrapWithMetrics()` (`src/observability/interceptor.ts`) wraps each `callTool()` dispatch. Post-processes results asynchronously: injects `_meta.tokenEstimate` (byte-length heuristic), records per-tool timing and token counts to `globalMetrics`. Swallows accumulator errors — interceptor failure never affects tool output. |
+| **Metrics Interceptor** | `wrapWithMetrics()` (`src/observability/interceptor.ts`) wraps each `callTool()` dispatch. Post-processes results asynchronously: injects `_meta.tokenEstimate` (byte-length heuristic), records per-tool timing and token counts to `globalMetrics`. Applied in both the cached handler path and the progress-token path. Swallows accumulator errors — interceptor failure never affects tool output. |
+| **Audit Interceptor** | `createAuditInterceptor()` (`src/audit/interceptor.ts`) wraps each `callTool()` dispatch alongside metrics. Scope-based filtering: write/admin tools logged by default, read tools opt-in via `--audit-reads`. Entries include tool name, scope, category, args (unless redacted), duration, token estimate, success/error, user, scopes. The interceptor is non-throwing — audit failures log to stderr but never propagate to callers. Applied in both the cached handler path and the progress-token path. |
 | **ErrorFieldsMixin**  | All output schemas extend `ErrorFieldsMixin.shape` — 6 optional error fields so error responses always pass validation. Canonical SSoT at `utils/errors/error-response-fields.ts`; handler layer re-export stub preserved.                                                                                |
 | **Barrel Re-exports** | Every directory has `index.ts` barrel. Import from `./module/index.js` (with `.js` extension for ESM).                                                                                                                                                                                                    |
 | **Team Database**     | Separate SQLite file (`TEAM_DB_PATH`) with author attribution. 20 dedicated tools split into `team/` subdirectory (core, search, admin, analytics, relationships, export, backup, vector). Cross-DB isolation with dedicated `teamVectorManager`.                                                         |
@@ -478,7 +483,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `github/`     | GitHub integration, issues, PRs, milestones, kanban |
 | `handlers/`   | Tool handlers, resource handlers, prompt handlers   |
 | `observability/` | Token estimator, metrics accumulator, interceptor — Phase 2 coverage |
-| `audit/`      | AuditLogger JSONL writing, 10 MB rotation, arg redaction, factory — Phase 2 coverage |
+| `audit/`      | AuditLogger async-buffered JSONL writing, 10 MB rotation, recent() tail-read, stderr mode, arg redaction + AuditInterceptor scope-based filtering, token estimation, duration timing, error capture — Phase 2 coverage |
 | `security/`   | Input validation, SQL injection, path traversal     |
 | `server/`     | MCP server setup, registration                      |
 | `transports/` | HTTP transport, sessions, rate limiting             |

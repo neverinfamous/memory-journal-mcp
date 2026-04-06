@@ -25,6 +25,7 @@ import { getHelpResourceDefinitions } from './help.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
+import { getGlobalAuditLogger } from '../tools/index.js'
 
 /**
  * Get all resource definitions for MCP list
@@ -143,7 +144,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
         ...getTemplateResourceDefinitions(),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
-        // Audit resource — logPath resolved from env var at runtime
-        getAuditResourceDef(process.env['AUDIT_LOG_PATH']),
+        // Audit resource — bound to the global audit logger (or null if unconfigured)
+        getAuditResourceDef(getGlobalAuditLogger),
     ]
 }

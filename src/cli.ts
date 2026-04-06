@@ -4,6 +4,8 @@ import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
 import { VERSION } from './version.js'
 import type { ProjectRegistryEntry } from './types/index.js'
+import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from './audit/index.js'
+import type { AuditConfig } from './audit/index.js'
 
 // Smart Database Resolution: Check root, then test-server, then default to root
 function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
@@ -73,6 +75,24 @@ program
         '--oauth-clock-tolerance <seconds>',
         'OAuth clock tolerance in seconds (default: 60)',
         '60'
+    )
+    // Audit options
+    .option(
+        '--audit-log <path>',
+        'Enable audit logging to the specified JSONL file path, or "stderr" for container mode (env: AUDIT_LOG_PATH)'
+    )
+    .option(
+        '--audit-redact',
+        'Redact tool arguments from audit entries (env: AUDIT_REDACT)'
+    )
+    .option(
+        '--audit-reads',
+        'Enable audit logging for read-scoped tool calls (default: off, env: AUDIT_READS)'
+    )
+    .option(
+        '--audit-log-max-size <bytes>',
+        'Maximum audit log file size in bytes before rotation (default: 10485760 / 10MB, env: AUDIT_LOG_MAX_SIZE)',
+        String(DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES)
     )
     .option(
         '--instruction-level <level>',
@@ -165,6 +185,10 @@ program
             briefingCopilot?: boolean
             workflowSummary?: string
             instructionLevel: string
+            auditLog?: string
+            auditRedact?: boolean
+            auditReads?: boolean
+            auditLogMaxSize: string
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -183,6 +207,23 @@ program
             })
 
             try {
+                // Build audit config from CLI options + env
+                const auditLogPath = options.auditLog ?? process.env['AUDIT_LOG_PATH']
+                const auditConfig: AuditConfig | undefined = auditLogPath
+                    ? {
+                          enabled: true,
+                          logPath: auditLogPath,
+                          redact:
+                              options.auditRedact ?? process.env['AUDIT_REDACT'] === 'true',
+                          auditReads:
+                              options.auditReads ?? process.env['AUDIT_READS'] === 'true',
+                          maxSizeBytes: parseInt(
+                              process.env['AUDIT_LOG_MAX_SIZE'] ?? options.auditLogMaxSize,
+                              10
+                          ),
+                      }
+                    : undefined
+
                 await createServer({
                     transport: options.transport as 'stdio' | 'http',
                     port: parseInt(options.port, 10),
@@ -280,6 +321,7 @@ program
                         | 'essential'
                         | 'standard'
                         | 'full',
+                    auditConfig,
                 })
             } catch (error) {
                 logger.error('Failed to start server', {
