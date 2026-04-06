@@ -72,6 +72,33 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
         suggestion: 'The input appears malformed. Check the format and try again.',
         code: 'VALIDATION_FAILED',
     },
+    // Schema / types patterns
+    {
+        pattern: /invalid input syntax for type|requires a.*column/i,
+        suggestion: 'The provided value is not valid for the assigned type.',
+        code: 'VALIDATION_FAILED',
+    },
+    {
+        pattern: /^Missing required parameters:/i,
+        suggestion: 'Provide all required parameters in your request.',
+        code: 'VALIDATION_FAILED',
+    },
+    // Codemode / Sandbox patterns
+    {
+        pattern: /execution timed out/i,
+        suggestion: 'Reduce code complexity or increase timeout (max 30s). Break into smaller operations.',
+        code: 'QUERY_FAILED',
+    },
+    {
+        pattern: /code validation failed/i,
+        suggestion: 'Check for blocked patterns. Use mj.* API instead.',
+        code: 'VALIDATION_FAILED',
+    },
+    {
+        pattern: /sandbox.*not initialized/i,
+        suggestion: 'Internal sandbox error. Retry the operation.',
+        code: 'INTERNAL_ERROR',
+    },
 ]
 
 // =============================================================================

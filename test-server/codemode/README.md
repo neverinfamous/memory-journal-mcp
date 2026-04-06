@@ -4,7 +4,9 @@
 
 This directory contains agent-optimized test prompts specifically designed to validate the `mj_execute_code` (Code Mode) sandbox capabilities. These tests verify the secure execution environment, the `mj.*` API bridge, workflow orchestration, and cross-group data operations.
 
-> **Note:** Code Mode tests should be executed *after* the core standard tests have completed, as they rely on a stable underlying database and robust tool handlers.
+> **Note:** Code Mode tests should be executed *after* the core standard tests have completed, as they rely on a stable underlying database and robust tool handlers. 
+
+> **Important Constraints (P401):** When verifying Code Mode scripts, explicitly ensure that scripts processing errors correctly handle boundary detection. A returned object MUST NOT bleed raw MCP exceptions. Pay close attention to the `_meta.tokenEstimate` to ensure token payloads do not breach thresholds during heavy array iterations.
 
 ## Test Modules
 

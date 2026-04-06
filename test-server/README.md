@@ -147,7 +147,7 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 
 1. Read the server instructions you received during initialization, then `memory://briefing`.
 2. Navigate to the `standard/` directory and **always run `standard/test-seed.md` first** — all other test files depend on it.
-3. Run any combination of the 13 independent test files in `standard/` (`test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-errors.md`, `test-integrity.md`, `test-team.md`).
+3. Run any combination of the independent test files in `standard/` (`test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-tool-group-*.md`, `test-team.md`).
 4. Each file is self-contained — pick the one relevant to your current task or run them in any order.
 5. **Run integration test scripts** for instruction levels, annotations, prompts, and scheduler (see Script Reference above).
 6. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.

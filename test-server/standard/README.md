@@ -21,6 +21,5 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-schemas.md`              | **Output Schemas** — Verify all 60 outputSchema tools return `structuredContent`                                      | After seed                |
 | `test-resources.md`            | **Resources** — All 28 resources (static + template, happy + error paths)                                             | After seed                |
 | `test-github.md`               | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, Kanban, milestones, insights, Copilot, cleanup)       | After seed                |
-| `test-errors.md`               | **Prompts & Error Handling** — 16 prompt handlers, structured error verification, numeric coercion                    | After seed                |
-| `test-integrity.md`            | **Data Integrity & Edge Cases** — Round-trip verification, boundary values, implementation bug detection              | After seed                |
+| `test-tool-group-*.md`         | **Granular Tool Groups** — 7 domains testing structured error responses, boundaries, and Zod sweeps                   | After seed                |
 | `test-team.md`                 | **Team Collaboration** — 20 team tools + 2 team resources                                                            | After seed                |

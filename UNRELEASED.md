@@ -44,6 +44,8 @@
 - Relocated 5 standalone testing `.mjs` files into `test-server/scripts/` to separate Node.js execution integration tests from agent functional testing prompts.
 - Updated `test-server/README.md` files table and agent workflow to reference new modular test structure.
 - Updated `test-server/code-map.md` test infrastructure table to reference new modular test files.
+- Refactored legacy `test-errors.md` and `test-integrity.md` files into 7 granular domain checklists (`test-tool-group-*.md`) to enforce strict Structured Error Response coverage per-tool.
+- Expanded `src/utils/errors/suggestions.ts` fuzzy pattern mapping to automatically catch and refine CodeMode exceptions and SQLite malformed-input boundaries.
 
 
 ### Fixed
