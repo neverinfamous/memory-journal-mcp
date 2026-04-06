@@ -58,7 +58,7 @@
         "node": ">=24.0.0"
     },
     "dependencies": {
-        "@huggingface/transformers": "^3.8.1",
+        "@huggingface/transformers": "^4.0.1",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "@octokit/graphql": "^9.0.3",
         "@octokit/rest": "^22.0.1",
