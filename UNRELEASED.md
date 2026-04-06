@@ -23,6 +23,7 @@
 - Aggregate call, error, and token counts in the `memory://health` metrics section.
 - `searchMode` and fusion scoring exposure on `EntriesListOutputSchema`.
 - `.env.example` with all environment variables grouped by category for local development setup.
+- Verification of Phase 26 Admin, Backup & Export Code Mode tests with 100% test pass rate.
 
 ### Changed
 
