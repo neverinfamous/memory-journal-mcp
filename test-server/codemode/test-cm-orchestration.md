@@ -155,8 +155,8 @@ return {
 
 ## Success Criteria
 
-- [ ] Journal health dashboard aggregates stats + recent + tags correctly
-- [ ] GitHub-journal coverage report iterates issues and searches entries
-- [ ] Tag analysis pipeline processes multiple tags with search per tag
-- [ ] Relationship graph summary checks entries for relationship counts
-- [ ] Full pipeline (create → index → semantic search) completes end-to-end
+- [x] Journal health dashboard aggregates stats + recent + tags correctly
+- [x] GitHub-journal coverage report iterates issues and searches entries
+- [x] Tag analysis pipeline processes multiple tags with search per tag
+- [x] Relationship graph summary checks entries for relationship counts
+- [x] Full pipeline (create → index → semantic search) completes end-to-end
