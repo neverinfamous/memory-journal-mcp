@@ -36,6 +36,7 @@ For every tool, you must explicitly confirm that Zod validation errors and Domai
 | Filter Ignored Bug | `get_statistics(start_date: "2099-01-01", end_date: "2099-12-31")` | ⚠️ SHOULD return 0. If returns all, handler is ignoring filters. |
 
 ## Success Criteria
+- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] All tools return structured handler errors.
 - [ ] No raw MCP exceptions are thrown.
 - [ ] Boundary conditions behave as specified.

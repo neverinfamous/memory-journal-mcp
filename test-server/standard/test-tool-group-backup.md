@@ -18,5 +18,6 @@
 - **Cleanup Count Limitation**: `cleanup_backups(keep_count: 0)`. Verify structural error block due to Zod min limit (should be min 1).
 
 ## Success Criteria
+- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] Restricting malicious or absent file paths in Backup tools.
 - [ ] Filter boundaries strictly enforced without silent omissions.

@@ -27,6 +27,7 @@
 | Filter Ignored Bug | `search_by_date_range` with `workflow_run_id: 999` | ⚠️ Verify if filter applies. |
 
 ## Success Criteria
+- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] Zod boundary limits prevent crashes.
 - [ ] Invalid dates return structured Domain/Validation errors.
 - [ ] No raw `-32602` responses.

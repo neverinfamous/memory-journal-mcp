@@ -18,5 +18,6 @@
 - **Team Insights**: Verify `team_get_cross_project_insights` returns the requisite fields even when the query returns absolutely zero rows.
 
 ## Success Criteria
+- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] Team Database missing context natively halts and warns user without crashing the MCP worker.
 - [ ] Missing models do not crash vector fallback pipelines.

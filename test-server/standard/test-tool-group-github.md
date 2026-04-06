@@ -20,5 +20,6 @@
 - **OutputSchema Compliance**: `get_repo_insights(sections: "traffic")` - verify partial failures do not leak unrecognized fields.
 
 ## Success Criteria
+- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] GitHub proxying safely catches 404s and 401s from the Octokit API.
 - [ ] OutputSchemas are not broken by enriched error states.

@@ -26,6 +26,7 @@
 | Backup Survival | Restore after backing up links. | Relationships survive. |
 
 ## Success Criteria
+- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] `link_entries` correctly mitigates bad inputs.
 - [ ] `visualize_relationships` correctly bounds the depth parameter.
 - [ ] No raw `-32602` responses.

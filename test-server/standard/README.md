@@ -23,3 +23,12 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-github.md`               | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, Kanban, milestones, insights, Copilot, cleanup)       | After seed                |
 | `test-tool-group-*.md`         | **Granular Tool Groups** — 7 domains testing structured error responses, boundaries, and Zod sweeps                   | After seed                |
 | `test-team.md`                 | **Team Collaboration** — 20 team tools + 2 team resources                                                            | After seed                |
+
+## Token Estimate Reporting
+
+All test workflows in `test-server/standard/` require the agent to track and report the token estimate used during the test pass. 
+
+**How to calculate:**
+- Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values.
+- *Alternatively*, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
+- Always provide this **Total Token Estimate** clearly in your final test report summary so the user can track context window consumption.

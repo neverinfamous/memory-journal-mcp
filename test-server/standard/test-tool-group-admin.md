@@ -24,5 +24,6 @@
 | Soft Delete Integrity | `delete_entry` | Entry hidden from standard views. |
 
 ## Success Criteria
+- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] Administrative mutations correctly block non-existent targets.
 - [ ] Vector integrations fallback safely without MCP crashes.
