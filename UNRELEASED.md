@@ -23,6 +23,8 @@
 - Post-processed `callTool()` results asynchronously to inject token estimates.
 - Updated `@huggingface/transformers` to `^4.0.0` and `typescript` to `^6.0.2`.
 - Updated all minor and patch cross-dependencies via `npm update`.
+**Dependency Updates**
+- Bumped `@huggingface/transformers` to `4.0.1`, `@playwright/test` to `1.59.1`, `@types/node` to `25.5.2`, `esbuild` to `0.28.0`, `eslint` to `10.2.0`, and `simple-git` to `3.35.2`.
 - Reduced `DOCKER_README.md` from 24,344 to 23,475 bytes (93.9% of Docker Hub 25,000-char limit) by shortening the tagline to meet the 100-char short description limit and collapsing duplicated routing sections.
 - Updated `test-server/code-map.md` handler map (`search.ts` → `search/index.ts`) and last-updated date.
 - Added `PROJECT_REGISTRY` and `TEAM_DB_PATH` placeholders to `mcp-config-example.json`.
@@ -46,3 +48,5 @@
 
 - Pinned `minimatch` to 10.2.5 across dependencies and overrides to combat transitive vulnerabilities.
 - Updated Dockerfile base image to `node:24.14.1-alpine` to fix underlying CVEs.
+- Fixed `vite` path traversal and arbitrary file read vulnerabilities by overriding with `^8.0.5`.
+- Bumped `github/codeql-action` to `v4.35.1` and `trufflesecurity/trufflehog` to `v3.94.2` to resolve static analysis and supply chain security alerts.
