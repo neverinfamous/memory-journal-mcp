@@ -271,7 +271,21 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         // MCP 2025-11-25: Pass outputSchema for structured responses
         if (tool.outputSchema !== undefined) {
-            toolOptions['outputSchema'] = tool.outputSchema
+            const outSchema = tool.outputSchema
+            if (
+                typeof outSchema === 'object' &&
+                outSchema !== null &&
+                'passthrough' in outSchema &&
+                typeof (outSchema as { passthrough: unknown }).passthrough === 'function'
+            ) {
+                try {
+                    toolOptions['outputSchema'] = (outSchema as { passthrough: () => z.ZodType }).passthrough()
+                } catch {
+                    toolOptions['outputSchema'] = outSchema
+                }
+            } else {
+                toolOptions['outputSchema'] = outSchema
+            }
         }
 
         if (tool.annotations !== undefined) {

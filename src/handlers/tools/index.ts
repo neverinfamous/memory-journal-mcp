@@ -245,16 +245,12 @@ export async function callTool(
         const freshTool = freshTools.find((t) => t.name === name)
         if (freshTool) {
             const freshResult = await Promise.resolve(freshTool.handler(args))
-            // Skip injection when outputSchema is defined — the MCP SDK validates
-            // structured content against outputSchema and rejects extra properties.
-            return freshTool.outputSchema != null ? freshResult : injectTokenEstimate(freshResult)
+            return injectTokenEstimate(freshResult)
         }
     }
 
     const result = await Promise.resolve(tool.handler(args))
-    // Skip injection when outputSchema is defined — the MCP SDK validates
-    // structured content against outputSchema and rejects extra properties.
-    return tool.outputSchema != null ? result : injectTokenEstimate(result)
+    return injectTokenEstimate(result)
 }
 
 /**

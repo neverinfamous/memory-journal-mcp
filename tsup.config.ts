@@ -15,5 +15,6 @@ export default defineConfig({
     minify: false,
     outDir: 'dist',
     target: 'es2022',
+    tsconfig: 'tsconfig.build.json',
     external: ['better-sqlite3', 'sqlite-vec', '@huggingface/transformers'],
 })
