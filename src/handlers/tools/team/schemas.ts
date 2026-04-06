@@ -414,7 +414,8 @@ export const TeamBackupsListOutputSchema = z
 
 /** team_semantic_search — strict */
 export const TeamSemanticSearchSchema = z.object({
-    query: z.string(),
+    query: z.string().optional(),
+    entry_id: z.number().optional().describe('Find entries related to this entry ID'),
     limit: z.number().max(500).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     hint_on_empty: z
@@ -427,6 +428,7 @@ export const TeamSemanticSearchSchema = z.object({
 /** team_semantic_search — relaxed */
 export const TeamSemanticSearchSchemaMcp = z.object({
     query: z.string().optional(),
+    entry_id: relaxedNumber().optional().describe('Find entries related to this entry ID'),
     limit: relaxedNumber().optional().default(10),
     similarity_threshold: relaxedNumber().optional().default(0.25),
     hint_on_empty: z
@@ -457,6 +459,7 @@ const TeamSemanticEntryOutputSchema = TeamEntryOutputSchema.extend({
 export const TeamSemanticSearchOutputSchema = z
     .object({
         query: z.string().optional(),
+        entryId: z.number().optional(),
         entries: z.array(TeamSemanticEntryOutputSchema).optional(),
         count: z.number().optional(),
         hint: z.string().optional(),

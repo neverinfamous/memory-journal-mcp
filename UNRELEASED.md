@@ -39,10 +39,10 @@
 - Updated test documentation and handler maps to reflect new modular test structure.
 - Refactored legacy `test-errors.md` and `test-integrity.md` files into 7 granular domain checklists (`test-tool-group-*.md`) to enforce strict Structured Error Response coverage per-tool.
 - Expanded `src/utils/errors/suggestions.ts` fuzzy pattern mapping to automatically catch and refine CodeMode exceptions and SQLite malformed-input boundaries.
-- Verified Phase 27 `codemode` Team API mapping (CRUD, tagging, and search operations) via `mj.team.*` under high-volume mock iterations.
 
 ### Fixed
 
+- Fixed `team_semantic_search` missing support for `entry_id` queries by adding `entry_id` to its input schemas (`TeamSemanticSearchSchema` and `TeamSemanticSearchSchemaMcp`), making `query` parameter properly optional, and correctly handling `entry_id` in the handler by invoking `teamVectorManager.searchByEntryId()`. Also added `entryId` to `TeamSemanticSearchOutputSchema`.
 - GitHub API payload generation bug in `create_github_milestone` and `update_github_milestone` causing failures when processing full ISO 8601 strings.
 - Interceptor schemas failing with `-32602` validation errors by bypassing strict output checks.
 - Shared context data bleeding in GitHub integration helpers.

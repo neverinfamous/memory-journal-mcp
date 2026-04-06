@@ -18,7 +18,7 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   * **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**
@@ -73,9 +73,9 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 ## Success Criteria
 
-- [x] Simple expressions return correct types: integer, string, object, null, boolean
-- [x] Async/await resolves correctly inside sandbox
-- [x] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
-- [x] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
-- [x] Custom `timeout` parameter accepted and enforced
-- [x] Infinite loop terminated with structured error (not hang or crash)
+- [ ] Simple expressions return correct types: integer, string, object, null, boolean
+- [ ] Async/await resolves correctly inside sandbox
+- [ ] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
+- [ ] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
+- [ ] Custom `timeout` parameter accepted and enforced
+- [ ] Infinite loop terminated with structured error (not hang or crash)

@@ -10,11 +10,11 @@ Last tested: April 6th, 2026
 | `test-cm-github.md`             | ~857                    |       |
 | `test-cm-orchestration.md`      | ~302                    |       |
 | `test-cm-readonly.md`           | ~983                    |       |
-| `test-cm-relationships.md`      | ~20,513                 |       |
-| `test-cm-sanbox-basics.md`      | ~8,482                  |       |
-| `test-cm-search.md`             | ~2,845                  |       |
-| `test-cm-security.md`           | ~4,441                  |       |
-| `test-cm-team-admin.md`         | ~4,609                  |       |
+| `test-cm-relationships.md`      | ~199                    |       |
+| `test-cm-sanbox-basics.md`      | ~504                    |       |
+| `test-cm-search.md`             | ~650                    |       |
+| `test-cm-security.md`           | ~256                    |       |
+| `test-cm-team-admin.md`         | ~699                    |       |
 | `test-cm-team-crud.md`          | ~5,380                  |       |
 | `test-cm-team-vector-errors.md` | ~3,365                  |       |
 | `test-cm-workflows.md`          | ~4,174                  |       |
