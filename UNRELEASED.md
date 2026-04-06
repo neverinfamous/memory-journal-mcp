@@ -39,6 +39,7 @@
 - Updated test documentation and handler maps to reflect new modular test structure.
 - Refactored legacy `test-errors.md` and `test-integrity.md` files into 7 granular domain checklists (`test-tool-group-*.md`) to enforce strict Structured Error Response coverage per-tool.
 - Expanded `src/utils/errors/suggestions.ts` fuzzy pattern mapping to automatically catch and refine CodeMode exceptions and SQLite malformed-input boundaries.
+- Verified Code Mode readonly sandbox tool filtering enforcement via `test-cm-readonly.md`.
 
 ### Fixed
 
