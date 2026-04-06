@@ -53,17 +53,19 @@ Execute BEFORE fulfilling any user request in a new session:
 1. **TARGET**: Infer `repo_name` from the active workspace context or user prompt.
 2. **FETCH**: Use the MCP `read_resource` tool (Server: `memory-journal-mcp`) to read `memory://briefing/{repo_name}`.
    - **RESTRICTION**: Do NOT use `execute_code` for this step.
-3. **RENDER TABLE**: Extract `userMessage` and output it EXCLUSIVELY as a Markdown Table.
+3. **RENDER TABLE**: Extract `userMessage` and output it EXCLUSIVELY as a vertical Markdown Table (2 columns: Field and Value).
    - **RESTRICTION**: NO bulleted lists. NO truncation of arrays or lists.
-   - **REQUIRED MAP**: Output all data comprehensively. Map these fields to rows/columns:
-     - Project Name
-     - Entry Counts (Journal & Team)
-     - Latest Entry (Journal & Team)
-     - GitHub (Repo, Branch, CI Status, Issues/PRs, Insights)
+   - **REQUIRED MAP**: Output all data comprehensively. Map these fields to the "Field" column:
+     - Application / Project
+     - Journal Entries
+     - Team DB Entries
+     - Latest Entry (Journal)
+     - Latest Entry (Team)
+     - GitHub (Include Repo, Branch, CI Status, Issues, PRs, Insights on separate lines in the Value column)
      - Milestone Progress
      - Template Resources (Output count only, not URLs)
      - Registered Workspaces (Output FULL list of project names)
-     - List number of available Rules, Skills, and Workflows
+     - Available Extensions (Rules, Skills, Workflows)
 
 ---
 

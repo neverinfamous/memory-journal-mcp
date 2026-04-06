@@ -18,7 +18,7 @@ Test cross-group orchestration: journal health dashboards, GitHub-journal covera
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   * **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**
@@ -155,8 +155,8 @@ return {
 
 ## Success Criteria
 
-- [x] Journal health dashboard aggregates stats + recent + tags correctly
-- [x] GitHub-journal coverage report iterates issues and searches entries
-- [x] Tag analysis pipeline processes multiple tags with search per tag
-- [x] Relationship graph summary checks entries for relationship counts
-- [x] Full pipeline (create → index → semantic search) completes end-to-end
+- [ ] Journal health dashboard aggregates stats + recent + tags correctly
+- [ ] GitHub-journal coverage report iterates issues and searches entries
+- [ ] Tag analysis pipeline processes multiple tags with search per tag
+- [ ] Relationship graph summary checks entries for relationship counts
+- [ ] Full pipeline (create → index → semantic search) completes end-to-end
