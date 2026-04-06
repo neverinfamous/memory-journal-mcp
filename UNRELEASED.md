@@ -23,32 +23,22 @@
 - Aggregate call, error, and token counts in the `memory://health` metrics section.
 - `searchMode` and fusion scoring exposure on `EntriesListOutputSchema`.
 - `.env.example` with all environment variables grouped by category for local development setup.
-- Verification of Phase 26 Admin, Backup & Export Code Mode tests with 100% test pass rate.
-- Verification of Phase 25 GitHub Tools Code Mode tests (16 tools) with 100% test pass rate.
+- `PROJECT_REGISTRY` and `TEAM_DB_PATH` placeholders to `mcp-config-example.json`.
 
 ### Changed
 
 - Refactored `AuditLogger` from synchronous `appendFileSync` to async-buffered writes (50-entry high-water mark, 100ms auto-flush) for non-blocking audit I/O.
 - Refactored `memory://audit` resource to use `AuditLogger.recent()` instead of full-file I/O.
-- Added `AuditConfig` type with `enabled`, `logPath`, `redact`, `auditReads`, `maxSizeBytes` fields.
-- Replaced `NullAuditLogger` with `enabled: false` config flag on `AuditLogger`.
+- Modified `AuditConfig` handling to replace `NullAuditLogger` with `enabled: false` config flag and explicitly typed fields.
 - Refactored `search.ts` handler into dedicated `/src/handlers/tools/search/` modules.
-- Post-processed `callTool()` results asynchronously to inject token estimates.
-- Updated `@huggingface/transformers` to `^4.0.0` and `typescript` to `^6.0.2`.
-- Updated all minor and patch cross-dependencies via `npm update`.
-**Dependency Updates**
-- Bumped `@huggingface/transformers` to `4.0.1`, `@playwright/test` to `1.59.1`, `@types/node` to `25.5.2`, `esbuild` to `0.28.0`, `eslint` to `10.2.0`, and `simple-git` to `3.35.2`.
-- Reduced `DOCKER_README.md` from 24,344 to 23,475 bytes (93.9% of Docker Hub 25,000-char limit) by shortening the tagline to meet the 100-char short description limit and collapsing duplicated routing sections.
-- Updated `test-server/code-map.md` handler map (`search.ts` → `search/index.ts`) and last-updated date.
-- Added `PROJECT_REGISTRY` and `TEAM_DB_PATH` placeholders to `mcp-config-example.json`.
-- Refactored monolithic Code Mode test files into four distinct, modular testing prompts located in `test-server/codemode/` (`test-tools-codemode-[1-4].md`) to reduce context window strain.
-- Refactored 4 monolithic core test files (`test-tools.md`, `test-tools2.md`, `test-tools3.md`, `test-tools-team.md`) into 14 focused, independently-runnable test modules located in `test-server/standard/` (`test-seed.md`, `test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-errors.md`, `test-integrity.md`, `test-team.md`) for ~70% token reduction per test session and isolated failure re-runs.
-- Relocated 5 standalone testing `.mjs` files into `test-server/scripts/` to separate Node.js execution integration tests from agent functional testing prompts.
-- Updated `test-server/README.md` files table and agent workflow to reference new modular test structure.
-- Updated `test-server/code-map.md` test infrastructure table to reference new modular test files.
+- Updated asynchronous `callTool()` processing to inject token estimates.
+- Consolidated dependency updates: `@huggingface/transformers` to `4.0.1`, `typescript` to `6.0.2`, `@playwright/test` to `1.59.1`, `@types/node` to `25.5.2`, `esbuild` to `0.28.0`, `eslint` to `10.2.0`, and `simple-git` to `3.35.2`.
+- Reduced `DOCKER_README.md` length to conform with Docker Hub 25,000-character limit.
+- Refactored monolithic core and Code Mode test files into granular, independently-runnable modules to reduce token strain.
+- Relocated standalone testing `.mjs` scripts into `test-server/scripts/`.
+- Updated test documentation and handler maps to reflect new modular test structure.
 - Refactored legacy `test-errors.md` and `test-integrity.md` files into 7 granular domain checklists (`test-tool-group-*.md`) to enforce strict Structured Error Response coverage per-tool.
 - Expanded `src/utils/errors/suggestions.ts` fuzzy pattern mapping to automatically catch and refine CodeMode exceptions and SQLite malformed-input boundaries.
-
 
 ### Fixed
 
@@ -61,13 +51,13 @@
 - Missing error boundary parsing in CLI `PROJECT_REGISTRY` payload handlers.
 - Documentation drift matching the 28 to 33 resource count update.
 - CI badges correctly targeting `gatekeeper.yml`.
-- Render issues with markdown checklists in `test-tools2.md` instructions.
+- Render issues with markdown checklists in agent instructions.
 - Prioritization of dynamic briefing resolution in server instruction loading.
-- `callTool()` progress-token path bypassing both metrics and audit interceptors — fresh handlers from `getAllToolDefinitions()` were invoked raw, skipping all instrumentation. Both cached and progress paths now apply identical metrics + audit wrapping.
+- `callTool()` progress-token path bypassing both metrics and audit interceptors for raw handler invocations.
 
 ### Security
 
-- Pinned `minimatch` to 10.2.5 across dependencies and overrides to combat transitive vulnerabilities.
+- Pinned `minimatch` to `10.2.5` across dependencies and overrides to combat transitive vulnerabilities.
 - Updated Dockerfile base image to `node:24.14.1-alpine` to fix underlying CVEs.
 - Fixed `vite` path traversal and arbitrary file read vulnerabilities by overriding with `^8.0.5`.
 - Bumped `github/codeql-action` to `v4.35.1` and `trufflesecurity/trufflehog` to `v3.94.2` to resolve static analysis and supply chain security alerts.

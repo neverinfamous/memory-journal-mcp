@@ -5,9 +5,9 @@ Last tested: April 6th, 2026
 | Test Document                   | Approximate Token Usage | Notes |
 | :------------------------------ | :---------------------- | :---- |
 | `test-cm-admin-backup.md`       | ~206                    |       |
-| `test-cm-api-discovery.md`      | ~6,132                  |       |
-| `test-cm-crud.md`               | ~5,369                  |       |
-| `test-cm-github.md`             | ~4,322                  |       |
+| `test-cm-api-discovery.md`      | ~406                    |       |
+| `test-cm-crud.md`               | ~720                    |       |
+| `test-cm-github.md`             | ~857                    |       |
 | `test-cm-orchestration.md`      | ~3,309                  |       |
 | `test-cm-readonly.md`           | ~20,513                 |       |
 | `test-cm-relationships.md`      | ~20,513                 |       |
