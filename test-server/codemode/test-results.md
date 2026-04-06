@@ -1,4 +1,4 @@
-# Token Consumption during Direct Tool Testing of postgres-mcp
+# Token Consumption during codemode Testing of postgres-mcp
 
 Last tested: April 6th, 2026
 
