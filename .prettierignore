@@ -11,6 +11,7 @@ pnpm-lock.yaml
 
 # Logs
 *.log
+logs/
 
 # Generated
 *.min.js
