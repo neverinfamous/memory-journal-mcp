@@ -456,17 +456,29 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/README.md`                   | Agent testing orchestration doc                                               |
 | `test-server/tool-reference.md`           | Complete 61-tool inventory with descriptions                                  |
 | `test-server/code-map.md`                 | This file — agent-optimized codebase navigation                               |
-| `test-server/test-preflight.md`           | Pre-test verification checklist                                               |
-| `test-server/test-tools.md`               | Entry-point agent test protocol (main tool tests)                             |
-| `test-server/test-tools2.md`              | Additional tool test scenarios                                                |
-| `test-server/test-tools-codemode-1.md`      | Code mode test prompts (Part 1: Foundations & Security)                       |
-| `test-server/test-tools-codemode-2.md`      | Code mode test prompts (Part 2: Core Data Operations)                         |
-| `test-server/test-tools-codemode-3.md`      | Code mode test prompts (Part 3: Workflows & Relationships)                    |
-| `test-server/test-tools-codemode-4.md`      | Code mode test prompts (Part 4: External, Admin & Team)                       |
-| `test-server/test-agent-experience.md`    | Open-ended agent experience scenarios                                         |
-| `test-server/test-instruction-levels.mjs` | Integration test — instruction level (essential/standard/full) token ordering | \n  | `test-server/test-filter-instructions.mjs` | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
-| `test-server/test-scheduler.mjs`          | Integration test — scheduler behavior                                         |
-| `test-server/test-tool-annotations.mjs`   | Integration test — tool annotation verification                               |
+| `test-server/test-preflight.md`             | Pre-test verification checklist                                               |
+| `test-server/standard/test-seed.md`                  | Seed data creation (S1–S17) — must run first                                  |
+| `test-server/standard/test-core-infra.md`            | Infrastructure tests (health, briefing, protocol scripts, GitHub status)      |
+| `test-server/standard/test-core-crud.md`             | Entry CRUD operations (create, read, update, delete)                          |
+| `test-server/standard/test-core-search.md`           | Text search (FTS5, hybrid, filters, cross-DB, date range)                     |
+| `test-server/standard/test-core-semantic.md`         | Semantic search, vector index, analytics, cross-project insights              |
+| `test-server/standard/test-core-relationships.md`    | Relationships, causal types, visualization, graph resources                   |
+| `test-server/standard/test-core-admin.md`            | Admin tools (tags, export, backup/restore)                                    |
+| `test-server/standard/test-core-scheduler.md`        | Scheduler tests (HTTP-only, terminal script)                                  |
+| `test-server/standard/test-schemas.md`               | outputSchema validation for all 60 tools                                      |
+| `test-server/standard/test-resources.md`             | All 28 resources (static + template, happy + error paths)                     |
+| `test-server/standard/test-github.md`                | GitHub integration (16 tools: read-only, lifecycle, Kanban, milestones)       |
+| `test-server/standard/test-errors.md`                | Prompt handlers, structured error verification, numeric coercion              |
+| `test-server/standard/test-integrity.md`             | Data integrity, boundary values, implementation bug detection                 |
+| `test-server/standard/test-team.md`                  | Team collaboration (20 tools + 2 resources)                                   |
+| `test-server/codemode/test-tools-codemode-1.md`      | Code mode test prompts (Part 1: Foundations & Security)                       |
+| `test-server/codemode/test-tools-codemode-2.md`      | Code mode test prompts (Part 2: Core Data Operations)                         |
+| `test-server/codemode/test-tools-codemode-3.md`      | Code mode test prompts (Part 3: Workflows & Relationships)                    |
+| `test-server/codemode/test-tools-codemode-4.md`      | Code mode test prompts (Part 4: External, Admin & Team)                       |
+| `test-server/test-agent-experience.md`      | Open-ended agent experience scenarios                                         |
+| `test-server/scripts/test-instruction-levels.mjs` | Integration test — instruction level (essential/standard/full) token ordering | \n  | `test-server/scripts/test-filter-instructions.mjs` | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
+| `test-server/scripts/test-scheduler.mjs`          | Integration test — scheduler behavior                                         |
+| `test-server/scripts/test-tool-annotations.mjs`   | Integration test — tool annotation verification                               |
 | `tests/`                                  | Vitest unit/integration tests (13 subdirectories)                             |
 | `tests/e2e/`                              | Playwright E2E tests — HTTP/SSE transport                                     |
 

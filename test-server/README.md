@@ -4,13 +4,10 @@
 
 ## Files
 
-| File                      | Purpose                                                                                                                                                                               | When to Read           |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
-| `test-tools.md`           | **Pass 1: Core Functionality** — Phases 0-8, 10 covering seed data, happy paths, error paths, and feature verification for 41 core tools, 24 resources, 16 prompts, and scheduler     | Always read first      |
-| `test-tools-team.md`      | **Pass 1b: Team Collaboration** — Phase 9 covering 20 team tools + 2 team resources                                                                                                   | After Pass 1 completes |
-| `test-tools2.md`          | **Pass 2: Validation & Edge Cases** — Phases 11-15 covering outputSchema validation, structured error verification, data integrity, boundary values, and implementation bug detection | After Pass 1 completes |
-| `test-tools-codemode.md`  | **Pass 3: Code Mode** — Phases 16-21 covering sandbox execution, API discoverability, multi-step workflows, readonly mode, error handling, and cross-group orchestration              | After Pass 1 completes |
-| `test-tools-codemode2.md` | **Pass 4: Code Mode Advanced** — Extended Code Mode scenarios                                                                                                                         | After Pass 3 completes |
+| File                           | Purpose                                                                                                              | When to Read              |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| [`standard/`](standard/README.md) | **Standard Modular Tests** — Directory containing 14 core modular test files. See `standard/README.md` for full list. | **Always start here** |
+| [`codemode/`](codemode/README.md) | **Code Mode Sandbox Tests** — Directory containing 4 modular Code Mode test prompts. See `codemode/README.md` for full list. | After standard tests |
 
 | `test-preflight.md` | **Pre-flight check** — validates tiered instructions, resources, and tool-filter alignment in 5 steps | Before any test pass |
 | [`tool-reference.md`](tool-reference.md) | **Tool Reference** — Categorized list of all 61 tools across 11 groups | Reference |
@@ -27,11 +24,11 @@ These scripts test features that require separate server processes — they **ca
 
 | Script                         | Tests                                                                                                                                 | Transport     | Duration |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
-| `test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
-| `test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
-| `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61)                                                                | stdio         | ~5s      |
-| `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)                                                                    | stdio         | ~10s     |
-| `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
+| `scripts/test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
+| `scripts/test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
+| `scripts/test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61)                                                                | stdio         | ~5s      |
+| `scripts/test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)                                                                    | stdio         | ~10s     |
+| `scripts/test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 
 ### Quick Run
 
@@ -40,21 +37,21 @@ cd C:\Users\chris\Desktop\memory-journal-mcp
 npm run build
 
 # Phase 1.3A — Instruction levels
-node test-server/test-instruction-levels.mjs
+node test-server/scripts/test-instruction-levels.mjs
 
 # Phase 1.3B — Filter-aware instruction sections + token estimates
-node test-server/test-filter-instructions.mjs
+node test-server/scripts/test-filter-instructions.mjs
 
 # Phase 1.3C — Tool annotations
-node test-server/test-tool-annotations.mjs
+node test-server/scripts/test-tool-annotations.mjs
 
 # Phase 8 — Prompt handlers
-node test-server/test-prompts.mjs
+node test-server/scripts/test-prompts.mjs
 
 # Phase 9 — Scheduler (requires HTTP server in a separate terminal)
 node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
 # In another terminal:
-node test-server/test-scheduler.mjs
+node test-server/scripts/test-scheduler.mjs
 ```
 
 ### Scheduler Script Options
@@ -149,15 +146,13 @@ When you run automated testing (e.g., `npm run test:e2e` or `vitest`), the test 
 ## Agent Workflow
 
 1. Read the server instructions you received during initialization, then `memory://briefing`.
-2. Read `test-tools.md` for Pass 1 protocol, phases, and success criteria.
-3. Execute via direct MCP tool calls. Run both happy-path and 🔴 error-path tests.
-4. **Run integration test scripts** for Phase 1.3 (instruction levels, annotations), Phase 8 (prompts), and Phase 9 (scheduler).
-5. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
-6. Report findings returning proper handler formatting.
-7. (Optional) Run Pass 1b from `test-tools-team.md` for team collaboration testing.
-8. (Optional) Run Pass 2 from `test-tools2.md` after Pass 1 completes successfully.
-9. (Optional) Run Pass 3 from `test-tools-codemode.md` for Code Mode sandbox testing.
-10. (Optional) Run Pass 4 from `test-tools-codemode2.md` for advanced Code Mode scenarios.
+2. Navigate to the `standard/` directory and **always run `standard/test-seed.md` first** — all other test files depend on it.
+3. Run any combination of the 13 independent test files in `standard/` (`test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-errors.md`, `test-integrity.md`, `test-team.md`).
+4. Each file is self-contained — pick the one relevant to your current task or run them in any order.
+5. **Run integration test scripts** for instruction levels, annotations, prompts, and scheduler (see Script Reference above).
+6. Provide manual cleanup (e.g., deleting test nodes) if testing stateful behavior.
+7. Report findings returning proper handler formatting.
+8. (Optional) Run Code Mode tests from `codemode/test-tools-codemode-{1..4}.md`.
 
 ## Troubleshooting
 

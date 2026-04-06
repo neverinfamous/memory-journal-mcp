@@ -39,7 +39,11 @@
 - Reduced `DOCKER_README.md` from 24,344 to 23,475 bytes (93.9% of Docker Hub 25,000-char limit) by shortening the tagline to meet the 100-char short description limit and collapsing duplicated routing sections.
 - Updated `test-server/code-map.md` handler map (`search.ts` → `search/index.ts`) and last-updated date.
 - Added `PROJECT_REGISTRY` and `TEAM_DB_PATH` placeholders to `mcp-config-example.json`.
-- Refactored monolithic Code Mode test files into four distinct, modular testing prompts (`test-tools-codemode-[1-4].md`) to reduce context window strain.
+- Refactored monolithic Code Mode test files into four distinct, modular testing prompts located in `test-server/codemode/` (`test-tools-codemode-[1-4].md`) to reduce context window strain.
+- Refactored 4 monolithic core test files (`test-tools.md`, `test-tools2.md`, `test-tools3.md`, `test-tools-team.md`) into 14 focused, independently-runnable test modules located in `test-server/standard/` (`test-seed.md`, `test-core-*.md`, `test-schemas.md`, `test-resources.md`, `test-github.md`, `test-errors.md`, `test-integrity.md`, `test-team.md`) for ~70% token reduction per test session and isolated failure re-runs.
+- Relocated 5 standalone testing `.mjs` files into `test-server/scripts/` to separate Node.js execution integration tests from agent functional testing prompts.
+- Updated `test-server/README.md` files table and agent workflow to reference new modular test structure.
+- Updated `test-server/code-map.md` test infrastructure table to reference new modular test files.
 
 
 ### Fixed
