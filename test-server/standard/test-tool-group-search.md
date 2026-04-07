@@ -2,12 +2,9 @@
 
 **Scope:** Deterministic verification of the Search tool group (`search_entries`, `search_by_date_range`, `semantic_search`) against the strict error handling matrix.
 
-**Execution Strategy:** The agent is to use **direct MCP tools.** Do not use scripts.
+**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls. Retrieve token estimates using the built-in audit/metric resources (`memory://metrics/tokens` and `memory://metrics/summary`) instead of executing standalone scripts.
 
-**Prerequisites:**
-
-- Seed data active.
-- Vector store initialized.
+**Prerequisites:** Seed data from `test-seed.md` must be present (S11, S12 for cross-DB; S15–S17 for team cross-project insights). `TEAM_DB_PATH` configured. MCP server instructions auto-injected.
 
 ## 1. Structured Error Matrix
 
@@ -31,7 +28,7 @@
 
 ## Success Criteria
 
-- [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
+- [ ] Agent reports the Total Token Estimate in the final summary (using the `memory://metrics/tokens` and `memory://metrics/summary` server resources, DO NOT use scripts to parse filesystem responses).
 - [ ] Zod boundary limits prevent crashes.
 - [ ] Invalid dates return structured Domain/Validation errors.
 - [ ] No raw `-32602` responses.

@@ -1,18 +1,20 @@
 # Test memory-journal-mcp — Team Tool Group
 
-**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+**Execution Strategy:** **Use direct MCP tools whenever possible.** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls. To verify Zod boundary violations or empty schemas, the agent MUST use **Code Mode (`mj_execute_code`)** via the internal API (e.g. `mj.team.create({})`). No external TS testing scripts are necessary.
 
 **Scope:** Deterministic verification of Team tools (`team_create_entry`, `team_search`, etc.) against strict error handling constraints.
 
+**Prerequisites:** Seed data from `test-seed.md` must be present (S11, S12 for cross-DB; S15–S17 for team cross-project insights). `TEAM_DB_PATH` configured. MCP server instructions auto-injected.
+
 ## 1. Structured Error Matrix
 
-| Tool | Domain Error Test | Zod Empty Param (`{}`) | Zod Type Mismatch |
-|---|---|---|---|
-| All Team Tools | Team DB not configured -> Returns `{success: false}` | N/A | N/A |
-| `team_create_entry` | `entry_type: "invalid"` | ⚠️ Should return validation error | `content: 123` |
-| `team_update_entry` | `entry_id: 999999` | ⚠️ Should return validation error | `entry_id: "abc"` |
-| `team_search_by_date_range`| `start_date: "Jan 1"` | ⚠️ Should return validation error | `limit: "abc"` |
-| `team_merge_tags` | `source_tag: "x"; target_tag: "x"` | ⚠️ Should return validation error | N/A |
+| Tool                        | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
+| --------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
+| All Team Tools              | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
+| `team_create_entry`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
+| `team_update_entry`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_search_by_date_range` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_merge_tags`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
 
 ### Specific Domain Checks
 
@@ -20,6 +22,7 @@
 - **Team Insights**: Verify `team_get_cross_project_insights` returns the requisite fields even when the query returns absolutely zero rows.
 
 ## Success Criteria
+
 - [ ] Agent reports the Total Token Estimate in the final summary (using `_meta.tokenEstimate` from responses).
 - [ ] Team Database missing context natively halts and warns user without crashing the MCP worker.
 - [ ] Missing models do not crash vector fallback pipelines.

@@ -4,7 +4,7 @@
 
 **Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
 
-**Prerequisites:** Seed data from `test-seed.md` must be present. Core tests should have passed. MCP server instructions auto-injected.
+**Prerequisites:** Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
 
 **Workflow after testing:**
 
@@ -13,7 +13,7 @@
 3. User verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
 4. Re-test fixes with direct MCP calls.
 5. Brief final summary.
-   * **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Scope:** Semantic/vector search, vector index management, statistics analytics, and cross-project insights.
 
-**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
 
 **Prerequisites:** Seed data from `test-seed.md` must be present (vector index rebuilt). MCP server instructions auto-injected.
 
@@ -10,10 +10,10 @@
 
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
 2. Implement, update `UNRELEASED.md`, commit without push.
-3. User verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
+3. USER verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
 4. Re-test fixes with direct MCP calls.
 5. Brief final summary.
-   * **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 ---
 
