@@ -4,9 +4,9 @@ Last tested: April 6th, 2026
 
 | Test Document                      | Approximate Token Usage | Notes |
 | :--------------------------------- | :---------------------- | :---- |
-| `test-core-admin.md`               | ~7,704                  |       |
-| `test-core-crud.md`                | ~3,703                  |       |
-| `test-core-infra.md`               | ~162                    |       |
+| `test-core-admin.md`               | ~7,647                  |       |
+| `test-core-crud.md`                | ~3,588                  |       |
+| `test-core-infra.md`               | ~270                    |       |
 | `test-core-relationships.md`       | ~                       |       |
 | `test-core-scheduler.md`           | ~                       |       |
 | `test-core-search.md`              | ~                       |       |
