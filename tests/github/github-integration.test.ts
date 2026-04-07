@@ -1012,4 +1012,34 @@ describe('GitHubIntegration', () => {
             expect(result).toEqual([])
         })
     })
+
+    // ========================================================================
+    // Review and Repo Wrappers
+    // ========================================================================
+
+    describe('review and caching wrappers', () => {
+        it('should call getReviews', async () => {
+            vi.spyOn((gh as any).pullRequestsManager, 'getReviews').mockResolvedValue([])
+            const result = await gh.getReviews('o', 'r', 1)
+            expect(result).toEqual([])
+        })
+
+        it('should call getReviewComments', async () => {
+            vi.spyOn((gh as any).pullRequestsManager, 'getReviewComments').mockResolvedValue([])
+            const result = await gh.getReviewComments('o', 'r', 1)
+            expect(result).toEqual([])
+        })
+
+        it('should call getCopilotReviewSummary', async () => {
+            vi.spyOn((gh as any).pullRequestsManager, 'getCopilotReviewSummary').mockResolvedValue({ summary: '', issues_found: 0, approvals: 0 })
+            const result = await gh.getCopilotReviewSummary('o', 'r', 1)
+            expect(result).toBeDefined()
+        })
+
+        it('should support setCachedRepoInfo', () => {
+            gh.setCachedRepoInfo({ owner: 'o', repo: 'r', remoteUrl: 'u', branch: 'b' })
+            const info = gh.getCachedRepoInfo()
+            expect(info?.owner).toBe('o')
+        })
+    })
 })

@@ -82,7 +82,7 @@ const ZOD_OPTIONAL_WRAPPERS = new Set([
  * field is optional to callers, and the description (first `_def` that has
  * one, scanning outer → inner). Supports both Zod 3 and Zod 4 shape.
  */
-function peelZodType(def: Record<string, unknown>): {
+export function peelZodType(def: Record<string, unknown>): {
     typeName: string
     isOptional: boolean
     description: string | undefined
@@ -119,7 +119,7 @@ function peelZodType(def: Record<string, unknown>): {
  * Extract parameter info from a Zod schema's shape.
  * Works with z.object() schemas that have a `.shape` property.
  */
-function extractParameters(inputSchema: unknown): ParameterInfo[] {
+export function extractParameters(inputSchema: unknown): ParameterInfo[] {
     if (inputSchema === undefined || inputSchema === null || typeof inputSchema !== 'object') {
         return []
     }

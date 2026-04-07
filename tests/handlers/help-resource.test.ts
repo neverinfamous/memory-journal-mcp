@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getHelpResourceDefinitions } from '../../src/handlers/resources/help.js'
+import { getHelpResourceDefinitions, peelZodType, extractParameters } from '../../src/handlers/resources/help.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { ResourceContext } from '../../src/handlers/resources/shared.js'
 import * as fs from 'fs'
@@ -184,5 +184,31 @@ describe('Help Resource Handlers', () => {
 
         const result = (await groupHelp!.handler('memory://help/github', getContext())) as any
         expect(result.data.group).toBe('github')
+    })
+
+    describe('Schema parsing edge cases', () => {
+        it('should handle invalid inputSchema in extractParameters', () => {
+            expect(extractParameters(null)).toEqual([])
+            expect(extractParameters(undefined)).toEqual([])
+            expect(extractParameters('string')).toEqual([])
+        })
+
+        it('should handle missing or invalid shape', () => {
+            expect(extractParameters({ typeName: 'ZodObject' })).toEqual([])
+            expect(extractParameters({ _def: { shape: () => 'primitive' } })).toEqual([])
+            expect(extractParameters({ _def: { shape: () => ({ field: 'not-an-object' }) } })).toEqual([])
+        })
+
+        it('should fallback to unknown if layers run out', () => {
+            const result = peelZodType({ })
+            expect(result.typeName).toBe('unknown')
+            expect(result.isOptional).toBe(false)
+        })
+
+        it('should pick up plain descriptions without type', () => {
+            const result = peelZodType({ description: 'hello' })
+            expect(result.description).toBe('hello')
+            expect(result.typeName).toBe('unknown')
+        })
     })
 })

@@ -422,9 +422,10 @@ describe('DatabaseAdapter', () => {
         it('should include causal metrics', () => {
             const stats = db.getStatistics()
             expect(stats.causalMetrics).toBeDefined()
-            expect(typeof stats.causalMetrics.blocked_by).toBe('number')
-            expect(typeof stats.causalMetrics.resolved).toBe('number')
-            expect(typeof stats.causalMetrics.caused).toBe('number')
+            const causalMetrics = stats.causalMetrics as Record<string, number>
+            expect(typeof causalMetrics.blocked_by).toBe('number')
+            expect(typeof causalMetrics.resolved).toBe('number')
+            expect(typeof causalMetrics.caused).toBe('number')
         })
 
         it('should filter by date range', () => {
@@ -432,10 +433,11 @@ describe('DatabaseAdapter', () => {
             const today = new Date().toISOString().split('T')[0]!
             const filteredStats = db.getStatistics('day', today, today)
 
-            expect(filteredStats.totalEntries).toBeLessThanOrEqual(allStats.totalEntries)
+            expect(filteredStats.totalEntries as number).toBeLessThanOrEqual(allStats.totalEntries as number)
             expect(filteredStats.dateRange).toBeDefined()
-            expect(filteredStats.dateRange!.startDate).toBe(today)
-            expect(filteredStats.dateRange!.endDate).toBe(today)
+            const dateRange = filteredStats.dateRange as { startDate: string; endDate: string }
+            expect(dateRange.startDate).toBe(today)
+            expect(dateRange.endDate).toBe(today)
         })
 
         it('should return 0 entries for future date range', () => {
@@ -456,7 +458,8 @@ describe('DatabaseAdapter', () => {
 
             expect(stats.projectBreakdown).toBeDefined()
             expect(Array.isArray(stats.projectBreakdown)).toBe(true)
-            const proj = stats.projectBreakdown!.find((p) => p.project_number === 555)
+            const breakdown = stats.projectBreakdown as { project_number: number; entry_count: number }[]
+            const proj = breakdown.find((p) => p.project_number === 555)
             expect(proj).toBeDefined()
             expect(proj!.entry_count).toBeGreaterThanOrEqual(1)
         })
@@ -569,7 +572,7 @@ describe('DatabaseAdapter', () => {
         })
 
         it('should get raw database handle', () => {
-            const rawDb = db.getRawDb()
+            const rawDb = db.getRawDb() as any
             expect(rawDb).toBeDefined()
             expect(typeof rawDb.exec).toBe('function')
         })
@@ -631,6 +634,39 @@ describe('DatabaseAdapter', () => {
         it('should filter by isPersonal', () => {
             const results = db.searchEntries('', { isPersonal: false })
             expect(results.every((e) => !e.isPersonal)).toBe(true)
+        })
+
+        it('should filter by tags', () => {
+            db.createEntry({ content: 'tags search target', tags: ['searchfilter'] })
+            const results = db.searchEntries('target', { tags: ['searchfilter'] })
+            const emptyResults = db.searchEntries('target', { tags: ['nonexistent-tag'] })
+            // Test non-FTS too
+            const noFts = db.searchEntries('', { tags: ['searchfilter'] })
+            expect(results.length).toBeGreaterThan(0)
+            expect(emptyResults.length).toBe(0)
+            expect(noFts.some(e => e.tags.includes('searchfilter'))).toBe(true)
+        })
+
+        it('should filter by entryType', () => {
+            db.createEntry({ content: 'entrytype target', entryType: 'milestone' })
+            const results = db.searchEntries('entrytype target', { entryType: 'milestone' })
+            expect(results.length).toBeGreaterThan(0)
+            expect(results.every(e => e.entryType === 'milestone')).toBe(true)
+        })
+
+        it('should filter by startDate and endDate', () => {
+            db.createEntry({ content: 'date target xyz' })
+            const today = new Date().toISOString().split('T')[0]!
+            const future = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]!
+            
+            const exactMatches = db.searchEntries('date target xyz', { startDate: today, endDate: today })
+            expect(exactMatches.length).toBeGreaterThan(0)
+
+            const noMatchesFuture = db.searchEntries('date target xyz', { startDate: future })
+            expect(noMatchesFuture.length).toBe(0)
+
+            const matchesPast = db.searchEntries('date target xyz', { endDate: today })
+            expect(matchesPast.length).toBeGreaterThan(0)
         })
     })
 

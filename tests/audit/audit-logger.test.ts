@@ -350,4 +350,79 @@ describe('AuditLogger', () => {
             await logger.close()
         })
     })
+
+    describe('coverage edge cases', () => {
+        it('should handle eager high-water flush', async () => {
+            const config = enabledConfig(dir)
+            const logger = new AuditLogger(config)
+            
+            for (let i = 0; i < 51; i++) {
+                logger.log(fakeEntry({ requestId: `req-${String(i)}` }))
+            }
+            await logger.close()
+            const content = await readFile(config.logPath, 'utf-8')
+            const lines = content.trim().split('\n')
+            expect(lines.length).toBe(51)
+        })
+
+        it('should catch write errors and unshift buffer without throwing', async () => {
+            const logger = new AuditLogger({
+                ...enabledConfig(dir),
+                logPath: dir, // dir is a directory, so appendFile will throw EISDIR
+            })
+            
+            const chunks: string[] = []
+            const originalWrite = process.stderr.write
+            process.stderr.write = ((chunk: string) => {
+                chunks.push(chunk)
+                return true
+            }) as typeof process.stderr.write
+            
+            try {
+                logger.log(fakeEntry())
+                await logger.flush()
+                expect(chunks.some((c) => c.includes('Write failed'))).toBe(true)
+            } finally {
+                process.stderr.write = originalWrite
+                await logger.close()
+            }
+        })
+
+        it('should handle concurrent flushes', async () => {
+            const config = enabledConfig(dir)
+            const logger = new AuditLogger(config)
+            logger.log(fakeEntry())
+            const p1 = logger.flush()
+            const p2 = logger.flush()
+            await Promise.all([p1, p2])
+            await logger.close()
+        })
+
+        it('should cache dirEnsured', async () => {
+            const config = enabledConfig(dir)
+            const logger = new AuditLogger(config)
+            logger.log(fakeEntry())
+            await logger.flush()
+            logger.log(fakeEntry())
+            await logger.flush() // dirEnsured is true here
+            await logger.close()
+        })
+
+        it('should handle recent() with completely unreadable file gracefully', async () => {
+            const logger = new AuditLogger({ ...enabledConfig(dir), logPath: dir })
+            const result = await logger.recent()
+            expect(result).toEqual([])
+            await logger.close()
+        })
+
+        it('should handle concurrent fast flushes on an empty buffer', async () => {
+            const config = enabledConfig(dir)
+            const logger = new AuditLogger(config)
+            // Empty buffer check when active flush finishes
+            const p = logger.flush()
+            await logger.flush()
+            await p
+            await logger.close()
+        })
+    })
 })

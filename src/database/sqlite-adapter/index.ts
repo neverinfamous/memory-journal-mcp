@@ -108,6 +108,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             prNumber?: number
             prStatus?: string
             workflowRunId?: number
+            tags?: string[]
+            entryType?: EntryType
+            startDate?: string
+            endDate?: string
         }
     ): JournalEntry[] {
         return this.entriesMgr.searchEntries(query, options)
