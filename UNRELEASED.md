@@ -50,6 +50,7 @@
 - Fixed relative path resolution for modularized test validation scripts.
 - Fixed `VectorSearchManager` caching a closed database connection, preventing `The database connection is not open` errors during index rebuilds after a backup is restored.
 - Refactored `VectorSearchManager` unit tests to correctly mock the constructor injection `IDatabaseAdapter` instead of incorrectly bypassing the `db` getter with `Object.assign()`.
+- Updated base URI template parsing logic for `@modelcontextprotocol/sdk` to correctly process path segments containing slashes by switching `{repo}` templates to `{+repo}`.
 
 ### Security
 

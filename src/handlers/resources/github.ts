@@ -350,9 +350,9 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
         const dynamicName = def.name + ' (Dynamic)'
         let dynamicUri: string
         if (def.uri === 'memory://milestones/{number}') {
-            dynamicUri = 'memory://milestones/{repo}/{number}'
+            dynamicUri = 'memory://milestones/{+repo}/{number}'
         } else {
-            dynamicUri = def.uri + '/{repo}'
+            dynamicUri = def.uri + '/{+repo}'
         }
         return {
             ...def,

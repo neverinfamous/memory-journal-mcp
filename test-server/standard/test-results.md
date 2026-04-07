@@ -11,7 +11,7 @@ Last tested: April 6th, 2026
 | `test-core-scheduler.md`           | N/A                     |       |
 | `test-core-search.md`              | ~2,358                  |       |
 | `test-core-semantic.md`            | ~3,677                  |       |
-| `test-github.md`                   | ~480,708                |       |
+| `test-github.md`                   | ~4,329                  |       |
 | `test-resources.md`                | ~                       |       |
 | `test-schemas.md`                  | ~                       |       |
 | `test-seed.md`                     | ~                       |       |

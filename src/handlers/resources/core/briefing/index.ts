@@ -38,7 +38,7 @@ export const briefingResource: InternalResourceDef = {
 }
 
 export const dynamicBriefingResource: InternalResourceDef = {
-    uri: 'memory://briefing/{repo}',
+    uri: 'memory://briefing/{+repo}',
     name: 'Dynamic Briefing',
     title: 'Project-Specific Session Context',
     description:

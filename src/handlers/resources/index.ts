@@ -115,9 +115,10 @@ export async function readResource(
     // Check for template matches (also use base URI)
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
-            // Use (.+) for {repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
-            const pattern = resource.uri.replace(/\{([^}]+)\}/g, (_match, paramName) => {
-                return paramName === 'repo' ? '(.+)' : '([^/]+)'
+            // Use (.+) for {+repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
+            const pattern = resource.uri.replace(/\{([^}]+)\}/g, (_match: string, paramName: string) => {
+                const cleanParam = paramName.startsWith('+') ? paramName.slice(1) : paramName
+                return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
             })
             const regex = new RegExp(`^${pattern}$`)
             if (regex.test(baseUri)) {
