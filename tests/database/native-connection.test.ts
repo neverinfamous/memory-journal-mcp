@@ -5,8 +5,8 @@
  * and close-during-initialization branches.
  */
 
-import { describe, it, expect, afterAll } from 'vitest'
-import type Database from 'better-sqlite3'
+import { describe, it, expect, afterAll, vi } from 'vitest'
+import type { Database } from 'better-sqlite3'
 import fs from 'node:fs'
 import { NativeConnectionManager } from '../../src/database/sqlite-adapter/native-connection.js'
 
@@ -151,14 +151,19 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr.initialize()
             const db = mgr.getRawDb() as Database
+            
+            // Drop insert trigger so insertion doesn't hit FTS index
+            db.exec('DROP TRIGGER IF EXISTS fts_content_ai')
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
-            // Wipe fts_content manually
-            db.exec('DELETE FROM fts_content')
             mgr.close()
 
-            // Re-init should populate FTS
+            // Re-init should populate FTS (entryCount=1, ftsCount=0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr2.initialize()
+            
+            const db2 = mgr2.getRawDb() as Database
+            const ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+            expect(ftsCount).toBe(1)
             mgr2.close()
         })
 
@@ -168,18 +173,22 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             const db = mgr.getRawDb() as Database
 
-            // FTS count is > 0, entryCount = 0 since we deleted memory_journal entries or made fts larger
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('bar', 'test')")
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('baz', 'test')")
+            
             // Drop delete trigger so deletion doesn't hit FTS
-            db.exec('DROP TRIGGER IF EXISTS memory_journal_ad')
+            db.exec('DROP TRIGGER IF EXISTS fts_content_ad')
             db.exec('DELETE FROM memory_journal')
             mgr.close()
 
-            // Re-init should trigger ghost cleanup because fts_count (3) > entry_count (0)
+            // Re-init should trigger ghost cleanup because ftsCount (3) > entryCount (0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH)
             await mgr2.initialize()
+            
+            const db2 = mgr2.getRawDb() as Database
+            const ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+            expect(ftsCount).toBe(0) // should be cleaned up!
             mgr2.close()
         })
     })
@@ -288,6 +297,26 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             expect(() => mgr.pragma('cache_size = 2000')).not.toThrow()
             mgr.close()
+        })
+    })
+
+    // =========================================================================
+    // setDbAndInitialized
+    // =========================================================================
+    
+    describe('setDbAndInitialized', () => {
+        it('should manually set db and skip initialization', () => {
+            const mgr = new NativeConnectionManager(':memory:')
+            const fakeDb = {
+                pragma: vi.fn(),
+                prepare: vi.fn(),
+                close: vi.fn()
+            }
+            mgr.setDbAndInitialized(fakeDb)
+            
+            // Should be initialized without calling initialize()
+            expect(() => mgr.pragma('foreign_keys = ON')).not.toThrow()
+            expect(fakeDb.pragma).toHaveBeenCalledWith('foreign_keys = ON')
         })
     })
 })

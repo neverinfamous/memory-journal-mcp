@@ -91,7 +91,7 @@ vi.mock('express', () => {
             }
         }),
     }
-    const expressFn = vi.fn().mockReturnValue(app)
+    const expressFn = vi.fn().mockReturnValue(app) as any
     // express.json() is a static method that returns body-parser middleware
     expressFn.json = vi.fn().mockReturnValue(vi.fn())
     return { default: expressFn }
@@ -224,6 +224,51 @@ describe('HttpTransport', () => {
         await transport.start(mockServer as never, mockScheduler as never)
 
         expect(mockScheduler.start).toHaveBeenCalled()
+    })
+
+    it('should configure HTTP server timeouts and close handler', async () => {
+        const transport = new HttpTransport({
+            port: 3000,
+            host: 'localhost',
+            corsOrigins: ['http://example.com'],
+        } as never)
+
+        const mockServer = { connect: vi.fn() }
+        await transport.start(mockServer as never, null)
+
+        // httpServer is mocked in express listen
+        const { logger } = await import('../../src/utils/logger.js')
+        
+        // Find the 'close' event handler
+        const closeCall = mockOn.mock.calls.find((c) => c[0] === 'close')
+        expect(closeCall).toBeDefined()
+        if (closeCall && typeof closeCall[1] === 'function') {
+            closeCall[1]()
+            expect(logger.info).toHaveBeenCalledWith('HTTP server closed', expect.any(Object))
+        }
+    })
+
+    it('should occasionally clean up rateLimitMap entries', async () => {
+        const transport = new HttpTransport({
+            port: 3000,
+            host: 'localhost',
+            enableRateLimit: true,
+            corsOrigins: ['http://example.com'],
+        } as never)
+
+        const mockServer = { connect: vi.fn() }
+        await transport.start(mockServer as never, null)
+
+        const rateLimitMap = (transport as any).rateLimitMap as Map<string, any>
+        rateLimitMap.set('192.168.1.1', { resetTime: Date.now() - 1000, count: 50 })
+        rateLimitMap.set('192.168.1.2', { resetTime: Date.now() + 100000, count: 5 })
+
+        // Trigger setInterval
+        vi.advanceTimersByTime(61000)
+
+        // Expired entry should be gone, valid entry should remain
+        expect(rateLimitMap.has('192.168.1.1')).toBe(false)
+        expect(rateLimitMap.has('192.168.1.2')).toBe(true)
     })
 
     // ========================================================================

@@ -262,13 +262,83 @@ describe('search_entries with mode param', () => {
         expect(result.searchMode).toBe('fts (fallback)')
     })
 
-    it('should fallback to fts when hybrid requested without vectorManager', async () => {
+    it('should execute semantic mode when vectorManager is available', async () => {
+        const mockVectorManager = {
+            search: async () => [{ entryId: 1, score: 0.9 }],
+            getStats: () => ({ itemCount: 1 })
+        } as any
+
+        const result = (await callTool(
+            'search_entries',
+            { query: 'authentication flow', mode: 'semantic', limit: 5 },
+            db,
+            mockVectorManager
+        )) as { searchMode: string, count: number }
+        expect(result.searchMode).toBe('semantic')
+        // entry 1 is seeded in beforeAll
+        expect(result.count).toBe(1)
+    })
+
+    it('should execute hybrid mode when vectorManager is available', async () => {
+        const mockVectorManager = {
+            search: async () => [{ entryId: 1, score: 0.9 }],
+            getStats: () => ({ itemCount: 1 })
+        } as any
+
         const result = (await callTool(
             'search_entries',
             { query: 'database migration patterns', mode: 'hybrid', limit: 5 },
-            db
+            db,
+            mockVectorManager
+        )) as { searchMode: string, count: number }
+        expect(result.searchMode).toBe('hybrid')
+    })
+    
+    it('should auto-resolve to semantic mode for questions when vectorManager is available', async () => {
+        const mockVectorManager = {
+            search: async () => [{ entryId: 1, score: 0.9 }],
+            getStats: () => ({ itemCount: 1 })
+        } as any
+
+        const result = (await callTool(
+            'search_entries',
+            { query: 'how did we handle authentication', mode: 'auto', limit: 5 },
+            db,
+            mockVectorManager
         )) as { searchMode: string }
-        expect(result.searchMode).toBe('fts (fallback)')
+        expect(result.searchMode).toBe('semantic (auto)')
+    })
+
+    it('should auto-resolve to hybrid mode for complex queries when vectorManager is available', async () => {
+        const mockVectorManager = {
+            search: async () => [{ entryId: 1, score: 0.9 }],
+            getStats: () => ({ itemCount: 1 })
+        } as any
+
+        const result = (await callTool(
+            'search_entries',
+            { query: 'database migration patterns', mode: 'auto', limit: 5 },
+            db,
+            mockVectorManager
+        )) as { searchMode: string }
+        expect(result.searchMode).toBe('hybrid (auto)')
+    })
+
+    it('should filter by is_personal in semantic mode', async () => {
+        const mockVectorManager = {
+            search: async () => [{ entryId: 1, score: 0.9 }],
+            getStats: () => ({ itemCount: 1 })
+        } as any
+
+        const result = (await callTool(
+            'search_entries',
+            { query: 'authentication flow', mode: 'semantic', is_personal: false, limit: 5 },
+            db,
+            mockVectorManager
+        )) as { count: number }
+        
+        // Entry 1 is personal so it should be filtered out
+        expect(result.count).toBe(0)
     })
 
     it('should return error for invalid mode', async () => {
@@ -297,10 +367,43 @@ describe('search_entries with mode param', () => {
 describe('semantic_search enhancements', () => {
     let db: DatabaseAdapter
     const testDbPath = './test-semantic-enhance.db'
+    let mockVectorManager: any
+    let entry1Id: number
+    let entry2Id: number
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
         await db.initialize()
+        
+        const entry1 = db.createEntry({
+            content: 'Authentication system design with OAuth2',
+            entryType: 'project_decision',
+            tags: ['auth', 'oauth', 'security'],
+            timestamp: '2026-03-01T12:00:00Z',
+            isPersonal: true
+        })
+        entry1Id = entry1.id
+
+        const entry2 = db.createEntry({
+            content: 'Login page implementation using React',
+            entryType: 'feature_implementation',
+            tags: ['frontend', 'react', 'auth'],
+            timestamp: '2026-03-15T12:00:00Z',
+            isPersonal: false
+        })
+        entry2Id = entry2.id
+
+        mockVectorManager = {
+            search: async () => [
+                { entryId: entry1Id, score: 0.9 },
+                { entryId: entry2Id, score: 0.8 },
+                { entryId: 999, score: 0.7 } // Missing entry
+            ],
+            searchByEntryId: async () => [
+                { entryId: entry2Id, score: 0.8 } // Related to 1
+            ],
+            getStats: () => ({ itemCount: 2 })
+        }
     })
 
     afterAll(() => {
@@ -320,6 +423,49 @@ describe('semantic_search enhancements', () => {
         }
         expect(result.error).toBe('Either query or entry_id must be provided')
         expect(result.code).toBe('VALIDATION_ERROR')
+    })
+    
+    it('should filter by tags', async () => {
+        const result = (await callTool('semantic_search', { query: 'auth', tags: ['oauth'] }, db, mockVectorManager)) as { count: number, entries: any[] }
+        expect(result.count).toBe(1)
+        expect(result.entries[0].id).toBe(entry1Id)
+    })
+
+    it('should filter by entry_type', async () => {
+        const result = (await callTool('semantic_search', { query: 'auth', entry_type: 'feature_implementation' }, db, mockVectorManager)) as { count: number, entries: any[] }
+        expect(result.count).toBe(1)
+        expect(result.entries[0].id).toBe(entry2Id)
+    })
+
+    it('should filter by start_date', async () => {
+        const result = (await callTool('semantic_search', { query: 'auth', start_date: '2026-03-10' }, db, mockVectorManager)) as { count: number, entries: any[] }
+        expect(result.count).toBe(1)
+        expect(result.entries[0].id).toBe(entry2Id)
+    })
+
+    it('should filter by end_date', async () => {
+        const result = (await callTool('semantic_search', { query: 'auth', end_date: '2026-03-10' }, db, mockVectorManager)) as { count: number, entries: any[] }
+        expect(result.count).toBe(1)
+        expect(result.entries[0].id).toBe(entry1Id)
+    })
+
+    it('should exclude source entry when searching by entry_id', async () => {
+        const mockVM = {
+            ...mockVectorManager,
+            searchByEntryId: async () => [
+                { entryId: entry1Id, score: 1.0 }, // The source entry
+                { entryId: entry2Id, score: 0.8 }  // Related entry
+            ]
+        }
+        const result = (await callTool('semantic_search', { entry_id: entry1Id }, db, mockVM)) as { count: number, entries: any[] }
+        expect(result.count).toBe(1)
+        expect(result.entries[0].id).toBe(entry2Id)
+    })
+
+    it('should generate noise hint for low quality results', async () => {
+        const mockVM = { ...mockVectorManager, search: async () => [{ entryId: entry1Id, score: 0.3 }] }
+        const result = (await callTool('semantic_search', { query: 'noise' }, db, mockVM)) as { hint: string }
+        expect(result.hint).toContain('noise')
     })
 
     it('should return configuration error when vectorManager unavailable', async () => {

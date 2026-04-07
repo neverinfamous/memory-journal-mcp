@@ -60,7 +60,7 @@ vi.mock('../../../src/utils/logger.js', () => ({
 import {
     setupStateful,
     type StatefulContext,
-} from '../../../src/transports/http/server/stateful.js'
+} from '../../src/transports/http/server/stateful.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 
 // ============================================================================
@@ -329,6 +329,37 @@ describe('setupStateful', () => {
 
         expect(server.connect).toHaveBeenCalled()
         expect(mockHandleRequest).toHaveBeenCalled()
+
+        // Verify onclose cleanup
+        expect(ctx.transports.size).toBeGreaterThan(0)
+        const sid = Array.from(ctx.transports.keys())[0]!
+        const createdTransport = ctx.transports.get(sid) as any
+        if (createdTransport && createdTransport.onclose) {
+             createdTransport.onclose()
+             expect(ctx.transports.has(sid)).toBe(false)
+        }
+
+        clearInterval(timer)
+    })
+
+    it('should close existing server connection before reconnecting', async () => {
+        vi.mocked(isInitializeRequest).mockReturnValue(true)
+
+        const ctx = createMockCtx()
+        ctx.serverConnected = true
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, server as never)
+        const handler = app.routes['post']!['/mcp']!
+
+        const req = mockReq({ headers: {}, body: { method: 'initialize' } })
+        handler(req, mockRes())
+
+        await vi.advanceTimersByTimeAsync(10)
+
+        expect(server.close).toHaveBeenCalled()
+        expect(server.connect).toHaveBeenCalled()
 
         clearInterval(timer)
     })
