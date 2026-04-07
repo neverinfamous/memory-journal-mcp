@@ -8,7 +8,7 @@
  * where k=60 is a tuning constant (standard in literature).
  */
 
-import type { JournalEntry } from '../../../types/index.js'
+import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager.js'
 import type { EntryWithSource } from './helpers.js'
@@ -95,7 +95,7 @@ export async function hybridSearch(
                 prStatus: options.prStatus,
                 workflowRunId: options.workflowRunId,
                 tags: options.tags,
-                entryType: options.entryType as import('../../../types/index.js').EntryType,
+                entryType: options.entryType as EntryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
             })

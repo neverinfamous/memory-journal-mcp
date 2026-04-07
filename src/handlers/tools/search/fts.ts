@@ -6,6 +6,7 @@
  */
 
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
+import type { EntryType } from '../../../types/index.js'
 import { calcPerDbLimit, mergeAndDedup, type EntryWithSource } from './helpers.js'
 
 /**
@@ -24,7 +25,7 @@ export function ftsSearch(
         prStatus?: string
         workflowRunId?: number
         tags?: string[]
-        entryType?: import('../../../types/index.js').EntryType
+        entryType?: EntryType
         startDate?: string
         endDate?: string
     }
