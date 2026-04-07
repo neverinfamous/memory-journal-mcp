@@ -473,15 +473,13 @@ Each job is error-isolated — a failure in one job won't affect the others. Sch
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
-| Environment Variable | Description                                                             |
-| -------------------- | ----------------------------------------------------------------------- |
-| `DB_PATH`            | Database file location (CLI: `--db`; default: `./memory_journal.db`)    |
-| `TEAM_DB_PATH`       | Team database file location (CLI: `--team-db`)                          |
-| `TEAM_AUTHOR`        | Override author name for team entries (default: `git config user.name`) |
-| `GITHUB_TOKEN`       | GitHub personal access token for API access                             |
-
+| Environment Variable | Description |
+| --- | --- |
+| `DB_PATH` | Database file location (CLI: `--db`; default: `./memory_journal.db`) |
+| `TEAM_DB_PATH` | Team database file location (CLI: `--team-db`) |
+| `TEAM_AUTHOR` | Override author name for team entries (default: `git config user.name`) |
+| `GITHUB_TOKEN` | GitHub personal access token for API access |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
-| `GITHUB_REPO_PATH` | Path to a git repository for auto-detecting owner/repo |
 | `PROJECT_REGISTRY` | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing |
 | `AUTO_REBUILD_INDEX` | Set to `true` to rebuild vector index on server startup |
 | `MCP_HOST` | Server bind host (`0.0.0.0` for containers, default: `localhost`) |

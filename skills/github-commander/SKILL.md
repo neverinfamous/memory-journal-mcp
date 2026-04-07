@@ -50,7 +50,7 @@ Load this skill when any of these apply:
 
 - `gh` CLI authenticated (`gh auth status`)
 - `GITHUB_TOKEN` set for API access
-- `GITHUB_REPO_PATH` set for repo auto-detection
+- `PROJECT_REGISTRY` configured for repo auto-detection
 - Project repo cloned locally
 
 ## Configuration

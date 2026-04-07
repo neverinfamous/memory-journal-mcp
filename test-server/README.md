@@ -166,7 +166,7 @@ The `memory-journal-mcp` uses `better-sqlite3` (native SQLite) in WAL mode. Lock
 
 ### GitHub tools return "Could not auto-detect repository"
 
-1. Verify `GITHUB_REPO_PATH` is set in `mcp_config.json` env
+1. Verify `PROJECT_REGISTRY` is configured in `mcp_config.json` env with the correct repo path
 2. Verify the path points to a directory with a `.git` folder and a valid `origin` remote
 3. Alternatively, pass `owner` and `repo` parameters explicitly in tool calls
 

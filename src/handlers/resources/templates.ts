@@ -271,7 +271,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 if (!context.github) {
-                    return 'graph LR\n  NoGitHub["GitHub integration not available \u2014 set GITHUB_TOKEN and GITHUB_REPO_PATH"]'
+                    return 'graph LR\n  NoGitHub["GitHub integration not available \u2014 set GITHUB_TOKEN and configure PROJECT_REGISTRY"]'
                 }
 
                 const repoInfo = await context.github.getRepoInfo()
@@ -279,7 +279,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 const repo = repoInfo.repo ?? undefined
 
                 if (!owner) {
-                    return 'graph LR\n  NoOwner["Repository owner not detected \u2014 set GITHUB_REPO_PATH"]'
+                    return 'graph LR\n  NoOwner["Repository owner not detected \u2014 configure PROJECT_REGISTRY"]'
                 }
 
                 const board = await context.github.getProjectKanban(owner, projectNumber, repo)
