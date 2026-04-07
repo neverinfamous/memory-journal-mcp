@@ -6,9 +6,9 @@ Test search, semantic search, date range, analytics, and vector index operations
 
 **Prerequisites:**
 
+- **Use codemode directly for all tests, NOT the terminal or scripts!**
 - Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
-- **Use codemode directly for all tests, NOT the terminal or scripts!**
 
 **Workflow after testing:**
 
