@@ -2,7 +2,7 @@
 
 # memory-journal-mcp
 
-## ESSENTIAL SESSION START!\*\*
+## ESSENTIAL SESSION START!
 
 1. You **MUST** read the `memory://briefing/{repo_name}` at the start of each chat!
 2. Use the standard MCP `read_resource` tool for this (do NOT use Code Mode/execute_code).

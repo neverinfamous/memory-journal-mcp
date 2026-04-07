@@ -1,4 +1,4 @@
-# Token Consumption during Direct Tool Testing of postgres-mcp
+# Token Consumption during Direct Tool Testing of memory-journal-mcp
 
 Last tested: April 7th, 2026
 

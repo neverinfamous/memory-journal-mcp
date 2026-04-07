@@ -12,7 +12,7 @@ async function runTests() {
     let tokenEstimate = 0
     console.log('--- Starting Relationships Tool Group Tests ---')
 
-    const tools = await getTools(db, null, vectorManager, github, {})
+    await getTools(db, null, vectorManager, github, {})
 
     async function testCall(name: string, args: any) {
         try {

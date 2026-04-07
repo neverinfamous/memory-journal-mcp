@@ -43,7 +43,9 @@ function updateBadges() {
         const filePath = path.join(ROOT_DIR, file)
         if (fs.existsSync(filePath)) {
             let content = fs.readFileSync(filePath, 'utf-8')
+            regex.lastIndex = 0
             if (regex.test(content)) {
+                regex.lastIndex = 0
                 content = content.replace(regex, newBadge)
                 fs.writeFileSync(filePath, content, 'utf-8')
                 console.log(`Updated coverage badge in ${file} to ${linesPct}%`)

@@ -11,7 +11,7 @@ Last tested: April 7th, 2026
 | `test-cm-orchestration.md`      | ~243                    |       |
 | `test-cm-readonly.md`           | ~983                    |       |
 | `test-cm-relationships.md`      | ~199                    |       |
-| `test-cm-sanbox-basics.md`      | ~504                    |       |
+| `test-cm-sandbox-basics.md`     | ~504                    |       |
 | `test-cm-search.md`             | ~388                    |       |
 | `test-cm-security.md`           | ~1,071                  |       |
 | `test-cm-team-admin.md`         | ~256                    |       |

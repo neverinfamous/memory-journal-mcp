@@ -1,4 +1,4 @@
-import { getTools, callTool } from '../../src/handlers/tools/index.ts'
+import { callTool } from '../../src/handlers/tools/index.ts'
 import { DatabaseAdapterFactory } from '../../src/database/adapter-factory.ts'
 import { VectorSearchManager } from '../../src/vector/vector-search-manager.ts'
 import { GitHubIntegration } from '../../src/github/github-integration/index.ts'
