@@ -1,6 +1,6 @@
 # Unreleased Changes
 
-## [Unreleased]
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v6.3.0...HEAD)
 
 ### Added
 

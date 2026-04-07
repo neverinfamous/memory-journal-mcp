@@ -481,6 +481,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `GITHUB_TOKEN`       | GitHub personal access token for API access                             |
 
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
+| `GITHUB_REPO_PATH` | Path to a git repository for auto-detecting owner/repo |
 | `PROJECT_REGISTRY` | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing |
 | `AUTO_REBUILD_INDEX` | Set to `true` to rebuild vector index on server startup |
 | `MCP_HOST` | Server bind host (`0.0.0.0` for containers, default: `localhost`) |
@@ -517,6 +518,8 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `COMMANDER_BRANCH_PREFIX` | Branch naming prefix for PRs (default: `fix`) |
 | `AUDIT_LOG_PATH` | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable audit logging. |
 | `AUDIT_REDACT` | Set to `true` to omit tool arguments from audit log entries for privacy (default: `false`) |
+| `AUDIT_READS` | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`) |
+| `AUDIT_LOG_MAX_SIZE` | Maximum audit log file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`) |
 | `MCP_METRICS_ENABLED` | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`) |
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
