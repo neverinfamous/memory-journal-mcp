@@ -5,8 +5,8 @@ Last tested: April 6th, 2026
 | Test Document                      | Approximate Token Usage | Notes |
 | :--------------------------------- | :---------------------- | :---- |
 | `test-core-admin.md`               | ~7,704                  |       |
-| `test-core-crud.md`                | ~                       |       |
-| `test-core-infra.md`               | ~                       |       |
+| `test-core-crud.md`                | ~3,703                  |       |
+| `test-core-infra.md`               | ~180                    |       |
 | `test-core-relationships.md`       | ~                       |       |
 | `test-core-scheduler.md`           | ~                       |       |
 | `test-core-search.md`              | ~                       |       |
