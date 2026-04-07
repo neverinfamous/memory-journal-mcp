@@ -5,7 +5,18 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.0.0...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.0.1...HEAD)
+
+## [7.0.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.0.1) - 2026-04-07
+
+### Added
+
+- `.github/workflows/hol-skill-validate.yml`: HOL skill validation CI gate — validates `skills/github-commander` package structure on push/PR via `hashgraph-online/skill-publish` in validate-only mode (no secrets, no publishing). Scoped to skill directory changes via `paths:` filter. Incorporates PR [#360](https://github.com/neverinfamous/memory-journal-mcp/pull/360) with corrections: standard checkout SHA, `main`-only trigger, path filtering.
+
+### Fixed
+
+- `DOCKER_README.md`: repaired broken env var table (two fragments with missing header separator merged into one); removed deprecated `GITHUB_REPO_PATH` row (removed in v7.0.0)
+- Core/Docs: purged stale references to `GITHUB_REPO_PATH` across codebase and template error strings, replacing them with `PROJECT_REGISTRY` guidance
 
 ## [7.0.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.0.0) - 2026-04-07
 

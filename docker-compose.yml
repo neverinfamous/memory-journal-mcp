@@ -9,7 +9,7 @@ services:
       - DB_PATH=/app/data/memory_journal.db
       # Optional: GitHub integration
       # - GITHUB_TOKEN=<your-github-token>
-      # - GITHUB_REPO_PATH=/app/repo
+      # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
       # Optional: CORS origin (default: *)
       # - MCP_CORS_ORIGIN=http://localhost:3000
     read_only: true
@@ -41,7 +41,7 @@ services:
       # - MCP_AUTH_TOKEN=your_secret_token_here
       # Optional: GitHub integration
       # - GITHUB_TOKEN=<your-github-token>
-      # - GITHUB_REPO_PATH=/app/repo
+      # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
       # Optional: CORS origin (default: *)
       # - MCP_CORS_ORIGIN=http://localhost:3000
     read_only: true

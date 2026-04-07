@@ -109,7 +109,7 @@ GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
 # Optional
 GITHUB_ORG_TOKEN=ghp_...        # For organization projects
-GITHUB_REPO_PATH=/path/to/repo  # For auto-detecting owner/repo
+PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
 MCP_CORS_ORIGIN=*               # CORS origin (default: *)
 MCP_HOST=localhost               # Server bind host

@@ -215,6 +215,7 @@ Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
 src/
 ├── cli.ts                      # CLI entry point (Commander)
 ├── index.ts                    # Library entry point
+├── audit/                      # JSONL audit log, audit resource
 ├── auth/                       # OAuth 2.1 authentication
 ├── codemode/                   # Sandboxed JS execution engine
 ├── constants/                  # Server instructions (source + generated)
@@ -227,8 +228,9 @@ src/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
 │   ├── tools/                  # 61 tool handlers (10 groups)
-│   ├── resources/              # 33 resource handlers
+│   ├── resources/              # 38 resource handlers
 │   └── prompts/                # 17 prompt handlers
+├── observability/              # Metrics interceptor, token estimator
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup
 │   ├── registration.ts         # Tool/resource/prompt registration

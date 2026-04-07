@@ -12,7 +12,7 @@ Copy the relevant variables to your MCP server configuration.
       "command": "memory-journal-mcp",
       "env": {
         "GITHUB_TOKEN": "ghp_your_token",
-        "GITHUB_REPO_PATH": "/path/to/your/repo"
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/your/repo\",\"project_number\":1}}"
       }
     }
   }
