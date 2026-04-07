@@ -9,7 +9,7 @@ Test the Code Mode security constraints: input validation, blocked patterns, run
 - Phase 16 (Sandbox Basics) must pass first.
 - Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
-- Use the MCP server directly for all tests — not the terminal or scripts.
+- Use codemode directly for all tests — not the terminal or scripts.
 
 **Workflow after testing:**
 

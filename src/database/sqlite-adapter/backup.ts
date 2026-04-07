@@ -144,12 +144,9 @@ export class BackupManager {
         // Native better-sqlite3 connection
         await fs.promises.copyFile(backupPath, this.ctx.getDbPath())
 
-        // Re-initialize the native connection via dynamic import to avoid static dependency
-        const DatabaseAdapter = (await import('better-sqlite3').then((m) => m.default)) as new (
-            path: string
-        ) => unknown
-        const newDb = new DatabaseAdapter(this.ctx.getDbPath())
-        this.ctx.setDbAndInitialized(newDb)
+        // Re-initialize using the connection's standard initialize method
+        // This ensures extensions like sqlite-vec are properly loaded
+        await this.ctx.initialize()
 
         const newCountResult = this.ctx.exec(
             'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'

@@ -53,8 +53,8 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
         expect(Array.isArray(response.content)).toBe(true)
         const text = (response.content as Array<{ text: string }>)[0]!.text
         console.log('GitHub Degrade Response:', text)
-        // Check for presence of auto-detect mention
-        expect(text).toContain('Could not auto-detect')
+        // Check for presence of requiresUserInput flag due to missing token / auto-detect failure
+        expect(text).toContain('"requiresUserInput":true')
     })
 
     test('get_github_context degrades gracefully to returning missing state', async () => {

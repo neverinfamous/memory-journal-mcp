@@ -51,7 +51,8 @@
 - Fixed `VectorSearchManager` caching a closed database connection, preventing `The database connection is not open` errors during index rebuilds after a backup is restored.
 - Refactored `VectorSearchManager` unit tests to correctly mock the constructor injection `IDatabaseAdapter` instead of incorrectly bypassing the `db` getter with `Object.assign()`.
 - Updated base URI template parsing logic for `@modelcontextprotocol/sdk` to correctly process path segments containing slashes by switching `{repo}` templates to `{+repo}`.
-
+- Fixed `INTERNAL_ERROR: no such module: vec0` when executing `rebuild_vector_index` after a backup is restored by calling `ctx.initialize()` instead of raw driver creation.
+- Aligned Playwright E2E GitHub degradation tests with recent structural error schema (checking for `requiresUserInput: true` instead of literal auto-detect string).
 ### Security
 
 - Pinned `minimatch` to `10.2.5` to combat transitive vulnerabilities.

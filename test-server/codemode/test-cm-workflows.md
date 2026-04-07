@@ -9,7 +9,7 @@ Test multi-step workflow execution: read-only pipelines, conditional branching, 
 - Pass 1 and 2 must have completed successfully.
 - Code Mode is included in all tool filtering presets by default.
 - Confirm MCP server instructions were auto-received before starting.
-- Use the MCP server directly for all tests — not the terminal or scripts.
+- Use codemode directly for all tests — not the terminal or scripts.
 
 **Workflow after testing:**
 
@@ -18,7 +18,7 @@ Test multi-step workflow execution: read-only pipelines, conditional branching, 
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   * **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 > [!IMPORTANT]
 > **Test Session Prerequisites**

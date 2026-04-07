@@ -8,7 +8,7 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 - Phase 27.1–27.3 (Team CRUD & Search) must have completed successfully.
 - Confirm MCP server instructions were auto-received before starting.
-- Use the MCP server directly for all tests — not the terminal or scripts.
+- Use codemode directly for all tests — not the terminal or scripts.
 
 **Workflow after testing:**
 
