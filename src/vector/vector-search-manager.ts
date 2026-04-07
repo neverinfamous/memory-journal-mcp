@@ -44,7 +44,13 @@ export class VectorSearchManager {
     private embedder:
         | ((text: string, options?: Record<string, unknown>) => Promise<unknown>)
         | null = null
-    private db: BetterSqlite3Database | null = null
+    private get db(): BetterSqlite3Database | null {
+        try {
+            return this.dbAdapter.getRawDb() as BetterSqlite3Database;
+        } catch {
+            return null;
+        }
+    }
     private readonly modelName: string
     private initialized = false
     private initializing = false
@@ -85,7 +91,6 @@ export class VectorSearchManager {
 
             // Get the raw better-sqlite3 database instance
             // sqlite-vec extension is already loaded by NativeConnectionManager
-            this.db = this.dbAdapter.getRawDb() as BetterSqlite3Database
 
             this.initialized = true
             this.initializing = false

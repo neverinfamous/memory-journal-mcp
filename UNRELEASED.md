@@ -48,6 +48,7 @@
 - Fixed `issueUrl` resolution fallback in `resolveIssueUrl` to actively fetch repository info if missing from cache.
 - Improved `Could not detect repository` hint to point multi-project users toward dynamic `{repo}` URIs.
 - Fixed relative path resolution for modularized test validation scripts.
+- Fixed `VectorSearchManager` caching a closed database connection, preventing `The database connection is not open` errors during index rebuilds after a backup is restored.
 
 ### Security
 

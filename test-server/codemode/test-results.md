@@ -8,7 +8,7 @@ Last tested: April 6th, 2026
 | `test-cm-api-discovery.md`      | ~406                    |       |
 | `test-cm-crud.md`               | ~720                    |       |
 | `test-cm-github.md`             | ~857                    |       |
-| `test-cm-orchestration.md`      | ~302                    |       |
+| `test-cm-orchestration.md`      | ~243                    |       |
 | `test-cm-readonly.md`           | ~983                    |       |
 | `test-cm-relationships.md`      | ~199                    |       |
 | `test-cm-sanbox-basics.md`      | ~504                    |       |
@@ -16,8 +16,8 @@ Last tested: April 6th, 2026
 | `test-cm-security.md`           | ~1,071                  |       |
 | `test-cm-team-admin.md`         | ~256                    |       |
 | `test-cm-team-crud.md`          | ~669                    |       |
-| `test-cm-team-vector-errors.md` | ~942                    |       |
+| `test-cm-team-vector-errors.md` | ~665                    |       |
 | `test-cm-workflows.md`          | ~295                    |       |
-| **Total Estimated Tokens**      | ~8,060                  |       |
+| **Total Estimated Tokens**      | ~                       |       |
 
 **Token counts don't include tokens used by the testing prompts themselves.**
