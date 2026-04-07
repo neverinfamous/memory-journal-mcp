@@ -27,13 +27,11 @@ flowchart LR
     end
 
     subgraph Release["Release"]
-        AR["auto-release"]
         NPM["publish-npm"]
         DP["docker-publish"]
     end
 
     subgraph Agentic["Agentic Workflows (Copilot)"]
-        DM["dependency-maintenance"]
         CHM["ci-health-monitor"]
         DDD["docs-drift-detector"]
         AM["agentics-maintenance"]
@@ -53,18 +51,14 @@ flowchart LR
     PR --> DAM
     PR --> DDD
 
-    Push -->|commit contains '[deps]'| AR
-    AR -->|creates release| NPM
     Tag --> NPM
 
     Sched --> CQL
     Sched --> SU
-    Sched --> DM
     Sched --> CHM
     Sched --> AM
 
     Manual --> SU
-    Manual --> DM
     Manual --> CHM
     Manual --> AM
 ```
@@ -93,7 +87,6 @@ flowchart LR
 
 | File                                     | Trigger                                                        | Purpose                                                                                                   |
 | ---------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [auto-release.yml](auto-release.yml)     | push to `main` with `[deps]` in commit message                 | Creates git tag + GitHub release for dependency-maintenance patch bumps                                   |
 | [publish-npm.yml](publish-npm.yml)       | release published / manual / `workflow_call` from docker-publish | Publishes to npm with version verification                                                                |
 | [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (after all security gates pass) | Multi-arch Docker build (amd64 + arm64), Docker Scout scan, manifest merge, Docker Hub description update |
 
@@ -103,7 +96,6 @@ These are AI-powered workflows using [GitHub Copilot Coding Agent](https://docs.
 
 | Prompt                                                 | Lock File                                                          | Schedule             | Purpose                                                                                            |
 | ------------------------------------------------------ | ------------------------------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------- |
-| [dependency-maintenance.md](dependency-maintenance.md) | [dependency-maintenance.lock.yml](dependency-maintenance.lock.yml) | Mon 14:00 UTC        | Batch-updates npm, Dockerfile patches, Alpine packages; validates, bumps patch version, creates PR |
 | [ci-health-monitor.md](ci-health-monitor.md)           | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml)           | Wed 14:00 UTC        | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config           |
 | [docs-drift-detector.md](docs-drift-detector.md)       | [docs-drift-detector.lock.yml](docs-drift-detector.lock.yml)       | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes                          |
 | [agentics-maintenance.yml](agentics-maintenance.yml)   | —                                                                  | Daily 00:37 UTC      | Auto-closes expired discussions, issues, and PRs created by agentic workflows                      |

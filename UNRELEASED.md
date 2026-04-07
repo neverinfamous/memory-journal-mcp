@@ -29,6 +29,10 @@
 - Expanded `suggestions.ts` pattern mapping for CodeMode exception bounding.
 - Updated dependencies (`typescript` 6.0.2, `@playwright/test` 1.59.1, `eslint` 10.2.0, etc.).
 
+### Removed
+
+- Removed experimental Copilot `dependency-maintenance` agentic workflow, `auto-release` workflow, and corresponding documentation.
+
 ### Fixed
 
 - Remedied persistent Zod and Octokit compiler diagnostic errors in the test suite to achieve 100% clean check status.

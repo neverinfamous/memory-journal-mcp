@@ -5,7 +5,7 @@
 
 ## Overview
 
-The memory-journal-mcp server currently serves as persistent memory for IDE agents. Separately, GitHub Copilot Coding Agent workflows (dependency maintenance, docs drift detection, CI health monitoring) run on the repository's CI infrastructure. These two systems operate independently — but there is a natural integration point where the agentic workflows could **write findings into the journal**, creating a persistent, searchable audit trail that IDE agents see at session start.
+The memory-journal-mcp server currently serves as persistent memory for IDE agents. Separately, GitHub Copilot Coding Agent workflows (docs drift detection, CI health monitoring) run on the repository's CI infrastructure. These two systems operate independently — but there is a natural integration point where the agentic workflows could **write findings into the journal**, creating a persistent, searchable audit trail that IDE agents see at session start.
 
 ## Current State
 
@@ -47,25 +47,7 @@ The memory-journal-mcp server currently serves as persistent memory for IDE agen
 
 ## Concrete Use Cases
 
-### 1. Dependency Update Audit Trail
-
-**Workflow**: `dependency-maintenance.md`
-**Tag**: `deps-update`
-
-After updating dependencies, the agent writes a journal entry:
-
-```javascript
-create_entry({
-  content:
-    'Updated 3 npm packages: zod 4.3.6→4.4.0, @octokit/rest 21.1→21.2, tsup 9.1→9.2. Dockerfile tar patch 7.5.11→7.5.12 (CVE-2025-XXXX). npm audit clean.',
-  entry_type: 'maintenance',
-  tags: ['deps-update', 'automated', 'npm', 'docker'],
-})
-```
-
-**IDE agent benefit**: `memory://briefing` shows recent dependency changes. The agent can `search_entries({ tags: ["deps-update"] })` to understand the dependency update cadence and any recurring issues.
-
-### 2. Documentation Drift Findings
+### 1. Documentation Drift Findings
 
 **Workflow**: `docs-drift-detector.md`
 **Tag**: `docs-drift`
@@ -84,7 +66,7 @@ create_entry({
 
 **IDE agent benefit**: Before updating docs, the agent searches `search_entries({ tags: ["docs-drift"] })` to see what patterns of drift recur — informing which sections are most fragile and need structural fixes (e.g., dynamic generation instead of hardcoded values).
 
-### 3. CI Health Findings
+### 2. CI Health Findings
 
 **Workflow**: `ci-health-monitor.md`
 **Tag**: `ci-health`
@@ -153,7 +135,7 @@ create - issue({ title: '[deps-audit] 2026-03-13', labels: ['deps-audit', 'autom
 
 ### Phase 1: Validate Concept (Option C)
 
-Use GitHub Issues as the transport. No code changes needed. The `dependency-maintenance` workflow already creates issues (fallback) and PRs. Add structured labels for filtering.
+Use GitHub Issues as the transport. No code changes needed. The workflows already create issues (fallback) and PRs. Add structured labels for filtering.
 
 ### Phase 2: Deploy HTTP Endpoint
 
