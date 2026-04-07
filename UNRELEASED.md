@@ -5,6 +5,7 @@
 ### Added
 
 - Playwright E2E observability testing for `/metrics` and `/audit` resources.
+- Verified Phase 27 Code Mode Team Vector, Insights, and Cross-Tool Errors suite (18/18 error paths structured).
 - Verified Phase 21 Code Mode Search & Semantics integration suite (16/16 tests passing).
 - Hybrid Reciprocal Rank Fusion (RRF) and heuristic query classification to `search_entries`.
 - Dynamic Vitest coverage badge generation via `scripts/update-badges.ts`.
