@@ -27,14 +27,12 @@ export class GitHubClient {
     constructor(workingDir = '.') {
         this.token = process.env['GITHUB_TOKEN']
 
-        const envRepoPath = process.env['GITHUB_REPO_PATH']
-        const effectiveDir = envRepoPath || workingDir
+        const effectiveDir = workingDir
 
         const resolvedDir = effectiveDir === '.' ? process.cwd() : effectiveDir
         logger.info('GitHub integration using directory', {
             module: 'GitHub',
             workingDir,
-            envRepoPath: envRepoPath ?? 'not set',
             effectiveDir,
             resolvedDir,
             cwd: process.cwd(),

@@ -18,6 +18,8 @@
 
 ### Changed
 
+- Deprecated and removed the legacy `GITHUB_REPO_PATH` environment variable across the entire codebase to favor `PROJECT_REGISTRY`.
+- Implemented intelligent `PROJECT_REGISTRY` fallback prioritizing the first configured registry project for static GitHub resource URIs (e.g. `memory://github/status`).
 - Transitioned `AuditLogger` from synchronous to async-buffered writes.
 - Backed `memory://audit` resource with streamlined `AuditLogger.recent()` implementation.
 - Modularized `search.ts` into granular folder-based handlers.
@@ -29,6 +31,7 @@
 
 ### Fixed
 
+- Remedied persistent Zod and Octokit compiler diagnostic errors in the test suite to achieve 100% clean check status.
 - Support for missing `entry_id` queries in `team_semantic_search`.
 - GitHub API ISO 8601 payload generation for milestones.
 - Interceptor schemas failing with `-32602` validation errors.

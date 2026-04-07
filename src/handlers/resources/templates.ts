@@ -227,7 +227,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 if (!context.github) {
                     return {
                         error: 'GitHub integration not available',
-                        hint: 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                        hint: 'Set GITHUB_TOKEN environment variable.',
                     }
                 }
 
@@ -238,7 +238,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                 if (!owner) {
                     return {
                         error: 'Could not detect repository owner',
-                        hint: 'Set GITHUB_REPO_PATH to your git repository.',
+                        hint: 'Run the MCP server from a valid git repository or configure PROJECT_REGISTRY.',
                     }
                 }
 

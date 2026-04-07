@@ -79,7 +79,7 @@ describe('GitHubIntegration', () => {
     beforeEach(() => {
         // Save and clear env to prevent real token usage
         delete process.env['GITHUB_TOKEN']
-        delete process.env['GITHUB_REPO_PATH']
+
 
         gh = new GitHubIntegration('.')
         octokit = createOctokitMock()

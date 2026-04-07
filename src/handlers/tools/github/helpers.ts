@@ -45,7 +45,7 @@ export async function resolveOwner(
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
                 suggestion:
-                    'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                    'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
             },
         }
@@ -114,7 +114,7 @@ export async function resolveOwnerRepo(
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
                 suggestion:
-                    'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                    'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
             },
         }

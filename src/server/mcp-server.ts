@@ -135,12 +135,22 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize GitHub integration
     let githubPath = '.'
-    if (options.defaultProjectNumber !== undefined && options.projectRegistry) {
-        const defaultEntry = Object.values(options.projectRegistry).find(
-            (r) => r.project_number === options.defaultProjectNumber
-        )
-        if (defaultEntry?.path) {
-            githubPath = defaultEntry.path
+    if (options.projectRegistry && Object.keys(options.projectRegistry).length > 0) {
+        if (options.defaultProjectNumber !== undefined) {
+            const defaultEntry = Object.values(options.projectRegistry).find(
+                (r) => r.project_number === options.defaultProjectNumber
+            )
+            if (defaultEntry?.path) {
+                githubPath = defaultEntry.path
+            }
+        }
+        
+        // Fallback: If no explicit default matched, use the first project in the registry
+        if (githubPath === '.') {
+            const firstEntry = Object.values(options.projectRegistry)[0]
+            if (firstEntry?.path) {
+                githubPath = firstEntry.path
+            }
         }
     }
     const github = new GitHubIntegration(githubPath)

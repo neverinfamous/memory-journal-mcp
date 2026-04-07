@@ -55,7 +55,7 @@ export async function resolveGitHubRepo(
                 error: 'GitHub integration not available',
                 hint: hasRegistry 
                     ? 'Set GITHUB_TOKEN, or assure the dynamic repo URI correctly matches a registered project.'
-                    : 'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables.',
+                    : 'Set GITHUB_TOKEN securely.',
             },
             annotations: { lastModified },
         }
@@ -72,8 +72,8 @@ export async function resolveGitHubRepo(
             data: {
                 error: 'Could not detect repository',
                 hint: hasRegistry 
-                    ? 'Set GITHUB_REPO_PATH, or use a repository-specific URI suffix (e.g., memory://github/status/{repo}) for multi-project setups.'
-                    : 'Set GITHUB_REPO_PATH to your git repository.',
+                    ? 'Use a repository-specific URI suffix (e.g., memory://github/status/{repo}) for multi-project setups, or ensure the fallback project is a valid git repository.'
+                    : 'Run the MCP server from a valid git repository or configure PROJECT_REGISTRY.',
                 ...(repoInfo.branch ? { branch: repoInfo.branch } : {}),
             },
             annotations: { lastModified },

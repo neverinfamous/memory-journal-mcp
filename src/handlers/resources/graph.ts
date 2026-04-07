@@ -110,12 +110,12 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             annotations: MEDIUM_PRIORITY,
             handler: async (_uri: string, context: ResourceContext) => {
                 if (!context.github) {
-                    return 'graph LR\n  NoGitHub["GitHub integration not available — set GITHUB_TOKEN and GITHUB_REPO_PATH"]'
+                    return 'graph LR\n  NoGitHub["GitHub integration not available — set GITHUB_TOKEN"]'
                 }
 
                 const repoInfo = await context.github.getRepoInfo()
                 if (!repoInfo.owner || !repoInfo.repo) {
-                    return 'graph LR\n  NoRepo["Repository not detected — set GITHUB_REPO_PATH in your config"]'
+                    return 'graph LR\n  NoRepo["Repository not detected — run in valid git repo or configure PROJECT_REGISTRY"]'
                 }
 
                 const workflowRuns = await context.github.getWorkflowRuns(
