@@ -15,10 +15,10 @@ Last tested: April 6th, 2026
 | `test-schemas.md`                  | ~386                    |       |
 | `test-seed.md`                     | ~6,800                  |       |
 | `test-team.md`                     | ~10,314                 |       |
-| `test-tool-group-admin.md`         | N/A                     |       |
+| `test-tool-group-admin.md`         | ~1,576                  |       |
 | `test-tool-group-backup.md`        | ~406                    |       |
 | `test-tool-group-core.md`          | ~1,642                  |       |
-| `test-tool-group-github.md`        | ~                       |       |
+| `test-tool-group-github.md`        | ~956                    |       |
 | `test-tool-group-relationships.md` | ~                       |       |
 | `test-tool-group-search.md`        | ~                       |       |
 | `test-tool-group-team-.md`         | ~                       |       |

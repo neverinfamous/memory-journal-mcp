@@ -16,6 +16,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61)                                                                | stdio         | ~5s      |
 | `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)                                                                    | stdio         | ~10s     |
 | `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
+| `test-github-auth.ts`          | Tool handler response when GITHUB_TOKEN is completely omitted (validates `requiresUserInput`)                                         | direct        | ~1s      |
 
 ## Scheduler Notes
 
@@ -28,3 +29,16 @@ node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups
 # Terminal 2: Test script
 node test-server/scripts/test-scheduler.mjs
 ```
+
+## TypeScript Scripts
+
+To run individual `.ts` test scripts (like `test-github-auth.ts`), use `tsx`:
+
+```powershell
+npx tsx test-server/scripts/test-github-auth.ts
+```
+
+**Expected Results from test-github-auth.ts:**
+
+- `API Available? false`: This confirms that our simulated environment (which purposefully unsets the `GITHUB_TOKEN`) correctly signals to the MCP server that the GitHub API lacks the necessary authentication to operate.
+- `"requiresUserInput": true`: This proves the tool handler intercepts the call using our new availability check and safely rejects it with a fully articulated, structured JSON error (rather than a raw stack trace or `-32602` SDK error).

@@ -17,7 +17,6 @@
 
 ### Specific Domain Checks
 
-- **GitHub Down/No token**: Simulate running github tools natively when API is unavailable or token fails. Verify structured `{ error, requiresUserInput }` and not raw throws.
 - **OutputSchema Compliance**: ⚠️ For `move_kanban_item(Bad Status)`, the error response returns `availableStatuses`. Verify this extra metadata doesn't cause a `-32602` OutputSchema validation error when `strict` is active.
 - **OutputSchema Compliance**: `get_repo_insights(sections: "traffic")` - verify partial failures do not leak unrecognized fields.
 

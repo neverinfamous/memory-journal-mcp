@@ -11,13 +11,13 @@ import { GitHubIntegration } from '../../../github/github-integration/index.js'
 export function resolveProjectNumber(
     context: ToolContext,
     repo: string | undefined,
-    explicitProjectNumber?: number
+    explicitProjectNumber?: number | null
 ): number | undefined {
-    if (explicitProjectNumber !== undefined) return explicitProjectNumber
-    if (repo && context.config?.projectRegistry?.[repo]?.project_number !== undefined) {
+    if (explicitProjectNumber != null) return explicitProjectNumber
+    if (repo && context.config?.projectRegistry?.[repo]?.project_number != null) {
         return context.config.projectRegistry[repo].project_number
     }
-    return context.config?.defaultProjectNumber
+    return context.config?.defaultProjectNumber ?? undefined
 }
 
 /**
@@ -36,7 +36,7 @@ export async function resolveOwner(
       }
     | { error: true; response: Record<string, unknown> }
 > {
-    if (!context.github) {
+    if (!context.github?.isApiAvailable()) {
         return {
             error: true,
             response: {
@@ -47,6 +47,7 @@ export async function resolveOwner(
                 suggestion:
                     'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
+                requiresUserInput: true,
             },
         }
     }
@@ -105,7 +106,7 @@ export async function resolveOwnerRepo(
         toolGithub = context.github
     }
 
-    if (!toolGithub) {
+    if (!toolGithub?.isApiAvailable()) {
         return {
             error: true,
             response: {
@@ -116,6 +117,7 @@ export async function resolveOwnerRepo(
                 suggestion:
                     'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
+                requiresUserInput: true,
             },
         }
     }
