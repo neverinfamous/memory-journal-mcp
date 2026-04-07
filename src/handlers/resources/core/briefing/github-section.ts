@@ -127,7 +127,13 @@ async function fetchCiStatus(
         const runs = await github.getWorkflowRuns(owner, repo, runLimit)
         if (runs.length === 0) return { status: 'unknown' }
 
-        const latestRun = runs[0]
+        const primaryRun = runs.find(
+            (r) =>
+                r.status !== 'completed' ||
+                ['success', 'failure', 'cancelled'].includes(r.conclusion ?? '')
+        ) ?? runs[0]
+
+        const latestRun = primaryRun
         let status: CiResult['status']
         if (!latestRun) {
             status = 'unknown'

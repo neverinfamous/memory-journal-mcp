@@ -2,6 +2,8 @@
 
 **Scope:** 20 team tools + 2 team resources — happy paths, core error paths, and feature verification for all team collaboration features.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** Seed data from `test-seed.md` must be present (S11, S12 for cross-DB; S15–S17 for team cross-project insights). `TEAM_DB_PATH` configured. MCP server instructions auto-injected.
 
 **Workflow after testing:**

@@ -2,6 +2,8 @@
 
 **Scope:** All 28 resources — static resources, template resources (happy path + error paths).
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** Seed data from `test-seed.md` must be present. Core tests should have passed. MCP server instructions auto-injected.
 
 **Workflow after testing:**

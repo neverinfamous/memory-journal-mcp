@@ -2,6 +2,8 @@
 
 **Scope:** Verify all 60 outputSchema tools return `structuredContent` (not raw text). `mj_execute_code` intentionally excluded — its dynamic return type produces a bare `{}` JSON Schema that crashes clients processing `structuredContent`.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** Seed data from `test-seed.md` must be present. Core tests should have passed. MCP server instructions auto-injected.
 
 **Workflow after testing:**

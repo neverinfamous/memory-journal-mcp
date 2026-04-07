@@ -1,5 +1,7 @@
 # Test memory-journal-mcp — GitHub Tool Group
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Scope:** Deterministic verification of the GitHub suite against the strict error handling matrix.
 
 ## 1. Structured Error Matrix

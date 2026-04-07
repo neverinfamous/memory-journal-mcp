@@ -188,9 +188,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                 'Merge one tag into another to consolidate similar tags (e.g., merge "phase-2" into "phase2"). The source tag is deleted after merge.',
             group: 'admin',
             inputSchema: z.object({
-                source_tag: z.string().optional().describe('Tag to merge from (will be deleted)'),
+                source_tag: z
+                    .union([z.string(), z.number()])
+                    .optional()
+                    .describe('Tag to merge from (will be deleted)'),
                 target_tag: z
-                    .string()
+                    .union([z.string(), z.number()])
                     .optional()
                     .describe('Tag to merge into (will be created if not exists)'),
             }),

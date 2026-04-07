@@ -15,7 +15,6 @@
 - Observability MCP resources (`memory://audit`, `memory://metrics/*`).
 - Exposed `searchMode` and fusion scoring on `EntriesListOutputSchema`.
 - Categorized `.env.example` and `mcp-config-example.json` placeholders.
-- Verified and certified all 20 Team Collaboration tools and resources, achieving 100% pass rate in Code Mode tests.
 
 ### Changed
 

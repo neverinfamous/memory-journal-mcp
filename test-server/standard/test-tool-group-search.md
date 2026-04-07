@@ -2,6 +2,8 @@
 
 **Scope:** Deterministic verification of the Search tool group (`search_entries`, `search_by_date_range`, `semantic_search`) against the strict error handling matrix.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** 
 - Seed data active.
 - Vector store initialized.

@@ -1,5 +1,7 @@
 # Test memory-journal-mcp — Admin Tool Group
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Scope:** Deterministic verification of Admin operations (`update_entry`, `delete_entry`, `merge_tags`, `list_tags`, `add_to_vector_index`, `rebuild_vector_index`) against strict error handling constraints.
 
 ## 1. Structured Error Matrix

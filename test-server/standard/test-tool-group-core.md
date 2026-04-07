@@ -2,6 +2,8 @@
 
 **Scope:** Deterministic verification of the Core tool group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) against the strict error handling matrix.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** 
 - Seed data from `test-seed.md` must be active.
 - Server running via Code Mode or direct MCP client.

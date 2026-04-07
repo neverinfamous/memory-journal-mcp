@@ -1,5 +1,7 @@
 # Test memory-journal-mcp — Backup & Export Tool Group
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Scope:** Deterministic verification of Backup/Export tools (`backup_journal`, `restore_backup`, `export_entries`, `cleanup_backups`) against the strict error handling constraints.
 
 ## 1. Structured Error Matrix

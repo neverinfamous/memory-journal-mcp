@@ -2,6 +2,8 @@
 
 **Scope:** Semantic/vector search, vector index management, statistics analytics, and cross-project insights.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** Seed data from `test-seed.md` must be present (vector index rebuilt). MCP server instructions auto-injected.
 
 **Workflow after testing:**

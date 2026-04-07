@@ -1,5 +1,7 @@
 # Test memory-journal-mcp — Team Tool Group
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Scope:** Deterministic verification of Team tools (`team_create_entry`, `team_search`, etc.) against strict error handling constraints.
 
 ## 1. Structured Error Matrix

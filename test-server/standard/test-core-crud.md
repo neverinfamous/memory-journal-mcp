@@ -2,6 +2,8 @@
 
 **Scope:** Create, read, update, and delete entry operations (24 core tools — CRUD subset).
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** Seed data from `test-seed.md` must be present. MCP server instructions auto-injected.
 
 **Workflow after testing:**

@@ -2,6 +2,8 @@
 
 **Scope:** HTTP/SSE transport scheduler — backup, vacuum, and vector index rebuild jobs.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** Project must be built (`npm run build`). MCP server instructions auto-injected.
 
 **Workflow after testing:**

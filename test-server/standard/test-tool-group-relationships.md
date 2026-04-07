@@ -2,6 +2,8 @@
 
 **Scope:** Deterministic verification of the Relationships tool group (`link_entries`, `visualize_relationships`, `get_related_entries`) against the strict error handling matrix.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** 
 - Seed data active.
 

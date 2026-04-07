@@ -2,6 +2,8 @@
 
 **Scope:** 16 GitHub tools — read-only tools, issue lifecycle, Kanban, milestones, repository insights, Copilot reviews, and test cleanup.
 
+**Execution Strategy:** The agent is to use direct MCP tools whenever possible rather than Code Mode or scripts. Code Mode is preferred to scripts.
+
 **Prerequisites:** Seed data from `test-seed.md` must be present. Core and schema tests should have passed. MCP server instructions auto-injected. Use https://github.com/users/neverinfamous/projects/5 for project/Kanban testing.
 
 **Workflow after testing:**
