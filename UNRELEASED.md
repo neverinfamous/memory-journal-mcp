@@ -42,6 +42,7 @@
 - Markdown rendering issues in agent instructions.
 - Prioritization of dynamic briefing resolution over server instructions.
 - `callTool()` progress-token path bypassing interceptors.
+- Fixed `issueUrl` resolution fallback in `resolveIssueUrl` to actively fetch repository info if missing from cache.
 
 ### Security
 

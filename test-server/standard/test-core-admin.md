@@ -9,9 +9,9 @@
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
 2. Implement, update `UNRELEASED.md`, commit without push.
 3. User verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
+4. Re-test fixes with **direct MCP calls**, not codemode.
 5. Brief final summary.
-   * **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 ---
 
