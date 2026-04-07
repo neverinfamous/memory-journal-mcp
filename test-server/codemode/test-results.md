@@ -18,6 +18,6 @@ Last tested: April 6th, 2026
 | `test-cm-team-crud.md`          | ~669                    |       |
 | `test-cm-team-vector-errors.md` | ~593                    |       |
 | `test-cm-workflows.md`          | ~295                    |       |
-| **Total Estimated Tokens**      | ~                       |       |
+| **Total Estimated Tokens**      | ~7,314                  |       |
 
 **Token counts don't include tokens used by the testing prompts themselves.**

@@ -21,6 +21,6 @@ Last tested: April 6th, 2026
 | `test-tool-group-github.md`  | ~4,992                  |       |
 | `test-tool-group-search.md`  | ~696,000                |       |
 | `test-tool-group-team.md`    | ~2,300                  |       |
-| **Total Estimated Tokens**   | ~730,702                |       |
+| **Total Estimated Tokens**   | ~747,669                |       |
 
 **Token counts don't include tokens used by the testing prompts themselves.**
