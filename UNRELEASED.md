@@ -43,6 +43,8 @@
 - Prioritization of dynamic briefing resolution over server instructions.
 - `callTool()` progress-token path bypassing interceptors.
 - Fixed `issueUrl` resolution fallback in `resolveIssueUrl` to actively fetch repository info if missing from cache.
+- Improved `Could not detect repository` hint to point multi-project users toward dynamic `{repo}` URIs.
+- Fixed relative path resolution for modularized test validation scripts.
 
 ### Security
 

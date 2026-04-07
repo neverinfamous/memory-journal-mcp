@@ -21,7 +21,7 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const PROJECT_DIR = resolve(__dirname, '..')
+const PROJECT_DIR = resolve(__dirname, '../..')
 
 // Section markers — substrings we check for presence/absence in instructions
 const SECTIONS = {
