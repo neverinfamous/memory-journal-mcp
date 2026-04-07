@@ -46,6 +46,9 @@
 | Date range + project  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", project_number: 5)`      | Only project #5 entries in date range                                                                                                                                                         |
 | Inverted date range   | `search_by_date_range(start_date: "2026-12-31", end_date: "2026-01-01")`                         | Returns `{ success: false, error: "Invalid date range: start_date (...) is after end_date (...)", code: "VALIDATION_ERROR", suggestion: "Ensure start_date is before or equal to end_date" }` |
 
+> [!TIP]
+> **Token Conservation in Code Mode:** When testing search across dozens of queries via `mj_execute_code`, do NOT append the full `res` objects to your results array. Map responses to `{ success: true, count: res.entries?.length || 0 }` to prevent returning massive JSON payloads (megabytes in size) that artificially inflate `_meta.tokenEstimate`.
+
 > [!NOTE]
 > **Cross-DB Search Behavior:** When a team DB is present, per-DB queries fetch `limit × 2` (capped at 500) to prevent BM25 ranking in one DB from silently dropping entries before the cross-DB merge. The user's requested `limit` is applied after merging.
 >

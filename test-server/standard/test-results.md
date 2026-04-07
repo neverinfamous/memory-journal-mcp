@@ -9,7 +9,7 @@ Last tested: April 6th, 2026
 | `test-core-infra.md`               | ~270                    |       |
 | `test-core-relationships.md`       | ~1,554                  |       |
 | `test-core-scheduler.md`           | N/A                     |       |
-| `test-core-search.md`              | ~                       |       |
+| `test-core-search.md`              | ~7,500                  |       |
 | `test-core-semantic.md`            | ~                       |       |
 | `test-github.md`                   | ~                       |       |
 | `test-resources.md`                | ~                       |       |
