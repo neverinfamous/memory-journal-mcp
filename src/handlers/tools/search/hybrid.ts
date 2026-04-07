@@ -74,6 +74,10 @@ export async function hybridSearch(
         prNumber?: number
         prStatus?: string
         workflowRunId?: number
+        tags?: string[]
+        entryType?: string
+        startDate?: string
+        endDate?: string
     }
 ): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number> }> {
     const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
@@ -90,6 +94,10 @@ export async function hybridSearch(
                 prNumber: options.prNumber,
                 prStatus: options.prStatus,
                 workflowRunId: options.workflowRunId,
+                tags: options.tags,
+                entryType: options.entryType as import('../../../types/index.js').EntryType,
+                startDate: options.startDate,
+                endDate: options.endDate,
             })
         ),
         // Semantic search (returns [] if vectorManager is unavailable)

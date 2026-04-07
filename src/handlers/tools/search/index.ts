@@ -48,6 +48,10 @@ const SearchEntriesSchema = z.object({
     pr_number: z.number().optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
     workflow_run_id: z.number().optional(),
+    tags: z.array(z.string()).optional(),
+    entry_type: z.enum(ENTRY_TYPES).optional(),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -67,6 +71,10 @@ const SearchEntriesSchemaMcp = z.object({
     pr_number: relaxedNumber().optional(),
     pr_status: z.string().optional(),
     workflow_run_id: relaxedNumber().optional(),
+    tags: z.array(z.string()).optional(),
+    entry_type: z.string().optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -215,7 +223,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.pr_number !== undefined ||
                         input.pr_status !== undefined ||
                         input.workflow_run_id !== undefined ||
-                        input.is_personal !== undefined
+                        input.is_personal !== undefined ||
+                        input.tags !== undefined ||
+                        input.entry_type !== undefined ||
+                        input.start_date !== undefined ||
+                        input.end_date !== undefined
 
                     const effectiveMode = !query && !hasFilters ? 'fts' : resolvedMode
 
@@ -227,6 +239,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         prNumber: input.pr_number,
                         prStatus: input.pr_status,
                         workflowRunId: input.workflow_run_id,
+                        tags: input.tags,
+                        entryType: input.entry_type,
+                        startDate: input.start_date,
+                        endDate: input.end_date,
                     }
 
                     // Route to the appropriate search strategy

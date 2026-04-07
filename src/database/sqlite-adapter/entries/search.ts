@@ -49,6 +49,10 @@ export function searchEntries(
         prNumber?: number
         prStatus?: string
         workflowRunId?: number
+        tags?: string[]
+        entryType?: EntryType
+        startDate?: string
+        endDate?: string
     }
 ): JournalEntry[] {
     const { db, tagsMgr } = context
@@ -86,6 +90,10 @@ function buildSearchQuery(
               prNumber?: number
               prStatus?: string
               workflowRunId?: number
+              tags?: string[]
+              entryType?: EntryType
+              startDate?: string
+              endDate?: string
           }
         | undefined,
     useFts: boolean
@@ -103,6 +111,13 @@ function buildSearchQuery(
             FROM memory_journal e
         `
     }
+    if (options?.tags && options.tags.length > 0) {
+        query += `
+            JOIN entry_tags et ON e.id = et.entry_id
+            JOIN tags t ON et.tag_id = t.id
+        `
+    }
+
     const params: unknown[] = []
     const conditions: string[] = ['e.deleted_at IS NULL']
 
@@ -144,6 +159,31 @@ function buildSearchQuery(
     if (options?.workflowRunId !== undefined) {
         conditions.push(`e.workflow_run_id = ?`)
         params.push(options.workflowRunId)
+    }
+
+    if (options?.tags && options.tags.length > 0) {
+        const placeholders = options.tags.map(() => '?').join(',')
+        conditions.push(`t.name IN (${placeholders})`)
+        params.push(...options.tags)
+    }
+
+    if (options?.entryType !== undefined) {
+        conditions.push(`e.entry_type = ?`)
+        params.push(options.entryType)
+    }
+
+    if (options?.startDate) {
+        let start = options.startDate
+        if (!start.includes('T')) start += 'T00:00:00.000Z'
+        conditions.push(`e.timestamp >= ?`)
+        params.push(start)
+    }
+
+    if (options?.endDate) {
+        let end = options.endDate
+        if (!end.includes('T')) end += 'T23:59:59.999Z'
+        conditions.push(`e.timestamp <= ?`)
+        params.push(end)
     }
 
     if (conditions.length > 0) {

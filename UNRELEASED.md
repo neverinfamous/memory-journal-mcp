@@ -57,6 +57,7 @@
 - Base URI template parsing logic inside `@modelcontextprotocol/sdk` improperly processing slashes by converting `{repo}` to `{+repo}`.
 - Silent database synchronization failure by correctly querying the `fts_content_docsize` shadow table to detect missing FTS5 documents.
 - Test suite parameter injection bugs in `search_entries` verification, unlocking stable 97%+ target line coverage.
+- Omitted metadata filters (`tags`, `entry_type`, `start_date`, `end_date`) from `search_entries` FTS and Hybrid pipelines.
 
 ### Security
 

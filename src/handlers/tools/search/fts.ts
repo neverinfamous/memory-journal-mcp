@@ -23,6 +23,10 @@ export function ftsSearch(
         prNumber?: number
         prStatus?: string
         workflowRunId?: number
+        tags?: string[]
+        entryType?: import('../../../types/index.js').EntryType
+        startDate?: string
+        endDate?: string
     }
 ): { entries: EntryWithSource[]; count: number } {
     const hasFilters =
@@ -31,7 +35,11 @@ export function ftsSearch(
         options.prNumber !== undefined ||
         options.prStatus !== undefined ||
         options.workflowRunId !== undefined ||
-        options.isPersonal !== undefined
+        options.isPersonal !== undefined ||
+        options.tags !== undefined ||
+        options.entryType !== undefined ||
+        options.startDate !== undefined ||
+        options.endDate !== undefined
 
     // When merging across DBs, fetch more per-DB so BM25 ranking
     // in one DB doesn't silently drop entries before the merge.
@@ -49,6 +57,10 @@ export function ftsSearch(
             prNumber: options.prNumber,
             prStatus: options.prStatus,
             workflowRunId: options.workflowRunId,
+            tags: options.tags,
+            entryType: options.entryType,
+            startDate: options.startDate,
+            endDate: options.endDate,
         })
     }
 
@@ -66,6 +78,10 @@ export function ftsSearch(
                 prNumber: options.prNumber,
                 prStatus: options.prStatus,
                 workflowRunId: options.workflowRunId,
+                tags: options.tags,
+                entryType: options.entryType,
+                startDate: options.startDate,
+                endDate: options.endDate,
             })
         }
         const merged = mergeAndDedup(
