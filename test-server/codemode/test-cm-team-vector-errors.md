@@ -93,7 +93,7 @@ return {
 > Verify that tool errors propagate as structured handler errors through the Code Mode API bridge — not as raw MCP errors or unhandled exceptions.
 
 ```javascript
-// Test code — batch error path testing:
+// Test code — batch error path testing (Execute with mj_execute_code repo parameter: 'memory-journal-mcp'):
 const errors = {}
 
 // Core errors
