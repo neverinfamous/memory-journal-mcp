@@ -6,6 +6,7 @@
 
 - Playwright E2E observability testing for `/metrics` and `/audit` resources.
 - Hybrid Reciprocal Rank Fusion (RRF) and heuristic query classification to `search_entries`.
+- Dynamic Vitest coverage badge generation via `scripts/update-badges.ts`.
 - Direct `entry_id` bypass and metadata filters to `semantic_search`.
 - Token estimation and `_meta.tokenEstimate` injection for context awareness.
 - Async JSONL `AuditLogger` with rotating archives, configurable redaction, and `stderr` support.
