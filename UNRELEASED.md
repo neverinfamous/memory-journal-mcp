@@ -20,6 +20,7 @@
 - Restructured `test-errors.md` into domain checklists.
 - Expanded CodeMode exception bounding in `suggestions.ts`.
 - Updated dependencies including `typescript` 6.0.2, `@playwright/test` 1.59.1, and `eslint` 10.2.0.
+- **Dependency Updates**: Updated 11 packages including `vitest` and `@vitest/coverage-v8` to `4.1.3`.
 
 ### Removed
 
