@@ -691,9 +691,9 @@ flowchart TB
 
 Memory Journal is designed for extremely low overhead during AI task execution. We include a `vitest bench` suite to maintain these baseline guarantees:
 
-- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~13x faster than retrieving 50 recent entries.
-- **Vector Search Engine**: Both search (~220 ops/sec) and indexing (~1600+ ops/sec) are high-throughput via `sqlite-vec` with SQL-native KNN queries.
-- **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800x faster than `get_recent_entries`). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
+- **Database Reads**: Operations execute in fractions of a millisecond. `calculateImportance` is ~13-14x faster than retrieving 50 recent entries.
+- **Vector Search Engine**: Both search (~140-220 ops/sec) and indexing (~1600-1900+ ops/sec) are high-throughput via `sqlite-vec` with SQL-native KNN queries.
+- **Core MCP Routines**: `getTools` uses cached O(1) dispatch (~4800-7000x faster than `get_recent_entries`). `create_entry` and `search_entries` execute through the full MCP layer with sub-millisecond overhead.
 
 To run the benchmarking suite locally:
 
