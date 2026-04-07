@@ -238,15 +238,13 @@ Restart Cursor or your MCP client and start journaling!
 
 The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
-| Environment Variable | Description                                                             |
-| -------------------- | ----------------------------------------------------------------------- |
-| `DB_PATH`            | Database file location (CLI: `--db`; default: `./memory_journal.db`)    |
-| `TEAM_DB_PATH`       | Team database file location (CLI: `--team-db`)                          |
-| `TEAM_AUTHOR`        | Override author name for team entries (default: `git config user.name`) |
-| `GITHUB_TOKEN`       | GitHub personal access token for API access                             |
-
+| Environment Variable | Description |
+| --- | --- |
+| `DB_PATH` | Database file location (CLI: `--db`; default: `./memory_journal.db`) |
+| `TEAM_DB_PATH` | Team database file location (CLI: `--team-db`) |
+| `TEAM_AUTHOR` | Override author name for team entries (default: `git config user.name`) |
+| `GITHUB_TOKEN` | GitHub personal access token for API access |
 | `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
-| `GITHUB_REPO_PATH` | Path to a git repository for auto-detecting owner/repo |
 | `PROJECT_REGISTRY` | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing |
 | `AUTO_REBUILD_INDEX` | Set to `true` to rebuild vector index on server startup |
 | `MCP_HOST` | Server bind host (`0.0.0.0` for containers, default: `localhost`) |
@@ -281,11 +279,13 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `COMMANDER_HITL_FILE_THRESHOLD` | Human-in-the-loop checkpoint if changes touch > N files (default: `10`) |
 | `COMMANDER_SECURITY_TOOLS` | Override security tool auto-detection (comma-separated; default: auto-detect) |
 | `COMMANDER_BRANCH_PREFIX` | Branch naming prefix for PRs (default: `fix`) |
-| `AUDIT_LOG_PATH` | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable audit logging. |
+| `AUDIT_LOG_PATH` | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable. |
 | `AUDIT_REDACT` | Set to `true` to omit tool arguments from audit log entries for privacy (default: `false`) |
 | `AUDIT_READS` | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`) |
 | `AUDIT_LOG_MAX_SIZE` | Maximum audit log file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`) |
 | `MCP_METRICS_ENABLED` | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`) |
+
+
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
 
