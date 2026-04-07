@@ -12,8 +12,8 @@ Last tested: April 6th, 2026
 | `test-core-search.md`              | ~2,358                  |       |
 | `test-core-semantic.md`            | ~3,677                  |       |
 | `test-github.md`                   | ~4,329                  |       |
-| `test-resources.md`                | ~                       |       |
-| `test-schemas.md`                  | ~                       |       |
+| `test-resources.md`                | ~359                    |       |
+| `test-schemas.md`                  | ~386                    |       |
 | `test-seed.md`                     | ~                       |       |
 | `test-team.md`                     | ~                       |       |
 | `test-tool-group-admin.md`         | ~                       |       |
@@ -23,6 +23,6 @@ Last tested: April 6th, 2026
 | `test-tool-group-relationships.md` | ~                       |       |
 | `test-tool-group-search.md`        | ~                       |       |
 | `test-tool-group-team-.md`         | ~                       |       |
-| **Total Estimated Tokens**         | ~                       |       |
+| **Total Estimated Tokens**         | ~24,168                 |       |
 
 **Token counts don't include tokens used by the testing prompts themselves.**

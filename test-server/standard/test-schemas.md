@@ -11,7 +11,7 @@
 3. User verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
 4. Re-test fixes with direct MCP calls.
 5. Brief final summary.
-   * **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 ---
 
