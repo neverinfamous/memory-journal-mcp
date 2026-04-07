@@ -8,4 +8,4 @@
 
 ### Fixed
 
-- `DOCKER_README.md`: repaired broken env var table (two fragments with missing header separator merged into one); removed deprecated `GITHUB_REPO_PATH` row removed in v7.0.0
+- `DOCKER_README.md`: repaired broken env var table (two fragments with missing header separator merged into one); removed deprecated `GITHUB_REPO_PATH` row (removed in v7.0.0)
