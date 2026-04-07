@@ -17,7 +17,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-prompts.mjs`             | `prompts/list` + `prompts/get` for all 16 prompts (shape + errors)                                                                    | stdio         | ~10s     |
 | `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 | `test-github-auth.ts`          | Tool handler response when GITHUB_TOKEN is completely omitted (validates `requiresUserInput`)                                         | direct        | ~1s      |
-
+| `test-relationships.ts`        | Tool handler responses for `link_entries` & `visualize_relationships` including depth bounds, error mitigation, and bad inputs        | direct        | ~2s      |
 ## Scheduler Notes
 
 The `test-scheduler.mjs` script requires an active HTTP server with aggressive timing configuration to be running in another terminal.
@@ -42,3 +42,10 @@ npx tsx test-server/scripts/test-github-auth.ts
 
 - `API Available? false`: This confirms that our simulated environment (which purposefully unsets the `GITHUB_TOKEN`) correctly signals to the MCP server that the GitHub API lacks the necessary authentication to operate.
 - `"requiresUserInput": true`: This proves the tool handler intercepts the call using our new availability check and safely rejects it with a fully articulated, structured JSON error (rather than a raw stack trace or `-32602` SDK error).
+
+**Expected Results from test-relationships.ts:**
+
+- Zod validation and domain errors (like `invalid relationship_type`, non-existent IDs, type mismatches) correctly return `success: false` payload with detailed suggestions instead of raw SDK exceptions.
+- `visualize_relationships` successfully executes at varying depths (1 vs 3) and bounds its visual tree effectively.
+- Token count correctly tracks throughout standard operational sequences.
+

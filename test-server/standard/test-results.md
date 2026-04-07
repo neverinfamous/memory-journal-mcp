@@ -18,8 +18,8 @@ Last tested: April 6th, 2026
 | `test-tool-group-admin.md`         | ~1,576                  |       |
 | `test-tool-group-backup.md`        | ~406                    |       |
 | `test-tool-group-core.md`          | ~1,642                  |       |
-| `test-tool-group-github.md`        | ~956                    |       |
-| `test-tool-group-relationships.md` | ~                       |       |
+| `test-tool-group-github.md`        | ~4,992                  |       |
+| `test-tool-group-relationships.md` | ~2,400                  |       |
 | `test-tool-group-search.md`        | ~                       |       |
 | `test-tool-group-team-.md`         | ~                       |       |
 | **Total Estimated Tokens**         | ~                       |       |
