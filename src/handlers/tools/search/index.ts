@@ -1,13 +1,18 @@
 /**
- * Search Tool Group - 4 tools
+ * Search Tool Group — 4 tools
  *
  * Tools: search_entries, search_by_date_range, semantic_search, get_vector_index_stats
+ *
+ * v6.4.0 (Hush Phase 1 — Search Excellence):
+ * - search_entries: Added `mode` param ('auto'|'fts'|'semantic'|'hybrid')
+ * - semantic_search: Added `entry_id`, `tags`, `entry_type`, `start_date`, `end_date` filters
+ * - Module split: search.ts → search/ directory for maintainability
  */
 
 import { z } from 'zod'
-import type { ToolDefinition, ToolContext } from '../../types/index.js'
-import { formatHandlerError } from '../../utils/error-helpers.js'
-import { ErrorFieldsMixin } from './error-fields-mixin.js'
+import type { ToolDefinition, ToolContext } from '../../../types/index.js'
+import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import {
     ENTRY_TYPES,
     DATE_FORMAT_REGEX,
@@ -15,14 +20,12 @@ import {
     EntryOutputSchema,
     EntriesListOutputSchema,
     relaxedNumber,
-} from './schemas.js'
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-/** Maximum entries returned by any single search query */
-const MAX_QUERY_LIMIT = 500
+} from '../schemas.js'
+import { MAX_QUERY_LIMIT, calcPerDbLimit, mergeAndDedup } from './helpers.js'
+import { resolveSearchMode, type SearchMode } from './auto.js'
+import { ftsSearch } from './fts.js'
+import { hybridSearch } from './hybrid.js'
+import type { SemanticSearchResult } from '../../../vector/vector-search-manager.js'
 
 // ============================================================================
 // Input Schemas
@@ -31,6 +34,13 @@ const MAX_QUERY_LIMIT = 500
 /** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
     query: z.string().optional(),
+    mode: z
+        .enum(['auto', 'fts', 'semantic', 'hybrid'])
+        .optional()
+        .default('auto')
+        .describe(
+            'Search strategy: auto (default, heuristic-based), fts (FTS5 keyword), semantic (vector), hybrid (RRF fusion of FTS5+vector)'
+        ),
     limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
     is_personal: z.boolean().optional(),
     project_number: z.number().optional(),
@@ -38,11 +48,22 @@ const SearchEntriesSchema = z.object({
     pr_number: z.number().optional(),
     pr_status: z.enum(['draft', 'open', 'merged', 'closed']).optional(),
     workflow_run_id: z.number().optional(),
+    tags: z.array(z.string()).optional(),
+    entry_type: z.enum(ENTRY_TYPES).optional(),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const SearchEntriesSchemaMcp = z.object({
     query: z.string().optional(),
+    mode: z
+        .string()
+        .optional()
+        .default('auto')
+        .describe(
+            'Search strategy: auto (default, heuristic-based), fts (FTS5 keyword), semantic (vector), hybrid (RRF fusion of FTS5+vector)'
+        ),
     limit: relaxedNumber().optional().default(10),
     is_personal: z.boolean().optional(),
     project_number: relaxedNumber().optional(),
@@ -50,6 +71,10 @@ const SearchEntriesSchemaMcp = z.object({
     pr_number: relaxedNumber().optional(),
     pr_status: z.string().optional(),
     workflow_run_id: relaxedNumber().optional(),
+    tags: z.array(z.string()).optional(),
+    entry_type: z.string().optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -82,10 +107,28 @@ const SearchByDateRangeSchemaMcp = z.object({
 
 /** Strict schema — used inside handler for structured Zod errors */
 const SemanticSearchSchema = z.object({
-    query: z.string(),
+    query: z.string().optional(),
+    entry_id: z
+        .number()
+        .optional()
+        .describe(
+            'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
+        ),
     limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     is_personal: z.boolean().optional(),
+    tags: z.array(z.string()).optional().describe('Filter results by tags'),
+    entry_type: z.enum(ENTRY_TYPES).optional().describe('Filter results by entry type'),
+    start_date: z
+        .string()
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .optional()
+        .describe('Filter results from this date (YYYY-MM-DD)'),
+    end_date: z
+        .string()
+        .regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE)
+        .optional()
+        .describe('Filter results until this date (YYYY-MM-DD)'),
     hint_on_empty: z
         .boolean()
         .optional()
@@ -95,10 +138,19 @@ const SemanticSearchSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const SemanticSearchSchemaMcp = z.object({
-    query: z.string(),
+    query: z.string().optional(),
+    entry_id: relaxedNumber()
+        .optional()
+        .describe(
+            'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
+        ),
     limit: relaxedNumber().optional().default(10),
     similarity_threshold: relaxedNumber().optional().default(0.25),
     is_personal: z.boolean().optional(),
+    tags: z.array(z.string()).optional().describe('Filter results by tags'),
+    entry_type: z.string().optional().describe('Filter results by entry type'),
+    start_date: z.string().optional().describe('Filter results from this date (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('Filter results until this date (YYYY-MM-DD)'),
     hint_on_empty: z
         .boolean()
         .optional()
@@ -117,6 +169,7 @@ const SemanticEntryOutputSchema = EntryOutputSchema.extend({
 const SemanticSearchOutputSchema = z
     .object({
         query: z.string().optional(),
+        entryId: z.number().optional(),
         entries: z.array(SemanticEntryOutputSchema).optional(),
         count: z.number().optional(),
         hint: z.string().optional(),
@@ -147,67 +200,110 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'search_entries',
             title: 'Search Entries',
             description:
-                'Full-text search journal entries using FTS5 (supports phrases "exact match", prefix auth*, boolean NOT/OR/AND, ranked by relevance). Optional filters for GitHub Projects, Issues, PRs, and Actions.',
+                'Search journal entries with auto-selecting strategy. Supports modes: auto (default — heuristic selects best strategy), fts (FTS5 keyword with phrases "exact match", prefix auth*, boolean NOT/OR/AND), semantic (vector similarity), hybrid (RRF fusion of FTS5+vector). Optional filters for GitHub Projects, Issues, PRs, and Actions.',
             group: 'search',
             inputSchema: SearchEntriesSchemaMcp,
             outputSchema: EntriesListOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const input = SearchEntriesSchema.parse(params)
+                    const query = input.query || ''
+                    const mode = input.mode as SearchMode
+
+                    // Resolve effective mode
+                    const { resolvedMode, isAuto } = resolveSearchMode(mode, query)
+
+                    // Empty query without filters → always use FTS (recent entries)
                     const hasFilters =
                         input.project_number !== undefined ||
                         input.issue_number !== undefined ||
                         input.pr_number !== undefined ||
                         input.pr_status !== undefined ||
                         input.workflow_run_id !== undefined ||
-                        input.is_personal !== undefined
+                        input.is_personal !== undefined ||
+                        input.tags !== undefined ||
+                        input.entry_type !== undefined ||
+                        input.start_date !== undefined ||
+                        input.end_date !== undefined
 
-                    // When merging across DBs, fetch more per-DB so BM25 ranking
-                    // in one DB doesn't silently drop entries before the merge.
-                    // The actual user limit is applied by mergeAndDedup.
-                    const perDbLimit = calcPerDbLimit(input.limit, !!teamDb)
+                    const effectiveMode = !query && !hasFilters ? 'fts' : resolvedMode
 
-                    let personalEntries
-                    if (!input.query && !hasFilters) {
-                        personalEntries = db.getRecentEntries(perDbLimit, input.is_personal)
-                    } else {
-                        personalEntries = db.searchEntries(input.query || '', {
-                            limit: perDbLimit,
-                            isPersonal: input.is_personal,
-                            projectNumber: input.project_number,
-                            issueNumber: input.issue_number,
-                            prNumber: input.pr_number,
-                            prStatus: input.pr_status,
-                            workflowRunId: input.workflow_run_id,
-                        })
+                    const searchOptions = {
+                        limit: input.limit,
+                        isPersonal: input.is_personal,
+                        projectNumber: input.project_number,
+                        issueNumber: input.issue_number,
+                        prNumber: input.pr_number,
+                        prStatus: input.pr_status,
+                        workflowRunId: input.workflow_run_id,
+                        tags: input.tags,
+                        entryType: input.entry_type,
+                        startDate: input.start_date,
+                        endDate: input.end_date,
                     }
 
-                    // Cross-database merge when team DB is available
-                    // Skip team DB when is_personal is explicitly true (team entries are never personal)
-                    if (teamDb && input.is_personal !== true) {
-                        let teamEntries
-                        if (!input.query && !hasFilters) {
-                            teamEntries = teamDb.getRecentEntries(perDbLimit)
-                        } else {
-                            teamEntries = teamDb.searchEntries(input.query || '', {
-                                limit: perDbLimit,
-                                projectNumber: input.project_number,
-                                issueNumber: input.issue_number,
-                                prNumber: input.pr_number,
-                                prStatus: input.pr_status,
-                                workflowRunId: input.workflow_run_id,
-                            })
+                    // Route to the appropriate search strategy
+                    switch (effectiveMode) {
+                        case 'semantic': {
+                            if (!vectorManager) {
+                                // Fallback to FTS when vector search is unavailable
+                                const result = ftsSearch(input.query, db, teamDb, searchOptions)
+                                return { ...result, searchMode: 'fts (fallback)' }
+                            }
+                            // Use semantic search, then fetch full entries
+                            const semanticResults = await vectorManager.search(
+                                query,
+                                input.limit,
+                                0.25
+                            )
+                            const entryIds = semanticResults.map((r) => r.entryId)
+                            const entriesMap = db.getEntriesByIds(entryIds)
+                            const entries = semanticResults
+                                .map((r) => {
+                                    const entry = entriesMap.get(r.entryId)
+                                    if (!entry) return null
+                                    if (
+                                        input.is_personal !== undefined &&
+                                        entry.isPersonal !== input.is_personal
+                                    )
+                                        return null
+                                    return { ...entry, source: 'personal' as const }
+                                })
+                                .filter((e): e is NonNullable<typeof e> => e !== null)
+                            return {
+                                entries,
+                                count: entries.length,
+                                searchMode: isAuto ? 'semantic (auto)' : 'semantic',
+                            }
                         }
-                        const merged = mergeAndDedup(
-                            personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
-                            teamEntries.map((e) => ({ ...e, source: 'team' as const })),
-                            input.limit
-                        )
-                        return { entries: merged, count: merged.length }
+                        case 'hybrid': {
+                            if (!vectorManager) {
+                                // Fallback to FTS when vector search is unavailable
+                                const result = ftsSearch(input.query, db, teamDb, searchOptions)
+                                return { ...result, searchMode: 'fts (fallback)' }
+                            }
+                            const { entries } = await hybridSearch(
+                                query,
+                                db,
+                                vectorManager,
+                                searchOptions
+                            )
+                            return {
+                                entries,
+                                count: entries.length,
+                                searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
+                            }
+                        }
+                        case 'fts':
+                        default: {
+                            const result = ftsSearch(input.query, db, teamDb, searchOptions)
+                            return {
+                                ...result,
+                                searchMode: isAuto ? 'fts (auto)' : 'fts',
+                            }
+                        }
                     }
-
-                    return { entries: personalEntries, count: personalEntries.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -282,7 +378,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
         {
             name: 'semantic_search',
             title: 'Semantic Search',
-            description: 'Perform semantic/vector search on journal entries using AI embeddings',
+            description:
+                'Perform semantic/vector search on journal entries using AI embeddings. Supports find-related-by-ID (entry_id) and metadata filters (tags, entry_type, date range).',
             group: 'search',
             inputSchema: SemanticSearchSchemaMcp,
             outputSchema: SemanticSearchOutputSchema,
@@ -290,6 +387,21 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = SemanticSearchSchema.parse(params)
+
+                    // Validate: at least one of query or entry_id must be provided
+                    if (!input.query && input.entry_id === undefined) {
+                        return {
+                            success: false,
+                            error: 'Either query or entry_id must be provided',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion:
+                                'Provide a text query for semantic search, or an entry_id to find related entries',
+                            recoverable: true,
+                            entries: [],
+                            count: 0,
+                        }
+                    }
 
                     if (!vectorManager) {
                         return {
@@ -306,11 +418,22 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const results = await vectorManager.search(
-                        input.query,
-                        input.limit ?? 10,
-                        input.similarity_threshold ?? 0.25
-                    )
+                    // Determine search method: by entry_id or by query
+                    let results: SemanticSearchResult[]
+                    if (input.entry_id !== undefined) {
+                        // Find related by ID: lookup existing embedding, skip re-embedding
+                        results = await vectorManager.searchByEntryId(
+                            input.entry_id,
+                            input.limit ?? 10,
+                            input.similarity_threshold ?? 0.25
+                        )
+                    } else {
+                        results = await vectorManager.search(
+                            input.query ?? '',
+                            input.limit ?? 10,
+                            input.similarity_threshold ?? 0.25
+                        )
+                    }
 
                     // Batch-fetch all entries in a single query (instead of N+1 getEntryById calls)
                     const entryIds = results.map((r) => r.entryId)
@@ -325,6 +448,24 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 input.is_personal !== undefined &&
                                 entry.isPersonal !== input.is_personal
                             )
+                                return null
+                            // Apply metadata filters
+                            if (input.tags && input.tags.length > 0) {
+                                const entryTags = db.getTagsForEntry(entry.id)
+                                if (!input.tags.some((t) => entryTags.includes(t))) return null
+                            }
+                            if (input.entry_type && entry.entryType !== input.entry_type)
+                                return null
+                            if (input.start_date) {
+                                const entryDate = entry.timestamp.split('T')[0] ?? ''
+                                if (entryDate < input.start_date) return null
+                            }
+                            if (input.end_date) {
+                                const entryDate = entry.timestamp.split('T')[0] ?? ''
+                                if (entryDate > input.end_date) return null
+                            }
+                            // Exclude the source entry from find-related results
+                            if (input.entry_id !== undefined && entry.id === input.entry_id)
                                 return null
                             return {
                                 ...entry,
@@ -357,6 +498,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         query: input.query,
+                        ...(input.entry_id !== undefined ? { entryId: input.entry_id } : {}),
                         entries,
                         count: entries.length,
                         ...(hint !== undefined ? { hint } : {}),
@@ -396,53 +538,4 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             },
         },
     ]
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Number of leading characters used as deduplication key */
-const DEDUP_KEY_LENGTH = 200
-
-/**
- * When merging across personal + team DBs, fetch more per-DB so BM25
- * ranking in one DB doesn't silently drop entries before the merge.
- */
-function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
-    return hasTeamDb ? Math.min(limit * 2, MAX_QUERY_LIMIT) : limit
-}
-
-interface EntryWithSource {
-    content: string
-    timestamp: string
-    source: 'personal' | 'team'
-    [key: string]: unknown
-}
-
-/**
- * Merge personal and team results, deduplicate by content,
- * and sort by timestamp descending.
- */
-function mergeAndDedup(
-    personal: EntryWithSource[],
-    team: EntryWithSource[],
-    limit?: number
-): EntryWithSource[] {
-    const seen = new Set<string>()
-    const merged: EntryWithSource[] = []
-
-    // Concat and sort by timestamp descending (ISO 8601 sorts lexicographically)
-    const all = [...personal, ...team].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-
-    for (const entry of all) {
-        // Deduplicate by content (same entry shared to team)
-        const key = entry.content.slice(0, DEDUP_KEY_LENGTH)
-        if (!seen.has(key)) {
-            seen.add(key)
-            merged.push(entry)
-        }
-    }
-
-    return limit !== undefined ? merged.slice(0, limit) : merged
 }

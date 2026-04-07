@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { GitHubIntegration } from '../../src/github/github-integration/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { callTool } from '../../src/handlers/tools/index.js'
 import * as fs from 'fs'
@@ -88,21 +89,25 @@ describe('Code Mode Tool Handlers', () => {
 
     it('should inject github context based on repo parameter', async () => {
         // Construct a ToolContext that mimics what the server builds
-        const context = Object.assign(Object.create(Object.getPrototypeOf(personalDb)), personalDb, {
-            config: {
-                defaultProjectNumber: 1,
-                projectRegistry: {
-                    testrepo: { path: '.', project_number: 99 }
-                }
+        const context = Object.assign(
+            Object.create(Object.getPrototypeOf(personalDb)),
+            personalDb,
+            {
+                config: {
+                    defaultProjectNumber: 1,
+                    projectRegistry: {
+                        testrepo: { path: '.', project_number: 99 },
+                    },
+                },
             }
-        })
-        
+        )
+
         const result = (await callTool(
             'mj_execute_code',
             { code: 'return 1', repo: 'testrepo' },
             context
         )) as any
-        
+
         expect(result.success).toBe(true)
         expect(result.result).toBe(2)
     })
@@ -113,9 +118,48 @@ describe('Code Mode Tool Handlers', () => {
             { code: 'return "huge"' },
             personalDb
         )) as any
-        
-        // Noisy test, removing log.
+
         expect(result.success).toBe(false)
         expect(result.error).toContain('Result exceeds')
+    })
+
+    it('should swallow git errors on repo context injection', async () => {
+        const spy = vi
+            .spyOn(GitHubIntegration.prototype, 'getRepoInfo')
+            .mockRejectedValue(new Error('no git'))
+
+        const context = Object.assign(
+            Object.create(Object.getPrototypeOf(personalDb)),
+            personalDb,
+            {
+                config: {
+                    projectRegistry: {
+                        testrepo2: { path: '.', project_number: 99 },
+                    },
+                },
+            }
+        )
+
+        const result = (await callTool(
+            'mj_execute_code',
+            { code: 'return 1', repo: 'testrepo2' },
+            context
+        )) as any
+
+        expect(result.error).toBeUndefined()
+        expect(result.success).toBe(true)
+        spy.mockRestore()
+    })
+
+    it('should trigger rate limit after 60 calls', async () => {
+        // Run 60 successful calls
+        for (let i = 0; i < 60; i++) {
+            await callTool('mj_execute_code', { code: 'return 1' }, personalDb)
+        }
+        // 61st call should be rate limited
+        const result = (await callTool('mj_execute_code', { code: 'return 1' }, personalDb)) as any
+
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('Rate limit exceeded')
     })
 })

@@ -8,12 +8,12 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96.7%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-97.52%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-377_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
 
-🎯 **AI Context + Project Intelligence:** Bridge disconnected AI sessions with persistent project memory and **automatic session handoff** — with full GitHub workflow integration.
+🎯 AI context + project intelligence: persistent memory and automatic session handoff for AI agents.
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/blob/main/CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
@@ -29,7 +29,7 @@
 | **GitHub Integration**        | 16 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                |
 | **Dynamic Project Routing**   | Seamlessly switch contexts and access CI/Issue tracking across multiple repositories using a single server instance via `PROJECT_REGISTRY`                     |
 | **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                  |
-| **Triple Search**             | Full-text (FTS5), semantic (`@huggingface/transformers` + `sqlite-vec`), and date-range search                                                                 |
+| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5 keywords, semantic vector similarity, auto-heuristics, and date-range filters                                            |
 | **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                     |
 | **Configurable Briefing**     | 12 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness                                                   |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                       |
@@ -38,29 +38,34 @@
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                             |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals      |
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))   |
-| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |     |
+| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
 ---
 
-## Suggested Rule (Add to AGENTS.md, GEMINI.md, etc)
+Suggested Rule (Add to AGENTS.md, GEMINI.md, etc):
 
-**ALWAYS PERFORM AT START OF CHATS**: Read `memory://briefing` by default and present the `userMessage` to the user as a formatted bullet list of key facts, including all available fields. When the user prompt or existing briefing clearly indicates a specific repository, additionally read `memory://briefing/{repo}` for that repo.
+🛑 MANDATORY SESSION START ROUTINE
 
-**CREATE JOURNAL ENTRIES** at natural checkpoints:
+Execute BEFORE fulfilling any user request in a new session:
 
-- After pushing to main (`milestone` or `technical_note`, tag with version)
-- After significant design decisions or learnings (`project_decision`)
-- After resolving non-trivial bugs (`bug_fix`, link to issue number)
-- Entries should only cover work done in present thread.
-
-**USE PROJECT AND CROSS-PROJECT INSIGHTS** when appropriate:
-
-- Run `get_cross_project_insights` before defining major architectures, new abstractions, or starting cross-cutting work to align with broader repository patterns.
-- Fetch `memory://github/insights` or run `get_repo_insights` to gauge project traction, health, and recent traffic.
-
-**SUGGEST CREATING OR IMPROVING RULES AND SKILLS** as you notice workflow opportunities.
+1. **TARGET**: Infer `repo_name` from the active workspace context or user prompt. If the task is not associated with a specific project, fallback to using the generic resource without a repo name (which defaults to the first registered workspace).
+2. **FETCH**: Use the MCP `read_resource` tool (Server: `memory-journal-mcp`) to read `memory://briefing/{repo_name}` (or `memory://briefing` if falling back).
+   - **RESTRICTION**: Do NOT use `execute_code` for this step.
+3. **RENDER TABLE**: Extract `userMessage` and output it EXCLUSIVELY as a vertical Markdown Table (2 columns: Field and Value).
+   - **RESTRICTION**: NO bulleted lists. NO truncation of arrays or lists.
+   - **REQUIRED MAP**: Output all data comprehensively. Map these fields to the "Field" column:
+     - Application / Project
+     - Journal Entries
+     - Team DB Entries
+     - Latest Entry (Journal)
+     - Latest Entry (Team)
+     - GitHub (Include Repo, Branch, CI Status, Issues, PRs, Insights on separate lines in the Value column)
+     - Milestone Progress
+     - Template Resources (Output count only, not URLs)
+     - Registered Workspaces (Output FULL list of project names)
+     - Available Extensions (Rules, Skills, Workflows)
 
 ---
 
@@ -216,11 +221,11 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 
 **Variants** (modify the config above):
 
-| Variant                 | Change                                                                                  |
-| ----------------------- | --------------------------------------------------------------------------------------- |
-| **Minimal (no GitHub)** | Remove the `-e GITHUB_TOKEN`, `-e GITHUB_REPO_PATH`, repo volume mount, and `env` block |
-| **Team collaboration**  | Add `-e`, `"TEAM_DB_PATH=/app/data/team.db"` to `args`                                  |
-| **Code Mode only**      | Add `"--tool-filter"`, `"codemode"` to `args` (single tool, all capabilities)           |
+| Variant                 | Change                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------- |
+| **Minimal (no GitHub)** | Remove the `-e GITHUB_TOKEN`, repo volume mount, and `env` block              |
+| **Team collaboration**  | Add `-e`, `"TEAM_DB_PATH=/app/data/team.db"` to `args`                        |
+| **Code Mode only**      | Add `"--tool-filter"`, `"codemode"` to `args` (single tool, all capabilities) |
 
 | **Briefing config** | Add `-e`, `"BRIEFING_ENTRY_COUNT=5"` to `args` (see env var table below) |
 | **Local build** | Replace `writenotenow/memory-journal-mcp:latest` with your local image name |
@@ -231,68 +236,64 @@ Restart Cursor or your MCP client and start journaling!
 
 ### GitHub Integration Configuration
 
-The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `GITHUB_REPO_PATH` is configured (shown in the Quick Start config above).
+The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the repository from your git context when `PROJECT_REGISTRY` is configured or the MCP server is run inside a git repository.
 
-| Environment Variable              | Description                                                                                       |
-| --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                              |
-| `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                    |
-| `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                           |
-| `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                       |
-| `GITHUB_REPO_PATH`                | Path to the git repository for auto-detecting owner/repo                                          |
-| `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                            |
-| `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing      |
-| `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                           |
-| `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                 |
-| `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                              |
-| `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: `*`)                           |
-| `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                 |
-| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)             |
-| `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)            |
-| `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                      |
-| `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                    |
-| `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                       |
-| `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                    |
-| `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                             |
-| `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                            |
-| `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                       |
-| `BRIEFING_PR_COUNT`               | PRs to list in briefing; `0` = count only (default: `0`)                                          |
-| `BRIEFING_PR_STATUS`              | Show PR status breakdown (open/merged/closed; default: `false`)                                   |
-| `BRIEFING_WORKFLOW_COUNT`         | Workflow runs to list in briefing; `0` = status only (default: `0`)                               |
-| `BRIEFING_WORKFLOW_STATUS`        | Show workflow status breakdown in briefing (default: `false`)                                     |
-| `BRIEFING_COPILOT_REVIEWS`        | Aggregate Copilot review state in briefing (default: `false`)                                     |
-| `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                 |
-| `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                |
-| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                   |
-| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
-| `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `npm run lint`)              |
-| `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `npm run typecheck`; empty = skip)                            |
-| `PROJECT_BUILD_CMD`               | Project build command (default: `npm run build`; empty = skip)                                    |
-| `PROJECT_TEST_CMD`                | Project test command (default: `npm run test`)                                                    |
-| `PROJECT_E2E_CMD`                 | Project E2E test command (default: empty = skip)                                                  |
-| `PROJECT_PACKAGE_MANAGER`         | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile)       |
-| `PROJECT_HAS_DOCKERFILE`          | Enable Docker audit steps (default: auto-detect)                                                  |
-| `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                           |
-| `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                     |
-| `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                     |
+| Environment Variable | Description                                                             |
+| -------------------- | ----------------------------------------------------------------------- |
+| `DB_PATH`            | Database file location (CLI: `--db`; default: `./memory_journal.db`)    |
+| `TEAM_DB_PATH`       | Team database file location (CLI: `--team-db`)                          |
+| `TEAM_AUTHOR`        | Override author name for team entries (default: `git config user.name`) |
+| `GITHUB_TOKEN`       | GitHub personal access token for API access                             |
 
-**Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`** and omit `GITHUB_REPO_PATH`.
+| `DEFAULT_PROJECT_NUMBER` | Default GitHub Project number for auto-assignment when creating issues |
+| `GITHUB_REPO_PATH` | Path to a git repository for auto-detecting owner/repo |
+| `PROJECT_REGISTRY` | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing |
+| `AUTO_REBUILD_INDEX` | Set to `true` to rebuild vector index on server startup |
+| `MCP_HOST` | Server bind host (`0.0.0.0` for containers, default: `localhost`) |
+| `MCP_AUTH_TOKEN` | Bearer token for HTTP transport authentication (CLI: `--auth-token`) |
+| `MCP_CORS_ORIGIN` | Allowed CORS origins for HTTP transport, comma-separated (default: `*`) |
+| `MCP_RATE_LIMIT_MAX` | Max requests per minute per client IP, HTTP only (default: `100`) |
+| `LOG_LEVEL` | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`) |
+| `MCP_ENABLE_HSTS` | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`) |
+| `OAUTH_ENABLED` | Set to `true` to enable OAuth 2.1 authentication (HTTP only) |
+| `OAUTH_ISSUER` | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`) |
+| `OAUTH_AUDIENCE` | Expected JWT audience claim |
+| `OAUTH_JWKS_URI` | JWKS endpoint for token signature verification |
+| `BRIEFING_ENTRY_COUNT` | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`) |
+| `BRIEFING_INCLUDE_TEAM` | Include team DB entries in briefing (`true`/`false`; default: `false`) |
+| `BRIEFING_ISSUE_COUNT` | Issues to list in briefing; `0` = count only (default: `0`) |
+| `BRIEFING_PR_COUNT` | PRs to list in briefing; `0` = count only (default: `0`) |
+| `BRIEFING_PR_STATUS` | Show PR status breakdown (open/merged/closed; default: `false`) |
+| `BRIEFING_WORKFLOW_COUNT` | Workflow runs to list in briefing; `0` = status only (default: `0`) |
+| `BRIEFING_WORKFLOW_STATUS` | Show workflow status breakdown in briefing (default: `false`) |
+| `BRIEFING_COPILOT_REVIEWS` | Aggregate Copilot review state in briefing (default: `false`) |
+| `RULES_FILE_PATH` | Path to user rules file for agent awareness (CLI: `--rules-file`) |
+| `SKILLS_DIR_PATH` | Path to skills directory for agent awareness (CLI: `--skills-dir`) |
+| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`) |
+| `INSTRUCTION_LEVEL` | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`) |
+| `PROJECT_LINT_CMD` | Project lint command for GitHub Commander validation gates (default: `npm run lint`) |
+| `PROJECT_TYPECHECK_CMD` | Project typecheck command (default: `npm run typecheck`; empty = skip) |
+| `PROJECT_BUILD_CMD` | Project build command (default: `npm run build`; empty = skip) |
+| `PROJECT_TEST_CMD` | Project test command (default: `npm run test`) |
+| `PROJECT_E2E_CMD` | Project E2E test command (default: empty = skip) |
+| `PROJECT_PACKAGE_MANAGER` | Package manager override: `npm`, `yarn`, `pnpm`, `bun` (default: auto-detect from lockfile) |
+| `PROJECT_HAS_DOCKERFILE` | Enable Docker audit steps (default: auto-detect) |
+| `COMMANDER_HITL_FILE_THRESHOLD` | Human-in-the-loop checkpoint if changes touch > N files (default: `10`) |
+| `COMMANDER_SECURITY_TOOLS` | Override security tool auto-detection (comma-separated; default: auto-detect) |
+| `COMMANDER_BRANCH_PREFIX` | Branch naming prefix for PRs (default: `fix`) |
+| `AUDIT_LOG_PATH` | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable audit logging. |
+| `AUDIT_REDACT` | Set to `true` to omit tool arguments from audit log entries for privacy (default: `false`) |
+| `AUDIT_READS` | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`) |
+| `AUDIT_LOG_MAX_SIZE` | Maximum audit log file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`) |
+| `MCP_METRICS_ENABLED` | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`) |
 
-#### Dynamic Context Resolution & Auto-Detection
+**Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
 
-When executing GitHub tools (issues, PRs, context, etc.), the server resolves repository context in this order:
+#### Context Resolution & Project Routing
 
-1. **Dynamic Project Routing**: If the agent passes a `repo` string that matches a key in your `PROJECT_REGISTRY`, the server dynamically mounts the physical directory mapped to that project. It executes git commands locally and automatically infers the `owner`.
-2. **Explicit Override**: If the agent provides both `owner` and `repo` explicitly, those values override auto-detection for API calls.
-3. **Missing Context**: Without `PROJECT_REGISTRY` or explicit parameters, the server blocks execution and returns `{requiresUserInput: true}` to prompt the agent.
+**Context resolution order**: Dynamic `PROJECT_REGISTRY` routing → explicit `owner`/`repo` → blocks with `{requiresUserInput: true}`. Kanban/issue project numbers resolve via passed argument → `PROJECT_REGISTRY` lookup → global `DEFAULT_PROJECT_NUMBER`.
 
-#### Automatic Project Routing (Kanban / Issues)
-
-When opening an issue or viewing/moving a Kanban card, the server needs a GitHub Project number. It determines this via:
-
-1. Exploring the raw `project_number` argument passed by the agent.
-2. Checking if the `repo` string precisely matches an entry in your **`PROJECT_REGISTRY`**, seamlessly mapping it to its pre-configured `project_number`.
-3. Falling back to the globally defined `DEFAULT_PROJECT_NUMBER` if set.
+**[Full routing & auto-detection docs →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
 
 ### 🔄 Session Management
 

@@ -114,8 +114,10 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
     ],
     search: [
         'mj.search.searchEntries({ query: "performance" })',
+        'mj.search.searchEntries({ query: "performance", mode: "hybrid" })',
         'mj.search.searchByDateRange({ start_date: "2026-03-01", end_date: "2026-03-11" })',
         'mj.search.semanticSearch({ query: "authentication patterns" })',
+        'mj.search.semanticSearch({ entry_id: 42 })',
     ],
     analytics: ['mj.analytics.getStatistics()', 'mj.analytics.getCrossProjectInsights()'],
     relationships: [

@@ -24,7 +24,7 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import type { ProgressContext } from '../../utils/progress-utils.js'
 
 import { getCoreTools } from './core.js'
-import { getSearchTools } from './search.js'
+import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
 import { getExportTools } from './export.js'
@@ -34,8 +34,36 @@ import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getCodeModeTools } from './codemode.js'
 
+import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
+import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
+import type { AuditConfig, AuditInterceptor } from '../../audit/index.js'
+
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
+
+// ============================================================================
+// Global Audit Logger Singleton
+// ============================================================================
+
+let globalAuditLogger: AuditLogger | null = null
+let globalAuditInterceptor: AuditInterceptor | null = null
+
+/**
+ * Initialize the global audit logger from CLI/env config.
+ * Called once during server startup. Must be called before any tool calls.
+ */
+export function initializeAuditLogger(config: AuditConfig): AuditLogger {
+    globalAuditLogger = new AuditLogger(config)
+    globalAuditInterceptor = createAuditInterceptor(globalAuditLogger)
+    return globalAuditLogger
+}
+
+/**
+ * Get the global audit logger instance (for shutdown/resource access).
+ */
+export function getGlobalAuditLogger(): AuditLogger | null {
+    return globalAuditLogger
+}
 
 // ============================================================================
 // Icon Mapping
@@ -187,7 +215,33 @@ function ensureToolCache(
     }
 
     const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
-    toolMapCache = new Map(getAllToolDefinitions(context).map((t) => [t.name, t]))
+    const rawDefs = getAllToolDefinitions(context)
+
+    // Wrap every handler with the metrics interceptor at cache-build time.
+    // When audit logging is enabled, also wraps with the audit interceptor.
+    // This is O(n) once per cache miss — production cost is negligible.
+    const instrumentedDefs: ToolDefinition[] = rawDefs.map((t) => {
+        // Layer 1: Metrics collection (always active)
+        const metricsWrapped = wrapWithMetrics(
+            t.name,
+            (args: Record<string, unknown>) => Promise.resolve(t.handler(args)),
+            globalMetrics
+        )
+
+        // Layer 2: Audit logging (only when initialized)
+        const interceptor = globalAuditInterceptor
+        const finalHandler = interceptor
+            ? (args: Record<string, unknown>): Promise<unknown> =>
+                  interceptor.around(t.name, args, () => metricsWrapped(args))
+            : metricsWrapped
+
+        return {
+            ...t,
+            handler: finalHandler as (params: unknown) => unknown,
+        }
+    })
+
+    toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
     mappedToolsCache = null // Invalidate mapped cache when definitions change
     cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
 }
@@ -195,7 +249,7 @@ function ensureToolCache(
 /**
  * Call a tool by name
  */
-export function callTool(
+export async function callTool(
     name: string,
     args: Record<string, unknown>,
     db: IDatabaseAdapter,
@@ -216,6 +270,8 @@ export function callTool(
 
     // When progress context is provided, rebuild the handler with it.
     // This is rare (only MCP server calls with progress tokens, not benchmarked).
+    // IMPORTANT: Fresh handlers must still be wrapped with metrics + audit
+    // interceptors — otherwise the progress path bypasses all instrumentation.
     if (progress) {
         const context: ToolContext = {
             db,
@@ -229,11 +285,23 @@ export function callTool(
         const freshTools = getAllToolDefinitions(context)
         const freshTool = freshTools.find((t) => t.name === name)
         if (freshTool) {
-            return Promise.resolve(freshTool.handler(args))
+            // Layer 1: Metrics
+            const metricsWrapped = wrapWithMetrics(
+                freshTool.name,
+                (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a)),
+                globalMetrics
+            )
+            // Layer 2: Audit (if initialized)
+            const interceptor = globalAuditInterceptor
+            const freshResult = interceptor
+                ? await interceptor.around(freshTool.name, args, () => metricsWrapped(args))
+                : await metricsWrapped(args)
+            return injectTokenEstimate(freshResult)
         }
     }
 
-    return Promise.resolve(tool.handler(args))
+    const result = await Promise.resolve(tool.handler(args))
+    return injectTokenEstimate(result)
 }
 
 /**

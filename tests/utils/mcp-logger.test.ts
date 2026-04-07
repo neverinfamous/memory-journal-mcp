@@ -59,6 +59,11 @@ describe('McpLogger', () => {
     // ========================================================================
 
     describe('level filtering', () => {
+        it('should allow setting to invalid level that does nothing', () => {
+            mcpLog.setLevel('invalid' as any)
+            expect(mcpLog.getLevel()).toBe('info')
+        })
+
         it('should log messages at or below configured severity', () => {
             mcpLog.setLevel('info')
             mcpLog.log('info', 'test', { message: 'info msg' })
@@ -90,11 +95,17 @@ describe('McpLogger', () => {
     describe('stderr fallback', () => {
         it('should format output with timestamp, level, and logger name', () => {
             mcpLog.log('info', 'MyModule', { message: 'hello world' })
-            const output = errorSpy.mock.calls[0]?.[0] as string
+            let output = errorSpy.mock.calls[0]?.[0] as string
 
             expect(output).toMatch(/^\[.+\] \[INFO\s+\]/)
             expect(output).toContain('[MyModule]')
             expect(output).toContain('hello world')
+
+            // Also test empty loggerName branch
+            mcpLog.log('info', '', { message: 'no module' })
+            output = errorSpy.mock.calls[1]?.[0] as string
+            expect(output).not.toContain('[]')
+            expect(output).toContain('no module')
         })
 
         it('should include extra context in stderr output', () => {

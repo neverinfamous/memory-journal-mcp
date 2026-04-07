@@ -1,0 +1,21 @@
+# Token Consumption during codemode Testing of memory-journal-mcp
+
+Last tested: April 7th, 2026
+
+| Test Document                   | Approximate Token Usage | Notes |
+| :------------------------------ | :---------------------- | :---- |
+| `test-cm-admin-backup.md`       | ~206                    |       |
+| `test-cm-api-discovery.md`      | ~406                    |       |
+| `test-cm-crud.md`               | ~720                    |       |
+| `test-cm-github.md`             | ~750                    |       |
+| `test-cm-orchestration.md`      | ~243                    |       |
+| `test-cm-readonly.md`           | ~983                    |       |
+| `test-cm-relationships.md`      | ~199                    |       |
+| `test-cm-sandbox-basics.md`     | ~504                    |       |
+| `test-cm-search.md`             | ~388                    |       |
+| `test-cm-security.md`           | ~1,071                  |       |
+| `test-cm-team-admin.md`         | ~256                    |       |
+| `test-cm-team-crud.md`          | ~669                    |       |
+| `test-cm-team-vector-errors.md` | ~1,271                  |       |
+| `test-cm-workflows.md`          | ~295                    |       |
+| **Total Estimated Tokens**      | **~7,961**              |       |

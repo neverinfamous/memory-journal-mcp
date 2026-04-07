@@ -6,7 +6,11 @@
  */
 
 import { ICON_BRIEFING } from '../../../../constants/icons.js'
-import { withPriority, withSessionInit, ASSISTANT_FOCUSED } from '../../../../utils/resource-annotations.js'
+import {
+    withPriority,
+    withSessionInit,
+    ASSISTANT_FOCUSED,
+} from '../../../../utils/resource-annotations.js'
 import { VERSION } from '../../../../version.js'
 import { GitHubIntegration } from '../../../../github/github-integration/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
@@ -38,7 +42,7 @@ export const briefingResource: InternalResourceDef = {
 }
 
 export const dynamicBriefingResource: InternalResourceDef = {
-    uri: 'memory://briefing/{repo}',
+    uri: 'memory://briefing/{+repo}',
     name: 'Dynamic Briefing',
     title: 'Project-Specific Session Context',
     description:
@@ -55,7 +59,10 @@ export const dynamicBriefingResource: InternalResourceDef = {
     },
 }
 
-async function buildBriefingData(context: ResourceContext, targetRepo?: string): Promise<ResourceResult> {
+async function buildBriefingData(
+    context: ResourceContext,
+    targetRepo?: string
+): Promise<ResourceResult> {
     const config = context.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
 
     // If targetRepo is provided, override the GitHubIntegration just for this briefing call
@@ -131,7 +138,9 @@ async function buildBriefingData(context: ResourceContext, targetRepo?: string):
             userMessage,
             clientNote:
                 'For full tool reference and field notes, read memory://instructions — only if your client did NOT auto-inject server instructions at session start (most modern clients including AntiGravity do this automatically).\\n' +
-                (config.projectRegistry ? '\\nMulti-project registry detected. To retrieve CI status, branch, and issues for a specific project, use the get_github_context tool or dynamic resources (e.g. memory://github/status/{repo}) with the repository name.' : ''),
+                (config.projectRegistry
+                    ? '\\nMulti-project registry detected. To retrieve CI status, branch, and issues for a specific project, use the get_github_context tool or dynamic resources (e.g. memory://github/status/{repo}) with the repository name.'
+                    : ''),
         },
         annotations: { lastModified: journal.lastModified },
     } satisfies ResourceResult

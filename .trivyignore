@@ -19,3 +19,4 @@ CVE-2026-32777
 
 # MEDIUM — DoS via NULL pointer dereference after OOM. No XML attack surface.
 CVE-2026-32778
+tmp/

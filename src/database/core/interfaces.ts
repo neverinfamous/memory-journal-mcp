@@ -114,6 +114,10 @@ export interface IDatabaseAdapter {
             prNumber?: number
             prStatus?: string
             workflowRunId?: number
+            tags?: string[]
+            entryType?: EntryType
+            startDate?: string
+            endDate?: string
         }
     ): JournalEntry[]
     searchByDateRange(

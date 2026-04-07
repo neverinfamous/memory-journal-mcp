@@ -3,7 +3,7 @@
  *
  * Verifies that GitHub tools gracefully degrade and return
  * structured { requiresUserInput: true } errors instead of crashing
- * or throwing unhandled exceptions when GITHUB_REPO_PATH is missing.
+ * or throwing unhandled exceptions when PROJECT_REGISTRY is missing.
  */
 
 import { test, expect } from '@playwright/test'
@@ -19,11 +19,11 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
     let client: Client
 
     test.beforeAll(async () => {
-        // Strip out GITHUB_REPO_PATH and GITHUB_TOKEN so auto-detect fails
-        const oldRepo = process.env.GITHUB_REPO_PATH
+        // Strip out PROJECT_REGISTRY and GITHUB_TOKEN so auto-detect fails
+        const oldRegistry = process.env.PROJECT_REGISTRY
         const oldToken = process.env.GITHUB_TOKEN
 
-        delete process.env.GITHUB_REPO_PATH
+        delete process.env.PROJECT_REGISTRY
         delete process.env.GITHUB_TOKEN
 
         // startServer propagates the current process.env
@@ -32,7 +32,7 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
             await startServer(GITHUB_DEGRADE_PORT, [], 'gh-degrade', startOpts)
             client = await createClient(GITHUB_DEGRADE_PORT)
         } finally {
-            if (oldRepo) process.env.GITHUB_REPO_PATH = oldRepo
+            if (oldRegistry) process.env.PROJECT_REGISTRY = oldRegistry
             if (oldToken) process.env.GITHUB_TOKEN = oldToken
         }
     })
@@ -53,8 +53,8 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
         expect(Array.isArray(response.content)).toBe(true)
         const text = (response.content as Array<{ text: string }>)[0]!.text
         console.log('GitHub Degrade Response:', text)
-        // Check for presence of auto-detect mention
-        expect(text).toContain('Could not auto-detect')
+        // Check for presence of requiresUserInput flag due to missing token / auto-detect failure
+        expect(text).toContain('"requiresUserInput":true')
     })
 
     test('get_github_context degrades gracefully to returning missing state', async () => {

@@ -47,7 +47,11 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/github\/status\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig, targetRepo)
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo
+                )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, branch, lastModified, github } = resolved
 
@@ -218,7 +222,11 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/github\/insights\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig, targetRepo)
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo
+                )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
 
@@ -265,7 +273,11 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
             handler: async (uri: string, context: ResourceContext): Promise<ResourceResult> => {
                 const match = /memory:\/\/github\/milestones\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig, targetRepo)
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo
+                )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
 
@@ -316,7 +328,11 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const resolved = await resolveGitHubRepo(context.github, context.briefingConfig, targetRepo)
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo
+                )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, github } = resolved
 
@@ -350,15 +366,17 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
         const dynamicName = def.name + ' (Dynamic)'
         let dynamicUri: string
         if (def.uri === 'memory://milestones/{number}') {
-            dynamicUri = 'memory://milestones/{repo}/{number}'
+            dynamicUri = 'memory://milestones/{+repo}/{number}'
         } else {
-            dynamicUri = def.uri + '/{repo}'
+            dynamicUri = def.uri + '/{+repo}'
         }
         return {
             ...def,
             uri: dynamicUri,
             name: dynamicName,
-            description: def.description + ' (Supports explicit multi-project repository targeting via {repo})',
+            description:
+                def.description +
+                ' (Supports explicit multi-project repository targeting via {repo})',
         }
     })
 

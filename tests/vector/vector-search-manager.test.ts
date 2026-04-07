@@ -99,11 +99,10 @@ describe('VectorSearchManager', () => {
     })
 
     describe('initialize', () => {
-        it('should load pipeline and get raw database', async () => {
+        it('should load pipeline', async () => {
             mockEmbedderFn.mockResolvedValue({ data: new Float32Array(384) })
             await vm.initialize()
 
-            expect(adapter.getRawDb).toHaveBeenCalled()
             expect(vm.isInitialized()).toBe(true)
         })
 
@@ -166,6 +165,19 @@ describe('VectorSearchManager', () => {
             expect(result.success).toBe(false)
             expect(result.error).toBeDefined()
         })
+
+        it('should return initialization error if not initialized', async () => {
+            const { pipeline: pipelineMock } = await import('@huggingface/transformers')
+            ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                new Error('Init failed during add')
+            )
+            const vm2 = new VectorSearchManager(adapter)
+            const result = await vm2.addEntry(99, 'Content')
+            expect(result.success).toBe(false)
+            expect(result.error).toContain(
+                'Vector search initialization failed: Init failed during add'
+            )
+        })
     })
 
     // ========================================================================
@@ -207,9 +219,82 @@ describe('VectorSearchManager', () => {
 
         it('should return empty on error', async () => {
             await initManager(vm)
-            mockEmbedderFn.mockRejectedValue(new Error('Embed fail'))
+            mockEmbedderFn.mockRejectedValue('Embed fail string error')
 
             const results = await vm.search('query')
+            expect(results).toEqual([])
+        })
+
+        it('should return empty if initialization fails', async () => {
+            const { pipeline: pipelineMock } = await import('@huggingface/transformers')
+            ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                'Init failed during search string error'
+            )
+            const vm2 = new VectorSearchManager(adapter)
+            const results = await vm2.search('query')
+            expect(results).toEqual([])
+        })
+    })
+
+    // ========================================================================
+    // Search By Entry ID
+    // ========================================================================
+
+    describe('searchByEntryId', () => {
+        it('should return filtered results based on existing embedding', async () => {
+            await initManager(vm)
+            mockGet.mockReturnValue({ embedding: Buffer.from(fakeEmbedding(0).buffer) })
+
+            mockAll.mockReturnValue([
+                { entry_id: 1, distance: 0.1 },
+                { entry_id: 2, distance: 1.0 },
+                { entry_id: 3, distance: 9.0 },
+            ])
+
+            // Excludes entryId 1 from the results
+            const results = await vm.searchByEntryId(1, 10, 0.3)
+            expect(results).toHaveLength(1)
+            expect(results[0]!.entryId).toBe(2)
+            expect(results[0]!.score).toBeCloseTo(0.5, 2)
+        })
+
+        it('should return empty if embedding not found', async () => {
+            await initManager(vm)
+            mockGet.mockReturnValue(undefined)
+
+            const results = await vm.searchByEntryId(99, 10, 0.3)
+            expect(results).toEqual([])
+        })
+
+        it('should return empty on SQL error', async () => {
+            await initManager(vm)
+            mockGet.mockImplementation(() => {
+                throw 'SQL error string'
+            })
+
+            const results = await vm.searchByEntryId(1)
+            expect(results).toEqual([])
+        })
+
+        it('should return empty if initialization fails', async () => {
+            const { pipeline: pipelineMock } = await import('@huggingface/transformers')
+            ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                'Init fail string error'
+            )
+            const vm2 = new VectorSearchManager(adapter)
+            const results = await vm2.searchByEntryId(1)
+            expect(results).toEqual([])
+        })
+
+        it('should return empty if db not available', async () => {
+            await initManager(vm)
+            ;(adapter.getRawDb as any).mockReturnValue(null) // Or throw error, testing db check
+            const vm3 = new VectorSearchManager(adapter)
+            await initManager(vm3)
+            ;(adapter.getRawDb as any).mockImplementation(() => {
+                throw new Error('No db')
+            })
+            const results = await vm3.searchByEntryId(1)
             expect(results).toEqual([])
         })
     })
@@ -232,6 +317,9 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return false if db not available', async () => {
+            ;(adapter.getRawDb as any).mockImplementation(() => {
+                throw new Error('No db')
+            })
             const result = await vm.removeEntry(42)
             expect(result).toBe(false)
         })
@@ -263,6 +351,9 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return zero count when no db', async () => {
+            ;(adapter.getRawDb as any).mockImplementation(() => {
+                throw new Error('No db')
+            })
             const stats = await vm.getStats()
             expect(stats.itemCount).toBe(0)
         })
@@ -358,21 +449,26 @@ describe('VectorSearchManager', () => {
         it('should return initialization error if initialize fails', async () => {
             const { pipeline: pipelineMock } = await import('@huggingface/transformers')
             ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-                new Error('Pipeline broke')
+                'Pipeline broke string error'
             )
             const result = await vm.rebuildIndex({} as any)
-            expect(result.firstError).toContain('Vector search initialization failed: Pipeline broke')
+            expect(result.firstError).toContain(
+                'Vector search initialization failed: Pipeline broke'
+            )
         })
 
         it('should handle insert statement failure during rebuild', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
-            
+
             // Mock run to throw ONLY on the second insert (after DELETE)
-            mockRun.mockImplementationOnce(() => undefined) // DELETE
-                   .mockImplementationOnce(() => undefined) // 1st INSERT
-                   .mockImplementationOnce(() => { throw new Error('Insert failed!!') }) // 2nd INSERT
-            
+            mockRun
+                .mockImplementationOnce(() => undefined) // DELETE
+                .mockImplementationOnce(() => undefined) // 1st INSERT
+                .mockImplementationOnce(() => {
+                    throw new Error('Insert failed!!')
+                }) // 2nd INSERT
+
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(2),
                 getEntriesPage: vi.fn().mockReturnValue([
@@ -396,12 +492,74 @@ describe('VectorSearchManager', () => {
         it('should rethrow pipeline errors', async () => {
             const { pipeline: pipelineMock } = await import('@huggingface/transformers')
             ;(pipelineMock as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-                new Error('Model not found')
+                'Model not found string'
             )
 
             const vm2 = new VectorSearchManager(adapter)
-            await expect(vm2.initialize()).rejects.toThrow('Model not found')
+            await expect(vm2.initialize()).rejects.toEqual('Model not found string')
             expect(vm2.isInitialized()).toBe(false)
+        })
+    })
+
+    describe('removeEntry', () => {
+        it('should return false if db not available', () => {
+            const fakeAdapter = {
+                getRawDb: () => {
+                    throw new Error()
+                },
+            } as any
+            const freshVm = new VectorSearchManager(fakeAdapter)
+            const result = freshVm.removeEntry(1)
+            expect(result).toBe(false)
+        })
+
+        it('should remove entry and return true', async () => {
+            await initManager(vm)
+            mockRun.mockReturnValue(undefined)
+            const result = vm.removeEntry(1)
+            expect(result).toBe(true)
+            expect(mockPrepare).toHaveBeenCalledWith(
+                'DELETE FROM vec_embeddings WHERE entry_id = ?'
+            )
+        })
+
+        it('should handle SQLite errors', async () => {
+            await initManager(vm)
+            mockRun.mockImplementation(() => {
+                throw 'remove fail string error'
+            })
+            const result = vm.removeEntry(1)
+            expect(result).toBe(false)
+        })
+    })
+
+    describe('getStats', () => {
+        it('should return default stats if db not available', () => {
+            const fakeAdapter = {
+                getRawDb: () => {
+                    throw new Error()
+                },
+            } as any
+            const freshVm = new VectorSearchManager(fakeAdapter)
+            const stats = freshVm.getStats()
+            expect(stats.itemCount).toBe(0)
+            expect(stats.dimensions).toBe(384)
+        })
+
+        it('should return item count', async () => {
+            await initManager(vm)
+            mockGet.mockReturnValue({ count: 42 })
+            const stats = vm.getStats()
+            expect(stats.itemCount).toBe(42)
+        })
+
+        it('should handle SQLite errors', async () => {
+            await initManager(vm)
+            mockGet.mockImplementation(() => {
+                throw 'stats fail string error'
+            })
+            const stats = vm.getStats()
+            expect(stats.itemCount).toBe(0)
         })
     })
 })

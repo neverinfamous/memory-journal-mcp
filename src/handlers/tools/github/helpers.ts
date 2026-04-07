@@ -11,13 +11,13 @@ import { GitHubIntegration } from '../../../github/github-integration/index.js'
 export function resolveProjectNumber(
     context: ToolContext,
     repo: string | undefined,
-    explicitProjectNumber?: number
+    explicitProjectNumber?: number | null
 ): number | undefined {
-    if (explicitProjectNumber !== undefined) return explicitProjectNumber
-    if (repo && context.config?.projectRegistry?.[repo]?.project_number !== undefined) {
+    if (explicitProjectNumber != null) return explicitProjectNumber
+    if (repo && context.config?.projectRegistry?.[repo]?.project_number != null) {
         return context.config.projectRegistry[repo].project_number
     }
-    return context.config?.defaultProjectNumber
+    return context.config?.defaultProjectNumber ?? undefined
 }
 
 /**
@@ -36,7 +36,7 @@ export async function resolveOwner(
       }
     | { error: true; response: Record<string, unknown> }
 > {
-    if (!context.github) {
+    if (!context.github?.isApiAvailable()) {
         return {
             error: true,
             response: {
@@ -44,9 +44,9 @@ export async function resolveOwner(
                 error: 'GitHub integration not available',
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
-                suggestion:
-                    'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                suggestion: 'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
+                requiresUserInput: true,
             },
         }
     }
@@ -95,9 +95,10 @@ export async function resolveOwnerRepo(
     | { error: true; response: Record<string, unknown> }
 > {
     let toolGithub: GitHubIntegration | undefined
-    const registryEntry = input.repo && context.config?.projectRegistry
-        ? context.config.projectRegistry[input.repo]
-        : undefined
+    const registryEntry =
+        input.repo && context.config?.projectRegistry
+            ? context.config.projectRegistry[input.repo]
+            : undefined
 
     if (registryEntry) {
         toolGithub = new GitHubIntegration(registryEntry.path)
@@ -105,7 +106,7 @@ export async function resolveOwnerRepo(
         toolGithub = context.github
     }
 
-    if (!toolGithub) {
+    if (!toolGithub?.isApiAvailable()) {
         return {
             error: true,
             response: {
@@ -113,14 +114,18 @@ export async function resolveOwnerRepo(
                 error: 'GitHub integration not available',
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
-                suggestion:
-                    'Set GITHUB_TOKEN and GITHUB_REPO_PATH environment variables to enable GitHub integration.',
+                suggestion: 'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
+                requiresUserInput: true,
             },
         }
     }
 
     const repoInfo = await toolGithub.getRepoInfo()
+    if (context.github && toolGithub !== context.github) {
+        context.github.setCachedRepoInfo(repoInfo)
+    }
+
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
 

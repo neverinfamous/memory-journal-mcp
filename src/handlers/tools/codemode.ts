@@ -15,7 +15,7 @@ import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
 import { getCoreTools } from './core.js'
-import { getSearchTools } from './search.js'
+import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
 import { getExportTools } from './export.js'
@@ -174,8 +174,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 github: injectedGithub,
                                 config: {
                                     ...context.config,
-                                    defaultProjectNumber: registryEntry.project_number ?? context.config.defaultProjectNumber
-                                }
+                                    defaultProjectNumber:
+                                        registryEntry.project_number ??
+                                        context.config.defaultProjectNumber,
+                                },
                             }
                         }
                     }

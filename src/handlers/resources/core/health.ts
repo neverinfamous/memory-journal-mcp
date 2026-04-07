@@ -2,6 +2,7 @@ import { getAllToolNames } from '../../../filtering/tool-filter.js'
 import { ICON_HEALTH } from '../../../constants/icons.js'
 import { HIGH_PRIORITY } from '../../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../shared.js'
+import { globalMetrics } from '../../../observability/index.js'
 
 /**
  * Get total tool count for health status
@@ -53,6 +54,20 @@ export const healthResource: InternalResourceDef = {
 
         const lastModified = new Date().toISOString()
 
+        const metricsSummary = (() => {
+            try {
+                const s = globalMetrics.getSummary()
+                return {
+                    totalCalls: s.totalCalls,
+                    totalErrors: s.totalErrors,
+                    totalOutputTokens: s.totalOutputTokens,
+                    upSince: s.upSince,
+                }
+            } catch {
+                return null
+            }
+        })()
+
         return {
             data: {
                 ...dbHealth,
@@ -67,6 +82,7 @@ export const healthResource: InternalResourceDef = {
                 scheduler: context.scheduler
                     ? context.scheduler.getStatus()
                     : { active: false, jobs: [] },
+                metrics: metricsSummary,
                 timestamp: lastModified,
             },
             annotations: { lastModified },

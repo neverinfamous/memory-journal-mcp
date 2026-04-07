@@ -24,6 +24,8 @@ import { getTeamResourceDefinitions } from './team.js'
 import { getHelpResourceDefinitions } from './help.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
+import { getAuditResourceDef } from '../../audit/index.js'
+import { getGlobalAuditLogger } from '../tools/index.js'
 
 /**
  * Get all resource definitions for MCP list
@@ -113,10 +115,14 @@ export async function readResource(
     // Check for template matches (also use base URI)
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
-            // Use (.+) for {repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
-            const pattern = resource.uri.replace(/\{([^}]+)\}/g, (_match, paramName) => {
-                return paramName === 'repo' ? '(.+)' : '([^/]+)'
-            })
+            // Use (.+) for {+repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
+            const pattern = resource.uri.replace(
+                /\{([^}]+)\}/g,
+                (_match: string, paramName: string) => {
+                    const cleanParam = paramName.startsWith('+') ? paramName.slice(1) : paramName
+                    return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
+                }
+            )
             const regex = new RegExp(`^${pattern}$`)
             if (regex.test(baseUri)) {
                 const result = await Promise.resolve(resource.handler(uri, context))
@@ -142,5 +148,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
         ...getTemplateResourceDefinitions(),
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
+        // Audit resource — bound to the global audit logger (or null if unconfigured)
+        getAuditResourceDef(getGlobalAuditLogger),
     ]
 }

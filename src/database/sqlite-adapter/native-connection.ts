@@ -131,9 +131,17 @@ export class NativeConnectionManager implements IDatabaseConnection {
 
         // Populate FTS5 index for existing databases that were created before FTS5 was added.
         // Uses FTS5's built-in 'rebuild' command for content-sync tables.
-        const ftsCount = (
-            db.prepare('SELECT COUNT(*) as c FROM fts_content').get() as { c: number }
-        ).c
+        // We query the fts_content_docsize shadow table to get the true number of indexed documents
+        // because querying fts_content directly merely delegates to the content table (memory_journal).
+        let ftsCount = 0
+        try {
+            ftsCount = (
+                db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
+            ).c
+        } catch {
+            // Shadow table doesn't exist yet or FTS5 disabled
+        }
+
         const entryCount = (
             db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
         ).c

@@ -33,7 +33,7 @@ export function getStatistics(
                 `SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL${dateFilter}`
             )
             .get(...dateParams) as { count: number }
-        totalEntries = countRow?.count ?? 0
+        totalEntries = countRow.count
 
         const typeRows = db
             .prepare(
@@ -47,7 +47,7 @@ export function getStatistics(
         const countRow = db
             .prepare('SELECT COUNT(*) as count FROM memory_journal WHERE deleted_at IS NULL')
             .get() as { count: number }
-        totalEntries = countRow?.count ?? 0
+        totalEntries = countRow.count
 
         const typeRows = db
             .prepare(
@@ -100,7 +100,7 @@ export function getStatistics(
         )
         .all() as { relationship_type: 'blocked_by' | 'resolved' | 'caused'; count: number }[]
 
-    const totalRelationships = relCountRow?.count ?? 0
+    const totalRelationships = relCountRow.count
     const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0
 
     const currentPeriod = entriesByPeriod[0]?.period ?? ''
@@ -136,8 +136,8 @@ export function getStatistics(
 
     if (startDate || endDate) {
         result['dateRange'] = {
-            startDate: startDate ?? '',
-            endDate: endDate ?? '',
+            startDate: startDate || '',
+            endDate: endDate || '',
         }
     }
 

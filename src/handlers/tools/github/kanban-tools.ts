@@ -24,7 +24,10 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
-                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: KanbanBoardOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -43,7 +46,11 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
 
                     // Fallback to explicit repo param if auto-detect failed (resolveOwner uses getRepoInfo)
                     const effectiveRepo = input.repo ?? resolved.repo
-                    const projectNum = resolveProjectNumber(context, effectiveRepo, input.project_number)
+                    const projectNum = resolveProjectNumber(
+                        context,
+                        effectiveRepo,
+                        input.project_number
+                    )
 
                     if (projectNum === undefined) {
                         return {
@@ -53,7 +60,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             category: 'validation',
                             recoverable: true,
                             requiresUserInput: true,
-                            instruction: 'Ask the user: "What is the GitHub Project number for this repository? (Usually found in the URL: projects/<number>)"'
+                            instruction:
+                                'Ask the user: "What is the GitHub Project number for this repository? (Usually found in the URL: projects/<number>)"',
                         }
                     }
 
@@ -100,7 +108,10 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .string()
                     .describe('Target status column name (e.g., "In Progress", "Done")'),
                 owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
-                repo: z.string().optional().describe('Repository name - LEAVE EMPTY to auto-detect'),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe('Repository name - LEAVE EMPTY to auto-detect'),
             }),
             outputSchema: MoveKanbanItemOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
@@ -120,7 +131,11 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     if ('error' in resolved) return resolved.response
 
                     const effectiveRepo = input.repo ?? resolved.repo
-                    const projectNum = resolveProjectNumber(context, effectiveRepo, input.project_number)
+                    const projectNum = resolveProjectNumber(
+                        context,
+                        effectiveRepo,
+                        input.project_number
+                    )
 
                     if (projectNum === undefined) {
                         return {

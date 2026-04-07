@@ -1,31 +1,19 @@
-# Test memory-journal-mcp — Pass 1b: Team Collaboration
+# Test memory-journal-mcp — Team Collaboration
 
-Exhaustively test the memory-journal-mcp server's team collaboration functionality (20 tools + 2 resources).
+**Scope:** 20 team tools + 2 team resources — happy paths, core error paths, and feature verification for all team collaboration features.
 
-**Scope:** 20 team tools, 2 team resources — this pass covers happy paths, core error paths, and feature verification for all team collaboration features.
+**Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
 
-**Prerequisites:**
-
-- Pass 1 (core functionality) must have completed successfully.
-- Confirm MCP server instructions were auto-received before starting.
-- Use the MCP server directly for all tests — not the terminal or scripts.
-- Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`.
-- Seed entries S11 and S12 from `test-tools.md` Phase 0 must exist (cross-DB search depends on them).
-- Seed entries S15, S16, S17 from `test-tools.md` Phase 0.5 must exist (`team_get_cross_project_insights` requires ≥ 3 team entries with `project_number: 5` to return a non-empty result).
+**Prerequisites:** Seed data from `test-seed.md` must be present (S11, S12 for cross-DB; S15–S17 for team cross-project insights). `TEAM_DB_PATH` configured. MCP server instructions auto-injected.
 
 **Workflow after testing:**
 
-1. Create a plan to fix any issues found or potential improvement opportunities, including changes to `server-instructions.md`/`server-instructions.ts` or this file (`test-server/test-tools-team.md`).
-2. Use `code-map.md` as a source of truth and ensure fixes comply with `C:\Users\chris\Desktop\adamic\skills\mcp-builder`.
-3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the user can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
-4. After user completes verification, re-test fixes with direct MCP calls.
-5. Provide a very brief final summary.
-
-> [!IMPORTANT]
-> **Test Session Prerequisites**
-
-1. The server instructions are auto-injected by the MCP protocol. Confirm receipt (no need to read `memory://instructions` separately).
-2. Confirm `memory://briefing` was auto-received and **present the `userMessage` to the user as a formatted bullet list of key facts as the server instructions required:**. Detailed briefing testing is in `test-tools.md` Phase 1.2.
+1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
+2. Implement, update `UNRELEASED.md`, commit without push.
+3. **USER** verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
+4. Re-test fixes with direct MCP calls.
+5. Brief final summary.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
 
 ---
 
@@ -49,14 +37,15 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 
 ### 10.2 Team Read Tools
 
-| Test            | Command/Action                                    | Expected Result                                  |
-| --------------- | ------------------------------------------------- | ------------------------------------------------ |
-| Get recent      | `team_get_recent(limit: 5)`                       | `entries` array (each with `author`), `count`    |
-| Default limit   | `team_get_recent`                                 | Returns up to 10 entries (default)               |
-| Search by text  | `team_search(query: "team test")`                 | Matching entries with `author` field             |
-| Search by tags  | `team_search(tags: ["team-test"])`                | Tag-filtered results                             |
-| Combined search | `team_search(query: "test", tags: ["team-test"])` | Text + tag filtered results                      |
-| No query/tags   | `team_search`                                     | Returns recent entries (fallback to `getRecent`) |
+| Test            | Command/Action                                     | Expected Result                                  |
+| --------------- | -------------------------------------------------- | ------------------------------------------------ |
+| Get recent      | `team_get_recent(limit: 5)`                        | `entries` array (each with `author`), `count`    |
+| Default limit   | `team_get_recent`                                  | Returns up to 10 entries (default)               |
+| Search by text  | `team_search(query: "team test", mode: "fts")`     | Matching entries with `author` field             |
+| Search by tags  | `team_search(tags: ["team-test"])`                 | Tag-filtered results                             |
+| Combined search | `team_search(query: "test", tags: ["team-test"])`  | Text + tag filtered results                      |
+| Hybrid search   | `team_search(query: "how did we fix performance")` | Auto-mode routes to semantic+FTS5 RRF            |
+| No query/tags   | `team_search`                                      | Returns recent entries (fallback to `getRecent`) |
 
 ### 10.3 Team Entry Detail
 
@@ -113,10 +102,10 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 | Rebuild team index      | `team_rebuild_vector_index`                                      | `success: true`, `entriesIndexed` > 0               |
 | Team vector stats       | `team_get_vector_index_stats`                                    | `available`, `itemCount`, `modelName`, `dimensions` |
 | Team semantic query     | `team_semantic_search(query: "team standup")`                    | ≥ 1 result with `similarity` score                  |
+| Team related by ID      | `team_semantic_search(entry_id: <team_entry_id>)`                | Semantically similar team entries bypassing strings |
 | Team semantic threshold | `team_semantic_search(query: "test", similarity_threshold: 0.5)` | Fewer results than default threshold (0.25)         |
-
-| Team add to index | `team_add_to_vector_index(entry_id: <team_entry_id>)` | `success: true`, `entryId` in response |
-| Team add nonexistent | `team_add_to_vector_index(entry_id: 999999)` | `{ success: false, error: "..." }` |
+| Team add to index       | `team_add_to_vector_index(entry_id: <team_entry_id>)`            | `success: true`, `entryId` in response              |
+| Team add nonexistent    | `team_add_to_vector_index(entry_id: 999999)`                     | `{ success: false, error: "..." }`                  |
 
 ### 10.9 Team Cross-Project Insights
 
@@ -175,12 +164,11 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 
 ## Success Criteria
 
-### Team Collaboration
-
 - [ ] `team_create_entry` creates entry with auto-detected `author` field
 - [ ] `team_create_entry` accepts explicit `author` override
 - [ ] `team_get_recent` returns entries with `author` field on each entry
 - [ ] `team_search` filters by text, tags, or both
+- [ ] `team_search` properly delegates to Hybrid/RRF when `mode: 'auto'`
 - [ ] `team_get_entry_by_id` returns entry with `author`, `importance`, and optional `relationships`
 - [ ] `team_get_entry_by_id` with `include_relationships: false` omits relationship data
 - [ ] `team_get_entry_by_id` returns structured error for nonexistent ID
@@ -204,6 +192,7 @@ Exhaustively test the memory-journal-mcp server's team collaboration functionali
 - [ ] `team_rebuild_vector_index` indexes team entries successfully
 - [ ] `team_get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
 - [ ] `team_semantic_search` returns semantically similar entries with `similarity` scores
+- [ ] `team_semantic_search` accepts `entry_id` for "Related by ID" lookup
 - [ ] `team_add_to_vector_index` succeeds for existing entries, errors for nonexistent
 - [ ] `team_get_cross_project_insights` returns `project_count ≥ 1` with seed entries S15–S17 present (project 5 has 3 entries, meeting `min_entries: 3`)
 - [ ] `team_get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project

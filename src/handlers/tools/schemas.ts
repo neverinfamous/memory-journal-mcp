@@ -125,6 +125,7 @@ export const EntriesListOutputSchema = z
     .object({
         entries: z.array(EntryOutputSchema).optional(),
         count: z.number().optional(),
+        searchMode: z.string().optional(),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

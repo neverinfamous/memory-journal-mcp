@@ -31,13 +31,13 @@ RUN cd /usr/local/lib/node_modules/npm && \
     mv package node_modules/tar && \
     rm tar-7.5.13.tgz
 
-# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.4
+# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.5
 RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack minimatch@10.2.4 && \
+    npm pack minimatch@10.2.5 && \
     rm -rf node_modules/minimatch && \
-    tar -xzf minimatch-10.2.4.tgz && \
+    tar -xzf minimatch-10.2.5.tgz && \
     mv package node_modules/minimatch && \
-    rm minimatch-10.2.4.tgz
+    rm minimatch-10.2.5.tgz
 
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
@@ -51,7 +51,7 @@ RUN npm ci
 RUN rm -rf node_modules/protobufjs/cli
 
 # Copy source code
-COPY tsconfig.json tsup.config.ts ./
+COPY tsconfig.json tsconfig.build.json tsup.config.ts ./
 COPY src/ ./src/
 
 # Build TypeScript

@@ -170,7 +170,7 @@ describe('WorkerSandbox', () => {
     it('should handle unknown RPC method (e.g. method removed after serialization)', async () => {
         const sandbox = new WorkerSandbox()
         const bindings: Record<string, any> = {}
-        
+
         let accessed = false
         Object.defineProperty(bindings, 'testGroup', {
             get: () => {
@@ -179,12 +179,12 @@ describe('WorkerSandbox', () => {
                     // Phase 1: Serialization by WorkerSandbox grabs this
                     return { doBad: async () => 'ok' }
                 }
-                // Phase 2: RPC request processing grabs this 
-                return {} 
+                // Phase 2: RPC request processing grabs this
+                return {}
             },
-            enumerable: true
+            enumerable: true,
         })
-        
+
         const code = 'try { await mj.testGroup.doBad(); } catch(e) { return e.message; }'
         const result = await sandbox.execute(code, bindings)
         expect(result.success).toBe(true)
@@ -203,7 +203,7 @@ describe('WorkerSandbox', () => {
                 }
                 return 'not a function'
             },
-            enumerable: true
+            enumerable: true,
         })
         const code = 'try { await mj.topFunc(); } catch(e) { return e.message; }'
         const result = await sandbox.execute(code, bindings)

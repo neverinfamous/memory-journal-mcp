@@ -52,7 +52,7 @@ describe('generateInstructions', () => {
         it('should include core behaviors', () => {
             const result = generateInstructions(TEST_TOOLS, TEST_PROMPTS, undefined, 'essential')
             expect(result).toContain('memory://briefing')
-            expect(result).toContain('Session Start')
+            expect(result).toContain('SESSION START!**')
         })
 
         it('should include Quick Access table', () => {

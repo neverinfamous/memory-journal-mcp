@@ -21,7 +21,12 @@ import {
     getEnabledGroups,
     type ToolFilterConfig,
 } from '../filtering/tool-filter.js'
-import { getTools, callTool } from '../handlers/tools/index.js'
+import {
+    getTools,
+    callTool,
+    initializeAuditLogger,
+    getGlobalAuditLogger,
+} from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/server-instructions.js'
@@ -30,6 +35,7 @@ import { HttpTransport } from '../transports/http/index.js'
 import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
 import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
 import type { ProjectRegistryEntry } from '../types/index.js'
+import type { AuditConfig } from '../audit/index.js'
 import {
     registerResources,
     registerPrompts,
@@ -66,6 +72,8 @@ export interface ServerOptions {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     // Instruction level
     instructionLevel?: 'essential' | 'standard' | 'full'
+    // Audit configuration
+    auditConfig?: AuditConfig
 }
 
 /**
@@ -87,6 +95,17 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const db = await DatabaseAdapterFactory.create(dbPath)
     await db.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath })
+
+    // Initialize audit logging if configured
+    if (options.auditConfig?.enabled) {
+        initializeAuditLogger(options.auditConfig)
+        logger.info('Audit logging enabled', {
+            module: 'McpServer',
+            path: options.auditConfig.logPath,
+            redact: options.auditConfig.redact,
+            auditReads: options.auditConfig.auditReads,
+        })
+    }
 
     // Initialize team database if configured
     let teamDb: IDatabaseAdapter | undefined
@@ -121,12 +140,22 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize GitHub integration
     let githubPath = '.'
-    if (options.defaultProjectNumber !== undefined && options.projectRegistry) {
-        const defaultEntry = Object.values(options.projectRegistry).find(
-            (r) => r.project_number === options.defaultProjectNumber
-        )
-        if (defaultEntry?.path) {
-            githubPath = defaultEntry.path
+    if (options.projectRegistry && Object.keys(options.projectRegistry).length > 0) {
+        if (options.defaultProjectNumber !== undefined) {
+            const defaultEntry = Object.values(options.projectRegistry).find(
+                (r) => r.project_number === options.defaultProjectNumber
+            )
+            if (defaultEntry?.path) {
+                githubPath = defaultEntry.path
+            }
+        }
+
+        // Fallback: If no explicit default matched, use the first project in the registry
+        if (githubPath === '.') {
+            const firstEntry = Object.values(options.projectRegistry)[0]
+            if (firstEntry?.path) {
+                githubPath = firstEntry.path
+            }
         }
     }
     const github = new GitHubIntegration(githubPath)
@@ -136,7 +165,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     } catch {
         // Ignore failing silently if not within a git repository workspace
     }
-    
+
     logger.info('GitHub integration initialized', {
         module: 'McpServer',
         hasToken: github.isApiAvailable(),
@@ -257,10 +286,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 // (non-ZodObject wrapper), fall back to the original schema to avoid
                 // a startup throw.
                 try {
-                    const relaxed = (schema as { partial: () => { passthrough?: () => z.ZodType } }).partial()
-                    toolOptions['inputSchema'] = typeof relaxed.passthrough === 'function'
-                        ? relaxed.passthrough()
-                        : schema
+                    const relaxed = (
+                        schema as { partial: () => { passthrough?: () => z.ZodType } }
+                    ).partial()
+                    toolOptions['inputSchema'] =
+                        typeof relaxed.passthrough === 'function' ? relaxed.passthrough() : schema
                 } catch {
                     toolOptions['inputSchema'] = schema
                 }
@@ -271,7 +301,23 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
         // MCP 2025-11-25: Pass outputSchema for structured responses
         if (tool.outputSchema !== undefined) {
-            toolOptions['outputSchema'] = tool.outputSchema
+            const outSchema = tool.outputSchema
+            if (
+                typeof outSchema === 'object' &&
+                outSchema !== null &&
+                'passthrough' in outSchema &&
+                typeof (outSchema as { passthrough: unknown }).passthrough === 'function'
+            ) {
+                try {
+                    toolOptions['outputSchema'] = (
+                        outSchema as { passthrough: () => z.ZodType }
+                    ).passthrough()
+                } catch {
+                    toolOptions['outputSchema'] = outSchema
+                }
+            } else {
+                toolOptions['outputSchema'] = outSchema
+            }
         }
 
         if (tool.annotations !== undefined) {
@@ -450,6 +496,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // Handle shutdown for stdio
         process.on('SIGINT', () => {
             logger.info('Shutting down...', { module: 'McpServer' })
+            // Flush audit log before exit
+            const auditLogger = getGlobalAuditLogger()
+            if (auditLogger) {
+                void auditLogger.close()
+            }
             db.close()
             teamDb?.close()
             process.exit(0)
@@ -482,6 +533,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
         process.on('SIGINT', () => {
             void (async () => {
                 await httpTransport.stop(scheduler)
+                // Flush audit log before exit
+                const auditLogger = getGlobalAuditLogger()
+                if (auditLogger) {
+                    await auditLogger.close()
+                }
                 db.close()
                 teamDb?.close()
                 process.exit(0)

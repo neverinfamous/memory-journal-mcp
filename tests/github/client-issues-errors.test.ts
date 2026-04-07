@@ -42,7 +42,7 @@ describe('GitHubClient — branch coverage', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         delete process.env['GITHUB_TOKEN']
-        delete process.env['GITHUB_REPO_PATH']
+
         client = new GitHubClient('.')
     })
 
@@ -148,7 +148,7 @@ describe('IssuesManager — branch coverage', () => {
         it('should return cached issues', async () => {
             const cached = [{ number: 1, title: 'cached' }]
             client.setCache('issues:o:r:open:20', cached)
-            client.octokit = {} as never // enable the octokit check
+            client.octokit = {} as any // enable the octokit check
             const result = await issues.getIssues('o', 'r')
             expect(result).toEqual(cached)
         })
@@ -158,7 +158,7 @@ describe('IssuesManager — branch coverage', () => {
                 issues: {
                     listForRepo: vi.fn().mockRejectedValue(new Error('API down')),
                 },
-            } as never
+            } as any
             const result = await issues.getIssues('o', 'r')
             expect(result).toEqual([])
         })
@@ -195,7 +195,7 @@ describe('IssuesManager — branch coverage', () => {
                         ],
                     }),
                 },
-            } as never
+            } as any
             const result = await issues.getIssues('o', 'r', 'all', 10)
             expect(result).toHaveLength(2)
             expect(result[0]!.state).toBe('OPEN')
@@ -214,7 +214,7 @@ describe('IssuesManager — branch coverage', () => {
         it('should return cached issue', async () => {
             const cached = { number: 1, title: 'cached issue' }
             client.setCache('issue:o:r:1', cached)
-            client.octokit = {} as never
+            client.octokit = {} as any
             const result = await issues.getIssue('o', 'r', 1)
             expect(result).toEqual(cached)
         })
@@ -226,7 +226,7 @@ describe('IssuesManager — branch coverage', () => {
                         data: { pull_request: { url: 'http://example.com' } },
                     }),
                 },
-            } as never
+            } as any
             const result = await issues.getIssue('o', 'r', 1)
             expect(result).toBeNull()
         })
@@ -252,7 +252,7 @@ describe('IssuesManager — branch coverage', () => {
                         },
                     }),
                 },
-            } as never
+            } as any
             const result = await issues.getIssue('o', 'r', 42)
             expect(result).not.toBeNull()
             expect(result!.labels).toEqual(['bug', 'string-label'])
@@ -265,7 +265,7 @@ describe('IssuesManager — branch coverage', () => {
                 issues: {
                     get: vi.fn().mockRejectedValue(new Error('Not found')),
                 },
-            } as never
+            } as any
             const result = await issues.getIssue('o', 'r', 999)
             expect(result).toBeNull()
         })
@@ -282,7 +282,7 @@ describe('IssuesManager — branch coverage', () => {
                 issues: {
                     create: vi.fn().mockRejectedValue(new Error('forbidden')),
                 },
-            } as never
+            } as any
             // Need to set apiCache just so invalidateCache doesn't break
             const result = await issues.createIssue('o', 'r', 'title')
             expect(result).toBeNull()
@@ -303,7 +303,7 @@ describe('IssuesManager — branch coverage', () => {
                     }),
                     createComment: vi.fn(),
                 },
-            } as never
+            } as any
             const result = await issues.closeIssue('o', 'r', 1)
             expect(result?.success).toBe(true)
             expect(client.octokit!.issues.createComment).not.toHaveBeenCalled()
@@ -317,7 +317,7 @@ describe('IssuesManager — branch coverage', () => {
                     }),
                     createComment: vi.fn().mockResolvedValue({}),
                 },
-            } as never
+            } as any
             const result = await issues.closeIssue('o', 'r', 1, 'closing comment')
             expect(result?.success).toBe(true)
             expect(client.octokit!.issues.createComment).toHaveBeenCalledWith({
@@ -333,7 +333,7 @@ describe('IssuesManager — branch coverage', () => {
                 issues: {
                     update: vi.fn().mockRejectedValue(new Error('fail')),
                 },
-            } as never
+            } as any
             const result = await issues.closeIssue('o', 'r', 1)
             expect(result).toBeNull()
         })
@@ -350,12 +350,12 @@ describe('Error helpers — branch coverage', () => {
             const error = new ZodError([
                 {
                     code: ZodIssueCode.invalid_type,
-                    expected: 'string',
-                    received: 'number',
+                    expected: 'string' as any,
+                    received: 'number' as any,
                     path: ['name'],
                     message: 'Expected string',
                 },
-            ])
+            ] as any)
             expect(formatZodError(error)).toBe('name: Expected string')
         })
 
@@ -363,12 +363,12 @@ describe('Error helpers — branch coverage', () => {
             const error = new ZodError([
                 {
                     code: ZodIssueCode.invalid_type,
-                    expected: 'string',
-                    received: 'number',
+                    expected: 'string' as any,
+                    received: 'number' as any,
                     path: [],
                     message: 'Required',
                 },
-            ])
+            ] as any)
             expect(formatZodError(error)).toBe('Required')
         })
 
@@ -376,26 +376,26 @@ describe('Error helpers — branch coverage', () => {
             const error = new ZodError([
                 {
                     code: ZodIssueCode.invalid_type,
-                    expected: 'string',
-                    received: 'number',
+                    expected: 'string' as any,
+                    received: 'number' as any,
                     path: ['a'],
                     message: 'Bad A',
                 },
                 {
                     code: ZodIssueCode.invalid_type,
-                    expected: 'number',
-                    received: 'string',
+                    expected: 'number' as any,
+                    received: 'string' as any,
                     path: ['b'],
                     message: 'Bad B',
                 },
-            ])
+            ] as any)
             expect(formatZodError(error)).toBe('a: Bad A; b: Bad B')
         })
     })
 
     describe('formatHandlerError', () => {
         it('should handle MemoryJournalMcpError', () => {
-            const err = new MemoryJournalMcpError('test error', 'TEST_CODE')
+            const err = new MemoryJournalMcpError('test error', 'TEST_CODE', ErrorCategory.INTERNAL)
             const result = formatHandlerError(err)
             expect(result.success).toBe(false)
             expect(result.code).toBe('TEST_CODE')
@@ -405,12 +405,12 @@ describe('Error helpers — branch coverage', () => {
             const err = new ZodError([
                 {
                     code: ZodIssueCode.invalid_type,
-                    expected: 'string',
-                    received: 'number',
+                    expected: 'string' as any,
+                    received: 'number' as any,
                     path: ['x'],
                     message: 'bad',
                 },
-            ])
+            ] as any)
             const result = formatHandlerError(err)
             expect(result.success).toBe(false)
             expect(result.code).toBe('VALIDATION_ERROR')

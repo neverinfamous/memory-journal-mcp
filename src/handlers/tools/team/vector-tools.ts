@@ -52,6 +52,20 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
 
                     const input = TeamSemanticSearchSchema.parse(params)
 
+                    if (!input.query && input.entry_id === undefined) {
+                        return {
+                            success: false,
+                            error: 'Either query or entry_id must be provided',
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion:
+                                'Provide a text query for semantic search, or an entry_id to find related entries',
+                            recoverable: true,
+                            entries: [],
+                            count: 0,
+                        }
+                    }
+
                     if (!teamVectorManager) {
                         return {
                             success: false,
@@ -67,11 +81,20 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const results = await teamVectorManager.search(
-                        input.query,
-                        input.limit ?? 10,
-                        input.similarity_threshold ?? 0.25
-                    )
+                    let results
+                    if (input.entry_id !== undefined) {
+                        results = await teamVectorManager.searchByEntryId(
+                            input.entry_id,
+                            input.limit ?? 10,
+                            input.similarity_threshold ?? 0.25
+                        )
+                    } else {
+                        results = await teamVectorManager.search(
+                            input.query ?? '',
+                            input.limit ?? 10,
+                            input.similarity_threshold ?? 0.25
+                        )
+                    }
 
                     // Batch-fetch all entries (instead of N+1 getEntryById calls)
                     const entryIds = results.map((r) => r.entryId)
@@ -84,6 +107,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
+                            if (input.entry_id !== undefined && entry.id === input.entry_id)
+                                return null
                             return {
                                 ...entry,
                                 author: authorMap.get(r.entryId) ?? null,
@@ -110,6 +135,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         query: input.query,
+                        ...(input.entry_id !== undefined ? { entryId: input.entry_id } : {}),
                         entries,
                         count: entries.length,
                         ...(hint !== undefined ? { hint } : {}),

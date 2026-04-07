@@ -7,7 +7,7 @@ export default defineConfig({
         include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',
-            reporter: ['text', 'html'],
+            reporter: ['text', 'html', 'json-summary'],
             reportsDirectory: '.test-output/coverage',
             include: ['src/**/*.ts'],
             exclude: [
@@ -18,8 +18,6 @@ export default defineConfig({
                 'src/codemode/worker-script.ts',
             ],
         },
-    },
-    benchmark: {
         hookTimeout: 30_000,
     },
 })

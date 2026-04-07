@@ -44,7 +44,13 @@ export class VectorSearchManager {
     private embedder:
         | ((text: string, options?: Record<string, unknown>) => Promise<unknown>)
         | null = null
-    private db: BetterSqlite3Database | null = null
+    private get db(): BetterSqlite3Database | null {
+        try {
+            return this.dbAdapter.getRawDb() as BetterSqlite3Database
+        } catch {
+            return null
+        }
+    }
     private readonly modelName: string
     private initialized = false
     private initializing = false
@@ -85,7 +91,6 @@ export class VectorSearchManager {
 
             // Get the raw better-sqlite3 database instance
             // sqlite-vec extension is already loaded by NativeConnectionManager
-            this.db = this.dbAdapter.getRawDb() as BetterSqlite3Database
 
             this.initialized = true
             this.initializing = false
@@ -223,6 +228,84 @@ export class VectorSearchManager {
         } catch (error) {
             logger.error('Semantic search failed', {
                 module: 'VectorSearch',
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
+        }
+    }
+
+    /**
+     * Find entries related to a given entry by its existing embedding.
+     * Uses the stored embedding directly, skipping the re-embedding step.
+     *
+     * @param entryId - Entry ID whose embedding is used as the search vector
+     * @param limit - Max number of results
+     * @param similarityThreshold - Minimum similarity score
+     */
+    async searchByEntryId(
+        entryId: number,
+        limit = 10,
+        similarityThreshold = 0.3
+    ): Promise<SemanticSearchResult[]> {
+        if (!this.initialized) {
+            try {
+                await this.initialize()
+            } catch {
+                return []
+            }
+        }
+
+        if (!this.db) {
+            return []
+        }
+
+        try {
+            // Look up the stored embedding for this entry
+            const row = this.db
+                .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
+                .get(BigInt(entryId)) as { embedding: Buffer } | undefined
+
+            if (!row) {
+                logger.debug('No embedding found for entry', {
+                    module: 'VectorSearch',
+                    entityId: entryId,
+                })
+                return []
+            }
+
+            // Use the stored embedding as the query vector
+            const queryVec = new Float32Array(
+                row.embedding.buffer,
+                row.embedding.byteOffset,
+                EMBEDDING_DIMENSIONS
+            )
+
+            // KNN search — fetch extra to allow excluding the source entry
+            const results = this.db
+                .prepare(
+                    `SELECT entry_id, distance
+                     FROM vec_embeddings
+                     WHERE embedding MATCH ?
+                     ORDER BY distance
+                     LIMIT ?`
+                )
+                .all(queryVec, (limit + 1) * 2) as { entry_id: number; distance: number }[]
+
+            // Convert L2 distance to similarity, exclude the source entry, filter by threshold
+            const filteredResults: SemanticSearchResult[] = results
+                .filter((r) => r.entry_id !== entryId)
+                .map((r) => ({
+                    entryId: r.entry_id,
+                    score: 1 / (1 + r.distance),
+                }))
+                .filter((r) => r.score >= similarityThreshold)
+                .slice(0, limit)
+
+            return filteredResults
+        } catch (error) {
+            logger.error('searchByEntryId failed', {
+                module: 'VectorSearch',
+                entityId: entryId,
                 error: error instanceof Error ? error.message : String(error),
             })
             return []

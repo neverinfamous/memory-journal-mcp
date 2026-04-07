@@ -63,18 +63,21 @@ export type InstructionLevel = 'essential' | 'standard' | 'full'
  */
 const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
-## Session Start
+## ESSENTIAL SESSION START!**
 
-**REQUIRED**: Before processing any user request, read \`memory://briefing/{repo_name}\` inferring \`repo_name\` strictly from the context of the user's prompt and present the \`userMessage\` to the user as a formatted bullet list of key facts, with all available fields, including:
+1. You **MUST** read the \`memory://briefing/{repo_name}\` at the start of each chat!
+2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
+3. Infer the \`repo_name\` from the user's prompt or your active workspace context.
+4. Once read, present the \`userMessage\` from the briefing to the user as a formatted bullet list containing the key facts for all available fields including:
 
+- Project Name:
 - Entry counts (journal + team)
-- GitHub: repo, branch, CI status, open issues/PRs
+- Latest Entry (journal + team):
+- GitHub: repo, branch, CI status, open issues/PRs, insights
 - Milestone progress (if any)
 - Template resources count
 - Registered Workspaces (if available - provides automatic repo-to-project routing)
 - Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
-
-**Server name for resource calls**: Derive from tool prefixes — strip the tool name suffix to get the server name.
 
 - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
 - **Cursor**: Tools are \`user-{name}-{tool}\` → server name = \`user-memory-journal-mcp\`
@@ -82,13 +85,15 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 ## Behaviors
 
+### memory-journal-mcp Behaviors
+
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures or cross-cutting abstractions. Use repo insights (\`memory://github/insights\`) to gauge traction.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
-## Rule & Skill Suggestions
+### Rule & Skill Suggestions
 
 When you notice the user consistently applies patterns, preferences, or workflows that could be codified:
 
@@ -167,16 +172,66 @@ function buildQuickAccess(groups: Set<ToolGroup>): string {
  * Code Mode namespace row definitions.
  * Each maps a tool group to its Code Mode API namespace.
  */
-const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
-    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
-    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
-    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
-    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
-    { group: 'export', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries("json")`' },
-    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
-    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
-    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
-    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
+const CODE_MODE_NAMESPACE_ROWS: {
+    group: ToolGroup
+    label: string
+    namespace: string
+    example: string
+}[] = [
+    {
+        group: 'core',
+        label: 'Core',
+        namespace: '`mj.core.*`',
+        example: '`mj.core.createEntry("Implemented feature X")`',
+    },
+    {
+        group: 'search',
+        label: 'Search',
+        namespace: '`mj.search.*`',
+        example: '`mj.search.searchEntries("performance")`',
+    },
+    {
+        group: 'analytics',
+        label: 'Analytics',
+        namespace: '`mj.analytics.*`',
+        example: '`mj.analytics.getStatistics()`',
+    },
+    {
+        group: 'relationships',
+        label: 'Relationships',
+        namespace: '`mj.relationships.*`',
+        example: '`mj.relationships.linkEntries(1, 2, "implements")`',
+    },
+    {
+        group: 'export',
+        label: 'Export',
+        namespace: '`mj.export.*`',
+        example: '`mj.export.exportEntries("json")`',
+    },
+    {
+        group: 'admin',
+        label: 'Admin',
+        namespace: '`mj.admin.*`',
+        example: '`mj.admin.rebuildVectorIndex()`',
+    },
+    {
+        group: 'github',
+        label: 'GitHub',
+        namespace: '`mj.github.*`',
+        example: '`mj.github.getGithubIssues({ state: "open" })`',
+    },
+    {
+        group: 'backup',
+        label: 'Backup',
+        namespace: '`mj.backup.*`',
+        example: '`mj.backup.backupJournal()`',
+    },
+    {
+        group: 'team',
+        label: 'Team',
+        namespace: '`mj.team.*`',
+        example: '`mj.team.teamCreateEntry("Team update")`',
+    },
 ]
 
 /**
@@ -186,9 +241,10 @@ const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: st
  */
 function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
     // Build namespace table with only enabled groups
-    const rows = CODE_MODE_NAMESPACE_ROWS
-        .filter((r) => groups.has(r.group))
-        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
+    const rows = CODE_MODE_NAMESPACE_ROWS.filter((r) => groups.has(r.group))
+        .map(
+            (r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`
+        )
         .join('\n')
 
     // Build the static behavioral text from the .md source,
@@ -201,8 +257,10 @@ function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
         return '\n' + fullSection
     }
     const beforeTable = fullSection.slice(0, tableStart)
-    const headerLine = '| Group         | Namespace            | Example                                            |'
-    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
+    const headerLine =
+        '| Group         | Namespace            | Example                                            |'
+    const separatorLine =
+        '| ------------- | -------------------- | -------------------------------------------------- |'
     const afterTable = fullSection.slice(tableEnd)
     return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
 }
@@ -336,10 +394,13 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 ## Semantic Search
 
 - **Indexing**: Entries are auto-indexed on creation (fire-and-forget). If index count drifts from DB count, use \`rebuild_vector_index\` or enable \`AUTO_REBUILD_INDEX=true\` for automatic reconciliation on server startup.
+- **Related by ID**: Provide \`entry_id\` instead of a query string to find entries semantically related to an existing entry (reuses the existing embedding to avoid inference costs).
+- **Metadata Filters**: Semantic search supports explicit filtering by \`tags\`, \`entry_type\`, \`start_date\`, and \`end_date\`.
 - **Thresholds**: Default similarity threshold is 0.25. For broader matches, try 0.15-0.2. Higher values (0.4+) return only very close semantic matches. A quality floor of 0.5 is always enforced: if all results score below 0.5, a hint is included indicating results may be noise. The \`hint_on_empty\` flag (default true) only controls advisory hints for empty indexes and zero-match queries — the quality gate hint is always shown.
 
 ## Search
 
+- **Hybrid Ranking**: \`search_entries\` defaults to \`mode: 'auto'\`. Conversational prompts automatically utilize Reciprocal Rank Fusion (true Hybrid) bridging keyword and vector algorithms.
 - **\`search_entries\` FTS5 query syntax**: Uses FTS5 full-text search with Porter stemmer. Phrase queries: \`"error handling"\`. Prefix: \`auth*\`. Boolean: \`deploy OR release\`, \`error NOT warning\`. Word-boundary matching ("log" matches "log" but not "catalog"). Results ranked by BM25 relevance. Falls back to LIKE substring matching for queries with unbalanced quotes or special characters.
 
 ## Relationships & Analytics
@@ -361,9 +422,8 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 - **Team cross-database search**: \`search_entries\` and \`search_by_date_range\` automatically merge team DB results when \`TEAM_DB_PATH\` is configured. Results include a \`source\` field ("personal" or "team").
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
-- **Team tools without \`TEAM_DB_PATH\`**: All ${TOOL_GROUPS.team.length} team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
+- **Team tools without \`TEAM_DB_PATH\`**: All 20 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
-
 
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
@@ -472,4 +532,3 @@ export const SERVER_INSTRUCTIONS =
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS
-

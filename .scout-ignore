@@ -10,3 +10,4 @@ CVE-2026-22184
 # Alpine busybox - wget CRLF injection (MEDIUM)
 # Patch submitted to busybox upstream but not in a release yet
 CVE-2025-60876
+tmp/

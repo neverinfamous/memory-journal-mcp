@@ -1,14 +1,20 @@
 {
-    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "name": "io.github.neverinfamous/memory-journal-mcp",
     "title": "Memory Journal MCP",
-    "description": "Persistent knowledge graphs and intelligent context recall across AI threads",
-    "version": "6.3.0",
+    "description": "Persistent knowledge graphs and intelligent context recall across AI threads with GitHub integration",
+    "version": "7.0.0",
     "packages": [
         {
             "registryType": "oci",
-            "identifier": "docker.io/writenotenow/memory-journal-mcp:v6.3.0",
-            "version": "6.3.0",
+            "identifier": "docker.io/writenotenow/memory-journal-mcp:v7.0.0",
+            "transport": {
+                "type": "stdio"
+            }
+        },
+        {
+            "registryType": "npm",
+            "identifier": "memory-journal-mcp",
             "transport": {
                 "type": "stdio"
             }
@@ -26,11 +32,11 @@
         "github-projects",
         "persistent-memory",
         "thread-continuity",
-        "semantic-search"
+        "semantic-search",
+        "codemode"
     ],
     "author": {
-        "name": "Adamic.tech",
-        "email": "writenotenow@gmail.com"
+        "name": "Adamic.tech"
     },
     "homepage": "https://github.com/neverinfamous/memory-journal-mcp",
     "repository": {

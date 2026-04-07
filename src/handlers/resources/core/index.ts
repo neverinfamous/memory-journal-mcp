@@ -11,6 +11,7 @@ import {
     workflowsResource,
     skillsResource,
 } from './utilities.js'
+import { getMetricsResourceDefinitions } from './metrics-resource.js'
 
 /**
  * Get core resource definitions
@@ -28,5 +29,6 @@ export function getCoreResourceDefinitions(): InternalResourceDef[] {
         workflowsResource,
         skillsResource,
         healthResource,
+        ...getMetricsResourceDefinitions(),
     ]
 }
