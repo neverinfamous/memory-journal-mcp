@@ -99,11 +99,10 @@ describe('VectorSearchManager', () => {
     })
 
     describe('initialize', () => {
-        it('should load pipeline and get raw database', async () => {
+        it('should load pipeline', async () => {
             mockEmbedderFn.mockResolvedValue({ data: new Float32Array(384) })
             await vm.initialize()
 
-            expect(adapter.getRawDb).toHaveBeenCalled()
             expect(vm.isInitialized()).toBe(true)
         })
 
@@ -232,6 +231,7 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return false if db not available', async () => {
+            ;(adapter.getRawDb as any).mockImplementation(() => { throw new Error('No db') })
             const result = await vm.removeEntry(42)
             expect(result).toBe(false)
         })
@@ -263,6 +263,7 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return zero count when no db', async () => {
+            ;(adapter.getRawDb as any).mockImplementation(() => { throw new Error('No db') })
             const stats = await vm.getStats()
             expect(stats.itemCount).toBe(0)
         })

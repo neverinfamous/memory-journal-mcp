@@ -49,6 +49,7 @@
 - Improved `Could not detect repository` hint to point multi-project users toward dynamic `{repo}` URIs.
 - Fixed relative path resolution for modularized test validation scripts.
 - Fixed `VectorSearchManager` caching a closed database connection, preventing `The database connection is not open` errors during index rebuilds after a backup is restored.
+- Refactored `VectorSearchManager` unit tests to correctly mock the constructor injection `IDatabaseAdapter` instead of incorrectly bypassing the `db` getter with `Object.assign()`.
 
 ### Security
 
