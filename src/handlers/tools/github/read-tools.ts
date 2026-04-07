@@ -268,7 +268,10 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
             group: 'github',
             inputSchema: z.object({
                 owner: z.string().optional().describe('Repository owner'),
-                repo: z.string().optional().describe('Repository name (use this to switch projects dynamically)'),
+                repo: z
+                    .string()
+                    .optional()
+                    .describe('Repository name (use this to switch projects dynamically)'),
             }),
             outputSchema: GitHubContextOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -286,7 +289,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input,
                         'would you like the context for'
                     )
-                    
+
                     let targetGithub: GitHubIntegration
                     if ('error' in resolved) {
                         // Maintain strict payload contract: gracefully degrade instead of erroring

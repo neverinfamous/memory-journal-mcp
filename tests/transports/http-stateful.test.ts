@@ -57,10 +57,7 @@ vi.mock('../../../src/utils/logger.js', () => ({
     },
 }))
 
-import {
-    setupStateful,
-    type StatefulContext,
-} from '../../src/transports/http/server/stateful.js'
+import { setupStateful, type StatefulContext } from '../../src/transports/http/server/stateful.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 
 // ============================================================================
@@ -335,8 +332,8 @@ describe('setupStateful', () => {
         const sid = Array.from(ctx.transports.keys())[0]!
         const createdTransport = ctx.transports.get(sid) as any
         if (createdTransport && createdTransport.onclose) {
-             createdTransport.onclose()
-             expect(ctx.transports.has(sid)).toBe(false)
+            createdTransport.onclose()
+            expect(ctx.transports.has(sid)).toBe(false)
         }
 
         clearInterval(timer)

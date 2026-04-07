@@ -37,7 +37,8 @@ export async function resolveIssueUrl(
 
     // 2. Fallback to globally repo info if available
     if (context.github) {
-        const cachedRepo = context.github.getCachedRepoInfo() ?? (await context.github.getRepoInfo())
+        const cachedRepo =
+            context.github.getCachedRepoInfo() ?? (await context.github.getRepoInfo())
         if (cachedRepo?.owner && cachedRepo?.repo) {
             return `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(issueNumber)}`
         }

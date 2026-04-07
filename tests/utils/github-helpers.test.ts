@@ -13,7 +13,7 @@ vi.mock('../../src/github/github-integration/index.js', () => {
             async getRepoInfo() {
                 return { owner: 'dynamic-owner', repo: 'dynamic-test-repo' }
             }
-        }
+        },
     }
 })
 
@@ -23,7 +23,12 @@ vi.mock('../../src/github/github-integration/index.js', () => {
 
 describe('resolveIssueUrl', () => {
     it('should return existingUrl when provided', async () => {
-        const result = await resolveIssueUrl({} as never, undefined, 42, 'https://example.com/issue/42')
+        const result = await resolveIssueUrl(
+            {} as never,
+            undefined,
+            42,
+            'https://example.com/issue/42'
+        )
         expect(result).toBe('https://example.com/issue/42')
     })
 
@@ -42,7 +47,9 @@ describe('resolveIssueUrl', () => {
             getCachedRepoInfo: vi
                 .fn()
                 .mockReturnValue({ owner: 'neverinfamous', repo: 'memory-journal-mcp' }),
-            getRepoInfo: vi.fn().mockResolvedValue({ owner: 'neverinfamous', repo: 'memory-journal-mcp' }),
+            getRepoInfo: vi
+                .fn()
+                .mockResolvedValue({ owner: 'neverinfamous', repo: 'memory-journal-mcp' }),
         }
 
         const result = await resolveIssueUrl({ github } as never, undefined, 42, undefined)
@@ -71,15 +78,15 @@ describe('resolveIssueUrl', () => {
 
     it('should dynamically resolve using projectRegistry if projectNumber provided', async () => {
         const context = {
-            github: { 
+            github: {
                 getCachedRepoInfo: vi.fn(),
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null })
+                getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null }),
             },
             config: {
                 projectRegistry: {
-                    testProject: { project_number: 99, path: '/test/dynamic/path' }
-                }
-            }
+                    testProject: { project_number: 99, path: '/test/dynamic/path' },
+                },
+            },
         }
         const result = await resolveIssueUrl(context as never, 99, 123, undefined)
         expect(result).toBe('https://github.com/dynamic-owner/dynamic-test-repo/issues/123')
@@ -87,15 +94,19 @@ describe('resolveIssueUrl', () => {
 
     it('should fallback to cached info if projectRegistry lacks projectNumber', async () => {
         const context = {
-            github: { 
-                getCachedRepoInfo: vi.fn().mockReturnValue({ owner: 'cached-owner', repo: 'cached-repo' }),
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'cached-owner', repo: 'cached-repo' })
+            github: {
+                getCachedRepoInfo: vi
+                    .fn()
+                    .mockReturnValue({ owner: 'cached-owner', repo: 'cached-repo' }),
+                getRepoInfo: vi
+                    .fn()
+                    .mockResolvedValue({ owner: 'cached-owner', repo: 'cached-repo' }),
             },
             config: {
                 projectRegistry: {
-                    testProject: { project_number: 55, path: '/test/dynamic/path' }
-                }
-            }
+                    testProject: { project_number: 55, path: '/test/dynamic/path' },
+                },
+            },
         }
         // passing 99 while registry only has 55
         const result = await resolveIssueUrl(context as never, 99, 124, undefined)

@@ -44,8 +44,7 @@ export async function resolveOwner(
                 error: 'GitHub integration not available',
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
-                suggestion:
-                    'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
+                suggestion: 'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
                 requiresUserInput: true,
             },
@@ -96,9 +95,10 @@ export async function resolveOwnerRepo(
     | { error: true; response: Record<string, unknown> }
 > {
     let toolGithub: GitHubIntegration | undefined
-    const registryEntry = input.repo && context.config?.projectRegistry
-        ? context.config.projectRegistry[input.repo]
-        : undefined
+    const registryEntry =
+        input.repo && context.config?.projectRegistry
+            ? context.config.projectRegistry[input.repo]
+            : undefined
 
     if (registryEntry) {
         toolGithub = new GitHubIntegration(registryEntry.path)
@@ -114,8 +114,7 @@ export async function resolveOwnerRepo(
                 error: 'GitHub integration not available',
                 code: 'CONFIGURATION_ERROR',
                 category: 'configuration',
-                suggestion:
-                    'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
+                suggestion: 'Set GITHUB_TOKEN environment variable to enable GitHub integration.',
                 recoverable: true,
                 requiresUserInput: true,
             },
@@ -126,7 +125,7 @@ export async function resolveOwnerRepo(
     if (context.github && toolGithub !== context.github) {
         context.github.setCachedRepoInfo(repoInfo)
     }
-    
+
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo
 

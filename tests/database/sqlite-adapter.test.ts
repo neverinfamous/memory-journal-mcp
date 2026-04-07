@@ -433,7 +433,9 @@ describe('DatabaseAdapter', () => {
             const today = new Date().toISOString().split('T')[0]!
             const filteredStats = db.getStatistics('day', today, today)
 
-            expect(filteredStats.totalEntries as number).toBeLessThanOrEqual(allStats.totalEntries as number)
+            expect(filteredStats.totalEntries as number).toBeLessThanOrEqual(
+                allStats.totalEntries as number
+            )
             expect(filteredStats.dateRange).toBeDefined()
             const dateRange = filteredStats.dateRange as { startDate: string; endDate: string }
             expect(dateRange.startDate).toBe(today)
@@ -458,7 +460,10 @@ describe('DatabaseAdapter', () => {
 
             expect(stats.projectBreakdown).toBeDefined()
             expect(Array.isArray(stats.projectBreakdown)).toBe(true)
-            const breakdown = stats.projectBreakdown as { project_number: number; entry_count: number }[]
+            const breakdown = stats.projectBreakdown as {
+                project_number: number
+                entry_count: number
+            }[]
             const proj = breakdown.find((p) => p.project_number === 555)
             expect(proj).toBeDefined()
             expect(proj!.entry_count).toBeGreaterThanOrEqual(1)
@@ -644,22 +649,25 @@ describe('DatabaseAdapter', () => {
             const noFts = db.searchEntries('', { tags: ['searchfilter'] })
             expect(results.length).toBeGreaterThan(0)
             expect(emptyResults.length).toBe(0)
-            expect(noFts.some(e => e.tags.includes('searchfilter'))).toBe(true)
+            expect(noFts.some((e) => e.tags.includes('searchfilter'))).toBe(true)
         })
 
         it('should filter by entryType', () => {
             db.createEntry({ content: 'entrytype target', entryType: 'milestone' })
             const results = db.searchEntries('entrytype target', { entryType: 'milestone' })
             expect(results.length).toBeGreaterThan(0)
-            expect(results.every(e => e.entryType === 'milestone')).toBe(true)
+            expect(results.every((e) => e.entryType === 'milestone')).toBe(true)
         })
 
         it('should filter by startDate and endDate', () => {
             db.createEntry({ content: 'date target xyz' })
             const today = new Date().toISOString().split('T')[0]!
             const future = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]!
-            
-            const exactMatches = db.searchEntries('date target xyz', { startDate: today, endDate: today })
+
+            const exactMatches = db.searchEntries('date target xyz', {
+                startDate: today,
+                endDate: today,
+            })
             expect(exactMatches.length).toBeGreaterThan(0)
 
             const noMatchesFuture = db.searchEntries('date target xyz', { startDate: future })

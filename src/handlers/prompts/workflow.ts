@@ -364,7 +364,11 @@ ${entrySummary}
                 'Create a session summary entry for the team capturing what was accomplished, pending items, and context for the next team session',
             icons: [ICON_PROMPT],
             arguments: [],
-            handler: (_args: Record<string, string>, _db: IDatabaseAdapter, teamDb?: IDatabaseAdapter) => {
+            handler: (
+                _args: Record<string, string>,
+                _db: IDatabaseAdapter,
+                teamDb?: IDatabaseAdapter
+            ) => {
                 if (!teamDb) {
                     throw new ConfigurationError('Team database not configured')
                 }

@@ -81,10 +81,7 @@ program
         '--audit-log <path>',
         'Enable audit logging to the specified JSONL file path, or "stderr" for container mode (env: AUDIT_LOG_PATH)'
     )
-    .option(
-        '--audit-redact',
-        'Redact tool arguments from audit entries (env: AUDIT_REDACT)'
-    )
+    .option('--audit-redact', 'Redact tool arguments from audit entries (env: AUDIT_REDACT)')
     .option(
         '--audit-reads',
         'Enable audit logging for read-scoped tool calls (default: off, env: AUDIT_READS)'
@@ -213,10 +210,8 @@ program
                     ? {
                           enabled: true,
                           logPath: auditLogPath,
-                          redact:
-                              options.auditRedact ?? process.env['AUDIT_REDACT'] === 'true',
-                          auditReads:
-                              options.auditReads ?? process.env['AUDIT_READS'] === 'true',
+                          redact: options.auditRedact ?? process.env['AUDIT_REDACT'] === 'true',
+                          auditReads: options.auditReads ?? process.env['AUDIT_READS'] === 'true',
                           maxSizeBytes: parseInt(
                               process.env['AUDIT_LOG_MAX_SIZE'] ?? options.auditLogMaxSize,
                               10

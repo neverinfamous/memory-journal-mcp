@@ -174,8 +174,10 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 github: injectedGithub,
                                 config: {
                                     ...context.config,
-                                    defaultProjectNumber: registryEntry.project_number ?? context.config.defaultProjectNumber
-                                }
+                                    defaultProjectNumber:
+                                        registryEntry.project_number ??
+                                        context.config.defaultProjectNumber,
+                                },
                             }
                         }
                     }

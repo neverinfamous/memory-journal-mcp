@@ -4,7 +4,7 @@
 
 This directory contains agent-optimized test prompts specifically designed to validate the `mj_execute_code` (Code Mode) sandbox capabilities. These tests verify the secure execution environment, the `mj.*` API bridge, workflow orchestration, and cross-group data operations.
 
-> **Note:** Code Mode tests should be executed *after* the core standard tests have completed, as they rely on a stable underlying database and robust tool handlers. 
+> **Note:** Code Mode tests should be executed _after_ the core standard tests have completed, as they rely on a stable underlying database and robust tool handlers.
 
 > **Important Constraints (P401):** When verifying Code Mode scripts, explicitly ensure that scripts processing errors correctly handle boundary detection. A returned object MUST NOT bleed raw MCP exceptions. Pay close attention to the `_meta.tokenEstimate` to ensure token payloads do not breach thresholds during heavy array iterations.
 
@@ -12,37 +12,37 @@ This directory contains agent-optimized test prompts specifically designed to va
 
 ### Foundations & Security (from CM-1)
 
-| File | Phase | Focus | When to Run |
-|------|:-----:|-------|-------------|
-| `test-cm-sandbox-basics.md` | 16 | Simple expressions, async, metrics, timeout | Always run first |
-| `test-cm-api-discovery.md` | 17 | `mj.help()`, per-group help, aliases, positional args | After Phase 16 |
-| `test-cm-readonly.md` | 18 | Readonly mode enforcement (read succeed, writes blocked) | After Phase 16 |
-| `test-cm-security.md` | 19 | Input validation, blocked patterns, runtime errors, nulled globals | After Phase 16 |
+| File                        | Phase | Focus                                                              | When to Run      |
+| --------------------------- | :---: | ------------------------------------------------------------------ | ---------------- |
+| `test-cm-sandbox-basics.md` |  16   | Simple expressions, async, metrics, timeout                        | Always run first |
+| `test-cm-api-discovery.md`  |  17   | `mj.help()`, per-group help, aliases, positional args              | After Phase 16   |
+| `test-cm-readonly.md`       |  18   | Readonly mode enforcement (read succeed, writes blocked)           | After Phase 16   |
+| `test-cm-security.md`       |  19   | Input validation, blocked patterns, runtime errors, nulled globals | After Phase 16   |
 
 ### Core Data Operations (from CM-2)
 
-| File | Phase | Focus | When to Run |
-|------|:-----:|-------|-------------|
-| `test-cm-crud.md` | 20 | Create/read/update/delete, full params, error paths | After Phases 16–19 |
-| `test-cm-search.md` | 21 | FTS5, filters, date range, semantic search, analytics | After Phases 16–19 |
+| File                | Phase | Focus                                                 | When to Run        |
+| ------------------- | :---: | ----------------------------------------------------- | ------------------ |
+| `test-cm-crud.md`   |  20   | Create/read/update/delete, full params, error paths   | After Phases 16–19 |
+| `test-cm-search.md` |  21   | FTS5, filters, date range, semantic search, analytics | After Phases 16–19 |
 
 ### Workflows & Relationships (from CM-3)
 
-| File | Phase | Focus | When to Run |
-|------|:-----:|-------|-------------|
-| `test-cm-workflows.md` | 22 | Read-only pipelines, conditional branching, round-trips | After Phases 16–19 |
-| `test-cm-orchestration.md` | 23 | Cross-group orchestration (health, tags, full pipeline) | After Phases 16–19 |
-| `test-cm-relationships.md` | 24 | Link all types, duplicates, Mermaid visualization + cleanup for 22-24 | After Phases 16–19 |
+| File                       | Phase | Focus                                                                 | When to Run        |
+| -------------------------- | :---: | --------------------------------------------------------------------- | ------------------ |
+| `test-cm-workflows.md`     |  22   | Read-only pipelines, conditional branching, round-trips               | After Phases 16–19 |
+| `test-cm-orchestration.md` |  23   | Cross-group orchestration (health, tags, full pipeline)               | After Phases 16–19 |
+| `test-cm-relationships.md` |  24   | Link all types, duplicates, Mermaid visualization + cleanup for 22-24 | After Phases 16–19 |
 
 ### External, Admin & Team (from CM-4)
 
-| File | Phase | Focus | When to Run |
-|------|:-----:|-------|-------------|
-| `test-cm-github.md` | 25 | GitHub 16 tools (read, Kanban, issues, milestones, insights) | After Phases 16–19 |
-| `test-cm-admin-backup.md` | 26 | Tag management, export formats/filters, backup lifecycle | After Phases 16–19 |
-| `test-cm-team-crud.md` | 27.1–27.3 | Team CRUD, error paths, date range search | After Phases 16–19 |
-| `test-cm-team-admin.md` | 27.4–27.8 | Team admin, analytics, relationships, export, backup | After Team CRUD |
-| `test-cm-team-vector-errors.md` | 27.9–27.10 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin |
+| File                            |   Phase    | Focus                                                                 | When to Run        |
+| ------------------------------- | :--------: | --------------------------------------------------------------------- | ------------------ |
+| `test-cm-github.md`             |     25     | GitHub 16 tools (read, Kanban, issues, milestones, insights)          | After Phases 16–19 |
+| `test-cm-admin-backup.md`       |     26     | Tag management, export formats/filters, backup lifecycle              | After Phases 16–19 |
+| `test-cm-team-crud.md`          | 27.1–27.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
+| `test-cm-team-admin.md`         | 27.4–27.8  | Team admin, analytics, relationships, export, backup                  | After Team CRUD    |
+| `test-cm-team-vector-errors.md` | 27.9–27.10 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
 
 ## Dependency DAG
 
@@ -76,9 +76,10 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
 
 ## Token Estimate Reporting
 
-All test workflows in `test-server/codemode/` require the agent to track and report the token estimate used during the test pass. 
+All test workflows in `test-server/codemode/` require the agent to track and report the token estimate used during the test pass.
 
 **How to calculate:**
+
 - Every tool execution returns a `_meta.tokenEstimate` object in the response. Sum these values.
-- *Alternatively*, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
+- _Alternatively_, you may read the `memory://metrics/summary` resource before and after testing to find the delta, or report the session totals via `memory://audit`.
 - Always provide this **Total Token Estimate** clearly in your final test report summary so the user can track context window consumption.

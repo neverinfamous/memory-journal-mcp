@@ -21,7 +21,12 @@ import {
     getEnabledGroups,
     type ToolFilterConfig,
 } from '../filtering/tool-filter.js'
-import { getTools, callTool, initializeAuditLogger, getGlobalAuditLogger } from '../handlers/tools/index.js'
+import {
+    getTools,
+    callTool,
+    initializeAuditLogger,
+    getGlobalAuditLogger,
+} from '../handlers/tools/index.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/server-instructions.js'
@@ -144,7 +149,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 githubPath = defaultEntry.path
             }
         }
-        
+
         // Fallback: If no explicit default matched, use the first project in the registry
         if (githubPath === '.') {
             const firstEntry = Object.values(options.projectRegistry)[0]
@@ -160,7 +165,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     } catch {
         // Ignore failing silently if not within a git repository workspace
     }
-    
+
     logger.info('GitHub integration initialized', {
         module: 'McpServer',
         hasToken: github.isApiAvailable(),
@@ -281,10 +286,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 // (non-ZodObject wrapper), fall back to the original schema to avoid
                 // a startup throw.
                 try {
-                    const relaxed = (schema as { partial: () => { passthrough?: () => z.ZodType } }).partial()
-                    toolOptions['inputSchema'] = typeof relaxed.passthrough === 'function'
-                        ? relaxed.passthrough()
-                        : schema
+                    const relaxed = (
+                        schema as { partial: () => { passthrough?: () => z.ZodType } }
+                    ).partial()
+                    toolOptions['inputSchema'] =
+                        typeof relaxed.passthrough === 'function' ? relaxed.passthrough() : schema
                 } catch {
                     toolOptions['inputSchema'] = schema
                 }
@@ -303,7 +309,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 typeof (outSchema as { passthrough: unknown }).passthrough === 'function'
             ) {
                 try {
-                    toolOptions['outputSchema'] = (outSchema as { passthrough: () => z.ZodType }).passthrough()
+                    toolOptions['outputSchema'] = (
+                        outSchema as { passthrough: () => z.ZodType }
+                    ).passthrough()
                 } catch {
                     toolOptions['outputSchema'] = outSchema
                 }

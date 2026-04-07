@@ -111,7 +111,9 @@ const SemanticSearchSchema = z.object({
     entry_id: z
         .number()
         .optional()
-        .describe('Find entries related to this entry ID (uses existing embedding, skips re-embedding)'),
+        .describe(
+            'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
+        ),
     limit: z.number().max(MAX_QUERY_LIMIT).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
     is_personal: z.boolean().optional(),
@@ -139,20 +141,16 @@ const SemanticSearchSchemaMcp = z.object({
     query: z.string().optional(),
     entry_id: relaxedNumber()
         .optional()
-        .describe('Find entries related to this entry ID (uses existing embedding, skips re-embedding)'),
+        .describe(
+            'Find entries related to this entry ID (uses existing embedding, skips re-embedding)'
+        ),
     limit: relaxedNumber().optional().default(10),
     similarity_threshold: relaxedNumber().optional().default(0.25),
     is_personal: z.boolean().optional(),
     tags: z.array(z.string()).optional().describe('Filter results by tags'),
     entry_type: z.string().optional().describe('Filter results by entry type'),
-    start_date: z
-        .string()
-        .optional()
-        .describe('Filter results from this date (YYYY-MM-DD)'),
-    end_date: z
-        .string()
-        .optional()
-        .describe('Filter results until this date (YYYY-MM-DD)'),
+    start_date: z.string().optional().describe('Filter results from this date (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('Filter results until this date (YYYY-MM-DD)'),
     hint_on_empty: z
         .boolean()
         .optional()
@@ -272,9 +270,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                         return null
                                     return { ...entry, source: 'personal' as const }
                                 })
-                                .filter(
-                                    (e): e is NonNullable<typeof e> => e !== null
-                                )
+                                .filter((e): e is NonNullable<typeof e> => e !== null)
                             return {
                                 entries,
                                 count: entries.length,
@@ -458,7 +454,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 const entryTags = db.getTagsForEntry(entry.id)
                                 if (!input.tags.some((t) => entryTags.includes(t))) return null
                             }
-                            if (input.entry_type && entry.entryType !== input.entry_type) return null
+                            if (input.entry_type && entry.entryType !== input.entry_type)
+                                return null
                             if (input.start_date) {
                                 const entryDate = entry.timestamp.split('T')[0] ?? ''
                                 if (entryDate < input.start_date) return null

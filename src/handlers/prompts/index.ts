@@ -34,7 +34,11 @@ export interface InternalPromptDef {
         required?: boolean
     }[]
     icons?: McpIcon[]
-    handler: (args: Record<string, string>, db: IDatabaseAdapter, teamDb?: IDatabaseAdapter) => { messages: PromptMessage[] }
+    handler: (
+        args: Record<string, string>,
+        db: IDatabaseAdapter,
+        teamDb?: IDatabaseAdapter
+    ) => { messages: PromptMessage[] }
 }
 
 /**

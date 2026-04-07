@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { getHelpResourceDefinitions, peelZodType, extractParameters } from '../../src/handlers/resources/help.js'
+import {
+    getHelpResourceDefinitions,
+    peelZodType,
+    extractParameters,
+} from '../../src/handlers/resources/help.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import type { ResourceContext } from '../../src/handlers/resources/shared.js'
 import * as fs from 'fs'
@@ -196,11 +200,13 @@ describe('Help Resource Handlers', () => {
         it('should handle missing or invalid shape', () => {
             expect(extractParameters({ typeName: 'ZodObject' })).toEqual([])
             expect(extractParameters({ _def: { shape: () => 'primitive' } })).toEqual([])
-            expect(extractParameters({ _def: { shape: () => ({ field: 'not-an-object' }) } })).toEqual([])
+            expect(
+                extractParameters({ _def: { shape: () => ({ field: 'not-an-object' }) } })
+            ).toEqual([])
         })
 
         it('should fallback to unknown if layers run out', () => {
-            const result = peelZodType({ })
+            const result = peelZodType({})
             expect(result.typeName).toBe('unknown')
             expect(result.isOptional).toBe(false)
         })

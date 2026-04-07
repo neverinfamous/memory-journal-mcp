@@ -151,7 +151,7 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr.initialize()
             const db = mgr.getRawDb() as Database
-            
+
             // Drop insert trigger so insertion doesn't hit FTS index
             db.exec('DROP TRIGGER IF EXISTS fts_content_ai')
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
@@ -160,9 +160,11 @@ describe('NativeConnectionManager', () => {
             // Re-init should populate FTS (entryCount=1, ftsCount=0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr2.initialize()
-            
+
             const db2 = mgr2.getRawDb() as Database
-            const ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+            const ftsCount = (
+                db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
+            ).c
             expect(ftsCount).toBe(1)
             mgr2.close()
         })
@@ -176,7 +178,7 @@ describe('NativeConnectionManager', () => {
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('bar', 'test')")
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('baz', 'test')")
-            
+
             // Drop delete trigger so deletion doesn't hit FTS
             db.exec('DROP TRIGGER IF EXISTS fts_content_ad')
             db.exec('DELETE FROM memory_journal')
@@ -185,9 +187,11 @@ describe('NativeConnectionManager', () => {
             // Re-init should trigger ghost cleanup because ftsCount (3) > entryCount (0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH)
             await mgr2.initialize()
-            
+
             const db2 = mgr2.getRawDb() as Database
-            const ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+            const ftsCount = (
+                db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
+            ).c
             expect(ftsCount).toBe(0) // should be cleaned up!
             mgr2.close()
         })
@@ -303,17 +307,17 @@ describe('NativeConnectionManager', () => {
     // =========================================================================
     // setDbAndInitialized
     // =========================================================================
-    
+
     describe('setDbAndInitialized', () => {
         it('should manually set db and skip initialization', () => {
             const mgr = new NativeConnectionManager(':memory:')
             const fakeDb = {
                 pragma: vi.fn(),
                 prepare: vi.fn(),
-                close: vi.fn()
+                close: vi.fn(),
             }
             mgr.setDbAndInitialized(fakeDb)
-            
+
             // Should be initialized without calling initialize()
             expect(() => mgr.pragma('foreign_keys = ON')).not.toThrow()
             expect(fakeDb.pragma).toHaveBeenCalledWith('foreign_keys = ON')

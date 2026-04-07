@@ -46,9 +46,9 @@ export class VectorSearchManager {
         | null = null
     private get db(): BetterSqlite3Database | null {
         try {
-            return this.dbAdapter.getRawDb() as BetterSqlite3Database;
+            return this.dbAdapter.getRawDb() as BetterSqlite3Database
         } catch {
-            return null;
+            return null
         }
     }
     private readonly modelName: string
@@ -274,7 +274,11 @@ export class VectorSearchManager {
             }
 
             // Use the stored embedding as the query vector
-            const queryVec = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, EMBEDDING_DIMENSIONS)
+            const queryVec = new Float32Array(
+                row.embedding.buffer,
+                row.embedding.byteOffset,
+                EMBEDDING_DIMENSIONS
+            )
 
             // KNN search — fetch extra to allow excluding the source entry
             const results = this.db

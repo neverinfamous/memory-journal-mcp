@@ -28,7 +28,11 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should return false from addEntry when no db after initialize', async () => {
-        const manager = new VectorSearchManager({ getRawDb: () => { throw new Error('No DB') } } as any)
+        const manager = new VectorSearchManager({
+            getRawDb: () => {
+                throw new Error('No DB')
+            },
+        } as any)
 
         // Force skipping real initialization by marking it as initialized
         // but with no db connection
@@ -39,7 +43,11 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should return empty results from search when no db after initialize', async () => {
-        const manager = new VectorSearchManager({ getRawDb: () => { throw new Error('No DB') } } as any)
+        const manager = new VectorSearchManager({
+            getRawDb: () => {
+                throw new Error('No DB')
+            },
+        } as any)
         Object.assign(manager, { initialized: true })
 
         const result = await manager.search('test query')
@@ -47,7 +55,11 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should return 0 from rebuildIndex when no db', async () => {
-        const manager = new VectorSearchManager({ getRawDb: () => { throw new Error('No DB') } } as any)
+        const manager = new VectorSearchManager({
+            getRawDb: () => {
+                throw new Error('No DB')
+            },
+        } as any)
         Object.assign(manager, { initialized: true })
 
         const mockDbAdapter = {
@@ -60,7 +72,11 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should return stats with zero values when no db', async () => {
-        const manager = new VectorSearchManager({ getRawDb: () => { throw new Error('No DB') } } as any)
+        const manager = new VectorSearchManager({
+            getRawDb: () => {
+                throw new Error('No DB')
+            },
+        } as any)
         Object.assign(manager, { initialized: true })
 
         const result = manager.getStats()
@@ -68,7 +84,11 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should auto-initialize when calling addEntry on uninitialized manager', async () => {
-        const manager = new VectorSearchManager({ getRawDb: () => { throw new Error('No DB') } } as any)
+        const manager = new VectorSearchManager({
+            getRawDb: () => {
+                throw new Error('No DB')
+            },
+        } as any)
 
         // Mock initialize to just set initialized flag without connecting
         const initSpy = vi.spyOn(manager, 'initialize').mockImplementation(async () => {
@@ -81,7 +101,11 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should auto-initialize when calling search on uninitialized manager', async () => {
-        const manager = new VectorSearchManager({ getRawDb: () => { throw new Error('No DB') } } as any)
+        const manager = new VectorSearchManager({
+            getRawDb: () => {
+                throw new Error('No DB')
+            },
+        } as any)
 
         const initSpy = vi.spyOn(manager, 'initialize').mockImplementation(async () => {
             Object.assign(manager, { initialized: true })
@@ -93,7 +117,11 @@ describe('VectorSearchManager — branch coverage', () => {
     })
 
     it('should auto-initialize when calling rebuildIndex on uninitialized manager', async () => {
-        const manager = new VectorSearchManager({ getRawDb: () => { throw new Error('No DB') } } as any)
+        const manager = new VectorSearchManager({
+            getRawDb: () => {
+                throw new Error('No DB')
+            },
+        } as any)
 
         const initSpy = vi.spyOn(manager, 'initialize').mockImplementation(async () => {
             Object.assign(manager, { initialized: true })

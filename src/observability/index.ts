@@ -7,16 +7,9 @@
  *   - interceptor: metrics-collecting tool handler wrapper
  */
 
-export {
-    estimateTokens,
-    estimatePayloadTokens,
-    injectTokenEstimate,
-} from './token-estimator.js'
+export { estimateTokens, estimatePayloadTokens, injectTokenEstimate } from './token-estimator.js'
 
-export {
-    MetricsAccumulator,
-    globalMetrics,
-} from './metrics.js'
+export { MetricsAccumulator, globalMetrics } from './metrics.js'
 
 export type { ToolMetrics, MetricsSummary, SystemMetrics } from './metrics.js'
 

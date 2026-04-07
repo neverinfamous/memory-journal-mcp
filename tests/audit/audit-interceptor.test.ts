@@ -47,11 +47,9 @@ describe('AuditInterceptor', () => {
         // create_entry is in the 'core' group which maps to 'read' scope
         // The scope-map resolves core group tools to 'read'
         // We need to use a tool name that resolves to 'read' scope
-        const result = await interceptor.around(
-            'search_entries',
-            { query: 'test' },
-            async () => ({ entries: [] })
-        )
+        const result = await interceptor.around('search_entries', { query: 'test' }, async () => ({
+            entries: [],
+        }))
 
         expect(result).toEqual({ entries: [] })
         await logger.flush()
@@ -100,11 +98,9 @@ describe('AuditInterceptor', () => {
 
     it('should set user=null when no OAuth context', async () => {
         const interceptor = createAuditInterceptor(logger)
-        await interceptor.around(
-            'create_github_issue_with_entry',
-            { title: 'test' },
-            async () => ({ success: true })
-        )
+        await interceptor.around('create_github_issue_with_entry', { title: 'test' }, async () => ({
+            success: true,
+        }))
         await logger.flush()
 
         const content = await readFile(join(dir, 'audit.jsonl'), 'utf-8')
@@ -118,13 +114,9 @@ describe('AuditInterceptor', () => {
         const interceptor = createAuditInterceptor(logger)
 
         await expect(
-            interceptor.around(
-                'create_github_issue_with_entry',
-                { title: 'bad' },
-                async () => {
-                    throw new Error('GitHub API error')
-                }
-            )
+            interceptor.around('create_github_issue_with_entry', { title: 'bad' }, async () => {
+                throw new Error('GitHub API error')
+            })
         ).rejects.toThrow('GitHub API error')
 
         await logger.flush()
@@ -154,7 +146,9 @@ describe('AuditInterceptor', () => {
 
     it('should redact args when logger is in redact mode', async () => {
         await logger.close()
-        logger = new AuditLogger(config(dir, { redact: true, logPath: join(dir, 'audit-redacted.jsonl') }))
+        logger = new AuditLogger(
+            config(dir, { redact: true, logPath: join(dir, 'audit-redacted.jsonl') })
+        )
 
         const interceptor = createAuditInterceptor(logger)
         await interceptor.around(
@@ -187,11 +181,10 @@ describe('AuditInterceptor', () => {
 
     it('should include tokenEstimate on write tool entries', async () => {
         const interceptor = createAuditInterceptor(logger)
-        await interceptor.around(
-            'create_github_issue_with_entry',
-            { title: 'test' },
-            async () => ({ success: true, issueNumber: 42 })
-        )
+        await interceptor.around('create_github_issue_with_entry', { title: 'test' }, async () => ({
+            success: true,
+            issueNumber: 42,
+        }))
         await logger.flush()
 
         const content = await readFile(join(dir, 'audit.jsonl'), 'utf-8')
@@ -208,11 +201,9 @@ describe('AuditInterceptor', () => {
         )
 
         const interceptor = createAuditInterceptor(logger)
-        await interceptor.around(
-            'search_entries',
-            { query: 'test' },
-            async () => ({ entries: [{ id: 1 }] })
-        )
+        await interceptor.around('search_entries', { query: 'test' }, async () => ({
+            entries: [{ id: 1 }],
+        }))
         await logger.flush()
 
         const content = await readFile(join(dir, 'audit-reads.jsonl'), 'utf-8')

@@ -38,11 +38,7 @@ export interface AuditInterceptor {
      * @param args      Tool input arguments
      * @param fn        The actual tool handler to execute
      */
-    around<T>(
-        toolName: string,
-        args: unknown,
-        fn: () => Promise<T>
-    ): Promise<T>
+    around<T>(toolName: string, args: unknown, fn: () => Promise<T>): Promise<T>
 }
 
 // ============================================================================
@@ -87,17 +83,11 @@ function generateRequestId(): string {
  *
  * @param auditLogger  The JSONL audit logger
  */
-export function createAuditInterceptor(
-    auditLogger: AuditLogger
-): AuditInterceptor {
+export function createAuditInterceptor(auditLogger: AuditLogger): AuditInterceptor {
     const auditReads = auditLogger.config.auditReads
 
     return {
-        async around<T>(
-            toolName: string,
-            args: unknown,
-            fn: () => Promise<T>
-        ): Promise<T> {
+        async around<T>(toolName: string, args: unknown, fn: () => Promise<T>): Promise<T> {
             const scope = getRequiredScope(toolName)
 
             // Read-scoped tools are only audited when --audit-reads is enabled

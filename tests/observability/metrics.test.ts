@@ -31,8 +31,20 @@ describe('MetricsAccumulator', () => {
         })
 
         it('accumulates across multiple calls for the same tool', () => {
-            acc.record({ toolName: 'search', durationMs: 10, inputTokens: 5, outputTokens: 50, isError: false })
-            acc.record({ toolName: 'search', durationMs: 20, inputTokens: 5, outputTokens: 60, isError: false })
+            acc.record({
+                toolName: 'search',
+                durationMs: 10,
+                inputTokens: 5,
+                outputTokens: 50,
+                isError: false,
+            })
+            acc.record({
+                toolName: 'search',
+                durationMs: 20,
+                inputTokens: 5,
+                outputTokens: 60,
+                isError: false,
+            })
 
             const summary = acc.getSummary()
             expect(summary.totalCalls).toBe(2)
@@ -42,8 +54,20 @@ describe('MetricsAccumulator', () => {
         })
 
         it('accumulates across multiple different tools', () => {
-            acc.record({ toolName: 'create_entry', durationMs: 10, inputTokens: 5, outputTokens: 10, isError: false })
-            acc.record({ toolName: 'get_entry', durationMs: 15, inputTokens: 3, outputTokens: 30, isError: false })
+            acc.record({
+                toolName: 'create_entry',
+                durationMs: 10,
+                inputTokens: 5,
+                outputTokens: 10,
+                isError: false,
+            })
+            acc.record({
+                toolName: 'get_entry',
+                durationMs: 15,
+                inputTokens: 3,
+                outputTokens: 30,
+                isError: false,
+            })
 
             const summary = acc.getSummary()
             expect(summary.totalCalls).toBe(2)
@@ -51,7 +75,13 @@ describe('MetricsAccumulator', () => {
         })
 
         it('increments errorCount on isError: true', () => {
-            acc.record({ toolName: 'create_entry', durationMs: 5, inputTokens: 2, outputTokens: 0, isError: true })
+            acc.record({
+                toolName: 'create_entry',
+                durationMs: 5,
+                inputTokens: 2,
+                outputTokens: 0,
+                isError: true,
+            })
 
             const summary = acc.getSummary()
             expect(summary.totalErrors).toBe(1)
@@ -60,7 +90,13 @@ describe('MetricsAccumulator', () => {
 
         it('sets lastCalledAt timestamp on record', () => {
             const before = new Date().toISOString()
-            acc.record({ toolName: 'create_entry', durationMs: 1, inputTokens: 1, outputTokens: 1, isError: false })
+            acc.record({
+                toolName: 'create_entry',
+                durationMs: 1,
+                inputTokens: 1,
+                outputTokens: 1,
+                isError: false,
+            })
             const after = new Date().toISOString()
 
             const breakdown = acc.getSummary().toolBreakdown['create_entry']
@@ -94,8 +130,20 @@ describe('MetricsAccumulator', () => {
         })
 
         it('sorts by totalOutputTokens descending', () => {
-            acc.record({ toolName: 'cheap', durationMs: 1, inputTokens: 1, outputTokens: 10, isError: false })
-            acc.record({ toolName: 'expensive', durationMs: 1, inputTokens: 1, outputTokens: 500, isError: false })
+            acc.record({
+                toolName: 'cheap',
+                durationMs: 1,
+                inputTokens: 1,
+                outputTokens: 10,
+                isError: false,
+            })
+            acc.record({
+                toolName: 'expensive',
+                durationMs: 1,
+                inputTokens: 1,
+                outputTokens: 500,
+                isError: false,
+            })
 
             const breakdown = acc.getTokenBreakdown()
             expect(breakdown[0]?.toolName).toBe('expensive')
@@ -103,8 +151,20 @@ describe('MetricsAccumulator', () => {
         })
 
         it('computes avgOutputTokens correctly', () => {
-            acc.record({ toolName: 'tool', durationMs: 1, inputTokens: 0, outputTokens: 100, isError: false })
-            acc.record({ toolName: 'tool', durationMs: 1, inputTokens: 0, outputTokens: 200, isError: false })
+            acc.record({
+                toolName: 'tool',
+                durationMs: 1,
+                inputTokens: 0,
+                outputTokens: 100,
+                isError: false,
+            })
+            acc.record({
+                toolName: 'tool',
+                durationMs: 1,
+                inputTokens: 0,
+                outputTokens: 200,
+                isError: false,
+            })
 
             const breakdown = acc.getTokenBreakdown()
             expect(breakdown[0]?.avgOutputTokens).toBe(150)
@@ -141,7 +201,13 @@ describe('MetricsAccumulator', () => {
 
     describe('reset()', () => {
         it('clears all accumulated data', () => {
-            acc.record({ toolName: 'create_entry', durationMs: 1, inputTokens: 1, outputTokens: 1, isError: false })
+            acc.record({
+                toolName: 'create_entry',
+                durationMs: 1,
+                inputTokens: 1,
+                outputTokens: 1,
+                isError: false,
+            })
             acc.recordUser('alice')
 
             acc.reset()

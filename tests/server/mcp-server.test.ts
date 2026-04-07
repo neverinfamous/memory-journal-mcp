@@ -254,7 +254,6 @@ vi.spyOn(process, 'exit').mockImplementation((() => {}) as never)
 import { createServer, type ServerOptions } from '../../src/server/mcp-server.js'
 import * as toolsModule from '../../src/handlers/tools/index.js'
 
-
 describe('McpServer', () => {
     beforeEach(() => {
         // Reset call counts but preserve mock implementations
@@ -338,7 +337,13 @@ describe('McpServer', () => {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
-                auditConfig: { enabled: true, logPath: '/tmp/test-mcp-server-audit.log', redact: false, auditReads: false, maxSizeBytes: 100000 }
+                auditConfig: {
+                    enabled: true,
+                    logPath: '/tmp/test-mcp-server-audit.log',
+                    redact: false,
+                    auditReads: false,
+                    maxSizeBytes: 100000,
+                },
             })
             expect(mockRegisterTool).toHaveBeenCalled()
         })
@@ -528,8 +533,8 @@ describe('McpServer', () => {
                 dbPath: './test-server.db',
                 defaultProjectNumber: 42,
                 projectRegistry: {
-                    testProj: { path: '/custom/repo/path', project_number: 42 }
-                }
+                    testProj: { path: '/custom/repo/path', project_number: 42 },
+                },
             })
             // Reaches lines 125-129 resolving githubPath through projectRegistry
             expect(mockRegisterTool).toHaveBeenCalled()
@@ -540,8 +545,8 @@ describe('McpServer', () => {
                 transport: 'stdio',
                 dbPath: './test-server.db',
                 projectRegistry: {
-                    testProj: { path: '/custom/repo/fallback', project_number: 99 }
-                }
+                    testProj: { path: '/custom/repo/fallback', project_number: 99 },
+                },
             })
             expect(mockRegisterTool).toHaveBeenCalled()
         })
@@ -628,57 +633,72 @@ describe('McpServer', () => {
             const handler = createEntryCalls[0]![2] as (
                 args: unknown,
                 extra: unknown
-            ) => Promise<{ content: { type: string; text: string }[], isError?: boolean }>
+            ) => Promise<{ content: { type: string; text: string }[]; isError?: boolean }>
 
             const result = await handler({ content: 'Test' }, { _meta: {} })
-            
+
             expect(result.isError).toBe(true)
-            const parsed = JSON.parse(result.content[0]!.text) as { success: boolean, error: string }
+            const parsed = JSON.parse(result.content[0]!.text) as {
+                success: boolean
+                error: string
+            }
             expect(parsed.success).toBe(false)
             expect(parsed.error).toContain('BigInt')
         })
 
         it('should return raw string result when tool has no outputSchema and result is a string', async () => {
-            const spyTools = vi.spyOn(toolsModule, 'getTools').mockReturnValueOnce([{
-                name: 'fake_string_tool',
-                description: 'A fake tool',
-                inputSchema: { shape: {} }
-                // no outputSchema!
-            } as any])
+            const spyTools = vi.spyOn(toolsModule, 'getTools').mockReturnValueOnce([
+                {
+                    name: 'fake_string_tool',
+                    description: 'A fake tool',
+                    inputSchema: { shape: {} },
+                    // no outputSchema!
+                } as any,
+            ])
 
-            const spyCall = vi.spyOn(toolsModule, 'callTool').mockResolvedValueOnce('Just a simple string result')
+            const spyCall = vi
+                .spyOn(toolsModule, 'callTool')
+                .mockResolvedValueOnce('Just a simple string result')
 
             await createServer({ transport: 'stdio', dbPath: './test-server.db' })
-            
+
             const toolCalls = mockRegisterTool.mock.calls.filter(
                 (call: unknown[]) => call[0] === 'fake_string_tool'
             ) as unknown[][]
-            
+
             const handler = toolCalls[0]![2] as any
             const result = await handler({ content: 'Test' }, { _meta: {} })
-            
+
             expect(result.content[0].text).toBe('Just a simple string result')
-            
+
             spyTools.mockRestore()
             spyCall.mockRestore()
         })
 
         it('should handle schema partial() or passthrough() throws gracefully', async () => {
-            const spy = vi.spyOn(toolsModule, 'getTools').mockReturnValueOnce([{
-                name: 'fake_tool',
-                description: 'A fake tool',
-                inputSchema: {
-                    partial: () => { throw new Error('schema blowup') },
-                },
-                outputSchema: {
-                    passthrough: () => { throw new Error('output schema blowup') }
-                }
-            } as any])
+            const spy = vi.spyOn(toolsModule, 'getTools').mockReturnValueOnce([
+                {
+                    name: 'fake_tool',
+                    description: 'A fake tool',
+                    inputSchema: {
+                        partial: () => {
+                            throw new Error('schema blowup')
+                        },
+                    },
+                    outputSchema: {
+                        passthrough: () => {
+                            throw new Error('output schema blowup')
+                        },
+                    },
+                } as any,
+            ])
 
             await createServer({ transport: 'stdio', dbPath: './test-server.db' })
 
             // The tool should still be registered with its original schema options
-            const fakeToolCall = mockRegisterTool.mock.calls.find((call: any[]) => call[0] === 'fake_tool')
+            const fakeToolCall = mockRegisterTool.mock.calls.find(
+                (call: any[]) => call[0] === 'fake_tool'
+            )
             expect(fakeToolCall).toBeDefined()
             if (fakeToolCall) {
                 expect(fakeToolCall[1].inputSchema).toBeDefined()
@@ -732,7 +752,7 @@ describe('McpServer', () => {
             const handler = resourceCalls[0]![3] as (
                 uri: URL
             ) => Promise<{ contents: { uri: string; text: string }[] }>
-            
+
             const result = await handler(new URL('memory://health'))
 
             expect(result.contents).toBeDefined()
@@ -749,7 +769,13 @@ describe('McpServer', () => {
             await createServer({
                 transport: 'stdio',
                 dbPath: './test-server.db',
-                auditConfig: { enabled: true, logPath: '/tmp/test-mcp-server-audit-sigint.log', redact: false, auditReads: false, maxSizeBytes: 100000 }
+                auditConfig: {
+                    enabled: true,
+                    logPath: '/tmp/test-mcp-server-audit-sigint.log',
+                    redact: false,
+                    auditReads: false,
+                    maxSizeBytes: 100000,
+                },
             })
 
             expect(mockSigintHandlers.length).toBeGreaterThan(0)
@@ -768,13 +794,19 @@ describe('McpServer', () => {
                 dbPath: './test-server.db',
                 statelessHttp: false,
                 port: 5123,
-                auditConfig: { enabled: true, logPath: '/tmp/test-mcp-server-audit-http.log', redact: false, auditReads: false, maxSizeBytes: 100000 }
+                auditConfig: {
+                    enabled: true,
+                    logPath: '/tmp/test-mcp-server-audit-http.log',
+                    redact: false,
+                    auditReads: false,
+                    maxSizeBytes: 100000,
+                },
             })
             const handler = mockSigintHandlers[mockSigintHandlers.length - 1]
             if (handler) {
                 // handler is async void, we just call it and wait a tick
                 handler()
-                await new Promise(resolve => setTimeout(resolve, 50))
+                await new Promise((resolve) => setTimeout(resolve, 50))
                 expect(mockDbClose).toHaveBeenCalled()
             }
         })
@@ -1214,7 +1246,7 @@ describe('McpServer', () => {
                     backupIntervalMinutes: 60,
                     vacuumIntervalMinutes: 120,
                     rebuildIndexIntervalMinutes: 180,
-                    keepBackups: 5
+                    keepBackups: 5,
                 },
             })
 
@@ -1232,7 +1264,7 @@ describe('McpServer', () => {
                     backupIntervalMinutes: 60,
                     vacuumIntervalMinutes: 0,
                     rebuildIndexIntervalMinutes: 0,
-                    keepBackups: 5
+                    keepBackups: 5,
                 },
             })
 
@@ -1247,7 +1279,7 @@ describe('McpServer', () => {
                     backupIntervalMinutes: 0,
                     vacuumIntervalMinutes: 0,
                     rebuildIndexIntervalMinutes: 0,
-                    keepBackups: 5
+                    keepBackups: 5,
                 },
             })
 

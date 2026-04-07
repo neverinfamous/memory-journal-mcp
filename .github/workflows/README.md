@@ -69,36 +69,36 @@ flowchart LR
 
 ### CI / Orchestration
 
-| File                                                   | Trigger                        | Purpose                                                                                  |
-| ------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------- |
-| [gatekeeper.yml](gatekeeper.yml)                       | push to `main` / tag `v*`      | Orchestrates CI/CD: fans out lint + security scans, gates docker-publish on all passing  |
+| File                                                   | Trigger                        | Purpose                                                                                 |
+| ------------------------------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------- |
+| [gatekeeper.yml](gatekeeper.yml)                       | push to `main` / tag `v*`      | Orchestrates CI/CD: fans out lint + security scans, gates docker-publish on all passing |
 | [lint-and-test.yml](lint-and-test.yml)                 | PR to `main` / `workflow_call` | Lint, typecheck, build, unit tests (Node 24.x + 25.x matrix), npm audit                 |
-| [dependabot-auto-merge.yml](dependabot-auto-merge.yml) | PR (`dependabot[bot]`)         | Auto-merges patch/minor Dependabot PRs, warns on major updates                           |
+| [dependabot-auto-merge.yml](dependabot-auto-merge.yml) | PR (`dependabot[bot]`)         | Auto-merges patch/minor Dependabot PRs, warns on major updates                          |
 
 ### Security
 
-| File                                         | Trigger                                                              | Purpose                                                                                            |
-| -------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [codeql.yml](codeql.yml)                     | PR / weekly (Mon 02:23 UTC) / `workflow_call`                        | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
-| [secrets-scanning.yml](secrets-scanning.yml) | PR / `workflow_call`                                                 | TruffleHog (verified secrets) + Gitleaks scanning                                                  |
-| [security-update.yml](security-update.yml)   | weekly (Sun 02:00 UTC) / manual / `workflow_call`                    | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
+| File                                         | Trigger                                           | Purpose                                                                                            |
+| -------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| [codeql.yml](codeql.yml)                     | PR / weekly (Mon 02:23 UTC) / `workflow_call`     | CodeQL static analysis for `javascript-typescript` and `actions`                                   |
+| [secrets-scanning.yml](secrets-scanning.yml) | PR / `workflow_call`                              | TruffleHog (verified secrets) + Gitleaks scanning                                                  |
+| [security-update.yml](security-update.yml)   | weekly (Sun 02:00 UTC) / manual / `workflow_call` | Docker image Trivy scan (CRITICAL/HIGH/MEDIUM), SARIF upload, auto-creates GitHub issue on failure |
 
 ### Release & Publishing
 
-| File                                     | Trigger                                                        | Purpose                                                                                                   |
-| ---------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| File                                     | Trigger                                                          | Purpose                                                                                                   |
+| ---------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | [publish-npm.yml](publish-npm.yml)       | release published / manual / `workflow_call` from docker-publish | Publishes to npm with version verification                                                                |
-| [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (after all security gates pass) | Multi-arch Docker build (amd64 + arm64), Docker Scout scan, manifest merge, Docker Hub description update |
+| [docker-publish.yml](docker-publish.yml) | `workflow_call` from gatekeeper (after all security gates pass)  | Multi-arch Docker build (amd64 + arm64), Docker Scout scan, manifest merge, Docker Hub description update |
 
 ### Agentic Workflows (GitHub Copilot)
 
 These are AI-powered workflows using [GitHub Copilot Coding Agent](https://docs.github.com/en/copilot/using-github-copilot/using-copilot-coding-agent-to-work-on-tasks/about-assigning-tasks-to-copilot). Each `.md` file contains the agent prompt; the corresponding `.lock.yml` is the auto-generated compiled workflow (**do not edit `.lock.yml` files**).
 
-| Prompt                                                 | Lock File                                                          | Schedule             | Purpose                                                                                            |
-| ------------------------------------------------------ | ------------------------------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------- |
-| [ci-health-monitor.md](ci-health-monitor.md)           | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml)           | Wed 14:00 UTC        | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config           |
-| [docs-drift-detector.md](docs-drift-detector.md)       | [docs-drift-detector.lock.yml](docs-drift-detector.lock.yml)       | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes                          |
-| [agentics-maintenance.yml](agentics-maintenance.yml)   | —                                                                  | Daily 00:37 UTC      | Auto-closes expired discussions, issues, and PRs created by agentic workflows                      |
+| Prompt                                               | Lock File                                                    | Schedule             | Purpose                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------- |
+| [ci-health-monitor.md](ci-health-monitor.md)         | [ci-health-monitor.lock.yml](ci-health-monitor.lock.yml)     | Wed 14:00 UTC        | Audits workflows for deprecated actions, Node.js runtime issues, stale Dependabot config |
+| [docs-drift-detector.md](docs-drift-detector.md)     | [docs-drift-detector.lock.yml](docs-drift-detector.lock.yml) | PR (on code changes) | Audits README, DOCKER_README, CONTRIBUTING for drift against code changes                |
+| [agentics-maintenance.yml](agentics-maintenance.yml) | —                                                            | Daily 00:37 UTC      | Auto-closes expired discussions, issues, and PRs created by agentic workflows            |
 
 ---
 

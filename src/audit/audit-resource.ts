@@ -15,7 +15,11 @@
  * audit log size.
  */
 
-import type { InternalResourceDef, ResourceContext, ResourceResult } from '../handlers/resources/shared.js'
+import type {
+    InternalResourceDef,
+    ResourceContext,
+    ResourceResult,
+} from '../handlers/resources/shared.js'
 import { ASSISTANT_FOCUSED } from '../utils/resource-annotations.js'
 import type { AuditLogger } from './audit-logger.js'
 

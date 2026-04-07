@@ -49,11 +49,12 @@ export async function resolveGitHubRepo(
     }
 
     if (!activeGithub) {
-        const hasRegistry = config?.projectRegistry && Object.keys(config.projectRegistry).length > 0
+        const hasRegistry =
+            config?.projectRegistry && Object.keys(config.projectRegistry).length > 0
         return {
             data: {
                 error: 'GitHub integration not available',
-                hint: hasRegistry 
+                hint: hasRegistry
                     ? 'Set GITHUB_TOKEN, or assure the dynamic repo URI correctly matches a registered project.'
                     : 'Set GITHUB_TOKEN securely.',
             },
@@ -67,11 +68,12 @@ export async function resolveGitHubRepo(
     const repo = repoInfo.repo
 
     if (!owner || !repo) {
-        const hasRegistry = config?.projectRegistry && Object.keys(config.projectRegistry).length > 0
+        const hasRegistry =
+            config?.projectRegistry && Object.keys(config.projectRegistry).length > 0
         return {
             data: {
                 error: 'Could not detect repository',
-                hint: hasRegistry 
+                hint: hasRegistry
                     ? 'Use a repository-specific URI suffix (e.g., memory://github/status/{repo}) for multi-project setups, or ensure the fallback project is a valid git repository.'
                     : 'Run the MCP server from a valid git repository or configure PROJECT_REGISTRY.',
                 ...(repoInfo.branch ? { branch: repoInfo.branch } : {}),

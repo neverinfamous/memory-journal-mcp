@@ -119,11 +119,7 @@ export class AuditLogger {
                 } else {
                     await this.ensureDirectory()
                     // One appendFile call with all buffered lines — each terminated by \n
-                    await appendFile(
-                        this.config.logPath,
-                        lines.join('\n') + '\n',
-                        'utf-8'
-                    )
+                    await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
                 }
             } catch (err) {
                 // Never throw — audit must not break tool execution

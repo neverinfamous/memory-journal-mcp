@@ -86,7 +86,8 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     // Codemode / Sandbox patterns
     {
         pattern: /execution timed out/i,
-        suggestion: 'Reduce code complexity or increase timeout (max 30s). Break into smaller operations.',
+        suggestion:
+            'Reduce code complexity or increase timeout (max 30s). Break into smaller operations.',
         code: 'QUERY_FAILED',
     },
     {

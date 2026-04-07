@@ -50,8 +50,7 @@ export const metricsSummaryResource: InternalResourceDef = {
 
         const errorRate =
             s.totalCalls > 0 ? ((s.totalErrors / s.totalCalls) * 100).toFixed(1) : '0.0'
-        const avgDuration =
-            s.totalCalls > 0 ? Math.round(s.totalDurationMs / s.totalCalls) : 0
+        const avgDuration = s.totalCalls > 0 ? Math.round(s.totalDurationMs / s.totalCalls) : 0
 
         const text =
             `metrics_summary:\n` +

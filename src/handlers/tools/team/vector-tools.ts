@@ -107,7 +107,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
-                            if (input.entry_id !== undefined && entry.id === input.entry_id) return null
+                            if (input.entry_id !== undefined && entry.id === input.entry_id)
+                                return null
                             return {
                                 ...entry,
                                 author: authorMap.get(r.entryId) ?? null,

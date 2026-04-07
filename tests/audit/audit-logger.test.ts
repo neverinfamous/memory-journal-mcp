@@ -355,7 +355,7 @@ describe('AuditLogger', () => {
         it('should handle eager high-water flush', async () => {
             const config = enabledConfig(dir)
             const logger = new AuditLogger(config)
-            
+
             for (let i = 0; i < 51; i++) {
                 logger.log(fakeEntry({ requestId: `req-${String(i)}` }))
             }
@@ -370,14 +370,14 @@ describe('AuditLogger', () => {
                 ...enabledConfig(dir),
                 logPath: dir, // dir is a directory, so appendFile will throw EISDIR
             })
-            
+
             const chunks: string[] = []
             const originalWrite = process.stderr.write
             process.stderr.write = ((chunk: string) => {
                 chunks.push(chunk)
                 return true
             }) as typeof process.stderr.write
-            
+
             try {
                 logger.log(fakeEntry())
                 await logger.flush()

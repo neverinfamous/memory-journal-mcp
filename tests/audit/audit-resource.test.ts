@@ -6,7 +6,7 @@ describe('Audit Resource', () => {
     it('returns setup hint when logger is not configured', async () => {
         const def = getAuditResourceDef(() => null)
         const result = (await def.handler('memory://audit', {} as any)) as any
-        
+
         expect(result.data).toContain('audit: not configured')
         expect(result.data).toContain('hint: Set AUDIT_LOG_PATH env var')
         expect(result.annotations?.lastModified).toBeDefined()
@@ -20,7 +20,7 @@ describe('Audit Resource', () => {
 
         const def = getAuditResourceDef(() => mockLogger)
         const result = (await def.handler('memory://audit', {} as any)) as any
-        
+
         expect(result.data).toContain('audit_log: /tmp/audit.jsonl')
         expect(result.data).toContain('entries: 0')
         expect(result.data).toContain('No write/admin operations have been audited yet')
@@ -38,7 +38,7 @@ describe('Audit Resource', () => {
                     durationMs: 100,
                     success: true,
                     tokenEstimate: 50,
-                    args: { test: 'arg' }
+                    args: { test: 'arg' },
                 },
                 {
                     timestamp: '2026-04-07T08:01:00.000Z',
@@ -48,8 +48,8 @@ describe('Audit Resource', () => {
                     durationMs: 200,
                     success: false,
                     error: 'Permission denied',
-                    tokenEstimate: 30
-                }
+                    tokenEstimate: 30,
+                },
             ]),
         } as unknown as AuditLogger
 

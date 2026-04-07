@@ -80,7 +80,6 @@ describe('GitHubIntegration', () => {
         // Save and clear env to prevent real token usage
         delete process.env['GITHUB_TOKEN']
 
-
         gh = new GitHubIntegration('.')
         octokit = createOctokitMock()
         injectMocks(gh, octokit)
@@ -1031,7 +1030,11 @@ describe('GitHubIntegration', () => {
         })
 
         it('should call getCopilotReviewSummary', async () => {
-            vi.spyOn((gh as any).pullRequestsManager, 'getCopilotReviewSummary').mockResolvedValue({ summary: '', issues_found: 0, approvals: 0 })
+            vi.spyOn((gh as any).pullRequestsManager, 'getCopilotReviewSummary').mockResolvedValue({
+                summary: '',
+                issues_found: 0,
+                approvals: 0,
+            })
             const result = await gh.getCopilotReviewSummary('o', 'r', 1)
             expect(result).toBeDefined()
         })

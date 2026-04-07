@@ -238,7 +238,7 @@ describe('HttpTransport', () => {
 
         // httpServer is mocked in express listen
         const { logger } = await import('../../src/utils/logger.js')
-        
+
         // Find the 'close' event handler
         const closeCall = mockOn.mock.calls.find((c) => c[0] === 'close')
         expect(closeCall).toBeDefined()

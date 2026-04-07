@@ -625,12 +625,21 @@ describe('HttpTransport', () => {
         })
 
         it('should catch errors when closing active transports and SSE transports', async () => {
-            const config: HttpTransportConfig = { port: 3000, host: '0.0.0.0', corsOrigins: ['*'], stateless: true }
+            const config: HttpTransportConfig = {
+                port: 3000,
+                host: '0.0.0.0',
+                corsOrigins: ['*'],
+                stateless: true,
+            }
             const transport = new HttpTransport(config)
             await transport.start(mockServer, null)
 
-            transport.transports.set('dummy-1', { close: vi.fn().mockRejectedValue(new Error('dummy close error')) } as any)
-            transport.sseTransports.set('dummy-2', { close: vi.fn().mockRejectedValue(new Error('dummy sse close error')) } as any)
+            transport.transports.set('dummy-1', {
+                close: vi.fn().mockRejectedValue(new Error('dummy close error')),
+            } as any)
+            transport.sseTransports.set('dummy-2', {
+                close: vi.fn().mockRejectedValue(new Error('dummy sse close error')),
+            } as any)
 
             // Should gracefully catch and log without throwing
             await transport.stop(null)
@@ -642,7 +651,7 @@ describe('HttpTransport', () => {
     // ========================================================================
     // Rate limiter middleware
     // ========================================================================
-    
+
     describe('rate limiter middleware', () => {
         it('should enforce rate limits and bypass health check', async () => {
             const config: HttpTransportConfig = {
@@ -660,11 +669,13 @@ describe('HttpTransport', () => {
                 const res = mockRes()
                 try {
                     // Send 101 requests from the same IP
-                    for(let i=0; i<101; i++) {
+                    for (let i = 0; i < 101; i++) {
                         mw(mockReq({ path: '/mcp', ip: '10.0.0.5' }), res, () => {})
                     }
-                } catch { /* skip */ }
-                
+                } catch {
+                    /* skip */
+                }
+
                 if ((res['status'] as any).mock.calls.some((c: any) => c[0] === 429)) {
                     rateLimiterMw = mw
                     break
@@ -679,7 +690,7 @@ describe('HttpTransport', () => {
                 nextCalled = true
             })
             expect(nextCalled).toBe(true)
-            expect((healthRes['status'] as any)).not.toHaveBeenCalledWith(429)
+            expect(healthRes['status'] as any).not.toHaveBeenCalledWith(429)
 
             // Cleanup any intervals started by HttpTransport for rate limiting
             await transport.stop(null)

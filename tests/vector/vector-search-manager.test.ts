@@ -174,7 +174,9 @@ describe('VectorSearchManager', () => {
             const vm2 = new VectorSearchManager(adapter)
             const result = await vm2.addEntry(99, 'Content')
             expect(result.success).toBe(false)
-            expect(result.error).toContain('Vector search initialization failed: Init failed during add')
+            expect(result.error).toContain(
+                'Vector search initialization failed: Init failed during add'
+            )
         })
     })
 
@@ -242,7 +244,7 @@ describe('VectorSearchManager', () => {
         it('should return filtered results based on existing embedding', async () => {
             await initManager(vm)
             mockGet.mockReturnValue({ embedding: Buffer.from(fakeEmbedding(0).buffer) })
-            
+
             mockAll.mockReturnValue([
                 { entry_id: 1, distance: 0.1 },
                 { entry_id: 2, distance: 1.0 },
@@ -289,7 +291,9 @@ describe('VectorSearchManager', () => {
             ;(adapter.getRawDb as any).mockReturnValue(null) // Or throw error, testing db check
             const vm3 = new VectorSearchManager(adapter)
             await initManager(vm3)
-            ;(adapter.getRawDb as any).mockImplementation(() => { throw new Error('No db') })
+            ;(adapter.getRawDb as any).mockImplementation(() => {
+                throw new Error('No db')
+            })
             const results = await vm3.searchByEntryId(1)
             expect(results).toEqual([])
         })
@@ -313,7 +317,9 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return false if db not available', async () => {
-            ;(adapter.getRawDb as any).mockImplementation(() => { throw new Error('No db') })
+            ;(adapter.getRawDb as any).mockImplementation(() => {
+                throw new Error('No db')
+            })
             const result = await vm.removeEntry(42)
             expect(result).toBe(false)
         })
@@ -345,7 +351,9 @@ describe('VectorSearchManager', () => {
         })
 
         it('should return zero count when no db', async () => {
-            ;(adapter.getRawDb as any).mockImplementation(() => { throw new Error('No db') })
+            ;(adapter.getRawDb as any).mockImplementation(() => {
+                throw new Error('No db')
+            })
             const stats = await vm.getStats()
             expect(stats.itemCount).toBe(0)
         })
@@ -444,18 +452,23 @@ describe('VectorSearchManager', () => {
                 'Pipeline broke string error'
             )
             const result = await vm.rebuildIndex({} as any)
-            expect(result.firstError).toContain('Vector search initialization failed: Pipeline broke')
+            expect(result.firstError).toContain(
+                'Vector search initialization failed: Pipeline broke'
+            )
         })
 
         it('should handle insert statement failure during rebuild', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
-            
+
             // Mock run to throw ONLY on the second insert (after DELETE)
-            mockRun.mockImplementationOnce(() => undefined) // DELETE
-                   .mockImplementationOnce(() => undefined) // 1st INSERT
-                   .mockImplementationOnce(() => { throw new Error('Insert failed!!') }) // 2nd INSERT
-            
+            mockRun
+                .mockImplementationOnce(() => undefined) // DELETE
+                .mockImplementationOnce(() => undefined) // 1st INSERT
+                .mockImplementationOnce(() => {
+                    throw new Error('Insert failed!!')
+                }) // 2nd INSERT
+
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(2),
                 getEntriesPage: vi.fn().mockReturnValue([
@@ -490,7 +503,11 @@ describe('VectorSearchManager', () => {
 
     describe('removeEntry', () => {
         it('should return false if db not available', () => {
-            const fakeAdapter = { getRawDb: () => { throw new Error() } } as any
+            const fakeAdapter = {
+                getRawDb: () => {
+                    throw new Error()
+                },
+            } as any
             const freshVm = new VectorSearchManager(fakeAdapter)
             const result = freshVm.removeEntry(1)
             expect(result).toBe(false)
@@ -501,7 +518,9 @@ describe('VectorSearchManager', () => {
             mockRun.mockReturnValue(undefined)
             const result = vm.removeEntry(1)
             expect(result).toBe(true)
-            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM vec_embeddings WHERE entry_id = ?')
+            expect(mockPrepare).toHaveBeenCalledWith(
+                'DELETE FROM vec_embeddings WHERE entry_id = ?'
+            )
         })
 
         it('should handle SQLite errors', async () => {
@@ -516,7 +535,11 @@ describe('VectorSearchManager', () => {
 
     describe('getStats', () => {
         it('should return default stats if db not available', () => {
-            const fakeAdapter = { getRawDb: () => { throw new Error() } } as any
+            const fakeAdapter = {
+                getRawDb: () => {
+                    throw new Error()
+                },
+            } as any
             const freshVm = new VectorSearchManager(fakeAdapter)
             const stats = freshVm.getStats()
             expect(stats.itemCount).toBe(0)
