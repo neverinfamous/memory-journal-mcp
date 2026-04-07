@@ -9,22 +9,22 @@
 - Dynamic Vitest coverage badge generation via `scripts/update-badges.ts`.
 - Direct `entry_id` bypass and metadata filters for semantic search tools.
 - Token estimation and `_meta.tokenEstimate` injection for context awareness.
-- Async JSONL `AuditLogger` with rotating archives, configurable redaction, interceptor hooks, CLI flags, tail-read support, and observability resources (`memory://audit`, `memory://metrics/*`).
+- Async JSONL `AuditLogger` with rotating archives, redaction, interceptor hooks, and observability resources (`memory://audit`, `memory://metrics/*`).
 - Categorized placeholders in `.env.example` and `mcp-config-example.json`.
 
 ### Changed
 
-- Modularized `search.ts` into granular folder-based handlers.
+- Modularized `search.ts` into folder-based handlers.
 - Reduced `DOCKER_README.md` size to comply with Docker Hub constraints.
-- Refactored monolithic `.mjs` testing files into modular suites.
-- Restructured `test-errors.md` into 7 granular domain checklists.
+- Refactored `.mjs` testing files into modular suites.
+- Restructured `test-errors.md` into domain checklists.
 - Expanded CodeMode exception bounding in `suggestions.ts`.
 - Updated dependencies including `typescript` 6.0.2, `@playwright/test` 1.59.1, and `eslint` 10.2.0.
 
 ### Removed
 
-- Legacy `GITHUB_REPO_PATH` environment variable across the codebase in favor of `PROJECT_REGISTRY`.
-- Experimental Copilot `dependency-maintenance` workflow, `auto-release` workflow, and related documentation.
+- Legacy `GITHUB_REPO_PATH` environment variable in favor of `PROJECT_REGISTRY`.
+- Experimental `dependency-maintenance` and `auto-release` workflows with related documentation.
 
 ### Fixed
 
@@ -37,14 +37,14 @@
 - Omitted metadata filters (`tags`, `entry_type`, `start_date`, `end_date`) in `search_entries` FTS and Hybrid pipelines.
 - Missing `entry_id` query support in `team_semantic_search`.
 - `VectorSearchManager` caching a closed database connection, causing index rebuild failures.
-- Silent database synchronization failure by correctly querying the `fts_content_docsize` shadow table.
-- ISO 8601 payload generation formatting for GitHub milestones.
+- Silent database synchronization failures caused by incorrect `fts_content_docsize` shadow table queries.
+- ISO 8601 payload formatting for GitHub milestones.
 - Markdown rendering issues in agent instructions.
 - Prioritization bug where server instructions overshadowed dynamic briefing resolution.
-- Misleading `Could not detect repository` hint for multi-project users.
-- Documentation mismatch regarding the 33 total resource count.
+- Misleading "Could not detect repository" hint for multi-project users.
+- Documentation mismatch regarding the total resource count.
 - GitHub CI badge workflow targets.
-- Test suite stabilization fixes (Zod/Octokit errors, random string crashes, hardcoded positions, test script relative paths, mocking bugs, and parameter injection covering).
+- Test suite stability issues including Zod validation gaps, random string generation crashes, and mock injection errors.
 
 ### Security
 
