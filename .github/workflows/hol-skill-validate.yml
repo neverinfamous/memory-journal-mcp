@@ -28,5 +28,5 @@ jobs:
         with:
           mode: validate
           skill-dir: skills/github-commander
-          annotate: "false"
-          preview-upload: "false"
+          annotate: 'false'
+          preview-upload: 'false'
