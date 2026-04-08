@@ -30,16 +30,16 @@
 
 | Test                    | Command/Action                                                                     | Expected Result                          |
 | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
-| Setup temp dir          | Use run_command or write_to_file to ensure a temp test folder exists (`tmp_md`)    | Temporary directory is ready             |
-| Basic Export Map        | `export_markdown(output_dir: "tmp_md", limit: 5)`                                  | Outputs `exported_count` matches limit   |
-| View Exported Node      | `run_command` (cat/get-content) on one of the exported files in `tmp_md`           | Validates YAML frontmatter generated     |
-| Import Dry Run          | `import_markdown(source_dir: "tmp_md", dry_run: true)`                             | Returns structured count of items        |
+| Setup temp dir          | Use run_command or write_to_file to ensure a temp test folder exists (`test_export`)    | Temporary directory is ready             |
+| Basic Export Map        | `export_markdown(output_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", limit: 5)` | Outputs `exported_count` matches limit   |
+| View Exported Node      | `run_command` (cat/get-content) on one of the exported files in `test_export`           | Validates YAML frontmatter generated     |
+| Import Dry Run          | `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: true)` | Returns structured count of items        |
 | Path Traversal Defense  | `export_markdown(output_dir: "../../etc/passwd")`                                  | Structured error rejecting `..` paths    |
 
 ---
 
 ## Success Criteria
 
-- [ ] `export_markdown` reliably targets OS local directories and generates correctly named files.
-- [ ] `import_markdown` gracefully executes dry run detection parsing.
-- [ ] IO tooling throws structured path traversal errors `..` on local directory injections.
+- [x] `export_markdown` reliably targets OS local directories and generates correctly named files.
+- [x] `import_markdown` gracefully executes dry run detection parsing.
+- [x] IO tooling throws structured path traversal errors `..` on local directory injections.
