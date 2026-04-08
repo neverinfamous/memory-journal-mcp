@@ -118,6 +118,24 @@ export function assertNoPathTraversal(filename: string): void {
     }
 }
 
+/**
+ * Validates that a directory path does not contain path traversal components.
+ *
+ * Unlike assertNoPathTraversal() (which rejects all separators for filenames),
+ * this allows `/` and `\` but rejects `..` path components that could escape
+ * the intended directory boundary.
+ *
+ * @param dirPath - The directory path to validate
+ * @throws PathTraversalError if `..` components are detected
+ */
+export function assertSafeDirectoryPath(dirPath: string): void {
+    const normalized = dirPath.replace(/\\/g, '/')
+    const segments = normalized.split('/')
+    if (segments.some((s) => s === '..')) {
+        throw new PathTraversalError(dirPath)
+    }
+}
+
 // ============================================================================
 // Error Message Sanitization
 // ============================================================================

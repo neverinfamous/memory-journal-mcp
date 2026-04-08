@@ -203,10 +203,10 @@ const CODE_MODE_NAMESPACE_ROWS: {
         example: '`mj.relationships.linkEntries(1, 2, "implements")`',
     },
     {
-        group: 'export',
-        label: 'Export',
-        namespace: '`mj.export.*`',
-        example: '`mj.export.exportEntries("json")`',
+        group: 'io',
+        label: 'IO',
+        namespace: '`mj.io.*`',
+        example: '`mj.io.exportEntries("json")`',
     },
     {
         group: 'admin',
@@ -279,7 +279,7 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Search        | \`mj.search.*\`        | \`mj.search.searchEntries("performance")\`           |
 | Analytics     | \`mj.analytics.*\`     | \`mj.analytics.getStatistics()\`                     |
 | Relationships | \`mj.relationships.*\` | \`mj.relationships.linkEntries(1, 2, "implements")\` |
-| Export        | \`mj.export.*\`        | \`mj.export.exportEntries("json")\`                  |
+| IO            | \`mj.io.*\`            | \`mj.io.exportEntries("json")\`                      |
 | Admin         | \`mj.admin.*\`         | \`mj.admin.rebuildVectorIndex()\`                    |
 | GitHub        | \`mj.github.*\`        | \`mj.github.getGithubIssues({ state: "open" })\`     |
 | Backup        | \`mj.backup.*\`        | \`mj.backup.backupJournal()\`                        |
@@ -422,7 +422,7 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 - **Team cross-database search**: \`search_entries\` and \`search_by_date_range\` automatically merge team DB results when \`TEAM_DB_PATH\` is configured. Results include a \`source\` field ("personal" or "team").
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
-- **Team tools without \`TEAM_DB_PATH\`**: All 20 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
+- **Team tools without \`TEAM_DB_PATH\`**: All 22 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
 
 /**

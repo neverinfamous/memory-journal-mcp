@@ -18,7 +18,7 @@ vi.mock('../../src/utils/progress-utils.js', () => ({
     sendProgress: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { getExportTools } from '../../src/handlers/tools/export.js'
+import { getIoTools } from '../../src/handlers/tools/io.js'
 
 // ============================================================================
 // Helpers
@@ -49,18 +49,18 @@ function createMockContext(dbOverrides: Partial<Record<string, unknown>> = {}) {
 // Tests
 // ============================================================================
 
-describe('getExportTools', () => {
+describe('getIoTools', () => {
     beforeEach(() => {
         vi.clearAllMocks()
     })
 
     it('should define export_entries tool', () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
 
         expect(tools).toHaveLength(1)
         expect(tools[0]!.name).toBe('export_entries')
-        expect(tools[0]!.group).toBe('export')
+        expect(tools[0]!.group).toBe('io')
     })
 
     // ========================================================================
@@ -69,7 +69,7 @@ describe('getExportTools', () => {
 
     it('should export entries as JSON by default', async () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         const result = (await handler({})) as Record<string, unknown>
@@ -81,7 +81,7 @@ describe('getExportTools', () => {
 
     it('should respect custom limit', async () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         await handler({ limit: 10 })
@@ -95,7 +95,7 @@ describe('getExportTools', () => {
 
     it('should export entries as Markdown', async () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         const result = (await handler({ format: 'markdown' })) as Record<string, unknown>
@@ -114,7 +114,7 @@ describe('getExportTools', () => {
 
     it('should filter by date range when start_date provided', async () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         await handler({ start_date: '2025-01-10' })
@@ -128,7 +128,7 @@ describe('getExportTools', () => {
 
     it('should filter by date range when end_date provided', async () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         await handler({ end_date: '2025-01-20' })
@@ -146,7 +146,7 @@ describe('getExportTools', () => {
 
     it('should filter by tags using searchByDateRange', async () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         await handler({ tags: ['important', 'review'] })
@@ -171,7 +171,7 @@ describe('getExportTools', () => {
         const context = createMockContext({
             searchByDateRange: vi.fn().mockReturnValue(entries),
         })
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         const result = (await handler({
@@ -192,7 +192,7 @@ describe('getExportTools', () => {
 
     it('should handle invalid format gracefully via formatHandlerError', async () => {
         const context = createMockContext()
-        const tools = getExportTools(context as never)
+        const tools = getIoTools(context as never)
         const handler = tools[0]!.handler
 
         // Invalid date format should cause Zod parse error

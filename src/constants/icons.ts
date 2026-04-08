@@ -41,9 +41,9 @@ export const ICON_RELATIONSHIPS: McpIcon = {
     sizes: ['24x24'],
 }
 
-/** Download/export icon */
-export const ICON_EXPORT: McpIcon = {
-    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpath d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/%3E%3Cpolyline points="7 10 12 15 17 10"/%3E%3Cline x1="12" y1="15" x2="12" y2="3"/%3E%3C/svg%3E',
+/** Swap/IO icon for import and export operations */
+export const ICON_IO: McpIcon = {
+    src: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"%3E%3Cpolyline points="16 3 21 3 21 8"/%3E%3Cline x1="4" y1="20" x2="21" y2="3"/%3E%3Cpolyline points="21 16 21 21 16 21"/%3E%3Cline x1="15" y1="15" x2="21" y2="21"/%3E%3Cline x1="4" y1="4" x2="9" y2="9"/%3E%3C/svg%3E',
     mimeType: 'image/svg+xml',
     sizes: ['24x24'],
 }
@@ -167,7 +167,7 @@ export const TOOL_GROUP_ICONS: Record<string, McpIcon> = {
     search: ICON_SEARCH,
     analytics: ICON_ANALYTICS,
     relationships: ICON_RELATIONSHIPS,
-    export: ICON_EXPORT,
+    io: ICON_IO,
     admin: ICON_ADMIN,
     github: ICON_GITHUB,
     backup: ICON_BACKUP,

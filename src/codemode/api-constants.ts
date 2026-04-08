@@ -40,8 +40,10 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         link: 'linkEntries',
         graph: 'visualizeRelationships',
     },
-    export: {
+    io: {
         dump: 'exportEntries',
+        md: 'exportMarkdown',
+        importMd: 'importMarkdown',
     },
     admin: {
         edit: 'updateEntry',
@@ -124,9 +126,10 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.relationships.linkEntries({ from_entry_id: 1, to_entry_id: 2, relationship_type: "implements" })',
         'mj.relationships.visualizeRelationships({ entry_id: 1 })',
     ],
-    export: [
-        'mj.export.exportEntries({ format: "json" })',
-        'mj.export.exportEntries({ format: "markdown", limit: 50 })',
+    io: [
+        'mj.io.exportEntries({ format: "json" })',
+        'mj.io.exportMarkdown({ output_dir: "./export" })',
+        'mj.io.importMarkdown({ source_dir: "./import" })',
     ],
     admin: [
         'mj.admin.updateEntry({ entry_id: 1, content: "Updated content" })',
@@ -249,7 +252,7 @@ export const GROUP_PREFIX_MAP: Record<string, string> = {
     search: '',
     analytics: '',
     relationships: '',
-    export: '',
+    io: '',
     admin: '',
     github: '',
     backup: '',

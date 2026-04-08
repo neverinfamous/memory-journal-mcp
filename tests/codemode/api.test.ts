@@ -46,7 +46,7 @@ function createMinimalToolSet(): ToolDefinition[] {
         createMockTool('semantic_search', 'search'),
         createMockTool('get_statistics', 'analytics'),
         createMockTool('link_entries', 'relationships'),
-        createMockTool('export_entries', 'export'),
+        createMockTool('export_entries', 'io'),
         createMockTool('update_entry', 'admin'),
         createMockTool('delete_entry', 'admin'),
         createMockTool('get_github_issues', 'github'),
@@ -69,7 +69,7 @@ describe('toolNameToMethodName', () => {
     })
 
     it('should handle single-word names', () => {
-        expect(toolNameToMethodName('export_entries', 'export')).toBe('exportEntries')
+        expect(toolNameToMethodName('export_entries', 'io')).toBe('exportEntries')
     })
 
     it('should keep prefix for github tools', () => {
@@ -117,7 +117,7 @@ describe('JournalApi', () => {
             expect(api.search).toBeDefined()
             expect(api.analytics).toBeDefined()
             expect(api.relationships).toBeDefined()
-            expect(api.export).toBeDefined()
+            expect(api.io).toBeDefined()
             expect(api.admin).toBeDefined()
             expect(api.github).toBeDefined()
             expect(api.backup).toBeDefined()
@@ -343,7 +343,7 @@ describe('JournalApi', () => {
             expect(bindings['search']).toBeDefined()
             expect(bindings['analytics']).toBeDefined()
             expect(bindings['relationships']).toBeDefined()
-            expect(bindings['export']).toBeDefined()
+            expect(bindings['io']).toBeDefined()
             expect(bindings['admin']).toBeDefined()
             expect(bindings['github']).toBeDefined()
             expect(bindings['backup']).toBeDefined()

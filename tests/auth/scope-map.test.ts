@@ -53,7 +53,11 @@ describe('scope-map', () => {
             for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
                 const expectedScope = TOOL_GROUP_SCOPES[group as ToolGroup]
                 for (const tool of tools) {
-                    expect(map.get(tool)).toBe(expectedScope)
+                    let expected = expectedScope
+                    if (tool === 'import_markdown' || tool === 'team_import_markdown') {
+                        expected = 'write'
+                    }
+                    expect(map.get(tool)).toBe(expected)
                 }
             }
         })

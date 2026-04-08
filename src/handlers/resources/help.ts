@@ -26,7 +26,7 @@ const GROUP_DESCRIPTIONS: Record<string, string> = {
     search: 'Full-text search, semantic search, date range queries, and vector index stats',
     analytics: 'Entry analytics, importance scoring, and productivity trends',
     relationships: 'Link and visualize relationships between journal entries',
-    export: 'Export journal data in various formats (JSON, Markdown, CSV)',
+    io: 'Import and export journal data — JSON export, Markdown round-trip (export/import)',
     admin: 'Update entries, rebuild indexes, and manage the vector search index',
     github: 'GitHub integration — issues, PRs, milestones, workflow runs, Kanban boards',
     backup: 'Create and restore database backups',
@@ -374,8 +374,10 @@ function inferGroupFromName(name: string): string {
         // relationships (2)
         link_entries: 'relationships',
         visualize_relationships: 'relationships',
-        // export (1)
-        export_entries: 'export',
+        // io (3)
+        export_entries: 'io',
+        export_markdown: 'io',
+        import_markdown: 'io',
         // admin (5)
         update_entry: 'admin',
         delete_entry: 'admin',

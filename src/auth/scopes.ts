@@ -55,7 +55,7 @@ export const TOOL_GROUP_SCOPES: Record<ToolGroup, StandardScope> = {
     search: SCOPES.READ,
     analytics: SCOPES.READ,
     relationships: SCOPES.READ,
-    export: SCOPES.READ,
+    io: SCOPES.READ,
     admin: SCOPES.ADMIN,
     github: SCOPES.WRITE,
     backup: SCOPES.ADMIN,
