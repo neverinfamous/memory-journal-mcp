@@ -68,8 +68,6 @@ return {
 | `sameTagError`     | `true`   |
 | `nonexistentError` | `true`   |
 
-
-
 ### 26.3 Backup & Restore
 
 ```javascript
