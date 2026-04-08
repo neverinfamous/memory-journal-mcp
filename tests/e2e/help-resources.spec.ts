@@ -24,7 +24,7 @@ const HELP_GROUPS = [
     'backup',
     'codemode',
     'core',
-    'export',
+    'io',
     'github',
     'relationships',
     'search',
