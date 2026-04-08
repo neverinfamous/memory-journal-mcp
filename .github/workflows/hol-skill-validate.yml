@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  id-token: none
 
 jobs:
   validate:
@@ -24,7 +25,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Validate Skill
-        uses: hashgraph-online/skill-publish@47895cf40f6214511c713628dbbafd0c3316f4dd
+        uses: hashgraph-online/skill-publish@47895cf40f6214511c713628dbbafd0c3316f4dd # v1.0.11
         with:
           mode: validate
           skill-dir: skills/github-commander
