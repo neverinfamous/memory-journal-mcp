@@ -55,52 +55,52 @@ return {
 
 ```javascript
 // Test code:
-const MOCK_DIR = 'cm_test_export'
+const MOCK_DIR = 'c:/Users/chris/Desktop/memory-journal-mcp/test-server/codemode/cm_test_export'
 
 // Export 5 entries to temporary directory
 const exportResult = await mj.io.exportMarkdown({
-    output_dir: MOCK_DIR,
-    limit: 5
+  output_dir: MOCK_DIR,
+  limit: 5,
 })
 
 // Run dry-run import on the sandbox folder
 const importResult = await mj.io.importMarkdown({
-    source_dir: MOCK_DIR,
-    dry_run: true
+  source_dir: MOCK_DIR,
+  dry_run: true,
 })
 
 // Path Traversal Security
 const traversal = await mj.io.exportMarkdown({
-    output_dir: '../../../etc/shadow',
-    limit: 1
+  output_dir: '../../../etc/shadow',
+  limit: 1,
 })
 
 return {
-    exportSuccess: exportResult.success,
-    exportedCount: exportResult.exported_count ?? 0,
-    validDir: exportResult.output_dir === MOCK_DIR,
-    dryRunSuccess: importResult.success,
-    isDryRun: importResult.dry_run === true,
-    simulatedUpdates: typeof importResult.updated === 'number',
-    traversalBlocked: traversal.success === false
+  exportSuccess: exportResult.success,
+  exportedCount: exportResult.exported_count ?? 0,
+  validDir: exportResult.output_dir === MOCK_DIR,
+  dryRunSuccess: importResult.success,
+  isDryRun: importResult.dry_run === true,
+  simulatedUpdates: typeof importResult.updated === 'number',
+  traversalBlocked: traversal.success === false,
 }
 ```
 
-| Check              | Expected      |
-| ------------------ | ------------- |
-| `exportSuccess`    | `true`        |
-| `exportedCount`    | `> 0`         |
-| `validDir`         | `true`        |
-| `dryRunSuccess`    | `true`        |
-| `isDryRun`         | `true`        |
-| `simulatedUpdates` | `true`        |
-| `traversalBlocked` | `true`        |
+| Check              | Expected |
+| ------------------ | -------- |
+| `exportSuccess`    | `true`   |
+| `exportedCount`    | `> 0`    |
+| `validDir`         | `true`   |
+| `dryRunSuccess`    | `true`   |
+| `isDryRun`         | `true`   |
+| `simulatedUpdates` | `true`   |
+| `traversalBlocked` | `true`   |
 
 ---
 
 ## Success Criteria
 
-- [x] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
-- [x] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
-- [x] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
-- [x] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
+- [ ] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
+- [ ] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
+- [ ] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
+- [ ] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
