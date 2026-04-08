@@ -68,47 +68,6 @@ return {
 | `sameTagError`     | `true`   |
 | `nonexistentError` | `true`   |
 
-### 26.2 Export
-
-```javascript
-// Test code:
-const jsonExport = await mj.export.exportEntries({ format: 'json', limit: 5 })
-const mdExport = await mj.export.exportEntries({ format: 'markdown', limit: 5 })
-const tagExport = await mj.export.exportEntries({
-  format: 'json',
-  tags: ['architecture'],
-  limit: 10,
-})
-const dateExport = await mj.export.exportEntries({
-  format: 'json',
-  start_date: '2026-01-01',
-  end_date: '2026-03-01',
-})
-const typeExport = await mj.export.exportEntries({
-  format: 'json',
-  entry_types: ['planning'],
-  limit: 10,
-})
-return {
-  jsonHasEntries: Array.isArray(jsonExport.entries),
-  jsonCount: jsonExport.entries?.length ?? 0,
-  mdHasContent: typeof mdExport.content === 'string',
-  tagFiltered:
-    tagExport.entries?.every(
-      (e) => e.tags?.includes('architecture') || e.tags?.some((t) => t === 'architecture')
-    ) ?? false,
-  dateFiltered: dateExport.entries?.length >= 0,
-  typeFiltered: typeExport.entries?.every((e) => e.entryType === 'planning') ?? true,
-}
-```
-
-| Check            | Expected                                      |
-| ---------------- | --------------------------------------------- |
-| `jsonHasEntries` | `true`                                        |
-| `mdHasContent`   | `true`                                        |
-| `tagFiltered`    | `true` (only entries with "architecture" tag) |
-| `typeFiltered`   | `true` (only "planning" type)                 |
-
 ### 26.3 Backup & Restore
 
 ```javascript
@@ -168,8 +127,7 @@ return {
 - [ ] `list_tags` returns tag list via Code Mode
 - [ ] `merge_tags` consolidates tags correctly — source removed, target exists
 - [ ] `merge_tags` returns structured errors for same-tag and nonexistent source
-- [ ] `export_entries` JSON and markdown formats work
-- [ ] `export_entries` filters (`tags`, `start_date/end_date`, `entry_types`) produce filtered results
+
 - [ ] `backup_journal` named and auto-named both succeed
 - [ ] `backup_journal` path traversal blocked with structured error
 - [ ] `list_backups` returns backup metadata

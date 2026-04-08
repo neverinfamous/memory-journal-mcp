@@ -189,7 +189,7 @@ export class JournalApi {
     readonly search: GroupApiRecord
     readonly analytics: GroupApiRecord
     readonly relationships: GroupApiRecord
-    readonly export: GroupApiRecord
+    readonly io: GroupApiRecord
     readonly admin: GroupApiRecord
     readonly github: GroupApiRecord
     readonly backup: GroupApiRecord
@@ -217,7 +217,7 @@ export class JournalApi {
             'relationships',
             this.toolsByGroup.get('relationships') ?? []
         )
-        this.export = createGroupApi('export', this.toolsByGroup.get('export') ?? [])
+        this.io = createGroupApi('io', this.toolsByGroup.get('io') ?? [])
         this.admin = createGroupApi('admin', this.toolsByGroup.get('admin') ?? [])
         this.github = createGroupApi('github', this.toolsByGroup.get('github') ?? [])
         this.backup = createGroupApi('backup', this.toolsByGroup.get('backup') ?? [])
@@ -254,7 +254,9 @@ export class JournalApi {
             search: this.search,
             analytics: this.analytics,
             relationships: this.relationships,
-            export: this.export,
+            io: this.io,
+            // Backward-compat alias — agents using mj.export.* still work
+            export: this.io,
             admin: this.admin,
             github: this.github,
             backup: this.backup,

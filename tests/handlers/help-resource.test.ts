@@ -148,12 +148,12 @@ describe('Help Resource Handlers', () => {
         expect(result.data.tools.length).toBeGreaterThan(0)
     })
 
-    it('should handle export group', async () => {
+    it('should handle io group', async () => {
         const defs = getHelpResourceDefinitions()
         const groupHelp = defs.find((d) => d.uri === 'memory://help/{group}')
 
-        const result = (await groupHelp!.handler('memory://help/export', getContext())) as any
-        expect(result.data.group).toBe('export')
+        const result = (await groupHelp!.handler('memory://help/io', getContext())) as any
+        expect(result.data.group).toBe('io')
     })
 
     it('should handle team group', async () => {

@@ -29,7 +29,7 @@ describe('TOOL_GROUPS', () => {
         expect(groups).toContain('search')
         expect(groups).toContain('analytics')
         expect(groups).toContain('relationships')
-        expect(groups).toContain('export')
+        expect(groups).toContain('io')
         expect(groups).toContain('admin')
         expect(groups).toContain('github')
         expect(groups).toContain('backup')

@@ -479,6 +479,54 @@ describe('Tool Handlers', () => {
             )) as { mermaid: string | null; entry_count: number }
 
             expect(result.entry_count).toBeGreaterThan(0)
+            expect(result.mermaid).toContain('mermaid')
+        })
+
+        it('should filter by relationship_type', async () => {
+            const e1 = (await callTool('create_entry', { content: 'Node X' }, db)) as {
+                entry: { id: number }
+            }
+            const e2 = (await callTool('create_entry', { content: 'Node Y' }, db)) as {
+                entry: { id: number }
+            }
+            const e3 = (await callTool('create_entry', { content: 'Node Z' }, db)) as {
+                entry: { id: number }
+            }
+
+            // Link 1 -> 2 (caused)
+            await callTool(
+                'link_entries',
+                {
+                    from_entry_id: e1.entry.id,
+                    to_entry_id: e2.entry.id,
+                    relationship_type: 'caused',
+                },
+                db
+            )
+
+            // Link 1 -> 3 (references)
+            await callTool(
+                'link_entries',
+                {
+                    from_entry_id: e1.entry.id,
+                    to_entry_id: e3.entry.id,
+                    relationship_type: 'references',
+                },
+                db
+            )
+
+            // Visualize with 'caused' only
+            const resultCaused = (await callTool(
+                'visualize_relationships',
+                {
+                    entry_id: e1.entry.id,
+                    relationship_type: 'caused',
+                },
+                db
+            )) as { mermaid: string }
+
+            expect(resultCaused.mermaid).toContain('caused')
+            expect(resultCaused.mermaid).not.toContain('references')
         })
     })
 

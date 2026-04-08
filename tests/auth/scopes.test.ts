@@ -201,7 +201,7 @@ describe('TOOL_GROUP_SCOPES', () => {
         expect(TOOL_GROUP_SCOPES['search']).toBe(SCOPES.READ)
         expect(TOOL_GROUP_SCOPES['analytics']).toBe(SCOPES.READ)
         expect(TOOL_GROUP_SCOPES['relationships']).toBe(SCOPES.READ)
-        expect(TOOL_GROUP_SCOPES['export']).toBe(SCOPES.READ)
+        expect(TOOL_GROUP_SCOPES['io']).toBe(SCOPES.READ)
     })
 
     it('should map write groups to write', () => {

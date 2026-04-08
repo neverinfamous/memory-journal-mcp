@@ -5,7 +5,44 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { sanitizeErrorForLogging } from '../../src/utils/security-utils.js'
+import {
+    sanitizeErrorForLogging,
+    assertSafeDirectoryPath,
+    PathTraversalError,
+} from '../../src/utils/security-utils.js'
+
+describe('assertSafeDirectoryPath', () => {
+    it('should validate normal directory paths', () => {
+        expect(() => assertSafeDirectoryPath('C:/Users/chris/Documents')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('/usr/local/bin')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('export')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('./export')).not.toThrow()
+    })
+
+    it('should validate Windows style paths safely', () => {
+        expect(() => assertSafeDirectoryPath('C:\\Users\\chris\\Documents')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('.\\export')).not.toThrow()
+    })
+
+    it('should throw PathTraversalError for `..` segments with forward slash', () => {
+        expect(() => assertSafeDirectoryPath('../secrets')).toThrow(PathTraversalError)
+        expect(() => assertSafeDirectoryPath('/var/logs/../../etc/passwd')).toThrow(
+            PathTraversalError
+        )
+        expect(() => assertSafeDirectoryPath('export/..')).toThrow(PathTraversalError)
+    })
+
+    it('should throw PathTraversalError for `..` segments with backslash', () => {
+        expect(() => assertSafeDirectoryPath('..\\secrets')).toThrow(PathTraversalError)
+        expect(() => assertSafeDirectoryPath('C:\\Users\\..\\Admin')).toThrow(PathTraversalError)
+    })
+
+    it('should NOT throw on valid directory names containing `..` like `..foo` or `foo..`', () => {
+        expect(() => assertSafeDirectoryPath('/var/logs/..foo/')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('/var/logs/foo../')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('..foo')).not.toThrow()
+    })
+})
 
 describe('sanitizeErrorForLogging', () => {
     it('should redact GitHub classic PATs (ghp_)', () => {

@@ -33,17 +33,7 @@
 > [!NOTE]
 > If `restore_backup` is tested after `merge_tags`, the restored backup will revert the merge. This is expected behavior. Verify merge worked immediately after calling `merge_tags`, before any backup restoration.
 
-### 5.2 Export
-
-| Test                    | Command/Action                                                                     | Expected Result                          |
-| ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
-| Export JSON             | `export_entries(format: "json", limit: 5)`                                         | JSON export with `entries` array         |
-| Export markdown         | `export_entries(format: "markdown", limit: 5)`                                     | Markdown export with `content` string    |
-| Export with tags        | `export_entries(format: "json", tags: ["test"], limit: 10)`                        | Only entries with matching tags returned |
-| Export with dates       | `export_entries(format: "json", start_date: "2026-01-01", end_date: "2026-03-01")` | Only entries within date range returned  |
-| Export with entry_types | `export_entries(format: "json", entry_types: ["planning"], limit: 10)`             | Only entries of specified type returned  |
-
-### 5.3 Backup & Restore
+### 5.2 Backup & Restore
 
 | Test                  | Command/Action                                              | Expected Result                                                                  |
 | --------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |

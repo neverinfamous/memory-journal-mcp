@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 61 tools are categorized here for filtering support.
+ * All 65 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -27,7 +27,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     search: ['search_entries', 'search_by_date_range', 'semantic_search', 'get_vector_index_stats'],
     analytics: ['get_statistics', 'get_cross_project_insights'],
     relationships: ['link_entries', 'visualize_relationships'],
-    export: ['export_entries'],
+    io: ['export_entries', 'export_markdown', 'import_markdown'],
     admin: [
         'update_entry',
         'delete_entry',
@@ -68,6 +68,8 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_link_entries',
         'team_visualize_relationships',
         'team_export_entries',
+        'team_export_markdown',
+        'team_import_markdown',
         'team_backup',
         'team_list_backups',
         'team_semantic_search',
@@ -90,14 +92,14 @@ export const META_GROUPS: Record<MetaGroup, ToolGroup[]> = {
         'search',
         'analytics',
         'relationships',
-        'export',
+        'io',
         'admin',
         'github',
         'backup',
         'team',
         'codemode',
     ],
-    readonly: ['core', 'search', 'analytics', 'relationships', 'export'],
+    readonly: ['core', 'search', 'analytics', 'relationships', 'io'],
 }
 
 /**
@@ -138,10 +140,27 @@ export function getEnabledGroups(enabledTools: Set<string>): Set<ToolGroup> {
 }
 
 /**
- * Check if a string is a valid group name
+ * Legacy group name aliases.
+ * Users with `--tool-filter=export` in their config are transparently mapped to `io`.
  */
-function isGroup(name: string): name is ToolGroup {
-    return name in TOOL_GROUPS
+const GROUP_ALIASES: Record<string, ToolGroup> = { export: 'io' }
+
+/**
+ * Resolve a group name, applying legacy aliases.
+ */
+function resolveGroupAlias(name: string): string {
+    return GROUP_ALIASES[name] ?? name
+}
+
+/**
+ * Check if a string is a valid group name (after alias resolution).
+ *
+ * Returns a boolean rather than a type predicate because legacy aliases like
+ * `export` resolve to `io` at call time — they are valid inputs but are not
+ * themselves members of the ToolGroup union, making a type predicate unsound.
+ */
+function isGroup(name: string): boolean {
+    return resolveGroupAlias(name) in TOOL_GROUPS
 }
 
 /**
@@ -191,7 +210,8 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
                     enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[group]])
                 }
             } else if (isGroup(name)) {
-                enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[name]])
+                const resolved = resolveGroupAlias(name) as ToolGroup
+                enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[resolved]])
             } else {
                 // Single tool
                 enabledTools.add(name)
@@ -205,7 +225,8 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
         } else if (isRemove) {
             // Remove group or tool
             if (isGroup(name)) {
-                for (const tool of TOOL_GROUPS[name]) {
+                const resolved = resolveGroupAlias(name) as ToolGroup
+                for (const tool of TOOL_GROUPS[resolved]) {
                     enabledTools.delete(tool)
                 }
             } else {
@@ -224,7 +245,8 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
                     enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[group]])
                 }
             } else if (isGroup(name)) {
-                enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[name]])
+                const resolved = resolveGroupAlias(name) as ToolGroup
+                enabledTools = new Set([...enabledTools, ...TOOL_GROUPS[resolved]])
             } else {
                 enabledTools.add(name)
             }
@@ -244,7 +266,8 @@ export function parseToolFilter(filterString: string): ToolFilterConfig {
         for (const rule of rules) {
             if (rule.type === 'exclude') {
                 if (isGroup(rule.target)) {
-                    for (const tool of TOOL_GROUPS[rule.target]) {
+                    const resolved = resolveGroupAlias(rule.target) as ToolGroup
+                    for (const tool of TOOL_GROUPS[resolved]) {
                         enabledTools.delete(tool)
                     }
                 } else {

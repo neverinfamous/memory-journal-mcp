@@ -49,6 +49,19 @@ const VisualizeInputSchema = z.object({
         .optional()
         .describe('Specific entry ID to visualize (shows connected entries)'),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+    relationship_type: z
+        .enum([
+            'evolves_from',
+            'references',
+            'implements',
+            'clarifies',
+            'response_to',
+            'blocked_by',
+            'resolved',
+            'caused',
+        ])
+        .optional()
+        .describe('Filter to show only this relationship type'),
     depth: z.number().min(1).max(3).optional().default(2).describe('Relationship traversal depth'),
     limit: z.number().max(500).optional().default(20).describe('Maximum entries to include'),
 })
@@ -59,6 +72,10 @@ const VisualizeInputSchemaMcp = z.object({
         .optional()
         .describe('Specific entry ID to visualize (shows connected entries)'),
     tags: z.array(z.string()).optional().describe('Filter entries by tags'),
+    relationship_type: z
+        .string()
+        .optional()
+        .describe('Filter to show only this relationship type (e.g., blocked_by, implements)'),
     depth: relaxedNumber().optional().default(2).describe('Relationship traversal depth'),
     limit: relaxedNumber().optional().default(20).describe('Maximum entries to include'),
 })
@@ -302,15 +319,21 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const entryIds = Object.keys(entries).map(Number)
                     const placeholders = entryIds.map(() => '?').join(',')
 
-                    const relsResult = db.executeRawQuery(
-                        `
+                    let relsQuery = `
                         SELECT from_entry_id, to_entry_id, relationship_type
                         FROM relationships
                         WHERE from_entry_id IN (${placeholders})
                           AND to_entry_id IN (${placeholders})
-                    `,
-                        [...entryIds, ...entryIds]
-                    )
+                    `
+                    const relsParams: unknown[] = [...entryIds, ...entryIds]
+
+                    // Apply relationship_type filter if specified
+                    if (input.relationship_type) {
+                        relsQuery += ' AND relationship_type = ?'
+                        relsParams.push(input.relationship_type)
+                    }
+
+                    const relsResult = db.executeRawQuery(relsQuery, relsParams)
 
                     const relationships = relsResult[0]?.values ?? []
 

@@ -39,10 +39,11 @@ This directory contains agent-optimized test prompts specifically designed to va
 | File                            |   Phase    | Focus                                                                 | When to Run        |
 | ------------------------------- | :--------: | --------------------------------------------------------------------- | ------------------ |
 | `test-cm-github.md`             |     25     | GitHub 16 tools (read, Kanban, issues, milestones, insights)          | After Phases 16–19 |
-| `test-cm-admin-backup.md`       |     26     | Tag management, export formats/filters, backup lifecycle              | After Phases 16–19 |
-| `test-cm-team-crud.md`          | 27.1–27.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
-| `test-cm-team-admin.md`         | 27.4–27.8  | Team admin, analytics, relationships, export, backup                  | After Team CRUD    |
-| `test-cm-team-vector-errors.md` | 27.9–27.10 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
+| `test-cm-io.md`                 |     26     | IO namespaces, Markdown orchestration roundtrips, and file schemas    | After Phases 16–19 |
+| `test-cm-admin-backup.md`       |     27     | Tag management, backup lifecycle                                      | After Phases 16–19 |
+| `test-cm-team-crud.md`          | 28.1–28.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
+| `test-cm-team-admin.md`         | 28.4–28.9  | Team admin, analytics, relationships, IO logic, backup                | After Team CRUD    |
+| `test-cm-team-vector-errors.md` | 28.10–28.11| Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
 
 ## Dependency DAG
 
@@ -59,10 +60,11 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
          ├── Phase 23 (Orchestration) ─────── independent
          ├── Phase 24 (Relationships) ─────── cleanup for 22-24
          ├── Phase 25 (GitHub) ────────────── independent
-         ├── Phase 26 (Admin/Backup) ──────── independent
-         └── Phase 27.1-3 (Team CRUD) ─────── sequential
-              └── Phase 27.4-8 (Team Admin)
-                   └── Phase 27.9-10 (Team Vector/Errors + cleanup)
+         ├── Phase 26 (IO & Markdown) ─────── independent
+         ├── Phase 27 (Admin/Backup) ──────── independent
+         └── Phase 28.1-3 (Team CRUD) ─────── sequential
+              └── Phase 28.4-9 (Team Admin)
+                   └── Phase 28.10-11 (Team Vector/Errors + cleanup)
 ```
 
 ## Execution Workflow
@@ -70,9 +72,9 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
 1. Navigate to the `test-server/codemode/` directory.
 2. Run `test-cm-sandbox-basics.md` (Phase 16) — must pass before proceeding.
 3. Run Phases 17–19 in any order.
-4. Continue with Phases 20–26 in any order (all independent after 16–19).
-5. Run Phase 27 files sequentially (CRUD → Admin → Vector/Errors).
-6. Cleanup is included in Phase 24 (for 22-24) and Phase 27.9-10 (for 25-27).
+4. Continue with Phases 20–27 in any order (all independent after 16–19).
+5. Run Phase 28 files sequentially (CRUD → Admin → Vector/Errors).
+6. Cleanup is included in Phase 24 (for 22-24) and Phase 28.10-11 (for 25-28).
 
 ## Token Estimate Reporting
 

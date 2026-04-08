@@ -2,7 +2,7 @@
 
 Test team vector search, cross-project insights, and comprehensive cross-tool error path verification through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 27.9–27.10 — ~10 test cases covering team vector operations, insights, and cross-tool structured error verification via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 28.9–28.10 — ~10 test cases covering team vector operations, insights, and cross-tool structured error verification via Code Mode.
 
 **Prerequisites:**
 
@@ -21,9 +21,9 @@ Test team vector search, cross-project insights, and comprehensive cross-tool er
 
 ---
 
-## Phase 27 (continued): Team Vector, Insights & Cross-Tool Errors
+## Phase 28 (continued): Team Vector, Insights & Cross-Tool Errors
 
-### 27.9 Team Vector & Cross-Project Insights
+### 28.9 Team Vector & Cross-Project Insights
 
 ```javascript
 // Test code:
@@ -80,7 +80,7 @@ return {
 | `insightsProjectCount` | ≥ 1 (project 5 visible with seed entries S15–S17; 0 if team seed missing) |
 | `filteredInsights`     | `project_count ≥ 0` (≥ 1 if S15–S17 fall within date range)               |
 
-### 27.10 Cross-Tool Error Path Verification (via Code Mode)
+### 28.10 Cross-Tool Error Path Verification (via Code Mode)
 
 > [!IMPORTANT]
 > Verify that tool errors propagate as structured handler errors through the Code Mode API bridge — not as raw MCP errors or unhandled exceptions.
@@ -183,7 +183,7 @@ for (const e of cm4Entries) {
   results.push({ id: e.id, deleted: del.success })
 }
 
-// Clean up team entries created during Phase 27
+// Clean up team entries created during Phase 28
 const teamEntries = await mj.team.teamSearch({ query: 'CM4', limit: 50 })
 for (const e of teamEntries.entries ?? []) {
   if (e.content?.includes('CM4')) {
@@ -205,4 +205,4 @@ return { cleaned: results.length, details: results }
 - [ ] `team_add_to_vector_index` succeeds for existing, errors for nonexistent via Code Mode
 - [ ] `team_get_cross_project_insights` returns schema-compliant response via Code Mode
 - [ ] All 18 cross-tool error paths return structured handler errors (not raw throws) through Code Mode
-- [ ] All test entries cleaned up after Phase 27
+- [ ] All test entries cleaned up after Phase 28

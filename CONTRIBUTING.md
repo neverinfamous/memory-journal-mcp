@@ -227,9 +227,10 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # 61 tool handlers (10 groups)
+│   ├── tools/                  # 65 tool handlers (10 groups)
 │   ├── resources/              # 38 resource handlers
 │   └── prompts/                # 17 prompt handlers
+├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator
 ├── server/
 │   ├── mcp-server.ts           # MCP server setup

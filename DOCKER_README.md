@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-97.52%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-97.12%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -21,7 +21,7 @@
 
 ### What Sets Us Apart
 
-**61 MCP Tools** · **17 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**65 MCP Tools** · **17 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,7 +33,8 @@
 | **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                     |
 | **Configurable Briefing**     | 12 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness                                                   |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                       |
-| **Team Collaboration**        | 20 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution                                               |
+| **Team Collaboration**        | 22 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution                                               |
+| **Data Interoperability**     | Bidirectional Markdown roundtripping, unified IO namespace, and schema-safe JSON exports with hard bounds-checked path traversal defenses                      |
 | **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                          |
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                             |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals      |
@@ -78,37 +79,37 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 61    | All tools (default)      |
+| `full`               | 65    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | ~15   | Disable all mutations    |
-| `-github`            | 45    | Exclude a group          |
-| `-github,-analytics` | 43    | Exclude multiple groups  |
+| `-github`            | 49    | Exclude a group          |
+| `-github,-analytics` | 47    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
 **Custom Selection:** List individual tool names to create your own whitelist: `--tool-filter "create_entry,search_entries,semantic_search"`
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`, `codemode`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `backup`, `team`, `codemode`
 
 **[Complete tool filtering guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tool-Filtering)**
 
 ## 📋 Core Capabilities
 
-### 🛠️ **61 MCP Tools** (10 Groups)
+### 🛠️ **65 MCP Tools** (10 Groups)
 
-| Group           | Tools | Description                                                                                                         |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                             |
-| `core`          | 6     | Entry CRUD, tags, test                                                                                              |
-| `search`        | 4     | Text search, date range, semantic, vector stats                                                                     |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                  |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                      |
-| `export`        | 1     | JSON/Markdown export                                                                                                |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                             |
-| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                      |
-| `team`          | 20    | CRUD, search, stats, relationships, export, backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
+| Group           | Tools | Description                                                                                                                              |
+| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                  |
+| `core`          | 6     | Entry CRUD, tags, test                                                                                                                   |
+| `search`        | 4     | Text search, date range, semantic, vector stats                                                                                          |
+| `analytics`     | 2     | Statistics, cross-project insights                                                                                                       |
+| `relationships` | 2     | Link entries, visualize graphs                                                                                                           |
+| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                           |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                  |
+| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                     |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                           |
+| `team`          | 22    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -221,11 +222,11 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 
 **Variants** (modify the config above):
 
-| Variant                 | Change                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| **Minimal (no GitHub)** | Remove the `-e GITHUB_TOKEN`, repo volume mount, and `env` block              |
-| **Team collaboration**  | Add `-e`, `"TEAM_DB_PATH=/app/data/team.db"` to `args`                        |
-| **Code Mode only**      | Add `"--tool-filter"`, `"codemode"` to `args` (single tool, all capabilities) |
+| Variant                 | Change                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------- |
+| **Minimal (no GitHub)** | Remove the `-e GITHUB_TOKEN`, repo volume mount, and `env` block                 |
+| **Team collaboration**  | Add `-e`, `"TEAM_DB_PATH=/app/data/team.db"` to `args`                           |
+| **Code Mode only**      | Add `"--tool-filter"`, `"codemode"` to `args` (single tool, all 65 capabilities) |
 
 | **Briefing config** | Add `-e`, `"BRIEFING_ENTRY_COUNT=5"` to `args` (see env var table below) |
 | **Local build** | Replace `writenotenow/memory-journal-mcp:latest` with your local image name |

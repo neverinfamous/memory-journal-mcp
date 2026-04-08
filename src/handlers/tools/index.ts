@@ -27,7 +27,7 @@ import { getCoreTools } from './core.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
-import { getExportTools } from './export.js'
+import { getIoTools } from './io.js'
 import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
@@ -93,10 +93,10 @@ function getToolIcon(
             title: 'Relationships',
             description: 'Entry relationship management',
         },
-        export: {
-            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/export.svg',
-            title: 'Export',
-            description: 'Data export operations',
+        io: {
+            iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/swap-horizontal.svg',
+            title: 'IO',
+            description: 'Import/export operations',
         },
         admin: {
             iconUrl: 'https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/cog.svg',
@@ -313,7 +313,7 @@ function getAllToolDefinitions(context: ToolContext): ToolDefinition[] {
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
         ...getRelationshipTools(context),
-        ...getExportTools(context),
+        ...getIoTools(context),
         ...getAdminTools(context),
         ...getGitHubTools(context),
         ...getBackupTools(context),

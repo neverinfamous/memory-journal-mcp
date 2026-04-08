@@ -18,7 +18,7 @@ import { getCoreTools } from './core.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
 import { getRelationshipTools } from './relationships.js'
-import { getExportTools } from './export.js'
+import { getIoTools } from './io.js'
 import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
@@ -98,7 +98,7 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
         ...getRelationshipTools(context),
-        ...getExportTools(context),
+        ...getIoTools(context),
         ...getAdminTools(context),
         ...getGitHubTools(context),
         ...getBackupTools(context),
@@ -121,7 +121,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                 'Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. ' +
                 'Enables multi-step workflows in a single call, reducing token usage by 70-90%. ' +
                 'API groups: mj.core.*, mj.search.*, mj.analytics.*, mj.relationships.*, ' +
-                'mj.export.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +
+                'mj.io.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +
                 'Use mj.help() for method listing. Returns the last expression value.',
             group: 'codemode',
             inputSchema: ExecuteCodeSchemaMcp,
