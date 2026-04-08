@@ -31,8 +31,15 @@ jobs:
 
   publish:
     needs: [lint, codeql, secrets, trivy]
-    # Publish only after ALL security gates pass (fan-out: runs in parallel, gates publish)
-    if: always() && needs.lint.result == 'success' && needs.codeql.result == 'success' && needs.secrets.result == 'success' && needs.trivy.result == 'success'
+    # Publish only on tag pushes (v*) after ALL security gates pass.
+    # Main-branch pushes (squash merge) run checks only — the tag push triggers the actual publish.
+    if: |
+      always() &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.lint.result == 'success' &&
+      needs.codeql.result == 'success' &&
+      needs.secrets.result == 'success' &&
+      needs.trivy.result == 'success'
     uses: ./.github/workflows/docker-publish.yml
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
