@@ -130,12 +130,12 @@
 
 ### 10.11 Team IO & Export
 
-| Test                   | Command/Action                                                                          | Expected Result                          |
-| ---------------------- | --------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Export JSON            | `team_export_entries(format: "json", limit: 5)`                                         | `format: "json"`, `data` string, `count` |
-| Export markdown        | `team_export_entries(format: "markdown", limit: 5)`                                     | `format: "markdown"`, `data` string      |
-| IO Export markdown     | `team_export_markdown(output_dir: "tmp_team_md", limit: 5)`                               | Generates local `.md` files in target dir|
-| IO Import dry run      | `team_import_markdown(source_dir: "tmp_team_md", dry_run: true)`                          | Returns mock counts, resolves `author`   |
+| Test               | Command/Action                                                   | Expected Result                           |
+| ------------------ | ---------------------------------------------------------------- | ----------------------------------------- |
+| Export JSON        | `team_export_entries(format: "json", limit: 5)`                  | `format: "json"`, `data` string, `count`  |
+| Export markdown    | `team_export_entries(format: "markdown", limit: 5)`              | `format: "markdown"`, `data` string       |
+| IO Export markdown | `team_export_markdown(output_dir: "tmp_team_md", limit: 5)`      | Generates local `.md` files in target dir |
+| IO Import dry run  | `team_import_markdown(source_dir: "tmp_team_md", dry_run: true)` | Returns mock counts, resolves `author`    |
 
 ### 10.12 Team Backup
 

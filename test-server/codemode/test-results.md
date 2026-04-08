@@ -8,7 +8,7 @@ Last tested: April 7th, 2026
 | `test-cm-api-discovery.md`      | ~406                    |       |
 | `test-cm-crud.md`               | ~720                    |       |
 | `test-cm-github.md`             | ~750                    |       |
-| `test-cm-io.md`                 | ~84                     |       |
+| `test-cm-io.md`                 | ~112                    |       |
 | `test-cm-orchestration.md`      | ~243                    |       |
 | `test-cm-readonly.md`           | ~983                    |       |
 | `test-cm-relationships.md`      | ~199                    |       |
