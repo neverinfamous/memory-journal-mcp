@@ -21,20 +21,20 @@
 
 ### 1. Legacy Export (`export_entries`)
 
-| Test                    | Command/Action                                                                     | Expected Result                          |
-| ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
-| Export JSON             | `export_entries(format: "json", limit: 5)`                                         | JSON export with `entries` array         |
-| Export markdown         | `export_entries(format: "markdown", limit: 5)`                                     | Markdown export with `content` string    |
+| Test            | Command/Action                                 | Expected Result                       |
+| --------------- | ---------------------------------------------- | ------------------------------------- |
+| Export JSON     | `export_entries(format: "json", limit: 5)`     | JSON export with `entries` array      |
+| Export markdown | `export_entries(format: "markdown", limit: 5)` | Markdown export with `content` string |
 
 ### 2. Markdown File Orchestration (`export_markdown` & `import_markdown`)
 
-| Test                    | Command/Action                                                                     | Expected Result                          |
-| ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------- |
-| Setup temp dir          | Use run_command or write_to_file to ensure a temp test folder exists (`test_export`)    | Temporary directory is ready             |
-| Basic Export Map        | `export_markdown(output_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", limit: 5)` | Outputs `exported_count` matches limit   |
-| View Exported Node      | `run_command` (cat/get-content) on one of the exported files in `test_export`           | Validates YAML frontmatter generated     |
-| Import Dry Run          | `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: true)` | Returns structured count of items        |
-| Path Traversal Defense  | `export_markdown(output_dir: "../../etc/passwd")`                                  | Structured error rejecting `..` paths    |
+| Test                   | Command/Action                                                                                                             | Expected Result                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Setup temp dir         | Use run_command or write_to_file to ensure a temp test folder exists (`test_export`)                                       | Temporary directory is ready           |
+| Basic Export Map       | `export_markdown(output_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", limit: 5)`      | Outputs `exported_count` matches limit |
+| View Exported Node     | `run_command` (cat/get-content) on one of the exported files in `test_export`                                              | Validates YAML frontmatter generated   |
+| Import Dry Run         | `import_markdown(source_dir: "C:\Users\chris\Desktop\memory-journal-mcp\test-server\standard\test_export", dry_run: true)` | Returns structured count of items      |
+| Path Traversal Defense | `export_markdown(output_dir: "../../etc/passwd")`                                                                          | Structured error rejecting `..` paths  |
 
 ---
 
