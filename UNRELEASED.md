@@ -12,6 +12,7 @@
 
 - Integrated comprehensive test matrices for the IO tooling, executing validation checks via Vitest mapping logic and Playwright's E2E payload contracts.
 - Added comprehensive documentation structures (`test-core-io.md`, `test-cm-io.md`) mapping declarative test paths for direct MCP mapping verification.
+- Verified unified IO Code Mode API via executing `test-cm-io.md` test run, achieving zero regression mapping and path traversal protection.
 
 ### Changed
 
