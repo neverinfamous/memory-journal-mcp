@@ -2,7 +2,7 @@
 
 Test team administration (update, delete, merge tags), analytics, relationships, export, and backup through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 27.4–27.8 — ~12 test cases covering team admin, analytics, relationships, export, and backup via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 28.4–28.9 — ~12 test cases covering team admin, analytics, relationships, IO, and backup via Code Mode.
 
 **Prerequisites:**
 
@@ -20,9 +20,9 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 
 ---
 
-## Phase 27 (continued): Team Admin & Collaboration via Code Mode
+## Phase 28: Team Admin & Collaboration via Code Mode
 
-### 27.4 Team Admin
+### 28.4 Team Admin
 
 ```javascript
 // Test code:
@@ -69,7 +69,7 @@ return {
 | `newTagExists`   | `true`   |
 | `deleteSuccess`  | `true`   |
 
-### 27.5 Team Analytics
+### 28.5 Team Analytics
 
 ```javascript
 // Test code:
@@ -90,7 +90,7 @@ return {
 | `hasAuthors`        | `true`   |
 | `monthlyHasPeriods` | `true`   |
 
-### 27.6 Team Relationships
+### 28.6 Team Relationships
 
 ```javascript
 // Test code:
@@ -128,32 +128,43 @@ return {
 | `dupDetected`    | `true`   |
 | `hasMermaid`     | `true`   |
 
-### 27.7 Team Export
+### 28.7 Team IO & Export
 
 ```javascript
 // Test code:
 const jsonExport = await mj.team.teamExportEntries({ format: 'json', limit: 5 })
 const mdExport = await mj.team.teamExportEntries({ format: 'markdown', limit: 5 })
-const tagExport = await mj.team.teamExportEntries({
-  format: 'json',
-  tags: ['codemode4-team-test'],
-  limit: 10,
+
+const MOCK_DIR = 'cm_team_export'
+
+const ioExport = await mj.team.teamExportMarkdown({
+    output_dir: MOCK_DIR,
+    limit: 5
 })
+
+const ioImport = await mj.team.teamImportMarkdown({
+    source_dir: MOCK_DIR,
+    dry_run: true
+})
+
 return {
   jsonHasData: typeof jsonExport.data === 'string',
-  jsonCount: jsonExport.count ?? 0,
   mdHasData: typeof mdExport.data === 'string',
-  tagFilteredCount: tagExport.count ?? 0,
+  ioExportSuccess: ioExport.success,
+  ioExportedCount: ioExport.exported_count ?? 0,
+  ioImportSuccess: ioImport.success,
+  ioImportDryRun: ioImport.dry_run
 }
 ```
 
-| Check         | Expected |
-| ------------- | -------- |
-| `jsonHasData` | `true`   |
-| `mdHasData`   | `true`   |
-| `jsonCount`   | ≥ 1      |
+| Check             | Expected |
+| ----------------- | -------- |
+| `jsonHasData`     | `true`   |
+| `mdHasData`       | `true`   |
+| `ioExportSuccess` | `true`   |
+| `ioImportDryRun`  | `true`   |
 
-### 27.8 Team Backup
+### 28.8 Team Backup
 
 ```javascript
 // Test code:

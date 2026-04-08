@@ -2,7 +2,7 @@
 
 Test team CRUD operations, error paths, and date range search through Code Mode.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 27.1–27.3 — ~15 test cases covering team create, read, search, and error paths via Code Mode.
+**Scope:** 1 tool (`mj_execute_code`), Phase 28.1–28.3 — ~15 test cases covering team create, read, search, and error paths via Code Mode.
 
 **Prerequisites:**
 
@@ -21,14 +21,14 @@ Test team CRUD operations, error paths, and date range search through Code Mode.
 
 ---
 
-## Phase 27: Team Tools via Code Mode
+## Phase 28: Team Tools via Code Mode
 
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured. If not configured, all team tools should return structured `{ success: false, error: "Team database not configured..." }`.
 >
 > **`team_delete_entry` is soft-delete only** — no `permanent` flag.
 
-### 27.1 Team CRUD
+### 28.1 Team CRUD
 
 ```javascript
 // Test code:
@@ -92,7 +92,7 @@ return {
 | `detailHasEntry`  | `true`                            |
 | `tagCount`        | ≥ 1                               |
 
-### 27.2 Team Error Paths
+### 28.2 Team Error Paths
 
 | Test               | Code                                                                                                                | Expected Result                    |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
@@ -104,7 +104,7 @@ return {
 | Merge same tag     | `return await mj.team.teamMergeTags({ source_tag: "x", target_tag: "x" });`                                         | `{ success: false, error: "..." }` |
 | Link nonexistent   | `return await mj.team.teamLinkEntries({ from_entry_id: 999999, to_entry_id: 1, relationship_type: "references" });` | `{ success: false, error: "..." }` |
 
-### 27.3 Team Date Range Search
+### 28.3 Team Date Range Search
 
 ```javascript
 // Test code:
