@@ -28,6 +28,10 @@
 
 ### Changed
 
+**Dependency Updates**
+
+- `typescript-eslint` from 8.57.0 to 8.58.1
+
 - Refactored the legacy `export` tool group into the unified `io` interface, adopting the `mj.io.*` namespace inside Code Mode (the `export` alias is preserved for backwards compatibility).
 - Deprecated `ICON_EXPORT` constant in favor of `ICON_IO` utilizing a bidirectional SVG visual design to signal interoperable data flow.
 - Lowercased group mappings for API Code Mode proxies.
