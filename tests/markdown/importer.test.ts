@@ -22,12 +22,8 @@ describe('importMarkdownEntries', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        vi.mocked(fs.readdir).mockResolvedValue([
-            '1-test.md',
-            'ignore-dir',
-            'ignore.txt',
-        ] as any)
-        
+        vi.mocked(fs.readdir).mockResolvedValue(['1-test.md', 'ignore-dir', 'ignore.txt'] as any)
+
         mockDb.createEntry.mockReturnValue({ id: 99 })
     })
 
@@ -39,28 +35,33 @@ tags:
 New content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any, {}, mockVectorManager as any)
+        const result = await importMarkdownEntries(
+            '/tmp/import',
+            mockDb as any,
+            {},
+            mockVectorManager as any
+        )
 
         expect(result.success).toBe(true)
         expect(result.created).toBe(1)
         expect(result.updated).toBe(0)
-        
+
         // Assert creation logic
         expect(mockDb.createEntry).toHaveBeenCalledWith({
             content: 'New content',
-            entryType: 'note',
+            entryType: 'personal_reflection',
             tags: ['test'],
         })
     })
 
     it('should update existing entry when mj_id is present and found in db', async () => {
-const fileContent = `---
+        const fileContent = `---
 mj_id: 42
 entry_type: project_decision
 ---
 Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
-        
+
         // Mock finding the entry
         mockDb.getEntryById.mockReturnValue({ id: 42 })
 
@@ -69,7 +70,7 @@ Updated decision content`
         expect(result.success).toBe(true)
         expect(result.updated).toBe(1)
         expect(result.created).toBe(0)
-        
+
         // Assert update logic
         expect(mockDb.updateEntry).toHaveBeenCalledWith(42, {
             content: 'Updated decision content',
@@ -85,7 +86,7 @@ mj_id: 100
 ---
 Restored entry`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
-        
+
         // Mock NOT finding the entry
         mockDb.getEntryById.mockReturnValue(null)
 
@@ -95,11 +96,11 @@ Restored entry`
         // From importer perspective, if it brings its own ID but it's new, it counts as creation
         expect(result.created).toBe(1)
         expect(result.updated).toBe(0)
-        
+
         // Assert creation logic explicitly using the requested ID
         expect(mockDb.createEntry).toHaveBeenCalledWith({
             content: 'Restored entry',
-            entryType: 'note',
+            entryType: 'personal_reflection',
             tags: undefined,
         })
     })
@@ -117,7 +118,7 @@ Updated decision content`
         expect(result.success).toBe(true)
         expect(result.dry_run).toBe(true)
         expect(result.updated).toBe(1) // dry run count
-        
+
         // Assert no mutations happened
         expect(mockDb.updateEntry).not.toHaveBeenCalled()
         expect(mockDb.createEntry).not.toHaveBeenCalled()
@@ -134,9 +135,9 @@ relationships:
 ---
 Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
-        
+
         // Mock the target missing
-        mockDb.getEntryById.mockImplementation((id) => id === 999 ? null : undefined)
+        mockDb.getEntryById.mockImplementation((id) => (id === 999 ? null : undefined))
 
         const result = await importMarkdownEntries('/tmp/import', mockDb as any)
 

@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 61 tools are categorized here for filtering support.
+ * All 65 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -153,9 +153,13 @@ function resolveGroupAlias(name: string): string {
 }
 
 /**
- * Check if a string is a valid group name (after alias resolution)
+ * Check if a string is a valid group name (after alias resolution).
+ *
+ * Returns a boolean rather than a type predicate because legacy aliases like
+ * `export` resolve to `io` at call time — they are valid inputs but are not
+ * themselves members of the ToolGroup union, making a type predicate unsound.
  */
-function isGroup(name: string): name is ToolGroup {
+function isGroup(name: string): boolean {
     return resolveGroupAlias(name) in TOOL_GROUPS
 }
 

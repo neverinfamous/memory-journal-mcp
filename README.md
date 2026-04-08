@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-97.52%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-97.12%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -154,8 +154,8 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | ~15   | Disable all mutations    |
-| `-github`            | 45    | Exclude a group          |
-| `-github,-analytics` | 43    | Exclude multiple groups  |
+| `-github`            | 49    | Exclude a group          |
+| `-github,-analytics` | 47    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -171,17 +171,17 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🛠️ **65 MCP Tools** (10 Groups)
 
-| Group           | Tools | Description                                                                                                         |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                             |
-| `core`          | 6     | Entry CRUD, tags, test                                                                                              |
-| `search`        | 4     | Text search, date range, semantic, vector stats                                                                     |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                  |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                      |
-| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                      |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                             |
-| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                      |
+| Group           | Tools | Description                                                                                                                              |
+| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                  |
+| `core`          | 6     | Entry CRUD, tags, test                                                                                                                   |
+| `search`        | 4     | Text search, date range, semantic, vector stats                                                                                          |
+| `analytics`     | 2     | Statistics, cross-project insights                                                                                                       |
+| `relationships` | 2     | Link entries, visualize graphs                                                                                                           |
+| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                           |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                  |
+| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                     |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                           |
 | `team`          | 22    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
@@ -629,7 +629,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 61 Tools"]
+        Tools["🛠️ 65 Tools"]
         Resources["📡 38 Resources"]
         Prompts["💬 17 Prompts"]
     end
@@ -658,7 +658,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (61)      │  │ Resources (38)  │  │ Prompts (17)│  │
+│  │ Tools (65)      │  │ Resources (38)  │  │ Prompts (17)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤

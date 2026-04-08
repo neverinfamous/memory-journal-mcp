@@ -5,7 +5,38 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.0.1...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.1.0...HEAD)
+
+## [7.1.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.1.0) - 2026-04-08
+
+### Security
+
+- Disabled OIDC token minting in the HOL validation workflow (`id-token: none`) as a Least Privilege security best practice (resolves PR #378 intent).
+- Removed deprecated `gitleaks-action` from the secret scanning workflow in favor of the active `trufflehog` step to resolve Node.js 20 deprecation warnings.
+- Updated `docker/scout-action` to `v1.20.4` to clear pending security scanning CI warnings.
+
+### Added
+
+- Created the `io` tool group to manage bidirectional data portability and cross-domain data indexing.
+- Added `export_markdown` and `import_markdown` tools for full round-trip entry synchronization using semantic YAML frontmatter parsing.
+- Added `team_export_markdown` and `team_import_markdown` tools to support seamless data synchronization for team databases.
+- Included `assertSafeDirectoryPath` core security guardrail for path traversal protection on directory-based APIs.
+- Added `relationship_type` filtering flag to `visualize_relationships` tool to isolate specific graph edge connections.
+
+### Fixed
+
+- Removed unnecessary `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` environment flag from the Trivy security scanning job.
+- Applied explicit version pinning comments (`# v1.0.11`) to the `skill-publish` workflow step for transparent auditability.
+
+### Changed
+
+- Refactored the legacy `export` tool group into the unified `io` interface, adopting the `mj.io.*` namespace inside Code Mode (the `export` alias is preserved for backwards compatibility).
+- Deprecated `ICON_EXPORT` constant in favor of `ICON_IO` utilizing a bidirectional SVG visual design to signal interoperable data flow.
+- Lowercased group mappings for API Code Mode proxies.
+
+### Dependencies
+
+- `typescript-eslint` from 8.57.0 to 8.58.1
 
 ## [7.0.1](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.0.1) - 2026-04-07
 

@@ -5,8 +5,9 @@
  * Deterministic filenames allow re-export to overwrite identically.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, open } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve, sep } from 'node:path'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
 import type { FrontmatterData } from './frontmatter.js'
@@ -88,7 +89,15 @@ export async function exportEntriesToMarkdown(
     outputDir: string,
     db: IDatabaseAdapter
 ): Promise<ExportResult> {
-    await mkdir(outputDir, { recursive: true })
+    // Guard: refuse to export into the OS temporary directory (CodeQL js/insecure-temporary-file)
+    const resolvedOutputDir = resolve(outputDir)
+    const resolvedTmpDir = resolve(tmpdir())
+    const tmpPrefix = resolvedTmpDir.endsWith(sep) ? resolvedTmpDir : resolvedTmpDir + sep
+    if (resolvedOutputDir === resolvedTmpDir || resolvedOutputDir.startsWith(tmpPrefix)) {
+        throw new Error('Refusing to export markdown files into the OS temporary directory')
+    }
+
+    await mkdir(resolvedOutputDir, { recursive: true })
 
     const files: string[] = []
     let skipped = 0
@@ -137,17 +146,24 @@ export async function exportEntriesToMarkdown(
         const frontmatter = serializeFrontmatter(fmData)
         const fileContent = frontmatter + '\n' + entry.content + '\n'
 
-        // Write file
+        // Write file — 'w' flag is O_WRONLY|O_CREAT|O_TRUNC: atomic create-or-overwrite via
+        // file descriptor with owner-only permissions. No check-then-act, no race window.
+        // Satisfies both CodeQL js/insecure-temporary-file and js/file-system-race.
         const filename = generateFilename(entry.id, entry.content)
-        const filepath = join(outputDir, filename)
-        await writeFile(filepath, fileContent, 'utf-8')
+        const filepath = join(resolvedOutputDir, filename)
+        const handle = await open(filepath, 'w', 0o600)
+        try {
+            await handle.writeFile(fileContent, 'utf-8')
+        } finally {
+            await handle.close()
+        }
         files.push(filename)
     }
 
     return {
         success: true,
         exported_count: files.length,
-        output_dir: outputDir,
+        output_dir: resolvedOutputDir,
         files,
         skipped,
     }

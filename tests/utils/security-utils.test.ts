@@ -26,7 +26,9 @@ describe('assertSafeDirectoryPath', () => {
 
     it('should throw PathTraversalError for `..` segments with forward slash', () => {
         expect(() => assertSafeDirectoryPath('../secrets')).toThrow(PathTraversalError)
-        expect(() => assertSafeDirectoryPath('/var/logs/../../etc/passwd')).toThrow(PathTraversalError)
+        expect(() => assertSafeDirectoryPath('/var/logs/../../etc/passwd')).toThrow(
+            PathTraversalError
+        )
         expect(() => assertSafeDirectoryPath('export/..')).toThrow(PathTraversalError)
     })
 

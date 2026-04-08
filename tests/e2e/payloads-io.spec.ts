@@ -9,6 +9,7 @@ import { test, expect } from '@playwright/test'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { createClient, callToolAndParse, expectSuccess } from './helpers.js'
 import { rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -19,12 +20,16 @@ test.describe('Payload Contracts: IO', () => {
     test.beforeAll(async () => {
         client = await createClient()
         // Ensure a predictable state before we begin testing IO directories
-        try { await rm(testExportDir, { recursive: true, force: true }) } catch {}
+        try {
+            await rm(testExportDir, { recursive: true, force: true })
+        } catch {}
     })
 
     test.afterAll(async () => {
         await client.close()
-        try { await rm(testExportDir, { recursive: true, force: true }) } catch {}
+        try {
+            await rm(testExportDir, { recursive: true, force: true })
+        } catch {}
     })
 
     test('export_entries (json) returns { format, entries, count }', async () => {
@@ -48,30 +53,32 @@ test.describe('Payload Contracts: IO', () => {
         expect(payload.format).toBe('markdown')
         expect(typeof payload.content).toBe('string')
     })
-    
+
     test('export_markdown returns success payload and outputs files', async () => {
         // First ensure we have an entry to export
-        const createPayload = await callToolAndParse(client, 'create_entry', { content: 'Test IO Export' })
+        const createPayload = await callToolAndParse(client, 'create_entry', {
+            content: 'Test IO Export',
+        })
         expectSuccess(createPayload)
 
         const payload = await callToolAndParse(client, 'export_markdown', {
             output_dir: testExportDir,
-            limit: 3
+            limit: 3,
         })
         expectSuccess(payload)
-        expect(payload.output_dir).toBe(testExportDir)
+        expect(payload.output_dir).toBe(resolve(testExportDir))
         expect(typeof payload.exported_count).toBe('number')
         expect(payload.exported_count).toBeGreaterThan(0)
         expect(Array.isArray(payload.files)).toBe(true)
     })
-    
+
     test('import_markdown reads directory and validates payload', async () => {
         // Run import on the directory we just exported to (round-trip)
         const payload = await callToolAndParse(client, 'import_markdown', {
             source_dir: testExportDir,
-            dry_run: true // Test the read without breaking database counts
+            dry_run: true, // Test the read without breaking database counts
         })
-        
+
         expectSuccess(payload)
         expect(payload.dry_run).toBe(true)
         expect(typeof payload.created).toBe('number')

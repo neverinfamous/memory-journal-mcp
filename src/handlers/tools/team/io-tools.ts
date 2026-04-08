@@ -17,6 +17,7 @@ import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries } from '../../../markdown/index.js'
 import type { ExportableEntry } from '../../../markdown/index.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
+import { batchFetchAuthors } from './helpers.js'
 import {
     DATE_FORMAT_REGEX,
     DATE_FORMAT_MESSAGE,
@@ -83,9 +84,7 @@ const TeamImportMarkdownOutputSchema = z
         created: z.number().optional(),
         updated: z.number().optional(),
         skipped: z.number().optional(),
-        errors: z
-            .array(z.object({ file: z.string(), error: z.string() }))
-            .optional(),
+        errors: z.array(z.object({ file: z.string(), error: z.string() })).optional(),
         dry_run: z.boolean().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -175,7 +174,11 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         `Exporting ${String(entries.length)} team entries...`
                     )
 
-                    // Map to ExportableEntry — team entries include author
+                    // Batch-fetch authors from team DB (author column is not on JournalEntry)
+                    const entryIds = entries.map((e) => e.id)
+                    const authorMap = batchFetchAuthors(teamDb, entryIds)
+
+                    // Map to ExportableEntry with resolved author
                     const exportable: ExportableEntry[] = entries.map((e) => ({
                         id: e.id,
                         content: e.content,
@@ -183,11 +186,14 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         timestamp: e.timestamp,
                         tags: e.tags,
                         significance: e.significanceType ?? undefined,
-                        // Team entries have author via raw query
-                        author: (e as unknown as Record<string, unknown>)['author'] as string | undefined,
+                        author: authorMap.get(e.id) ?? undefined,
                     }))
 
-                    const result = await exportEntriesToMarkdown(exportable, input.output_dir, teamDb)
+                    const result = await exportEntriesToMarkdown(
+                        exportable,
+                        input.output_dir,
+                        teamDb
+                    )
 
                     await sendProgress(progress, 3, 3, 'Team export complete')
                     return result

@@ -10,7 +10,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
-import type { EntryType, RelationshipType } from '../types/index.js'
+import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
 
 // ============================================================================
@@ -153,9 +153,8 @@ export async function importMarkdownEntries(
                 continue
             }
 
-            // Determine operation: update or create
             let entryId: number
-            const entryType = toEntryType(metadata.entry_type) ?? 'note' as EntryType
+            const entryType: EntryType = toEntryType(metadata.entry_type) ?? 'personal_reflection'
 
             if (metadata.mj_id !== undefined) {
                 const existing = db.getEntryById(metadata.mj_id)
@@ -174,6 +173,9 @@ export async function importMarkdownEntries(
                         content: body,
                         entryType,
                         tags: metadata.tags,
+                        ...(metadata.significance !== undefined && {
+                            significanceType: metadata.significance as SignificanceType,
+                        }),
                     })
                     entryId = newEntry.id
                     result.created++
@@ -184,6 +186,9 @@ export async function importMarkdownEntries(
                     content: body,
                     entryType,
                     tags: metadata.tags,
+                    ...(metadata.significance !== undefined && {
+                        significanceType: metadata.significance as SignificanceType,
+                    }),
                 })
                 entryId = newEntry.id
                 result.created++
@@ -198,11 +203,7 @@ export async function importMarkdownEntries(
                     try {
                         const targetExists = db.getEntryById(rel.target_id)
                         if (targetExists) {
-                            db.linkEntries(
-                                entryId,
-                                rel.target_id,
-                                rel.type as RelationshipType
-                            )
+                            db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
                         }
                     } catch {
                         // Relationship linking failure is non-fatal

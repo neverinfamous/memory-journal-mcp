@@ -60,7 +60,7 @@ Content`
         })
         expect(body).toBe('Content')
     })
-    
+
     it('should ignore invalid YAML structures gracefully due to our custom parser limitations, but not crash', () => {
         const markdown = `---
 invalid_key:
@@ -72,7 +72,7 @@ Content`
         expect(metadata.mj_id).toBe(99)
         expect(body).toBe('Content')
     })
-    
+
     it('should require the first delimiter to be on line 1 to be treated as frontmatter', () => {
         const markdown = `
 ---

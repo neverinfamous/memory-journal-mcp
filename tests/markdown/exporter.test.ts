@@ -5,11 +5,18 @@ import {
     generateFilename,
 } from '../../src/markdown/exporter.js'
 import * as fs from 'node:fs/promises'
-import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+
+// Shared mock file handle
+const mockHandle = {
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+}
 
 vi.mock('node:fs/promises', () => ({
     mkdir: vi.fn(),
-    writeFile: vi.fn(),
+    open: vi.fn(),
 }))
 
 describe('markdown exporter utilities', () => {
@@ -52,6 +59,9 @@ describe('exportEntriesToMarkdown', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
+        mockHandle.writeFile.mockResolvedValue(undefined)
+        mockHandle.close.mockResolvedValue(undefined)
+        vi.mocked(fs.open).mockResolvedValue(mockHandle as any)
         mockDb.getTagsForEntry.mockReturnValue([])
         mockDb.getRelationshipsForEntry.mockReturnValue([])
     })
@@ -76,23 +86,36 @@ describe('exportEntriesToMarkdown', () => {
         ]
         mockDb.getTagsForEntry.mockImplementation((id) => (id === 1 ? ['tag1'] : ['tag2']))
 
-        const result = await exportEntriesToMarkdown(entries as any, '/tmp/export', mockDb as any)
+        const result = await exportEntriesToMarkdown(
+            entries as any,
+            '/var/lib/memory-journal/export',
+            mockDb as any
+        )
 
         expect(result.success).toBe(true)
         expect(result.exported_count).toBe(2)
         expect(result.skipped).toBe(0)
+        expect(result.output_dir).toBe(resolve('/var/lib/memory-journal/export'))
 
-        // Ensure directory was created
-        expect(fs.mkdir).toHaveBeenCalledWith('/tmp/export', { recursive: true })
+        // Ensure directory was created with the resolved path
+        expect(fs.mkdir).toHaveBeenCalledWith(resolve('/var/lib/memory-journal/export'), { recursive: true })
 
-        // Ensure write file was called for both entries
-        expect(fs.writeFile).toHaveBeenCalledTimes(2)
+        // Ensure open was called twice (once per entry) with create-or-truncate + 0o600
+        expect(fs.open).toHaveBeenCalledTimes(2)
+        expect(fs.open).toHaveBeenCalledWith(
+            join(resolve('/var/lib/memory-journal/export'), '1-test-content-one.md'),
+            'w',
+            0o600
+        )
 
-        const firstWriteCall = vi.mocked(fs.writeFile).mock.calls[0]
-        expect(firstWriteCall[0]).toContain(join('/tmp/export', '1-test-content-one.md'))
-        expect(firstWriteCall[1]).toContain('mj_id: 1')
-        expect(firstWriteCall[1]).toContain('Test content one')
-        expect(firstWriteCall[1]).toContain('tag1')
+        // Ensure the handle wrote content and was closed
+        expect(mockHandle.writeFile).toHaveBeenCalledTimes(2)
+        expect(mockHandle.close).toHaveBeenCalledTimes(2)
+
+        const firstWriteContent = vi.mocked(mockHandle.writeFile).mock.calls[0][0] as string
+        expect(firstWriteContent).toContain('mj_id: 1')
+        expect(firstWriteContent).toContain('Test content one')
+        expect(firstWriteContent).toContain('tag1')
     })
 
     it('should skip entries without content', async () => {
@@ -105,11 +128,24 @@ describe('exportEntriesToMarkdown', () => {
             },
         ]
 
-        const result = await exportEntriesToMarkdown(entries as any, '/tmp/export', mockDb as any)
+        const result = await exportEntriesToMarkdown(
+            entries as any,
+            '/var/lib/memory-journal/export',
+            mockDb as any
+        )
 
         expect(result.success).toBe(true)
         expect(result.exported_count).toBe(0)
         expect(result.skipped).toBe(1)
-        expect(fs.writeFile).not.toHaveBeenCalled()
+        expect(fs.open).not.toHaveBeenCalled()
+    })
+
+    it('should reject exporting into the os temp directory', async () => {
+        const tmpExportDir = join(tmpdir(), 'export')
+        await expect(exportEntriesToMarkdown([], tmpExportDir, mockDb as any)).rejects.toThrow(
+            'Refusing to export markdown files into the OS temporary directory'
+        )
+        expect(fs.mkdir).not.toHaveBeenCalled()
+        expect(fs.open).not.toHaveBeenCalled()
     })
 })
