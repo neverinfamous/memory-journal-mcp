@@ -63,7 +63,7 @@ test.describe('Help Resources', () => {
             expect(response.contents.length).toBe(1)
             expect(response.contents[0].uri).toBe('memory://help')
 
-            const text = response.contents[0].text as string
+            const text = (response.contents[0] as { text: string }).text
             expect(text.length).toBeGreaterThan(50)
 
             // Should be valid JSON with group structure
@@ -80,7 +80,7 @@ test.describe('Help Resources', () => {
         const client = await createClient()
         try {
             const response = await client.readResource({ uri: 'memory://help' })
-            const parsed = JSON.parse(response.contents[0].text as string)
+            const parsed = JSON.parse((response.contents[0] as { text: string }).text)
             const groupNames = (parsed.groups as Array<{ name: string }>).map((g) => g.name)
 
             for (const group of HELP_GROUPS) {
@@ -101,7 +101,7 @@ test.describe('Help Resources', () => {
             expect(response.contents[0].uri).toBe('memory://help/gotchas')
             expect(response.contents[0].mimeType).toBe('text/markdown')
 
-            const text = response.contents[0].text as string
+            const text = (response.contents[0] as { text: string }).text
             expect(text.length, 'gotchas content too short').toBeGreaterThan(50)
         } finally {
             await client.close()
@@ -120,7 +120,7 @@ test.describe('Help Resources', () => {
                 expect(response.contents.length).toBe(1)
                 expect(response.contents[0].uri).toBe(`memory://help/${group}`)
 
-                const text = response.contents[0].text as string
+                const text = (response.contents[0] as { text: string }).text
                 expect(text.length, `${group} help content too short`).toBeGreaterThan(50)
 
                 // Should be valid JSON with tool details
@@ -142,7 +142,7 @@ test.describe('Help Resources', () => {
             })
 
             expect(response.contents).toBeDefined()
-            const text = response.contents[0].text as string
+            const text = (response.contents[0] as { text: string }).text
             const parsed = JSON.parse(text)
             expect(parsed.error).toBeDefined()
             expect(typeof parsed.error).toBe('string')
