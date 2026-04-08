@@ -64,7 +64,8 @@ const FrontmatterSchema = z.object({
  * Serialize frontmatter data into a YAML frontmatter block.
  * Output: `---\nkey: value\n---\n`
  */
-export function serializeFrontmatter(data: FrontmatterData): string {
+export function serializeFrontmatter(data: FrontmatterData | null | undefined): string {
+    if (data === null || data === undefined) return ''
     const lines: string[] = ['---']
 
     if (data.mj_id !== undefined) lines.push(`mj_id: ${String(data.mj_id)}`)
@@ -74,7 +75,7 @@ export function serializeFrontmatter(data: FrontmatterData): string {
     if (data.significance !== undefined) lines.push(`significance: ${data.significance}`)
     if (data.source !== undefined) lines.push(`source: ${data.source}`)
 
-    if (data.tags !== undefined && data.tags.length > 0) {
+    if (data.tags && data.tags.length > 0) {
         lines.push('tags:')
         for (const tag of data.tags) {
             lines.push(`  - ${tag}`)
@@ -87,6 +88,10 @@ export function serializeFrontmatter(data: FrontmatterData): string {
             lines.push(`  - type: ${rel.type}`)
             lines.push(`    target_id: ${String(rel.target_id)}`)
         }
+    }
+
+    if (lines.length === 1) {
+        return ''
     }
 
     lines.push('---')

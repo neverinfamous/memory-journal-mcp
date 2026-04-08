@@ -76,9 +76,10 @@ describe('getIoTools', () => {
         const context = createMockContext()
         const tools = getIoTools(context as never)
 
-        expect(tools).toHaveLength(1)
-        expect(tools[0]!.name).toBe('export_entries')
-        expect(tools[0]!.group).toBe('io')
+        expect(tools).toHaveLength(3)
+        const exportTool = tools.find((t) => t.name === 'export_entries')
+        expect(exportTool).toBeDefined()
+        expect(exportTool!.group).toBe('io')
     })
 
     // ========================================================================

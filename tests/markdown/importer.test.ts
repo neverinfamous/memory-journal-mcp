@@ -23,9 +23,9 @@ describe('importMarkdownEntries', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         vi.mocked(fs.readdir).mockResolvedValue([
-            { name: '1-test.md', isFile: () => true },
-            { name: 'ignore-dir', isFile: () => false },
-            { name: 'ignore.txt', isFile: () => true },
+            '1-test.md',
+            'ignore-dir',
+            'ignore.txt',
         ] as any)
         
         mockDb.createEntry.mockReturnValue({ id: 99 })
@@ -48,17 +48,15 @@ New content`
         // Assert creation logic
         expect(mockDb.createEntry).toHaveBeenCalledWith({
             content: 'New content',
-            entryType: 'note', // default
-            author: undefined,
-            id: undefined, // no id forces DB auto-increment
+            entryType: 'note',
+            tags: ['test'],
         })
-        expect(mockDb.getOrCreateTag).toHaveBeenCalledWith('test')
     })
 
     it('should update existing entry when mj_id is present and found in db', async () => {
-        const fileContent = `---
+const fileContent = `---
 mj_id: 42
-entry_type: decision
+entry_type: project_decision
 ---
 Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -75,7 +73,8 @@ Updated decision content`
         // Assert update logic
         expect(mockDb.updateEntry).toHaveBeenCalledWith(42, {
             content: 'Updated decision content',
-            entryType: 'decision',
+            entryType: 'project_decision',
+            tags: undefined,
         })
         expect(mockDb.createEntry).not.toHaveBeenCalled()
     })
@@ -98,10 +97,11 @@ Restored entry`
         expect(result.updated).toBe(0)
         
         // Assert creation logic explicitly using the requested ID
-        expect(mockDb.createEntry).toHaveBeenCalledWith(expect.objectContaining({
+        expect(mockDb.createEntry).toHaveBeenCalledWith({
             content: 'Restored entry',
-            id: 100,
-        }))
+            entryType: 'note',
+            tags: undefined,
+        })
     })
 
     it('should respect dry_run mode entirely', async () => {

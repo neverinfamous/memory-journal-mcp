@@ -63,13 +63,15 @@ describe('exportEntriesToMarkdown', () => {
                 content: 'Test content one',
                 timestamp: '2026-04-08T12:00:00Z',
                 entryType: 'note',
+                tags: ['tag1'],
             },
             {
                 id: 2,
                 content: 'Test content two',
                 timestamp: '2026-04-08T12:00:00Z',
-                entryType: 'decision',
+                entryType: 'project_decision',
                 significance: 'high',
+                tags: ['tag2'],
             },
         ]
         mockDb.getTagsForEntry.mockImplementation((id) => (id === 1 ? ['tag1'] : ['tag2']))

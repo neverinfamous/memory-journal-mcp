@@ -108,7 +108,7 @@ export async function exportEntriesToMarkdown(
             source: 'memory-journal-mcp',
         }
 
-        if (entry.tags.length > 0) {
+        if (entry.tags !== undefined && entry.tags.length > 0) {
             fmData.tags = entry.tags
         }
 
