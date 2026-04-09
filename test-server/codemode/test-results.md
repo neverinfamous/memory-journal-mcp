@@ -6,7 +6,8 @@ Last tested: April 7th, 2026
 | :------------------------------ | :---------------------- | :---- |
 | `test-cm-admin-backup.md`       | ~141                    |       |
 | `test-cm-api-discovery.md`      | ~376                    |       |
-| `test-cm-crud.md`               | ~720                    |       |
+| `test-cm-crud.md`               | ~933                    |       |
+| `test-cm-error-matrix.md`       | ~590                    |       |
 | `test-cm-github.md`             | ~750                    |       |
 | `test-cm-io.md`                 | ~112                    |       |
 | `test-cm-orchestration.md`      | ~243                    |       |
