@@ -26,9 +26,9 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 | Test                     | Code                                                 | Expected Result                                                                                         |
 | ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| mj.help() returns groups | `return await mj.help();`                            | `groups` array with 9 entries, `totalMethods` > 40, `usage` string                                      |
-| All 9 groups present     | `const h = await mj.help(); return h.groups;`        | Contains: `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team` |
-| Correct group count      | `const h = await mj.help(); return h.groups.length;` | `9`                                                                                                     |
+| mj.help() returns groups | `return await mj.help();`                            | `groups` array with 10 entries, `totalMethods` > 40, `usage` string                                      |
+| All 10 groups present    | `const h = await mj.help(); return h.groups;`        | Contains: `core`, `search`, `analytics`, `relationships`, `io`, `export`, `admin`, `github`, `backup`, `team` |
+| Correct group count      | `const h = await mj.help(); return h.groups.length;` | `10`                                                                                                      |
 
 ### 17.2 Per-Group Help
 
@@ -53,7 +53,7 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 ## Success Criteria
 
-- [ ] `mj.help()` returns all 9 groups with correct `totalMethods` count
+- [ ] `mj.help()` returns all 10 groups with correct `totalMethods` count
 - [ ] Per-group `help()` returns method names for each group
 - [ ] Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
 - [ ] Positional arguments work (e.g., `mj.core.get(id)`)

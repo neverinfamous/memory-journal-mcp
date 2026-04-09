@@ -4,6 +4,7 @@
 
 ### Added
 
+- Updated Code Mode API discoverability tests to accurately account for the `io` tool group addition
 - Added `roadmap-kickoff` and `update-deps` workflows to the `github-commander` skills package.
 - Added `docs/deployment.md` with comprehensive CI/CD deployment instructions and version bump checklist (migrated from copilot-mj-setup-instructions.md)
 - `BRIEFING_MILESTONE_COUNT` and `--briefing-milestones` configuration for configuring `memory://briefing` milestone counts.
