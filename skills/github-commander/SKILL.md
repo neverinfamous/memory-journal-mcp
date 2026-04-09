@@ -44,7 +44,6 @@ Load this skill when any of these apply:
 | **Security Audit**      | `workflows/security-audit.md`     | Auto-detected security scanning             |
 | **Code Quality Audit**  | `workflows/code-quality-audit.md` | Static code quality analysis                |
 | **Performance Audit**   | `workflows/perf-audit.md`         | Build, bundle, runtime, test speed analysis |
-| **Full Audit**          | `workflows/full-audit.md`         | Unified quality + perf + security audit     |
 
 ## Prerequisites
 
