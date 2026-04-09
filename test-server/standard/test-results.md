@@ -17,7 +17,7 @@ _Note: The tracked token counts only reflect the estimated tokens that actually 
 | `test-github.md`                   | ~6,785                  |
 | `test-integrity.md`                | ~2,850                  |
 | `test-kanban-lifecycle.md`         | ~850                    |
-| `test-payload-lifeoptimization.md` | ~850                    |
+| `test-payload-lifeoptimization.md` | ~832                    |
 | `test-resources.md`                | ~359                    |
 | `test-schemas.md`                  | ~2,733                  |
 | `test-seed.md`                     | ~6,800                  |
@@ -28,4 +28,4 @@ _Note: The tracked token counts only reflect the estimated tokens that actually 
 | `test-tool-group-github.md`        | ~1,010                  |
 | `test-tool-group-search.md`        | ~4,650                  |
 | `test-tool-group-team.md`          | ~1,858                  |
-| **Total Estimated Tokens**         | **~**                   |
+| **Total Estimated Tokens**         | **~79,269**             |
