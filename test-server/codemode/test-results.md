@@ -22,4 +22,4 @@ Last tested: April 7th, 2026
 | `test-cm-team-crud.md`            | ~604                    |
 | `test-cm-team-vector-errors.md`   | ~776                    |
 | `test-cm-workflows.md`            | ~279                    |
-| **Total Estimated Tokens**        | **~21,601**             |
+| **Total Estimated Tokens**        | **~8,521**              |
