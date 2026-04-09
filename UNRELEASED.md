@@ -3,7 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.1.0...HEAD)
 
 ### Added
-- Bundled native foundational agent skills (`bun`, `github-commander`, `golang`, `mastering-typescript`, `mysql`, `playwright-standard`, `postgres`, `react-best-practices`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `vitest-standard`) for out-of-the-box system context
+
+- Bundled native foundational agent skills (`bun`, `github-commander`, `golang`, `mysql`, `playwright-standard`, `postgres`, `react-best-practices`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `typescript`, `vitest-standard`) for out-of-the-box system context
 - `roadmap-kickoff` and `update-deps` workflows
 - `docs/deployment.md` documentation
 - `BRIEFING_MILESTONE_COUNT` environment variable and `--briefing-milestones` CLI flag
@@ -19,6 +20,7 @@
 - `itemCount`, `truncated`, `summaryOnly` metadata in Kanban output schema
 
 ### Changed
+
 - Reduced Code Mode default max result size from 10 MB to 100 KB
 - Enforced 500-item maximum limit in `get_recent_entries`, `get_github_issues`, and `get_github_prs`
 - Refactored `rulesResource`, `skillsResource`, and `scanSkillsDir` to use asynchronous File System APIs
@@ -27,6 +29,7 @@
 - Optimized CI `publish` workflow to run exclusively on tagged releases
 
 ### Fixed
+
 - Missing lower-bound validation constraint on `limit` parameters
 - Strict-boolean-expressions and type checking warnings in prompt handlers
 - Incorrect milestone sort direction in the `memory://briefing` reference
@@ -34,12 +37,3 @@
 - Stale assertions in `test-cm-crud.md` and `test-core-infra.md` integration tests
 - `link_entries` tool ignoring soft-deleted state when creating new relationships
 - Increased timeout in `tests/e2e/boundary.spec.ts` to accommodate vector index rebuild operations during CI execution
-
-### Verified
-- Validated all 67 standard MCP tools return `structuredContent` via automatically bounded payload output schemas
-- Excluded Code Mode explicitly from `structuredContent` wrapper to prevent crash-inducing unconstrained schema parsing on client layers
-- Verified Phase 10 Team Collaboration suite: 22 team tools and 2 team resources, ensuring safe DB isolation, accurate author attribution, and proper boundary conditions
-- Verified Phase 12 Admin Tool Group operations including `update_entry`, `delete_entry`, `merge_tags`, and `add_to_vector_index` against deterministic structured error schemas (Zod mismatch, domain not found) with 100% token tracking
-- Verified Backup & Export Tool Group (`backup_journal`, `restore_backup`, `export_entries`, `cleanup_backups`) enforcing path traversal restrictions, domain errors (`RESOURCE_NOT_FOUND`), strict filter bounding, and Zod parameter validation (`keep_count <= 0`).
-- Verified Core Tool Group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) verifying 100% compliance with structured error matrix (Zod type mismatches, domain constraints, MAX criteria) without bubbling raw MCP boundaries (`-32602`), confirming 500-limit constraints, and ensuring zero filter-ignorance in statistics parameters.
-- Verified GitHub Tool Group integration (`create_github_issue_with_entry`, `close_github_issue_with_entry`, `get_github_issue`, `get_github_pr`, `get_github_context`, etc.) correctly handles null database lookups via normalized structured error format. Completed local unit testing (100% pass) to confirm resilient fallback parameters and proper `RESOURCE_NOT_FOUND` integration.

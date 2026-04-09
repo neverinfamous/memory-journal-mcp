@@ -46,7 +46,7 @@
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                             |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals      |
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))   |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`bun`, `golang`, `mastering-typescript`, `playwright-standard`, `react-best-practices`, `rust`, `shadcn-ui`) establishing permanent AI behavior and architecture rules                           |
+| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `bun`, `gitlab`, `golang`, `playwright-standard`, `react-best-practices`, `rust`, `shadcn-ui`, `typescript`) establishing permanent AI behavior and architecture rules                           |
 | **GitHub Commander**          | Pipeline skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
 
 ---
@@ -620,6 +620,10 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 > **Why this design?** The MCP server focuses on value-added features that integrate journal entries with GitHub (Kanban views, Milestones, timeline resources, context linking). Standard GitHub mutations (create/close issues, merge PRs, manage releases) are handled directly by agents via `gh` CLI.
 
 **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
+
+### GitHub Commander Workflows
+
+The server natively bundles the `github-commander` agent skill (accessible via `memory://skills/github-commander`). This extends your AI assistant with 8 autonomous DevOps workflows for repository stewardship: **Issue Triage**, **Milestone Sprints**, **PR Reviews**, **Security Audits**, **Code Quality Audits**, **Performance Audits**, **Roadmap Kickoffs**, and **Dependency Updates**. Configure validation layers using the `PROJECT_*` environment overrides to enforce CI-matching execution locally during agent tasks!
 
 ## 🏗️ Architecture
 

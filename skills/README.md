@@ -40,10 +40,12 @@ The markdown body contains the full instructions the agent follows once the skil
 
 | Skill | Description |
 |-------|-------------|
+| `autonomous-dev` | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
 | `bun` | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler |
 | `github-commander` | GitHub pipeline workflows for orchestrating issues, regressions, and deployments |
+| `gitlab` | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab |
 | `golang` | Master Go development with production-grade best practices from Google and Uber style guides |
-| `mastering-typescript` | Enterprise-grade TypeScript development with type-safe patterns, Zod validation, and modern tooling |
+| `typescript` | Enterprise-grade TypeScript development with type-safe patterns, Zod validation, and modern tooling |
 | `mysql` | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations |
 | `playwright-standard` | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience |
 | `postgres` | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS |

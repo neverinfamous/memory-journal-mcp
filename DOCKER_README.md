@@ -39,7 +39,7 @@
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                             |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals      |
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))   |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`bun`, `golang`, `mastering-typescript`, `playwright-standard`, `react-best-practices`, `rust`, `shadcn-ui`) establishing permanent AI behavior and architecture rules                           |
+| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `bun`, `gitlab`, `golang`, `playwright-standard`, `react-best-practices`, `rust`, `shadcn-ui`, `typescript`) establishing permanent AI behavior and architecture rules                           |
 | **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
