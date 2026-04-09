@@ -80,6 +80,15 @@ export class GitHubIntegration {
         return this.issuesManager.getIssue(owner, repo, issueNumber)
     }
 
+    async getIssueComments(
+        owner: string,
+        repo: string,
+        issueNumber: number,
+        limit = 30
+    ): Promise<{ author: string; body: string; createdAt: string }[]> {
+        return this.issuesManager.getIssueComments(owner, repo, issueNumber, limit)
+    }
+
     async createIssue(
         owner: string,
         repo: string,

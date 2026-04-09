@@ -125,8 +125,13 @@ export class CodeModeSecurityManager {
 
             // If stringification succeeded but the string itself is larger than the limit
             if (Buffer.byteLength(serialized, 'utf-8') > this.config.maxResultSize) {
+                const actualKb = Math.round(Buffer.byteLength(serialized, 'utf-8') / 1024)
+                const limitKb = Math.round(this.config.maxResultSize / 1024)
                 errors.push(
-                    `Result exceeds maximum size of ${String(this.config.maxResultSize)} bytes`
+                    `Result exceeds maximum size of ${String(limitKb)} KB (${String(actualKb)} KB returned). ` +
+                        `Extract specific fields or aggregate data before returning. ` +
+                        `Example: instead of \`return await mj.github.getKanbanBoard(5)\`, use ` +
+                        `\`const b = await mj.github.getKanbanBoard(5); return { columns: b.columns.length, totalItems: b.totalItems }\``
                 )
             }
         } catch (error) {

@@ -54,6 +54,12 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-tool-group-github.md` |  15e  | **GitHub** — Structured error matrix, OutputSchema compliance              | After seed  |
 | `test-tool-group-team.md`   |  15f  | **Team** — Structured error matrix, missing DB context, vector fallbacks   | After seed  |
 
+### Cross-Cutting Optimization Tests
+
+| File                             | Phase | Purpose                                                                                            | When to Run |
+| -------------------------------- | :---: | -------------------------------------------------------------------------------------------------- | ----------- |
+| `test-payload-optimization.md`   |  16   | **Payload Optimization** — Kanban throttling, body truncation, pagination cap, Code Mode result cap | After seed  |
+
 ## Dependency DAG
 
 ```
@@ -73,7 +79,8 @@ Phase 0 (Seed Data) ─── MUST PASS FIRST
     ├── Phase 12 (Integrity) ────────── independent
     ├── Phase 13 (GitHub) ───────────── independent
     ├── Phase 14 (Team) ─────────────── independent
-    └── Phase 15a–f (Tool Groups) ──── independent (any order)
+    ├── Phase 15a–f (Tool Groups) ──── independent (any order)
+    └── Phase 16 (Payload Optimization) independent
 ```
 
 ## Execution Workflow
@@ -82,7 +89,8 @@ Phase 0 (Seed Data) ─── MUST PASS FIRST
 2. Run `test-core-infra.md` (Phase 1) to verify server health and connectivity.
 3. Continue with Phases 2–14 in any order (all independent after seed).
 4. Run the 6 `test-tool-group-*.md` files (Phase 15) in any order for Zod sweep / structured error verification.
-5. Cleanup is handled within individual test files where applicable.
+5. Run `test-payload-optimization.md` (Phase 16) to verify payload optimization features.
+6. Cleanup is handled within individual test files where applicable.
 
 ## Token Estimate Reporting
 

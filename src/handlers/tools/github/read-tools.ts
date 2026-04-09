@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { relaxedNumber } from '../schemas.js'
+import { MAX_QUERY_LIMIT } from '../search/helpers.js'
 import {
     GitHubIssuesListOutputSchema,
     GitHubIssueResultOutputSchema,
@@ -55,7 +56,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z.number().optional().default(20),
+                            limit: z.number().max(MAX_QUERY_LIMIT).optional().default(20),
                         })
                         .parse(params)
 
@@ -116,7 +117,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             owner: z.string().optional(),
                             repo: z.string().optional(),
                             state: z.enum(['open', 'closed', 'all']).optional().default('open'),
-                            limit: z.number().optional().default(20),
+                            limit: z.number().max(MAX_QUERY_LIMIT).optional().default(20),
                         })
                         .parse(params)
 
@@ -156,6 +157,17 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 issue_number: z.number(),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+                truncate_body: relaxedNumber()
+                    .optional()
+                    .default(800)
+                    .describe(
+                        'Max characters for body text (0 = full body, default 800). Reduces token usage.'
+                    ),
+                include_comments: z
+                    .boolean()
+                    .optional()
+                    .default(false)
+                    .describe('Include issue comments (default false). Each comment adds tokens.'),
             }),
             outputSchema: GitHubIssueResultOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -166,6 +178,8 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             issue_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            truncate_body: z.number().optional().default(800),
+                            include_comments: z.boolean().optional().default(false),
                         })
                         .parse(params)
 
@@ -191,8 +205,40 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             detectedRepo: resolved.detectedRepo,
                         }
                     }
+
+                    // Apply body truncation
+                    const truncateBody = input.truncate_body
+                    let bodyTruncated = false
+                    let bodyFullLength: number | undefined
+                    if (
+                        truncateBody > 0 &&
+                        issue.body &&
+                        issue.body.length > truncateBody
+                    ) {
+                        bodyFullLength = issue.body.length
+                        const remaining = issue.body.length - truncateBody
+                        issue.body =
+                            issue.body.slice(0, truncateBody) +
+                            `\n[Truncated. Re-run with truncate_body: 0 to view remaining ${String(remaining)} chars]`
+                        bodyTruncated = true
+                    }
+
+                    // Fetch comments if requested
+                    let comments: { author: string; body: string; createdAt: string }[] | undefined
+                    if (input.include_comments) {
+                        comments = await resolved.github.getIssueComments(
+                            resolved.owner,
+                            resolved.repo,
+                            input.issue_number
+                        )
+                    }
+
                     return {
-                        issue,
+                        issue: {
+                            ...issue,
+                            ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
+                        },
+                        ...(comments ? { comments, commentCount: comments.length } : {}),
                         owner: resolved.owner,
                         repo: resolved.repo,
                         detectedOwner: resolved.detectedOwner,
@@ -213,6 +259,12 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                 pr_number: z.number(),
                 owner: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
                 repo: z.string().optional().describe('LEAVE EMPTY to auto-detect from git'),
+                truncate_body: relaxedNumber()
+                    .optional()
+                    .default(800)
+                    .describe(
+                        'Max characters for body text (0 = full body, default 800). Reduces token usage.'
+                    ),
             }),
             outputSchema: GitHubPRResultOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -223,6 +275,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             pr_number: z.number(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            truncate_body: z.number().optional().default(800),
                         })
                         .parse(params)
 
@@ -248,8 +301,31 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             detectedRepo: resolved.detectedRepo,
                         }
                     }
+
+                    // Apply body truncation
+                    const truncateBody = input.truncate_body
+                    let bodyTruncated = false
+                    let bodyFullLength: number | undefined
+                    if (
+                        truncateBody > 0 &&
+                        pullRequest.body &&
+                        pullRequest.body.length > truncateBody
+                    ) {
+                        bodyFullLength = pullRequest.body.length
+                        const remaining = pullRequest.body.length - truncateBody
+                        pullRequest.body =
+                            pullRequest.body.slice(0, truncateBody) +
+                            `\n[Truncated. Re-run with truncate_body: 0 to view remaining ${String(remaining)} chars]`
+                        bodyTruncated = true
+                    }
+
                     return {
-                        pullRequest,
+                        pullRequest: {
+                            ...pullRequest,
+                            ...(bodyTruncated
+                                ? { bodyTruncated: true, bodyFullLength }
+                                : {}),
+                        },
                         owner: resolved.owner,
                         repo: resolved.repo,
                         detectedOwner: resolved.detectedOwner,

@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { relaxedNumber } from '../schemas.js'
 import { KanbanBoardOutputSchema, MoveKanbanItemOutputSchema } from './schemas.js'
 import { resolveOwner, resolveProjectNumber } from './helpers.js'
 
@@ -28,6 +29,19 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .string()
                     .optional()
                     .describe('Repository name - LEAVE EMPTY to auto-detect'),
+                summary_only: z
+                    .boolean()
+                    .optional()
+                    .default(false)
+                    .describe(
+                        'Return column summaries only (name + itemCount), omitting individual items. Saves ~80% tokens.'
+                    ),
+                item_limit: relaxedNumber()
+                    .optional()
+                    .default(25)
+                    .describe(
+                        'Maximum items per column (default 25, max 100). Set to 0 for summary_only behavior.'
+                    ),
             }),
             outputSchema: KanbanBoardOutputSchema,
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
@@ -38,6 +52,8 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             project_number: z.number().optional(),
                             owner: z.string().optional(),
                             repo: z.string().optional(),
+                            summary_only: z.boolean().optional().default(false),
+                            item_limit: z.number().max(100).optional().default(25),
                         })
                         .parse(params)
 
@@ -86,7 +102,42 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    return board
+                    // Apply payload optimization: summary_only or item_limit
+                    const summaryOnly = input.summary_only || input.item_limit === 0
+
+                    if (summaryOnly) {
+                        // Summary mode: return column names + counts only
+                        const summaryColumns = board.columns.map((col) => ({
+                            status: col.status,
+                            statusOptionId: col.statusOptionId,
+                            items: [],
+                            itemCount: col.items.length,
+                        }))
+                        return {
+                            ...board,
+                            columns: summaryColumns,
+                            summaryOnly: true,
+                        }
+                    }
+
+                    // Apply per-column item_limit truncation
+                    const itemLimit = input.item_limit
+                    const truncatedColumns = board.columns.map((col) => {
+                        if (col.items.length <= itemLimit) {
+                            return { ...col, itemCount: col.items.length }
+                        }
+                        return {
+                            ...col,
+                            items: col.items.slice(0, itemLimit),
+                            itemCount: col.items.length,
+                            truncated: true,
+                        }
+                    })
+
+                    return {
+                        ...board,
+                        columns: truncatedColumns,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

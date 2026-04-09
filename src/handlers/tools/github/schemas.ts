@@ -27,6 +27,8 @@ export const GitHubIssueOutputSchema = z
 
 export const GitHubIssueDetailsOutputSchema = GitHubIssueOutputSchema.extend({
     body: z.string().nullable(),
+    bodyTruncated: z.boolean().optional(),
+    bodyFullLength: z.number().optional(),
     labels: z.array(z.string()),
     assignees: z.array(z.string()),
     createdAt: z.string(),
@@ -52,6 +54,16 @@ export const GitHubIssuesListOutputSchema = z
 export const GitHubIssueResultOutputSchema = z
     .object({
         issue: GitHubIssueDetailsOutputSchema.optional(),
+        comments: z
+            .array(
+                z.object({
+                    author: z.string(),
+                    body: z.string(),
+                    createdAt: z.string(),
+                })
+            )
+            .optional(),
+        commentCount: z.number().optional(),
         owner: z.string().optional(),
         repo: z.string().optional(),
         detectedOwner: z.string().nullable().optional(),
@@ -77,6 +89,8 @@ export const GitHubPullRequestOutputSchema = z
 
 export const GitHubPRDetailsOutputSchema = GitHubPullRequestOutputSchema.extend({
     body: z.string().nullable(),
+    bodyTruncated: z.boolean().optional(),
+    bodyFullLength: z.number().optional(),
     draft: z.boolean(),
     headBranch: z.string(),
     baseBranch: z.string(),
@@ -162,6 +176,8 @@ const KanbanColumnOutputSchema = z.object({
     status: z.string(),
     statusOptionId: z.string(),
     items: z.array(KanbanItemOutputSchema),
+    itemCount: z.number().optional(),
+    truncated: z.boolean().optional(),
 })
 
 export const KanbanBoardOutputSchema = z
@@ -173,6 +189,7 @@ export const KanbanBoardOutputSchema = z
         statusOptions: z.array(StatusOptionOutputSchema).optional(),
         columns: z.array(KanbanColumnOutputSchema).optional(),
         totalItems: z.number().optional(),
+        summaryOnly: z.boolean().optional(),
         owner: z.string().optional(),
         detectedOwner: z.string().nullable().optional(),
         detectedRepo: z.string().nullable().optional(),

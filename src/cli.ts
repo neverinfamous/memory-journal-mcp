@@ -67,6 +67,10 @@ program
         'Code Mode sandbox: "worker" (production, default) or "vm" (lightweight)',
         'worker'
     )
+    .option(
+        '--codemode-max-result-size <bytes>',
+        'Maximum Code Mode result size in bytes (default: 102400 / 100KB, env: CODE_MODE_MAX_RESULT_SIZE)'
+    )
     .option('--oauth-enabled', 'Enable OAuth 2.1 authentication (env: OAUTH_ENABLED)')
     .option('--oauth-issuer <url>', 'OAuth issuer URL (env: OAUTH_ISSUER)')
     .option('--oauth-audience <audience>', 'OAuth audience (env: OAUTH_AUDIENCE)')
@@ -170,6 +174,7 @@ program
             vacuumInterval: string
             rebuildIndexInterval: string
             sandboxMode: string
+            codemodeMaxResultSize?: string
             oauthEnabled?: boolean
             oauthIssuer?: string
             oauthAudience?: string
@@ -208,6 +213,13 @@ program
                 ...(options.teamDb ? { teamDb: options.teamDb } : {}),
                 ...(host ? { host } : {}),
             })
+
+            // Set CODE_MODE_MAX_RESULT_SIZE env var from CLI flag if provided
+            const codemodeMaxResultSize =
+                options.codemodeMaxResultSize ?? process.env['CODE_MODE_MAX_RESULT_SIZE']
+            if (codemodeMaxResultSize) {
+                process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize
+            }
 
             try {
                 // Build audit config from CLI options + env

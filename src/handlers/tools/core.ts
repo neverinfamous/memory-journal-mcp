@@ -24,6 +24,7 @@ import {
     relaxedNumber,
     TagOutputSchema,
 } from './schemas.js'
+import { MAX_QUERY_LIMIT } from './search/helpers.js'
 
 // ============================================================================
 // Input Schemas
@@ -83,7 +84,7 @@ const GetEntryByIdSchemaMcp = z.object({
 })
 
 const GetRecentEntriesSchema = z.object({
-    limit: z.number().max(500).optional().default(5),
+    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(5),
     is_personal: z.boolean().optional(),
 })
 
