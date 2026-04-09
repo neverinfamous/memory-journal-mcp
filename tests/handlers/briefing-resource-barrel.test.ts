@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
     dynamicBriefingResource,
 } from '../../src/handlers/resources/core/briefing/index.js'
@@ -30,6 +30,10 @@ vi.mock('../../src/handlers/resources/core/briefing/user-message.js', () => ({
 }))
 
 describe('Briefing Resources', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
     it('dynamicBriefingResource handles URI extraction', async () => {
         const result = await dynamicBriefingResource.handler('memory://briefing/test-repo', {
             briefingConfig: {
@@ -40,6 +44,7 @@ describe('Briefing Resources', () => {
         } as any)
 
         expect(result.data).toBeDefined()
+        expect(GitHubIntegration).toHaveBeenCalledTimes(1)
         expect(GitHubIntegration).toHaveBeenCalledWith('/tmp/test')
     })
 
