@@ -1,5 +1,5 @@
 {
-  "name": "@neverinfamous/agent-skills",
+  "name": "neverinfamous-agent-skills",
   "version": "1.0.0",
   "description": "Foundational AI agent metacognitive skills and workflows for the Adamic ecosystem.",
   "type": "module",

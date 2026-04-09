@@ -18,7 +18,7 @@ if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
 }
 
-console.log(`\x1b[36mSynchronizing @neverinfamous/agent-skills to -> ${targetDir}\x1b[0m`);
+console.log(`\x1b[36mSynchronizing neverinfamous-agent-skills to -> ${targetDir}\x1b[0m`);
 
 const items = fs.readdirSync(sourceDir);
 let count = 0;

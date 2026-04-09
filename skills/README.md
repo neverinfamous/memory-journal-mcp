@@ -1,4 +1,4 @@
-# @neverinfamous/agent-skills
+# neverinfamous-agent-skills
 
 Reusable instruction sets that establish permanent AI behavior paradigms and extend agent capabilities for specialized tasks. 
 
@@ -7,7 +7,7 @@ Reusable instruction sets that establish permanent AI behavior paradigms and ext
 This directory is published as a standalone internal NPM package. Developers can pull the latest skills into their local workspaces by running:
 
 ```bash
-npx @neverinfamous/agent-skills@latest
+npx neverinfamous-agent-skills@latest
 ```
 
 This command will automatically download and synchronize the latest `SKILL.md` files into `./.agents/skills/`.
