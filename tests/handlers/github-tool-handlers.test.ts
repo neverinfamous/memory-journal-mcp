@@ -524,7 +524,9 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as any
 
-            expect(result.error).toContain('not found or lacks a nodeId')
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('RESOURCE_NOT_FOUND')
+            expect(result.category).toBe('resource')
         })
 
         it('should return error when project not found', async () => {
@@ -546,7 +548,9 @@ describe('GitHub Tool Handlers', () => {
                 github
             )) as any
 
-            expect(result.error).toContain('not found')
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('RESOURCE_NOT_FOUND')
+            expect(result.category).toBe('resource')
         })
     })
 

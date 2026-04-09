@@ -96,7 +96,7 @@ export interface SecurityConfig {
     maxCodeLength: number
     /** Maximum executions per minute per client (default: 60) */
     maxExecutionsPerMinute: number
-    /** Maximum result size in bytes (default: 10MB) */
+    /** Maximum result size in bytes (default: 100KB) */
     maxResultSize: number
     /** Patterns to block in code */
     blockedPatterns: RegExp[]

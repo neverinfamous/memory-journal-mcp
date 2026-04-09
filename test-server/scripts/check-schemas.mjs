@@ -49,15 +49,17 @@ proc.stdout.on('data', (chunk) => {
                     }
                 }
 
+                clearTimeout(killTimeout)
                 if (missingNames.length > 0) {
-                    console.log(`MISSING outputSchema: ${missingNames.join(', ')}`)
+                    console.error(
+                        `Schema check failed: ${missingNames.length} tool(s) missing outputSchema`
+                    )
+                    console.error(`MISSING outputSchema: ${missingNames.join(', ')}`)
+                    process.exit(1)
                 } else {
                     console.log('ALL TOOLS HAVE OUTPUT SCHEMA!')
+                    process.exit(0)
                 }
-
-                clearTimeout(killTimeout)
-                process.exit(0)
-            }
         } catch {}
     }
 })

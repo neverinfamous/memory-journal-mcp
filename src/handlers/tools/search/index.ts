@@ -209,7 +209,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = SearchEntriesSchema.parse(params)
-                    const query = input.query || ''
+                    const query = input.query?.trim() || ''
                     const mode = input.mode as SearchMode
 
                     // Validate: at least one filter or query must be provided to prevent bare searches

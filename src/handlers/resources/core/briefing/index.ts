@@ -63,7 +63,7 @@ async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string
 ): Promise<ResourceResult> {
-    const config = context.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+    const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
 
     let activeGithub = context.github
     let activeProjectNumber = config.defaultProjectNumber

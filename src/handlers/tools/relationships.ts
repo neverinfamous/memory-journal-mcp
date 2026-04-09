@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext, RelationshipType } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
+import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import type { QueryResult } from '../../database/core/interfaces.js'
@@ -136,10 +137,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     // Guard: self-referential links are not meaningful
                     if (input.from_entry_id === input.to_entry_id) {
                         return {
+                            ...formatHandlerError(
+                                new ValidationError('Cannot link an entry to itself')
+                            ),
                             success: false,
-                            error: 'Cannot link an entry to itself',
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
                         }
                     }
 
@@ -158,12 +159,13 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const toEntry = db.getEntryById(input.to_entry_id)
                     if (!fromEntry || !toEntry) {
                         return {
+                            ...formatHandlerError(
+                                new ResourceNotFoundError(
+                                    'Entry',
+                                    `from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)}`
+                                )
+                            ),
                             success: false,
-                            error: `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`,
-                            code: 'RESOURCE_NOT_FOUND',
-                            category: 'resource',
-                            suggestion: 'Verify both entry IDs exist before linking',
-                            recoverable: true,
                         }
                     }
 
@@ -200,12 +202,13 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         const isFkError = errMsg.includes('FOREIGN KEY constraint failed')
                         if (isFkError) {
                             return {
+                                ...formatHandlerError(
+                                    new ResourceNotFoundError(
+                                        'Entry',
+                                        `from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)}`
+                                    )
+                                ),
                                 success: false,
-                                error: `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`,
-                                code: 'RESOURCE_NOT_FOUND',
-                                category: 'resource',
-                                suggestion: 'Verify both entry IDs exist before linking',
-                                recoverable: true,
                             }
                         }
                     }
