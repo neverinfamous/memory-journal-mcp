@@ -10,7 +10,7 @@ export type ToolGroup =
     | 'search' // Search: search_entries, search_by_date_range, semantic_search
     | 'analytics' // Analytics: get_statistics, get_cross_project_insights
     | 'relationships' // Relationships: link_entries, visualize_relationships
-    | 'io'     // IO: export_entries, export_markdown, import_markdown
+    | 'io' // IO: export_entries, export_markdown, import_markdown
     | 'admin' // Admin: update_entry, delete_entry
     | 'github' // Reserved for future GitHub-specific tools
     | 'backup' // Backup: backup_journal, list_backups, restore_backup

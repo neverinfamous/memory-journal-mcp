@@ -17,7 +17,7 @@ Test search, semantic search, date range, analytics, and vector index operations
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -129,12 +129,18 @@ const withPersonal = await mj.search.searchByDateRange({
   end_date: '2026-12-31',
   is_personal: true,
 })
+const withProject = await mj.search.searchByDateRange({
+  start_date: '2026-01-01',
+  end_date: '2026-12-31',
+  project_number: 5,
+})
 return {
   basicCount: basic.entries.length,
   typeCount: withType.entries.length,
   typeAllPlanning: withType.entries.every((e) => e.entryType === 'planning'),
   tagCount: withTags.entries.length,
   personalCount: withPersonal.entries.length,
+  projectCount: withProject.entries.length,
 }
 ```
 
@@ -144,12 +150,14 @@ return {
 | `typeAllPlanning` | `true` (if any planning entries exist) |
 | `tagCount`        | ≥ 1 (entries with "deploy" tag)        |
 | `personalCount`   | ≥ 0                                    |
+| `projectCount`    | ≥ 0 (entries linked to project #5)     |
 
 ### 21.5 Search by Date Range — Error Paths
 
-| Test                | Code                                                                                     | Expected Result                                         |
-| ------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Invalid date format | `return await mj.search.searchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });` | `{ success: false, error: "..." }` with YYYY-MM-DD hint |
+| Test                | Code                                                                                              | Expected Result                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Invalid date format | `return await mj.search.searchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
+| Inverted date range | `return await mj.search.searchByDateRange({ start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
 
 ### 21.6 Semantic Search
 
@@ -255,6 +263,8 @@ return {
 - [ ] Cross-DB search returns entries with `source: 'personal'` and `source: 'team'`
 - [ ] `search_by_date_range` with filters (`entry_type`, `tags`, `is_personal`) works
 - [ ] `search_by_date_range` rejects invalid date format with structured error
+- [ ] `search_by_date_range` rejects inverted date range (start > end) with structured error
+- [ ] `search_by_date_range` filters by `project_number`
 - [ ] `semantic_search` processes Related by ID (`entry_id`) lookups avoiding query strings
 - [ ] `semantic_search` correctly filters results downstream using `tags` and `is_personal`
 - [ ] `semantic_search` with custom threshold returns fewer results

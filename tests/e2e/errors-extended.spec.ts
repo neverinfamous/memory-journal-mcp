@@ -122,13 +122,11 @@ test.describe('Errors: Search', () => {
         }
     })
 
-    test('search_entries with empty query → returns results (treats "" as get-recent)', async () => {
+    test('search_entries with empty query → validation error', async () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'search_entries', { query: '' })
-            // Server treats empty string as valid — returns recent entries
-            expectSuccess(p)
-            expect(Array.isArray(p.entries)).toBe(true)
+            expectHandlerError(p)
         } finally {
             await client.close()
         }

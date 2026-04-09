@@ -80,6 +80,15 @@ export class GitHubIntegration {
         return this.issuesManager.getIssue(owner, repo, issueNumber)
     }
 
+    async getIssueComments(
+        owner: string,
+        repo: string,
+        issueNumber: number,
+        limit = 30
+    ): Promise<{ author: string; body: string; createdAt: string }[]> {
+        return this.issuesManager.getIssueComments(owner, repo, issueNumber, limit)
+    }
+
     async createIssue(
         owner: string,
         repo: string,
@@ -232,6 +241,13 @@ export class GitHubIntegration {
         contentId: string
     ): Promise<{ success: boolean; itemId?: string; error?: string }> {
         return this.projectsManager.addProjectItem(projectId, contentId)
+    }
+
+    async deleteProjectItem(
+        projectId: string,
+        itemId: string
+    ): Promise<{ success: boolean; error?: string }> {
+        return this.projectsManager.deleteProjectItem(projectId, itemId)
     }
 
     async getMilestones(

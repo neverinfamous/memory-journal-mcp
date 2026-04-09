@@ -17,7 +17,7 @@ Test team CRUD operations, error paths, and date range search through Code Mode.
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -139,13 +139,13 @@ return {
 
 ## Success Criteria
 
-- [ ] `team_create_entry` with auto-detected and explicit `author` works
-- [ ] `team_get_recent` returns entries with `author` field
-- [ ] `team_search` filters by text, tags, and combined
-- [ ] `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
-- [ ] `team_list_tags` returns tag list from team database
-- [ ] `team_search_by_date_range` filters by date range, entry_type, and tags
-- [ ] Invalid `entry_type` on team create returns structured error
-- [ ] Nonexistent IDs return structured errors for get, update, delete, link
-- [ ] Invalid date range returns structured error with format hint
-- [ ] Merge same tag returns structured error
+- [] `team_create_entry` with auto-detected and explicit `author` works
+- [] `team_get_recent` returns entries with `author` field
+- [] `team_search` filters by text, tags, and combined
+- [] `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
+- [] `team_list_tags` returns tag list from team database
+- [] `team_search_by_date_range` filters by date range, entry_type, and tags
+- [] Invalid `entry_type` on team create returns structured error
+- [] Nonexistent IDs return structured errors for get, update, delete, link
+- [] Invalid date range returns structured error with format hint
+- [] Merge same tag returns structured error

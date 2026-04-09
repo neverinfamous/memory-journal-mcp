@@ -9,8 +9,8 @@
 // Constants
 // ============================================================================
 
-/** Maximum entries returned by any single search query */
-export const MAX_QUERY_LIMIT = 500
+import { MAX_QUERY_LIMIT } from '../schemas.js'
+export { MAX_QUERY_LIMIT }
 
 /** Number of leading characters used as deduplication key */
 const DEDUP_KEY_LENGTH = 200

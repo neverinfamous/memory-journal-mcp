@@ -1,3 +1,7 @@
+---
+description: Work through open issues in a GitHub milestone sequentially, applying the issue-triage workflow to each
+---
+
 # Milestone Sprint
 
 Work through open issues in a GitHub milestone sequentially, applying the
@@ -10,7 +14,11 @@ issue-triage workflow to each.
    ```
    get_github_milestone({ milestone_number: <N> })
    ```
-3. List open issues in the milestone, sorted by priority labels:
+3. Read priority ordering directly from the centralized Project Control Board:
+   ```
+   read_resource("memory://kanban/{project_number}")
+   ```
+   Cross-reference this prioritized sequence with the open milestone issues:
    ```
    get_github_issues({ milestone: <N>, state: "open" })
    ```

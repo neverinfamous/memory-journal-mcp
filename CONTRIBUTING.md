@@ -227,8 +227,8 @@ src/
 ├── github/
 │   └── github-integration/     # GitHub API integration
 ├── handlers/
-│   ├── tools/                  # 65 tool handlers (10 groups)
-│   ├── resources/              # 38 resource handlers
+│   ├── tools/                  # 67 tool handlers (10 groups)
+│   ├── resources/              # 34 resource handlers
 │   └── prompts/                # 17 prompt handlers
 ├── markdown/                   # Markdown import/export (round-trip frontmatter parsing)
 ├── observability/              # Metrics interceptor, token estimator
@@ -242,8 +242,21 @@ src/
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 
 skills/                             # Bundled agent skills (shipped with npm)
-└── github-commander/               # GitHub workflow skills (triage, review, audits)
-```
+├── autonomous-dev/                 # Autonomous software development agent harness
+├── bun/                            # Bun all-in-one toolkit guidelines
+├── github-commander/               # GitHub workflow skills (triage, review, audits)
+├── gitlab/                         # GitLab repository and CI/CD assistant
+├── golang/                         # Go development best practices
+├── mysql/                          # Production-grade MySQL rules
+├── playwright-standard/            # End-to-end testing with Playwright
+├── postgres/                       # Enterprise PostgreSQL development
+├── react-best-practices/           # React and Next.js performance guidelines
+├── rust/                           # Rust systems programming guidelines
+├── shadcn-ui/                      # UI component development with shadcn
+├── skill-builder/                  # Creation and evaluation of agent skills
+├── sqlite/                         # SQLite meta-cognitive rules
+├── typescript/                     # Enterprise-grade TypeScript patterns
+└── vitest-standard/                # Unit testing with Vitest and TDD
 
 ## 🤝 Community
 

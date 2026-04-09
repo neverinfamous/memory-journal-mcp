@@ -20,14 +20,20 @@ const PREVIEW_LENGTH = 80
 export interface JournalContext {
     totalEntries: number
     latestEntries: { id: number; timestamp: string; type: string; preview: string }[]
+    latestSessionSummary?: { id: number; timestamp: string; type: string; preview: string }
+    sessionSummaries?: { id: number; timestamp: string; type: string; preview: string }[]
     lastModified: string
 }
 
 export function buildJournalContext(
     context: ResourceContext,
-    config: BriefingConfig
+    config: BriefingConfig,
+    projectNumber?: number | null
 ): JournalContext {
-    const recentEntries = context.db.getRecentEntries(config.entryCount)
+    const recentEntries =
+        typeof projectNumber === 'number'
+            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
+            : context.db.getRecentEntries(config.entryCount)
     const latestEntries = recentEntries.map((e) => {
         const content = e.content ?? ''
         return {
@@ -39,10 +45,55 @@ export function buildJournalContext(
         }
     })
 
+    // Fetch latest session summaries
+    const summaryEntries =
+        typeof projectNumber === 'number'
+            ? context.db.searchEntries('', {
+                  limit: config.summaryCount,
+                  projectNumber,
+                  tags: ['session-summary'],
+              })
+            : context.db.searchEntries('', {
+                  limit: config.summaryCount,
+                  tags: ['session-summary'],
+              })
+
+    // Fallback to retrospective type if no tag matched
+    const retroEntries =
+        summaryEntries.length === 0
+            ? typeof projectNumber === 'number'
+                ? context.db.searchEntries('', {
+                      limit: config.summaryCount,
+                      projectNumber,
+                      entryType: 'retrospective',
+                  })
+                : context.db.searchEntries('', {
+                      limit: config.summaryCount,
+                      entryType: 'retrospective',
+                  })
+            : []
+
+    const finalSummaryEntries = summaryEntries.length > 0 ? summaryEntries : retroEntries
+
+    let latestSessionSummary
+    let sessionSummaries
+    if (finalSummaryEntries.length > 0) {
+        sessionSummaries = finalSummaryEntries.map((entry) => {
+            const c = entry.content ?? ''
+            return {
+                id: entry.id,
+                timestamp: entry.timestamp,
+                type: entry.entryType,
+                preview: c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : ''),
+            }
+        })
+        latestSessionSummary = sessionSummaries[0]
+    }
+
     const totalEntries = context.db.getActiveEntryCount()
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
-    return { totalEntries, latestEntries, lastModified }
+    return { totalEntries, latestEntries, latestSessionSummary, sessionSummaries, lastModified }
 }
 
 // ============================================================================
@@ -59,13 +110,17 @@ export interface TeamContext {
 
 export function buildTeamContext(
     context: ResourceContext,
-    config: BriefingConfig
+    config: BriefingConfig,
+    projectNumber?: number | null
 ): TeamContext | undefined {
     if (!context.teamDb) return undefined
 
     try {
         const teamTotalEntries = context.teamDb.getActiveEntryCount()
-        const teamRecent = context.teamDb.getRecentEntries(1)
+        const teamRecent =
+            typeof projectNumber === 'number'
+                ? context.teamDb.searchEntries('', { limit: 1, projectNumber })
+                : context.teamDb.getRecentEntries(1)
         const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
         const teamContent = teamLatestEntry
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
@@ -83,7 +138,10 @@ export function buildTeamContext(
             | undefined = undefined
 
         if (config.includeTeam) {
-            const teamEntries = context.teamDb.getRecentEntries(config.entryCount)
+            const teamEntries =
+                typeof projectNumber === 'number'
+                    ? context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber })
+                    : context.teamDb.getRecentEntries(config.entryCount)
             teamLatestEntries = teamEntries.map((e) => {
                 const content = e.content ?? ''
                 return {

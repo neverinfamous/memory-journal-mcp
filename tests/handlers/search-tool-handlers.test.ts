@@ -131,7 +131,7 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(alphaEntries.length).toBe(1)
         })
 
-        it('should merge recent entries (no query, no filters)', async () => {
+        it('should return validation error for empty search (no query, no filters)', async () => {
             const result = (await callTool(
                 'search_entries',
                 { limit: 10 },
@@ -141,9 +141,10 @@ describe('Search Tool Handlers - Coverage', () => {
                 undefined,
                 undefined,
                 teamDb
-            )) as { entries: unknown[]; count: number }
+            )) as { success: boolean; code: string }
 
-            expect(result.count).toBeGreaterThan(0)
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('VALIDATION_FAILED')
         })
     })
 

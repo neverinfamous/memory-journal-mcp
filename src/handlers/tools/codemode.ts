@@ -64,7 +64,19 @@ let securityManager: CodeModeSecurityManager | null = null
 let sandboxPool: ISandboxPool | null = null
 
 function getSecurityManager(): CodeModeSecurityManager {
-    securityManager ??= new CodeModeSecurityManager()
+    if (!securityManager) {
+        const envMaxSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
+        const parsedMaxSize =
+            envMaxSize && /^\d+$/.test(envMaxSize) ? parseInt(envMaxSize, 10) : undefined
+        const overrides =
+            parsedMaxSize !== undefined &&
+            Number.isFinite(parsedMaxSize) &&
+            Number.isInteger(parsedMaxSize) &&
+            parsedMaxSize > 0
+                ? { maxResultSize: parsedMaxSize }
+                : undefined
+        securityManager = new CodeModeSecurityManager(overrides)
+    }
     return securityManager
 }
 

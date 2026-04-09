@@ -16,7 +16,7 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -24,11 +24,11 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 ### 17.1 Top-Level Help
 
-| Test                     | Code                                                 | Expected Result                                                                                         |
-| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| mj.help() returns groups | `return await mj.help();`                            | `groups` array with 9 entries, `totalMethods` > 40, `usage` string                                      |
-| All 9 groups present     | `const h = await mj.help(); return h.groups;`        | Contains: `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team` |
-| Correct group count      | `const h = await mj.help(); return h.groups.length;` | `9`                                                                                                     |
+| Test                     | Code                                                 | Expected Result                                                                                               |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| mj.help() returns groups | `return await mj.help();`                            | `groups` array with 10 entries, `totalMethods` > 40, `usage` string                                           |
+| All 10 groups present    | `const h = await mj.help(); return h.groups;`        | Contains: `core`, `search`, `analytics`, `relationships`, `io`, `export`, `admin`, `github`, `backup`, `team` |
+| Correct group count      | `const h = await mj.help(); return h.groups.length;` | `10`                                                                                                          |
 
 ### 17.2 Per-Group Help
 
@@ -53,7 +53,7 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 ## Success Criteria
 
-- [ ] `mj.help()` returns all 9 groups with correct `totalMethods` count
+- [ ] `mj.help()` returns all 10 groups with correct `totalMethods` count
 - [ ] Per-group `help()` returns method names for each group
 - [ ] Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
 - [ ] Positional arguments work (e.g., `mj.core.get(id)`)

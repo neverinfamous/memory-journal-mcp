@@ -112,9 +112,9 @@ test.describe('Payload Contracts: Structured Error Fields', () => {
             relationship_type: 'references',
         })
 
-        // Self-loop returns { success, error, code: 'VALIDATION_ERROR', category: 'validation' }
-        // (no suggestion/recoverable on inline error paths)
-        expectMinimumError(payload, 'VALIDATION_ERROR')
+        // Self-loop returns { success, error, code: 'VALIDATION_FAILED', category: 'validation' }
+        // (now routes through MemoryJournalMcpError with suggestion/recoverable via formatHandlerError)
+        expectFullError(payload, 'VALIDATION_FAILED')
         expect(payload.category).toBe('validation')
     })
 

@@ -62,6 +62,44 @@ describe('getTeamIoTools', () => {
     })
 
     describe('team_export_markdown', () => {
+        it('should return error when teamDb not configured', async () => {
+            const context = { progress: null } as any
+            const handler = getTeamIoTools(context).find(
+                (t) => t.name === 'team_export_markdown'
+            )!.handler
+            const result = (await handler({ output_dir: '/tmp/team-out' })) as any
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Team collaboration is not configured')
+        })
+
+        it('should fetch by dates when start_date is provided', async () => {
+            const context = createMockContext()
+            ;(context.teamDb as any).searchByDateRange = vi.fn().mockReturnValue([])
+            const handler = getTeamIoTools(context as never).find(
+                (t) => t.name === 'team_export_markdown'
+            )!.handler
+
+            const result = (await handler({
+                output_dir: '/tmp/team-out',
+                start_date: '2025-01-01',
+            })) as any
+            expect((context.teamDb as any).searchByDateRange).toHaveBeenCalled()
+        })
+
+        it('should handle errors during export', async () => {
+            const context = createMockContext()
+            context.teamDb.getRecentEntries = vi.fn().mockImplementation(() => {
+                throw new Error('Export error')
+            })
+            const handler = getTeamIoTools(context as never).find(
+                (t) => t.name === 'team_export_markdown'
+            )!.handler
+
+            const result = (await handler({ output_dir: '/tmp/team-out' })) as any
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Export error')
+        })
+
         it('should call export tool with teamDb', async () => {
             const context = createMockContext()
             const handler = getTeamIoTools(context as never).find(
@@ -79,6 +117,25 @@ describe('getTeamIoTools', () => {
     })
 
     describe('team_import_markdown', () => {
+        it('should return error when teamDb not configured', async () => {
+            const context = { progress: null } as any
+            const handler = getTeamIoTools(context).find(
+                (t) => t.name === 'team_import_markdown'
+            )!.handler
+            const result = (await handler({ source_dir: '/tmp/team-in' })) as any
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Team collaboration is not configured')
+        })
+
+        it('should handle errors during import', async () => {
+            const context = createMockContext()
+            const handler = getTeamIoTools(context as never).find(
+                (t) => t.name === 'team_import_markdown'
+            )!.handler
+            const result = (await handler({ source_dir: '/tmp/team-in', limit: 1000 })) as any
+            expect(result.success).toBe(false)
+        })
+
         it('should resolve author and pass to importer options', async () => {
             const context = createMockContext()
             const handler = getTeamIoTools(context as never).find(

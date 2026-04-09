@@ -481,6 +481,122 @@ describe('GitHub Tool Handlers', () => {
         })
     })
 
+    describe('add_kanban_item', () => {
+        it('should add item when issue and project board are found', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                }),
+                getIssue: vi.fn().mockResolvedValue({
+                    nodeId: 'ISSUE_NODE_1',
+                }),
+                addProjectItem: vi.fn().mockResolvedValue({ success: true, itemId: 'PVTITEM_NEW' }),
+            })
+
+            const result = (await callTool(
+                'add_kanban_item',
+                {
+                    project_number: 1,
+                    issue_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as any
+
+            expect(result.success).toBe(true)
+            expect(result.itemId).toBe('PVTITEM_NEW')
+        })
+
+        it('should return error when issue lacks nodeId or not found', async () => {
+            const github = createMockGitHub({
+                getIssue: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'add_kanban_item',
+                {
+                    project_number: 1,
+                    issue_number: 999,
+                },
+                db,
+                undefined,
+                github
+            )) as any
+
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('RESOURCE_NOT_FOUND')
+            expect(result.category).toBe('resource')
+        })
+
+        it('should return error when project not found', async () => {
+            const github = createMockGitHub({
+                getIssue: vi.fn().mockResolvedValue({
+                    nodeId: 'ISSUE_NODE_1',
+                }),
+                getProjectKanban: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'add_kanban_item',
+                {
+                    project_number: 999,
+                    issue_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as any
+
+            expect(result.success).toBe(false)
+            expect(result.code).toBe('RESOURCE_NOT_FOUND')
+            expect(result.category).toBe('resource')
+        })
+    })
+
+    describe('delete_kanban_item', () => {
+        it('should delete item when project board found', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue({
+                    projectId: 'PVT_1',
+                }),
+                deleteProjectItem: vi.fn().mockResolvedValue({ success: true }),
+            })
+
+            const result = (await callTool(
+                'delete_kanban_item',
+                {
+                    project_number: 1,
+                    item_id: 'PVTITEM_1',
+                },
+                db,
+                undefined,
+                github
+            )) as any
+
+            expect(result.success).toBe(true)
+        })
+
+        it('should return error when project not found', async () => {
+            const github = createMockGitHub({
+                getProjectKanban: vi.fn().mockResolvedValue(null),
+            })
+
+            const result = (await callTool(
+                'delete_kanban_item',
+                {
+                    project_number: 999,
+                    item_id: 'PVTITEM_1',
+                },
+                db,
+                undefined,
+                github
+            )) as any
+
+            expect(result.error).toContain('not found')
+        })
+    })
+
     // ========================================================================
     // Close issue with entry
     // ========================================================================

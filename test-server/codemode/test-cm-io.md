@@ -16,13 +16,13 @@ Test the unified IO namespace, testing both legacy `exportEntries` formats and t
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
-## Phase: IO & Interoperability via Code Mode
+## Phase 26: IO & Interoperability via Code Mode
 
-### 1. Legacy Export
+### 26.1 Legacy Export
 
 ```javascript
 // Test code:
@@ -51,7 +51,7 @@ return {
 | `mdHasContent`   | `true`                                        |
 | `tagFiltered`    | `true` (only entries with "architecture" tag) |
 
-### 2. Markdown File Orchestration
+### 26.2 Markdown File Orchestration
 
 ```javascript
 // Test code:
@@ -100,7 +100,7 @@ return {
 
 ## Success Criteria
 
-- [ ] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
-- [ ] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
-- [ ] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
-- [ ] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
+- [] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
+- [] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
+- [] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
+- [] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.

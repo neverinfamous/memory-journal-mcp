@@ -361,7 +361,9 @@ export class ProjectsManager {
             })
             return { success: false, error: errorMessage }
         } finally {
-            this.client.invalidateCache('kanban:')
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
         }
     }
 
@@ -408,7 +410,52 @@ export class ProjectsManager {
             })
             return { success: false, error: errorMessage }
         } finally {
-            this.client.invalidateCache('kanban:')
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
+        }
+    }
+
+    async deleteProjectItem(
+        projectId: string,
+        itemId: string
+    ): Promise<{ success: boolean; error?: string }> {
+        if (!this.client.graphqlWithAuth) {
+            return { success: false, error: 'GraphQL not available - no token' }
+        }
+
+        try {
+            const mutation = `
+                mutation($projectId: ID!, $itemId: ID!) {
+                    deleteProjectV2Item(input: { projectId: $projectId, itemId: $itemId }) {
+                        deletedItemId
+                    }
+                }
+            `
+
+            await this.client.graphqlWithAuth(mutation, {
+                projectId,
+                itemId,
+            })
+
+            logger.info('Deleted project item', {
+                module: 'GitHub',
+                context: { projectId, itemId },
+            })
+
+            return { success: true }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error)
+            logger.error('Failed to delete item from project', {
+                module: 'GitHub',
+                context: { projectId, itemId },
+                error: errorMessage,
+            })
+            return { success: false, error: errorMessage }
+        } finally {
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
         }
     }
 }

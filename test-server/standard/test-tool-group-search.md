@@ -28,7 +28,7 @@
 
 ## Success Criteria
 
-- [ ] Agent reports the Total Token Estimate in the final summary (using the `memory://metrics/tokens` and `memory://metrics/summary` server resources, DO NOT use scripts to parse filesystem responses).
+- [ ] Agent reports the Total Token Estimate in the final summary (using the `memory://metrics/tokens` and `memory://metrics/summary` server resources, DO NOT use scripts to parse filesystem responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
 - [ ] Zod boundary limits prevent crashes.
 - [ ] Invalid dates return structured Domain/Validation errors.
 - [ ] No raw `-32602` responses.

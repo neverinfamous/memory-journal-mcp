@@ -109,6 +109,52 @@ export class IssuesManager {
         }
     }
 
+    async getIssueComments(
+        owner: string,
+        repo: string,
+        issueNumber: number,
+        limit = 30
+    ): Promise<{ author: string; body: string; createdAt: string }[]> {
+        const _limit = Math.min(limit, 100)
+        if (_limit <= 0) return []
+        if (!this.client.octokit) {
+            return []
+        }
+
+        const cacheKey = `issue-comments:${owner}:${repo}:${String(issueNumber)}:${String(_limit)}`
+        const cached = this.client.getCached(cacheKey) as
+            | { author: string; body: string; createdAt: string }[]
+            | undefined
+        if (cached) return cached
+
+        try {
+            const response = await this.client.octokit.issues.listComments({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                per_page: _limit,
+                sort: 'created',
+                direction: 'asc',
+            })
+
+            const comments = response.data.slice(0, _limit).map((comment) => ({
+                author: comment.user?.login ?? 'unknown',
+                body: comment.body ?? '',
+                createdAt: comment.created_at,
+            }))
+
+            this.client.setCache(cacheKey, comments)
+            return comments
+        } catch (error) {
+            logger.error('Failed to get issue comments', {
+                module: 'GitHub',
+                entityId: issueNumber,
+                error: error instanceof Error ? error.message : String(error),
+            })
+            return []
+        }
+    }
+
     async createIssue(
         owner: string,
         repo: string,

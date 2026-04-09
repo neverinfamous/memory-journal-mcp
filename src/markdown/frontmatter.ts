@@ -224,7 +224,10 @@ export function parseFrontmatter(content: string): ParseResult {
     }
 
     // Body is everything after the closing ---
-    const body = lines.slice(closingIndex + 1).join('\n').replace(/^\n/, '')
+    const body = lines
+        .slice(closingIndex + 1)
+        .join('\n')
+        .replace(/^\n/, '')
 
     return { metadata: parseResult.data, body }
 }
@@ -244,7 +247,10 @@ function parseScalar(value: string): string | number | boolean {
     if (value === 'false') return false
 
     // String (strip surrounding quotes if present)
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+    ) {
         return value.slice(1, -1)
     }
 

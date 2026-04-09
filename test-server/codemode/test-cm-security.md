@@ -17,7 +17,7 @@ Test the Code Mode security constraints: input validation, blocked patterns, run
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -64,8 +64,8 @@ Test the Code Mode security constraints: input validation, blocked patterns, run
 
 ## Success Criteria
 
-- [ ] Empty code returns structured error (not raw MCP error)
-- [ ] All 7 blocked patterns (`require`, `process`, `eval`, `import`, `Function`, `__proto__`, `child_process`) return structured security errors
-- [ ] Syntax errors return `{ success: false, error: "..." }` with descriptive message
-- [ ] Runtime errors (ReferenceError, TypeError) caught and returned as structured errors
-- [ ] Nulled globals confirmed: `process`, `require`, `setTimeout`, `globalThis` are all `undefined`
+- [] Empty code returns structured error (not raw MCP error)
+- [] All 7 blocked patterns (`require`, `process`, `eval`, `import`, `Function`, `__proto__`, `child_process`) return structured security errors
+- [] Syntax errors return `{ success: false, error: "..." }` with descriptive message
+- [] Runtime errors (ReferenceError, TypeError) caught and returned as structured errors
+- [] Nulled globals confirmed: `process`, `require`, `setTimeout`, `globalThis` are all `undefined`

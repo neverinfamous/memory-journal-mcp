@@ -1,0 +1,48 @@
+{
+    "name": "neverinfamous-agent-skills",
+    "version": "1.0.6",
+    "description": "Foundational AI agent metacognitive skills and workflows for the Adamic ecosystem.",
+    "type": "module",
+    "main": "README.md",
+    "bin": {
+        "agent-skills": "bin/sync.js"
+    },
+    "files": [
+        "bin/",
+        "README.md",
+        "autonomous-dev/",
+        "bun/",
+        "github-commander/",
+        "gitlab/",
+        "golang/",
+        "mysql/",
+        "playwright-standard/",
+        "postgres/",
+        "react-best-practices/",
+        "rust/",
+        "shadcn-ui/",
+        "skill-builder/",
+        "sqlite/",
+        "typescript/",
+        "vitest-standard/"
+    ],
+    "scripts": {
+        "sync": "node bin/sync.js"
+    },
+    "keywords": [
+        "agent",
+        "skills",
+        "mcp",
+        "llm",
+        "github-commander"
+    ],
+    "author": "Adamic.tech",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/neverinfamous/memory-journal-mcp.git"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}

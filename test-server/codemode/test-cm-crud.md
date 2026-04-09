@@ -17,7 +17,7 @@ Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read,
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -108,13 +108,13 @@ return {
   hasEntryType: typeof full.entry?.entryType === 'string',
   hasContent: typeof full.entry?.content === 'string',
   hasTags: Array.isArray(full.entry?.tags),
-  fullRelCount: full.entry?.relationships?.length ?? 'none',
-  noRelCount: noRels.entry?.relationships?.length ?? 'none',
+  fullRelCount: full.relationships?.length ?? 'none',
+  noRelCount: noRels.relationships?.length ?? 'none',
 }
 ```
 
 > [!NOTE]
-> The `importance` and `importanceBreakdown` fields are not included in the `getEntryById` code-mode response. Use the direct `get_entry_by_id` tool call to access these computed fields.
+> The `importance`, `importanceBreakdown`, and `relationships` fields are returned at the top level of the `getEntryById` code-mode response, parallel to the `entry` object itself.
 
 | Check          | Expected                                |
 | -------------- | --------------------------------------- |
@@ -198,6 +198,49 @@ return {
 | ---------------- | ----------------------------------------------------------- | ---------------------------------- |
 | Positional alias | `return await mj.core.testSimple({ message: "CM3 test" });` | `{ message: "..." }` echoing input |
 
+### 20.10 Create Entry — project_owner & auto_context
+
+| Test               | Code                                                                                                                                                                                  | Expected Result                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| With project_owner | `const r = await mj.core.createEntry({ content: "CM3 owner test", project_number: 5, project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
+| auto_context off   | `const r = await mj.core.createEntry({ content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
+
+### 20.11 Update Entry — is_personal Toggle
+
+```javascript
+// Test code:
+const created = await mj.core.createEntryMinimal({ content: 'CM3 personal toggle test' })
+const id = created.entry.id
+
+// Toggle to non-personal
+const toggled = await mj.admin.updateEntry({ entry_id: id, is_personal: false })
+const verify1 = await mj.core.getEntryById({ entry_id: id })
+
+// Toggle back to personal
+const toggledBack = await mj.admin.updateEntry({ entry_id: id, is_personal: true })
+const verify2 = await mj.core.getEntryById({ entry_id: id })
+
+return {
+  toggleSuccess: toggled.success,
+  isPersonalFalse: verify1.entry?.isPersonal === false,
+  toggleBackSuccess: toggledBack.success,
+  isPersonalTrue: verify2.entry?.isPersonal === true,
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `toggleSuccess`     | `true`   |
+| `isPersonalFalse`   | `true`   |
+| `toggleBackSuccess` | `true`   |
+| `isPersonalTrue`    | `true`   |
+
+### 20.12 Create Entry — issueUrl Auto-Population
+
+| Test                    | Code                                                                                                                                                                                                 | Expected Result                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ content: "CM3 issue link", issue_number: 1 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
+
 ---
 
 ## Cleanup
@@ -209,6 +252,9 @@ After testing, remove test entries created during Phase 20:
 | Delete full-params entry | `delete_entry(entry_id: <full_params_id>, permanent: true)` |
 | Delete shared entry      | `delete_entry(entry_id: <shared_id>, permanent: true)`      |
 | Delete update test entry | `delete_entry(entry_id: <update_test_id>, permanent: true)` |
+| Delete owner test entry  | `delete_entry(entry_id: <owner_test_id>, permanent: true)`  |
+| Delete toggle test entry | `delete_entry(entry_id: <toggle_test_id>, permanent: true)` |
+| Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
 
 ---
 
@@ -218,9 +264,13 @@ After testing, remove test entries created during Phase 20:
 - [ ] `create_entry` with `share_with_team: true` creates entry with `sharedWithTeam` and `author`
 - [ ] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors
 - [ ] `create_entry` rejects empty content with structured error
-- [ ] `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` only available via direct tool call)
+- [ ] `create_entry` with `project_owner` persists the field
+- [ ] `create_entry` with `auto_context: false` creates entry without auto-generated context
+- [ ] `create_entry` with `issue_number` auto-populates `issueUrl`
+- [ ] `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
 - [ ] `get_entry_by_id` with `include_relationships: false` omits relationship data
 - [ ] `update_entry` updates content, tags, and entry_type — verified via read-back
+- [ ] `update_entry` `is_personal` toggle correctly changes personal status
 - [ ] `update_entry` returns structured error for nonexistent IDs
 - [ ] `delete_entry` soft delete hides entry from search
 - [ ] `delete_entry` permanent delete and nonexistent ID both return structured responses

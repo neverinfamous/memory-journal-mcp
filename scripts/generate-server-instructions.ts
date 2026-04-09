@@ -31,8 +31,8 @@ const SECTION_NAMES = ['CORE', 'COPILOT', 'CODE_MODE', 'GITHUB', 'HELP_POINTERS'
 /**
  * Parse sections from markdown using <!-- SECTION:NAME --> delimiters
  */
-function parseSections(content) {
-    const sections = {}
+function parseSections(content: string): Record<string, string> {
+    const sections: Record<string, string> = {}
 
     for (let i = 0; i < SECTION_NAMES.length; i++) {
         const name = SECTION_NAMES[i]
@@ -67,7 +67,7 @@ function parseSections(content) {
 /**
  * Escape content for use inside a JS/TS template literal
  */
-function escapeForTemplateLiteral(content) {
+function escapeForTemplateLiteral(content: string): string {
     return content.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${')
 }
 
@@ -207,7 +207,7 @@ lines.push(
     "    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, \"implements\")`' },"
 )
 lines.push(
-    "    { group: 'export', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries(\"json\")`' },"
+    "    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.exportEntries(\"json\")`' },"
 )
 lines.push(
     "    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },"

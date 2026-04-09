@@ -27,6 +27,8 @@ export const GitHubIssueOutputSchema = z
 
 export const GitHubIssueDetailsOutputSchema = GitHubIssueOutputSchema.extend({
     body: z.string().nullable(),
+    bodyTruncated: z.boolean().optional(),
+    bodyFullLength: z.number().optional(),
     labels: z.array(z.string()),
     assignees: z.array(z.string()),
     createdAt: z.string(),
@@ -52,6 +54,16 @@ export const GitHubIssuesListOutputSchema = z
 export const GitHubIssueResultOutputSchema = z
     .object({
         issue: GitHubIssueDetailsOutputSchema.optional(),
+        comments: z
+            .array(
+                z.object({
+                    author: z.string(),
+                    body: z.string(),
+                    createdAt: z.string(),
+                })
+            )
+            .optional(),
+        commentCount: z.number().optional(),
         owner: z.string().optional(),
         repo: z.string().optional(),
         detectedOwner: z.string().nullable().optional(),
@@ -77,6 +89,8 @@ export const GitHubPullRequestOutputSchema = z
 
 export const GitHubPRDetailsOutputSchema = GitHubPullRequestOutputSchema.extend({
     body: z.string().nullable(),
+    bodyTruncated: z.boolean().optional(),
+    bodyFullLength: z.number().optional(),
     draft: z.boolean(),
     headBranch: z.string(),
     baseBranch: z.string(),
@@ -161,7 +175,9 @@ const StatusOptionOutputSchema = z.object({
 const KanbanColumnOutputSchema = z.object({
     status: z.string(),
     statusOptionId: z.string(),
-    items: z.array(KanbanItemOutputSchema),
+    items: z.array(KanbanItemOutputSchema).optional(),
+    itemCount: z.number().optional(),
+    truncated: z.boolean().optional(),
 })
 
 export const KanbanBoardOutputSchema = z
@@ -173,6 +189,16 @@ export const KanbanBoardOutputSchema = z
         statusOptions: z.array(StatusOptionOutputSchema).optional(),
         columns: z.array(KanbanColumnOutputSchema).optional(),
         totalItems: z.number().optional(),
+        itemDirectory: z
+            .array(
+                z.object({
+                    id: z.string(),
+                    title: z.string(),
+                    status: z.string().nullable(),
+                })
+            )
+            .optional(),
+        summaryOnly: z.boolean().optional(),
         owner: z.string().optional(),
         detectedOwner: z.string().nullable().optional(),
         detectedRepo: z.string().nullable().optional(),
@@ -185,15 +211,24 @@ export const KanbanBoardOutputSchema = z
 
 export const MoveKanbanItemOutputSchema = z
     .object({
-        success: z.boolean().optional(),
         itemId: z.string().optional(),
         newStatus: z.string().optional(),
         projectNumber: z.number().optional(),
-        message: z.string().optional(),
-        error: z.string().optional(),
-        requiresUserInput: z.boolean().optional(),
-        hint: z.string().optional(),
         availableStatuses: z.array(z.string()).optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const AddKanbanItemOutputSchema = z
+    .object({
+        itemId: z.string().optional(),
+        projectNumber: z.number().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const DeleteKanbanItemOutputSchema = z
+    .object({
+        itemId: z.string().optional(),
+        projectNumber: z.number().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 

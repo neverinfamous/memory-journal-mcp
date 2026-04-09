@@ -23,6 +23,7 @@ import {
     ImportanceBreakdownSchema,
     relaxedNumber,
     TagOutputSchema,
+    MAX_QUERY_LIMIT,
 } from './schemas.js'
 
 // ============================================================================
@@ -83,7 +84,7 @@ const GetEntryByIdSchemaMcp = z.object({
 })
 
 const GetRecentEntriesSchema = z.object({
-    limit: z.number().max(500).optional().default(5),
+    limit: z.number().min(1).max(MAX_QUERY_LIMIT).optional().default(5),
     is_personal: z.boolean().optional(),
 })
 

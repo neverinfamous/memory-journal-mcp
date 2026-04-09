@@ -63,19 +63,21 @@ async function buildBriefingData(
     context: ResourceContext,
     targetRepo?: string
 ): Promise<ResourceResult> {
-    const config = context.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
+    const config = { ...DEFAULT_BRIEFING_CONFIG, ...context.briefingConfig }
 
-    // If targetRepo is provided, override the GitHubIntegration just for this briefing call
     let activeGithub = context.github
+    let activeProjectNumber = config.defaultProjectNumber
+
     if (targetRepo && config.projectRegistry?.[targetRepo]) {
         const repoPath = config.projectRegistry[targetRepo].path
         activeGithub = new GitHubIntegration(repoPath)
+        activeProjectNumber = config.projectRegistry[targetRepo].project_number ?? undefined
     }
 
     // Build all sections
-    const journal = buildJournalContext(context, config)
+    const journal = buildJournalContext(context, config, activeProjectNumber)
     const github = await buildGitHubSection(activeGithub, config)
-    const team = buildTeamContext(context, config)
+    const team = buildTeamContext(context, config, activeProjectNumber)
     const rulesFile = buildRulesFileInfo(config.rulesFilePath)
     const skillsDir = buildSkillsDirInfo(config.skillsDirPath)
 
@@ -84,12 +86,17 @@ async function buildBriefingData(
         ? `#${journal.latestEntries[0].id} (${journal.latestEntries[0].type}): ${journal.latestEntries[0].preview}`
         : 'No entries yet'
 
+    const summaryPreviews = journal.sessionSummaries
+        ? journal.sessionSummaries.map((s) => `#${s.id} (${s.type}): ${s.preview}`)
+        : null
+
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
         branchName: github?.branch ?? 'unknown',
         ciStatus: github?.ci ?? 'unknown',
         totalEntries: journal.totalEntries,
         latestPreview,
+        summaryPreviews,
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,
         rulesFile,
@@ -103,6 +110,9 @@ async function buildBriefingData(
             journal: {
                 totalEntries: journal.totalEntries,
                 latestEntries: journal.latestEntries,
+                ...(journal.latestSessionSummary
+                    ? { latestSessionSummary: journal.latestSessionSummary }
+                    : {}),
             },
             github,
             teamContext: team?.teamInfo,

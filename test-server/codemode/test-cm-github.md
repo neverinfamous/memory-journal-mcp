@@ -17,7 +17,7 @@ Test all 16 GitHub tools via Code Mode: read-only lookups, error paths, Kanban o
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -248,16 +248,16 @@ return {
 
 ## Success Criteria
 
-- [ ] All 16 GitHub tools callable via `mj.github.*`
-- [ ] `get_github_context` returns repo and branch info
-- [ ] `get_github_issues` and `get_github_prs` support `state` filter (open/closed/all)
-- [ ] Single issue/PR lookups return expected fields
-- [ ] Nonexistent issue/PR/milestone return structured errors
-- [ ] Kanban board returns columns with statusOptions
-- [ ] `move_kanban_item` with invalid status returns error with `availableStatuses`
-- [ ] Issue lifecycle (create → close) works end-to-end via Code Mode
-- [ ] `close_github_issue_with_entry` returns error for already-closed issues
-- [ ] Milestone CRUD lifecycle (create → update → close → delete) works via Code Mode
-- [ ] `get_repo_insights` returns star/fork data
-- [ ] `get_copilot_reviews` returns review state
-- [ ] All test artifacts cleaned up
+- [x] All 16 GitHub tools callable via `mj.github.*`
+- [x] `get_github_context` returns repo and branch info
+- [x] `get_github_issues` and `get_github_prs` support `state` filter (open/closed/all)
+- [x] Single issue/PR lookups return expected fields
+- [x] Nonexistent issue/PR/milestone return structured errors
+- [x] Kanban board returns columns with statusOptions
+- [x] `move_kanban_item` with invalid status returns error with `availableStatuses`
+- [x] Issue lifecycle (create → close) works end-to-end via Code Mode
+- [x] `close_github_issue_with_entry` returns error for already-closed issues
+- [x] Milestone CRUD lifecycle (create → update → close → delete) works via Code Mode
+- [x] `get_repo_insights` returns star/fork data
+- [x] `get_copilot_reviews` returns review state
+- [x] All test artifacts cleaned up

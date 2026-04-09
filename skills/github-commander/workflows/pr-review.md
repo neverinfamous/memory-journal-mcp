@@ -1,3 +1,7 @@
+---
+description: Review an open pull request with validation pipeline and structured findings
+---
+
 # PR Review
 
 Review an open pull request with optional validation pipeline and structured
@@ -47,8 +51,8 @@ findings.
 3. Run validation gates (same as issue-triage Phase 3):
    - Gate 1: Lint + Typecheck
    - Gate 2: Build
-   - Gate 3: Unit/Integration Tests
-   - Gate 4: E2E Tests
+   - Gate 3: Unit/Integration Tests _(Agent Note: Ensure OutputCharacterCount >= 10000 on test execution)_
+   - Gate 4: E2E Tests _(Agent Note: Ensure OutputCharacterCount >= 10000)_
    - Gate 5: Security Scans (auto-detected)
 
    Journal each gate result as in issue-triage.
@@ -108,10 +112,12 @@ Journal review completion:
 create_entry({
   content: "Completed review of PR #<N>: <decision>. Findings: <count>. Gates: <summary>.",
   entry_type: "review_complete",
-  tags: ["commander", "review"],
+  tags: ["commander", "review", "<decision>"],
   pr_number: <N>
 })
 ```
+
+_Kanban Sync:_ If the review decision was **Approved**, prompt the user (or execute if explicitly permitted) to merge the PR. Merging the PR securely merges the code and triggers GitHub automation to move the linked Kanban Issue card to the "Done" state, safely completing the execution chain initiated by `roadmap-kickoff`.
 
 ## Phase 5 — Session Summary
 

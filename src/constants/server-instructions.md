@@ -2,7 +2,7 @@
 
 # memory-journal-mcp
 
-## ESSENTIAL SESSION START!
+## **ESSENTIAL SESSION START!**
 
 1. You **MUST** read the `memory://briefing/{repo_name}` at the start of each chat!
 2. Use the standard MCP `read_resource` tool for this (do NOT use Code Mode/execute_code).
@@ -63,6 +63,13 @@ When you notice the user consistently applies patterns, preferences, or workflow
 - Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
 - For skills, explain the workflow it would automate and what triggers it
 
+### Native Agent Skills (NPM Distribution)
+
+This server leverages the `neverinfamous-agent-skills` package. If the user's `SKILLS_DIR_PATH` environment variable targets these, you have native access to foundational frameworks (`mastering-typescript`, `react-best-practices`, `playwright-standard`, `golang`, `rust`, `shadcn-ui`) and the `github-commander` DevOps workflows (`issue-triage`, `pr-review`, etc.).
+
+- The user can distribute or update these skills across their repositories by running `npx neverinfamous-agent-skills@latest`.
+- If you need to create a new skill, reference the bundled `skill-builder` instructions!
+
 <!-- SECTION:COPILOT -->
 
 ## Copilot Review Patterns
@@ -93,7 +100,7 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Search        | `mj.search.*`        | `mj.search.searchEntries("performance")`           |
 | Analytics     | `mj.analytics.*`     | `mj.analytics.getStatistics()`                     |
 | Relationships | `mj.relationships.*` | `mj.relationships.linkEntries(1, 2, "implements")` |
-| Export        | `mj.export.*`        | `mj.export.exportEntries("json")`                  |
+| IO            | `mj.io.*`            | `mj.io.exportEntries("json")`                      |
 | Admin         | `mj.admin.*`         | `mj.admin.rebuildVectorIndex()`                    |
 | GitHub        | `mj.github.*`        | `mj.github.getGithubIssues({ state: "open" })`     |
 | Backup        | `mj.backup.*`        | `mj.backup.backupJournal()`                        |
@@ -134,7 +141,7 @@ return entries.map((e) => ({ id: e.id, content: e.content.slice(0, 50) }))
 - Include `issue_number`/`pr_number` in `create_entry` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → `actions-failure-digest` prompt or `memory://actions/recent`
-- Kanban: `get_kanban_board` → `move_kanban_item` → document completion (project_number auto-resolves if repo is registered)
+- Kanban: `get_kanban_board` → `add_kanban_item` / `move_kanban_item` / `delete_kanban_item` → document completion (project_number auto-resolves if repo is registered)
 - Milestones: `get_github_milestones` → track project progress, `memory://github/milestones`
 - **Multi-Project Routing**: If `memory://briefing` shows "Registered Workspaces":
   - **Tools**: Pass a `repo` parameter to ALL GitHub tools (including `get_github_context`) to explicitly target a specific project.

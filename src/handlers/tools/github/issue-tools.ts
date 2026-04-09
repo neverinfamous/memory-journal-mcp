@@ -12,6 +12,7 @@ import type {
     SignificanceType,
 } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { ValidationError } from '../../../types/errors.js'
 import {
     CreateGitHubIssueWithEntryOutputSchema,
     CloseGitHubIssueWithEntryOutputSchema,
@@ -97,6 +98,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
+                            code: 'API_ERROR',
+                            category: 'api',
+                            suggestion: 'Verify GitHub token has write access to issues.',
+                            recoverable: true,
                         }
                     }
 
@@ -298,13 +303,21 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Issue #${String(input.issue_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the issue number exists in this repository.',
+                            recoverable: true,
                         }
                     }
 
                     if (issueDetails.state === 'CLOSED') {
                         return {
+                            ...formatHandlerError(
+                                new ValidationError(
+                                    `Issue #${String(input.issue_number)} is already closed`
+                                )
+                            ),
                             success: false,
-                            error: `Issue #${String(input.issue_number)} is already closed`,
                         }
                     }
 
@@ -319,6 +332,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.',
+                            code: 'API_ERROR',
+                            category: 'api',
+                            suggestion: 'Verify GitHub token has write access to issues.',
+                            recoverable: true,
                         }
                     }
 

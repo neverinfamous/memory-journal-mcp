@@ -67,6 +67,10 @@ program
         'Code Mode sandbox: "worker" (production, default) or "vm" (lightweight)',
         'worker'
     )
+    .option(
+        '--codemode-max-result-size <bytes>',
+        'Maximum Code Mode result size in bytes (default: 102400 / 100KB, env: CODE_MODE_MAX_RESULT_SIZE)'
+    )
     .option('--oauth-enabled', 'Enable OAuth 2.1 authentication (env: OAUTH_ENABLED)')
     .option('--oauth-issuer <url>', 'OAuth issuer URL (env: OAUTH_ISSUER)')
     .option('--oauth-audience <audience>', 'OAuth audience (env: OAUTH_AUDIENCE)')
@@ -103,6 +107,11 @@ program
         '3'
     )
     .option(
+        '--briefing-summaries <count>',
+        'Number of session summaries to show in briefing (env: BRIEFING_SUMMARY_COUNT)',
+        '1'
+    )
+    .option(
         '--briefing-include-team',
         'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'
     )
@@ -119,6 +128,11 @@ program
     .option(
         '--briefing-pr-status',
         'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'
+    )
+    .option(
+        '--briefing-milestones <count>',
+        'Number of milestones to list in briefing; 0 = hide (env: BRIEFING_MILESTONE_COUNT)',
+        '3'
     )
     .option(
         '--rules-file <path>',
@@ -165,16 +179,19 @@ program
             vacuumInterval: string
             rebuildIndexInterval: string
             sandboxMode: string
+            codemodeMaxResultSize?: string
             oauthEnabled?: boolean
             oauthIssuer?: string
             oauthAudience?: string
             oauthJwksUri?: string
             oauthClockTolerance: string
             briefingEntries: string
+            briefingSummaries: string
             briefingIncludeTeam?: boolean
             briefingIssues: string
             briefingPrs: string
             briefingPrStatus?: boolean
+            briefingMilestones: string
             rulesFile?: string
             skillsDir?: string
             briefingWorkflows: string
@@ -202,6 +219,13 @@ program
                 ...(options.teamDb ? { teamDb: options.teamDb } : {}),
                 ...(host ? { host } : {}),
             })
+
+            // Set CODE_MODE_MAX_RESULT_SIZE env var from CLI flag if provided
+            const codemodeMaxResultSize =
+                options.codemodeMaxResultSize ?? process.env['CODE_MODE_MAX_RESULT_SIZE']
+            if (codemodeMaxResultSize) {
+                process.env['CODE_MODE_MAX_RESULT_SIZE'] = codemodeMaxResultSize
+            }
 
             try {
                 // Build audit config from CLI options + env
@@ -251,7 +275,10 @@ program
                     oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],
                     oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
-                    oauthClockTolerance: parseInt(options.oauthClockTolerance, 10),
+                    oauthClockTolerance: parseInt(
+                        process.env['OAUTH_CLOCK_TOLERANCE'] ?? options.oauthClockTolerance,
+                        10
+                    ),
                     // Project Registry
                     projectRegistry: (() => {
                         const raw = process.env['PROJECT_REGISTRY']
@@ -272,6 +299,10 @@ program
                             process.env['BRIEFING_ENTRY_COUNT'] ?? options.briefingEntries,
                             10
                         ),
+                        summaryCount: parseInt(
+                            process.env['BRIEFING_SUMMARY_COUNT'] ?? options.briefingSummaries,
+                            10
+                        ),
                         includeTeam:
                             options.briefingIncludeTeam ??
                             process.env['BRIEFING_INCLUDE_TEAM'] === 'true',
@@ -286,6 +317,10 @@ program
                         prStatusBreakdown:
                             options.briefingPrStatus ??
                             process.env['BRIEFING_PR_STATUS'] === 'true',
+                        milestoneCount: parseInt(
+                            process.env['BRIEFING_MILESTONE_COUNT'] ?? options.briefingMilestones,
+                            10
+                        ),
                         rulesFilePath:
                             options.rulesFile ?? process.env['RULES_FILE_PATH'] ?? undefined,
                         skillsDirPath:

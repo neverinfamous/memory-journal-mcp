@@ -13,7 +13,7 @@
 3. **USER** verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
 4. Re-test fixes with **direct MCP calls**, not codemode.
 5. Brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -21,10 +21,12 @@
 
 ### 1. Legacy Export (`export_entries`)
 
-| Test            | Command/Action                                 | Expected Result                       |
-| --------------- | ---------------------------------------------- | ------------------------------------- |
-| Export JSON     | `export_entries(format: "json", limit: 5)`     | JSON export with `entries` array      |
-| Export markdown | `export_entries(format: "markdown", limit: 5)` | Markdown export with `content` string |
+| Test            | Command/Action                                                         | Expected Result                               |
+| --------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| Export JSON     | `export_entries(format: "json", limit: 5)`                             | JSON export with `entries` array              |
+| Export markdown | `export_entries(format: "markdown", limit: 5)`                         | Markdown export with `content` string         |
+| Export with tag | `export_entries(format: "json", tags: ["architecture"], limit: 10)`    | Only entries with "architecture" tag returned |
+| Export future   | `export_entries(format: "json", start_date: "2099-01-01", limit: 100)` | Returns 0 entries (date filter enforced)      |
 
 ### 2. Markdown File Orchestration (`export_markdown` & `import_markdown`)
 

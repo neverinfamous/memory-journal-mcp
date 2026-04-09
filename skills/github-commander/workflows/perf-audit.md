@@ -83,6 +83,8 @@ Run tests with verbose output:
 <PROJECT_TEST_CMD> -- --reporter=verbose
 ```
 
+_(Agent Note: Ensure OutputCharacterCount >= 10000 on test command execution to fully capture the summary line.)_
+
 Report:
 
 - Total suite duration

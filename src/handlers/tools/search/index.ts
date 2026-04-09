@@ -12,6 +12,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { ValidationError } from '../../../types/errors.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import {
     ENTRY_TYPES,
@@ -208,13 +209,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = SearchEntriesSchema.parse(params)
-                    const query = input.query || ''
+                    const query = input.query?.trim() || ''
                     const mode = input.mode as SearchMode
 
-                    // Resolve effective mode
-                    const { resolvedMode, isAuto } = resolveSearchMode(mode, query)
-
-                    // Empty query without filters → always use FTS (recent entries)
+                    // Validate: at least one filter or query must be provided to prevent bare searches
                     const hasFilters =
                         input.project_number !== undefined ||
                         input.issue_number !== undefined ||
@@ -227,7 +225,23 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.start_date !== undefined ||
                         input.end_date !== undefined
 
-                    const effectiveMode = !query && !hasFilters ? 'fts' : resolvedMode
+                    if (!query && !hasFilters) {
+                        return {
+                            ...formatHandlerError(
+                                new ValidationError(
+                                    'Search requires either a query string or at least one filter',
+                                    { suggestion: 'Provide a search query or use get_recent_entries instead' }
+                                )
+                            ),
+                            entries: [],
+                            count: 0,
+                        }
+                    }
+
+                    // Resolve effective mode
+                    const { resolvedMode, isAuto } = resolveSearchMode(mode, query)
+
+                    const effectiveMode = resolvedMode
 
                     const searchOptions = {
                         limit: input.limit,

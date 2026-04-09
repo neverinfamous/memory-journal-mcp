@@ -16,7 +16,7 @@ Test team administration (update, delete, merge tags), analytics, relationships,
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -138,13 +138,13 @@ const mdExport = await mj.team.teamExportEntries({ format: 'markdown', limit: 5 
 const MOCK_DIR = 'cm_team_export'
 
 const ioExport = await mj.team.teamExportMarkdown({
-    output_dir: MOCK_DIR,
-    limit: 5
+  output_dir: MOCK_DIR,
+  limit: 5,
 })
 
 const ioImport = await mj.team.teamImportMarkdown({
-    source_dir: MOCK_DIR,
-    dry_run: true
+  source_dir: MOCK_DIR,
+  dry_run: true,
 })
 
 return {
@@ -153,7 +153,7 @@ return {
   ioExportSuccess: ioExport.success,
   ioExportedCount: ioExport.exported_count ?? 0,
   ioImportSuccess: ioImport.success,
-  ioImportDryRun: ioImport.dry_run
+  ioImportDryRun: ioImport.dry_run,
 }
 ```
 
@@ -194,12 +194,12 @@ return {
 
 ## Success Criteria
 
-- [ ] `team_update_entry` updates content, tags, and entry_type
-- [ ] `team_delete_entry` soft-deletes team entries
-- [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
-- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- [ ] `team_link_entries` creates relationships with duplicate detection
-- [ ] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
-- [ ] `team_export_entries` exports JSON and markdown with filters
-- [ ] `team_backup` creates named and auto-named backups
-- [ ] `team_list_backups` returns backup metadata
+- [] `team_update_entry` updates content, tags, and entry_type
+- [] `team_delete_entry` soft-deletes team entries
+- [] `team_merge_tags` consolidates tags — source removed, entries re-tagged
+- [] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
+- [] `team_link_entries` creates relationships with duplicate detection
+- [] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
+- [] `team_export_entries` exports JSON and markdown with filters
+- [] `team_backup` creates named and auto-named backups
+- [] `team_list_backups` returns backup metadata

@@ -16,13 +16,13 @@ Test tag management, export formats/filters, and the backup/restore lifecycle th
 3. After implementation, update `UNRELEASED.md` and commit without pushing. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. After user completes verification, re-test fixes with direct MCP calls.
 5. Provide a very brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
-## Phase 26: Admin, Backup & Export via Code Mode
+## Phase 27: Admin, Backup & Export via Code Mode
 
-### 26.1 Tag Management
+### 27.1 Tag Management
 
 ```javascript
 // Test code:
@@ -68,7 +68,7 @@ return {
 | `sameTagError`     | `true`   |
 | `nonexistentError` | `true`   |
 
-### 26.3 Backup & Restore
+### 27.2 Backup & Restore
 
 ```javascript
 // Test code:
@@ -124,13 +124,13 @@ return {
 
 ## Success Criteria
 
-- [ ] `list_tags` returns tag list via Code Mode
-- [ ] `merge_tags` consolidates tags correctly — source removed, target exists
-- [ ] `merge_tags` returns structured errors for same-tag and nonexistent source
+- [x] `list_tags` returns tag list via Code Mode
+- [x] `merge_tags` consolidates tags correctly — source removed, target exists
+- [x] `merge_tags` returns structured errors for same-tag and nonexistent source
 
-- [ ] `backup_journal` named and auto-named both succeed
-- [ ] `backup_journal` path traversal blocked with structured error
-- [ ] `list_backups` returns backup metadata
-- [ ] `restore_backup` succeeds with `revertedChanges` field
-- [ ] `restore_backup` nonexistent file returns structured error
-- [ ] `cleanup_backups` deletes old backups
+- [x] `backup_journal` named and auto-named both succeed
+- [x] `backup_journal` path traversal blocked with structured error
+- [x] `list_backups` returns backup metadata
+- [x] `restore_backup` succeeds with `revertedChanges` field
+- [x] `restore_backup` nonexistent file returns structured error
+- [x] `cleanup_backups` deletes old backups

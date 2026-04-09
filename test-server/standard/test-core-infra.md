@@ -13,7 +13,7 @@
 3. **USER** verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
 4. Re-test fixes with direct MCP calls.
 5. Brief final summary.
-   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total tokens used by this test pass.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 
@@ -39,7 +39,7 @@
 | Confirm `userMessage`            | Inspect briefing.userMessage     | Formatted table with project/branch/CI/journal stats                                                   |
 | Milestone progress row           | Inspect briefing.userMessage     | Table includes milestone progress row (e.g., "🚩 Milestones: X open")                                  |
 | Team DB row                      | Inspect briefing.userMessage     | Table includes "Team DB" row with team entry count (requires `TEAM_DB_PATH`)                           |
-| Template URIs                    | Check `templateResources` array  | 7 template URIs listed (includes `memory://milestones/{number}`)                                       |
+| Template URIs                    | Check `templateResources` array  | 11 template URIs listed (includes `memory://milestones/{number}`)                                      |
 | Workflow summary                 | Inspect `github.workflowSummary` | Present when `BRIEFING_WORKFLOW_STATUS=true` — has `passing`, `failing`, `pending`, `cancelled` counts |
 | Workflow named runs              | Inspect `workflowSummary.runs`   | Array of `{name, conclusion}` when `BRIEFING_WORKFLOW_COUNT > 0`; CI row shows icons (✅/❌)           |
 | Rules metadata                   | Inspect `rulesFile` field        | Present when `RULES_FILE_PATH` set — has `name`, `sizeKB`, `lastModified`                              |
@@ -58,14 +58,14 @@ npm run build
 # Test A — Instruction levels (essential < standard < full)
 node test-server/scripts/test-instruction-levels.mjs
 
-# Test B — Tool annotations (61 tools, 45 openWorldHint=false, 16 openWorldHint=true, 0 missing)
+# Test B — Tool annotations (67 tools, 45 openWorldHint=false, 22 openWorldHint=true, 0 missing)
 node test-server/scripts/test-tool-annotations.mjs
 ```
 
 | Check              | Expected                                                             |
 | ------------------ | -------------------------------------------------------------------- |
-| Instruction levels | essential (~1.5K) < standard (~1.7K) < full (~2.7K tokens)           |
-| Tool annotations   | 61 tools, all with `annotations`, 45 `false` + 16 `true` = 0 missing |
+| Instruction levels | essential (~1.9K) < standard (~2.2K) < full (~3.3K tokens)           |
+| Tool annotations   | 67 tools, all with `annotations`, 45 `false` + 22 `true` = 0 missing |
 
 ### 1.4 GitHub Status Resource
 
@@ -82,7 +82,7 @@ node test-server/scripts/test-tool-annotations.mjs
 - [ ] `test_simple` returns echo message
 - [ ] `memory://health` shows DB stats, vector index health, team DB block, and `scheduler.active: false`
 - [ ] `memory://briefing` returns complete JSON with all expected fields
-- [ ] Server instructions length respects `--instruction-level`: essential (~1.5K tokens) < standard (~1.7K) < full (~2.7K)
-- [ ] 45 core/local tools have `openWorldHint: false`; 16 GitHub tools have `openWorldHint: true` (61 total, 0 missing)
+- [ ] Server instructions length respects `--instruction-level`: essential (~1.9K tokens) < standard (~2.2K) < full (~3.3K)
+- [ ] 45 core/local tools have `openWorldHint: false`; 22 GitHub tools have `openWorldHint: true` (67 total, 0 missing)
 - [ ] `get_statistics` returns all 4 enhanced analytics metrics
 - [ ] `memory://github/status` returns compact JSON with CI, issues, PRs, milestones

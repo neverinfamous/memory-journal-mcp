@@ -191,13 +191,25 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                 `
                 )
 
+                const mappedEntries = entries.map((e: Record<string, unknown>) => ({
+                    id: e['id'],
+                    type:
+                        (e['entry_type'] as string | undefined) ??
+                        (e['entryType'] as string | undefined),
+                    timestamp: e['timestamp'],
+                    content:
+                        typeof e['content'] === 'string' && e['content'].length > 250
+                            ? e['content'].slice(0, 250) + '...'
+                            : e['content'],
+                }))
+
                 return {
                     messages: [
                         {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Track goals and milestones based on significant entries:\n\n${JSON.stringify(entries, null, 2)}\n\nSummarize progress toward goals and highlight achievements.`,
+                                text: `Track goals and milestones based on significant entries:\n\n${JSON.stringify(mappedEntries, null, 2)}\n\nSummarize progress toward goals and highlight achievements.`,
                             },
                         },
                     ],
