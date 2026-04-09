@@ -7,6 +7,9 @@
 import type { BriefingGitHub } from './github-section.js'
 import type { RulesFile, SkillsDir } from './context-section.js'
 
+const escapeTableCell = (text: string): string =>
+    text.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
+
 /**
  * Build the user-facing markdown table for the briefing.
  */
@@ -64,7 +67,7 @@ export function formatUserMessage(opts: {
             const titles = github.openIssueList
                 .map((i) => `#${String(i.number)} ${i.title}`)
                 .join(' · ')
-            issuesRow = `\n| **Issues** | ${String(github.openIssues)} open: ${titles} |`
+            issuesRow = `\n| **Issues** | ${String(github.openIssues)} open: ${escapeTableCell(titles)} |`
         } else {
             issuesRow = `\n| **Issues** | ${String(github.openIssues)} open |`
         }
@@ -80,7 +83,7 @@ export function formatUserMessage(opts: {
             const titles = github.openPrList
                 .map((p) => `#${String(p.number)} ${p.title}`)
                 .join(' · ')
-            prsRow = `\n| **PRs** | ${String(github.openPRs)} open: ${titles} |`
+            prsRow = `\n| **PRs** | ${String(github.openPRs)} open: ${escapeTableCell(titles)} |`
         } else {
             prsRow = `\n| **PRs** | ${String(github.openPRs)} open |`
         }
@@ -89,7 +92,7 @@ export function formatUserMessage(opts: {
     // Milestone row
     const milestoneRow =
         github?.milestones && github.milestones.length > 0
-            ? `\n| **Milestones** | ${github.milestones.map((m) => `${m.title} (${m.progress}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`).join(', ')} |`
+            ? `\n| **Milestones** | ${escapeTableCell(github.milestones.map((m) => `${m.title} (${m.progress}${m.dueOn ? `, due ${m.dueOn.split('T')[0] ?? ''}` : ''})`).join(', '))} |`
             : ''
 
     // Insights row
@@ -112,9 +115,6 @@ export function formatUserMessage(opts: {
     const copilotRow = github?.copilotReviews
         ? `\n| **Copilot** | ${String(github.copilotReviews.reviewed)} reviewed · ${String(github.copilotReviews.approved)} approved${github.copilotReviews.changesRequested > 0 ? ` · ${String(github.copilotReviews.changesRequested)} changes requested` : ''}${github.copilotReviews.totalComments > 0 ? ` (${String(github.copilotReviews.totalComments)} comments)` : ''} |`
         : ''
-
-    const escapeTableCell = (text: string): string =>
-        text.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
 
     const summariesOutput =
         summaryPreviews && summaryPreviews.length > 0

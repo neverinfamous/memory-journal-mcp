@@ -30,6 +30,7 @@ function createOctokitMock() {
     return {
         issues: {
             listForRepo: vi.fn(),
+            listComments: vi.fn(),
             get: vi.fn(),
             create: vi.fn(),
             update: vi.fn(),
@@ -308,6 +309,44 @@ describe('GitHubIntegration', () => {
             octokit.issues.get.mockRejectedValue(new Error('Not found'))
             const issue = await gh.getIssue('o', 'r', 999)
             expect(issue).toBeNull()
+        })
+    })
+
+    describe('getIssueComments', () => {
+        it('should return mapped comments and limit to 100', async () => {
+            octokit.issues.listComments.mockResolvedValue({
+                data: [
+                    { user: { login: 'u1' }, body: 'b1', created_at: '2025-01-01' },
+                ],
+            })
+            // limit requested is 200, should pass 100 to api
+            const comments = await gh.getIssueComments('o', 'r', 1, 200)
+            expect(comments).toHaveLength(1)
+            expect(octokit.issues.listComments).toHaveBeenCalledWith(expect.objectContaining({
+                owner: 'o',
+                repo: 'r',
+                issue_number: 1,
+                per_page: 100,
+            }))
+            expect(comments[0]!.author).toBe('u1')
+        })
+
+        it('should return cached comments', async () => {
+            octokit.issues.listComments.mockResolvedValue({
+                data: [{ user: { login: 'u1' }, body: 'b1', created_at: '2025-01-01' }],
+            })
+            await gh.getIssueComments('o', 'r', 1, 30) // cache it
+            expect(octokit.issues.listComments).toHaveBeenCalledTimes(1)
+            const cached = await gh.getIssueComments('o', 'r', 1, 30)
+            expect(cached).toHaveLength(1)
+            // Should not call API again
+            expect(octokit.issues.listComments).toHaveBeenCalledTimes(1)
+        })
+
+        it('should return empty when no octokit', async () => {
+            ;(gh as any).client.octokit = null
+            const comments = await gh.getIssueComments('o', 'r', 1)
+            expect(comments).toEqual([])
         })
     })
 

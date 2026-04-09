@@ -65,7 +65,9 @@ proc.stdout.on('data', (chunk) => {
                 }
             } else if (msg.id === 1 && !msg.error) {
                 // Initialize succeeded, send initialized and query tools
-                proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n')
+                proc.stdin.write(
+                    JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n'
+                )
                 proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n')
             }
         } catch {}

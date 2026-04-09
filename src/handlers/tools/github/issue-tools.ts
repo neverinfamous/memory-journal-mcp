@@ -12,6 +12,7 @@ import type {
     SignificanceType,
 } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { ValidationError } from '../../../types/errors.js'
 import {
     CreateGitHubIssueWithEntryOutputSchema,
     CloseGitHubIssueWithEntryOutputSchema,
@@ -311,12 +312,12 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
 
                     if (issueDetails.state === 'CLOSED') {
                         return {
+                            ...formatHandlerError(
+                                new ValidationError(
+                                    `Issue #${String(input.issue_number)} is already closed`
+                                )
+                            ),
                             success: false,
-                            error: `Issue #${String(input.issue_number)} is already closed`,
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'You cannot close an already closed issue.',
-                            recoverable: true,
                         }
                     }
 
