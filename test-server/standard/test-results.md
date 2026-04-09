@@ -2,7 +2,7 @@
 
 Last tested: April 9th, 2026
 
-*Note: The tracked token counts only reflect the estimated tokens that actually entered the context window.*
+_Note: The tracked token counts only reflect the estimated tokens that actually entered the context window._
 
 | Test Document                      | Approximate Token Usage |
 | :--------------------------------- | :---------------------- |
@@ -12,10 +12,10 @@ Last tested: April 9th, 2026
 | `test-core-io.md`                  | ~1,855                  |
 | `test-core-relationships.md`       | ~4,089                  |
 | `test-core-scheduler.md`           | ~18,857                 |
-| `test-core-search.md`              | ~114,127                |
+| `test-core-search.md`              | ~8,600                  |
 | `test-core-semantic.md`            | ~3,831                  |
 | `test-github.md`                   | ~6,785                  |
-| `test-integrity.md`                | ~365,837                |
+| `test-integrity.md`                | ~2,850                  |
 | `test-kanban-lifecycle.md`         | ~850                    |
 | `test-payload-lifeoptimization.md` | ~850                    |
 | `test-resources.md`                | ~359                    |
@@ -28,4 +28,4 @@ Last tested: April 9th, 2026
 | `test-tool-group-github.md`        | ~1,010                  |
 | `test-tool-group-search.md`        | ~4,650                  |
 | `test-tool-group-team.md`          | ~1,858                  |
-| **Total Estimated Tokens**         | **~556,801**            |
+| **Total Estimated Tokens**         | **~**                   |
