@@ -1,6 +1,6 @@
 {
   "name": "neverinfamous-agent-skills",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Foundational AI agent metacognitive skills and workflows for the Adamic ecosystem.",
   "type": "module",
   "main": "README.md",
@@ -14,11 +14,13 @@
     "github-commander/",
     "golang/",
     "mysql/",
+    "playwright-standard/",
     "postgres/",
     "rust/",
     "shadcn-ui/",
     "skill-builder/",
-    "sqlite/"
+    "sqlite/",
+    "vitest-standard/"
   ],
   "scripts": {
     "sync": "node bin/sync.js"
