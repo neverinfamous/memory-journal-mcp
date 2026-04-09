@@ -10,10 +10,11 @@
     "files": [
         "bin/",
         "README.md",
+        "autonomous-dev/",
         "bun/",
         "github-commander/",
+        "gitlab/",
         "golang/",
-        "mastering-typescript/",
         "mysql/",
         "playwright-standard/",
         "postgres/",
@@ -22,6 +23,7 @@
         "shadcn-ui/",
         "skill-builder/",
         "sqlite/",
+        "typescript/",
         "vitest-standard/"
     ],
     "scripts": {

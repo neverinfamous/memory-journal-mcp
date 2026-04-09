@@ -7,16 +7,23 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const projectDir = join(__dirname, '..', '..')
 
+const DEFAULT_CHECK_SCHEMAS_TIMEOUT_MS = 15000
+const configuredCheckSchemasTimeoutMs = Number.parseInt(process.env.CHECK_SCHEMAS_TIMEOUT_MS ?? '', 10)
+const checkSchemasTimeoutMs =
+    Number.isFinite(configuredCheckSchemasTimeoutMs) && configuredCheckSchemasTimeoutMs > 0
+        ? configuredCheckSchemasTimeoutMs
+        : DEFAULT_CHECK_SCHEMAS_TIMEOUT_MS
+
 const proc = spawn(process.execPath, ['dist/cli.js', '--instruction-level', 'essential'], {
     cwd: projectDir,
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
 const killTimeout = setTimeout(() => {
-    console.log('Timeout — killing process')
+    console.log(`Timeout after ${checkSchemasTimeoutMs}ms — killing process`)
     proc.kill()
     process.exit(1)
-}, 5000)
+}, checkSchemasTimeoutMs)
 
 let buffer = ''
 proc.stdout.on('data', (chunk) => {

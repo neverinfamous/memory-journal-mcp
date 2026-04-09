@@ -361,7 +361,11 @@ export class ProjectsManager {
             })
             return { success: false, error: errorMessage }
         } finally {
-            this.client.invalidateCache('kanban:')
+            try {
+                this.client.invalidateCache('kanban:')
+            } catch {
+                // Ignore cache invalidation errors
+            }
         }
     }
 
@@ -408,7 +412,11 @@ export class ProjectsManager {
             })
             return { success: false, error: errorMessage }
         } finally {
-            this.client.invalidateCache('kanban:')
+            try {
+                this.client.invalidateCache('kanban:')
+            } catch {
+                // Ignore cache invalidation errors
+            }
         }
     }
 
@@ -449,7 +457,11 @@ export class ProjectsManager {
             })
             return { success: false, error: errorMessage }
         } finally {
-            this.client.invalidateCache('kanban:')
+            try {
+                this.client.invalidateCache('kanban:')
+            } catch {
+                // Ignore cache invalidation errors
+            }
         }
     }
 }
