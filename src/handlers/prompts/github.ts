@@ -10,6 +10,15 @@ import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-co
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
 
+function formatPromptEntries(entries: any[], maxCount: number = 50) {
+    return entries.slice(0, maxCount).map((e: any) => ({
+        id: e.id,
+        type: e.entry_type || e.entryType,
+        timestamp: e.timestamp,
+        content: typeof e.content === 'string' && e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
+    }))
+}
+
 /**
  * Get GitHub prompt definitions
  */
@@ -42,7 +51,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Generate a status summary for Project #${String(projectNumber)}:\n\nEntries: ${JSON.stringify(entries, null, 2)}\n\nProvide: overview, recent activity, blockers, next steps.`,
+                                text: `Generate a status summary for Project #${String(projectNumber)}:\n\nEntries: ${JSON.stringify(formatPromptEntries(entries), null, 2)}\n\nProvide: overview, recent activity, blockers, next steps.`,
                             },
                         },
                     ],
@@ -73,7 +82,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Summarize PR #${String(prNumber)} activity:\n\nJournal entries: ${JSON.stringify(entries, null, 2)}\n\nProvide: summary of changes, decisions made, testing done.`,
+                                text: `Summarize PR #${String(prNumber)} activity:\n\nJournal entries: ${JSON.stringify(formatPromptEntries(entries), null, 2)}\n\nProvide: summary of changes, decisions made, testing done.`,
                             },
                         },
                     ],
@@ -104,7 +113,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Prepare for code review of PR #${String(prNumber)}:\n\nContext entries: ${JSON.stringify(entries, null, 2)}\n\nProvide: review checklist, areas of concern, testing recommendations.`,
+                                text: `Prepare for code review of PR #${String(prNumber)}:\n\nContext entries: ${JSON.stringify(formatPromptEntries(entries), null, 2)}\n\nProvide: review checklist, areas of concern, testing recommendations.`,
                             },
                         },
                     ],
@@ -135,7 +144,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Retrospective for PR #${String(prNumber)}:\n\nJournal entries: ${JSON.stringify(entries, null, 2)}\n\nProvide: what went well, challenges, lessons learned.`,
+                                text: `Retrospective for PR #${String(prNumber)}:\n\nJournal entries: ${JSON.stringify(formatPromptEntries(entries), null, 2)}\n\nProvide: what went well, challenges, lessons learned.`,
                             },
                         },
                     ],
@@ -165,7 +174,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Analyze CI/CD failures from these workflow entries:\n\n${JSON.stringify(entries, null, 2)}\n\nProvide: failure patterns, root causes, remediation steps.`,
+                                text: `Analyze CI/CD failures from these workflow entries:\n\n${JSON.stringify(formatPromptEntries(entries), null, 2)}\n\nProvide: failure patterns, root causes, remediation steps.`,
                             },
                         },
                     ],
@@ -199,7 +208,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Track milestones for Project #${String(projectNumber)}:\n\nMilestone entries: ${JSON.stringify(entries, null, 2)}\n\nProvide: progress summary, upcoming milestones, timeline.`,
+                                text: `Track milestones for Project #${String(projectNumber)}:\n\nMilestone entries: ${JSON.stringify(formatPromptEntries(entries), null, 2)}\n\nProvide: progress summary, upcoming milestones, timeline.`,
                             },
                         },
                     ],

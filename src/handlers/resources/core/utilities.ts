@@ -145,6 +145,10 @@ export const statisticsResource: InternalResourceDef = {
     },
 }
 
+let cachedRulesContent: string | null = null
+let rulesLastScanTime = 0
+const RULES_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
 export const rulesResource: InternalResourceDef = {
     uri: 'memory://rules',
     name: 'Rules File',
@@ -153,7 +157,7 @@ export const rulesResource: InternalResourceDef = {
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
-    handler: (_uri: string, _context: ResourceContext): ResourceResult => {
+    handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
         const rulesPath = process.env['RULES_FILE_PATH']
         if (!rulesPath) {
             return {
@@ -165,11 +169,26 @@ export const rulesResource: InternalResourceDef = {
             }
         }
         try {
-            const content = fs.readFileSync(rulesPath, 'utf8')
+            const stat = await fs.promises.stat(rulesPath)
+            const mtimeMs = stat.mtimeMs
+
+            if (cachedRulesContent && Date.now() - rulesLastScanTime < RULES_CACHE_TTL_MS) {
+                return {
+                    data: cachedRulesContent,
+                    annotations: {
+                        lastModified: new Date(mtimeMs).toISOString(),
+                    },
+                }
+            }
+
+            const content = await fs.promises.readFile(rulesPath, 'utf8')
+            cachedRulesContent = content
+            rulesLastScanTime = Date.now()
+
             return {
                 data: content,
                 annotations: {
-                    lastModified: new Date(fs.statSync(rulesPath).mtimeMs).toISOString(),
+                    lastModified: new Date(mtimeMs).toISOString(),
                 },
             }
         } catch (err) {
@@ -252,12 +271,12 @@ function getShippedSkillsDir(): string | undefined {
 }
 
 /** Scan a single skills directory and return skill entries. */
-function scanSkillsDir(
+async function scanSkillsDir(
     dir: string,
     source: string
-): { name: string; path: string; excerpt: string; source: string }[] {
+): Promise<{ name: string; path: string; excerpt: string; source: string }[]> {
     if (!fs.existsSync(dir)) return []
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true })
     const skills: { name: string; path: string; excerpt: string; source: string }[] = []
 
     for (const entry of entries) {
@@ -265,7 +284,7 @@ function scanSkillsDir(
         const skillMdPath = path.join(dir, entry.name, 'SKILL.md')
         if (!fs.existsSync(skillMdPath)) continue
 
-        const content = fs.readFileSync(skillMdPath, 'utf8')
+        const content = await fs.promises.readFile(skillMdPath, 'utf8')
         // Extract first non-empty non-header line as excerpt (up to 160 chars)
         const lines = content.split('\n')
         const excerptLine = lines.find(
@@ -286,7 +305,7 @@ export const skillsResource: InternalResourceDef = {
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-    handler: (_uri: string, _context: ResourceContext): ResourceResult => {
+    handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
         const userSkillsDir = process.env['SKILLS_DIR_PATH']
         const shippedSkillsDir = getShippedSkillsDir()
         const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
@@ -327,12 +346,12 @@ export const skillsResource: InternalResourceDef = {
             >()
 
             if (shippedSkillsDir) {
-                for (const skill of scanSkillsDir(shippedSkillsDir, 'shipped')) {
+                for (const skill of await scanSkillsDir(shippedSkillsDir, 'shipped')) {
                     skillMap.set(skill.name, skill)
                 }
             }
             if (userSkillsDir) {
-                for (const skill of scanSkillsDir(userSkillsDir, 'user')) {
+                for (const skill of await scanSkillsDir(userSkillsDir, 'user')) {
                     skillMap.set(skill.name, skill) // user overrides shipped
                 }
             }

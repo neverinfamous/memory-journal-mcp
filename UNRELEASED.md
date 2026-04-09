@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `docs/deployment.md` with comprehensive CI/CD deployment instructions and version bump checklist (migrated from copilot-mj-setup-instructions.md)
 - `BRIEFING_MILESTONE_COUNT` and `--briefing-milestones` configuration for configuring `memory://briefing` milestone counts.
 - `summary_only` and `item_limit` parameters for `get_kanban_board` — reduces token usage by up to 80% for large project boards
 - `truncate_body` parameter for `get_github_issue` and `get_github_pr` — default 800 chars, set to 0 for full body
@@ -22,3 +23,6 @@
 - Gate `publish` job in `gatekeeper.yml` to tag pushes only (`startsWith(github.ref, 'refs/tags/v')`); squash-merge pushes to `main` now run lint/test/security checks only, eliminating the double pipeline run on every release
 - Code Mode `maxResultSize` default reduced from 10 MB to 100 KB for context window protection (configurable via `CODE_MODE_MAX_RESULT_SIZE`)
 - `MAX_QUERY_LIMIT` (500) enforced in `get_recent_entries`, `get_github_issues`, `get_github_prs` strict handler schemas (was already in search tools)
+- Refactored `rulesResource`, `skillsResource`, and `scanSkillsDir` to use asynchronous `fs.promises` API to avoid blocking the Node event loop on polling
+- Implemented `formatPromptEntries` truncation helper in GitHub prompts and `goal-tracker` prompt to prevent infinite `JSON.stringify` context allocation
+- Added in-memory TTL caching (5 minutes) for the `memory://rules` resource using `fs.promises.stat` to verify timestamps
