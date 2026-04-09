@@ -19,47 +19,71 @@ Run this explicit code mode script internally. Configure it against an arbitrary
 
 ```javascript
 // Test configurations
-const TEST_ISSUE = 385; // Example fallback
 const PROJECT_NUM = 5;
 
 // Pipeline tracker
 const _stages = [];
 
 try {
-  // 1. Resolve issue nodeId seamlessly
-  const issue = await mj.github.getIssue(undefined, undefined, TEST_ISSUE);
-  if (!issue || !issue.nodeId) throw new Error("Could not find issue ID");
-  _stages.push({ step: "getIssue", nodeId: issue.nodeId });
+  // 1. Create temporary issue to test Kanban
+  const createResult = await mj.github.createIssue({ title: 'CM6 Test Kanban', owner: 'neverinfamous', repo: 'memory-journal-mcp' });
+  if (!createResult.success) throw new Error("Could not create issue");
+  const testIssue = createResult.issue.number;
+  _stages.push({ step: "createIssue", issue: testIssue });
 
-  // 2. Add to board
-  const project = await mj.github.getProjectKanban(undefined, PROJECT_NUM);
-  if (!project) throw new Error("Project not available");
+  // 2. Remove from default Kanban to test direct linkage
+  const initBoard = await mj.github.getKanbanBoard({ project_number: PROJECT_NUM });
+  let initItemId = null;
+  for(const col of initBoard.columns) {
+    for(const item of col.items) {
+      if(item.number === testIssue) initItemId = item.id;
+    }
+  }
+  if(initItemId) await mj.github.deleteKanbanItem({ project_number: PROJECT_NUM, item_id: initItemId });
   
-  const addResult = await mj.github.addProjectItem(project.projectId, issue.nodeId);
-  if (!addResult.success) throw new Error(`Add failed: ${addResult.error}`);
+  // Now add it back to test addKanbanItem
+  const addResult = await mj.github.addKanbanItem({ project_number: PROJECT_NUM, issue_number: testIssue, owner: 'neverinfamous', repo: 'memory-journal-mcp' });
+  if (!addResult.success) throw new Error(`Add failed: ${addResult.error || JSON.stringify(addResult)}`);
   _stages.push({ step: "addProjectItem", itemId: addResult.itemId });
 
   // 3. Move across statuses
-  const targetOption = project.statusOptions.find(o => o.name === 'Ready');
-  if(!targetOption) throw new Error("Target status not found");
+  const projectInfo = await mj.github.getKanbanBoard({ project_number: PROJECT_NUM });
+  const targetOption = projectInfo.statusOptions.find(o => o.name === 'Ready');
   
-  const moveResult = await mj.github.moveProjectItem(
-     project.projectId,
-     addResult.itemId,
-     project.statusFieldId,
-     targetOption.id
-  );
-  if (!moveResult.success) throw new Error(`Move failed: ${moveResult.error}`);
+  const moveResult = await mj.github.moveKanbanItem({
+     project_number: PROJECT_NUM,
+     item_id: addResult.itemId,
+     target_status: targetOption.name
+  });
+  if (!moveResult.success) throw new Error(`Move failed: ${moveResult.error || JSON.stringify(moveResult)}`);
   _stages.push({ step: "moveProjectItem", newStatus: 'Ready' });
 
-  // 4. Verify topological representation in itemDirectory using summaryOnly
-  // Actually getProjectKanban doesn't accept 'summaryOnly', its REST wrapper does. We just use standard get
+  // 4. Verify topological representation in columns (retry for eventual consistency)
+  let foundItem = null;
+  for(let i=0; i<3; i++) {
+     const verifyProject = await mj.github.getKanbanBoard({ project_number: PROJECT_NUM });
+     for (const col of verifyProject.columns) {
+        for (const item of col.items) {
+           if (item.id === addResult.itemId) {
+              foundItem = item;
+              break;
+           }
+        }
+        if (foundItem) break;
+     }
+     if (foundItem && foundItem.status === 'Ready') break;
+  }
+  
+  if(!foundItem) throw new Error("Item not found in project columns after move");
+  if(foundItem.status !== 'Ready') throw new Error(`Item status is ${foundItem.status}, expected Ready`);
   _stages.push({ step: "verifyBoardStructure", targetReached: true });
 
   // 5. Tear down
-  const deleteResult = await mj.github.deleteProjectItem(project.projectId, addResult.itemId);
-  if (!deleteResult.success) throw new Error(`Delete failed: ${deleteResult.error}`);
+  const deleteResult = await mj.github.deleteKanbanItem({ project_number: PROJECT_NUM, item_id: addResult.itemId });
+  if (!deleteResult.success) throw new Error(`Delete failed: ${deleteResult.error || JSON.stringify(deleteResult)}`);
   _stages.push({ step: "deleteProjectItem", detached: true });
+
+  await mj.github.closeIssue({ issue_number: testIssue, owner: 'neverinfamous', repo: 'memory-journal-mcp', comment: 'Testing complete' });
 
   return { success: true, stages: _stages };
 
