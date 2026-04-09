@@ -2,6 +2,8 @@
 
 Last tested: April 9th, 2026
 
+*Note: The tracked token counts only reflect the estimated tokens that actually entered the context window.*
+
 | Test Document                      | Approximate Token Usage |
 | :--------------------------------- | :---------------------- |
 | `test-core-admin.md`               | ~4,301                  |
