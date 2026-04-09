@@ -4,6 +4,7 @@
 
 ### Added
 
+- Expanded comprehensive test coverage suites across github integrations, workflow prompts, generic utilities, and vector search edge cases, pushing vitest overall line coverage above the 97% threshold
 - Bundled native foundational agent skills (`bun`, `github-commander`, `golang`, `mysql`, `playwright-standard`, `postgres`, `react-best-practices`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `typescript`, `vitest-standard`) for out-of-the-box system context
 - `roadmap-kickoff` and `update-deps` workflows
 - `docs/deployment.md` documentation
