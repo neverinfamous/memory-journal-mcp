@@ -26,7 +26,7 @@ export class MilestonesManager {
                 state,
                 per_page: limit,
                 sort: 'due_on',
-                direction: 'asc',
+                direction: 'desc',
             })
 
             const result = response.data.map((ms) => ({

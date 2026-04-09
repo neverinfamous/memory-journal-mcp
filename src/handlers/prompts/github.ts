@@ -10,12 +10,25 @@ import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-co
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
 
-function formatPromptEntries(entries: any[], maxCount: number = 50) {
-    return entries.slice(0, maxCount).map((e: any) => ({
-        id: e.id,
-        type: e.entry_type || e.entryType,
-        timestamp: e.timestamp,
-        content: typeof e.content === 'string' && e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
+interface FormattedPromptEntry {
+    id: unknown
+    type: unknown
+    timestamp: unknown
+    content: unknown
+}
+
+function formatPromptEntries(
+    entries: Record<string, unknown>[],
+    maxCount = 50
+): FormattedPromptEntry[] {
+    return entries.slice(0, maxCount).map((e) => ({
+        id: e['id'],
+        type: (e['entry_type'] as string | undefined) ?? (e['entryType'] as string | undefined),
+        timestamp: e['timestamp'],
+        content:
+            typeof e['content'] === 'string' && e['content'].length > 250
+                ? e['content'].slice(0, 250) + '...'
+                : e['content'],
     }))
 }
 

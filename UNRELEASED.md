@@ -26,3 +26,8 @@
 - Refactored `rulesResource`, `skillsResource`, and `scanSkillsDir` to use asynchronous `fs.promises` API to avoid blocking the Node event loop on polling
 - Implemented `formatPromptEntries` truncation helper in GitHub prompts and `goal-tracker` prompt to prevent infinite `JSON.stringify` context allocation
 - Added in-memory TTL caching (5 minutes) for the `memory://rules` resource using `fs.promises.stat` to verify timestamps
+
+### Fixed
+
+- Fixed strict-boolean-expressions and no-explicit-any ESLint/TypeScript errors in prompt handlers
+- Changed default sort direction in `getMilestones` to `desc` to correctly prioritize recent milestones in the `memory://briefing` summary
