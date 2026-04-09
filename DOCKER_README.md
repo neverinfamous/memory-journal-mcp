@@ -220,15 +220,11 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 }
 ```
 
-**Variants** (modify the config above):
-
-| Variant                 | Change                                                                           |
-| ----------------------- | -------------------------------------------------------------------------------- |
-| **Minimal (no GitHub)** | Remove the `-e GITHUB_TOKEN`, repo volume mount, and `env` block                 |
-| **Team collaboration**  | Add `-e`, `"TEAM_DB_PATH=/app/data/team.db"` to `args`                           |
-| **Code Mode only**      | Add `"--tool-filter"`, `"codemode"` to `args` (single tool, all 67 capabilities) |
-
-| **Briefing config** | Add `-e`, `"BRIEFING_ENTRY_COUNT=5"` to `args` (see env var table below) |
+**Variants** (modify the config array above):
+- **Minimal**: Remove `-e GITHUB_TOKEN`, repo mount, and `env` block.
+- **Team**: Add `-e "TEAM_DB_PATH=/app/data/team.db"`.
+- **Code Mode**: Add `"--tool-filter", "codemode"`.
+- **Briefing**: Add `-e "BRIEFING_ENTRY_COUNT=5"`.
 
 ### 4. Restart & Journal!
 
@@ -257,7 +253,9 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                |
 | `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                                   |
 | `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                |
+| `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`) |
 | `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (default: `3`)                                                                    |
+| `BRIEFING_SUMMARY_COUNT`          | Session summaries to list in briefing (CLI: `--briefing-summaries`; default: `1`)                             |
 | `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                                        |
 | `BRIEFING_MILESTONE_COUNT`        | Milestones to list in briefing; `0` = hide (default: `3`)                                                     |
 | `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                                   |
