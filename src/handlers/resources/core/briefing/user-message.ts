@@ -8,7 +8,7 @@ import type { BriefingGitHub } from './github-section.js'
 import type { RulesFile, SkillsDir } from './context-section.js'
 
 const escapeTableCell = (text: string): string =>
-    text.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
+    text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
 
 /**
  * Build the user-facing markdown table for the briefing.

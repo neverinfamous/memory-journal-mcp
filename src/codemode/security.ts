@@ -132,7 +132,7 @@ export class CodeModeSecurityManager {
                     `Result exceeds maximum size of ${String(limitKb)} KB (${String(actualKb)} KB returned). ` +
                         `Extract specific fields or aggregate data before returning. ` +
                         `Example: instead of \`return await mj.github.getKanbanBoard(5)\`, use ` +
-                        `\`const b = await mj.github.getKanbanBoard(5); return { columns: b.columns.length, totalItems: b.totalItems }\``
+                        `\`const b = await mj.github.getKanbanBoard(5); return { columns: b.columns?.length ?? 0, totalItems: b.totalItems }\``
                 )
             }
         } catch (error) {
