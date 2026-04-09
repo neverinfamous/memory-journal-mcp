@@ -43,9 +43,11 @@ The markdown body contains the full instructions the agent follows once the skil
 | `bun` | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler |
 | `github-commander` | GitHub pipeline workflows for orchestrating issues, regressions, and deployments |
 | `golang` | Master Go development with production-grade best practices from Google and Uber style guides |
+| `mastering-typescript` | Enterprise-grade TypeScript development with type-safe patterns, Zod validation, and modern tooling |
 | `mysql` | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations |
 | `playwright-standard` | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience |
 | `postgres` | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS |
+| `react-best-practices` | Vercel engineering guidelines for React/Next.js performance, hooks, and bundle optimization |
 | `rust` | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture |
 | `shadcn-ui` | Deep knowledge of shadcn/ui components, patterns, forms, and best practices |
 | `skill-builder` | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing |
