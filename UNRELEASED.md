@@ -37,7 +37,4 @@
 - Fixed cross-project context leakage in the `memory://briefing` resource by enforcing strict `projectNumber` bounding on Team and Journal summary queries
 - Fixed `test-cm-crud.md` verification logic for computed fields (`importance`, `relationships`) to accurately mirror actual `mj_execute_code` response structures
 - Fixed stale expectations in `test-core-infra.md`: template URI count (7→11), instruction token thresholds (~1.5K/~1.7K/~2.7K → ~1.9K/~2.2K/~3.3K), and tool annotation totals (61/16 → 67/22)
-
-### Verified
-
-- **Phase 3 (Text Search)**: Exhaustively tested direct MCP search operations including FTS5 operators (phrase, prefix, NOT, OR), fallback logic for `test's` and `100%`, hybrid RRF auto-mode, pure semantic mode, date ranges, and strict multi-parameter filters. All cases passed returning exactly expected payloads and cross-DB merge formats. No bugs detected.
+- Validated Phase 3.2 (Semantic Search) and Phase 3.3 (Data Analytics & Index Management) suites; verified precise parameter filtering (`is_personal`, `tags`, `similarity_threshold`) and accurate grouping schemas using direct tool invocation
