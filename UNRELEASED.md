@@ -16,6 +16,7 @@
 - `delete_kanban_item` tool — cleanly remove issues/items from a GitHub project Kanban board without deleting the issue
 - `CODE_MODE_MAX_RESULT_SIZE` env var and `--codemode-max-result-size` CLI flag for configurable Code Mode output cap
 - Agent-guidance error messages for Code Mode result size violations (includes actual KB returned, field extraction example)
+- Verified automated scheduler test suite for backup, vacuum, and vector index rebuild background jobs
 - `bodyTruncated`, `bodyFullLength` metadata in issue/PR detail output schemas
 - `itemCount`, `truncated`, `summaryOnly` metadata in Kanban output schema
 - Vitest tests for payload optimization: `result-size-cap`, `kanban-payload-optimization`, `github-body-truncation`, `max-query-limit` (32 new tests)
