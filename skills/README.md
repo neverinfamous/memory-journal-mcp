@@ -47,6 +47,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `postgres` | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS |
 | `rust` | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture |
 | `shadcn-ui` | Deep knowledge of shadcn/ui components, patterns, forms, and best practices |
+| `skill-builder` | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing |
 | `sqlite` | Production configurations for concurrency (WAL), typing (STRICT), and data integrity |
 
 ## Adding a Skill
