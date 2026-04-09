@@ -1,8 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import {
-    dynamicBriefingResource,
-} from '../../src/handlers/resources/core/briefing/index.js'
-import { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
 vi.mock('../../src/github/github-integration/index.js', () => ({
     GitHubIntegration: vi.fn(),
@@ -11,6 +7,11 @@ vi.mock('../../src/github/github-integration/index.js', () => ({
 vi.mock('../../src/handlers/resources/core/briefing/github-section.js', () => ({
     buildGitHubSection: vi.fn().mockResolvedValue({}),
 }))
+
+import {
+    dynamicBriefingResource,
+} from '../../src/handlers/resources/core/briefing/index.js'
+import { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
 vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => ({
     buildJournalContext: vi

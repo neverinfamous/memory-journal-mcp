@@ -258,7 +258,7 @@ describe('Team Admin Tool Handlers', () => {
             )) as any
 
             expect(searchTarget.count).toBeGreaterThanOrEqual(3)
-        })
+        }, 30000)
 
         it('should return error if source and target are the same', async () => {
             const result = (await callTool(

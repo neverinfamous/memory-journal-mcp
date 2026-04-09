@@ -25,6 +25,9 @@ const killTimeout = setTimeout(() => {
     process.exit(1)
 }, checkSchemasTimeoutMs)
 
+proc.stderr.pipe(process.stderr)
+proc.on('exit', () => clearTimeout(killTimeout))
+proc.on('error', () => clearTimeout(killTimeout))
 let buffer = ''
 proc.stdout.on('data', (chunk) => {
     buffer += chunk.toString()

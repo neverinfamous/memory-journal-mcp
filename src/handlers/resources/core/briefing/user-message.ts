@@ -124,9 +124,9 @@ export function formatUserMessage(opts: {
     return `📋 **Session Context Loaded**
 | Context | Value |
 |---------|-------|
-| **Project** | ${repoName} |
-| **Branch** | ${branchName} |
-| **CI** | ${ciDisplay} |
+| **Project** | ${escapeTableCell(repoName)} |
+| **Branch** | ${escapeTableCell(branchName)} |
+| **CI** | ${escapeTableCell(ciDisplay)} |
 | **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
 }
