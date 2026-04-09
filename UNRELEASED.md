@@ -34,3 +34,4 @@
 - Fixed strict-boolean-expressions and no-explicit-any ESLint/TypeScript errors in prompt handlers
 - Changed default sort direction in `getMilestones` to `desc` to correctly prioritize recent milestones in the `memory://briefing` summary
 - Fixed cross-project context leakage in the `memory://briefing` resource by enforcing strict `projectNumber` bounding on Team and Journal summary queries
+- Fixed `test-cm-crud.md` verification logic for computed fields (`importance`, `relationships`) to accurately mirror actual `mj_execute_code` response structures

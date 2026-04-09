@@ -108,13 +108,13 @@ return {
   hasEntryType: typeof full.entry?.entryType === 'string',
   hasContent: typeof full.entry?.content === 'string',
   hasTags: Array.isArray(full.entry?.tags),
-  fullRelCount: full.entry?.relationships?.length ?? 'none',
-  noRelCount: noRels.entry?.relationships?.length ?? 'none',
+  fullRelCount: full.relationships?.length ?? 'none',
+  noRelCount: noRels.relationships?.length ?? 'none',
 }
 ```
 
 > [!NOTE]
-> The `importance` and `importanceBreakdown` fields are not included in the `getEntryById` code-mode response. Use the direct `get_entry_by_id` tool call to access these computed fields.
+> The `importance`, `importanceBreakdown`, and `relationships` fields are returned at the top level of the `getEntryById` code-mode response, parallel to the `entry` object itself.
 
 | Check          | Expected                                |
 | -------------- | --------------------------------------- |
@@ -266,7 +266,7 @@ After testing, remove test entries created during Phase 20:
 - [ ] `create_entry` with `project_owner` persists the field
 - [ ] `create_entry` with `auto_context: false` creates entry without auto-generated context
 - [ ] `create_entry` with `issue_number` auto-populates `issueUrl`
-- [ ] `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` only available via direct tool call)
+- [ ] `get_entry_by_id` returns `entryType`, `content`, `tags` via Code Mode (note: `importance`/`importanceBreakdown` are available at the top level)
 - [ ] `get_entry_by_id` with `include_relationships: false` omits relationship data
 - [ ] `update_entry` updates content, tags, and entry_type — verified via read-back
 - [ ] `update_entry` `is_personal` toggle correctly changes personal status
