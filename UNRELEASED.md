@@ -28,6 +28,9 @@
 - Implemented payload truncation in GitHub prompts to prevent excessive context allocation
 - Added in-memory TTL caching for GitHub issue comments and `memory://rules` resource
 - Optimized CI `publish` workflow to run exclusively on tagged releases
+- **Dependency Updates**
+  - Updated `vitest` to `4.1.4`
+  - Updated `@vitest/coverage-v8` to `4.1.4`
 
 ### Fixed
 
