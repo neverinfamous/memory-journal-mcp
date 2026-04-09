@@ -19,6 +19,7 @@
 - `bodyTruncated`, `bodyFullLength` metadata in issue/PR detail output schemas
 - `itemCount`, `truncated`, `summaryOnly` metadata in Kanban output schema
 - Vitest tests for payload optimization: `result-size-cap`, `kanban-payload-optimization`, `github-body-truncation`, `max-query-limit` (32 new tests)
+- Verified Payload Optimization via Code Mode suite (Kanban throttling, body truncation, max query size, and result size caps)
 
 ### Changed
 
