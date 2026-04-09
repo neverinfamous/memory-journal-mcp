@@ -13,8 +13,9 @@ and a concrete fix suggestion. Group findings by category:
    feature flags
 2. **Duplication** — repeated logic that should be extracted into shared helpers
 3. **Import hygiene** — unused imports, missing imports, circular dependencies
-4. **Type safety** — `any` usage, loose type assertions (`as`), missing return
-   types on exported functions
+4. **Type safety** — `any` usage (use `unknown` instead), loose type assertions
+   (`as` — prefer `satisfies`), missing return types on exported functions,
+   and use of `enum`s (prefer literal union types)
 5. **Error handling** — typed error classes with descriptive messages including
    context. Propagate with stack traces; never silently swallow exceptions
 6. **Logging** — centralized logger with structured payloads. Module-prefixed
@@ -28,8 +29,9 @@ and a concrete fix suggestion. Group findings by category:
    named constants
 10. **Stale markers** — TODO, FIXME, HACK, XXX comments; outdated JSDoc;
     comments that contradict the code
-11. **Security** — unsanitized input, missing validation, overly permissive
-    schemas
+11. **Boundary Validation & Security** — ALWAYS use Zod (or equivalent) to
+    validate external boundaries. Flag blind-casting of payloads. Flag
+    unsanitized SQL interpolation, missing validation, overly permissive schemas
 12. **Performance** — unnecessary allocations in hot paths, missing early
     returns, redundant queries
 13. **Dependency hygiene** — unused dependencies, unlisted peer dependencies
@@ -70,7 +72,7 @@ After human approval:
 2. Run validation gates after all fixes:
    - Gate 1: Lint + Typecheck
    - Gate 2: Build
-   - Gate 3: Tests
+   - Gate 3: Tests *(Agent Note: Ensure OutputCharacterCount >= 10000 on test command execution to fully capture the summary line.)*
 3. Update changelog with audit fixes
 4. Commit with descriptive message:
    ```bash

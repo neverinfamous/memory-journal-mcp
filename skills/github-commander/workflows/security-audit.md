@@ -102,8 +102,8 @@ Perform static analysis of the source code for common vulnerability patterns:
    boundary checks
 4. **Prototype pollution** — unchecked `Object.assign()`, deep merge without
    prototype guards
-5. **Input validation gaps** — overly permissive schemas, missing validation on
-   API boundaries
+5. **Input validation gaps** — blind-casting external payloads without validation,
+   overly permissive schemas, missing `.strict()` on API boundaries (ALWAYS use Zod)
 6. **Authentication bypass** — endpoints accessible without auth checks
 7. **Error disclosure** — stack traces, database errors, or internal structure
    leaked in responses
@@ -114,7 +114,7 @@ If GitHub Actions workflows exist (`.github/workflows/`):
 
 1. **Action pinning** — verify `uses:` references use SHA commits, not tags
 2. **Secret handling** — verify secrets use `${{ secrets.* }}`, not inline values
-3. **Security gates** — verify security scans hard-fail (no `continue-on-error: true`)
+3. **Security gates** — verify security scans (e.g., Docker Scout, Trivy, CodeQL, npm audit) hard-fail on vulnerabilities (no `continue-on-error: true`)
 4. **Permissions** — verify workflow `permissions` follows least privilege
 
 ## Phase 8 — Findings Report

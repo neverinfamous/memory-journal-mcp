@@ -63,8 +63,8 @@ Run the standard validation gates from SKILL.md:
 
 1. **Gate 1**: Lint + Typecheck (`PROJECT_LINT_CMD`, `PROJECT_TYPECHECK_CMD`)
 2. **Gate 2**: Build (`PROJECT_BUILD_CMD`)
-3. **Gate 3**: Tests (`PROJECT_TEST_CMD`)
-4. **Gate 4**: E2E Tests (`PROJECT_E2E_CMD`)
+3. **Gate 3**: Tests (`PROJECT_TEST_CMD`) *(Agent Note: Ensure OutputCharacterCount >= 10000 on test execution)*
+4. **Gate 4**: E2E Tests (`PROJECT_E2E_CMD`) *(Agent Note: Ensure OutputCharacterCount >= 10000)*
 
 Journal each gate result. Fix any failures caused by dependency updates.
 

@@ -79,7 +79,7 @@ On failure → attempt fix → **HITL checkpoint** after 2 attempts.
 
 ### Gate 3: Unit/Integration Tests
 
-Run `PROJECT_TEST_CMD` (default: `npm run test`).
+Run `PROJECT_TEST_CMD` (default: `npm run test`). *(Agent Note: Ensure OutputCharacterCount >= 10000 on test execution)*
 
 On failure:
 
@@ -90,7 +90,7 @@ On failure:
 
 ### Gate 4: E2E Tests
 
-Run `PROJECT_E2E_CMD` (default: empty = skip).
+Run `PROJECT_E2E_CMD` (default: empty = skip). *(Agent Note: Ensure OutputCharacterCount >= 10000)*
 Skip if not configured. Same failure handling as Gate 3.
 
 ### Gate 5: Security Scans
