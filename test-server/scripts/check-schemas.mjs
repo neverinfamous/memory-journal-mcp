@@ -63,6 +63,10 @@ proc.stdout.on('data', (chunk) => {
                     console.log('ALL TOOLS HAVE OUTPUT SCHEMA!')
                     process.exit(0)
                 }
+            } else if (msg.id === 1 && !msg.error) {
+                // Initialize succeeded, send initialized and query tools
+                proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n')
+                proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n')
             }
         } catch {}
     }
@@ -80,11 +84,3 @@ proc.stdin.write(
         },
     }) + '\n'
 )
-setTimeout(() => {
-    proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n')
-    setTimeout(() => {
-        proc.stdin.write(
-            JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n'
-        )
-    }, 500)
-}, 1500)

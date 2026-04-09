@@ -155,6 +155,15 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             r.relationshipType === input.relationship_type
                     )
 
+                    if (existing) {
+                        return {
+                            success: true,
+                            relationship: existing,
+                            duplicate: true,
+                            message: 'Relationship already exists',
+                        }
+                    }
+
                     const fromEntry = db.getEntryById(input.from_entry_id)
                     const toEntry = db.getEntryById(input.to_entry_id)
                     if (!fromEntry || !toEntry) {
@@ -166,15 +175,6 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                                 )
                             ),
                             success: false,
-                        }
-                    }
-
-                    if (existing) {
-                        return {
-                            success: true,
-                            relationship: existing,
-                            duplicate: true,
-                            message: 'Relationship already exists',
                         }
                     }
 
