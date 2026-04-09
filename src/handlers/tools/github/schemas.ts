@@ -175,7 +175,7 @@ const StatusOptionOutputSchema = z.object({
 const KanbanColumnOutputSchema = z.object({
     status: z.string(),
     statusOptionId: z.string(),
-    items: z.array(KanbanItemOutputSchema).optional(),
+    items: z.array(KanbanItemOutputSchema),
     itemCount: z.number().optional(),
     truncated: z.boolean().optional(),
 })

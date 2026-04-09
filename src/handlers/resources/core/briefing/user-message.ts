@@ -114,7 +114,7 @@ export function formatUserMessage(opts: {
         : ''
 
     const escapeTableCell = (text: string): string =>
-        text.replace(/\|/g, '\\|').replace(/\n/g, '<br>')
+        text.replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
 
     const summariesOutput =
         summaryPreviews && summaryPreviews.length > 0

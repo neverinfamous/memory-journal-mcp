@@ -164,19 +164,6 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const fromEntry = db.getEntryById(input.from_entry_id)
-                    const toEntry = db.getEntryById(input.to_entry_id)
-                    if (!fromEntry || !toEntry) {
-                        return {
-                            ...formatHandlerError(
-                                new ResourceNotFoundError(
-                                    'Entry',
-                                    `from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)}`
-                                )
-                            ),
-                            success: false,
-                        }
-                    }
 
                     // linkEntries throws for nonexistent entries
                     const relationship = db.linkEntries(
