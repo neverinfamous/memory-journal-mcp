@@ -3,7 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.1.0...HEAD)
 
 ### Added
-- Bundled native foundational agent skills (`bun`, `github-commander`, `golang`, `mysql`, `playwright-standard`, `postgres`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `vitest-standard`) for out-of-the-box system context
+- Bundled native foundational agent skills (`bun`, `github-commander`, `golang`, `mastering-typescript`, `mysql`, `playwright-standard`, `postgres`, `react-best-practices`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `vitest-standard`) for out-of-the-box system context
 - `roadmap-kickoff` and `update-deps` workflows
 - `docs/deployment.md` documentation
 - `BRIEFING_MILESTONE_COUNT` environment variable and `--briefing-milestones` CLI flag
