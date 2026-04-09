@@ -30,3 +30,4 @@
 - Incorrect milestone sort direction in the `memory://briefing` reference
 - Cross-project context leakage in `memory://briefing` query scoping
 - Stale assertions in `test-cm-crud.md` and `test-core-infra.md` integration tests
+- `link_entries` tool ignoring soft-deleted state when creating new relationships

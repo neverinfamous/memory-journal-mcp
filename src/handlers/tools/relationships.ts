@@ -154,6 +154,19 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             r.relationshipType === input.relationship_type
                     )
 
+                    const fromEntry = db.getEntryById(input.from_entry_id)
+                    const toEntry = db.getEntryById(input.to_entry_id)
+                    if (!fromEntry || !toEntry) {
+                        return {
+                            success: false,
+                            error: `One or both entries not found (from: ${String(input.from_entry_id)}, to: ${String(input.to_entry_id)})`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify both entry IDs exist before linking',
+                            recoverable: true,
+                        }
+                    }
+
                     if (existing) {
                         return {
                             success: true,
