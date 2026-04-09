@@ -19,7 +19,6 @@
 - `bodyTruncated`, `bodyFullLength` metadata in issue/PR detail output schemas
 - `itemCount`, `truncated`, `summaryOnly` metadata in Kanban output schema
 - Vitest tests for payload optimization: `result-size-cap`, `kanban-payload-optimization`, `github-body-truncation`, `max-query-limit` (32 new tests)
-- Verified Phase 26/27 Admin, Backup & Export Code Mode capabilities and parity (100% test coverage)
 
 ### Changed
 
@@ -34,3 +33,4 @@
 
 - Fixed strict-boolean-expressions and no-explicit-any ESLint/TypeScript errors in prompt handlers
 - Changed default sort direction in `getMilestones` to `desc` to correctly prioritize recent milestones in the `memory://briefing` summary
+- Fixed cross-project context leakage in the `memory://briefing` resource by enforcing strict `projectNumber` bounding on Team and Journal summary queries

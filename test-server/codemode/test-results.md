@@ -5,7 +5,7 @@ Last tested: April 7th, 2026
 | Test Document                   | Approximate Token Usage | Notes |
 | :------------------------------ | :---------------------- | :---- |
 | `test-cm-admin-backup.md`       | ~141                    |       |
-| `test-cm-api-discovery.md`      | ~406                    |       |
+| `test-cm-api-discovery.md`      | ~376                    |       |
 | `test-cm-crud.md`               | ~720                    |       |
 | `test-cm-github.md`             | ~750                    |       |
 | `test-cm-io.md`                 | ~112                    |       |
@@ -19,4 +19,4 @@ Last tested: April 7th, 2026
 | `test-cm-team-crud.md`          | ~669                    |       |
 | `test-cm-team-vector-errors.md` | ~1,271                  |       |
 | `test-cm-workflows.md`          | ~295                    |       |
-| **Total Estimated Tokens**      | **~7,918**              |       |
+| **Total Estimated Tokens**      | **~7,888**              |       |

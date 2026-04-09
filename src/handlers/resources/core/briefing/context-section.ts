@@ -25,9 +25,13 @@ export interface JournalContext {
 
 export function buildJournalContext(
     context: ResourceContext,
-    config: BriefingConfig
+    config: BriefingConfig,
+    projectNumber?: number | null
 ): JournalContext {
-    const recentEntries = context.db.getRecentEntries(config.entryCount)
+    const recentEntries =
+        typeof projectNumber === 'number'
+            ? context.db.searchEntries('', { limit: config.entryCount, projectNumber })
+            : context.db.getRecentEntries(config.entryCount)
     const latestEntries = recentEntries.map((e) => {
         const content = e.content ?? ''
         return {
@@ -59,13 +63,17 @@ export interface TeamContext {
 
 export function buildTeamContext(
     context: ResourceContext,
-    config: BriefingConfig
+    config: BriefingConfig,
+    projectNumber?: number | null
 ): TeamContext | undefined {
     if (!context.teamDb) return undefined
 
     try {
         const teamTotalEntries = context.teamDb.getActiveEntryCount()
-        const teamRecent = context.teamDb.getRecentEntries(1)
+        const teamRecent =
+            typeof projectNumber === 'number'
+                ? context.teamDb.searchEntries('', { limit: 1, projectNumber })
+                : context.teamDb.getRecentEntries(1)
         const teamLatestEntry = teamRecent[0] as Record<string, unknown> | undefined
         const teamContent = teamLatestEntry
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
@@ -83,7 +91,10 @@ export function buildTeamContext(
             | undefined = undefined
 
         if (config.includeTeam) {
-            const teamEntries = context.teamDb.getRecentEntries(config.entryCount)
+            const teamEntries =
+                typeof projectNumber === 'number'
+                    ? context.teamDb.searchEntries('', { limit: config.entryCount, projectNumber })
+                    : context.teamDb.getRecentEntries(config.entryCount)
             teamLatestEntries = teamEntries.map((e) => {
                 const content = e.content ?? ''
                 return {

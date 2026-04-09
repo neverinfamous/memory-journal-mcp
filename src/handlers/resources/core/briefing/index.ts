@@ -65,17 +65,19 @@ async function buildBriefingData(
 ): Promise<ResourceResult> {
     const config = context.briefingConfig ?? DEFAULT_BRIEFING_CONFIG
 
-    // If targetRepo is provided, override the GitHubIntegration just for this briefing call
     let activeGithub = context.github
+    let activeProjectNumber = config.defaultProjectNumber
+
     if (targetRepo && config.projectRegistry?.[targetRepo]) {
         const repoPath = config.projectRegistry[targetRepo].path
         activeGithub = new GitHubIntegration(repoPath)
+        activeProjectNumber = config.projectRegistry[targetRepo].project_number ?? undefined
     }
 
     // Build all sections
-    const journal = buildJournalContext(context, config)
+    const journal = buildJournalContext(context, config, activeProjectNumber)
     const github = await buildGitHubSection(activeGithub, config)
-    const team = buildTeamContext(context, config)
+    const team = buildTeamContext(context, config, activeProjectNumber)
     const rulesFile = buildRulesFileInfo(config.rulesFilePath)
     const skillsDir = buildSkillsDirInfo(config.skillsDirPath)
 
