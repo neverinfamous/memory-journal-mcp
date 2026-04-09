@@ -126,7 +126,8 @@ When you notice the user consistently applies patterns, preferences, or workflow
 
 ### Native Agent Skills (NPM Distribution)
 
-This server leverages the \`neverinfamous-agent-skills\` package. If the user's \`SKILLS_DIR_PATH\` environment variable targets these, you have native access to foundational frameworks (\`mastering-typescript\`, \`react-best-practices\`, \`playwright-standard\`, \`golang\`, \`rust\`, \`shadcn-ui\`) and the \`github-commander\` DevOps workflows (\`issue-triage\`, \`pr-review\`, etc.). 
+This server leverages the \`neverinfamous-agent-skills\` package. If the user's \`SKILLS_DIR_PATH\` environment variable targets these, you have native access to foundational frameworks (\`mastering-typescript\`, \`react-best-practices\`, \`playwright-standard\`, \`golang\`, \`rust\`, \`shadcn-ui\`) and the \`github-commander\` DevOps workflows (\`issue-triage\`, \`pr-review\`, etc.).
+
 - The user can distribute or update these skills across their repositories by running \`npx neverinfamous-agent-skills@latest\`.
 - If you need to create a new skill, reference the bundled \`skill-builder\` instructions!
 `
@@ -178,61 +179,16 @@ function buildQuickAccess(groups: Set<ToolGroup>): string {
  * Code Mode namespace row definitions.
  * Each maps a tool group to its Code Mode API namespace.
  */
-const CODE_MODE_NAMESPACE_ROWS: {
-    group: ToolGroup
-    label: string
-    namespace: string
-    example: string
-}[] = [
-    {
-        group: 'core',
-        label: 'Core',
-        namespace: '`mj.core.*`',
-        example: '`mj.core.createEntry("Implemented feature X")`',
-    },
-    {
-        group: 'search',
-        label: 'Search',
-        namespace: '`mj.search.*`',
-        example: '`mj.search.searchEntries("performance")`',
-    },
-    {
-        group: 'analytics',
-        label: 'Analytics',
-        namespace: '`mj.analytics.*`',
-        example: '`mj.analytics.getStatistics()`',
-    },
-    {
-        group: 'relationships',
-        label: 'Relationships',
-        namespace: '`mj.relationships.*`',
-        example: '`mj.relationships.linkEntries(1, 2, "implements")`',
-    },
+const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
+    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
+    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
+    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
+    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
     { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.exportEntries("json")`' },
-    {
-        group: 'admin',
-        label: 'Admin',
-        namespace: '`mj.admin.*`',
-        example: '`mj.admin.rebuildVectorIndex()`',
-    },
-    {
-        group: 'github',
-        label: 'GitHub',
-        namespace: '`mj.github.*`',
-        example: '`mj.github.getGithubIssues({ state: "open" })`',
-    },
-    {
-        group: 'backup',
-        label: 'Backup',
-        namespace: '`mj.backup.*`',
-        example: '`mj.backup.backupJournal()`',
-    },
-    {
-        group: 'team',
-        label: 'Team',
-        namespace: '`mj.team.*`',
-        example: '`mj.team.teamCreateEntry("Team update")`',
-    },
+    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
+    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
+    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
+    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
 ]
 
 /**
@@ -242,10 +198,9 @@ const CODE_MODE_NAMESPACE_ROWS: {
  */
 function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
     // Build namespace table with only enabled groups
-    const rows = CODE_MODE_NAMESPACE_ROWS.filter((r) => groups.has(r.group))
-        .map(
-            (r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`
-        )
+    const rows = CODE_MODE_NAMESPACE_ROWS
+        .filter((r) => groups.has(r.group))
+        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
         .join('\n')
 
     // Build the static behavioral text from the .md source,
@@ -258,10 +213,8 @@ function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
         return '\n' + fullSection
     }
     const beforeTable = fullSection.slice(0, tableStart)
-    const headerLine =
-        '| Group         | Namespace            | Example                                            |'
-    const separatorLine =
-        '| ------------- | -------------------- | -------------------------------------------------- |'
+    const headerLine = '| Group         | Namespace            | Example                                            |'
+    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
     const afterTable = fullSection.slice(tableEnd)
     return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
 }
@@ -426,6 +379,7 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 - **Team tools without \`TEAM_DB_PATH\`**: All 22 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
 
+
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
  *
@@ -533,3 +487,4 @@ export const SERVER_INSTRUCTIONS =
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS
+

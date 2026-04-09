@@ -17,6 +17,7 @@ proc.stdout.on('data', (chunk) => {
     buffer += chunk.toString()
 
     const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
     for (const line of lines) {
         const trimmed = line.trim()
         if (!trimmed) continue

@@ -316,7 +316,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'You cannot close an already closed issue.',
-                            recoverable: false,
+                            recoverable: true,
                         }
                     }
 

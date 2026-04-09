@@ -115,11 +115,12 @@ export class IssuesManager {
         issueNumber: number,
         limit = 30
     ): Promise<{ author: string; body: string; createdAt: string }[]> {
+        const _limit = Math.min(limit, 100)
         if (!this.client.octokit) {
             return []
         }
 
-        const cacheKey = `issue-comments:${owner}:${repo}:${String(issueNumber)}:${String(limit)}`
+        const cacheKey = `issue-comments:${owner}:${repo}:${String(issueNumber)}:${String(_limit)}`
         const cached = this.client.getCached(cacheKey) as
             | { author: string; body: string; createdAt: string }[]
             | undefined
@@ -130,12 +131,12 @@ export class IssuesManager {
                 owner,
                 repo,
                 issue_number: issueNumber,
-                per_page: Math.min(limit, 100),
+                per_page: _limit,
                 sort: 'created',
                 direction: 'asc',
             })
 
-            const comments = response.data.slice(0, limit).map((comment) => ({
+            const comments = response.data.slice(0, _limit).map((comment) => ({
                 author: comment.user?.login ?? 'unknown',
                 body: comment.body ?? '',
                 createdAt: comment.created_at,

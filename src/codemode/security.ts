@@ -126,7 +126,7 @@ export class CodeModeSecurityManager {
             // If stringification succeeded but the string itself is larger than the limit
             if (Buffer.byteLength(serialized, 'utf-8') > this.config.maxResultSize) {
                 const actualKb = Math.ceil(Buffer.byteLength(serialized, 'utf-8') / 1024)
-                const limitKb = Math.floor(this.config.maxResultSize / 1024)
+                const limitKb = Math.ceil(this.config.maxResultSize / 1024)
                 errors.push(
                     `Result exceeds maximum size of ${String(limitKb)} KB (${String(actualKb)} KB returned). ` +
                         `Extract specific fields or aggregate data before returning. ` +
