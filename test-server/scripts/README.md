@@ -11,6 +11,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 
 | Script                         | Tests                                                                                                                                 | Transport     | Duration |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
+| `check-schemas.mjs`            | `tools/list` validates that all tools (except `mj_execute_code`) contain a properly serialized `outputSchema` definition              | stdio         | ~5s      |
 | `test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
 | `test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
 | `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 16 true = 61)                                                                | stdio         | ~5s      |
