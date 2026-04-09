@@ -40,29 +40,14 @@ The markdown body contains the full instructions the agent follows once the skil
 
 | Skill | Description |
 |-------|-------------|
-| `agents-sdk` | Build AI agents on Cloudflare Workers using the Agents SDK |
-| `building-ai-agent-on-cloudflare` | End-to-end guide for stateful AI agents with WebSockets, state, and tools |
-| `building-mcp-server-on-cloudflare` | Remote MCP servers on Cloudflare Workers with OAuth and deployment |
 | `bun` | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler |
-| `cloudflare` | Comprehensive Cloudflare platform skill — decision trees, product index, retrieval sources |
-| `durable-objects` | Create and review Durable Objects — RPC, SQLite storage, alarms, WebSockets |
-| `github-repo-setup` | Scaffold public TypeScript/Node.js repos under `neverinfamous` |
+| `github-commander` | GitHub pipeline workflows for orchestrating issues, regressions, and deployments |
 | `golang` | Master Go development with production-grade best practices from Google and Uber style guides |
-| `mastering-typescript` | Master enterprise-grade TypeScript 6.0+ with type-safe patterns, Zod validation, and modern toolchains (Vite, pnpm, ESLint) |
-| `mcp-builder` | Build high-quality MCP servers with structured errors, HTTP hardening, OAuth, Code Mode, and dynamic instructions |
-| `next-best-practices` | Next.js file conventions, RSC boundaries, data patterns, metadata, error handling |
-| `next-cache-components` | Next.js 16 PPR, `use cache`, `cacheLife`, `cacheTag`, `updateTag` |
-| `next-upgrade` | Upgrade Next.js following official migration guides and codemods |
-| `playwright-standard` | Comprehensive, opinionated guidance for Playwright E2E, API, and visual tests with "Golden Rules" for resilience |
-| `react-best-practices` | React and Next.js performance optimization guidelines from Vercel Engineering |
+| `mysql` | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations |
+| `postgres` | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS |
 | `rust` | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture |
-| `sandbox-sdk` | Sandboxed code execution — interpreters, CI/CD, untrusted code |
 | `shadcn-ui` | Deep knowledge of shadcn/ui components, patterns, forms, and best practices |
-| `skill-builder` | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing |
-| `vitest-standard` | Production-grade unit testing with Vitest, emphasizing TDD, behavior-driven design, and clean mocking patterns |
-| `web-perf` | Chrome DevTools MCP performance auditing — Core Web Vitals, network, accessibility |
-| `workers-best-practices` | Cloudflare Workers production patterns — streaming, bindings, secrets, observability |
-| `wrangler` | Cloudflare Workers CLI for deploying and managing Workers and bindings |
+| `sqlite` | Production configurations for concurrency (WAL), typing (STRICT), and data integrity |
 
 ## Adding a Skill
 
