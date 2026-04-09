@@ -4,9 +4,6 @@
 
 ### Added
 
-- Validated Phase 19: Error Handling & Security perfectly via `codemode` test suite, covering input validation, malicious execution patterns, syntax/reference exceptions, and nulled global boundaries
-- Validated Phase 21: Search & Semantics functionality perfectly via `codemode` test suite, covering FTS5 queries, date ranges, filters, vectors, and analytics methods
-- Validated Phase 16: Sandbox Basics functionality perfectly via `codemode` test suite, covering simple expressions, async operations, execution metrics extraction, and timeout validation
 - Updated Code Mode API discoverability tests to accurately account for the `io` tool group addition
 - Added `roadmap-kickoff` and `update-deps` workflows to the `github-commander` skills package.
 - Added `docs/deployment.md` with comprehensive CI/CD deployment instructions and version bump checklist (migrated from copilot-mj-setup-instructions.md)

@@ -16,7 +16,7 @@ Last tested: April 7th, 2026
 | `test-cm-readonly.md`             | ~1,024                  |       |
 | `test-cm-relationships.md`        | ~312                    |       |
 | `test-cm-sandbox-basics.md`       | ~507                    |       |
-| `test-cm-search.md`               | ~388                    |       |
+| `test-cm-search.md`               | ~378                    |       |
 | `test-cm-security.md`             | ~1,071                  |       |
 | `test-cm-team-admin.md`           | ~194                    |       |
 | `test-cm-team-crud.md`            | ~669                    |       |
