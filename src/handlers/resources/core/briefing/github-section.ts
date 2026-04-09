@@ -63,7 +63,7 @@ export async function buildGitHubSection(
         const [ciStatus, issuesAndPrs, milestones, insights, copilotReviews] = await Promise.all([
             fetchCiStatus(github, owner, repo, config),
             fetchIssuesAndPrs(github, owner, repo, config),
-            fetchMilestones(github, owner, repo, config.milestoneCount),
+            fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
             fetchInsights(github, owner, repo),
             config.copilotReviews
                 ? fetchCopilotReviews(github, owner, repo)

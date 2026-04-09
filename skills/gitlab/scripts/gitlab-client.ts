@@ -25,7 +25,7 @@ export class GitLabClient {
             throw new Error('GITLAB_API_TOKEN is missing in environment or ~/.claude/.env')
         }
 
-        const host = process.env.GITLAB_URL || 'https://gitlab.lan.athonet.com'
+        const host = process.env.GITLAB_URL || 'https://gitlab.com'
 
         this.api = new Gitlab({
             host,

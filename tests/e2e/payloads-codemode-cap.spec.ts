@@ -29,10 +29,8 @@ test.describe('Payload Contracts: Code Mode Result Cap (E2E)', () => {
         })
 
         expect(typeof payload).toBe('object')
-        // Should not be an error — this is well under 100KB
-        if (payload.success !== undefined) {
-            expect(payload.success).not.toBe(false)
-        }
+        expect(payload.success).toBe(true)
+
     })
 
     test('mj_execute_code → oversized result returns structured error', async () => {
@@ -64,10 +62,6 @@ test.describe('Payload Contracts: Code Mode Result Cap (E2E)', () => {
             code: `return 'z'.repeat(50 * 1024);`,
         })
 
-        expect(typeof payload).toBe('object')
-        // Should succeed — well under cap
-        if (payload.success !== undefined) {
-            expect(payload.success).not.toBe(false)
-        }
+        expect(payload.success).toBe(true)
     })
 })

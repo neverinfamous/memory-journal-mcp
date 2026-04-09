@@ -23,8 +23,8 @@ import {
     ImportanceBreakdownSchema,
     relaxedNumber,
     TagOutputSchema,
+    MAX_QUERY_LIMIT,
 } from './schemas.js'
-import { MAX_QUERY_LIMIT } from './search/helpers.js'
 
 // ============================================================================
 // Input Schemas

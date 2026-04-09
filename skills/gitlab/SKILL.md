@@ -112,4 +112,4 @@ const results = await helper.searchCode('authenticate_user', 'group/project')
 The client reads settings from the environment:
 
 - `GITLAB_API_TOKEN` - Personal Access Token (required)
-- `GITLAB_URL` - GitLab instance URL (default: https://gitlab.lan.athonet.com)
+- `GITLAB_URL` - GitLab instance URL (default: https://gitlab.com)

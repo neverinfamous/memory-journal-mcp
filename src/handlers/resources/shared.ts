@@ -102,7 +102,7 @@ export interface BriefingConfig {
     /** Number of recent journal entries to include (default: 3) */
     entryCount: number
     /** Number of recent session summaries to display (default: 1) */
-    summaryCount: number
+    summaryCount?: number
     /** Include team DB entries in briefing preview (default: false) */
     includeTeam: boolean
     /** Number of open issues to list with titles; 0 = count only (default: 0) */
@@ -112,7 +112,7 @@ export interface BriefingConfig {
     /** Show PR status breakdown (open/merged/closed) instead of simple count (default: false) */
     prStatusBreakdown: boolean
     /** Number of milestones to list in briefing; 0 = hide (default: 3) */
-    milestoneCount: number
+    milestoneCount?: number
     /** Path to the user's rules file (e.g., .gemini/GEMINI.md) for awareness in briefing */
     rulesFilePath?: string
     /** Path to the user's skills directory for awareness in briefing */

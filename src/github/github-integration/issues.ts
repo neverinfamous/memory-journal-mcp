@@ -116,6 +116,7 @@ export class IssuesManager {
         limit = 30
     ): Promise<{ author: string; body: string; createdAt: string }[]> {
         const _limit = Math.min(limit, 100)
+        if (_limit <= 0) return []
         if (!this.client.octokit) {
             return []
         }
