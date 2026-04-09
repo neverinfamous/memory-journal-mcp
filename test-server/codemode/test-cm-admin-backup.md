@@ -20,9 +20,9 @@ Test tag management, export formats/filters, and the backup/restore lifecycle th
 
 ---
 
-## Phase 26: Admin, Backup & Export via Code Mode
+## Phase 27: Admin, Backup & Export via Code Mode
 
-### 26.1 Tag Management
+### 27.1 Tag Management
 
 ```javascript
 // Test code:
@@ -68,7 +68,7 @@ return {
 | `sameTagError`     | `true`   |
 | `nonexistentError` | `true`   |
 
-### 26.3 Backup & Restore
+### 27.2 Backup & Restore
 
 ```javascript
 // Test code:

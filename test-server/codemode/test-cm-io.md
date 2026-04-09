@@ -20,9 +20,9 @@ Test the unified IO namespace, testing both legacy `exportEntries` formats and t
 
 ---
 
-## Phase: IO & Interoperability via Code Mode
+## Phase 26: IO & Interoperability via Code Mode
 
-### 1. Legacy Export
+### 26.1 Legacy Export
 
 ```javascript
 // Test code:
@@ -51,7 +51,7 @@ return {
 | `mdHasContent`   | `true`                                        |
 | `tagFiltered`    | `true` (only entries with "architecture" tag) |
 
-### 2. Markdown File Orchestration
+### 26.2 Markdown File Orchestration
 
 ```javascript
 // Test code:

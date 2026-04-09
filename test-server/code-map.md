@@ -481,10 +481,19 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/codemode/test-cm-orchestration.md`      | Code mode — Phase 23: Cross-group orchestration (health, tags, full pipeline)   |
 | `test-server/codemode/test-cm-relationships.md`      | Code mode — Phase 24: Relationships & visualization (link, duplicate, Mermaid)  |
 | `test-server/codemode/test-cm-github.md`             | Code mode — Phase 25: GitHub tools (16 tools: read, Kanban, lifecycle, CRUD)    |
-| `test-server/codemode/test-cm-admin-backup.md`       | Code mode — Phase 26: Admin, backup & export (tags, export, backup lifecycle)   |
-| `test-server/codemode/test-cm-team-crud.md`          | Code mode — Phase 27.1-3: Team CRUD, error paths, date range search             |
-| `test-server/codemode/test-cm-team-admin.md`         | Code mode — Phase 27.4-8: Team admin, analytics, relationships, export, backup  |
-| `test-server/codemode/test-cm-team-vector-errors.md` | Code mode — Phase 27.9-10: Team vector, insights, cross-tool error verification |
+| `test-server/codemode/test-cm-io.md`                 | Code mode — Phase 26: IO & interoperability (export, Markdown orchestration)    |
+| `test-server/codemode/test-cm-admin-backup.md`       | Code mode — Phase 27: Admin, backup & export (tags, export, backup lifecycle)   |
+| `test-server/codemode/test-cm-team-crud.md`          | Code mode — Phase 28.1-3: Team CRUD, error paths, date range search             |
+| `test-server/codemode/test-cm-team-admin.md`         | Code mode — Phase 28.4-9: Team admin, analytics, relationships, export, backup  |
+| `test-server/codemode/test-cm-team-vector-errors.md` | Code mode — Phase 28.10-11: Team vector, insights, cross-tool error verification |
+| `test-server/codemode/test-cm-error-matrix.md`       | Code mode — Phase 29: Systematic Zod sweeps + type mismatches across all groups |
+| `test-server/standard/test-core-io.md`               | IO interoperability (legacy export, Markdown roundtrips)                         |
+| `test-server/standard/test-tool-group-core.md`       | Granular stress test — Core tools error matrix, Zod sweeps, boundaries          |
+| `test-server/standard/test-tool-group-admin.md`      | Granular stress test — Admin tools error matrix, Zod sweeps                     |
+| `test-server/standard/test-tool-group-backup.md`     | Granular stress test — Backup tools error matrix, filter enforcement            |
+| `test-server/standard/test-tool-group-search.md`     | Granular stress test — Search tools error matrix, limit/threshold boundaries    |
+| `test-server/standard/test-tool-group-github.md`     | Granular stress test — GitHub tools error matrix, OutputSchema compliance       |
+| `test-server/standard/test-tool-group-team.md`       | Granular stress test — Team tools error matrix, missing DB context              |
 | `test-server/test-agent-experience.md`               | Open-ended agent experience scenarios                                           |
 | `test-server/scripts/test-instruction-levels.mjs`    | Integration test — instruction level (essential/standard/full) token ordering   | \n  | `test-server/scripts/test-filter-instructions.mjs` | Integration test — filter-aware instruction sections per `--tool-filter` config; reports token estimates per filter combination |
 | `test-server/scripts/test-scheduler.mjs`             | Integration test — scheduler behavior                                           |
