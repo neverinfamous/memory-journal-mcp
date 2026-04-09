@@ -1,4 +1,5 @@
 ---
+name: shadcn-ui
 title: Skills
 description: Give your AI assistant deep knowledge of shadcn/ui components, patterns, and best practices.
 ---

@@ -1,7 +1,13 @@
 import { spawn } from 'child_process'
 
-const projectDir = 'C:\\Users\\chris\\Desktop\\memory-journal-mcp'
-const proc = spawn('node', ['dist/cli.js', '--instruction-level', 'essential'], {
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const projectDir = join(__dirname, '..', '..')
+
+const proc = spawn(process.execPath, ['dist/cli.js', '--instruction-level', 'essential'], {
     cwd: projectDir,
     stdio: ['pipe', 'pipe', 'pipe'],
 })
@@ -19,16 +25,16 @@ proc.stdout.on('data', (chunk) => {
             if (msg.id === 2) {
                 const tools = msg.result?.tools || []
                 console.log(`Total tools: ${tools.length}`)
-                
+
                 const missingNames = []
                 for (const tool of tools) {
                     if (tool.name === 'mj_execute_code') continue
-                    
+
                     if (!tool.outputSchema) {
                         missingNames.push(tool.name)
                     }
                 }
-                
+
                 if (missingNames.length > 0) {
                     console.log(`MISSING outputSchema: ${missingNames.join(', ')}`)
                 } else {
@@ -38,15 +44,28 @@ proc.stdout.on('data', (chunk) => {
                 clearTimeout(killTimeout)
                 process.exit(0)
             }
-        } catch { }
+        } catch {}
     }
 })
 
-proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } } }) + '\n')
+proc.stdin.write(
+    JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+            protocolVersion: '2025-03-26',
+            capabilities: {},
+            clientInfo: { name: 'test', version: '1.0' },
+        },
+    }) + '\n'
+)
 setTimeout(() => {
     proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n')
     setTimeout(() => {
-        proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n')
+        proc.stdin.write(
+            JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n'
+        )
     }, 500)
 }, 1500)
 

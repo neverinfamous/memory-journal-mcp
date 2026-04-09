@@ -52,15 +52,15 @@ src/
 
 ```typescript
 // users.module.ts
-import { Module } from '@nestjs/common';
-import { UsersController } from './users.controller';
-import { UsersService } from './users.service';
-import { UsersRepository } from './users.repository';
+import { Module } from '@nestjs/common'
+import { UsersController } from './users.controller'
+import { UsersService } from './users.service'
+import { UsersRepository } from './users.repository'
 
 @Module({
   controllers: [UsersController],
   providers: [UsersService, UsersRepository],
-  exports: [UsersService] // Export for use in other modules
+  exports: [UsersService], // Export for use in other modules
 })
 export class UsersModule {}
 ```
@@ -82,12 +82,12 @@ import {
   Body,
   Query,
   HttpCode,
-  HttpStatus
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, UserResponseDto } from './dto';
-import { PaginationDto } from '@/common/dto';
+  HttpStatus,
+} from '@nestjs/common'
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger'
+import { UsersService } from './users.service'
+import { CreateUserDto, UpdateUserDto, UserResponseDto } from './dto'
+import { PaginationDto } from '@/common/dto'
 
 @ApiTags('users')
 @Controller('users')
@@ -98,7 +98,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, type: [UserResponseDto] })
   async findAll(@Query() query: PaginationDto): Promise<UserResponseDto[]> {
-    return this.usersService.findAll(query);
+    return this.usersService.findAll(query)
   }
 
   @Get(':id')
@@ -106,7 +106,7 @@ export class UsersController {
   @ApiResponse({ status: 200, type: UserResponseDto })
   @ApiResponse({ status: 404, description: 'User not found' })
   async findOne(@Param('id') id: string): Promise<UserResponseDto> {
-    return this.usersService.findOne(id);
+    return this.usersService.findOne(id)
   }
 
   @Post()
@@ -114,23 +114,20 @@ export class UsersController {
   @ApiOperation({ summary: 'Create new user' })
   @ApiResponse({ status: 201, type: UserResponseDto })
   async create(@Body() dto: CreateUserDto): Promise<UserResponseDto> {
-    return this.usersService.create(dto);
+    return this.usersService.create(dto)
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update user' })
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateUserDto
-  ): Promise<UserResponseDto> {
-    return this.usersService.update(id, dto);
+  async update(@Param('id') id: string, @Body() dto: UpdateUserDto): Promise<UserResponseDto> {
+    return this.usersService.update(id, dto)
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete user' })
   async remove(@Param('id') id: string): Promise<void> {
-    return this.usersService.remove(id);
+    return this.usersService.remove(id)
   }
 }
 ```
@@ -151,68 +148,68 @@ import {
   IsOptional,
   IsEnum,
   ValidateNested,
-  IsArray
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+  IsArray,
+} from 'class-validator'
+import { Type } from 'class-transformer'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
 export enum UserRole {
   User = 'user',
   Admin = 'admin',
-  Moderator = 'moderator'
+  Moderator = 'moderator',
 }
 
 export class AddressDto {
   @ApiProperty()
   @IsString()
-  street: string;
+  street: string
 
   @ApiProperty()
   @IsString()
-  city: string;
+  city: string
 
   @ApiProperty()
   @IsString()
-  country: string;
+  country: string
 }
 
 export class CreateUserDto {
   @ApiProperty({ example: 'john@example.com' })
   @IsEmail()
-  email: string;
+  email: string
 
   @ApiProperty({ minLength: 2, maxLength: 50 })
   @IsString()
   @MinLength(2)
   @MaxLength(50)
-  name: string;
+  name: string
 
   @ApiProperty({ minLength: 8 })
   @IsString()
   @MinLength(8)
-  password: string;
+  password: string
 
   @ApiPropertyOptional({ enum: UserRole, default: UserRole.User })
   @IsOptional()
   @IsEnum(UserRole)
-  role?: UserRole = UserRole.User;
+  role?: UserRole = UserRole.User
 
   @ApiPropertyOptional({ type: AddressDto })
   @IsOptional()
   @ValidateNested()
   @Type(() => AddressDto)
-  address?: AddressDto;
+  address?: AddressDto
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  tags?: string[];
+  tags?: string[]
 }
 
 // dto/update-user.dto.ts
-import { PartialType } from '@nestjs/swagger';
-import { CreateUserDto } from './create-user.dto';
+import { PartialType } from '@nestjs/swagger'
+import { CreateUserDto } from './create-user.dto'
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {}
 ```
@@ -221,17 +218,17 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {}
 
 ```typescript
 // dto/user.schema.ts
-import { z } from 'zod';
-import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod'
+import { createZodDto } from 'nestjs-zod'
 
 // Define Zod schemas
-export const UserRoleSchema = z.enum(['user', 'admin', 'moderator']);
+export const UserRoleSchema = z.enum(['user', 'admin', 'moderator'])
 
 export const AddressSchema = z.object({
   street: z.string(),
   city: z.string(),
-  country: z.string()
-});
+  country: z.string(),
+})
 
 export const CreateUserSchema = z.object({
   email: z.string().email(),
@@ -239,45 +236,45 @@ export const CreateUserSchema = z.object({
   password: z.string().min(8),
   role: UserRoleSchema.default('user').optional(),
   address: AddressSchema.optional(),
-  tags: z.array(z.string()).optional()
-});
+  tags: z.array(z.string()).optional(),
+})
 
-export const UpdateUserSchema = CreateUserSchema.partial();
+export const UpdateUserSchema = CreateUserSchema.partial()
 
 // Create DTO classes from schemas
 export class CreateUserDto extends createZodDto(CreateUserSchema) {}
 export class UpdateUserDto extends createZodDto(UpdateUserSchema) {}
 
 // Infer types
-export type CreateUser = z.infer<typeof CreateUserSchema>;
-export type UpdateUser = z.infer<typeof UpdateUserSchema>;
+export type CreateUser = z.infer<typeof CreateUserSchema>
+export type UpdateUser = z.infer<typeof UpdateUserSchema>
 ```
 
 ### Global Validation Pipe
 
 ```typescript
 // main.ts
-import { ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common'
+import { NestFactory } from '@nestjs/core'
+import { AppModule } from './app.module'
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule)
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,           // Strip unknown properties
+      whitelist: true, // Strip unknown properties
       forbidNonWhitelisted: true, // Throw on unknown properties
-      transform: true,           // Transform payloads to DTO classes
+      transform: true, // Transform payloads to DTO classes
       transformOptions: {
-        enableImplicitConversion: true
-      }
+        enableImplicitConversion: true,
+      },
     })
-  );
+  )
 
-  await app.listen(3000);
+  await app.listen(3000)
 }
-bootstrap();
+bootstrap()
 ```
 
 ---
@@ -288,45 +285,45 @@ bootstrap();
 
 ```typescript
 // users.service.ts
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { UsersRepository } from './users.repository';
-import { CreateUserDto, UpdateUserDto, UserResponseDto } from './dto';
-import { PaginationDto } from '@/common/dto';
+import { Injectable, NotFoundException } from '@nestjs/common'
+import { UsersRepository } from './users.repository'
+import { CreateUserDto, UpdateUserDto, UserResponseDto } from './dto'
+import { PaginationDto } from '@/common/dto'
 
 @Injectable()
 export class UsersService {
   constructor(private readonly usersRepository: UsersRepository) {}
 
   async findAll(query: PaginationDto): Promise<UserResponseDto[]> {
-    const users = await this.usersRepository.findAll(query);
-    return users.map(this.toResponseDto);
+    const users = await this.usersRepository.findAll(query)
+    return users.map(this.toResponseDto)
   }
 
   async findOne(id: string): Promise<UserResponseDto> {
-    const user = await this.usersRepository.findById(id);
+    const user = await this.usersRepository.findById(id)
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException(`User with ID ${id} not found`)
     }
-    return this.toResponseDto(user);
+    return this.toResponseDto(user)
   }
 
   async create(dto: CreateUserDto): Promise<UserResponseDto> {
-    const user = await this.usersRepository.create(dto);
-    return this.toResponseDto(user);
+    const user = await this.usersRepository.create(dto)
+    return this.toResponseDto(user)
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<UserResponseDto> {
-    const user = await this.usersRepository.update(id, dto);
+    const user = await this.usersRepository.update(id, dto)
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException(`User with ID ${id} not found`)
     }
-    return this.toResponseDto(user);
+    return this.toResponseDto(user)
   }
 
   async remove(id: string): Promise<void> {
-    const deleted = await this.usersRepository.delete(id);
+    const deleted = await this.usersRepository.delete(id)
     if (!deleted) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException(`User with ID ${id} not found`)
     }
   }
 
@@ -336,8 +333,8 @@ export class UsersService {
       email: user.email,
       name: user.name,
       role: user.role,
-      createdAt: user.createdAt
-    };
+      createdAt: user.createdAt,
+    }
   }
 }
 ```
@@ -346,10 +343,10 @@ export class UsersService {
 
 ```typescript
 // users.repository.ts
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
-import { User, Prisma } from '@prisma/client';
-import { PaginationDto } from '@/common/dto';
+import { Injectable } from '@nestjs/common'
+import { PrismaService } from '@/prisma/prisma.service'
+import { User, Prisma } from '@prisma/client'
+import { PaginationDto } from '@/common/dto'
 
 @Injectable()
 export class UsersRepository {
@@ -359,36 +356,36 @@ export class UsersRepository {
     return this.prisma.user.findMany({
       skip: query.skip,
       take: query.take,
-      orderBy: { createdAt: 'desc' }
-    });
+      orderBy: { createdAt: 'desc' },
+    })
   }
 
   async findById(id: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { id } });
+    return this.prisma.user.findUnique({ where: { id } })
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { email } });
+    return this.prisma.user.findUnique({ where: { email } })
   }
 
   async create(data: Prisma.UserCreateInput): Promise<User> {
-    return this.prisma.user.create({ data });
+    return this.prisma.user.create({ data })
   }
 
   async update(id: string, data: Prisma.UserUpdateInput): Promise<User | null> {
     try {
-      return await this.prisma.user.update({ where: { id }, data });
+      return await this.prisma.user.update({ where: { id }, data })
     } catch {
-      return null;
+      return null
     }
   }
 
   async delete(id: string): Promise<boolean> {
     try {
-      await this.prisma.user.delete({ where: { id } });
-      return true;
+      await this.prisma.user.delete({ where: { id } })
+      return true
     } catch {
-      return false;
+      return false
     }
   }
 }
@@ -402,18 +399,18 @@ export class UsersRepository {
 
 ```typescript
 // auth/strategies/jwt.strategy.ts
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
-import { UsersService } from '@/modules/users/users.service';
+import { Injectable, UnauthorizedException } from '@nestjs/common'
+import { PassportStrategy } from '@nestjs/passport'
+import { ExtractJwt, Strategy } from 'passport-jwt'
+import { ConfigService } from '@nestjs/config'
+import { UsersService } from '@/modules/users/users.service'
 
 interface JwtPayload {
-  sub: string;
-  email: string;
-  role: string;
-  iat: number;
-  exp: number;
+  sub: string
+  email: string
+  role: string
+  iat: number
+  exp: number
 }
 
 @Injectable()
@@ -425,16 +422,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.getOrThrow<string>('JWT_SECRET')
-    });
+      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
+    })
   }
 
   async validate(payload: JwtPayload) {
-    const user = await this.usersService.findOne(payload.sub);
+    const user = await this.usersService.findOne(payload.sub)
     if (!user) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException()
     }
-    return { id: payload.sub, email: payload.email, role: payload.role };
+    return { id: payload.sub, email: payload.email, role: payload.role }
   }
 }
 ```
@@ -443,32 +440,32 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
 ```typescript
 // common/decorators/roles.decorator.ts
-import { SetMetadata } from '@nestjs/common';
+import { SetMetadata } from '@nestjs/common'
 
-export const ROLES_KEY = 'roles';
-export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+export const ROLES_KEY = 'roles'
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles)
 
 // common/guards/roles.guard.ts
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { ROLES_KEY } from '../decorators/roles.decorator';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
+import { ROLES_KEY } from '../decorators/roles.decorator'
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
-      ROLES_KEY,
-      [context.getHandler(), context.getClass()]
-    );
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ])
 
     if (!requiredRoles) {
-      return true;
+      return true
     }
 
-    const { user } = context.switchToHttp().getRequest();
-    return requiredRoles.includes(user.role);
+    const { user } = context.switchToHttp().getRequest()
+    return requiredRoles.includes(user.role)
   }
 }
 
@@ -479,13 +476,13 @@ export class AdminController {
   @Get('users')
   @Roles('admin')
   findAllUsers() {
-    return this.adminService.findAllUsers();
+    return this.adminService.findAllUsers()
   }
 
   @Delete('users/:id')
   @Roles('admin', 'moderator')
   removeUser(@Param('id') id: string) {
-    return this.adminService.removeUser(id);
+    return this.adminService.removeUser(id)
   }
 }
 ```
@@ -498,44 +495,38 @@ export class AdminController {
 
 ```typescript
 // common/filters/http-exception.filter.ts
-import {
-  ExceptionFilter,
-  Catch,
-  ArgumentsHost,
-  HttpException,
-  HttpStatus
-} from '@nestjs/common';
-import { Response } from 'express';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common'
+import { Response } from 'express'
 
 interface ErrorResponse {
-  statusCode: number;
-  message: string;
-  error: string;
-  timestamp: string;
-  path: string;
+  statusCode: number
+  message: string
+  error: string
+  timestamp: string
+  path: string
 }
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
-    const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest();
+    const ctx = host.switchToHttp()
+    const response = ctx.getResponse<Response>()
+    const request = ctx.getRequest()
 
-    let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
-    let error = 'Internal Server Error';
+    let status = HttpStatus.INTERNAL_SERVER_ERROR
+    let message = 'Internal server error'
+    let error = 'Internal Server Error'
 
     if (exception instanceof HttpException) {
-      status = exception.getStatus();
-      const exceptionResponse = exception.getResponse();
+      status = exception.getStatus()
+      const exceptionResponse = exception.getResponse()
 
       if (typeof exceptionResponse === 'string') {
-        message = exceptionResponse;
+        message = exceptionResponse
       } else if (typeof exceptionResponse === 'object') {
-        const responseObj = exceptionResponse as Record<string, unknown>;
-        message = (responseObj.message as string) || message;
-        error = (responseObj.error as string) || exception.name;
+        const responseObj = exceptionResponse as Record<string, unknown>
+        message = (responseObj.message as string) || message
+        error = (responseObj.error as string) || exception.name
       }
     }
 
@@ -544,22 +535,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message,
       error,
       timestamp: new Date().toISOString(),
-      path: request.url
-    };
+      path: request.url,
+    }
 
-    response.status(status).json(errorResponse);
+    response.status(status).json(errorResponse)
   }
 }
 
 // main.ts
-app.useGlobalFilters(new AllExceptionsFilter());
+app.useGlobalFilters(new AllExceptionsFilter())
 ```
 
 ### Custom Exceptions
 
 ```typescript
 // common/exceptions/business.exception.ts
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus } from '@nestjs/common'
 
 export class BusinessException extends HttpException {
   constructor(
@@ -567,25 +558,22 @@ export class BusinessException extends HttpException {
     public readonly code: string,
     status: HttpStatus = HttpStatus.BAD_REQUEST
   ) {
-    super({ message, code }, status);
+    super({ message, code }, status)
   }
 }
 
 export class InsufficientFundsException extends BusinessException {
   constructor(required: number, available: number) {
-    super(
-      `Insufficient funds: required ${required}, available ${available}`,
-      'INSUFFICIENT_FUNDS'
-    );
+    super(`Insufficient funds: required ${required}, available ${available}`, 'INSUFFICIENT_FUNDS')
   }
 }
 
 export class DuplicateEmailException extends BusinessException {
   constructor(email: string) {
-    super(`Email ${email} is already registered`, 'DUPLICATE_EMAIL');
+    super(`Email ${email} is already registered`, 'DUPLICATE_EMAIL')
   }
 }
 
 // Usage
-throw new InsufficientFundsException(100, 50);
+throw new InsufficientFundsException(100, 50)
 ```

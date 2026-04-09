@@ -11,7 +11,9 @@ describe('ProjectsManager - additional coverage', () => {
     })
 
     it('deleteProjectItem handles successful deletion', async () => {
-        const graphqlWithAuth = vi.fn().mockResolvedValue({ deleteProjectV2Item: { deletedItemId: 'item1' } })
+        const graphqlWithAuth = vi
+            .fn()
+            .mockResolvedValue({ deleteProjectV2Item: { deletedItemId: 'item1' } })
         const mockClient = { graphqlWithAuth, invalidateCache: vi.fn() } as unknown as GitHubClient
         const manager = new ProjectsManager(mockClient)
         const result = await manager.deleteProjectItem('proj1', 'item1')
@@ -38,7 +40,9 @@ describe('ProjectsManager - additional coverage', () => {
     })
 
     it('addProjectItem handles successful addition', async () => {
-        const graphqlWithAuth = vi.fn().mockResolvedValue({ addProjectV2ItemById: { item: { id: 'newItem' } } })
+        const graphqlWithAuth = vi
+            .fn()
+            .mockResolvedValue({ addProjectV2ItemById: { item: { id: 'newItem' } } })
         const mockClient = { graphqlWithAuth, invalidateCache: vi.fn() } as unknown as GitHubClient
         const manager = new ProjectsManager(mockClient)
         const result = await manager.addProjectItem('proj1', 'content1')

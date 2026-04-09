@@ -8,7 +8,12 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { relaxedNumber } from '../schemas.js'
-import { KanbanBoardOutputSchema, MoveKanbanItemOutputSchema, AddKanbanItemOutputSchema, DeleteKanbanItemOutputSchema } from './schemas.js'
+import {
+    KanbanBoardOutputSchema,
+    MoveKanbanItemOutputSchema,
+    AddKanbanItemOutputSchema,
+    DeleteKanbanItemOutputSchema,
+} from './schemas.js'
 import { resolveOwner, resolveOwnerRepo, resolveProjectNumber } from './helpers.js'
 
 export function getKanbanTools(context: ToolContext): ToolDefinition[] {
@@ -113,13 +118,13 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             items: [],
                             itemCount: col.items.length,
                         }))
-                        
+
                         // Enhanced payload: ID-to-Title subset to avoid needing the full board to find an ID
-                        const itemDirectory = board.columns.flatMap(col => 
-                            col.items.map(item => ({
+                        const itemDirectory = board.columns.flatMap((col) =>
+                            col.items.map((item) => ({
                                 id: item.id,
                                 title: item.title,
-                                status: item.status
+                                status: item.status,
                             }))
                         )
 
@@ -127,7 +132,7 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                             ...board,
                             columns: summaryColumns,
                             summaryOnly: true,
-                            itemDirectory
+                            itemDirectory,
                         }
                     }
 
@@ -277,7 +282,10 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
                 issue_number: z.number().describe('The number of the issue or PR to add'),
-                owner: z.string().optional().describe('Repository owner - LEAVE EMPTY to auto-detect'),
+                owner: z
+                    .string()
+                    .optional()
+                    .describe('Repository owner - LEAVE EMPTY to auto-detect'),
                 repo: z
                     .string()
                     .optional()
@@ -377,7 +385,9 @@ export function getKanbanTools(context: ToolContext): ToolDefinition[] {
                     .number()
                     .optional()
                     .describe('GitHub Project number (optional if repo is registered)'),
-                item_id: z.string().describe('The project item ID to remove (from get_kanban_board)'),
+                item_id: z
+                    .string()
+                    .describe('The project item ID to remove (from get_kanban_board)'),
                 owner: z.string().optional().describe('Project owner - LEAVE EMPTY to auto-detect'),
                 repo: z
                     .string()

@@ -169,19 +169,20 @@ export const rulesResource: InternalResourceDef = {
             }
         }
         try {
-            const stat = await fs.promises.stat(rulesPath)
-            const mtimeMs = stat.mtimeMs
-
             if (cachedRulesContent && Date.now() - rulesLastScanTime < RULES_CACHE_TTL_MS) {
+                const stat = await fs.promises.stat(rulesPath).catch(() => ({ mtimeMs: Date.now() }))
                 return {
                     data: cachedRulesContent,
                     annotations: {
-                        lastModified: new Date(mtimeMs).toISOString(),
+                        lastModified: new Date(stat.mtimeMs).toISOString(),
                     },
                 }
             }
 
             const content = await fs.promises.readFile(rulesPath, 'utf8')
+            const stat = await fs.promises.stat(rulesPath).catch(() => ({ mtimeMs: Date.now() }))
+            const mtimeMs = stat.mtimeMs
+
             cachedRulesContent = content
             rulesLastScanTime = Date.now()
 

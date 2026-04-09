@@ -98,7 +98,9 @@ describe('exportEntriesToMarkdown', () => {
         expect(result.output_dir).toBe(resolve('/var/lib/memory-journal/export'))
 
         // Ensure directory was created with the resolved path
-        expect(fs.mkdir).toHaveBeenCalledWith(resolve('/var/lib/memory-journal/export'), { recursive: true })
+        expect(fs.mkdir).toHaveBeenCalledWith(resolve('/var/lib/memory-journal/export'), {
+            recursive: true,
+        })
 
         // Ensure open was called twice (once per entry) with create-or-truncate + 0o600
         expect(fs.open).toHaveBeenCalledTimes(2)

@@ -56,18 +56,18 @@ return {
 }
 ```
 
-| Check             | Expected                                        |
-| ----------------- | ----------------------------------------------- |
-| `createEmpty`     | `true` (content required)                       |
-| `createMinEmpty`  | `true` (content required)                       |
-| `getByIdEmpty`    | `true` (entry_id required)                      |
-| `recentDefaults`  | `true` (uses defaults)                          |
-| `statsDefaults`   | `true` (uses defaults)                          |
-| `tagsDefaults`    | `true` (no params needed)                       |
-| `contentNumError` | `true` (content must be string)                 |
-| `limitStrHandled` | `true` (coerces or errors — never crashes)      |
-| `idStrError`      | `true` (entry_id must be number)                |
-| `limitNegError`   | `true` (limit must be ≥ 1)                      |
+| Check             | Expected                                   |
+| ----------------- | ------------------------------------------ |
+| `createEmpty`     | `true` (content required)                  |
+| `createMinEmpty`  | `true` (content required)                  |
+| `getByIdEmpty`    | `true` (entry_id required)                 |
+| `recentDefaults`  | `true` (uses defaults)                     |
+| `statsDefaults`   | `true` (uses defaults)                     |
+| `tagsDefaults`    | `true` (no params needed)                  |
+| `contentNumError` | `true` (content must be string)            |
+| `limitStrHandled` | `true` (coerces or errors — never crashes) |
+| `idStrError`      | `true` (entry_id must be number)           |
+| `limitNegError`   | `true` (limit must be ≥ 1)                 |
 
 ### 29.2 Search Group — Empty Params & Boundaries
 
@@ -82,7 +82,10 @@ const vectorStatsEmpty = await mj.search.getVectorIndexStats({})
 const limitOver = await mj.search.searchEntries({ query: 'test', limit: 501 })
 const thresholdStr = await mj.search.semanticSearch({ query: 'test', similarity_threshold: 'abc' })
 const dateInvalid = await mj.search.searchByDateRange({ start_date: 'Jan 1', end_date: 'Jan 31' })
-const dateInverted = await mj.search.searchByDateRange({ start_date: '2026-12-31', end_date: '2026-01-01' })
+const dateInverted = await mj.search.searchByDateRange({
+  start_date: '2026-12-31',
+  end_date: '2026-01-01',
+})
 
 return {
   searchEmptyHandled: searchEmpty.success === false || Array.isArray(searchEmpty.entries),
@@ -96,14 +99,14 @@ return {
 }
 ```
 
-| Check                | Expected                             |
-| -------------------- | ------------------------------------ |
-| `dateRangeEmptyError`| `true` (start/end date required)     |
-| `semanticEmptyError` | `true` (query or entry_id required)  |
-| `vectorStatsOk`      | `true` (no params needed)            |
-| `limitOverError`     | `true` (limit max 500)               |
-| `dateInvalidError`   | `true` (YYYY-MM-DD required)         |
-| `dateInvertedError`  | `true` (start must be before end)    |
+| Check                 | Expected                            |
+| --------------------- | ----------------------------------- |
+| `dateRangeEmptyError` | `true` (start/end date required)    |
+| `semanticEmptyError`  | `true` (query or entry_id required) |
+| `vectorStatsOk`       | `true` (no params needed)           |
+| `limitOverError`      | `true` (limit max 500)              |
+| `dateInvalidError`    | `true` (YYYY-MM-DD required)        |
+| `dateInvertedError`   | `true` (start must be before end)   |
 
 ### 29.3 Admin Group — Empty Params & Domain Errors
 
@@ -158,13 +161,19 @@ const linkEmpty = await mj.relationships.linkEntries({})
 const vizEmpty = await mj.relationships.visualizeRelationships({})
 
 const linkBadSource = await mj.relationships.linkEntries({
-  from_entry_id: 999999, to_entry_id: 1, relationship_type: 'references',
+  from_entry_id: 999999,
+  to_entry_id: 1,
+  relationship_type: 'references',
 })
 const linkBadTarget = await mj.relationships.linkEntries({
-  from_entry_id: 1, to_entry_id: 999999, relationship_type: 'references',
+  from_entry_id: 1,
+  to_entry_id: 999999,
+  relationship_type: 'references',
 })
 const linkBadType = await mj.relationships.linkEntries({
-  from_entry_id: 1, to_entry_id: 2, relationship_type: 'invalid_type',
+  from_entry_id: 1,
+  to_entry_id: 2,
+  relationship_type: 'invalid_type',
 })
 
 return {
@@ -176,12 +185,12 @@ return {
 }
 ```
 
-| Check               | Expected                                   |
-| ------------------- | ------------------------------------------ |
-| `linkEmptyError`    | `true` (from/to entry_id required)         |
-| `linkBadSourceError`| `true` (source entry not found)            |
-| `linkBadTargetError`| `true` (target entry not found)            |
-| `linkBadTypeError`  | `true` (invalid relationship type)         |
+| Check                | Expected                           |
+| -------------------- | ---------------------------------- |
+| `linkEmptyError`     | `true` (from/to entry_id required) |
+| `linkBadSourceError` | `true` (source entry not found)    |
+| `linkBadTargetError` | `true` (target entry not found)    |
+| `linkBadTypeError`   | `true` (invalid relationship type) |
 
 ### 29.5 Backup Group — Empty Params & Security
 
@@ -208,13 +217,13 @@ return {
 }
 ```
 
-| Check                | Expected                             |
-| -------------------- | ------------------------------------ |
-| `backupEmptyOk`      | `true` (auto-names backup)           |
-| `restoreEmptyError`  | `true` (filename required)           |
-| `traversalBlocked`   | `true` (path traversal rejected)     |
-| `restoreBadFileError`| `true` (file not found)              |
-| `cleanupZeroError`   | `true` (keep_count min 1)            |
+| Check                 | Expected                         |
+| --------------------- | -------------------------------- |
+| `backupEmptyOk`       | `true` (auto-names backup)       |
+| `restoreEmptyError`   | `true` (filename required)       |
+| `traversalBlocked`    | `true` (path traversal rejected) |
+| `restoreBadFileError` | `true` (file not found)          |
+| `cleanupZeroError`    | `true` (keep_count min 1)        |
 
 ### 29.6 GitHub Group — Empty Params & Not-Found
 
@@ -249,13 +258,13 @@ return {
 }
 ```
 
-| Check              | Expected                          |
-| ------------------ | --------------------------------- |
-| `issuesOk`         | `true` (defaults to open issues)  |
-| `contextOk`        | `true` (auto-detects repo)        |
-| `issueBadNumError`  | `true` (404 structured error)    |
-| `prBadNumError`     | `true` (404 structured error)    |
-| `issueEmptyError`   | `true` (issue_number required)   |
+| Check              | Expected                         |
+| ------------------ | -------------------------------- |
+| `issuesOk`         | `true` (defaults to open issues) |
+| `contextOk`        | `true` (auto-detects repo)       |
+| `issueBadNumError` | `true` (404 structured error)    |
+| `prBadNumError`    | `true` (404 structured error)    |
+| `issueEmptyError`  | `true` (issue_number required)   |
 
 ### 29.7 Team Group — Empty Params & DB Not Configured
 
@@ -304,18 +313,18 @@ return {
 }
 ```
 
-| Check                  | Expected                              |
-| ---------------------- | ------------------------------------- |
-| `createEmptyError`     | `true` (content required)             |
-| `getByIdEmptyError`    | `true` (entry_id required)            |
-| `recentOk`             | `true` (uses defaults)                |
-| `tagsOk`               | `true` (no params needed)             |
-| `dateRangeEmptyError`  | `true` (start/end date required)      |
-| `updateEmptyError`     | `true` (entry_id required)            |
-| `deleteEmptyError`     | `true` (entry_id required)            |
-| `mergeEmptyError`      | `true` (source/target required)       |
-| `linkEmptyError`       | `true` (from/to entry_id required)    |
-| `createNumContentError`| `true` (content must be string)       |
+| Check                   | Expected                           |
+| ----------------------- | ---------------------------------- |
+| `createEmptyError`      | `true` (content required)          |
+| `getByIdEmptyError`     | `true` (entry_id required)         |
+| `recentOk`              | `true` (uses defaults)             |
+| `tagsOk`                | `true` (no params needed)          |
+| `dateRangeEmptyError`   | `true` (start/end date required)   |
+| `updateEmptyError`      | `true` (entry_id required)         |
+| `deleteEmptyError`      | `true` (entry_id required)         |
+| `mergeEmptyError`       | `true` (source/target required)    |
+| `linkEmptyError`        | `true` (from/to entry_id required) |
+| `createNumContentError` | `true` (content must be string)    |
 
 ### 29.8 IO Group — Empty Params & Security
 
@@ -330,18 +339,22 @@ const exportBadFormat = await mj.io.exportEntries({ format: 'xml' })
 const exportLimitStr = await mj.io.exportEntries({ format: 'json', limit: 'abc' })
 
 return {
-  exportEmptyOk: exportEmpty.success !== undefined || exportEmpty.entries !== undefined || exportEmpty.content !== undefined,
+  exportEmptyOk:
+    exportEmpty.success !== undefined ||
+    exportEmpty.entries !== undefined ||
+    exportEmpty.content !== undefined,
   exportMdEmptyError: exportMdEmpty.success === false,
   importMdEmptyError: importMdEmpty.success === false,
-  exportBadFormatHandled: exportBadFormat.success === false || typeof exportBadFormat.content === 'string',
+  exportBadFormatHandled:
+    exportBadFormat.success === false || typeof exportBadFormat.content === 'string',
   exportLimitStrHandled: exportLimitStr.success === false || exportLimitStr.entries !== undefined,
 }
 ```
 
-| Check                    | Expected                             |
-| ------------------------ | ------------------------------------ |
-| `exportMdEmptyError`     | `true` (output_dir required)         |
-| `importMdEmptyError`     | `true` (source_dir required)         |
+| Check                | Expected                     |
+| -------------------- | ---------------------------- |
+| `exportMdEmptyError` | `true` (output_dir required) |
+| `importMdEmptyError` | `true` (source_dir required) |
 
 ---
 

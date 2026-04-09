@@ -211,9 +211,6 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     const query = input.query || ''
                     const mode = input.mode as SearchMode
 
-                    // Resolve effective mode
-                    const { resolvedMode, isAuto } = resolveSearchMode(mode, query)
-
                     // Validate: at least one filter or query must be provided to prevent bare searches
                     const hasFilters =
                         input.project_number !== undefined ||
@@ -239,6 +236,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             count: 0,
                         }
                     }
+
+                    // Resolve effective mode
+                    const { resolvedMode, isAuto } = resolveSearchMode(mode, query)
 
                     const effectiveMode = resolvedMode
 

@@ -197,12 +197,13 @@ return {
 | Test             | Code                                                        | Expected Result                    |
 | ---------------- | ----------------------------------------------------------- | ---------------------------------- |
 | Positional alias | `return await mj.core.testSimple({ message: "CM3 test" });` | `{ message: "..." }` echoing input |
+
 ### 20.10 Create Entry — project_owner & auto_context
 
-| Test                    | Code                                                                                                                           | Expected Result                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| With project_owner      | `const r = await mj.core.createEntry({ content: "CM3 owner test", project_number: 5, project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
-| auto_context off        | `const r = await mj.core.createEntry({ content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };` | `success: true`, entry created              |
+| Test               | Code                                                                                                                                                                                  | Expected Result                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| With project_owner | `const r = await mj.core.createEntry({ content: "CM3 owner test", project_number: 5, project_owner: "neverinfamous" }); return { success: r.success, owner: r.entry?.projectOwner };` | `success: true`, `owner: "neverinfamous"` |
+| auto_context off   | `const r = await mj.core.createEntry({ content: "CM3 no context", auto_context: false }); return { success: r.success, id: r.entry?.id };`                                            | `success: true`, entry created            |
 
 ### 20.11 Update Entry — is_personal Toggle
 
@@ -236,8 +237,8 @@ return {
 
 ### 20.12 Create Entry — issueUrl Auto-Population
 
-| Test                    | Code                                                                                                                           | Expected Result                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Test                    | Code                                                                                                                                                                                                 | Expected Result                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | issueUrl auto-populated | `const ctx = await mj.github.getGithubContext({}); const r = await mj.core.createEntry({ content: "CM3 issue link", issue_number: 1 }); return { success: r.success, issueUrl: r.entry?.issueUrl };` | `success: true`, `issueUrl` contains github URL or is auto-populated |
 
 ---
@@ -246,14 +247,14 @@ return {
 
 After testing, remove test entries created during Phase 20:
 
-| Cleanup Step               | Command/Action                                                |
-| -------------------------- | ------------------------------------------------------------- |
-| Delete full-params entry   | `delete_entry(entry_id: <full_params_id>, permanent: true)`   |
-| Delete shared entry        | `delete_entry(entry_id: <shared_id>, permanent: true)`        |
-| Delete update test entry   | `delete_entry(entry_id: <update_test_id>, permanent: true)`   |
-| Delete owner test entry    | `delete_entry(entry_id: <owner_test_id>, permanent: true)`    |
-| Delete toggle test entry   | `delete_entry(entry_id: <toggle_test_id>, permanent: true)`   |
-| Delete issue link entry    | `delete_entry(entry_id: <issue_link_id>, permanent: true)`    |
+| Cleanup Step             | Command/Action                                              |
+| ------------------------ | ----------------------------------------------------------- |
+| Delete full-params entry | `delete_entry(entry_id: <full_params_id>, permanent: true)` |
+| Delete shared entry      | `delete_entry(entry_id: <shared_id>, permanent: true)`      |
+| Delete update test entry | `delete_entry(entry_id: <update_test_id>, permanent: true)` |
+| Delete owner test entry  | `delete_entry(entry_id: <owner_test_id>, permanent: true)`  |
+| Delete toggle test entry | `delete_entry(entry_id: <toggle_test_id>, permanent: true)` |
+| Delete issue link entry  | `delete_entry(entry_id: <issue_link_id>, permanent: true)`  |
 
 ---
 

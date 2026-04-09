@@ -22,7 +22,16 @@ export function formatUserMessage(opts: {
     rulesFile?: RulesFile
     skillsDir?: SkillsDir
 }): string {
-    const { repoName, branchName, totalEntries, latestPreview, summaryPreviews, github, rulesFile, skillsDir } = opts
+    const {
+        repoName,
+        branchName,
+        totalEntries,
+        latestPreview,
+        summaryPreviews,
+        github,
+        rulesFile,
+        skillsDir,
+    } = opts
 
     // Build enhanced CI display
     let ciDisplay = opts.ciStatus
@@ -104,9 +113,10 @@ export function formatUserMessage(opts: {
         ? `\n| **Copilot** | ${String(github.copilotReviews.reviewed)} reviewed · ${String(github.copilotReviews.approved)} approved${github.copilotReviews.changesRequested > 0 ? ` · ${String(github.copilotReviews.changesRequested)} changes requested` : ''}${github.copilotReviews.totalComments > 0 ? ` (${String(github.copilotReviews.totalComments)} comments)` : ''} |`
         : ''
 
-    const summariesOutput = summaryPreviews && summaryPreviews.length > 0
-        ? summaryPreviews.map(s => `\n| **Summary** | ${s} |`).join('')
-        : ''
+    const summariesOutput =
+        summaryPreviews && summaryPreviews.length > 0
+            ? summaryPreviews.map((s) => `\n| **Summary** | ${s} |`).join('')
+            : ''
 
     return `📋 **Session Context Loaded**
 | Context | Value |

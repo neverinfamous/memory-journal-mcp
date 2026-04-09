@@ -82,7 +82,8 @@ Run tests with verbose output:
 ```bash
 <PROJECT_TEST_CMD> -- --reporter=verbose
 ```
-*(Agent Note: Ensure OutputCharacterCount >= 10000 on test command execution to fully capture the summary line.)*
+
+_(Agent Note: Ensure OutputCharacterCount >= 10000 on test command execution to fully capture the summary line.)_
 
 Report:
 

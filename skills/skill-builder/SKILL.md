@@ -20,13 +20,13 @@ of which agent platform you're targeting.
 
 ## Quick Reference
 
-| Phase | What You Do |
-|---|---|
-| **1. Capture Intent** | Understand what the skill should do and when it should trigger |
-| **2. Write the Skill** | Create SKILL.md with frontmatter, instructions, and references |
-| **3. Test** | Write realistic prompts and validate the agent follows the skill |
-| **4. Iterate** | Improve based on feedback, keep lean, bundle repeated patterns |
-| **5. Optimize Description** | Tune the frontmatter description for reliable triggering |
+| Phase                       | What You Do                                                      |
+| --------------------------- | ---------------------------------------------------------------- |
+| **1. Capture Intent**       | Understand what the skill should do and when it should trigger   |
+| **2. Write the Skill**      | Create SKILL.md with frontmatter, instructions, and references   |
+| **3. Test**                 | Write realistic prompts and validate the agent follows the skill |
+| **4. Iterate**              | Improve based on feedback, keep lean, bundle repeated patterns   |
+| **5. Optimize Description** | Tune the frontmatter description for reliable triggering         |
 
 ---
 
@@ -44,7 +44,7 @@ the user made, input/output patterns observed.
 
 2. **When should this skill trigger?**
    What user phrases, contexts, or tool patterns should activate it?
-   Think broadly — agents tend to *under-trigger* skills, so include edge cases.
+   Think broadly — agents tend to _under-trigger_ skills, so include edge cases.
 
 3. **What's the expected output format?**
    Files, structured data, reports, code changes, terminal commands?
@@ -95,36 +95,37 @@ narrow or passive means the skill sits unused even when it would help.
 name: deploy-prod
 description: |
   Deploy to production with validation gates...
-dependencies: node>=18, gh>=2.0    # Required tools/runtimes
-context: fork                       # Spawn isolated subagent (fresh context)
-disable-model-invocation: true      # User-only invoke (prevents auto-trigger)
-user-invocable: false              # Agent-only (background knowledge)
-allowed-tools: ["view_file", "search"] # Restrict tool access during skill activation
+dependencies: node>=18, gh>=2.0 # Required tools/runtimes
+context: fork # Spawn isolated subagent (fresh context)
+disable-model-invocation: true # User-only invoke (prevents auto-trigger)
+user-invocable: false # Agent-only (background knowledge)
+allowed-tools: ['view_file', 'search'] # Restrict tool access during skill activation
 metadata:
-  internal: true                    # Hides from CLI discovery by default
+  internal: true # Hides from CLI discovery by default
 ---
 ```
 
-| Field | When to Use |
-|---|---|
-| `dependencies` | Skill requires specific tools or runtimes — prevents cryptic failures |
-| `context: fork` | Task is concrete, self-contained, and resource-heavy (deep file reads, prototyping). Prevents context pollution. **Don't use for guidelines-only skills** — fork returns empty without a concrete task |
-| `disable-model-invocation` | Skill has destructive side effects (deploy, commit, delete). Agent can't auto-trigger |
-| `user-invocable: false` | Background knowledge the agent should absorb, not a user-facing command |
-| `allowed-tools` | Limit an agent's available tools when this skill triggers to enforce security guidelines. |
-| `metadata.internal` | Set to `true` for WIP or CI-only skills. Requires `INSTALL_INTERNAL_SKILLS=1` to install via CLI. |
+| Field                      | When to Use                                                                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dependencies`             | Skill requires specific tools or runtimes — prevents cryptic failures                                                                                                                                  |
+| `context: fork`            | Task is concrete, self-contained, and resource-heavy (deep file reads, prototyping). Prevents context pollution. **Don't use for guidelines-only skills** — fork returns empty without a concrete task |
+| `disable-model-invocation` | Skill has destructive side effects (deploy, commit, delete). Agent can't auto-trigger                                                                                                                  |
+| `user-invocable: false`    | Background knowledge the agent should absorb, not a user-facing command                                                                                                                                |
+| `allowed-tools`            | Limit an agent's available tools when this skill triggers to enforce security guidelines.                                                                                                              |
+| `metadata.internal`        | Set to `true` for WIP or CI-only skills. Requires `INSTALL_INTERNAL_SKILLS=1` to install via CLI.                                                                                                      |
 
 ### Progressive Disclosure (3-Tier)
 
 Skills use a three-level loading system to manage token budgets:
 
-| Tier | What | Token Cost | When Loaded |
-|---|---|---|---|
-| **Metadata** | `name` + `description` in frontmatter | ~50-100 tokens | Always in context |
-| **SKILL.md body** | Main instructions | ~500-2000 tokens | When skill triggers |
-| **References** | Detailed docs in `references/` | Unlimited | On demand, as needed |
+| Tier              | What                                  | Token Cost       | When Loaded          |
+| ----------------- | ------------------------------------- | ---------------- | -------------------- |
+| **Metadata**      | `name` + `description` in frontmatter | ~50-100 tokens   | Always in context    |
+| **SKILL.md body** | Main instructions                     | ~500-2000 tokens | When skill triggers  |
+| **References**    | Detailed docs in `references/`        | Unlimited        | On demand, as needed |
 
 **Guidelines:**
+
 - Keep `SKILL.md` body under ~500 lines. If approaching this, add a layer of
   hierarchy with `references/` files and clear pointers about when to read them
 - Reference files can be any length but should include a table of contents if
@@ -172,15 +173,17 @@ them. These principles come from observing what actually works in practice.
 ### Explain the Why, Not Just the What
 
 Today's LLMs are smart. They have good theory of mind and when given a good
-explanation of *why* something matters, they go beyond rote instruction-following
+explanation of _why_ something matters, they go beyond rote instruction-following
 and make better decisions in novel situations.
 
 **Instead of:**
+
 ```markdown
 ALWAYS use parameterized queries. NEVER interpolate user input into SQL.
 ```
 
 **Prefer:**
+
 ```markdown
 Use parameterized queries for all user-supplied values. Raw string
 interpolation in SQL creates injection vulnerabilities — an attacker could
@@ -189,7 +192,7 @@ the database engine handle escaping, which is both safer and handles edge
 cases (quotes, unicode) that manual escaping misses.
 ```
 
-The second version helps the agent understand *when* the rule applies and *why*,
+The second version helps the agent understand _when_ the rule applies and _why_,
 so it makes better judgment calls in ambiguous situations.
 
 ### Keep It Lean
@@ -208,6 +211,7 @@ underlying insight into a principle that helps across all cases.
 ### Use Imperative Form
 
 Write instructions as direct commands:
+
 - ✅ "Run the lint command before committing"
 - ❌ "The lint command should be run before committing"
 - ❌ "You might want to run the lint command"
@@ -218,9 +222,11 @@ When the skill produces structured output, show the exact template:
 
 ```markdown
 ## Report Structure
+
 Use this template for findings:
 
 ### [Category] — [Severity]
+
 **File:** `path/to/file.ts:L42-L58`
 **Finding:** Description of the issue
 **Fix:** Concrete remediation step
@@ -258,15 +264,15 @@ traditional malware scanners can't analyze natural-language payloads.
 
 ## Anti-Patterns
 
-| Anti-Pattern | Why It Fails | Fix |
-|---|---|---|
-| **Wall of MUSTs** | Agent treats all rules as equal priority; real priorities get lost | Explain reasoning, let agent derive the rule |
-| **Overfitting to test cases** | Skill works for 3 prompts but fails on the 4th | Generalize the underlying principle |
-| **Passive description** | "Helps with deployment" → agent never triggers | Use assertive "Use when..." phrasing |
-| **Monolithic SKILL.md** | 800+ lines → token overflow, poor comprehension | Split into references at ~500 lines |
-| **Kitchen-sink skill** | Tries to handle 5 unrelated tasks | One skill = one job; create separate skills |
-| **Embedding secrets** | API keys in instructions → leaked to logs | Document as env var prerequisites |
-| **No HITL gates** | Destructive actions without user approval | Use `disable-model-invocation: true` |
+| Anti-Pattern                  | Why It Fails                                                       | Fix                                          |
+| ----------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
+| **Wall of MUSTs**             | Agent treats all rules as equal priority; real priorities get lost | Explain reasoning, let agent derive the rule |
+| **Overfitting to test cases** | Skill works for 3 prompts but fails on the 4th                     | Generalize the underlying principle          |
+| **Passive description**       | "Helps with deployment" → agent never triggers                     | Use assertive "Use when..." phrasing         |
+| **Monolithic SKILL.md**       | 800+ lines → token overflow, poor comprehension                    | Split into references at ~500 lines          |
+| **Kitchen-sink skill**        | Tries to handle 5 unrelated tasks                                  | One skill = one job; create separate skills  |
+| **Embedding secrets**         | API keys in instructions → leaked to logs                          | Document as env var prerequisites            |
+| **No HITL gates**             | Destructive actions without user approval                          | Use `disable-model-invocation: true`         |
 
 ---
 
@@ -288,14 +294,17 @@ manual validation that the agent follows the skill correctly.
 
 ```markdown
 ## Test 1: Simple issue fix
+
 "Fix issue #42 — the README has a broken link in the installation section"
 Expected: Agent loads skill, gathers context, fixes link, runs gates, submits PR
 
 ## Test 2: Audit request
+
 "Run a security audit on this project"
 Expected: Agent loads skill, detects available tools, runs scans, journals findings
 
 ## Test 3: Edge case — no GitHub configured
+
 "Fix the bug where users can't login"
 Expected: Agent attempts to load skill, handles missing GITHUB_TOKEN gracefully
 ```
@@ -304,17 +313,18 @@ Expected: Agent attempts to load skill, handles missing GITHUB_TOKEN gracefully
 
 Score each test run on these dimensions:
 
-| Dimension | 1 (Poor) | 3 (Good) | 5 (Excellent) |
-|---|---|---|---|
-| **Trigger accuracy** | Loads <50% of the time | ~80% correct | All intended prompts trigger correctly |
-| **Instruction following** | Skips >2 steps | Minor deviations | All steps followed, branches handled |
-| **Edge case handling** | Crashes or hallucinates | Returns generic error | Structured, actionable error |
-| **Output quality** | Wrong format | Correct format, minor gaps | Exact template match |
-| **Token efficiency** | Loads everything always | Reads some references | Progressive disclosure used correctly |
+| Dimension                 | 1 (Poor)                | 3 (Good)                   | 5 (Excellent)                          |
+| ------------------------- | ----------------------- | -------------------------- | -------------------------------------- |
+| **Trigger accuracy**      | Loads <50% of the time  | ~80% correct               | All intended prompts trigger correctly |
+| **Instruction following** | Skips >2 steps          | Minor deviations           | All steps followed, branches handled   |
+| **Edge case handling**    | Crashes or hallucinates | Returns generic error      | Structured, actionable error           |
+| **Output quality**        | Wrong format            | Correct format, minor gaps | Exact template match                   |
+| **Token efficiency**      | Loads everything always | Reads some references      | Progressive disclosure used correctly  |
 
 ### Validation
 
 For each test scenario, verify:
+
 - Did the agent load the skill? (Check if it followed the workflow)
 - Did it follow the steps in order?
 - Did it handle edge cases gracefully?
@@ -354,7 +364,7 @@ After testing, improve the skill based on what you observed.
 
 1. Apply improvements to the skill
 2. Re-run test scenarios mentally or with an agent
-3. Check: did the changes help across *all* scenarios, not just the one that
+3. Check: did the changes help across _all_ scenarios, not just the one that
    prompted the change?
 4. Repeat until satisfied or diminishing returns
 
@@ -396,11 +406,13 @@ skill, optimize the description for reliable triggering.
 ### Example — Before vs. After
 
 **Before (passive, narrow):**
+
 ```yaml
 description: Guide for creating MCP servers using Node/TypeScript.
 ```
 
 **After (assertive, broad):**
+
 ```yaml
 description: |
   Guide for creating high-quality MCP servers that enable LLMs to interact
@@ -435,10 +447,11 @@ INSTALL_INTERNAL_SKILLS=1 npx skills add my-org/internal-skills
 
 ### Agent Integration & Discovery Paths
 
-Almost all leading AI coding assistants (Claude Code, Cursor, OpenHands, Antigravity, Kiro CLI, Amp, Roo Code, GitHub Copilot) comply with the semantic [Agent Skills Specification](https://agentskills.io). 
+Almost all leading AI coding assistants (Claude Code, Cursor, OpenHands, Antigravity, Kiro CLI, Amp, Roo Code, GitHub Copilot) comply with the semantic [Agent Skills Specification](https://agentskills.io).
 
 Agents will automatically parse and load any `.md` file with conforming YAML frontmatter placed inside standard discovery paths:
-* Root project directory: `./skills/` or `.agents/skills/`
-* Assistant-specific local scope: `.cursor/skills/`, `.claude/skills/`, `.iflow/skills/`, etc.
+
+- Root project directory: `./skills/` or `.agents/skills/`
+- Assistant-specific local scope: `.cursor/skills/`, `.claude/skills/`, `.iflow/skills/`, etc.
 
 When publishing a library for distribution using the `skills` CLI, the installer will recursively seek directories (e.g. `skills/`, `skills/.curated/`) and correctly provision them into the endpoint user's recognized location. Alternately, use the Claude `.claude-plugin/marketplace.json` manifest to broadcast capability scopes explicitly to tools.

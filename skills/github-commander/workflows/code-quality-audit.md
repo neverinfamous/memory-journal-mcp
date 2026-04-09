@@ -72,7 +72,7 @@ After human approval:
 2. Run validation gates after all fixes:
    - Gate 1: Lint + Typecheck
    - Gate 2: Build
-   - Gate 3: Tests *(Agent Note: Ensure OutputCharacterCount >= 10000 on test command execution to fully capture the summary line.)*
+   - Gate 3: Tests _(Agent Note: Ensure OutputCharacterCount >= 10000 on test command execution to fully capture the summary line.)_
 3. Update changelog with audit fixes
 4. Commit with descriptive message:
    ```bash

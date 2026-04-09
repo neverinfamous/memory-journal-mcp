@@ -33,17 +33,26 @@ function createMockBoard(itemsPerColumn: number) {
             { id: 'OPT_DONE', name: 'Done' },
         ],
         columns: [
-            { status: 'Todo', statusOptionId: 'OPT_TODO', items: items.slice(0, Math.floor(itemsPerColumn / 2)) },
-            { status: 'In Progress', statusOptionId: 'OPT_PROGRESS', items: items.slice(Math.floor(itemsPerColumn / 2), Math.floor(itemsPerColumn / 2) + 5) },
+            {
+                status: 'Todo',
+                statusOptionId: 'OPT_TODO',
+                items: items.slice(0, Math.floor(itemsPerColumn / 2)),
+            },
+            {
+                status: 'In Progress',
+                statusOptionId: 'OPT_PROGRESS',
+                items: items.slice(
+                    Math.floor(itemsPerColumn / 2),
+                    Math.floor(itemsPerColumn / 2) + 5
+                ),
+            },
             { status: 'Done', statusOptionId: 'OPT_DONE', items },
         ],
         totalItems: itemsPerColumn + 5 + Math.floor(itemsPerColumn / 2),
     }
 }
 
-function createMockGitHub(
-    overrides: Partial<Record<string, unknown>> = {}
-): GitHubIntegration {
+function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): GitHubIntegration {
     const defaults = {
         isApiAvailable: vi.fn().mockReturnValue(true),
         getRepoInfo: vi.fn().mockResolvedValue({
@@ -102,7 +111,10 @@ describe('Kanban Payload Optimization', () => {
                 db,
                 undefined,
                 github
-            )) as { columns: { status: string; items: unknown[]; itemCount: number }[]; summaryOnly: boolean }
+            )) as {
+                columns: { status: string; items: unknown[]; itemCount: number }[]
+                summaryOnly: boolean
+            }
 
             expect(result.summaryOnly).toBe(true)
             for (const col of result.columns) {
@@ -141,7 +153,14 @@ describe('Kanban Payload Optimization', () => {
                 db,
                 undefined,
                 github
-            )) as { columns: { status: string; items: unknown[]; truncated?: boolean; itemCount: number }[] }
+            )) as {
+                columns: {
+                    status: string
+                    items: unknown[]
+                    truncated?: boolean
+                    itemCount: number
+                }[]
+            }
 
             // Done column has 50 items, should be truncated to 3
             const doneCol = result.columns.find((c) => c.status === 'Done')
@@ -159,7 +178,14 @@ describe('Kanban Payload Optimization', () => {
                 db,
                 undefined,
                 github
-            )) as { columns: { status: string; items: unknown[]; truncated?: boolean; itemCount: number }[] }
+            )) as {
+                columns: {
+                    status: string
+                    items: unknown[]
+                    truncated?: boolean
+                    itemCount: number
+                }[]
+            }
 
             // In Progress has 5 items, well within 100
             const progressCol = result.columns.find((c) => c.status === 'In Progress')
@@ -176,7 +202,14 @@ describe('Kanban Payload Optimization', () => {
                 db,
                 undefined,
                 github
-            )) as { columns: { status: string; items: unknown[]; truncated?: boolean; itemCount: number }[] }
+            )) as {
+                columns: {
+                    status: string
+                    items: unknown[]
+                    truncated?: boolean
+                    itemCount: number
+                }[]
+            }
 
             // Done column has 50 items, should be truncated to 25
             const doneCol = result.columns.find((c) => c.status === 'Done')

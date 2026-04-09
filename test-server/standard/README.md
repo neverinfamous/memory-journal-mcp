@@ -10,10 +10,10 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 
 ### Seed & Infrastructure
 
-| File                  | Phase | Purpose                                                                                            | When to Run        |
-| --------------------- | :---: | -------------------------------------------------------------------------------------------------- | ------------------ |
-| `test-seed.md`        |   0   | **Seed Data** — Create 17 entries (S1–S17) required by all other test files                        | **Always run first** |
-| `test-core-infra.md`  |   1   | **Infrastructure** — Health, briefing, protocol validation scripts, GitHub status resource          | After seed         |
+| File                 | Phase | Purpose                                                                                    | When to Run          |
+| -------------------- | :---: | ------------------------------------------------------------------------------------------ | -------------------- |
+| `test-seed.md`       |   0   | **Seed Data** — Create 17 entries (S1–S17) required by all other test files                | **Always run first** |
+| `test-core-infra.md` |   1   | **Infrastructure** — Health, briefing, protocol validation scripts, GitHub status resource | After seed           |
 
 ### Core Functional Tests
 
@@ -22,44 +22,44 @@ This directory contains the core modular test files for `memory-journal-mcp`. Th
 | `test-core-crud.md`          |   2   | **Entry CRUD** — Create, read, update, delete operations                                            | After seed  |
 | `test-core-search.md`        |   3   | **Text Search** — FTS5, phrase/prefix/boolean, LIKE fallback, hybrid auto-mode, date range, filters | After seed  |
 | `test-core-semantic.md`      |   4   | **Semantic Search & Analytics** — Vector search, index management, statistics, cross-project        | After seed  |
-| `test-core-relationships.md` |   5   | **Relationships** — Entry linking, causal types, visualization (Mermaid), graph resources            | After seed  |
-| `test-core-io.md`            |   6   | **IO & Interoperability** — Export/Import Markdown roundtrips, slugification, JSON legacy exports    | After seed  |
+| `test-core-relationships.md` |   5   | **Relationships** — Entry linking, causal types, visualization (Mermaid), graph resources           | After seed  |
+| `test-core-io.md`            |   6   | **IO & Interoperability** — Export/Import Markdown roundtrips, slugification, JSON legacy exports   | After seed  |
 | `test-core-admin.md`         |   7   | **Admin & Backup** — Tag management, backup/restore operations                                      | After seed  |
-| `test-core-scheduler.md`     |   8   | **Scheduler** — HTTP/SSE transport scheduler jobs (terminal script)                                  | After seed  |
+| `test-core-scheduler.md`     |   8   | **Scheduler** — HTTP/SSE transport scheduler jobs (terminal script)                                 | After seed  |
 
 ### Cross-Cutting Validation
 
-| File                   | Phase | Purpose                                                                                 | When to Run |
-| ---------------------- | :---: | --------------------------------------------------------------------------------------- | ----------- |
-| `test-schemas.md`      |   9   | **Output Schemas** — Verify all 60 outputSchema tools return `structuredContent`        | After seed  |
-| `test-resources.md`    |  10   | **Resources** — All 28 resources (static + template, happy + error paths)               | After seed  |
-| `test-errors.md`       |  11   | **Error Handling** — Prompt handlers, structured error verification, numeric coercion   | After seed  |
-| `test-integrity.md`    |  12   | **Data Integrity** — Boundary values, round-trip fidelity, implementation bug detection | After seed  |
+| File                | Phase | Purpose                                                                                 | When to Run |
+| ------------------- | :---: | --------------------------------------------------------------------------------------- | ----------- |
+| `test-schemas.md`   |   9   | **Output Schemas** — Verify all 60 outputSchema tools return `structuredContent`        | After seed  |
+| `test-resources.md` |  10   | **Resources** — All 28 resources (static + template, happy + error paths)               | After seed  |
+| `test-errors.md`    |  11   | **Error Handling** — Prompt handlers, structured error verification, numeric coercion   | After seed  |
+| `test-integrity.md` |  12   | **Data Integrity** — Boundary values, round-trip fidelity, implementation bug detection | After seed  |
 
 ### External Integrations
 
-| File                    | Phase | Purpose                                                                                            | When to Run |
-| ----------------------- | :---: | -------------------------------------------------------------------------------------------------- | ----------- |
-| `test-github.md`        |  13   | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, milestones, insights, Copilot, cleanup) | After seed  |
-| `test-kanban-lifecycle.md`| 13.5 | **Kanban Lifecycle** — Seamless Add/Move/Delete flow using token-efficient `get_kanban_board` | After seed  |
-| `test-team.md`          |  14   | **Team Collaboration** — 22 team tools + 2 team resources                                          | After seed  |
+| File                       | Phase | Purpose                                                                                                 | When to Run |
+| -------------------------- | :---: | ------------------------------------------------------------------------------------------------------- | ----------- |
+| `test-github.md`           |  13   | **GitHub Integration** — 16 GitHub tools (read-only, lifecycle, milestones, insights, Copilot, cleanup) | After seed  |
+| `test-kanban-lifecycle.md` | 13.5  | **Kanban Lifecycle** — Seamless Add/Move/Delete flow using token-efficient `get_kanban_board`           | After seed  |
+| `test-team.md`             |  14   | **Team Collaboration** — 22 team tools + 2 team resources                                               | After seed  |
 
 ### Granular Tool Group Stress Tests
 
-| File                        | Phase | Purpose                                                                    | When to Run |
-| --------------------------- | :---: | -------------------------------------------------------------------------- | ----------- |
-| `test-tool-group-core.md`   |  15a  | **Core** — Structured error matrix, Zod sweeps, boundary testing           | After seed  |
-| `test-tool-group-admin.md`  |  15b  | **Admin** — Structured error matrix, Zod sweeps, integrity tests           | After seed  |
-| `test-tool-group-backup.md` |  15c  | **Backup** — Structured error matrix, filter boundary enforcement          | After seed  |
-| `test-tool-group-search.md` |  15d  | **Search** — Structured error matrix, limit/threshold boundaries           | After seed  |
-| `test-tool-group-github.md` |  15e  | **GitHub** — Structured error matrix, OutputSchema compliance              | After seed  |
-| `test-tool-group-team.md`   |  15f  | **Team** — Structured error matrix, missing DB context, vector fallbacks   | After seed  |
+| File                        | Phase | Purpose                                                                  | When to Run |
+| --------------------------- | :---: | ------------------------------------------------------------------------ | ----------- |
+| `test-tool-group-core.md`   |  15a  | **Core** — Structured error matrix, Zod sweeps, boundary testing         | After seed  |
+| `test-tool-group-admin.md`  |  15b  | **Admin** — Structured error matrix, Zod sweeps, integrity tests         | After seed  |
+| `test-tool-group-backup.md` |  15c  | **Backup** — Structured error matrix, filter boundary enforcement        | After seed  |
+| `test-tool-group-search.md` |  15d  | **Search** — Structured error matrix, limit/threshold boundaries         | After seed  |
+| `test-tool-group-github.md` |  15e  | **GitHub** — Structured error matrix, OutputSchema compliance            | After seed  |
+| `test-tool-group-team.md`   |  15f  | **Team** — Structured error matrix, missing DB context, vector fallbacks | After seed  |
 
 ### Cross-Cutting Optimization Tests
 
-| File                             | Phase | Purpose                                                                                            | When to Run |
-| -------------------------------- | :---: | -------------------------------------------------------------------------------------------------- | ----------- |
-| `test-payload-optimization.md`   |  16   | **Payload Optimization** — Kanban throttling, body truncation, pagination cap, Code Mode result cap | After seed  |
+| File                           | Phase | Purpose                                                                                             | When to Run |
+| ------------------------------ | :---: | --------------------------------------------------------------------------------------------------- | ----------- |
+| `test-payload-optimization.md` |  16   | **Payload Optimization** — Kanban throttling, body truncation, pagination cap, Code Mode result cap | After seed  |
 
 ## Dependency DAG
 

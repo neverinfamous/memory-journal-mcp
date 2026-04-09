@@ -5,13 +5,14 @@ description: Enforced meta-cognitive rules and production configurations for SQL
 
 # SQLite Production Standards
 
-SQLite provides lightweight, serverless SQL, but its default configurations are extremely permissive and optimized for backwards compatibility rather than production rigor. 
+SQLite provides lightweight, serverless SQL, but its default configurations are extremely permissive and optimized for backwards compatibility rather than production rigor.
 
 Any AI agent interacting with or scaffolding SQLite databases MUST adhere to the following strict guidelines to prevent catastrophic concurrency failures, silent data corruption, or locking issues.
 
 ## Concurrency & Performance (Critical Mandates)
 
 SQLite only permits one writer at a time. To prevent random `SQLITE_BUSY` errors and enable high-performance read-while-writing:
+
 - **Enable WAL Mode**: You must execute `PRAGMA journal_mode=WAL;` immediately upon connection. Ensure the `-wal` and `-shm` sidecar files are managed alongside the main `.db` file.
 - **Configure Timeouts**: Set `PRAGMA busy_timeout=5000;` so writers wait up to 5 seconds before failing.
 - **Early Lock Acquisition**: Use `BEGIN IMMEDIATE;` to grab the write lock early and prevent deadlocks in read-then-write batch patterns.
@@ -20,7 +21,8 @@ SQLite only permits one writer at a time. To prevent random `SQLITE_BUSY` errors
 ## Data Integrity & Type Safety
 
 SQLite's default type system uses "Type Affinity" (it will happily accept the string "hello" in an `INTEGER` column) and ignores foreign keys.
-- **Foreign Keys**: You MUST execute `PRAGMA foreign_keys=ON;` on every single new database connection. It is not persisted. Without this, `ON DELETE CASCADE` fails silently. 
+
+- **Foreign Keys**: You MUST execute `PRAGMA foreign_keys=ON;` on every single new database connection. It is not persisted. Without this, `ON DELETE CASCADE` fails silently.
 - **Strict Typing**: For all new tables, you MUST append `STRICT` to the `CREATE TABLE` statement (e.g., `CREATE TABLE users (...) STRICT;`) to enforce real data types.
 - **Date/Time Handling**: There is no native DATE/TIME type. Standardize on `TEXT` (ISO8601) or `INTEGER` (Unix timestamp).
 - **Booleans**: Do not use `BOOLEAN`. Use `INTEGER` (0/1). `TRUE` and `FALSE` are just aliases.

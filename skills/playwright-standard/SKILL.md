@@ -28,6 +28,7 @@ This skill combines battle-tested coding standards with industrial-scale infrast
 ## Quality Standards
 
 ### Locators Priority
+
 1.  **Role**: `page.getByRole('button', { name: 'Submit' })`
 2.  **Label**: `page.getByLabel('User Name')`
 3.  **Placeholder**: `page.getByPlaceholder('Search...')`
@@ -35,6 +36,7 @@ This skill combines battle-tested coding standards with industrial-scale infrast
 5.  **TestID**: `page.getByTestId('submit-btn')` (Last resort)
 
 ### Synchronization
+
 - **Do**: `await expect(locator).toBeVisible()`
 - **Avoid**: `await page.waitForSelector('.btn')`
 - **Avoid**: `await page.waitForLoadState('networkidle')` (Flaky on high-latency networks)
@@ -45,11 +47,12 @@ This skill combines battle-tested coding standards with industrial-scale infrast
 
 For infrastructure, scale, or niche environments, read the relevant reference file:
 
-| Scenario | Reference File |
-| :--- | :--- |
-| **CI/CD, Sharding, Docker** | [infrastructure.md](references/infrastructure.md) |
+| Scenario                         | Reference File                                            |
+| :------------------------------- | :-------------------------------------------------------- |
+| **CI/CD, Sharding, Docker**      | [infrastructure.md](references/infrastructure.md)         |
 | **Electron, WebSockets, Canvas** | [advanced-scenarios.md](references/advanced-scenarios.md) |
-| **Visual, Accessibility, API** | [advanced-scenarios.md](references/advanced-scenarios.md) |
+| **Visual, Accessibility, API**   | [advanced-scenarios.md](references/advanced-scenarios.md) |
 
 ## Example: Fixture-based Isolation
+
 See [fixtures.ts](examples/fixtures.ts) for the recommended pattern for sharing state without global variables.

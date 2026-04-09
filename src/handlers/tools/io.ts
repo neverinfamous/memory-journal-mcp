@@ -87,14 +87,8 @@ const ExportMarkdownSchema = z.object({
 /** Relaxed schema — MCP registration */
 const ExportMarkdownSchemaMcp = z.object({
     output_dir: z.string().describe('Target directory for .md files'),
-    start_date: z
-        .string()
-        .optional()
-        .describe('Start date filter (YYYY-MM-DD)'),
-    end_date: z
-        .string()
-        .optional()
-        .describe('End date filter (YYYY-MM-DD)'),
+    start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
+    end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     entry_types: z.array(z.string()).optional().describe('Filter by entry types'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
     limit: relaxedNumber()
@@ -306,11 +300,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         significance: e.significanceType ?? undefined,
                     }))
 
-                    const result = await exportEntriesToMarkdown(
-                        exportable,
-                        input.output_dir,
-                        db
-                    )
+                    const result = await exportEntriesToMarkdown(exportable, input.output_dir, db)
 
                     await sendProgress(progress, 3, 3, 'Export complete')
                     return result

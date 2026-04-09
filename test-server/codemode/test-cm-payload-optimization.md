@@ -34,8 +34,10 @@ const summary = await mj.github.getKanbanBoard({ project_number: 5, summary_only
 if (summary.columns) {
   if (!summary.summaryOnly) failures.push('summaryOnly flag not set')
   for (const col of summary.columns) {
-    if (col.items?.length > 0) failures.push(`summaryMode: column "${col.name}" has ${col.items.length} items, expected 0`)
-    if (typeof col.itemCount !== 'number') failures.push(`summaryMode: column "${col.name}" missing itemCount`)
+    if (col.items?.length > 0)
+      failures.push(`summaryMode: column "${col.name}" has ${col.items.length} items, expected 0`)
+    if (typeof col.itemCount !== 'number')
+      failures.push(`summaryMode: column "${col.name}" missing itemCount`)
   }
 } else if (summary.success !== false) {
   failures.push('summary mode returned no columns and no error')
@@ -45,9 +47,12 @@ if (summary.columns) {
 const limited = await mj.github.getKanbanBoard({ project_number: 5, item_limit: 2 })
 if (limited.columns) {
   for (const col of limited.columns) {
-    if (col.items?.length > 2) failures.push(`itemLimit: column "${col.name}" has ${col.items.length} items, expected ≤2`)
-    if (typeof col.itemCount !== 'number') failures.push(`itemLimit: column "${col.name}" missing itemCount`)
-    if (col.itemCount > 2 && col.truncated !== true) failures.push(`itemLimit: column "${col.name}" should be truncated`)
+    if (col.items?.length > 2)
+      failures.push(`itemLimit: column "${col.name}" has ${col.items.length} items, expected ≤2`)
+    if (typeof col.itemCount !== 'number')
+      failures.push(`itemLimit: column "${col.name}" missing itemCount`)
+    if (col.itemCount > 2 && col.truncated !== true)
+      failures.push(`itemLimit: column "${col.name}" should be truncated`)
   }
 }
 
@@ -61,7 +66,8 @@ if (zeroLimit.columns && !zeroLimit.summaryOnly) {
 const defaultBoard = await mj.github.getKanbanBoard({ project_number: 5 })
 if (defaultBoard.columns) {
   for (const col of defaultBoard.columns) {
-    if (typeof col.itemCount !== 'number') failures.push(`default: column "${col.name}" missing itemCount`)
+    if (typeof col.itemCount !== 'number')
+      failures.push(`default: column "${col.name}" missing itemCount`)
   }
 }
 
@@ -73,12 +79,12 @@ return {
 }
 ```
 
-| Check                       | Expected                |
-| --------------------------- | ----------------------- |
-| `success`                   | `true`                  |
-| `failures`                  | `[]` (empty array)      |
-| `summaryColumnsChecked`     | ≥ 1                     |
-| `limitedColumnsChecked`     | ≥ 1                     |
+| Check                   | Expected           |
+| ----------------------- | ------------------ |
+| `success`               | `true`             |
+| `failures`              | `[]` (empty array) |
+| `summaryColumnsChecked` | ≥ 1                |
+| `limitedColumnsChecked` | ≥ 1                |
 
 ### 30.2 Body Truncation
 
@@ -89,12 +95,16 @@ const failures = []
 // Get a known issue for testing
 const issues = await mj.github.getGithubIssues({ limit: 3 })
 const issueNum = issues.issues?.[0]?.number
-if (!issueNum) return { success: false, error: 'No issues found for testing', failures: ['no_issues'] }
+if (!issueNum)
+  return { success: false, error: 'No issues found for testing', failures: ['no_issues'] }
 
 // Default truncation (800 chars)
 const defaultIssue = await mj.github.getGithubIssue({ issue_number: issueNum })
 if (defaultIssue.issue) {
-  if (defaultIssue.issue.bodyTruncated === undefined && defaultIssue.issue.bodyFullLength === undefined) {
+  if (
+    defaultIssue.issue.bodyTruncated === undefined &&
+    defaultIssue.issue.bodyFullLength === undefined
+  ) {
     // Only valid if body is null or ≤ 800
     const body = defaultIssue.issue.body
     if (body && body.length > 800) failures.push('default: body > 800 but no truncation metadata')
@@ -108,7 +118,10 @@ if (fullIssue.issue && fullIssue.issue.bodyTruncated === true) {
 }
 
 // Include comments
-const withComments = await mj.github.getGithubIssue({ issue_number: issueNum, include_comments: true })
+const withComments = await mj.github.getGithubIssue({
+  issue_number: issueNum,
+  include_comments: true,
+})
 if (withComments.issue) {
   if (!Array.isArray(withComments.comments) && withComments.commentCount === undefined) {
     failures.push('includeComments: no comments array or commentCount present')
@@ -140,11 +153,11 @@ return {
 }
 ```
 
-| Check          | Expected           |
-| -------------- | ------------------ |
-| `success`      | `true`             |
-| `failures`     | `[]` (empty array) |
-| `prChecked`    | `true`             |
+| Check       | Expected           |
+| ----------- | ------------------ |
+| `success`   | `true`             |
+| `failures`  | `[]` (empty array) |
+| `prChecked` | `true`             |
 
 ### 30.3 MAX_QUERY_LIMIT
 
@@ -197,8 +210,8 @@ return {
 return { msg: 'small result', timestamp: Date.now() }
 ```
 
-| Check | Expected |
-| ----- | -------- |
+| Check           | Expected                |
+| --------------- | ----------------------- |
 | Result returned | Object with `msg` field |
 
 **Test 30.4b — Oversized result (over cap):**
@@ -208,10 +221,10 @@ return { msg: 'small result', timestamp: Date.now() }
 return 'x'.repeat(120 * 1024)
 ```
 
-| Check | Expected |
-| ----- | -------- |
-| `success` | `false` |
-| `error` | Contains "KB" and "aggregate" guidance |
+| Check     | Expected                               |
+| --------- | -------------------------------------- |
+| `success` | `false`                                |
+| `error`   | Contains "KB" and "aggregate" guidance |
 
 **Test 30.4c — Boundary result (~50KB, under cap):**
 
@@ -220,8 +233,8 @@ return 'x'.repeat(120 * 1024)
 return 'z'.repeat(50 * 1024)
 ```
 
-| Check | Expected |
-| ----- | -------- |
+| Check           | Expected                         |
+| --------------- | -------------------------------- |
 | Result returned | 50KB string passes without error |
 
 ---

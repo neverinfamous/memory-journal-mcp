@@ -46,29 +46,45 @@ export function buildJournalContext(
     })
 
     // Fetch latest session summaries
-    const summaryEntries = typeof projectNumber === 'number'
-        ? context.db.searchEntries('', { limit: config.summaryCount, projectNumber, tags: ['session-summary'] })
-        : context.db.searchEntries('', { limit: config.summaryCount, tags: ['session-summary'] })
-    
-    // Fallback to retrospective type if no tag matched
-    const retroEntries = summaryEntries.length === 0 ? (
+    const summaryEntries =
         typeof projectNumber === 'number'
-            ? context.db.searchEntries('', { limit: config.summaryCount, projectNumber, entryType: 'retrospective' })
-            : context.db.searchEntries('', { limit: config.summaryCount, entryType: 'retrospective' })
-    ) : []
+            ? context.db.searchEntries('', {
+                  limit: config.summaryCount,
+                  projectNumber,
+                  tags: ['session-summary'],
+              })
+            : context.db.searchEntries('', {
+                  limit: config.summaryCount,
+                  tags: ['session-summary'],
+              })
+
+    // Fallback to retrospective type if no tag matched
+    const retroEntries =
+        summaryEntries.length === 0
+            ? typeof projectNumber === 'number'
+                ? context.db.searchEntries('', {
+                      limit: config.summaryCount,
+                      projectNumber,
+                      entryType: 'retrospective',
+                  })
+                : context.db.searchEntries('', {
+                      limit: config.summaryCount,
+                      entryType: 'retrospective',
+                  })
+            : []
 
     const finalSummaryEntries = summaryEntries.length > 0 ? summaryEntries : retroEntries
-    
+
     let latestSessionSummary
     let sessionSummaries
     if (finalSummaryEntries.length > 0) {
-        sessionSummaries = finalSummaryEntries.map(entry => {
+        sessionSummaries = finalSummaryEntries.map((entry) => {
             const c = entry.content ?? ''
             return {
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')
+                preview: c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : ''),
             }
         })
         latestSessionSummary = sessionSummaries[0]

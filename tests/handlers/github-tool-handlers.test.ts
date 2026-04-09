@@ -490,13 +490,19 @@ describe('GitHub Tool Handlers', () => {
                 getIssue: vi.fn().mockResolvedValue({
                     nodeId: 'ISSUE_NODE_1',
                 }),
-                addProjectItem: vi.fn().mockResolvedValue({ success: true, itemId: 'PVTITEM_NEW' })
+                addProjectItem: vi.fn().mockResolvedValue({ success: true, itemId: 'PVTITEM_NEW' }),
             })
 
-            const result = await callTool('add_kanban_item', {
-                project_number: 1,
-                issue_number: 1,
-            }, db, undefined, github) as any
+            const result = (await callTool(
+                'add_kanban_item',
+                {
+                    project_number: 1,
+                    issue_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as any
 
             expect(result.success).toBe(true)
             expect(result.itemId).toBe('PVTITEM_NEW')
@@ -504,29 +510,41 @@ describe('GitHub Tool Handlers', () => {
 
         it('should return error when issue lacks nodeId or not found', async () => {
             const github = createMockGitHub({
-                getIssue: vi.fn().mockResolvedValue(null)
+                getIssue: vi.fn().mockResolvedValue(null),
             })
 
-            const result = await callTool('add_kanban_item', {
-                project_number: 1,
-                issue_number: 999,
-            }, db, undefined, github) as any
+            const result = (await callTool(
+                'add_kanban_item',
+                {
+                    project_number: 1,
+                    issue_number: 999,
+                },
+                db,
+                undefined,
+                github
+            )) as any
 
             expect(result.error).toContain('not found or lacks a nodeId')
         })
 
         it('should return error when project not found', async () => {
-             const github = createMockGitHub({
+            const github = createMockGitHub({
                 getIssue: vi.fn().mockResolvedValue({
                     nodeId: 'ISSUE_NODE_1',
                 }),
                 getProjectKanban: vi.fn().mockResolvedValue(null),
             })
 
-            const result = await callTool('add_kanban_item', {
-                project_number: 999,
-                issue_number: 1,
-            }, db, undefined, github) as any
+            const result = (await callTool(
+                'add_kanban_item',
+                {
+                    project_number: 999,
+                    issue_number: 1,
+                },
+                db,
+                undefined,
+                github
+            )) as any
 
             expect(result.error).toContain('not found')
         })
@@ -538,13 +556,19 @@ describe('GitHub Tool Handlers', () => {
                 getProjectKanban: vi.fn().mockResolvedValue({
                     projectId: 'PVT_1',
                 }),
-                deleteProjectItem: vi.fn().mockResolvedValue({ success: true })
+                deleteProjectItem: vi.fn().mockResolvedValue({ success: true }),
             })
 
-            const result = await callTool('delete_kanban_item', {
-                project_number: 1,
-                item_id: 'PVTITEM_1',
-            }, db, undefined, github) as any
+            const result = (await callTool(
+                'delete_kanban_item',
+                {
+                    project_number: 1,
+                    item_id: 'PVTITEM_1',
+                },
+                db,
+                undefined,
+                github
+            )) as any
 
             expect(result.success).toBe(true)
         })
@@ -554,10 +578,16 @@ describe('GitHub Tool Handlers', () => {
                 getProjectKanban: vi.fn().mockResolvedValue(null),
             })
 
-            const result = await callTool('delete_kanban_item', {
-                project_number: 999,
-                item_id: 'PVTITEM_1',
-            }, db, undefined, github) as any
+            const result = (await callTool(
+                'delete_kanban_item',
+                {
+                    project_number: 999,
+                    item_id: 'PVTITEM_1',
+                },
+                db,
+                undefined,
+                github
+            )) as any
 
             expect(result.error).toContain('not found')
         })

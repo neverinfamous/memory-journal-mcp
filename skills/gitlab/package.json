@@ -1,14 +1,14 @@
 {
-  "name": "gitlab-skill",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@gitbeaker/rest": "^40.0.0",
-    "dotenv": "^16.4.5"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
-  }
+    "name": "gitlab-skill",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@gitbeaker/rest": "^40.0.0",
+        "dotenv": "^16.4.5"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0"
+    }
 }

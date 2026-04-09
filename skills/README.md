@@ -1,6 +1,6 @@
 # neverinfamous-agent-skills
 
-Reusable instruction sets that establish permanent AI behavior paradigms and extend agent capabilities for specialized tasks. 
+Reusable instruction sets that establish permanent AI behavior paradigms and extend agent capabilities for specialized tasks.
 
 ## Installation & Distribution
 
@@ -38,23 +38,23 @@ The markdown body contains the full instructions the agent follows once the skil
 
 ## Inventory
 
-| Skill | Description |
-|-------|-------------|
-| `autonomous-dev` | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
-| `bun` | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler |
-| `github-commander` | GitHub pipeline workflows for orchestrating issues, regressions, and deployments |
-| `gitlab` | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab |
-| `golang` | Master Go development with production-grade best practices from Google and Uber style guides |
-| `typescript` | Enterprise-grade TypeScript development with type-safe patterns, Zod validation, and modern tooling |
-| `mysql` | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations |
-| `playwright-standard` | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience |
-| `postgres` | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS |
-| `react-best-practices` | Vercel engineering guidelines for React/Next.js performance, hooks, and bundle optimization |
-| `rust` | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture |
-| `shadcn-ui` | Deep knowledge of shadcn/ui components, patterns, forms, and best practices |
-| `skill-builder` | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing |
-| `sqlite` | Production configurations for concurrency (WAL), typing (STRICT), and data integrity |
-| `vitest-standard` | Comprehensive unit testing expertise covering Vitest, TDD, mocking strategies, and test architecture |
+| Skill                  | Description                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `autonomous-dev`       | Harness for autonomous software development — alignment gates, adversarial agents, Git workflows, and CI/CD pipelines |
+| `bun`                  | Master the Bun all-in-one toolkit — runtime, package manager, test runner, and bundler                                |
+| `github-commander`     | GitHub pipeline workflows for orchestrating issues, regressions, and deployments                                      |
+| `gitlab`               | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
+| `golang`               | Master Go development with production-grade best practices from Google and Uber style guides                          |
+| `typescript`           | Enterprise-grade TypeScript development with type-safe patterns, Zod validation, and modern tooling                   |
+| `mysql`                | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                    |
+| `playwright-standard`  | Opinionated guidance for Playwright E2E/API tests, Page Object Models, and CI/CD resilience                           |
+| `postgres`             | Advanced PostgreSQL patterns — indexing layouts, JSONB querying, transactional guardrails, and RLS                    |
+| `react-best-practices` | Vercel engineering guidelines for React/Next.js performance, hooks, and bundle optimization                           |
+| `rust`                 | Master Rust development using a layer-based "meta-cognition" framework for borrowing, lifetimes, and architecture     |
+| `shadcn-ui`            | Deep knowledge of shadcn/ui components, patterns, forms, and best practices                                           |
+| `skill-builder`        | Guide for creating, evaluating, and refining agent skills — progressive disclosure, triggers, and testing             |
+| `sqlite`               | Production configurations for concurrency (WAL), typing (STRICT), and data integrity                                  |
+| `vitest-standard`      | Comprehensive unit testing expertise covering Vitest, TDD, mocking strategies, and test architecture                  |
 
 ## GitHub Commander Workflows
 

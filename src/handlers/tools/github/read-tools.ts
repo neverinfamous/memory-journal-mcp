@@ -210,11 +210,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     const truncateBody = input.truncate_body
                     let bodyTruncated = false
                     let bodyFullLength: number | undefined
-                    if (
-                        truncateBody > 0 &&
-                        issue.body &&
-                        issue.body.length > truncateBody
-                    ) {
+                    if (truncateBody > 0 && issue.body && issue.body.length > truncateBody) {
                         bodyFullLength = issue.body.length
                         const remaining = issue.body.length - truncateBody
                         issue.body =
@@ -322,9 +318,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     return {
                         pullRequest: {
                             ...pullRequest,
-                            ...(bodyTruncated
-                                ? { bodyTruncated: true, bodyFullLength }
-                                : {}),
+                            ...(bodyTruncated ? { bodyTruncated: true, bodyFullLength } : {}),
                         },
                         owner: resolved.owner,
                         repo: resolved.repo,

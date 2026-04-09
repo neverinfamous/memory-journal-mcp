@@ -2,7 +2,6 @@ import { callTool } from '../../src/handlers/tools/index.ts'
 import { DatabaseAdapterFactory } from '../../src/database/adapter-factory.ts'
 import { VectorSearchManager } from '../../src/vector/vector-search-manager.ts'
 import { GitHubIntegration } from '../../src/github/github-integration/index.ts'
-
 ;(async () => {
     const db = await DatabaseAdapterFactory.create(':memory:')
     await db.initialize()

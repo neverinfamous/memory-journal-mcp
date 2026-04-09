@@ -14,9 +14,7 @@ import type { GitHubIntegration } from '../../src/github/github-integration.js'
 // Mock
 // ============================================================================
 
-function createMockGitHub(
-    overrides: Partial<Record<string, unknown>> = {}
-): GitHubIntegration {
+function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): GitHubIntegration {
     const defaults = {
         isApiAvailable: vi.fn().mockReturnValue(true),
         getRepoInfo: vi.fn().mockResolvedValue({

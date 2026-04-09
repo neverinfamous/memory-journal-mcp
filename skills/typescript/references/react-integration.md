@@ -160,52 +160,52 @@ function Button<T extends React.ElementType = "button">({
 
 ```typescript
 // Basic usage (type inferred)
-const [count, setCount] = useState(0);
+const [count, setCount] = useState(0)
 
 // Explicit type (for complex types or initial null)
-const [user, setUser] = useState<User | null>(null);
+const [user, setUser] = useState<User | null>(null)
 
 // With union types
-type Status = "idle" | "loading" | "success" | "error";
-const [status, setStatus] = useState<Status>("idle");
+type Status = 'idle' | 'loading' | 'success' | 'error'
+const [status, setStatus] = useState<Status>('idle')
 
 // Lazy initialization
 const [state, setState] = useState<ExpensiveState>(() => {
-  return computeExpensiveInitialState();
-});
+  return computeExpensiveInitialState()
+})
 ```
 
 ### useRef
 
 ```typescript
 // DOM element ref
-const inputRef = useRef<HTMLInputElement>(null);
+const inputRef = useRef<HTMLInputElement>(null)
 
 function focusInput() {
-  inputRef.current?.focus();
+  inputRef.current?.focus()
 }
 
 // Mutable ref (no initial render)
-const intervalRef = useRef<NodeJS.Timeout | null>(null);
+const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
 useEffect(() => {
-  intervalRef.current = setInterval(() => {}, 1000);
+  intervalRef.current = setInterval(() => {}, 1000)
   return () => {
     if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+      clearInterval(intervalRef.current)
     }
-  };
-}, []);
+  }
+}, [])
 
 // Ref to store previous value
 function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T | undefined>(undefined);
+  const ref = useRef<T | undefined>(undefined)
 
   useEffect(() => {
-    ref.current = value;
-  }, [value]);
+    ref.current = value
+  }, [value])
 
-  return ref.current;
+  return ref.current
 }
 ```
 
@@ -214,37 +214,34 @@ function usePrevious<T>(value: T): T | undefined {
 ```typescript
 // Define state and actions
 interface CounterState {
-  count: number;
-  step: number;
+  count: number
+  step: number
 }
 
 type CounterAction =
-  | { type: "increment" }
-  | { type: "decrement" }
-  | { type: "setStep"; payload: number }
-  | { type: "reset" };
+  | { type: 'increment' }
+  | { type: 'decrement' }
+  | { type: 'setStep'; payload: number }
+  | { type: 'reset' }
 
-function counterReducer(
-  state: CounterState,
-  action: CounterAction
-): CounterState {
+function counterReducer(state: CounterState, action: CounterAction): CounterState {
   switch (action.type) {
-    case "increment":
-      return { ...state, count: state.count + state.step };
-    case "decrement":
-      return { ...state, count: state.count - state.step };
-    case "setStep":
-      return { ...state, step: action.payload };
-    case "reset":
-      return { count: 0, step: 1 };
+    case 'increment':
+      return { ...state, count: state.count + state.step }
+    case 'decrement':
+      return { ...state, count: state.count - state.step }
+    case 'setStep':
+      return { ...state, step: action.payload }
+    case 'reset':
+      return { count: 0, step: 1 }
   }
 }
 
 // Usage
-const [state, dispatch] = useReducer(counterReducer, { count: 0, step: 1 });
+const [state, dispatch] = useReducer(counterReducer, { count: 0, step: 1 })
 
-dispatch({ type: "increment" });
-dispatch({ type: "setStep", payload: 5 });
+dispatch({ type: 'increment' })
+dispatch({ type: 'setStep', payload: 5 })
 ```
 
 ### Custom Hooks
@@ -252,45 +249,46 @@ dispatch({ type: "setStep", payload: 5 });
 ```typescript
 // Async data fetching hook
 interface UseAsyncResult<T> {
-  data: T | null;
-  loading: boolean;
-  error: Error | null;
-  refetch: () => void;
+  data: T | null
+  loading: boolean
+  error: Error | null
+  refetch: () => void
 }
 
 function useAsync<T>(
   asyncFn: () => Promise<T>,
   deps: React.DependencyList = []
 ): UseAsyncResult<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [data, setData] = useState<T | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
 
   const execute = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
-      const result = await asyncFn();
-      setData(result);
+      const result = await asyncFn()
+      setData(result)
     } catch (e) {
-      setError(e instanceof Error ? e : new Error(String(e)));
+      setError(e instanceof Error ? e : new Error(String(e)))
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, deps);
+  }, deps)
 
   useEffect(() => {
-    execute();
-  }, [execute]);
+    execute()
+  }, [execute])
 
-  return { data, loading, error, refetch: execute };
+  return { data, loading, error, refetch: execute }
 }
 
 // Usage
-const { data: users, loading, error } = useAsync(
-  () => fetch("/api/users").then((r) => r.json()),
-  []
-);
+const {
+  data: users,
+  loading,
+  error,
+} = useAsync(() => fetch('/api/users').then((r) => r.json()), [])
 
 // Local storage hook
 function useLocalStorage<T>(
@@ -299,20 +297,20 @@ function useLocalStorage<T>(
 ): [T, (value: T | ((prev: T) => T)) => void] {
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      const item = localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
     } catch {
-      return initialValue;
+      return initialValue
     }
-  });
+  })
 
   const setValue = (value: T | ((prev: T) => T)) => {
-    const valueToStore = value instanceof Function ? value(storedValue) : value;
-    setStoredValue(valueToStore);
-    localStorage.setItem(key, JSON.stringify(valueToStore));
-  };
+    const valueToStore = value instanceof Function ? value(storedValue) : value
+    setStoredValue(valueToStore)
+    localStorage.setItem(key, JSON.stringify(valueToStore))
+  }
 
-  return [storedValue, setValue];
+  return [storedValue, setValue]
 }
 ```
 
@@ -323,17 +321,17 @@ function useLocalStorage<T>(
 ### Zustand with TypeScript
 
 ```typescript
-import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { create } from 'zustand'
+import { devtools, persist } from 'zustand/middleware'
 
 // Define state interface
 interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-  setUser: (user: User) => void;
+  user: User | null
+  token: string | null
+  isAuthenticated: boolean
+  login: (email: string, password: string) => Promise<void>
+  logout: () => void
+  setUser: (user: User) => void
 }
 
 // Create typed store
@@ -346,103 +344,103 @@ const useAuthStore = create<AuthState>()(
         isAuthenticated: false,
 
         login: async (email, password) => {
-          const response = await api.login(email, password);
+          const response = await api.login(email, password)
           set({
             user: response.user,
             token: response.token,
-            isAuthenticated: true
-          });
+            isAuthenticated: true,
+          })
         },
 
         logout: () => {
-          set({ user: null, token: null, isAuthenticated: false });
+          set({ user: null, token: null, isAuthenticated: false })
         },
 
-        setUser: (user) => set({ user })
+        setUser: (user) => set({ user }),
       }),
       { name: 'auth-storage' }
     )
   )
-);
+)
 
 // Usage with selectors
-const user = useAuthStore((state) => state.user);
-const login = useAuthStore((state) => state.login);
+const user = useAuthStore((state) => state.user)
+const login = useAuthStore((state) => state.login)
 
 // Shallow comparison for multiple values
-import { useShallow } from 'zustand/react/shallow';
+import { useShallow } from 'zustand/react/shallow'
 
 const { user, isAuthenticated } = useAuthStore(
   useShallow((state) => ({
     user: state.user,
-    isAuthenticated: state.isAuthenticated
+    isAuthenticated: state.isAuthenticated,
   }))
-);
+)
 ```
 
 ### Redux Toolkit with TypeScript
 
 ```typescript
-import { createSlice, PayloadAction, configureStore } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, configureStore } from '@reduxjs/toolkit'
 
 // Define slice state
 interface TodosState {
-  items: Todo[];
-  filter: "all" | "active" | "completed";
-  loading: boolean;
+  items: Todo[]
+  filter: 'all' | 'active' | 'completed'
+  loading: boolean
 }
 
 const initialState: TodosState = {
   items: [],
-  filter: "all",
-  loading: false
-};
+  filter: 'all',
+  loading: false,
+}
 
 // Create typed slice
 const todosSlice = createSlice({
-  name: "todos",
+  name: 'todos',
   initialState,
   reducers: {
     addTodo: (state, action: PayloadAction<string>) => {
       state.items.push({
         id: crypto.randomUUID(),
         text: action.payload,
-        completed: false
-      });
+        completed: false,
+      })
     },
     toggleTodo: (state, action: PayloadAction<string>) => {
-      const todo = state.items.find((t) => t.id === action.payload);
+      const todo = state.items.find((t) => t.id === action.payload)
       if (todo) {
-        todo.completed = !todo.completed;
+        todo.completed = !todo.completed
       }
     },
-    setFilter: (state, action: PayloadAction<TodosState["filter"]>) => {
-      state.filter = action.payload;
-    }
-  }
-});
+    setFilter: (state, action: PayloadAction<TodosState['filter']>) => {
+      state.filter = action.payload
+    },
+  },
+})
 
 // Configure store with type inference
 const store = configureStore({
   reducer: {
-    todos: todosSlice.reducer
-  }
-});
+    todos: todosSlice.reducer,
+  },
+})
 
 // Infer types from store
-type RootState = ReturnType<typeof store.getState>;
-type AppDispatch = typeof store.dispatch;
+type RootState = ReturnType<typeof store.getState>
+type AppDispatch = typeof store.dispatch
 
 // Typed hooks
-import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux';
+import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux'
 
-const useAppDispatch = () => useDispatch<AppDispatch>();
-const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+const useAppDispatch = () => useDispatch<AppDispatch>()
+const useAppSelector: TypedUseSelectorHook<RootState> = useSelector
 
 // Usage
-const todos = useAppSelector((state) => state.todos.items);
-const dispatch = useAppDispatch();
-dispatch(todosSlice.actions.addTodo("New todo"));
+const todos = useAppSelector((state) => state.todos.items)
+const dispatch = useAppDispatch()
+dispatch(todosSlice.actions.addTodo('New todo'))
 ```
 
 ---
@@ -454,37 +452,37 @@ dispatch(todosSlice.actions.addTodo("New todo"));
 ```typescript
 // Click events
 function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
-  console.log(event.currentTarget.name);
+  console.log(event.currentTarget.name)
 }
 
 // Form events
 function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
+  event.preventDefault()
+  const formData = new FormData(event.currentTarget)
 }
 
 // Input change
 function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-  const { name, value, checked, type } = event.target;
-  const inputValue = type === "checkbox" ? checked : value;
+  const { name, value, checked, type } = event.target
+  const inputValue = type === 'checkbox' ? checked : value
 }
 
 // Keyboard events
 function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-  if (event.key === "Enter") {
-    event.preventDefault();
+  if (event.key === 'Enter') {
+    event.preventDefault()
     // submit form
   }
 }
 
 // Focus events
 function handleFocus(event: React.FocusEvent<HTMLInputElement>) {
-  event.target.select();
+  event.target.select()
 }
 
 // Drag events
 function handleDrag(event: React.DragEvent<HTMLDivElement>) {
-  event.dataTransfer.setData("text/plain", "dragged data");
+  event.dataTransfer.setData('text/plain', 'dragged data')
 }
 ```
 
@@ -593,26 +591,26 @@ function ThemeToggle() {
 ```typescript
 // Factory function for creating typed contexts
 function createContext<T>(displayName: string) {
-  const Context = React.createContext<T | undefined>(undefined);
-  Context.displayName = displayName;
+  const Context = React.createContext<T | undefined>(undefined)
+  Context.displayName = displayName
 
   function useContextHook(): T {
-    const context = React.useContext(Context);
+    const context = React.useContext(Context)
     if (context === undefined) {
-      throw new Error(`use${displayName} must be used within ${displayName}Provider`);
+      throw new Error(`use${displayName} must be used within ${displayName}Provider`)
     }
-    return context;
+    return context
   }
 
-  return [Context.Provider, useContextHook] as const;
+  return [Context.Provider, useContextHook] as const
 }
 
 // Usage
 interface AuthContextType {
-  user: User | null;
-  login: (credentials: Credentials) => Promise<void>;
-  logout: () => void;
+  user: User | null
+  login: (credentials: Credentials) => Promise<void>
+  logout: () => void
 }
 
-const [AuthProvider, useAuth] = createContext<AuthContextType>("Auth");
+const [AuthProvider, useAuth] = createContext<AuthContextType>('Auth')
 ```

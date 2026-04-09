@@ -83,7 +83,7 @@ On failure → attempt fix → **HITL checkpoint** after 2 attempts.
 
 ### Gate 3: Unit/Integration Tests
 
-Run `PROJECT_TEST_CMD` (default: `npm run test`). *(Agent Note: Ensure OutputCharacterCount >= 10000 on test execution)*
+Run `PROJECT_TEST_CMD` (default: `npm run test`). _(Agent Note: Ensure OutputCharacterCount >= 10000 on test execution)_
 
 On failure:
 
@@ -94,7 +94,7 @@ On failure:
 
 ### Gate 4: E2E Tests
 
-Run `PROJECT_E2E_CMD` (default: empty = skip). *(Agent Note: Ensure OutputCharacterCount >= 10000)*
+Run `PROJECT_E2E_CMD` (default: empty = skip). _(Agent Note: Ensure OutputCharacterCount >= 10000)_
 Skip if not configured. Same failure handling as Gate 3.
 
 ### Gate 5: Security Scans
@@ -231,7 +231,7 @@ Wait for human approval before proceeding to Phase 5.
      pr_number: <pr_number>
    })
    ```
-   *Kanban Sync:* Using the Project Node IDs anchored in the memory journal during the roadmap kickoff, transition the issue card from "In Progress" to "In Review":
+   _Kanban Sync:_ Using the Project Node IDs anchored in the memory journal during the roadmap kickoff, transition the issue card from "In Progress" to "In Review":
    ```bash
    // turbo
    gh project item-edit --id {ITEM_NODE_ID} --project-id {PROJECT_NODE_ID} --field-id {STATUS_FIELD_ID} --single-select-option-id {IN_REVIEW_OPTION_ID}

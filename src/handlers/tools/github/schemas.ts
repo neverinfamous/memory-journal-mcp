@@ -175,7 +175,7 @@ const StatusOptionOutputSchema = z.object({
 const KanbanColumnOutputSchema = z.object({
     status: z.string(),
     statusOptionId: z.string(),
-    items: z.array(KanbanItemOutputSchema),
+    items: z.array(KanbanItemOutputSchema).optional(),
     itemCount: z.number().optional(),
     truncated: z.boolean().optional(),
 })
@@ -189,11 +189,15 @@ export const KanbanBoardOutputSchema = z
         statusOptions: z.array(StatusOptionOutputSchema).optional(),
         columns: z.array(KanbanColumnOutputSchema).optional(),
         totalItems: z.number().optional(),
-        itemDirectory: z.array(z.object({
-            id: z.string(),
-            title: z.string(),
-            status: z.string().nullable()
-        })).optional(),
+        itemDirectory: z
+            .array(
+                z.object({
+                    id: z.string(),
+                    title: z.string(),
+                    status: z.string().nullable(),
+                })
+            )
+            .optional(),
         summaryOnly: z.boolean().optional(),
         owner: z.string().optional(),
         detectedOwner: z.string().nullable().optional(),

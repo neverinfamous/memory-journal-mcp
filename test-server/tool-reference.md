@@ -72,11 +72,11 @@ Link entries and visualize knowledge graphs.
 
 Export and import journal data in multiple formats, including Markdown roundtripping.
 
-| Tool               | Description                                        |
-| ------------------ | -------------------------------------------------- |
-| `export_entries`   | Export journal entries to JSON or Markdown format. |
-| `export_markdown`  | Export the entire journal to a structured directory of Markdown files. |
-| `import_markdown`  | Import a structured directory of Markdown files into the journal database. |
+| Tool              | Description                                                                |
+| ----------------- | -------------------------------------------------------------------------- |
+| `export_entries`  | Export journal entries to JSON or Markdown format.                         |
+| `export_markdown` | Export the entire journal to a structured directory of Markdown files.     |
+| `import_markdown` | Import a structured directory of Markdown files into the journal database. |
 
 ---
 

@@ -136,12 +136,12 @@ Modern TypeScript toolchain configuration for 2025.
 
 ### Why pnpm
 
-| Feature | npm | pnpm |
-|---------|-----|------|
-| Disk usage | Duplicates packages | Shared store, symlinks |
-| Install speed | Slower | 2-3x faster |
-| Strictness | Allows phantom deps | Strict by default |
-| Monorepo support | Basic workspaces | First-class support |
+| Feature          | npm                 | pnpm                   |
+| ---------------- | ------------------- | ---------------------- |
+| Disk usage       | Duplicates packages | Shared store, symlinks |
+| Install speed    | Slower              | 2-3x faster            |
+| Strictness       | Allows phantom deps | Strict by default      |
+| Monorepo support | Basic workspaces    | First-class support    |
 
 ### Basic Commands
 
@@ -199,18 +199,15 @@ packages:
 
 ```typescript
 // vite.config.ts
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tsconfigPaths()
-  ],
+  plugins: [react(), tsconfigPaths()],
   server: {
     port: 3000,
-    host: true
+    host: true,
   },
   build: {
     target: 'es2022',
@@ -219,25 +216,25 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
-          utils: ['lodash-es', 'date-fns']
-        }
-      }
-    }
+          utils: ['lodash-es', 'date-fns'],
+        },
+      },
+    },
   },
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts']
-  }
-});
+    setupFiles: ['./src/test/setup.ts'],
+  },
+})
 ```
 
 ### Library Mode
 
 ```typescript
 // vite.config.ts for library
-import { defineConfig } from 'vite';
-import dts from 'vite-plugin-dts';
+import { defineConfig } from 'vite'
+import dts from 'vite-plugin-dts'
 
 export default defineConfig({
   build: {
@@ -245,22 +242,20 @@ export default defineConfig({
       entry: './src/index.ts',
       name: 'MyLibrary',
       fileName: 'my-library',
-      formats: ['es', 'cjs']
+      formats: ['es', 'cjs'],
     },
     rollupOptions: {
       external: ['react', 'react-dom'],
       output: {
         globals: {
           react: 'React',
-          'react-dom': 'ReactDOM'
-        }
-      }
-    }
+          'react-dom': 'ReactDOM',
+        },
+      },
+    },
   },
-  plugins: [
-    dts({ insertTypesEntry: true })
-  ]
-});
+  plugins: [dts({ insertTypesEntry: true })],
+})
 ```
 
 ---
@@ -271,10 +266,10 @@ export default defineConfig({
 
 ```javascript
 // eslint.config.js
-import eslint from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import reactPlugin from 'eslint-plugin-react';
-import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import eslint from '@eslint/js'
+import tseslint from 'typescript-eslint'
+import reactPlugin from 'eslint-plugin-react'
+import reactHooksPlugin from 'eslint-plugin-react-hooks'
 
 export default tseslint.config(
   // Base ESLint recommendations
@@ -289,9 +284,9 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: import.meta.dirname
-      }
-    }
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
   },
 
   // React configuration
@@ -299,38 +294,44 @@ export default tseslint.config(
     files: ['**/*.tsx'],
     plugins: {
       react: reactPlugin,
-      'react-hooks': reactHooksPlugin
+      'react-hooks': reactHooksPlugin,
     },
     rules: {
       ...reactPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
-      'react/react-in-jsx-scope': 'off'
+      'react/react-in-jsx-scope': 'off',
     },
     settings: {
-      react: { version: 'detect' }
-    }
+      react: { version: 'detect' },
+    },
   },
 
   // Custom rules
   {
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_'
-      }],
-      '@typescript-eslint/consistent-type-imports': ['error', {
-        prefer: 'type-imports'
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          prefer: 'type-imports',
+        },
+      ],
       '@typescript-eslint/no-floating-promises': 'error',
-      '@typescript-eslint/await-thenable': 'error'
-    }
+      '@typescript-eslint/await-thenable': 'error',
+    },
   },
 
   // Ignore patterns
   {
-    ignores: ['dist/**', 'node_modules/**', '*.config.js']
+    ignores: ['dist/**', 'node_modules/**', '*.config.js'],
   }
-);
+)
 ```
 
 ### Common Rules Explained
@@ -377,9 +378,9 @@ export default tseslint.config(
 
 ```typescript
 // vitest.config.ts
-import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
-import tsconfigPaths from 'vite-tsconfig-paths';
+import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
+import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
@@ -391,36 +392,36 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['**/*.d.ts', '**/*.config.*', '**/test/**']
+      exclude: ['**/*.d.ts', '**/*.config.*', '**/test/**'],
     },
     typecheck: {
-      enabled: true
-    }
-  }
-});
+      enabled: true,
+    },
+  },
+})
 ```
 
 ### Test Setup
 
 ```typescript
 // src/test/setup.ts
-import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
-import { afterEach, beforeAll, afterAll, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest'
+import { cleanup } from '@testing-library/react'
+import { afterEach, beforeAll, afterAll, vi } from 'vitest'
 
 // Cleanup after each test
 afterEach(() => {
-  cleanup();
-});
+  cleanup()
+})
 
 // Mock environment variables
 beforeAll(() => {
-  vi.stubEnv('API_URL', 'http://localhost:3000');
-});
+  vi.stubEnv('API_URL', 'http://localhost:3000')
+})
 
 afterAll(() => {
-  vi.unstubAllEnvs();
-});
+  vi.unstubAllEnvs()
+})
 ```
 
 ### Example Tests
@@ -486,12 +487,12 @@ describe('Button', () => {
 
 ```javascript
 // eslint.config.js
-import eslintConfigPrettier from 'eslint-config-prettier';
+import eslintConfigPrettier from 'eslint-config-prettier'
 
 export default tseslint.config(
   // ... other configs
   eslintConfigPrettier // Must be last to disable conflicting rules
-);
+)
 ```
 
 ### Package Scripts

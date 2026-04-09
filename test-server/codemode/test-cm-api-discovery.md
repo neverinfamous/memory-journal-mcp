@@ -24,11 +24,11 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 ### 17.1 Top-Level Help
 
-| Test                     | Code                                                 | Expected Result                                                                                         |
-| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| mj.help() returns groups | `return await mj.help();`                            | `groups` array with 10 entries, `totalMethods` > 40, `usage` string                                      |
+| Test                     | Code                                                 | Expected Result                                                                                               |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| mj.help() returns groups | `return await mj.help();`                            | `groups` array with 10 entries, `totalMethods` > 40, `usage` string                                           |
 | All 10 groups present    | `const h = await mj.help(); return h.groups;`        | Contains: `core`, `search`, `analytics`, `relationships`, `io`, `export`, `admin`, `github`, `backup`, `team` |
-| Correct group count      | `const h = await mj.help(); return h.groups.length;` | `10`                                                                                                      |
+| Correct group count      | `const h = await mj.help(); return h.groups.length;` | `10`                                                                                                          |
 
 ### 17.2 Per-Group Help
 

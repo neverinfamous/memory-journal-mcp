@@ -154,9 +154,9 @@ return {
 
 ### 21.5 Search by Date Range — Error Paths
 
-| Test                | Code                                                                                     | Expected Result                                         |
-| ------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Invalid date format | `return await mj.search.searchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });` | `{ success: false, error: "..." }` with YYYY-MM-DD hint |
+| Test                | Code                                                                                              | Expected Result                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Invalid date format | `return await mj.search.searchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });`          | `{ success: false, error: "..." }` with YYYY-MM-DD hint     |
 | Inverted date range | `return await mj.search.searchByDateRange({ start_date: "2026-12-31", end_date: "2026-01-01" });` | `{ success: false, error: "..." }` start must be before end |
 
 ### 21.6 Semantic Search

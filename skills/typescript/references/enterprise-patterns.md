@@ -22,42 +22,40 @@ Instead of throwing exceptions, return typed results:
 
 ```typescript
 // Define Result type
-type Result<T, E = Error> =
-  | { success: true; data: T }
-  | { success: false; error: E };
+type Result<T, E = Error> = { success: true; data: T } | { success: false; error: E }
 
 // Helper functions
 function ok<T>(data: T): Result<T, never> {
-  return { success: true, data };
+  return { success: true, data }
 }
 
 function err<E>(error: E): Result<never, E> {
-  return { success: false, error };
+  return { success: false, error }
 }
 
 // Usage
 interface ValidationError {
-  field: string;
-  message: string;
+  field: string
+  message: string
 }
 
 function parseEmail(input: string): Result<string, ValidationError> {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
   if (!emailRegex.test(input)) {
-    return err({ field: "email", message: "Invalid email format" });
+    return err({ field: 'email', message: 'Invalid email format' })
   }
 
-  return ok(input.toLowerCase());
+  return ok(input.toLowerCase())
 }
 
 // Consuming Result
-const result = parseEmail(userInput);
+const result = parseEmail(userInput)
 
 if (result.success) {
-  console.log(`Valid email: ${result.data}`);
+  console.log(`Valid email: ${result.data}`)
 } else {
-  console.error(`Error in ${result.error.field}: ${result.error.message}`);
+  console.error(`Error in ${result.error.field}: ${result.error.message}`)
 }
 ```
 
@@ -66,50 +64,50 @@ if (result.success) {
 ```typescript
 // Base application error
 abstract class AppError extends Error {
-  abstract readonly code: string;
-  abstract readonly statusCode: number;
+  abstract readonly code: string
+  abstract readonly statusCode: number
 
   constructor(message: string) {
-    super(message);
-    this.name = this.constructor.name;
-    Error.captureStackTrace(this, this.constructor);
+    super(message)
+    this.name = this.constructor.name
+    Error.captureStackTrace(this, this.constructor)
   }
 }
 
 // Specific error types
 class NotFoundError extends AppError {
-  readonly code = "NOT_FOUND";
-  readonly statusCode = 404;
+  readonly code = 'NOT_FOUND'
+  readonly statusCode = 404
 
   constructor(resource: string, id: string) {
-    super(`${resource} with id ${id} not found`);
+    super(`${resource} with id ${id} not found`)
   }
 }
 
 class ValidationError extends AppError {
-  readonly code = "VALIDATION_ERROR";
-  readonly statusCode = 400;
+  readonly code = 'VALIDATION_ERROR'
+  readonly statusCode = 400
 
   constructor(
     message: string,
     public readonly fields: Record<string, string[]>
   ) {
-    super(message);
+    super(message)
   }
 }
 
 class UnauthorizedError extends AppError {
-  readonly code = "UNAUTHORIZED";
-  readonly statusCode = 401;
+  readonly code = 'UNAUTHORIZED'
+  readonly statusCode = 401
 
-  constructor(message = "Authentication required") {
-    super(message);
+  constructor(message = 'Authentication required') {
+    super(message)
   }
 }
 
 // Type guard for app errors
 function isAppError(error: unknown): error is AppError {
-  return error instanceof AppError;
+  return error instanceof AppError
 }
 
 // Error handler
@@ -120,16 +118,16 @@ function handleError(error: unknown): { status: number; body: object } {
       body: {
         code: error.code,
         message: error.message,
-        ...(error instanceof ValidationError && { fields: error.fields })
-      }
-    };
+        ...(error instanceof ValidationError && { fields: error.fields }),
+      },
+    }
   }
 
-  console.error("Unexpected error:", error);
+  console.error('Unexpected error:', error)
   return {
     status: 500,
-    body: { code: "INTERNAL_ERROR", message: "Internal server error" }
-  };
+    body: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
+  }
 }
 ```
 
@@ -140,7 +138,7 @@ function handleError(error: unknown): { status: number; body: object } {
 ### Zod Schema Validation
 
 ```typescript
-import { z } from 'zod';
+import { z } from 'zod'
 
 // Define schemas
 const UserSchema = z.object({
@@ -148,44 +146,44 @@ const UserSchema = z.object({
   name: z.string().min(1).max(100),
   email: z.string().email(),
   age: z.number().int().min(0).max(150).optional(),
-  role: z.enum(["user", "admin", "moderator"]),
-  metadata: z.record(z.string()).optional()
-});
+  role: z.enum(['user', 'admin', 'moderator']),
+  metadata: z.record(z.string()).optional(),
+})
 
 // Infer TypeScript type
-type User = z.infer<typeof UserSchema>;
+type User = z.infer<typeof UserSchema>
 
 // Create DTO schemas
-const CreateUserSchema = UserSchema.omit({ id: true });
-type CreateUserDto = z.infer<typeof CreateUserSchema>;
+const CreateUserSchema = UserSchema.omit({ id: true })
+type CreateUserDto = z.infer<typeof CreateUserSchema>
 
-const UpdateUserSchema = UserSchema.partial().omit({ id: true });
-type UpdateUserDto = z.infer<typeof UpdateUserSchema>;
+const UpdateUserSchema = UserSchema.partial().omit({ id: true })
+type UpdateUserDto = z.infer<typeof UpdateUserSchema>
 
 // Validation functions
 function validateCreateUser(data: unknown): Result<CreateUserDto, z.ZodError> {
-  const result = CreateUserSchema.safeParse(data);
+  const result = CreateUserSchema.safeParse(data)
 
   if (result.success) {
-    return ok(result.data);
+    return ok(result.data)
   }
 
-  return err(result.error);
+  return err(result.error)
 }
 
 // Transform Zod errors to user-friendly format
 function formatZodError(error: z.ZodError): Record<string, string[]> {
-  const formatted: Record<string, string[]> = {};
+  const formatted: Record<string, string[]> = {}
 
   for (const issue of error.issues) {
-    const path = issue.path.join(".");
+    const path = issue.path.join('.')
     if (!formatted[path]) {
-      formatted[path] = [];
+      formatted[path] = []
     }
-    formatted[path].push(issue.message);
+    formatted[path].push(issue.message)
   }
 
-  return formatted;
+  return formatted
 }
 ```
 
@@ -193,27 +191,27 @@ function formatZodError(error: z.ZodError): Record<string, string[]> {
 
 ```typescript
 // Branded/Nominal types
-declare const EmailBrand: unique symbol;
-type Email = string & { readonly [EmailBrand]: true };
+declare const EmailBrand: unique symbol
+type Email = string & { readonly [EmailBrand]: true }
 
-declare const UserIdBrand: unique symbol;
-type UserId = string & { readonly [UserIdBrand]: true };
+declare const UserIdBrand: unique symbol
+type UserId = string & { readonly [UserIdBrand]: true }
 
 // Validation functions that return branded types
 function validateEmail(input: string): Email {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(input)) {
-    throw new ValidationError("Invalid email", { email: ["Invalid format"] });
+    throw new ValidationError('Invalid email', { email: ['Invalid format'] })
   }
-  return input as Email;
+  return input as Email
 }
 
 function validateUserId(input: string): UserId {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   if (!uuidRegex.test(input)) {
-    throw new ValidationError("Invalid user ID", { id: ["Must be UUID"] });
+    throw new ValidationError('Invalid user ID', { id: ['Must be UUID'] })
   }
-  return input as UserId;
+  return input as UserId
 }
 
 // Usage: Functions require validated types
@@ -226,8 +224,8 @@ function getUser(id: UserId): Promise<User> {
 }
 
 // Compiler enforces validation
-sendEmail("invalid", "Hello");           // Error: string not assignable to Email
-sendEmail(validateEmail("a@b.com"), "Hello"); // OK
+sendEmail('invalid', 'Hello') // Error: string not assignable to Email
+sendEmail(validateEmail('a@b.com'), 'Hello') // OK
 ```
 
 ---
@@ -280,16 +278,16 @@ src/
 
 ```typescript
 // features/users/index.ts
-export type { User, CreateUserDto, UpdateUserDto } from './user.types';
-export { UserSchema, CreateUserSchema } from './user.schema';
-export { UserService } from './user.service';
-export { UserController } from './user.controller';
+export type { User, CreateUserDto, UpdateUserDto } from './user.types'
+export { UserSchema, CreateUserSchema } from './user.schema'
+export { UserService } from './user.service'
+export { UserController } from './user.controller'
 
 // Don't export repository (internal detail)
 // Don't export internal helper functions
 
 // Usage in other modules
-import { User, UserService } from '@/features/users';
+import { User, UserService } from '@/features/users'
 ```
 
 ### Path Aliases
@@ -393,7 +391,7 @@ async function findUser(id) {
  * @returns {T | undefined}
  */
 function first(items) {
-  return items[0];
+  return items[0]
 }
 ```
 
@@ -408,14 +406,14 @@ function first(items) {
 
 ```typescript
 // Before (CommonJS)
-const express = require('express');
-const { UserService } = require('./user.service');
-module.exports = { router };
+const express = require('express')
+const { UserService } = require('./user.service')
+module.exports = { router }
 
 // After (ESM)
-import express from 'express';
-import { UserService } from './user.service.js'; // Note .js extension
-export { router };
+import express from 'express'
+import { UserService } from './user.service.js' // Note .js extension
+export { router }
 ```
 
 ---
@@ -425,61 +423,58 @@ export { router };
 ### Input Sanitization
 
 ```typescript
-import { z } from 'zod';
-import DOMPurify from 'isomorphic-dompurify';
+import { z } from 'zod'
+import DOMPurify from 'isomorphic-dompurify'
 
 // Sanitized string schema
 const SanitizedString = z.string().transform((val) => {
-  return DOMPurify.sanitize(val.trim());
-});
+  return DOMPurify.sanitize(val.trim())
+})
 
 // HTML content schema (for rich text)
 const HtmlContentSchema = z.string().transform((val) => {
   return DOMPurify.sanitize(val, {
     ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
-    ALLOWED_ATTR: ['href', 'target']
-  });
-});
+    ALLOWED_ATTR: ['href', 'target'],
+  })
+})
 
 // SQL-safe identifier
-const SafeIdentifierSchema = z.string().regex(
-  /^[a-zA-Z_][a-zA-Z0-9_]*$/,
-  "Invalid identifier"
-);
+const SafeIdentifierSchema = z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Invalid identifier')
 ```
 
 ### Type-Safe Environment Variables
 
 ```typescript
-import { z } from 'zod';
+import { z } from 'zod'
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']),
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
-  REDIS_URL: z.string().url().optional()
-});
+  REDIS_URL: z.string().url().optional(),
+})
 
 // Validate on startup
 function loadEnv() {
-  const result = EnvSchema.safeParse(process.env);
+  const result = EnvSchema.safeParse(process.env)
 
   if (!result.success) {
-    console.error('Invalid environment variables:');
-    console.error(result.error.format());
-    process.exit(1);
+    console.error('Invalid environment variables:')
+    console.error(result.error.format())
+    process.exit(1)
   }
 
-  return result.data;
+  return result.data
 }
 
-export const env = loadEnv();
+export const env = loadEnv()
 
 // Usage: fully typed
-env.PORT;        // number
-env.NODE_ENV;    // "development" | "production" | "test"
-env.REDIS_URL;   // string | undefined
+env.PORT // number
+env.NODE_ENV // "development" | "production" | "test"
+env.REDIS_URL // string | undefined
 ```
 
 ### Secure API Response Types
@@ -487,21 +482,21 @@ env.REDIS_URL;   // string | undefined
 ```typescript
 // Never expose internal fields
 interface InternalUser {
-  id: string;
-  name: string;
-  email: string;
-  passwordHash: string;
-  internalNotes: string;
+  id: string
+  name: string
+  email: string
+  passwordHash: string
+  internalNotes: string
 }
 
 // Public API response (Pick only safe fields)
-type PublicUser = Pick<InternalUser, 'id' | 'name' | 'email'>;
+type PublicUser = Pick<InternalUser, 'id' | 'name' | 'email'>
 
 // Or explicitly define
 interface UserResponse {
-  id: string;
-  name: string;
-  email: string;
+  id: string
+  name: string
+  email: string
 }
 
 // Transform function
@@ -509,8 +504,8 @@ function toPublicUser(user: InternalUser): UserResponse {
   return {
     id: user.id,
     name: user.name,
-    email: user.email
-  };
+    email: user.email,
+  }
 }
 ```
 
@@ -518,19 +513,19 @@ function toPublicUser(user: InternalUser): UserResponse {
 
 ```typescript
 interface RateLimitConfig {
-  windowMs: number;
-  maxRequests: number;
+  windowMs: number
+  maxRequests: number
 }
 
 interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  resetAt: Date;
+  allowed: boolean
+  remaining: number
+  resetAt: Date
 }
 
 const rateLimits: Record<string, RateLimitConfig> = {
   api: { windowMs: 60000, maxRequests: 100 },
   auth: { windowMs: 300000, maxRequests: 5 },
-  upload: { windowMs: 3600000, maxRequests: 10 }
-} as const satisfies Record<string, RateLimitConfig>;
+  upload: { windowMs: 3600000, maxRequests: 10 },
+} as const satisfies Record<string, RateLimitConfig>
 ```

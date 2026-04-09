@@ -20,7 +20,7 @@ iterating on a skill.
 
 ## Writing Quality
 
-- [ ] Instructions explain *why*, not just *what*
+- [ ] Instructions explain _why_, not just _what_
 - [ ] No excessive MUST/NEVER/ALWAYS in all-caps (use explanatory reasoning instead)
 - [ ] Uses imperative form ("Run the tests" not "You should run the tests")
 - [ ] Output formats are explicitly defined with templates
@@ -28,7 +28,7 @@ iterating on a skill.
 
 ## Triggering
 
-- [ ] "When to Load" section covers obvious *and* non-obvious trigger scenarios
+- [ ] "When to Load" section covers obvious _and_ non-obvious trigger scenarios
 - [ ] Description is assertive enough to avoid under-triggering
 - [ ] Borderline trigger scenarios are addressed
 
