@@ -14,7 +14,7 @@ Last tested: April 7th, 2026
 | `test-cm-orchestration.md`        | ~317                    |       |
 | `test-cm-payload-optimization.md` | ~317                    |       |
 | `test-cm-readonly.md`             | ~1,024                  |       |
-| `test-cm-relationships.md`        | ~199                    |       |
+| `test-cm-relationships.md`        | ~312                    |       |
 | `test-cm-sandbox-basics.md`       | ~504                    |       |
 | `test-cm-search.md`               | ~388                    |       |
 | `test-cm-security.md`             | ~1,071                  |       |
