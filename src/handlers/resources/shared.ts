@@ -101,6 +101,8 @@ export function isResourceError(
 export interface BriefingConfig {
     /** Number of recent journal entries to include (default: 3) */
     entryCount: number
+    /** Number of recent session summaries to display (default: 1) */
+    summaryCount: number
     /** Include team DB entries in briefing preview (default: false) */
     includeTeam: boolean
     /** Number of open issues to list with titles; 0 = count only (default: 0) */
@@ -132,6 +134,7 @@ export interface BriefingConfig {
 /** Default briefing configuration — preserves pre-existing behavior */
 export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
     entryCount: 3,
+    summaryCount: 1,
     includeTeam: false,
     issueCount: 0,
     prCount: 0,

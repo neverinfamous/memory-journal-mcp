@@ -11,6 +11,7 @@
 - `include_comments` parameter for `get_github_issue`
 - `add_kanban_item` and `delete_kanban_item` tools for GitHub project boards
 - "Latest Summary" field in `memory://briefing` payload to surface the most recent session summary
+- `BRIEFING_SUMMARY_COUNT` environment variable and `--briefing-summaries` CLI flag for configuring multiple session summaries in the briefing resource
 - `CODE_MODE_MAX_RESULT_SIZE` environment variable and `--codemode-max-result-size` CLI flag
 - Agent-guidance error messages for Code Mode result size violations
 - `bodyTruncated`, `bodyFullLength` metadata in issue/PR detail output schemas

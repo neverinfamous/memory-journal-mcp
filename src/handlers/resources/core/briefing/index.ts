@@ -86,8 +86,8 @@ async function buildBriefingData(
         ? `#${journal.latestEntries[0].id} (${journal.latestEntries[0].type}): ${journal.latestEntries[0].preview}`
         : 'No entries yet'
 
-    const latestSummaryPreview = journal.latestSessionSummary
-        ? `#${journal.latestSessionSummary.id} (${journal.latestSessionSummary.type}): ${journal.latestSessionSummary.preview}`
+    const summaryPreviews = journal.sessionSummaries
+        ? journal.sessionSummaries.map(s => `#${s.id} (${s.type}): ${s.preview}`)
         : null
 
     const userMessage = formatUserMessage({
@@ -96,7 +96,7 @@ async function buildBriefingData(
         ciStatus: github?.ci ?? 'unknown',
         totalEntries: journal.totalEntries,
         latestPreview,
-        latestSummaryPreview,
+        summaryPreviews,
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,
         rulesFile,

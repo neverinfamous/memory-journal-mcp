@@ -107,6 +107,11 @@ program
         '3'
     )
     .option(
+        '--briefing-summaries <count>',
+        'Number of session summaries to show in briefing (env: BRIEFING_SUMMARY_COUNT)',
+        '1'
+    )
+    .option(
         '--briefing-include-team',
         'Include team DB entries in briefing (env: BRIEFING_INCLUDE_TEAM)'
     )
@@ -181,6 +186,7 @@ program
             oauthJwksUri?: string
             oauthClockTolerance: string
             briefingEntries: string
+            briefingSummaries: string
             briefingIncludeTeam?: boolean
             briefingIssues: string
             briefingPrs: string
@@ -288,6 +294,10 @@ program
                     briefingConfig: {
                         entryCount: parseInt(
                             process.env['BRIEFING_ENTRY_COUNT'] ?? options.briefingEntries,
+                            10
+                        ),
+                        summaryCount: parseInt(
+                            process.env['BRIEFING_SUMMARY_COUNT'] ?? options.briefingSummaries,
                             10
                         ),
                         includeTeam:

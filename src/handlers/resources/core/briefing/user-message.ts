@@ -16,13 +16,13 @@ export function formatUserMessage(opts: {
     ciStatus: string
     totalEntries: number
     latestPreview: string
-    latestSummaryPreview?: string | null
+    summaryPreviews?: string[] | null
     github: BriefingGitHub | null
     teamTotalEntries?: number
     rulesFile?: RulesFile
     skillsDir?: SkillsDir
 }): string {
-    const { repoName, branchName, totalEntries, latestPreview, latestSummaryPreview, github, rulesFile, skillsDir } = opts
+    const { repoName, branchName, totalEntries, latestPreview, summaryPreviews, github, rulesFile, skillsDir } = opts
 
     // Build enhanced CI display
     let ciDisplay = opts.ciStatus
@@ -104,6 +104,10 @@ export function formatUserMessage(opts: {
         ? `\n| **Copilot** | ${String(github.copilotReviews.reviewed)} reviewed · ${String(github.copilotReviews.approved)} approved${github.copilotReviews.changesRequested > 0 ? ` · ${String(github.copilotReviews.changesRequested)} changes requested` : ''}${github.copilotReviews.totalComments > 0 ? ` (${String(github.copilotReviews.totalComments)} comments)` : ''} |`
         : ''
 
+    const summariesOutput = summaryPreviews && summaryPreviews.length > 0
+        ? summaryPreviews.map(s => `\n| **Summary** | ${s} |`).join('')
+        : ''
+
     return `📋 **Session Context Loaded**
 | Context | Value |
 |---------|-------|
@@ -111,5 +115,5 @@ export function formatUserMessage(opts: {
 | **Branch** | ${branchName} |
 | **CI** | ${ciDisplay} |
 | **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${latestPreview} |${latestSummaryPreview ? `\n| **Summary** | ${latestSummaryPreview} |` : ''}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+| **Latest** | ${latestPreview} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
 }
