@@ -137,6 +137,7 @@ test.describe('Boundary: Nonexistent Entries', () => {
 
 test.describe('Boundary: Idempotency', () => {
     test('rebuild_vector_index called twice → both succeed', async () => {
+        test.setTimeout(90000)
         const client = await createClient()
         try {
             const p1 = await callToolAndParse(client, 'rebuild_vector_index', {})

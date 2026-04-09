@@ -32,8 +32,10 @@
 - Cross-project context leakage in `memory://briefing` query scoping
 - Stale assertions in `test-cm-crud.md` and `test-core-infra.md` integration tests
 - `link_entries` tool ignoring soft-deleted state when creating new relationships
+- Increased timeout in `tests/e2e/boundary.spec.ts` to accommodate vector index rebuild operations during CI execution
 
 ### Verified
 - Validated all 67 standard MCP tools return `structuredContent` via automatically bounded payload output schemas
 - Excluded Code Mode explicitly from `structuredContent` wrapper to prevent crash-inducing unconstrained schema parsing on client layers
-- Verified Phase 10 Team Collaboration suite: 22 team tools and 2 team resources, ensuring safe DB isolation, accurate author attribution, and proper boundary conditions.
+- Verified Phase 10 Team Collaboration suite: 22 team tools and 2 team resources, ensuring safe DB isolation, accurate author attribution, and proper boundary conditions
+- Verified Phase 12 Admin Tool Group operations including `update_entry`, `delete_entry`, `merge_tags`, and `add_to_vector_index` against deterministic structured error schemas (Zod mismatch, domain not found) with 100% token tracking
