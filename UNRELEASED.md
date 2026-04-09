@@ -32,3 +32,7 @@
 - Cross-project context leakage in `memory://briefing` query scoping
 - Stale assertions in `test-cm-crud.md` and `test-core-infra.md` integration tests
 - `link_entries` tool ignoring soft-deleted state when creating new relationships
+
+### Verified
+- Validated all 67 standard MCP tools return `structuredContent` via automatically bounded payload output schemas
+- Excluded Code Mode explicitly from `structuredContent` wrapper to prevent crash-inducing unconstrained schema parsing on client layers
