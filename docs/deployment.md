@@ -13,7 +13,7 @@ If all four pass → `docker-publish.yml` runs → then `publish-npm.yml` runs.
 
 ## To trigger a release
 
-**Option A — Automatic (push to main or tag):** Simply merge/push a tag (e.g., `v7.1.0`) to `main`. The pipeline fires automatically and publishes. *(Note: Pushing directly to main without a tag will just run the validation gates without publishing).*
+**Option A — Automatic (push to main or tag):** Simply merge/push a tag (e.g., `v7.2.0`) to `main`. _(Note: Pushing directly to main without a tag will just run the validation gates without publishing)._
 
 **Option B — Manual npm publish only (no Docker):** Go to Actions → "Publish to NPM" → Run workflow. Useful if Docker already published but npm failed.
 
@@ -21,20 +21,20 @@ If all four pass → `docker-publish.yml` runs → then `publish-npm.yml` runs.
 
 Make sure these are set in Settings → Secrets → Actions:
 
-| Secret | Purpose |
-| ------ | ------- |
-| `DOCKER_USERNAME` | Docker Hub login (`writenotenow`) |
+| Secret            | Purpose                             |
+| ----------------- | ----------------------------------- |
+| `DOCKER_USERNAME` | Docker Hub login (`writenotenow`)   |
 | `DOCKER_PASSWORD` | Docker Hub password or access token |
-| `NPM_TOKEN` | npm automation token |
+| `NPM_TOKEN`       | npm automation token                |
 
 ## Required GitHub Environments
 
 Two protected environments must exist with appropriate approval rules:
 
-| Environment | Used by | URL |
-| ----------- | ------- | --- |
+| Environment  | Used by                        | URL                                                      |
+| ------------ | ------------------------------ | -------------------------------------------------------- |
 | `production` | Docker manifest push (on tags) | https://hub.docker.com/r/writenotenow/memory-journal-mcp |
-| `npm` | npm publish | https://www.npmjs.com/package/memory-journal-mcp |
+| `npm`        | npm publish                    | https://www.npmjs.com/package/memory-journal-mcp         |
 
 ## What gets published
 
