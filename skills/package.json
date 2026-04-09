@@ -13,6 +13,7 @@
     "bun/",
     "github-commander/",
     "golang/",
+    "mysql/",
     "rust/",
     "shadcn-ui/",
     "sqlite/"
