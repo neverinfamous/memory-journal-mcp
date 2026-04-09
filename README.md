@@ -738,6 +738,7 @@ npm run test:e2e  # End-to-end HTTP/SSE transport tests
 
 - **[GitHub Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** - Complete documentation
 - **[Copilot Setup Guide](docs/copilot-setup.md)** - Cross-agent memory bridge between IDE agents and GitHub Copilot
+- **[Deployment Guide](docs/deployment.md)** - CI/CD pipeline, environments, and version bump checklist
 - **[Docker Hub](https://hub.docker.com/r/writenotenow/memory-journal-mcp)** - Container images
 - **[npm Package](https://www.npmjs.com/package/memory-journal-mcp)** - Node.js distribution
 - **[Issues](https://github.com/neverinfamous/memory-journal-mcp/issues)** - Bug reports & feature requests
