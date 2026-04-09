@@ -63,6 +63,12 @@ When you notice the user consistently applies patterns, preferences, or workflow
 - Frame suggestions as: "I noticed you always [pattern]. Would you like me to add/update a rule for this?"
 - For skills, explain the workflow it would automate and what triggers it
 
+### Native Agent Skills (NPM Distribution)
+
+This server leverages the `neverinfamous-agent-skills` package. If the user's `SKILLS_DIR_PATH` environment variable targets these, you have native access to foundational frameworks (`golang`, `rust`, `shadcn-ui`, `postgres`) and the `github-commander` DevOps workflows (`issue-triage`, `pr-review`, etc.). 
+- The user can distribute or update these skills across their repositories by running `npx neverinfamous-agent-skills@latest`.
+- If you need to create a new skill, reference the bundled `skill-builder` instructions!
+
 <!-- SECTION:COPILOT -->
 
 ## Copilot Review Patterns
