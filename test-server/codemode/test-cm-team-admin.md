@@ -138,13 +138,13 @@ const mdExport = await mj.team.teamExportEntries({ format: 'markdown', limit: 5 
 const MOCK_DIR = 'cm_team_export'
 
 const ioExport = await mj.team.teamExportMarkdown({
-    output_dir: MOCK_DIR,
-    limit: 5
+  output_dir: MOCK_DIR,
+  limit: 5,
 })
 
 const ioImport = await mj.team.teamImportMarkdown({
-    source_dir: MOCK_DIR,
-    dry_run: true
+  source_dir: MOCK_DIR,
+  dry_run: true,
 })
 
 return {
@@ -153,7 +153,7 @@ return {
   ioExportSuccess: ioExport.success,
   ioExportedCount: ioExport.exported_count ?? 0,
   ioImportSuccess: ioImport.success,
-  ioImportDryRun: ioImport.dry_run
+  ioImportDryRun: ioImport.dry_run,
 }
 ```
 
@@ -194,12 +194,12 @@ return {
 
 ## Success Criteria
 
-- [x] `team_update_entry` updates content, tags, and entry_type
-- [x] `team_delete_entry` soft-deletes team entries
-- [x] `team_merge_tags` consolidates tags — source removed, entries re-tagged
-- [x] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- [x] `team_link_entries` creates relationships with duplicate detection
-- [x] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
-- [x] `team_export_entries` exports JSON and markdown with filters
-- [x] `team_backup` creates named and auto-named backups
-- [x] `team_list_backups` returns backup metadata
+- [] `team_update_entry` updates content, tags, and entry_type
+- [] `team_delete_entry` soft-deletes team entries
+- [] `team_merge_tags` consolidates tags — source removed, entries re-tagged
+- [] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
+- [] `team_link_entries` creates relationships with duplicate detection
+- [] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
+- [] `team_export_entries` exports JSON and markdown with filters
+- [] `team_backup` creates named and auto-named backups
+- [] `team_list_backups` returns backup metadata
