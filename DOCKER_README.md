@@ -21,7 +21,7 @@
 
 ### What Sets Us Apart
 
-**67 MCP Tools** · **17 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**67 MCP Tools** · **17 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                                                     |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -113,9 +113,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 Standups, retrospectives, PR summaries, weekly digests, period analysis, milestone tracking, context bundles, session summaries, and more. **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **38 Resources** (25 Static + 13 Template)
+### 📡 **34 Resources** (25 Static + 9 Template)
 
-25 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://help/gotchas`, GitHub status/insights, team stats, and more) plus 13 template resources for dynamic briefings (`memory://briefing/{repo}`), project timelines, issue/PR entries, Kanban boards, milestone details, per-repo GitHub details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+25 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://help/gotchas`, GitHub status/insights, team stats, and more) plus 9 template resources for dynamic briefings (`memory://briefing/{repo}`), project timelines, issue/PR entries, Kanban boards, milestone details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
 
 ## 🚀 Quick Start (2 Minutes)
 

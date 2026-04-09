@@ -60,6 +60,7 @@ proc.stdout.on('data', (chunk) => {
                     console.log('ALL TOOLS HAVE OUTPUT SCHEMA!')
                     process.exit(0)
                 }
+            }
         } catch {}
     }
 })

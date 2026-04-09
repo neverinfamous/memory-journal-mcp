@@ -28,7 +28,7 @@
 
 ### What Sets Us Apart
 
-**67 MCP Tools** · **17 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**67 MCP Tools** · **17 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                                                     |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -204,11 +204,11 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
-### 📡 **38 Resources** (25 Static + 13 Template)
+### 📡 **34 Resources** (25 Static + 9 Template)
 
 **Static Resources** (appear in resource lists):
 
-- `memory://briefing` / `memory://briefing/{repo}` - **Session initialization**: compact context for AI agents (~300 tokens)
+- `memory://briefing` - **Session initialization**: compact context for AI agents (~300 tokens)
 - `memory://instructions` - **Behavioral guidance**: complete server instructions for AI agents
 - `memory://recent` - 10 most recent entries
 - `memory://significant` - Significant milestones and breakthroughs
@@ -236,10 +236,6 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Template Resources** (require parameters, fetch directly by URI):
 
-- `memory://github/status/{repo}` - Repository status targeted by repo
-- `memory://github/insights/{repo}` - Repository insights targeted by repo
-- `memory://github/milestones/{repo}` - Open milestones targeted by repo
-- `memory://milestones/{repo}/{number}` - Milestone detail targeted by repo
 - `memory://projects/{number}/timeline` - Project activity timeline
 - `memory://issues/{issue_number}/entries` - Entries linked to issue
 - `memory://prs/{pr_number}/entries` - Entries linked to PR
@@ -248,6 +244,9 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://kanban/{project_number}/diagram` - Kanban Mermaid visualization
 - `memory://milestones/{number}` - Milestone detail with completion progress
 - `memory://help/{group}` - Per-group tool reference with parameters and annotations
+- `memory://briefing/{repo}` - Context targeted to a specific repository
+
+*Note: The `memory://github/status`, `memory://github/insights`, `memory://github/milestones`, and `memory://milestones/{number}` resources also accept an optional `/{repo}` path suffix for cross-repo targeting.*
 
 ---
 

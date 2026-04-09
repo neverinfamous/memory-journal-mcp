@@ -63,6 +63,19 @@ describe('IssuesManager - getIssueComments (Coverage)', () => {
         const result = await manager.getIssueComments('owner', 'repo', 1)
         expect(result).toEqual([])
     })
+
+    it('caps limit at 100', async () => {
+        const listComments = vi.fn().mockResolvedValue({ data: [] })
+        const mockClient = {
+            octokit: { issues: { listComments } },
+            getCached: vi.fn().mockReturnValue(undefined),
+            setCache: vi.fn(),
+        } as unknown as GitHubClient
+
+        const manager = new IssuesManager(mockClient)
+        await manager.getIssueComments('owner', 'repo', 1, 500)
+        expect(listComments).toHaveBeenCalledWith(expect.objectContaining({ per_page: 100 }))
+    })
 })
 
 describe('IssuesManager - getIssues (Coverage)', () => {

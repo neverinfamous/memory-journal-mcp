@@ -113,9 +113,12 @@ export function formatUserMessage(opts: {
         ? `\n| **Copilot** | ${String(github.copilotReviews.reviewed)} reviewed · ${String(github.copilotReviews.approved)} approved${github.copilotReviews.changesRequested > 0 ? ` · ${String(github.copilotReviews.changesRequested)} changes requested` : ''}${github.copilotReviews.totalComments > 0 ? ` (${String(github.copilotReviews.totalComments)} comments)` : ''} |`
         : ''
 
+    const escapeTableCell = (text: string): string =>
+        text.replace(/\|/g, '\\|').replace(/\n/g, '<br>')
+
     const summariesOutput =
         summaryPreviews && summaryPreviews.length > 0
-            ? summaryPreviews.map((s) => `\n| **Summary** | ${s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, '<br>')} |`).join('')
+            ? summaryPreviews.map((s) => `\n| **Summary** | ${escapeTableCell(s)} |`).join('')
             : ''
 
     return `📋 **Session Context Loaded**
@@ -125,5 +128,5 @@ export function formatUserMessage(opts: {
 | **Branch** | ${branchName} |
 | **CI** | ${ciDisplay} |
 | **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${latestPreview} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
 }
