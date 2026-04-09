@@ -12,7 +12,7 @@ Last tested: April 7th, 2026
 | `test-cm-io.md`                   | ~98                     |       |
 | `test-cm-kanban.md`               | ~94                     |       |
 | `test-cm-orchestration.md`        | ~317                    |       |
-| `test-cm-payload-optimization.md` | ~317                    |       |
+| `test-cm-payload-optimization.md` | ~13,089                 |       |
 | `test-cm-readonly.md`             | ~1,024                  |       |
 | `test-cm-relationships.md`        | ~312                    |       |
 | `test-cm-sandbox-basics.md`       | ~507                    |       |
@@ -21,5 +21,5 @@ Last tested: April 7th, 2026
 | `test-cm-team-admin.md`           | ~262                    |       |
 | `test-cm-team-crud.md`            | ~604                    |       |
 | `test-cm-team-vector-errors.md`   | ~776                    |       |
-| `test-cm-workflows.md`            | ~295                    |       |
-| **Total Estimated Tokens**        | **~**                   |       |
+| `test-cm-workflows.md`            | ~279                    |       |
+| **Total Estimated Tokens**        | **~21,601**             |       |
