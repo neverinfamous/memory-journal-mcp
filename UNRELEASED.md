@@ -36,3 +36,4 @@
 - Changed default sort direction in `getMilestones` to `desc` to correctly prioritize recent milestones in the `memory://briefing` summary
 - Fixed cross-project context leakage in the `memory://briefing` resource by enforcing strict `projectNumber` bounding on Team and Journal summary queries
 - Fixed `test-cm-crud.md` verification logic for computed fields (`importance`, `relationships`) to accurately mirror actual `mj_execute_code` response structures
+- Fixed stale expectations in `test-core-infra.md`: template URI count (7→11), instruction token thresholds (~1.5K/~1.7K/~2.7K → ~1.9K/~2.2K/~3.3K), and tool annotation totals (61/16 → 67/22)
