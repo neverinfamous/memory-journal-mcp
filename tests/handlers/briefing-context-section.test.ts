@@ -48,6 +48,7 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
                 content: 'Decided to use TypeScript for the project.',
             },
         ]),
+        searchEntries: vi.fn().mockReturnValue([]),
         getActiveEntryCount: vi.fn().mockReturnValue(42),
         ...overrides,
     }

@@ -20,6 +20,7 @@ const PREVIEW_LENGTH = 80
 export interface JournalContext {
     totalEntries: number
     latestEntries: { id: number; timestamp: string; type: string; preview: string }[]
+    latestSessionSummary?: { id: number; timestamp: string; type: string; preview: string }
     lastModified: string
 }
 
@@ -43,10 +44,35 @@ export function buildJournalContext(
         }
     })
 
+    // Fetch latest session summary
+    const summaryEntries = typeof projectNumber === 'number'
+        ? context.db.searchEntries('', { limit: 1, projectNumber, tags: ['session-summary'] })
+        : context.db.searchEntries('', { limit: 1, tags: ['session-summary'] })
+    
+    // Fallback to retrospective type if no tag matched
+    const retroEntries = summaryEntries.length === 0 ? (
+        typeof projectNumber === 'number'
+            ? context.db.searchEntries('', { limit: 1, projectNumber, entryType: 'retrospective' })
+            : context.db.searchEntries('', { limit: 1, entryType: 'retrospective' })
+    ) : []
+
+    const finalSummaryEntry = summaryEntries[0] ?? retroEntries[0]
+    
+    let latestSessionSummary
+    if (finalSummaryEntry) {
+        const c = finalSummaryEntry.content ?? ''
+        latestSessionSummary = {
+            id: finalSummaryEntry.id,
+            timestamp: finalSummaryEntry.timestamp,
+            type: finalSummaryEntry.entryType,
+            preview: c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')
+        }
+    }
+
     const totalEntries = context.db.getActiveEntryCount()
     const lastModified = recentEntries[0]?.timestamp ?? new Date().toISOString()
 
-    return { totalEntries, latestEntries, lastModified }
+    return { totalEntries, latestEntries, latestSessionSummary, lastModified }
 }
 
 // ============================================================================

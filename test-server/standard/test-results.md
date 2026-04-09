@@ -12,7 +12,7 @@ Last tested: April 9th, 2026
 | `test-core-scheduler.md`     | ~18,857                 |                          |
 | `test-core-search.md`        | ~114,127                | bloat from earlier tests |
 | `test-core-semantic.md`      | ~3,831                  |                          |
-| `test-github.md`             | ~3,800                  |                          |
+| `test-github.md`             | ~6,785                  |                          |
 | `test-resources.md`          | ~359                    |                          |
 | `test-schemas.md`            | ~386                    |                          |
 | `test-seed.md`               | ~6,800                  |                          |

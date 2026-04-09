@@ -16,12 +16,13 @@ export function formatUserMessage(opts: {
     ciStatus: string
     totalEntries: number
     latestPreview: string
+    latestSummaryPreview?: string | null
     github: BriefingGitHub | null
     teamTotalEntries?: number
     rulesFile?: RulesFile
     skillsDir?: SkillsDir
 }): string {
-    const { repoName, branchName, totalEntries, latestPreview, github, rulesFile, skillsDir } = opts
+    const { repoName, branchName, totalEntries, latestPreview, latestSummaryPreview, github, rulesFile, skillsDir } = opts
 
     // Build enhanced CI display
     let ciDisplay = opts.ciStatus
@@ -110,5 +111,5 @@ export function formatUserMessage(opts: {
 | **Branch** | ${branchName} |
 | **CI** | ${ciDisplay} |
 | **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${latestPreview} |${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+| **Latest** | ${latestPreview} |${latestSummaryPreview ? `\n| **Summary** | ${latestSummaryPreview} |` : ''}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${rulesFile.name} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
 }

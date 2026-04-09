@@ -86,12 +86,17 @@ async function buildBriefingData(
         ? `#${journal.latestEntries[0].id} (${journal.latestEntries[0].type}): ${journal.latestEntries[0].preview}`
         : 'No entries yet'
 
+    const latestSummaryPreview = journal.latestSessionSummary
+        ? `#${journal.latestSessionSummary.id} (${journal.latestSessionSummary.type}): ${journal.latestSessionSummary.preview}`
+        : null
+
     const userMessage = formatUserMessage({
         repoName: github?.repo ?? 'local',
         branchName: github?.branch ?? 'unknown',
         ciStatus: github?.ci ?? 'unknown',
         totalEntries: journal.totalEntries,
         latestPreview,
+        latestSummaryPreview,
         github,
         teamTotalEntries: team?.teamInfo.totalEntries,
         rulesFile,
@@ -105,6 +110,7 @@ async function buildBriefingData(
             journal: {
                 totalEntries: journal.totalEntries,
                 latestEntries: journal.latestEntries,
+                ...(journal.latestSessionSummary ? { latestSessionSummary: journal.latestSessionSummary } : {}),
             },
             github,
             teamContext: team?.teamInfo,
