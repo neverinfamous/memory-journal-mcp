@@ -46,7 +46,8 @@
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                             |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals      |
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))   |
-| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
+| **Native Agent Skills**       | Bundled foundational coding paradigms (`bun`, `golang`, `rust`, `shadcn-ui`) establishing permanent AI behavior and architecture rules                           |
+| **GitHub Commander**          | Pipeline skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md)) |
 
 ---
 
@@ -125,19 +126,13 @@ Execute BEFORE fulfilling any user request in a new session:
 1. **TARGET**: Infer `repo_name` from the active workspace context or user prompt. If the task is not associated with a specific project, fallback to using the generic resource without a repo name (which defaults to the first registered workspace).
 2. **FETCH**: Use the MCP `read_resource` tool (Server: `memory-journal-mcp`) to read `memory://briefing/{repo_name}` (or `memory://briefing` if falling back).
    - **RESTRICTION**: Do NOT use `execute_code` for this step.
-3. **RENDER TABLE**: Extract `userMessage` and output it EXCLUSIVELY as a vertical Markdown Table (2 columns: Field and Value).
-   - **RESTRICTION**: NO bulleted lists. NO truncation of arrays or lists.
-   - **REQUIRED MAP**: Output all data comprehensively. Map these fields to the "Field" column:
-     - Application / Project
-     - Journal Entries
-     - Team DB Entries
-     - Latest Entry (Journal)
-     - Latest Entry (Team)
-     - GitHub (Include Repo, Branch, CI Status, Issues, PRs, Insights on separate lines in the Value column)
-     - Milestone Progress
-     - Template Resources (Output count only, not URLs)
-     - Registered Workspaces (Output FULL list of project names)
-     - Available Extensions (Rules, Skills, Workflows)
+3. **RENDER TABLE**: Parse the briefing JSON and output a dense 2-column Markdown Table (Field, Value) capturing the core context.
+   - **RESTRICTION**: NO bulleted lists. Do NOT truncate issues or summaries.
+   - **FORMATTING**: Group related properties to save vertical space. Use `<br>` tags for inner-cell line breaks.
+   - **REQUIRED GROUPS**:
+     - **GitHub**: Combine Repo, Branch, CI, PRs, and Insights.
+     - **GitHub Issues**: List every issue, one per line.
+     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries, Milestones, and Workspaces.
 
 ---
 

@@ -196,6 +196,13 @@ src/
         ├── index.ts                # Prompt registration barrel
         ├── workflow.ts             # 11 workflow prompts (standup, retro, digest, analysis, etc., confirm-briefing)
         └── github.ts              # 6 GitHub prompts (project-status-summary, pr-summary, code-review-prep, pr-retrospective, actions-failure-digest, project-milestone-tracker)
+
+skills/
+├── bun/                            # Bun ecosystem conventions and testing patterns
+├── github-commander/               # Automated pipeline orchestration (triage, PR, audit)
+├── golang/                         # Go 1.22+ structure, concurrency, and error handling
+├── rust/                           # Rust ownership, traits, and error propagation
+└── shadcn-ui/                      # Form schemas, component generation, and styling
 ```
 
 ---
