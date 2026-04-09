@@ -16,7 +16,6 @@
 - `delete_kanban_item` tool — cleanly remove issues/items from a GitHub project Kanban board without deleting the issue
 - `CODE_MODE_MAX_RESULT_SIZE` env var and `--codemode-max-result-size` CLI flag for configurable Code Mode output cap
 - Agent-guidance error messages for Code Mode result size violations (includes actual KB returned, field extraction example)
-- Verified automated scheduler test suite for backup, vacuum, and vector index rebuild background jobs
 - `bodyTruncated`, `bodyFullLength` metadata in issue/PR detail output schemas
 - `itemCount`, `truncated`, `summaryOnly` metadata in Kanban output schema
 - Vitest tests for payload optimization: `result-size-cap`, `kanban-payload-optimization`, `github-body-truncation`, `max-query-limit` (32 new tests)
@@ -38,3 +37,7 @@
 - Fixed cross-project context leakage in the `memory://briefing` resource by enforcing strict `projectNumber` bounding on Team and Journal summary queries
 - Fixed `test-cm-crud.md` verification logic for computed fields (`importance`, `relationships`) to accurately mirror actual `mj_execute_code` response structures
 - Fixed stale expectations in `test-core-infra.md`: template URI count (7→11), instruction token thresholds (~1.5K/~1.7K/~2.7K → ~1.9K/~2.2K/~3.3K), and tool annotation totals (61/16 → 67/22)
+
+### Verified
+
+- **Phase 3 (Text Search)**: Exhaustively tested direct MCP search operations including FTS5 operators (phrase, prefix, NOT, OR), fallback logic for `test's` and `100%`, hybrid RRF auto-mode, pure semantic mode, date ranges, and strict multi-parameter filters. All cases passed returning exactly expected payloads and cross-DB merge formats. No bugs detected.
