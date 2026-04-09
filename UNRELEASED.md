@@ -2,6 +2,10 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.1.0...HEAD)
 
+### Security / Verification
+
+- Completed Phase 12 Data Integrity & Boundary verification sweep (zero data loss across 12+ mutation vectors)
+
 ### Added
 
 - Bundled native foundational agent skills (`bun`, `github-commander`, `golang`, `mysql`, `playwright-standard`, `postgres`, `react-best-practices`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `typescript`, `vitest-standard`) for out-of-the-box system context
