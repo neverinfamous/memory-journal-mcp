@@ -56,8 +56,8 @@ src/
 │   ├── authorization-server-discovery.ts  # RFC 8414 auth server metadata discovery
 │   ├── transport-agnostic.ts       # Non-Express auth re-exports for transport portability
 │   ├── errors.ts                   # OAuth-specific error classes
-│   ├── types.ts                    # OAuth TypeScript types
-│   └── index.ts                    # Barrel
+│   ├── types.ts                # OAuth TypeScript types
+│   └── index.ts                # Barrel
 │
 ├── transports/
 │   └── http/
@@ -67,7 +67,7 @@ src/
 │       ├── index.ts                # Barrel
 │       └── server/
 │           ├── index.ts            # HTTP server factory (stateful/stateless selection)
-│           ├── stateful.ts         # Stateful HTTP transport (Streamable HTTP + session management)
+│           ├── stateful.ts         # Stateful HTTP transport (Integrates `addProjectV2ItemById`, `updateProjectV2ItemFieldValue`, and `deleteProjectV2Item`.)
 │           ├── stateless.ts        # Stateless HTTP transport (serverless mode)
 │           └── legacy-sse.ts       # Legacy SSE transport (MCP 2024-11-05 compat)
 │
@@ -96,7 +96,7 @@ src/
 │       ├── tags.ts                 # Tag CRUD and merge operations
 │       ├── relationships.ts        # Entry relationship operations
 │       └── entries/
-│           ├── index.ts            # Entry operations barrel
+│           ├── index.ts                # Entry operations barrel
 │           ├── crud.ts             # Entry create/read/update/delete
 │           ├── search.ts           # FTS5 search, date-range search
 │           ├── importance.ts       # Importance scoring algorithm
@@ -217,7 +217,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **admin**         | `admin.ts`                   | 5     | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`                                      |
 | **github**        | `github/read-tools.ts`       | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue` (truncate_body, include_comments), `get_github_pr` (truncate_body), `get_github_context` |
 |                   | `github/issue-tools.ts`      | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                |
-|                   | `github/kanban-tools.ts`     | 2     | `get_kanban_board` (summary_only, item_limit), `move_kanban_item`                                                                |
+|                   | `github/kanban-tools.ts`     | 4     | `get_kanban_board` (summary_only, item_limit), `move_kanban_item`, `addKanbanItem`, `deleteKanbanItem`                           |
 |                   | `github/milestone-tools.ts`  | 5     | `get_github_milestones`, `get_github_milestone`, `create_github_milestone`, `update_github_milestone`, `delete_github_milestone` |
 |                   | `github/insights-tools.ts`   | 1     | `get_repo_insights`                                                                                                              |
 |                   | `github/copilot-tools.ts`    | 1     | `get_copilot_reviews`                                                                                                            |
@@ -240,7 +240,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | `error-fields-mixin.ts`    | Re-export stub → `utils/errors/error-response-fields.ts` (canonical SSoT)                                                                     |
 | `../version.ts`            | Version SSoT — reads `package.json`, exports `VERSION`                                                                                        |
 | `github/helpers.ts`        | GitHub repo auto-detection, error formatting, token scrubbing                                                                                 |
-| `github/schemas.ts`        | Zod input/output schemas for all 16 GitHub tools                                                                                              |
+| `github/schemas.ts`        | Zod input/output schemas for all 18 GitHub tools                                                                                              |
 | `github/mutation-tools.ts` | GitHub mutation tools barrel (re-exports issue + kanban + milestone tools)                                                                    |
 
 ---
@@ -426,7 +426,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | **Code Mode Bridge**    | `mj.*` API in worker thread communicates via MessagePort RPC to main thread tool handlers. All 10 groups exposed (`core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`). Readonly mode halts execution gracefully and returns structured errors via proxy traps. Result cap 100KB default (configurable via `CODE_MODE_MAX_RESULT_SIZE`).                                                                                                                             |
 | **Tool Filtering**      | `ToolFilter` parses `--tool-filter` string → whitelist/blacklist of tool names. `codemode` auto-injected unless explicitly excluded. Shortcuts: `starter`, `essential`, `readonly`.                                                                                                                                                                                                                                                                                                                           |
 | **Briefing System**     | `memory://briefing` assembled from modular sections (context, GitHub, user message). Configurable via 13 env vars / CLI flags (incl. `--workflow-summary`/`MEMORY_JOURNAL_WORKFLOW_SUMMARY` for `memory://workflows`). Instruction levels: `essential`, `standard`, `full`.                                                                                                                                                                                                                                   |
-| **GitHub Split**        | GitHub tools split across 7 handler files by domain. `GitHubIntegration` facade handles all API calls. Tools dynamically instantiate local `GitHubIntegration` bounds to the target project's physical path via `PROJECT_REGISTRY` if explicitly requested, falling back to the first registered project globally.                                                                                                                                                                                            |
+| **GitHub Split**        | **Tools**: 67 specialized agents (across 10 domains). `GitHubIntegration` facade handles all API calls. Tools dynamically instantiate local `GitHubIntegration` bounds to the target project's physical path via `PROJECT_REGISTRY` if explicitly requested, falling back to the first registered project globally.                                                                                                                                                                                            |
 | **Database Adapter**    | `IDatabaseAdapter` interface → `SqliteAdapter` (better-sqlite3). Entry operations split into `entries/` subdirectory (crud, search, importance, statistics, shared).                                                                                                                                                                                                                                                                                                                                          |
 | **Vector Search**       | `VectorSearchManager` integrates `sqlite-vec` + `@huggingface/transformers`. Lazy model loading on first use.                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **OAuth 2.1**           | RFC 9728/8414 compliant. Scope enforcement via `scope-map.ts` (read/write/admin). JWT/JWKS validation. Optional — falls back to bearer token or no auth.                                                                                                                                                                                                                                                                                                                                                      |
@@ -469,7 +469,7 @@ The E2E test `tests/e2e/zod-sweep.spec.ts` calls every tool with `{}` and assert
 | `test-server/standard/test-core-scheduler.md`        | Scheduler tests (HTTP-only, terminal script)                                    |
 | `test-server/standard/test-schemas.md`               | outputSchema validation for all 60 tools                                        |
 | `test-server/standard/test-resources.md`             | All 28 resources (static + template, happy + error paths)                       |
-| `test-server/standard/test-github.md`                | GitHub integration (16 tools: read-only, lifecycle, Kanban, milestones)         |
+| `test-server/standard/test-github.md`                | **GitHubIntegration** (`index.ts`): Facade uniting 18 tools (issues, PRs, kanban, milestones, repo context). Orchestrates cross-module dependencies. |
 | `test-server/standard/test-errors.md`                | Prompt handlers, structured error verification, numeric coercion                |
 | `test-server/standard/test-integrity.md`             | Data integrity, boundary values, implementation bug detection                   |
 | `test-server/standard/test-team.md`                  | Team collaboration (20 tools + 2 resources)                                     |

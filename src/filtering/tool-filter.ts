@@ -43,6 +43,8 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'get_github_context',
         'get_kanban_board',
         'move_kanban_item',
+        'add_kanban_item',
+        'delete_kanban_item',
         'create_github_issue_with_entry',
         'close_github_issue_with_entry',
         'get_github_milestones',

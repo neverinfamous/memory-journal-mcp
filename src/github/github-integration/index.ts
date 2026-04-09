@@ -243,6 +243,13 @@ export class GitHubIntegration {
         return this.projectsManager.addProjectItem(projectId, contentId)
     }
 
+    async deleteProjectItem(
+        projectId: string,
+        itemId: string
+    ): Promise<{ success: boolean; error?: string }> {
+        return this.projectsManager.deleteProjectItem(projectId, itemId)
+    }
+
     async getMilestones(
         owner: string,
         repo: string,

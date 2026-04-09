@@ -189,6 +189,11 @@ export const KanbanBoardOutputSchema = z
         statusOptions: z.array(StatusOptionOutputSchema).optional(),
         columns: z.array(KanbanColumnOutputSchema).optional(),
         totalItems: z.number().optional(),
+        itemDirectory: z.array(z.object({
+            id: z.string(),
+            title: z.string(),
+            status: z.string().nullable()
+        })).optional(),
         summaryOnly: z.boolean().optional(),
         owner: z.string().optional(),
         detectedOwner: z.string().nullable().optional(),
@@ -211,6 +216,30 @@ export const MoveKanbanItemOutputSchema = z
         requiresUserInput: z.boolean().optional(),
         hint: z.string().optional(),
         availableStatuses: z.array(z.string()).optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const AddKanbanItemOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        itemId: z.string().optional(),
+        projectNumber: z.number().optional(),
+        message: z.string().optional(),
+        error: z.string().optional(),
+        requiresUserInput: z.boolean().optional(),
+        hint: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const DeleteKanbanItemOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        itemId: z.string().optional(),
+        projectNumber: z.number().optional(),
+        message: z.string().optional(),
+        error: z.string().optional(),
+        requiresUserInput: z.boolean().optional(),
+        hint: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 

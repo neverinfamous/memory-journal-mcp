@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **61 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **67 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -68,13 +68,15 @@ Link entries and visualize knowledge graphs.
 
 ---
 
-## export (1 tool + Code Mode)
+## io (3 tools + Code Mode)
 
-Export journal data in multiple formats.
+Export and import journal data in multiple formats, including Markdown roundtripping.
 
-| Tool             | Description                                        |
-| ---------------- | -------------------------------------------------- |
-| `export_entries` | Export journal entries to JSON or Markdown format. |
+| Tool               | Description                                        |
+| ------------------ | -------------------------------------------------- |
+| `export_entries`   | Export journal entries to JSON or Markdown format. |
+| `export_markdown`  | Export the entire journal to a structured directory of Markdown files. |
+| `import_markdown`  | Import a structured directory of Markdown files into the journal database. |
 
 ---
 
@@ -92,7 +94,7 @@ Entry mutations, vector index management, and tag maintenance.
 
 ---
 
-## github (16 tools + Code Mode)
+## github (18 tools + Code Mode)
 
 GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights, issue lifecycle, and Copilot Reviews.
 
@@ -105,6 +107,8 @@ GitHub integration — Issues, PRs, context, Kanban boards, Milestones, Insights
 | `get_github_context`             | Get current repository context including branch, open issues, and open PRs. Only counts OPEN items (closed items excluded).               |
 | `get_kanban_board`               | View a GitHub Project v2 as a Kanban board with items grouped by Status column. Returns all columns with their items.                     |
 | `move_kanban_item`               | Move a Kanban item to a different status column. Requires the project board to have a Status field.                                       |
+| `add_kanban_item`                | Attach an existing GitHub issue to a GitHub Project v2 Kanban board as an item.                                                           |
+| `delete_kanban_item`             | Remove an item from a GitHub Project v2 Kanban board without deleting the underlying issue.                                               |
 | `create_github_issue_with_entry` | Create a GitHub issue AND automatically create a linked journal entry documenting the issue creation.                                     |
 | `close_github_issue_with_entry`  | Close a GitHub issue AND create a journal entry documenting the resolution.                                                               |
 | `get_github_milestones`          | List GitHub milestones for the repository with completion percentages and due dates.                                                      |
@@ -172,11 +176,13 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | `team_link_entries`            | Create a relationship between two team entries.                        |
 | `team_visualize_relationships` | Generate a Mermaid diagram showing relationships between team entries. |
 
-### Export
+### IO
 
-| Tool                  | Description                                                                                     |
-| --------------------- | ----------------------------------------------------------------------------------------------- |
-| `team_export_entries` | Export team entries in JSON or Markdown format with optional date range, type, and tag filters. |
+| Tool                   | Description                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `team_export_entries`  | Export team entries in JSON or Markdown format with optional date range, type, and tag filters. |
+| `team_export_markdown` | Export team journal to a structured directory of Markdown files.                                |
+| `team_import_markdown` | Import team entries from a structured directory of Markdown files.                              |
 
 ### Backup
 
@@ -202,7 +208,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 61    | All tools (default)      |
+| `full`               | 67    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | ~15   | Disable all mutations    |
@@ -213,7 +219,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 **Custom Selection:** List individual tool names to create your own whitelist: `--tool-filter "create_entry,search_entries,semantic_search"`
 
-**Groups:** `core`, `search`, `analytics`, `relationships`, `export`, `admin`, `github`, `backup`, `team`, `codemode`
+**Groups:** `core`, `search`, `analytics`, `relationships`, `io`, `admin`, `github`, `backup`, `team`, `codemode`
 
 ---
 
@@ -228,4 +234,4 @@ Code executes in a **sandboxed VM context** with:
 - **Hard timeouts** — configurable execution limit (default 30s)
 - **Full API access** — all 10 tool groups available via `mj.*`
 
-**API Groups:** `mj.core.*`, `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.export.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`
+**API Groups:** `mj.core.*`, `mj.search.*`, `mj.analytics.*`, `mj.relationships.*`, `mj.io.*`, `mj.admin.*`, `mj.github.*`, `mj.backup.*`, `mj.team.*`

@@ -9,6 +9,8 @@
 - `truncate_body` parameter for `get_github_issue` and `get_github_pr` — default 800 chars, set to 0 for full body
 - `include_comments` parameter for `get_github_issue` — fetch issue comments on demand (default: off)
 - `getIssueComments()` method in GitHub integration layer with caching
+- `add_kanban_item` tool — directly attach GitHub issues to a GitHub project Kanban board via Node ID integration
+- `delete_kanban_item` tool — cleanly remove issues/items from a GitHub project Kanban board without deleting the issue
 - `CODE_MODE_MAX_RESULT_SIZE` env var and `--codemode-max-result-size` CLI flag for configurable Code Mode output cap
 - Agent-guidance error messages for Code Mode result size violations (includes actual KB returned, field extraction example)
 - `bodyTruncated`, `bodyFullLength` metadata in issue/PR detail output schemas

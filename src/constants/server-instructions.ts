@@ -63,7 +63,7 @@ export type InstructionLevel = 'essential' | 'standard' | 'full'
  */
 const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
-## ESSENTIAL SESSION START!**
+## **ESSENTIAL SESSION START!**
 
 1. You **MUST** read the \`memory://briefing/{repo_name}\` at the start of each chat!
 2. Use the standard MCP \`read_resource\` tool for this (do NOT use Code Mode/execute_code).
@@ -172,66 +172,16 @@ function buildQuickAccess(groups: Set<ToolGroup>): string {
  * Code Mode namespace row definitions.
  * Each maps a tool group to its Code Mode API namespace.
  */
-const CODE_MODE_NAMESPACE_ROWS: {
-    group: ToolGroup
-    label: string
-    namespace: string
-    example: string
-}[] = [
-    {
-        group: 'core',
-        label: 'Core',
-        namespace: '`mj.core.*`',
-        example: '`mj.core.createEntry("Implemented feature X")`',
-    },
-    {
-        group: 'search',
-        label: 'Search',
-        namespace: '`mj.search.*`',
-        example: '`mj.search.searchEntries("performance")`',
-    },
-    {
-        group: 'analytics',
-        label: 'Analytics',
-        namespace: '`mj.analytics.*`',
-        example: '`mj.analytics.getStatistics()`',
-    },
-    {
-        group: 'relationships',
-        label: 'Relationships',
-        namespace: '`mj.relationships.*`',
-        example: '`mj.relationships.linkEntries(1, 2, "implements")`',
-    },
-    {
-        group: 'io',
-        label: 'IO',
-        namespace: '`mj.io.*`',
-        example: '`mj.io.exportEntries("json")`',
-    },
-    {
-        group: 'admin',
-        label: 'Admin',
-        namespace: '`mj.admin.*`',
-        example: '`mj.admin.rebuildVectorIndex()`',
-    },
-    {
-        group: 'github',
-        label: 'GitHub',
-        namespace: '`mj.github.*`',
-        example: '`mj.github.getGithubIssues({ state: "open" })`',
-    },
-    {
-        group: 'backup',
-        label: 'Backup',
-        namespace: '`mj.backup.*`',
-        example: '`mj.backup.backupJournal()`',
-    },
-    {
-        group: 'team',
-        label: 'Team',
-        namespace: '`mj.team.*`',
-        example: '`mj.team.teamCreateEntry("Team update")`',
-    },
+const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
+    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
+    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
+    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
+    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
+    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.exportEntries("json")`' },
+    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
+    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
+    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
+    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
 ]
 
 /**
@@ -241,10 +191,9 @@ const CODE_MODE_NAMESPACE_ROWS: {
  */
 function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
     // Build namespace table with only enabled groups
-    const rows = CODE_MODE_NAMESPACE_ROWS.filter((r) => groups.has(r.group))
-        .map(
-            (r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`
-        )
+    const rows = CODE_MODE_NAMESPACE_ROWS
+        .filter((r) => groups.has(r.group))
+        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
         .join('\n')
 
     // Build the static behavioral text from the .md source,
@@ -257,10 +206,8 @@ function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
         return '\n' + fullSection
     }
     const beforeTable = fullSection.slice(0, tableStart)
-    const headerLine =
-        '| Group         | Namespace            | Example                                            |'
-    const separatorLine =
-        '| ------------- | -------------------- | -------------------------------------------------- |'
+    const headerLine = '| Group         | Namespace            | Example                                            |'
+    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
     const afterTable = fullSection.slice(tableEnd)
     return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
 }
@@ -323,7 +270,7 @@ const GITHUB_INSTRUCTIONS = `\n## GitHub Integration
 - Include \`issue_number\`/\`pr_number\` in \`create_entry\` to auto-link
 - After closing issue/merging PR → create summary entry with learnings
 - CI failures → \`actions-failure-digest\` prompt or \`memory://actions/recent\`
-- Kanban: \`get_kanban_board\` → \`move_kanban_item\` → document completion (project_number auto-resolves if repo is registered)
+- Kanban: \`get_kanban_board\` → \`add_kanban_item\` / \`move_kanban_item\` / \`delete_kanban_item\` → document completion (project_number auto-resolves if repo is registered)
 - Milestones: \`get_github_milestones\` → track project progress, \`memory://github/milestones\`
 - **Multi-Project Routing**: If \`memory://briefing\` shows "Registered Workspaces":
   - **Tools**: Pass a \`repo\` parameter to ALL GitHub tools (including \`get_github_context\`) to explicitly target a specific project.
@@ -424,6 +371,7 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
 - **Team tools without \`TEAM_DB_PATH\`**: All 22 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
+
 
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
@@ -532,3 +480,4 @@ export const SERVER_INSTRUCTIONS =
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS
+

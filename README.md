@@ -28,7 +28,7 @@
 
 ### What Sets Us Apart
 
-**65 MCP Tools** · **17 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**67 MCP Tools** · **17 Workflow Prompts** · **38 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -150,7 +150,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 65    | All tools (default)      |
+| `full`               | 67    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | ~15   | Disable all mutations    |
@@ -169,7 +169,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **65 MCP Tools** (10 Groups)
+### 🛠️ **67 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                                                              |
 | --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -180,7 +180,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `relationships` | 2     | Link entries, visualize graphs                                                                                                           |
 | `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                           |
 | `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                  |
-| `github`        | 16    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                     |
+| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                     |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                           |
 | `team`          | 22    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
 
@@ -269,7 +269,7 @@ Code executes in a **sandboxed VM context** with multiple layers of security. Al
 
 ### ⚡ Code Mode Only (Maximum Token Savings)
 
-Run with **only Code Mode enabled** — a single tool that provides access to all 65 tools' worth of capability through the `mj.*` API:
+Run with **only Code Mode enabled** — a single tool that provides access to all 67 tools' worth of capability through the `mj.*` API:
 
 ```json
 {
@@ -611,7 +611,7 @@ Memory Journal provides a **hybrid approach** to GitHub management:
 - `get_github_issues` / `get_github_issue` - Query issues
 - `get_github_prs` / `get_github_pr` - Query pull requests
 - `get_github_context` - Full repository context
-- `get_kanban_board` / `move_kanban_item` - **Kanban management**
+- `get_kanban_board` / `add_kanban_item` / `move_kanban_item` / `delete_kanban_item` - **Kanban management**
 - `get_github_milestones` / `get_github_milestone` - **Milestone tracking with completion %**
 - `create_github_milestone` / `update_github_milestone` / `delete_github_milestone` - **Milestone CRUD**
 - `get_repo_insights` - **Repository traffic & analytics** (stars, clones, views, referrers, popular paths)
@@ -630,7 +630,7 @@ flowchart TB
     AI["🤖 AI Agent<br/>(Cursor, Windsurf, Claude)"]
 
     subgraph MCP["Memory Journal MCP Server"]
-        Tools["🛠️ 65 Tools"]
+        Tools["🛠️ 67 Tools"]
         Resources["📡 38 Resources"]
         Prompts["💬 17 Prompts"]
     end
@@ -659,7 +659,7 @@ flowchart TB
 ┌─────────────────────────────────────────────────────────────┐
 │ MCP Server Layer (TypeScript)                               │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐  │
-│  │ Tools (65)      │  │ Resources (38)  │  │ Prompts (17)│  │
+│  │ Tools (67)      │  │ Resources (38)  │  │ Prompts (17)│  │
 │  │ with Annotations│  │ with Annotations│  │             │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
