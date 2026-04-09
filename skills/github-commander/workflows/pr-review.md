@@ -1,3 +1,7 @@
+---
+description: Review an open pull request with validation pipeline and structured findings
+---
+
 # PR Review
 
 Review an open pull request with optional validation pipeline and structured
@@ -108,10 +112,12 @@ Journal review completion:
 create_entry({
   content: "Completed review of PR #<N>: <decision>. Findings: <count>. Gates: <summary>.",
   entry_type: "review_complete",
-  tags: ["commander", "review"],
+  tags: ["commander", "review", "<decision>"],
   pr_number: <N>
 })
 ```
+
+*Kanban Sync:* If the review decision was **Approved**, prompt the user (or execute if explicitly permitted) to merge the PR. Merging the PR securely merges the code and triggers GitHub automation to move the linked Kanban Issue card to the "Done" state, safely completing the execution chain initiated by `roadmap-kickoff`.
 
 ## Phase 5 — Session Summary
 

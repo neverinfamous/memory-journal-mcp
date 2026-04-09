@@ -1,3 +1,7 @@
+---
+description: Fix a single assigned GitHub issue end-to-end — from context gathering through validated PR submission
+---
+
 # Issue Triage
 
 Fix a single assigned GitHub issue end-to-end — from context gathering through
@@ -217,15 +221,20 @@ Wait for human approval before proceeding to Phase 5.
    gh pr create --base main --title "fix: <description>" --body "Closes #<N>\n\n<summary of changes>"
    ```
 
-6. Journal the PR:
+6. Journal the PR and update the Kanban Board:
    ```
    create_entry({
      content: "Submitted PR #<pr_number> for issue #<N>: <description>. Gates: all passed.",
      entry_type: "pr_submitted",
-     tags: ["commander", "pr"],
+     tags: ["commander", "pr", "kanban_sync"],
      issue_number: <N>,
      pr_number: <pr_number>
    })
+   ```
+   *Kanban Sync:* Using the Project Node IDs anchored in the memory journal during the roadmap kickoff, transition the issue card from "In Progress" to "In Review":
+   ```bash
+   // turbo
+   gh project item-edit --id {ITEM_NODE_ID} --project-id {PROJECT_NODE_ID} --field-id {STATUS_FIELD_ID} --single-select-option-id {IN_REVIEW_OPTION_ID}
    ```
 
 ## Phase 6 — Session Summary
