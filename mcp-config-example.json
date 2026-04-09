@@ -33,6 +33,7 @@
                 "BRIEFING_ISSUE_COUNT": "0",
                 "BRIEFING_PR_COUNT": "0",
                 "BRIEFING_PR_STATUS": "false",
+                "BRIEFING_MILESTONE_COUNT": "3",
                 "BRIEFING_WORKFLOW_COUNT": "0",
                 "BRIEFING_WORKFLOW_STATUS": "false",
                 "BRIEFING_COPILOT_REVIEWS": "false",

@@ -121,6 +121,11 @@ program
         'Show PR status breakdown in briefing (env: BRIEFING_PR_STATUS)'
     )
     .option(
+        '--briefing-milestones <count>',
+        'Number of milestones to list in briefing; 0 = hide (env: BRIEFING_MILESTONE_COUNT)',
+        '3'
+    )
+    .option(
         '--rules-file <path>',
         'Path to user rules file for awareness in briefing (env: RULES_FILE_PATH)'
     )
@@ -175,6 +180,7 @@ program
             briefingIssues: string
             briefingPrs: string
             briefingPrStatus?: boolean
+            briefingMilestones: string
             rulesFile?: string
             skillsDir?: string
             briefingWorkflows: string
@@ -286,6 +292,10 @@ program
                         prStatusBreakdown:
                             options.briefingPrStatus ??
                             process.env['BRIEFING_PR_STATUS'] === 'true',
+                        milestoneCount: parseInt(
+                            process.env['BRIEFING_MILESTONE_COUNT'] ?? options.briefingMilestones,
+                            10
+                        ),
                         rulesFilePath:
                             options.rulesFile ?? process.env['RULES_FILE_PATH'] ?? undefined,
                         skillsDirPath:

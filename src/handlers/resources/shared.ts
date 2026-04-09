@@ -109,6 +109,8 @@ export interface BriefingConfig {
     prCount: number
     /** Show PR status breakdown (open/merged/closed) instead of simple count (default: false) */
     prStatusBreakdown: boolean
+    /** Number of milestones to list in briefing; 0 = hide (default: 3) */
+    milestoneCount: number
     /** Path to the user's rules file (e.g., .gemini/GEMINI.md) for awareness in briefing */
     rulesFilePath?: string
     /** Path to the user's skills directory for awareness in briefing */
@@ -134,6 +136,7 @@ export const DEFAULT_BRIEFING_CONFIG: BriefingConfig = {
     issueCount: 0,
     prCount: 0,
     prStatusBreakdown: false,
+    milestoneCount: 3,
     workflowCount: 0,
     workflowStatusBreakdown: false,
     copilotReviews: false,

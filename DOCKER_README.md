@@ -229,7 +229,6 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 | **Code Mode only**      | Add `"--tool-filter"`, `"codemode"` to `args` (single tool, all 65 capabilities) |
 
 | **Briefing config** | Add `-e`, `"BRIEFING_ENTRY_COUNT=5"` to `args` (see env var table below) |
-| **Local build** | Replace `writenotenow/memory-journal-mcp:latest` with your local image name |
 
 ### 4. Restart & Journal!
 
@@ -241,35 +240,36 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 
 | Environment Variable              | Description                                                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `DB_PATH`                         | Database file location (CLI: `--db`; default: `./memory_journal.db`)                                          |
-| `TEAM_DB_PATH`                    | Team database file location (CLI: `--team-db`)                                                                |
+| `DB_PATH`                         | Database file location (default: `./memory_journal.db`)                                                       |
+| `TEAM_DB_PATH`                    | Team database file location                                                                                   |
 | `TEAM_AUTHOR`                     | Override author name for team entries (default: `git config user.name`)                                       |
 | `GITHUB_TOKEN`                    | GitHub personal access token for API access                                                                   |
 | `DEFAULT_PROJECT_NUMBER`          | Default GitHub Project number for auto-assignment when creating issues                                        |
 | `PROJECT_REGISTRY`                | JSON map of repos to `{ path, project_number }` for multi-project auto-detection and routing                  |
 | `AUTO_REBUILD_INDEX`              | Set to `true` to rebuild vector index on server startup                                                       |
 | `MCP_HOST`                        | Server bind host (`0.0.0.0` for containers, default: `localhost`)                                             |
-| `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication (CLI: `--auth-token`)                                          |
+| `MCP_AUTH_TOKEN`                  | Bearer token for HTTP transport authentication                                                                |
 | `MCP_CORS_ORIGIN`                 | Allowed CORS origins for HTTP transport, comma-separated (default: `*`)                                       |
 | `MCP_RATE_LIMIT_MAX`              | Max requests per minute per client IP, HTTP only (default: `100`)                                             |
-| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`; CLI: `--log-level`)                         |
-| `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (CLI: `--enable-hsts`; default: `false`)                        |
+| `LOG_LEVEL`                       | Log verbosity: `error`, `warn`, `info`, `debug` (default: `info`)                                             |
+| `MCP_ENABLE_HSTS`                 | Enable HSTS security header on HTTP responses (default: `false`)                                              |
 | `OAUTH_ENABLED`                   | Set to `true` to enable OAuth 2.1 authentication (HTTP only)                                                  |
 | `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                |
 | `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                                   |
 | `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                |
-| `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                         |
+| `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (default: `3`)                                                                    |
 | `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                                        |
+| `BRIEFING_MILESTONE_COUNT`        | Milestones to list in briefing; `0` = hide (default: `3`)                                                     |
 | `BRIEFING_ISSUE_COUNT`            | Issues to list in briefing; `0` = count only (default: `0`)                                                   |
 | `BRIEFING_PR_COUNT`               | PRs to list in briefing; `0` = count only (default: `0`)                                                      |
 | `BRIEFING_PR_STATUS`              | Show PR status breakdown (open/merged/closed; default: `false`)                                               |
 | `BRIEFING_WORKFLOW_COUNT`         | Workflow runs to list in briefing; `0` = status only (default: `0`)                                           |
 | `BRIEFING_WORKFLOW_STATUS`        | Show workflow status breakdown in briefing (default: `false`)                                                 |
 | `BRIEFING_COPILOT_REVIEWS`        | Aggregate Copilot review state in briefing (default: `false`)                                                 |
-| `RULES_FILE_PATH`                 | Path to user rules file for agent awareness (CLI: `--rules-file`)                                             |
-| `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness (CLI: `--skills-dir`)                                            |
-| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows` (CLI: `--workflow-summary`)                               |
-| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (CLI: `--instruction-level`; default: `standard`)             |
+| `RULES_FILE_PATH`                 | Path to user rules file for agent awareness                                                                   |
+| `SKILLS_DIR_PATH`                 | Path to skills directory for agent awareness                                                                  |
+| `MEMORY_JOURNAL_WORKFLOW_SUMMARY` | Free-text workflow summary for `memory://workflows`                                                           |
+| `INSTRUCTION_LEVEL`               | Briefing depth: `essential`, `standard`, `full` (default: `standard`)                                         |
 | `PROJECT_LINT_CMD`                | Project lint command for GitHub Commander validation gates (default: `npm run lint`)                          |
 | `PROJECT_TYPECHECK_CMD`           | Project typecheck command (default: `npm run typecheck`; empty = skip)                                        |
 | `PROJECT_BUILD_CMD`               | Project build command (default: `npm run build`; empty = skip)                                                |
@@ -282,8 +282,8 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                                 |
 | `AUDIT_LOG_PATH`                  | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable. |
 | `AUDIT_REDACT`                    | Set to `true` to omit tool arguments from audit log entries for privacy (default: `false`)                    |
-| `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                |
-| `AUDIT_LOG_MAX_SIZE`              | Maximum audit log file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)       |
+| `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (default: `false`)                                      |
+| `AUDIT_LOG_MAX_SIZE`              | Maximum audit log file size in bytes before rotation (default: `10485760`)                                    |
 | `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)                          |
 
 **Multi-Project Workflows**: For agents to seamlessly support multiple projects, provide **`PROJECT_REGISTRY`**.
@@ -331,16 +331,6 @@ For production deployments, enable full OAuth 2.1 support on the HTTP transport 
 ### GitHub Management Capabilities
 
 16 GitHub tools covering issues, PRs, Kanban boards, milestones (with completion %), repository insights, Copilot reviews, and issue lifecycle with journal linking. Standard mutations (create/close issues, merge PRs) are handled by agents via `gh` CLI. **[Complete GitHub integration guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Git-Integration)**
-
-## 🏗️ Build from Source
-
-```bash
-git clone https://github.com/neverinfamous/memory-journal-mcp.git
-cd memory-journal-mcp
-docker build -f Dockerfile -t memory-journal-mcp-local .
-```
-
-Then use `memory-journal-mcp-local` as the image name in your MCP config (see Quick Start above).
 
 ## 📄 License
 

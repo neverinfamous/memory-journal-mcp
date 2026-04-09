@@ -63,7 +63,7 @@ export async function buildGitHubSection(
         const [ciStatus, issuesAndPrs, milestones, insights, copilotReviews] = await Promise.all([
             fetchCiStatus(github, owner, repo, config),
             fetchIssuesAndPrs(github, owner, repo, config),
-            fetchMilestones(github, owner, repo),
+            fetchMilestones(github, owner, repo, config.milestoneCount),
             fetchInsights(github, owner, repo),
             config.copilotReviews
                 ? fetchCopilotReviews(github, owner, repo)
@@ -262,10 +262,13 @@ async function fetchIssuesAndPrs(
 async function fetchMilestones(
     github: GitHubIntegration,
     owner: string,
-    repo: string
+    repo: string,
+    limit: number
 ): Promise<{ title: string; progress: string; dueOn: string | null }[]> {
+    if (limit <= 0) return []
+
     try {
-        const msList = await github.getMilestones(owner, repo, 'open', 3)
+        const msList = await github.getMilestones(owner, repo, 'open', limit)
         return msList.map((m) => {
             const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
             return {
