@@ -492,6 +492,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `OAUTH_ISSUER`                    | OAuth issuer URL (e.g., `https://auth.example.com/realms/mcp`)                                                              |
 | `OAUTH_AUDIENCE`                  | Expected JWT audience claim                                                                                                 |
 | `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                              |
+| `OAUTH_CLOCK_TOLERANCE`           | Allowed clock skew tolerance in seconds for JWT verification (default: `5`)                                                 |
 | `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`)             |
 | `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                                       |
 | `BRIEFING_SUMMARY_COUNT`          | Session summaries to list in briefing (CLI: `--briefing-summaries`; default: `1`)                                           |
@@ -577,6 +578,7 @@ Or via environment variables:
 export OAUTH_ENABLED=true
 export OAUTH_ISSUER=https://auth.example.com/realms/mcp
 export OAUTH_AUDIENCE=memory-journal-mcp
+export OAUTH_CLOCK_TOLERANCE=5
 memory-journal-mcp --transport http --port 3000
 ```
 

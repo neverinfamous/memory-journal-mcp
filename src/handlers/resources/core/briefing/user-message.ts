@@ -115,7 +115,7 @@ export function formatUserMessage(opts: {
 
     const summariesOutput =
         summaryPreviews && summaryPreviews.length > 0
-            ? summaryPreviews.map((s) => `\n| **Summary** | ${s.replace(/\|/g, '\\|').replace(/\n/g, '<br>')} |`).join('')
+            ? summaryPreviews.map((s) => `\n| **Summary** | ${s.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, '<br>')} |`).join('')
             : ''
 
     return `📋 **Session Context Loaded**

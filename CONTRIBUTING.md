@@ -242,8 +242,21 @@ src/
 └── vector/                     # Semantic search (sqlite-vec + transformers)
 
 skills/                             # Bundled agent skills (shipped with npm)
-└── github-commander/               # GitHub workflow skills (triage, review, audits)
-```
+├── autonomous-dev/                 # Autonomous software development agent harness
+├── bun/                            # Bun all-in-one toolkit guidelines
+├── github-commander/               # GitHub workflow skills (triage, review, audits)
+├── gitlab/                         # GitLab repository and CI/CD assistant
+├── golang/                         # Go development best practices
+├── mysql/                          # Production-grade MySQL rules
+├── playwright-standard/            # End-to-end testing with Playwright
+├── postgres/                       # Enterprise PostgreSQL development
+├── react-best-practices/           # React and Next.js performance guidelines
+├── rust/                           # Rust systems programming guidelines
+├── shadcn-ui/                      # UI component development with shadcn
+├── skill-builder/                  # Creation and evaluation of agent skills
+├── sqlite/                         # SQLite meta-cognitive rules
+├── typescript/                     # Enterprise-grade TypeScript patterns
+└── vitest-standard/                # Unit testing with Vitest and TDD
 
 ## 🤝 Community
 

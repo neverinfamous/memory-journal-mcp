@@ -12,6 +12,12 @@ const proc = spawn(process.execPath, ['dist/cli.js', '--instruction-level', 'ess
     stdio: ['pipe', 'pipe', 'pipe'],
 })
 
+const killTimeout = setTimeout(() => {
+    console.log('Timeout — killing process')
+    proc.kill()
+    process.exit(1)
+}, 5000)
+
 let buffer = ''
 proc.stdout.on('data', (chunk) => {
     buffer += chunk.toString()
@@ -69,9 +75,3 @@ setTimeout(() => {
         )
     }, 500)
 }, 1500)
-
-const killTimeout = setTimeout(() => {
-    console.log('Timeout — killing process')
-    proc.kill()
-    process.exit(1)
-}, 5000)

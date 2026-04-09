@@ -226,8 +226,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     if (!query && !hasFilters) {
                         return {
-                            success: false,
-                            error: 'Search requires either a query string or at least one filter',
+                            ...formatHandlerError(new Error('Search requires either a query string or at least one filter')),
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
                             suggestion: 'Provide a search query or use get_recent_entries instead',
