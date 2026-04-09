@@ -65,7 +65,7 @@ export const TeamCreateEntrySchemaMcp = z.object({
 
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
-    limit: z.number().max(500).optional().default(10),
+    limit: z.number().min(1).max(500).optional().default(10),
 })
 
 /** team_get_recent — relaxed */

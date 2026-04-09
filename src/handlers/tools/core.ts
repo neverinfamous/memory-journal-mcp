@@ -84,7 +84,7 @@ const GetEntryByIdSchemaMcp = z.object({
 })
 
 const GetRecentEntriesSchema = z.object({
-    limit: z.number().max(MAX_QUERY_LIMIT).optional().default(5),
+    limit: z.number().min(1).max(MAX_QUERY_LIMIT).optional().default(5),
     is_personal: z.boolean().optional(),
 })
 
