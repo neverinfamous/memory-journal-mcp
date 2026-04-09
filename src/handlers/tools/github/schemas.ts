@@ -211,39 +211,24 @@ export const KanbanBoardOutputSchema = z
 
 export const MoveKanbanItemOutputSchema = z
     .object({
-        success: z.boolean().optional(),
         itemId: z.string().optional(),
         newStatus: z.string().optional(),
         projectNumber: z.number().optional(),
-        message: z.string().optional(),
-        error: z.string().optional(),
-        requiresUserInput: z.boolean().optional(),
-        hint: z.string().optional(),
         availableStatuses: z.array(z.string()).optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 
 export const AddKanbanItemOutputSchema = z
     .object({
-        success: z.boolean().optional(),
         itemId: z.string().optional(),
         projectNumber: z.number().optional(),
-        message: z.string().optional(),
-        error: z.string().optional(),
-        requiresUserInput: z.boolean().optional(),
-        hint: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 
 export const DeleteKanbanItemOutputSchema = z
     .object({
-        success: z.boolean().optional(),
         itemId: z.string().optional(),
         projectNumber: z.number().optional(),
-        message: z.string().optional(),
-        error: z.string().optional(),
-        requiresUserInput: z.boolean().optional(),
-        hint: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 

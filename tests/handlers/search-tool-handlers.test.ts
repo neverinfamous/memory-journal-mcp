@@ -144,7 +144,7 @@ describe('Search Tool Handlers - Coverage', () => {
             )) as { success: boolean; code: string }
 
             expect(result.success).toBe(false)
-            expect(result.code).toBe('VALIDATION_ERROR')
+            expect(result.code).toBe('VALIDATION_FAILED')
         })
     })
 

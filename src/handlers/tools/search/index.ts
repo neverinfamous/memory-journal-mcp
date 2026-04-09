@@ -12,6 +12,7 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { ValidationError } from '../../../types/errors.js'
 import { ErrorFieldsMixin } from '../error-fields-mixin.js'
 import {
     ENTRY_TYPES,
@@ -226,11 +227,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     if (!query && !hasFilters) {
                         return {
-                            ...formatHandlerError(new Error('Search requires either a query string or at least one filter')),
-                            code: 'VALIDATION_ERROR',
-                            category: 'validation',
-                            suggestion: 'Provide a search query or use get_recent_entries instead',
-                            recoverable: true,
+                            ...formatHandlerError(
+                                new ValidationError(
+                                    'Search requires either a query string or at least one filter',
+                                    { suggestion: 'Provide a search query or use get_recent_entries instead' }
+                                )
+                            ),
                             entries: [],
                             count: 0,
                         }

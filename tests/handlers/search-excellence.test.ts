@@ -374,7 +374,7 @@ describe('search_entries with mode param', () => {
         }
         // Empty query without filters → strict validation error
         expect(result.success).toBe(false)
-        expect(result.code).toBe('VALIDATION_ERROR')
+        expect(result.code).toBe('VALIDATION_FAILED')
         expect(result.error).toContain('query string or at least one filter')
     })
 })
