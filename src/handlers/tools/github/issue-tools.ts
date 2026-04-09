@@ -97,6 +97,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
+                            code: 'API_ERROR',
+                            category: 'api',
+                            suggestion: 'Verify GitHub token has write access to issues.',
+                            recoverable: true,
                         }
                     }
 
@@ -298,6 +302,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Issue #${String(input.issue_number)} not found`,
+                            code: 'RESOURCE_NOT_FOUND',
+                            category: 'resource',
+                            suggestion: 'Verify the issue number exists in this repository.',
+                            recoverable: true,
                         }
                     }
 
@@ -305,6 +313,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: `Issue #${String(input.issue_number)} is already closed`,
+                            code: 'VALIDATION_ERROR',
+                            category: 'validation',
+                            suggestion: 'You cannot close an already closed issue.',
+                            recoverable: false,
                         }
                     }
 
@@ -319,6 +331,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         return {
                             success: false,
                             error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.',
+                            code: 'API_ERROR',
+                            category: 'api',
+                            suggestion: 'Verify GitHub token has write access to issues.',
+                            recoverable: true,
                         }
                     }
 
