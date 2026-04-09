@@ -3,8 +3,8 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const projectDir = join(__dirname, '..')
-const proc = spawn('node', ['dist/cli.js', '--instruction-level', 'essential'], {
+const projectDir = join(__dirname, '..', '..')
+const proc = spawn(process.execPath, ['dist/cli.js', '--instruction-level', 'essential'], {
     cwd: projectDir,
     env: { ...process.env, TEAM_DB_PATH: 'test-team-prompts.db' },
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -29,7 +29,7 @@ proc.stdout.on('data', (chunk) => {
         } catch {}
     }
 })
-proc.stderr.on('data', () => {})
+proc.stderr.pipe(process.stderr)
 
 let nextId = 1
 function rpc(method, params = {}) {
