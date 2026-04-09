@@ -204,6 +204,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "AUTO_REBUILD_INDEX": "true",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "BRIEFING_ENTRY_COUNT": "3",
+        "BRIEFING_SUMMARY_COUNT": "1",
         "BRIEFING_INCLUDE_TEAM": "true",
         "BRIEFING_ISSUE_COUNT": "1",
         "BRIEFING_PR_COUNT": "1",
