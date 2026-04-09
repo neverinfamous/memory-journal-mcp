@@ -8,11 +8,13 @@ Last tested: April 9th, 2026
 | `test-core-crud.md`          | ~1,015                  |                          |
 | `test-core-infra.md`         | ~1,093                  |                          |
 | `test-core-io.md`            | ~1,855                  |                          |
-| `test-core-relationships.md` | ~1,935                  |                          |
+| `test-core-relationships.md` | ~4,089                  |                          |
 | `test-core-scheduler.md`     | ~18,857                 |                          |
 | `test-core-search.md`        | ~114,127                | bloat from earlier tests |
 | `test-core-semantic.md`      | ~3,831                  |                          |
 | `test-github.md`             | ~6,785                  |                          |
+| `test-integrity.md`          | ~365,837                |                          |
+| `test-kanban-lifecycle.md`   | ~850                    |                          |
 | `test-resources.md`          | ~359                    |                          |
 | `test-schemas.md`            | ~386                    |                          |
 | `test-seed.md`               | ~6,800                  |                          |
