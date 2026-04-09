@@ -9,7 +9,7 @@ Last tested: April 7th, 2026
 | `test-cm-crud.md`               | ~933                    |       |
 | `test-cm-error-matrix.md`       | ~590                    |       |
 | `test-cm-github.md`             | ~750                    |       |
-| `test-cm-io.md`                 | ~112                    |       |
+| `test-cm-io.md`                 | ~98                     |       |
 | `test-cm-orchestration.md`      | ~243                    |       |
 | `test-cm-readonly.md`           | ~983                    |       |
 | `test-cm-relationships.md`      | ~199                    |       |
@@ -20,4 +20,4 @@ Last tested: April 7th, 2026
 | `test-cm-team-crud.md`          | ~669                    |       |
 | `test-cm-team-vector-errors.md` | ~1,271                  |       |
 | `test-cm-workflows.md`          | ~295                    |       |
-| **Total Estimated Tokens**      | **~7,888**              |       |
+| **Total Estimated Tokens**      | **~8,305**              |       |

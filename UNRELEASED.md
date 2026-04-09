@@ -4,7 +4,7 @@
 
 ### Added
 
-- Completed Code Mode Phase 25 integration testing covering all 16 `mj.github.*` tools, validating issue lifecycles, milestone CRUD, Kanban maneuvers, repository insights, Copilot reviews, and structured `-32602` error compliance
+- Validated Code Mode IO and Markdown interoperability tools (`mj.io.exportEntries`, `mj.io.exportMarkdown`, `mj.io.importMarkdown`) including path traversal security
 - Updated Code Mode API discoverability tests to accurately account for the `io` tool group addition
 - Added `roadmap-kickoff` and `update-deps` workflows to the `github-commander` skills package.
 - Added `docs/deployment.md` with comprehensive CI/CD deployment instructions and version bump checklist (migrated from copilot-mj-setup-instructions.md)
