@@ -40,3 +40,4 @@
 - Excluded Code Mode explicitly from `structuredContent` wrapper to prevent crash-inducing unconstrained schema parsing on client layers
 - Verified Phase 10 Team Collaboration suite: 22 team tools and 2 team resources, ensuring safe DB isolation, accurate author attribution, and proper boundary conditions
 - Verified Phase 12 Admin Tool Group operations including `update_entry`, `delete_entry`, `merge_tags`, and `add_to_vector_index` against deterministic structured error schemas (Zod mismatch, domain not found) with 100% token tracking
+- Verified Backup & Export Tool Group (`backup_journal`, `restore_backup`, `export_entries`, `cleanup_backups`) enforcing path traversal restrictions, domain errors (`RESOURCE_NOT_FOUND`), strict filter bounding, and Zod parameter validation (`keep_count <= 0`).
