@@ -14,7 +14,8 @@
     "github-commander/",
     "golang/",
     "rust/",
-    "shadcn-ui/"
+    "shadcn-ui/",
+    "sqlite/"
   ],
   "scripts": {
     "sync": "node bin/sync.js"
