@@ -37,3 +37,5 @@
 - Stale assertions in `test-cm-crud.md` and `test-core-infra.md` integration tests
 - `link_entries` tool ignoring soft-deleted state when creating new relationships
 - Increased timeout in `tests/e2e/boundary.spec.ts` to accommodate vector index rebuild operations during CI execution
+- Empty parameter objects (`{}`) in `search_entries` erroneously bypassing validation, now returning structured `VALIDATION_ERROR`
+- Code Mode `mj_execute_code` dynamically strips write operations when `readonly: true` is requested
