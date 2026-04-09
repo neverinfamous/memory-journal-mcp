@@ -367,6 +367,8 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
 }
 ```
 
+> 💡 **Tip:** Optimize your context window! **Journal entries** (`BRIEFING_ENTRY_COUNT`) capture frequent, granular actions (e.g. bug fixes, implementation steps). **Session summaries** (`BRIEFING_SUMMARY_COUNT`) surface high-level retrospectives meant to pass strategic context continuously across distinct AI sessions. Use both appropriately to keep the agent briefing highly focused!
+
 **Variants** (modify the config above):
 
 | Variant                 | Change                                                                                                                       |
