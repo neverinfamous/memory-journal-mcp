@@ -12,7 +12,7 @@
 
 **Workflow after testing:**
 
-1. Verify token usage limit adherence in the final summary.
+1. Verify token usage limit adherence in the final summary. The tokens tracked should only count the estimated tokens that actually entered the context window.
 
 ---
 

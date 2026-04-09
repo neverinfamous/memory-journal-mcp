@@ -21,6 +21,7 @@
 
 ### Changed
 
+- Clarified token tracking in testing workflows to stipulate that tracked token counts should only reflect the estimated tokens that actually entered the context window
 - Reduced Code Mode default max result size from 10 MB to 100 KB
 - Enforced 500-item maximum limit in `get_recent_entries`, `get_github_issues`, and `get_github_prs`
 - Refactored `rulesResource`, `skillsResource`, and `scanSkillsDir` to use asynchronous File System APIs
