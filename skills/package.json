@@ -14,6 +14,7 @@
     "github-commander/",
     "golang/",
     "mysql/",
+    "postgres/",
     "rust/",
     "shadcn-ui/",
     "sqlite/"
