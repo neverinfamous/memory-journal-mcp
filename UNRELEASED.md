@@ -27,9 +27,12 @@
 
 ### Fixed
 
-- Missing lower-bound validation constraint on `limit` parameters
+- Fixed missing lower-bound validation constraint on `limit` parameters
 - Empty parameter objects (`{}`) in `search_entries` bypassing validation, now correctly returning structured `VALIDATION_ERROR`
 - Code Mode `mj_execute_code` failing to block write operations when `readonly` is requested
 - `link_entries` ignoring soft-deleted state when creating new relationships
 - Cross-project context leakage in `memory://briefing` query scoping
 - Incorrect milestone sort direction in the `memory://briefing` reference
+- Missing `OAUTH_CLOCK_TOLERANCE` environment variable fallback in CLI configuration parsing
+- Incorrect mapping of IO tool group to `export.ts` instead of `io.ts` in `code-map.md`
+- Shortened `DOCKER_README.md` to adhere to Docker Hub's 25,000 character limits

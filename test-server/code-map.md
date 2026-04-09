@@ -220,7 +220,7 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **search**        | `search/index.ts`            | 4     | `search_entries`, `search_by_date_range`, `semantic_search`, `get_vector_index_stats`                                            |
 | **analytics**     | `analytics.ts`               | 2     | `get_statistics`, `get_cross_project_insights`                                                                                   |
 | **relationships** | `relationships.ts`           | 2     | `link_entries`, `visualize_relationships`                                                                                        |
-| **export**        | `export.ts`                  | 1     | `export_entries`                                                                                                                 |
+| **io**            | `io.ts`                      | 3     | `export_entries`, `export_markdown`, `import_markdown`                                                                           |
 | **admin**         | `admin.ts`                   | 5     | `update_entry`, `delete_entry`, `merge_tags`, `rebuild_vector_index`, `add_to_vector_index`                                      |
 | **github**        | `github/read-tools.ts`       | 5     | `get_github_issues`, `get_github_prs`, `get_github_issue` (truncate_body, include_comments), `get_github_pr` (truncate_body), `get_github_context` |
 |                   | `github/issue-tools.ts`      | 2     | `create_github_issue_with_entry`, `close_github_issue_with_entry`                                                                |

@@ -275,7 +275,7 @@ program
                     oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],
                     oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
-                    oauthClockTolerance: parseInt(options.oauthClockTolerance, 10),
+                    oauthClockTolerance: parseInt(process.env['OAUTH_CLOCK_TOLERANCE'] ?? options.oauthClockTolerance, 10),
                     // Project Registry
                     projectRegistry: (() => {
                         const raw = process.env['PROJECT_REGISTRY']
