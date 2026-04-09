@@ -4,6 +4,7 @@
 
 ### Added
 
+- Completed Phase 18 Code Mode `readonly` mode validation, successfully verifying read-only tool filtering and state preservation
 - Updated Code Mode API discoverability tests to accurately account for the `io` tool group addition
 - Added `roadmap-kickoff` and `update-deps` workflows to the `github-commander` skills package.
 - Added `docs/deployment.md` with comprehensive CI/CD deployment instructions and version bump checklist (migrated from copilot-mj-setup-instructions.md)
@@ -19,7 +20,6 @@
 - `bodyTruncated`, `bodyFullLength` metadata in issue/PR detail output schemas
 - `itemCount`, `truncated`, `summaryOnly` metadata in Kanban output schema
 - Vitest tests for payload optimization: `result-size-cap`, `kanban-payload-optimization`, `github-body-truncation`, `max-query-limit` (32 new tests)
-- Verified Payload Optimization via Code Mode suite (Kanban throttling, body truncation, max query size, and result size caps)
 
 ### Changed
 
