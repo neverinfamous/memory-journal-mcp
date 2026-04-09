@@ -4,6 +4,7 @@
 
 ### Added
 
+- Validated Phase 21: Search & Semantics functionality perfectly via `codemode` test suite, covering FTS5 queries, date ranges, filters, vectors, and analytics methods
 - Validated Phase 16: Sandbox Basics functionality perfectly via `codemode` test suite, covering simple expressions, async operations, execution metrics extraction, and timeout validation
 - Updated Code Mode API discoverability tests to accurately account for the `io` tool group addition
 - Added `roadmap-kickoff` and `update-deps` workflows to the `github-commander` skills package.
