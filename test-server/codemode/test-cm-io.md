@@ -100,7 +100,7 @@ return {
 
 ## Success Criteria
 
-- [x] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
-- [x] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
-- [x] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
-- [x] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
+- [] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
+- [] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
+- [] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
+- [] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
