@@ -250,7 +250,8 @@ export const CreateGitHubIssueWithEntryOutputSchema = z
             .object({
                 projectNumber: z.number(),
                 added: z.boolean(),
-                message: z.string(),
+                message: z.string().optional(),
+                error: z.string().optional(),
                 initialStatus: z
                     .object({
                         status: z.string(),

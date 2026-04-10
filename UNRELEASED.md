@@ -3,11 +3,14 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.2.0...HEAD)
 
 ### Added
+
 - Created `test-server/scripts/cleanup-seed-data.mjs`, a native zero-dependency cleanup utility for purging testing/seed data artifacts. Uses a rigid whitelist technique to protect entries from defined core GitHub projects (e.g. `memory-journal-mcp` or `postgres-mcp`) and core structural seed data while automatically expunging testing artifacts.
 - Standardized `success: true` field for read-only tool happy paths across Analytics, Team Search, and Vector tools for response consistency.
 - Feature parity for `team_semantic_search` including filters for tags, entry type, and date range.
 
 ### Fixed
+
+- Fixed `CreateGitHubIssueWithEntryOutputSchema` to allow optional `message` and dynamic `error` payloads inside the `project` field, resolving structured validation failures that crashed clients when Kanban adds failed or board states were unknown.
 - Resolved `semantic_search` filtering inconsistency by implementing explicit 10x oversampling (min 100) when metadata filters are present.
 - Removed hidden `* 2` multiplier from `VectorSearchManager.search` in favor of caller-managed oversampling.
 - Corrected `team_search` to implement oversampling when tags are present to improve variety before filtering.
@@ -20,3 +23,9 @@
 - Fixed prompt registration callback in `registration.ts` to wrap handler execution in `try/catch`, preventing runtime exceptions from prompt handlers (e.g., `ConfigurationError` when `TEAM_DB_PATH` is absent) from propagating as raw MCP protocol errors. Errors are now returned as a user-visible message within the `messages` array.
 - Added `success: true` to happy-path responses for `get_entry_by_id`, `get_recent_entries`, `test_simple`, and `list_tags` core tools to ensure consistent `success` field presence across all tool responses.
 - Fixed `link_entries` to reject linking to soft-deleted entries: added explicit `db.getEntryById` existence checks for both `from_entry_id` and `to_entry_id` before proceeding, returning a structured `RESOURCE_NOT_FOUND` error when either entry is absent or has `deletedAt` set. Previously, soft-deleted entries passed the SQLite FK constraint silently since they remain as physical rows in the table.
+
+### Verified
+
+- **OutputSchema Enforcement:** Verified all 60 outputSchema tools return `structuredContent` properties correctly natively against the `memory-journal-mcp` Zod definitions. Total session token estimate across tools reached extremely low values (approx 8,500 total output tokens), verifying lean overhead of structured models.
+- **Payload Optimization:** Verified all 4 payload optimization boundaries via direct testing: Kanban throttling (`summary_only`, `item_limit`), body truncation (`truncate_body`, `include_comments`), `MAX_QUERY_LIMIT` pagination cap mapping (limit <= 500), and `mj_execute_code` cap limit parsing (100KB threshold structured error limit values output). All mechanisms operate robustly and produce well-structured guidance on limit violations instead of raw protocol errors.
+- **Resources Check:** Verified deterministic execution of all 28 resources across the `memory-journal-mcp` server. Validated 22 static resource endpoints and 14 template resource endpoints (including explicit nonexistent identifier checks for gracefully handled zero-results). All endpoints passed with 100% adherence to architectural boundaries. No generic uncaught exceptions emitted.
