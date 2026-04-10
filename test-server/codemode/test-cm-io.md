@@ -78,7 +78,7 @@ const traversal = await mj.io.exportMarkdown({
 return {
   exportSuccess: exportResult.success,
   exportedCount: exportResult.exported_count ?? 0,
-  validDir: exportResult.output_dir === MOCK_DIR,
+  validDir: exportResult.output_dir?.replace(/\\/g, '/') === MOCK_DIR,
   dryRunSuccess: importResult.success,
   isDryRun: importResult.dry_run === true,
   simulatedUpdates: typeof importResult.updated === 'number',
@@ -100,7 +100,7 @@ return {
 
 ## Success Criteria
 
-- [] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
-- [] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
-- [] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
-- [] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
+- [x] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
+- [x] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
+- [x] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
+- [x] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
