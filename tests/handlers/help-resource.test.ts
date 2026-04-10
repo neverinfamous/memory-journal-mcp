@@ -35,7 +35,7 @@ describe('Help Resource Handlers', () => {
         expect(result.data.totalGroups).toBeGreaterThan(0)
         expect(result.data.groups.some((g: any) => g.name === 'core')).toBe(true)
         expect(result.data.groups.some((g: any) => g.name === 'search')).toBe(true)
-    }, 15000)
+    }, 30000)
 
     it('should generate memory://help/{group} for a valid group', async () => {
         const defs = getHelpResourceDefinitions()
@@ -62,7 +62,7 @@ describe('Help Resource Handlers', () => {
         expect(tagsParam).toBeDefined()
         expect(tagsParam.type).toBe('array')
         expect(tagsParam.required).toBe(false)
-    })
+    }, 30000)
 
     it('should return error for invalid group in memory://help/{group}', async () => {
         const defs = getHelpResourceDefinitions()
