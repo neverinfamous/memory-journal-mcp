@@ -126,16 +126,31 @@ export function registerPrompts(
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
-                const args = providedArgs as Record<string, string>
-                const promptResult = getPrompt(promptDef.name, args, db, teamDb)
-                // Map to MCP SDK expected format
-                const result = {
-                    messages: promptResult.messages.map((m) => ({
-                        role: m.role as 'user' | 'assistant',
-                        content: m.content as { type: 'text'; text: string },
-                    })),
+                try {
+                    const args = providedArgs as Record<string, string>
+                    const promptResult = getPrompt(promptDef.name, args, db, teamDb)
+                    // Map to MCP SDK expected format
+                    const result = {
+                        messages: promptResult.messages.map((m) => ({
+                            role: m.role as 'user' | 'assistant',
+                            content: m.content as { type: 'text'; text: string },
+                        })),
+                    }
+                    return Promise.resolve(result)
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : String(err)
+                    return Promise.resolve({
+                        messages: [
+                            {
+                                role: 'user' as const,
+                                content: {
+                                    type: 'text' as const,
+                                    text: `[Prompt handler error] ${message}`,
+                                },
+                            },
+                        ],
+                    })
                 }
-                return Promise.resolve(result)
             }
         )
     }

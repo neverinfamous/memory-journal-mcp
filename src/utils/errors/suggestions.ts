@@ -59,7 +59,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     {
         pattern: /SQLITE_CONSTRAINT|unique constraint/i,
         suggestion: 'A uniqueness or integrity constraint was violated. Check input values.',
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
     },
     // Disk / space patterns
     {
@@ -70,18 +70,18 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     {
         pattern: /malformed|invalid json|unexpected token/i,
         suggestion: 'The input appears malformed. Check the format and try again.',
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
     },
     // Schema / types patterns
     {
         pattern: /invalid input syntax for type|requires a.*column/i,
         suggestion: 'The provided value is not valid for the assigned type.',
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
     },
     {
         pattern: /^Missing required parameters:/i,
         suggestion: 'Provide all required parameters in your request.',
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
     },
     // Codemode / Sandbox patterns
     {
@@ -93,7 +93,7 @@ export const ERROR_SUGGESTIONS: ErrorSuggestion[] = [
     {
         pattern: /code validation failed/i,
         suggestion: 'Check for blocked patterns. Use mj.* API instead.',
-        code: 'VALIDATION_FAILED',
+        code: 'VALIDATION_ERROR',
     },
     {
         pattern: /sandbox.*not initialized/i,
