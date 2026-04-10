@@ -135,6 +135,17 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     let entryIds: number[] = []
 
                     if (entry_id !== undefined) {
+                        const fromEntry = teamDb.getEntryById(entry_id)
+                        if (!fromEntry) {
+                            return {
+                                success: false,
+                                error: `Team entry ${String(entry_id)} not found`,
+                                code: 'RESOURCE_NOT_FOUND',
+                                category: 'resource',
+                                suggestion: 'Verify the team entry ID and try again',
+                                recoverable: true,
+                            }
+                        }
                         // Start from a specific entry and traverse
                         entryIds = [entry_id]
                         const visited = new Set<number>(entryIds)

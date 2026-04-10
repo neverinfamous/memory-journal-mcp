@@ -220,6 +220,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         const entry = db.getEntryById(input.entry_id)
                         if (!entry) {
                             return {
+                                ...formatHandlerError(new ResourceNotFoundError('Entry', String(input.entry_id))),
                                 success: false,
                                 entry_count: 0,
                                 relationship_count: 0,
