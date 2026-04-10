@@ -393,6 +393,7 @@ export const DeleteMilestoneOutputSchema = z
 
 export const RepoInsightsOutputSchema = z
     .object({
+        success: z.boolean().optional(),
         owner: z.string().optional(),
         repo: z.string().optional(),
         section: z.string().optional(),
