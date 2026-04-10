@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.2.0...HEAD)
 
 ### Added
+- Created `test-server/scripts/cleanup-seed-data.mjs`, a native zero-dependency cleanup utility for purging testing/seed data artifacts. Uses a rigid whitelist technique to protect entries from defined core GitHub projects (e.g. `memory-journal-mcp` or `postgres-mcp`) and core structural seed data while automatically expunging testing artifacts.
 - Standardized `success: true` field for read-only tool happy paths across Analytics, Team Search, and Vector tools for response consistency.
 - Feature parity for `team_semantic_search` including filters for tags, entry type, and date range.
 
