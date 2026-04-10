@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.2.0...HEAD)
 
 ### Fixed
+- Verified Readonly Sandbox Enforcement via Code Mode (Phase 18) successfully. Validated that `readonly: true` correctly strips mutation APIs (throwing 'Operation not found'), while retaining read APIs properly. Verified that default mode allows state mutations seamlessly. No code modifications were required.
 - Verified Payload Optimization via Code Mode (Phase 30) successfully. All checks including Kanban throttling (`summary_only`, `item_limit`), body truncation, `MAX_QUERY_LIMIT` bounds, and the 100KB Result Size Cap passed perfectly with proper structed outputs and truncation metadata. No code modifications were required.
 - Verified Core CRUD via Code Mode (Phase 20) successfully. All operations including create, read, update, delete, with parameter checks and schema error handling behave deterministically and correctly.
 - Verified Admin, Backup & Export tools via Code Mode (Phase 26/27) successfully. No modifications required as all functions behave deterministically according to the strict error handling matrix.

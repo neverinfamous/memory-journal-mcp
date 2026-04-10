@@ -30,9 +30,9 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 | Test               | Code (readonly: true)                                              | Expected Result                       |
 | ------------------ | ------------------------------------------------------------------ | ------------------------------------- |
-| Get recent entries | `return await mj.core.getRecentEntries({limit: 2});`               | `{ success: true }`, entries returned |
-| Search entries     | `return await mj.search.searchEntries({query: "test", limit: 2});` | `{ success: true }`, search works     |
-| Get statistics     | `return await mj.analytics.getStatistics({});`                     | `{ success: true }`, stats returned   |
+| Get recent entries | `return await mj.core.getRecentEntries({limit: 2});`               | `{ count, entries }` returned         |
+| Search entries     | `return await mj.search.searchEntries({query: "test", limit: 2});` | `{ count, entries }` returned         |
+| Get statistics     | `return await mj.analytics.getStatistics({});`                     | data returned                         |
 | Help still works   | `return await mj.help();`                                          | Groups and methods listed             |
 
 ### 18.2 Write Operations Blocked
