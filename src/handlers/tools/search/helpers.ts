@@ -10,6 +10,9 @@
 // ============================================================================
 
 import { MAX_QUERY_LIMIT } from '../schemas.js'
+import type { JournalEntry } from '../../../types/index.js'
+import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
+
 export { MAX_QUERY_LIMIT }
 
 /** Number of leading characters used as deduplication key */
@@ -25,6 +28,20 @@ export interface EntryWithSource {
     source: 'personal' | 'team'
     [key: string]: unknown
 }
+
+export interface ISearchFilters {
+    isPersonal?: boolean
+    projectNumber?: number
+    issueNumber?: number
+    prNumber?: number
+    prStatus?: string
+    workflowRunId?: number
+    tags?: string[]
+    entryType?: string
+    startDate?: string
+    endDate?: string
+}
+
 
 // ============================================================================
 // Helpers
@@ -63,4 +80,35 @@ export function mergeAndDedup(
     }
 
     return limit !== undefined ? merged.slice(0, limit) : merged
+}
+
+/**
+ * Filter an entry in-memory according to search options.
+ * Used for post-filtering vector search results which don't support SQL metadata filtering.
+ */
+export function passMetadataFilters(
+    entry: JournalEntry,
+    options: ISearchFilters,
+    db: IDatabaseAdapter
+): boolean {
+    if (options.isPersonal !== undefined && entry.isPersonal !== options.isPersonal) return false
+    if (options.projectNumber !== undefined && entry.projectNumber !== options.projectNumber) return false
+    if (options.issueNumber !== undefined && entry.issueNumber !== options.issueNumber) return false
+    if (options.prNumber !== undefined && entry.prNumber !== options.prNumber) return false
+    if (options.prStatus !== undefined && entry.prStatus !== options.prStatus) return false
+    if (options.workflowRunId !== undefined && entry.workflowRunId !== options.workflowRunId) return false
+    if (options.entryType && entry.entryType !== options.entryType) return false
+    if (options.startDate) {
+        const entryDate = entry.timestamp.split('T')[0] ?? ''
+        if (entryDate < options.startDate) return false
+    }
+    if (options.endDate) {
+        const entryDate = entry.timestamp.split('T')[0] ?? ''
+        if (entryDate > options.endDate) return false
+    }
+    if (options.tags && options.tags.length > 0) {
+        const entryTags: string[] = db.getTagsForEntry(entry.id)
+        if (!options.tags.some((t: string) => entryTags.includes(t))) return false
+    }
+    return true
 }

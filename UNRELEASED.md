@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.2.0...HEAD)
 
 ### Fixed
+- Verified Automated Scheduler over HTTP/SSE protocols. The integration runs natively without Code Mode scripts, managing backup limits, vacuum scheduling, and vector index intervals perfectly with successful execution of jobs. No code modifications were required.
 - Verified Relationships & Visualization tools via direct calls successfully. Entry linking (including causal types: blocked_by, resolved, caused), duplicate detection, reverse links validation, and Mermaid graph/visualization resources execute flawlessly with compliant structured errors. No code modifications were required.
 - Fixed `memory://github/status` so `milestones` explicitly returns an object with `{ openCount: 0, items: [] }` when there are no milestones, resolving layout inconsistencies.
 - Verified Core Infrastructure (Health, Status, Briefing, Validation Scripts) tools via direct calls. All Phase 1 tools function perfectly with correct metadata, telemetry and schema layouts.
@@ -23,3 +24,4 @@
 - Verified Multi-Step Workflows via Code Mode (Phase 22) successfully. Chaining read-only APIs, processing and transforming returned datasets, robust conditional branching, and full create/read/search round-trips correctly maintained state and sequence execution within a single sandbox run. No code modifications were required.
 - Verified Core CRUD tool capabilities via direct MCP calls. All 24 core entry operations across create, read, update, and delete tested flawlessly with 100% compliance to field persistence, relationship lookups, and schema validation. No code modifications were required.
 - Verified IO & Markdown Interoperability tools via direct MCP calls. Format exports, markdown file orchestration (`export_markdown`/`import_markdown` dry-run), and path traversal security controls executed seamlessly in adherence to OS filesystem bounds. No code modifications were required.
+- Fixed Vector/Semantic Index Metadata Filtering: Centralized `passMetadataFilters` helper in `helpers.ts` and retrofitted `hybridSearch` (RRF) and `semanticSearch` to correctly drop vector matches that do not pass in-memory filter criteria (such as `tags`, `isPersonal`, `projectNumber`, `entryType`, and date ranges), closing a critical filtering gap in Vector-based Search methods. Verified successfully via direct MCP calls.

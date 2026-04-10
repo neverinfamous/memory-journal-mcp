@@ -22,7 +22,7 @@ import {
     EntriesListOutputSchema,
     relaxedNumber,
 } from '../schemas.js'
-import { MAX_QUERY_LIMIT, calcPerDbLimit, mergeAndDedup } from './helpers.js'
+import { MAX_QUERY_LIMIT, calcPerDbLimit, mergeAndDedup, passMetadataFilters } from './helpers.js'
 import { resolveSearchMode, type SearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
@@ -277,11 +277,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
                                     if (!entry) return null
-                                    if (
-                                        input.is_personal !== undefined &&
-                                        entry.isPersonal !== input.is_personal
-                                    )
-                                        return null
+                                    if (!passMetadataFilters(entry, searchOptions, db)) return null
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
@@ -457,27 +453,16 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
-                            // Apply is_personal filter if specified
-                            if (
-                                input.is_personal !== undefined &&
-                                entry.isPersonal !== input.is_personal
-                            )
-                                return null
-                            // Apply metadata filters
-                            if (input.tags && input.tags.length > 0) {
-                                const entryTags = db.getTagsForEntry(entry.id)
-                                if (!input.tags.some((t) => entryTags.includes(t))) return null
+                            
+                            const filterOptions = {
+                                isPersonal: input.is_personal,
+                                tags: input.tags,
+                                entryType: input.entry_type,
+                                startDate: input.start_date,
+                                endDate: input.end_date,
                             }
-                            if (input.entry_type && entry.entryType !== input.entry_type)
-                                return null
-                            if (input.start_date) {
-                                const entryDate = entry.timestamp.split('T')[0] ?? ''
-                                if (entryDate < input.start_date) return null
-                            }
-                            if (input.end_date) {
-                                const entryDate = entry.timestamp.split('T')[0] ?? ''
-                                if (entryDate > input.end_date) return null
-                            }
+                            if (!passMetadataFilters(entry, filterOptions, db)) return null
+
                             // Exclude the source entry from find-related results
                             if (input.entry_id !== undefined && entry.id === input.entry_id)
                                 return null

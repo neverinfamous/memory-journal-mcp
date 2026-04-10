@@ -11,7 +11,7 @@
 import type { JournalEntry, EntryType } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import type { VectorSearchManager } from '../../../vector/vector-search-manager.js'
-import type { EntryWithSource } from './helpers.js'
+import { passMetadataFilters, type ISearchFilters, type EntryWithSource } from './helpers.js'
 
 /** RRF tuning constant (standard value from Cormack et al. 2009) */
 const RRF_K = 60
@@ -66,18 +66,8 @@ export async function hybridSearch(
     query: string,
     db: IDatabaseAdapter,
     vectorManager: VectorSearchManager | undefined,
-    options: {
+    options: ISearchFilters & {
         limit: number
-        isPersonal?: boolean
-        projectNumber?: number
-        issueNumber?: number
-        prNumber?: number
-        prStatus?: string
-        workflowRunId?: number
-        tags?: string[]
-        entryType?: string
-        startDate?: string
-        endDate?: string
     }
 ): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number> }> {
     const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
@@ -127,8 +117,8 @@ export async function hybridSearch(
     for (const id of sortedIds) {
         const entry = entriesMap.get(id)
         if (!entry) continue
-        // Apply is_personal filter if specified
-        if (options.isPersonal !== undefined && entry.isPersonal !== options.isPersonal) continue
+        // Apply memory-level metadata filters
+        if (!passMetadataFilters(entry, options, db)) continue
         entries.push({ ...entry, source: 'personal' as const })
     }
 
