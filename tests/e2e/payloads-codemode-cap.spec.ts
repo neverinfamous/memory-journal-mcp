@@ -30,7 +30,6 @@ test.describe('Payload Contracts: Code Mode Result Cap (E2E)', () => {
 
         expect(typeof payload).toBe('object')
         expect(payload.success).toBe(true)
-
     })
 
     test('mj_execute_code → oversized result returns structured error', async () => {

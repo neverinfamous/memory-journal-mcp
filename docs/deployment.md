@@ -13,7 +13,7 @@ If all four pass → `docker-publish.yml` runs → then `publish-npm.yml` runs.
 
 ## To trigger a release
 
-**Option A — Automatic (push to main or tag):** Simply merge/push a tag (e.g., `v7.2.0`) to `main`. _(Note: Pushing directly to main without a tag will just run the validation gates without publishing)._
+**Option A — Automatic (push to main or tag):** Simply merge/push a tag (e.g., `v7.3.0`) to `main`. _(Note: Pushing directly to main without a tag will just run the validation gates without publishing)._
 
 **Option B — Manual npm publish only (no Docker):** Go to Actions → "Publish to NPM" → Run workflow. Useful if Docker already published but npm failed.
 

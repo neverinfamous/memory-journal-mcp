@@ -40,9 +40,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const { query, tags, limit } = TeamSearchSchema.parse(params)
 
-                    const searchLimit = tags && tags.length > 0
-                        ? Math.max(limit * 5, 50)
-                        : limit
+                    const searchLimit = tags && tags.length > 0 ? Math.max(limit * 5, 50) : limit
 
                     let entries
                     if (query) {

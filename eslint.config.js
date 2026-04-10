@@ -110,10 +110,7 @@ export default tseslint.config(
     // Test configuration (non-type-aware)
     {
         files: ['tests/**/*.ts', 'test-server/**/*.ts'],
-        extends: [
-            js.configs.recommended,
-            ...tseslint.configs.recommended,
-        ],
+        extends: [js.configs.recommended, ...tseslint.configs.recommended],
         languageOptions: {
             ecmaVersion: 2022,
             globals: {
@@ -133,7 +130,7 @@ export default tseslint.config(
             // Allow console mocking inside tests
             'no-console': 'off',
             // Allow generic Function types in mocks
-            '@typescript-eslint/no-unsafe-function-type': 'off'
+            '@typescript-eslint/no-unsafe-function-type': 'off',
         },
     }
 )

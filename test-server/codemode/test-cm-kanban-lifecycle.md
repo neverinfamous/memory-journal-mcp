@@ -9,8 +9,8 @@ Extract and report the `_meta.tokenEstimate` from the tool's outer response wrap
 
 ## 25.1.1 Full Topological Execution
 
-| #   | Test                                   | Command                                             | Expected Result                                                              |
-| --- | -------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| #   | Test                                   | Command                                             | Expected Result                                                                   |
+| --- | -------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
 | 1   | Pipelined Add -> Move -> Map -> Delete | `mj_execute_code` with the pipeline logic natively. | `{ "success": true, "stages": [...] }` returned smoothly inside the tool wrapper. |
 
 ### The Pipeline Script Setup

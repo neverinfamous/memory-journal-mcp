@@ -586,7 +586,10 @@ describe('GitHub resources — branch coverage', () => {
                 createMockContext({ github }) as never
             )) as Record<string, unknown>
             const data = result.data as Record<string, unknown>
-            const milestones = data.milestones as { openCount: number; items: { completionPercentage: number }[] }
+            const milestones = data.milestones as {
+                openCount: number
+                items: { completionPercentage: number }[]
+            }
             expect(milestones.openCount).toBe(1)
             expect(milestones.items[0]!.completionPercentage).toBe(70)
         })

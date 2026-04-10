@@ -20,7 +20,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 | `test-github-auth.ts`          | Tool handler response when GITHUB_TOKEN is completely omitted (validates `requiresUserInput`)                                         | direct        | ~1s      |
 | `test-relationships.ts`        | Tool handler responses for `link_entries` & `visualize_relationships` including depth bounds, error mitigation, and bad inputs        | direct        | ~2s      |
-| `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests. | stdio         | ~1s      |
+| `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests.    | stdio         | ~1s      |
 
 ## Scheduler Notes
 
