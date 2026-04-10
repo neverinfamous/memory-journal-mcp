@@ -144,6 +144,28 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Guard: both entries must exist and not be soft-deleted.
+                    // db.linkEntries only enforces FK against physical rows, so soft-deleted
+                    // entries (deletedAt set) would pass the FK check silently.
+                    const fromEntry = db.getEntryById(input.from_entry_id)
+                    if (!fromEntry || fromEntry.deletedAt) {
+                        return {
+                            ...formatHandlerError(
+                                new ResourceNotFoundError('Entry', String(input.from_entry_id))
+                            ),
+                            success: false,
+                        }
+                    }
+                    const toEntry = db.getEntryById(input.to_entry_id)
+                    if (!toEntry || toEntry.deletedAt) {
+                        return {
+                            ...formatHandlerError(
+                                new ResourceNotFoundError('Entry', String(input.to_entry_id))
+                            ),
+                            success: false,
+                        }
+                    }
+
                     // Check for existing duplicate relationship (exact direction only).
                     // Reverse direction (B→A when A→B exists) is intentionally allowed
                     // so agents can model bidirectional relationships explicitly.
