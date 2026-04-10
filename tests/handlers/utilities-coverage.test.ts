@@ -19,7 +19,7 @@ describe('utilities coverage', () => {
         try {
             let time = Date.now()
             vi.spyOn(Date, 'now').mockImplementation(() => time)
-            const statSpy = vi.spyOn(fs.promises, 'stat').mockResolvedValue({ mtimeMs: 1234 } as any)
+            vi.spyOn(fs.promises, 'stat').mockResolvedValue({ mtimeMs: 1234 } as any)
             const readFileSpy = vi.spyOn(fs.promises, 'readFile').mockResolvedValue('rules content')
 
             // 1. Initial read
