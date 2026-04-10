@@ -230,7 +230,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             ...formatHandlerError(
                                 new ValidationError(
                                     'Search requires either a query string or at least one filter',
-                                    { suggestion: 'Provide a search query or use get_recent_entries instead' }
+                                    {
+                                        suggestion:
+                                            'Provide a search query or use get_recent_entries instead',
+                                    }
                                 )
                             ),
                             entries: [],
@@ -267,7 +270,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             }
                             // Use semantic search with overfetching for filtering reliability
                             const internalLimit = hasFilters
-                                ? Math.max(input.limit * 10, 100)
+                                ? Math.min(Math.max(input.limit * 10, 100), 1000)
                                 : input.limit * 2
                             const semanticResults = await vectorManager.search(
                                 query,
@@ -385,7 +388,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         return { success: true, entries: merged, count: merged.length }
                     }
 
-                    return { success: true, entries: personalEntries, count: personalEntries.length }
+                    return {
+                        success: true,
+                        entries: personalEntries,
+                        count: personalEntries.length,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -442,7 +449,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         input.end_date !== undefined
 
                     const internalLimit = hasFilters
-                        ? Math.max(input.limit * 10, 100)
+                        ? Math.min(Math.max(input.limit * 10, 100), 1000)
                         : input.limit * 2
 
                     // Determine search method: by entry_id or by query
@@ -470,7 +477,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
-                            
+
                             const filterOptions = {
                                 isPersonal: input.is_personal,
                                 tags: input.tags,

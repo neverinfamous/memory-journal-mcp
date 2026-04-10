@@ -42,7 +42,6 @@ export interface ISearchFilters {
     endDate?: string
 }
 
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -92,11 +91,13 @@ export function passMetadataFilters(
     db: IDatabaseAdapter
 ): boolean {
     if (options.isPersonal !== undefined && entry.isPersonal !== options.isPersonal) return false
-    if (options.projectNumber !== undefined && entry.projectNumber !== options.projectNumber) return false
+    if (options.projectNumber !== undefined && entry.projectNumber !== options.projectNumber)
+        return false
     if (options.issueNumber !== undefined && entry.issueNumber !== options.issueNumber) return false
     if (options.prNumber !== undefined && entry.prNumber !== options.prNumber) return false
     if (options.prStatus !== undefined && entry.prStatus !== options.prStatus) return false
-    if (options.workflowRunId !== undefined && entry.workflowRunId !== options.workflowRunId) return false
+    if (options.workflowRunId !== undefined && entry.workflowRunId !== options.workflowRunId)
+        return false
     if (options.entryType && entry.entryType !== options.entryType) return false
     if (options.startDate) {
         const entryDate = entry.timestamp.split('T')[0] ?? ''
@@ -107,7 +108,9 @@ export function passMetadataFilters(
         if (entryDate > options.endDate) return false
     }
     if (options.tags && options.tags.length > 0) {
-        const entryTags: string[] = db.getTagsForEntry(entry.id)
+        const entryTags: string[] = Array.isArray(entry.tags)
+            ? entry.tags
+            : db.getTagsForEntry(entry.id)
         if (!options.tags.some((t: string) => entryTags.includes(t))) return false
     }
     return true

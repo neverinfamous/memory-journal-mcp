@@ -60,18 +60,16 @@ describe('PullRequestsManager - coverage', () => {
             octokit: {
                 rest: {
                     pulls: {
-                        listReviews: vi
-                            .fn()
-                            .mockResolvedValue({
-                                data: [
-                                    {
-                                        id: 1,
-                                        user: { login: 'user' },
-                                        state: 'APPROVED',
-                                        body: 'body',
-                                    },
-                                ],
-                            }),
+                        listReviews: vi.fn().mockResolvedValue({
+                            data: [
+                                {
+                                    id: 1,
+                                    user: { login: 'user' },
+                                    state: 'APPROVED',
+                                    body: 'body',
+                                },
+                            ],
+                        }),
                     },
                 },
             },
@@ -113,13 +111,9 @@ describe('PullRequestsManager - coverage', () => {
             octokit: {
                 rest: {
                     pulls: {
-                        listReviews: vi
-                            .fn()
-                            .mockResolvedValue({
-                                data: [
-                                    { id: 1, user: { login: 'copilot[bot]' }, state: 'COMMENTED' },
-                                ],
-                            }),
+                        listReviews: vi.fn().mockResolvedValue({
+                            data: [{ id: 1, user: { login: 'copilot[bot]' }, state: 'COMMENTED' }],
+                        }),
                         listReviewComments: vi.fn().mockResolvedValue({ data: [] }),
                     },
                 },

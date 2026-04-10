@@ -20,6 +20,7 @@ network:
 permissions: read-all
 
 safe-outputs:
+  report-failure-as-issue: false
   create-issue:
     title-prefix: '[ci-health] '
     labels: [maintenance, ci-cd]

@@ -133,6 +133,7 @@ const EntryByIdOutputSchema = z
 
 const TestSimpleOutputSchema = z
     .object({
+        success: z.boolean().optional(),
         message: z.string(),
     })
     .extend(ErrorFieldsMixin.shape)

@@ -8,7 +8,10 @@ const __dirname = dirname(__filename)
 const projectDir = join(__dirname, '..', '..')
 
 const DEFAULT_CHECK_SCHEMAS_TIMEOUT_MS = 15000
-const configuredCheckSchemasTimeoutMs = Number.parseInt(process.env.CHECK_SCHEMAS_TIMEOUT_MS ?? '', 10)
+const configuredCheckSchemasTimeoutMs = Number.parseInt(
+    process.env.CHECK_SCHEMAS_TIMEOUT_MS ?? '',
+    10
+)
 const checkSchemasTimeoutMs =
     Number.isFinite(configuredCheckSchemasTimeoutMs) && configuredCheckSchemasTimeoutMs > 0
         ? configuredCheckSchemasTimeoutMs
@@ -66,9 +69,16 @@ proc.stdout.on('data', (chunk) => {
             } else if (msg.id === 1 && !msg.error) {
                 // Initialize succeeded, send initialized and query tools
                 proc.stdin.write(
-                    JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n'
+                    JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'notifications/initialized',
+                        params: {},
+                    }) + '\n'
                 )
-                proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) + '\n')
+                proc.stdin.write(
+                    JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }) +
+                        '\n'
+                )
             }
         } catch {}
     }

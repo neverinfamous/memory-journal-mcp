@@ -90,7 +90,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         input.end_date !== undefined
 
                     const internalLimit = hasFilters
-                        ? Math.max(input.limit * 10, 100)
+                        ? Math.min(Math.max(input.limit * 10, 100), 1000)
                         : input.limit * 2
 
                     let results: SemanticSearchResult[]

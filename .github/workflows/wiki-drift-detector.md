@@ -19,6 +19,7 @@ network:
 permissions: read-all
 
 safe-outputs:
+  report-failure-as-issue: false
   add-comment:
     max: 3
     discussions: false

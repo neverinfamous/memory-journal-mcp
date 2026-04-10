@@ -170,7 +170,9 @@ export const rulesResource: InternalResourceDef = {
         }
         try {
             if (cachedRulesContent && Date.now() - rulesLastScanTime < RULES_CACHE_TTL_MS) {
-                const stat = await fs.promises.stat(rulesPath).catch(() => ({ mtimeMs: Date.now() }))
+                const stat = await fs.promises
+                    .stat(rulesPath)
+                    .catch(() => ({ mtimeMs: Date.now() }))
                 return {
                     data: cachedRulesContent,
                     annotations: {

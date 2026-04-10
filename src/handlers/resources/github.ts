@@ -181,7 +181,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                                 completionPercentage: pct,
                                 dueOn: ms.dueOn,
                             }
-                        })
+                        }),
                     }
                 } else if (milestoneResult.status === 'rejected') {
                     milestoneSummary = null
