@@ -2,8 +2,16 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.2.0...HEAD)
 
-### Fixed
+### Added
+- Standardized `success: true` field for read-only tool happy paths across Analytics, Team Search, and Vector tools for response consistency.
+- Feature parity for `team_semantic_search` including filters for tags, entry type, and date range.
 
+### Fixed
+- Resolved `semantic_search` filtering inconsistency by implementing explicit 10x oversampling (min 100) when metadata filters are present.
+- Removed hidden `* 2` multiplier from `VectorSearchManager.search` in favor of caller-managed oversampling.
+- Corrected `team_search` to implement oversampling when tags are present to improve variety before filtering.
+- Fixed missing `success: true` field in several tool response schemas.
+- Centralized `passMetadataFilters` usage across both personal and team semantic search handlers.
 - Fixed `memory://github/status` so `milestones` explicitly returns an object with `{ openCount: 0, items: [] }` when there are no milestones, resolving layout inconsistencies.
 - Fixed Vector/Semantic Index Metadata Filtering: Centralized `passMetadataFilters` helper in `helpers.ts` and retrofitted `hybridSearch` (RRF) and `semanticSearch` to correctly drop vector matches that do not pass in-memory filter criteria (such as `tags`, `isPersonal`, `projectNumber`, `entryType`, and date ranges), closing a critical filtering gap in Vector-based Search methods. Verified successfully via direct MCP calls.
 - Fixed `ValidationError` class error code from `VALIDATION_FAILED` to `VALIDATION_ERROR` to align with the `formatHandlerError` Zod path, ensuring all validation errors (both schema-driven and programmatic) emit the same `VALIDATION_ERROR` code. Aligned `suggestions.ts` pattern-matched codes for `SQLITE_CONSTRAINT`, `malformed`, and `code validation failed` patterns to use `VALIDATION_ERROR` as well.

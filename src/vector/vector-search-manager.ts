@@ -213,7 +213,7 @@ export class VectorSearchManager {
                      ORDER BY distance
                      LIMIT ?`
                 )
-                .all(queryVec, limit * 2) as { entry_id: number; distance: number }[]
+                .all(queryVec, limit) as { entry_id: number; distance: number }[]
 
             // Convert L2 distance to similarity score and filter by threshold
             const filteredResults: SemanticSearchResult[] = results
@@ -289,7 +289,7 @@ export class VectorSearchManager {
                      ORDER BY distance
                      LIMIT ?`
                 )
-                .all(queryVec, (limit + 1) * 2) as { entry_id: number; distance: number }[]
+                .all(queryVec, limit + 1) as { entry_id: number; distance: number }[]
 
             // Convert L2 distance to similarity, exclude the source entry, filter by threshold
             const filteredResults: SemanticSearchResult[] = results

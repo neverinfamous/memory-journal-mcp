@@ -40,11 +40,15 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const { query, tags, limit } = TeamSearchSchema.parse(params)
 
+                    const searchLimit = tags && tags.length > 0
+                        ? Math.max(limit * 5, 50)
+                        : limit
+
                     let entries
                     if (query) {
-                        entries = teamDb.searchEntries(query, { limit })
+                        entries = teamDb.searchEntries(query, { limit: searchLimit })
                     } else {
-                        entries = teamDb.getRecentEntries(limit)
+                        entries = teamDb.getRecentEntries(searchLimit)
                     }
 
                     // Filter by tags if provided (batch query instead of N+1)
@@ -73,6 +77,9 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Apply final limit after filtering
+                    entries = entries.slice(0, limit)
+
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(
                         teamDb,
@@ -83,7 +90,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { entries: enriched, count: enriched.length }
+                    return { success: true, entries: enriched, count: enriched.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -135,7 +142,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { entries: enriched, count: enriched.length }
+                    return { success: true, entries: enriched, count: enriched.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

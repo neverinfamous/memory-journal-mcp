@@ -418,6 +418,10 @@ export const TeamSemanticSearchSchema = z.object({
     entry_id: z.number().optional().describe('Find entries related to this entry ID'),
     limit: z.number().max(500).optional().default(10),
     similarity_threshold: z.number().optional().default(0.25),
+    tags: z.array(z.string()).optional(),
+    entry_type: z.enum(ENTRY_TYPES).optional(),
+    start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     hint_on_empty: z
         .boolean()
         .optional()
@@ -431,6 +435,10 @@ export const TeamSemanticSearchSchemaMcp = z.object({
     entry_id: relaxedNumber().optional().describe('Find entries related to this entry ID'),
     limit: relaxedNumber().optional().default(10),
     similarity_threshold: relaxedNumber().optional().default(0.25),
+    tags: z.array(z.string()).optional(),
+    entry_type: z.string().optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
     hint_on_empty: z
         .boolean()
         .optional()

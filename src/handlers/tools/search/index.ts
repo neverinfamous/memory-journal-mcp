@@ -265,10 +265,13 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
                                 return { ...result, searchMode: 'fts (fallback)' }
                             }
-                            // Use semantic search, then fetch full entries
+                            // Use semantic search with overfetching for filtering reliability
+                            const internalLimit = hasFilters
+                                ? Math.max(input.limit * 10, 100)
+                                : input.limit * 2
                             const semanticResults = await vectorManager.search(
                                 query,
-                                input.limit,
+                                internalLimit,
                                 0.25
                             )
                             const entryIds = semanticResults.map((r) => r.entryId)
@@ -282,6 +285,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
                             return {
+                                success: true,
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
@@ -300,6 +304,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 searchOptions
                             )
                             return {
+                                success: true,
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
@@ -310,6 +315,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             const result = ftsSearch(input.query, db, teamDb, searchOptions)
                             return {
                                 ...result,
+                                success: true,
                                 searchMode: isAuto ? 'fts (auto)' : 'fts',
                             }
                         }
@@ -376,10 +382,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             teamEntries.map((e) => ({ ...e, source: 'team' as const })),
                             input.limit
                         )
-                        return { entries: merged, count: merged.length }
+                        return { success: true, entries: merged, count: merged.length }
                     }
 
-                    return { entries: personalEntries, count: personalEntries.length }
+                    return { success: true, entries: personalEntries, count: personalEntries.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -428,19 +434,30 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const hasFilters =
+                        input.is_personal !== undefined ||
+                        input.tags !== undefined ||
+                        input.entry_type !== undefined ||
+                        input.start_date !== undefined ||
+                        input.end_date !== undefined
+
+                    const internalLimit = hasFilters
+                        ? Math.max(input.limit * 10, 100)
+                        : input.limit * 2
+
                     // Determine search method: by entry_id or by query
                     let results: SemanticSearchResult[]
                     if (input.entry_id !== undefined) {
                         // Find related by ID: lookup existing embedding, skip re-embedding
                         results = await vectorManager.searchByEntryId(
                             input.entry_id,
-                            input.limit ?? 10,
+                            internalLimit,
                             input.similarity_threshold ?? 0.25
                         )
                     } else {
                         results = await vectorManager.search(
                             input.query ?? '',
-                            input.limit ?? 10,
+                            internalLimit,
                             input.similarity_threshold ?? 0.25
                         )
                     }
@@ -472,6 +489,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             }
                         })
                         .filter((e): e is NonNullable<typeof e> => e !== null)
+                        .slice(0, input.limit)
 
                     const stats = vectorManager.getStats()
                     const isIndexEmpty = stats.itemCount === 0
@@ -496,6 +514,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 : undefined
 
                     return {
+                        success: true,
                         query: input.query,
                         ...(input.entry_id !== undefined ? { entryId: input.entry_id } : {}),
                         entries,
