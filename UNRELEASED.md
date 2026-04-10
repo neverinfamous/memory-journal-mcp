@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.2.0...HEAD)
 
 ### Fixed
+- Verified Team CRUD and Date Range Search tools via Code Mode (Phase 28.1–28.3) successfully. All team creation, attribute association (authors), text/tag filtering, error path handling, date range filtering, and cross-team tagging performed deterministically with zero errors. No code modifications were required.
 - Verified Team Admin & Collaboration tools via Code Mode (Phase 28.4-28.8) successfully. Team administration, entry statistics, relationship linking, markdown/JSON exports, and SQLite backup workflows performed deterministically with zero errors. No code modifications were required.
 - Verified Search, Dates, Semantic & Analytics tools via Code Mode (Phase 21) successfully. Validated FTS5 with LIKE fallback, auto-mode RRF heuristics, custom threshold filtering, date ranges, cross-DB queries, and generated compliant analytics and cross-project insights. No modifications were required.
 - Verified Readonly Sandbox Enforcement via Code Mode (Phase 18) successfully. Validated that `readonly: true` correctly strips mutation APIs (throwing 'Operation not found'), while retaining read APIs properly. Verified that default mode allows state mutations seamlessly. No code modifications were required.
