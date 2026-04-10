@@ -28,12 +28,12 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ### 18.1 Read Operations Succeed
 
-| Test               | Code (readonly: true)                                              | Expected Result                       |
-| ------------------ | ------------------------------------------------------------------ | ------------------------------------- |
-| Get recent entries | `return await mj.core.getRecentEntries({limit: 2});`               | `{ count, entries }` returned         |
-| Search entries     | `return await mj.search.searchEntries({query: "test", limit: 2});` | `{ count, entries }` returned         |
-| Get statistics     | `return await mj.analytics.getStatistics({});`                     | data returned                         |
-| Help still works   | `return await mj.help();`                                          | Groups and methods listed             |
+| Test               | Code (readonly: true)                                              | Expected Result               |
+| ------------------ | ------------------------------------------------------------------ | ----------------------------- |
+| Get recent entries | `return await mj.core.getRecentEntries({limit: 2});`               | `{ count, entries }` returned |
+| Search entries     | `return await mj.search.searchEntries({query: "test", limit: 2});` | `{ count, entries }` returned |
+| Get statistics     | `return await mj.analytics.getStatistics({});`                     | data returned                 |
+| Help still works   | `return await mj.help();`                                          | Groups and methods listed     |
 
 ### 18.2 Write Operations Blocked
 
@@ -53,7 +53,7 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ## Success Criteria
 
-- [x] `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
-- [x] `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
-- [x] `readonly: false` (default) allows both read and write operations
-- [x] `mj.help()` still works in readonly mode
+- [] `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
+- [] `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
+- [] `readonly: false` (default) allows both read and write operations
+- [] `mj.help()` still works in readonly mode
