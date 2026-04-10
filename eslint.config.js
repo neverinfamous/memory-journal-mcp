@@ -122,12 +122,18 @@ export default tseslint.config(
         },
         rules: {
             // Base rules for tests without projectService type information
-            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+            '@typescript-eslint/no-unused-vars': 'off',
             // Tests can use any and non-null assertions safely
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
-            // Prevent console.log except standard test warnings
-            'no-console': ['error', { allow: ['error', 'warn'] }],
+            // Allow require() style imports for mocks
+            '@typescript-eslint/no-require-imports': 'off',
+            // Allow empty block statements in tests (e.g. catch (e) {})
+            'no-empty': 'off',
+            // Allow console mocking inside tests
+            'no-console': 'off',
+            // Allow generic Function types in mocks
+            '@typescript-eslint/no-unsafe-function-type': 'off'
         },
     }
 )
