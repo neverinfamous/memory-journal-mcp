@@ -61,7 +61,7 @@ Execute BEFORE fulfilling any user request in a new session:
    - **REQUIRED GROUPS**:
      - **GitHub**: Combine Repo, Branch, CI, PRs, and Insights.
      - **GitHub Issues**: List every issue, one per line.
-     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries, Milestones, and Workspaces.
+     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries, Proactive Analytics/Team Density, Milestones, and Workspaces.
 4. **STOP & WAIT**: After rendering the table, execute the user's prompt but do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
 
 ---

@@ -15,6 +15,7 @@ export interface BriefingInsights {
     significanceSpike: string | null
     staleProjects: { projectNumber: number; daysSilent: number }[]
     topImportance: { id: number; score: number; preview: string }[]
+    relationshipDensity?: number
 }
 
 /**
@@ -82,5 +83,6 @@ function formatDigest(snapshot: DigestSnapshot): BriefingInsights {
             score: e.score,
             preview: e.preview,
         })),
+        ...(snapshot.currentRelDensity > 0 ? { relationshipDensity: snapshot.currentRelDensity } : {})
     }
 }
