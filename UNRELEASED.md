@@ -23,3 +23,4 @@
 - Verified Code Mode Core CRUD operations (Phase 20), confirming native object hydration for `share_with_team`, `is_personal` toggles, `project_owner`, and `issueUrl` auto-population without raw MCP exceptions.
 - Verified Code Mode Error Matrix and Zod Sweeps (Phase 29), ensuring `{}` empty parameters, type mismatches, and domain boundaries return uniform `{ success: false }` across all 10 `mj.*` API groups without sandbox crashes.
 - Verified Code Mode GitHub Tools (Phase 25), confirming all 16 `mj.github.*` endpoints, read-only limits, Kanban operations, issue and milestone lifecycles correctly surface schema-compliant responses and structured errors instead of raw `-32602` faults.
+- Verified Code Mode IO & Interoperability (Phase 26), confirming legacy export payload hydration, markdown file orchestration within sandbox mapped directories, and strict path traversal halts.
