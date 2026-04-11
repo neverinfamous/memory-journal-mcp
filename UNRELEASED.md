@@ -19,3 +19,4 @@
 
 ### Security
 - Verified Admin tag management, export filters, and Backup/Restore lifecycle through the Code Mode sandbox. All tools strictly return structured `{ success: false }` bounds errors.
+- Verified Code Mode API discoverability (Phase 17), confirming top-level and per-group help documentation, method aliases, and positional argument proxying.
