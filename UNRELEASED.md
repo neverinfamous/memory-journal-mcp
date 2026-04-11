@@ -3,6 +3,8 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.3.0...HEAD)
 
 ### Added
+- Phase 2: Verified all 16 GitHub capability tools including issue lifecycle, milestones, kanban board manipulation, and copilot PR review analysis.
+
 - `python` skill: Modern Python engineering — `uv`, `ruff`, type hints, `pytest`, Pydantic v2, `src/` layout, and async patterns.
 - `docker` skill: Production-grade Docker — multi-stage builds, BuildKit, non-root users, secret mounts, Compose v2, and CI/CD integration.
 - `tailwind-css` skill: Tailwind CSS v4 — CSS-first `@theme` configuration, `@custom-variant` dark mode, responsive design, animations, and v3 migration.
