@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { relaxedNumber } from '../schemas.js'
-import { MAX_QUERY_LIMIT } from '../search/helpers.js'
+import { MAX_QUERY_LIMIT } from '../schemas.js'
 import {
     GitHubIssuesListOutputSchema,
     GitHubIssueResultOutputSchema,

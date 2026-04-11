@@ -140,13 +140,22 @@ const SEED_FINGERPRINTS = [
 
 function loadSqlite() {
     const require = createRequire(join(PROJECT_ROOT, 'package.json'))
-    return require('better-sqlite3')
+    return { Database: require('better-sqlite3'), sqliteVec: require('sqlite-vec') }
 }
 
-function openDb(path, Database) {
+function openDb(path, Database, sqliteVec) {
     if (!existsSync(path)) return { db: null, missing: true }
     try {
         const db = new Database(realpathSync(path))
+        if (sqliteVec) {
+            try {
+                sqliteVec.load(db)
+            } catch (err) {
+                console.warn(
+                    `[WARN] Could not load sqlite-vec for ${path}, vec_embeddings cleanup will be skipped: ${err.message}`
+                )
+            }
+        }
         db.pragma('journal_mode = WAL')
         db.pragma('foreign_keys = ON')
         return { db, missing: false }
@@ -264,9 +273,30 @@ function processDatabase({ db, label, seedFingerprints }) {
 
     const deleteFn = db.transaction((idList) => {
         let total = 0
+        let deleteVec = null
+        try {
+            deleteVec = db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+        } catch (e) {
+            // vec_embeddings might not be loaded or exist, ignore safely
+        }
+
         for (const id of idList) {
+            if (deleteVec) {
+                try {
+                    deleteVec.run(id)
+                } catch (e) {}
+            }
             total += db.prepare('DELETE FROM memory_journal WHERE id = ?').run(id).changes
         }
+
+        // Recompute tags usage_count and prune orphans
+        db.prepare(
+            `DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM entry_tags)`
+        ).run()
+        db.prepare(
+            `UPDATE tags SET usage_count = (SELECT COUNT(*) FROM entry_tags WHERE tag_id = tags.id)`
+        ).run()
+
         return total
     })
 
@@ -276,7 +306,7 @@ function processDatabase({ db, label, seedFingerprints }) {
 }
 
 async function main() {
-    const Database = loadSqlite()
+    const { Database, sqliteVec } = loadSqlite()
 
     console.log('═'.repeat(60))
     console.log('  memory-journal-mcp — Database Purge (Strict Whitelist)')
@@ -291,7 +321,7 @@ async function main() {
     let totalSkipped = 0
 
     // --- Personal DB ---
-    const { db: personalDb, missing: personalMissing } = openDb(DB_PATH, Database)
+    const { db: personalDb, missing: personalMissing } = openDb(DB_PATH, Database, sqliteVec)
     if (!personalMissing) {
         const result = processDatabase({
             db: personalDb,
@@ -306,7 +336,7 @@ async function main() {
     }
 
     // --- Team DB ---
-    const { db: teamDb, missing: teamMissing } = openDb(TEAM_DB_PATH, Database)
+    const { db: teamDb, missing: teamMissing } = openDb(TEAM_DB_PATH, Database, sqliteVec)
     if (!teamMissing) {
         const result = processDatabase({
             db: teamDb,

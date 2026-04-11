@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Team Admin & Collaboration
+# Re-Test memory-journal-mcp — Code Mode: Team Admin & Collaboration
 
 Test team administration (update, delete, merge tags), analytics, relationships, export, and backup through Code Mode.
 
@@ -190,16 +190,39 @@ return {
 | `autoSuccess`    | `true`   |
 | `listHasBackups` | `true`   |
 
+### 28.9 Team Collaboration Matrix & Analytics
+
+```javascript
+// Test code:
+const matrix = await mj.team.teamGetCollaborationMatrix({})
+
+// Return key properties to prove Code Mode boundary bindings work seamlessly
+return {
+  success: matrix.success,
+  hasTotalAuthors: typeof matrix.totalAuthors === 'number',
+  hasActivityList: Array.isArray(matrix.authorActivity),
+  hasEntriesNum: typeof matrix.totalEntries === 'number',
+}
+```
+
+| Check             | Expected |
+| ----------------- | -------- |
+| `success`         | `true`   |
+| `hasTotalAuthors` | `true`   |
+| `hasActivityList` | `true`   |
+| `hasEntriesNum`   | `true`   |
+
 ---
 
 ## Success Criteria
 
-- [] `team_update_entry` updates content, tags, and entry_type
-- [] `team_delete_entry` soft-deletes team entries
-- [] `team_merge_tags` consolidates tags — source removed, entries re-tagged
-- [] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
-- [] `team_link_entries` creates relationships with duplicate detection
-- [] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
-- [] `team_export_entries` exports JSON and markdown with filters
-- [] `team_backup` creates named and auto-named backups
-- [] `team_list_backups` returns backup metadata
+- [ ] `team_update_entry` updates content, tags, and entry_type
+- [ ] `team_delete_entry` soft-deletes team entries
+- [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
+- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `authors`
+- [ ] `team_link_entries` creates relationships with duplicate detection
+- [ ] `team_visualize_relationships` returns Mermaid diagram with node/edge counts
+- [ ] `team_export_entries` exports JSON and markdown with filters
+- [ ] `team_backup` creates named and auto-named backups
+- [ ] `team_list_backups` returns backup metadata
+- [ ] `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings

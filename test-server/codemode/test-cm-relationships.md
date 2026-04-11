@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Relationships & Visualization
+# Re-Test memory-journal-mcp — Code Mode: Relationships & Visualization
 
 Test relationship linking (all types), duplicate detection, error paths, and Mermaid visualization through Code Mode.
 

@@ -8,8 +8,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import { MAX_QUERY_LIMIT } from '../../src/handlers/tools/search/helpers.js'
-import type { GitHubIntegration } from '../../src/github/github-integration.js'
+import { MAX_QUERY_LIMIT } from '../../src/handlers/tools/schemas.js'
+import type { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
 function createMockGitHub(): GitHubIntegration {
     return {

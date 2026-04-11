@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Team Collaboration
+# Re-Test memory-journal-mcp — Team Collaboration
 
 **Scope:** 22 team tools + 2 team resources — happy paths, core error paths, and feature verification for all team collaboration features.
 
@@ -10,7 +10,7 @@
 
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
 2. Implement, update `UNRELEASED.md`, commit without push.
-3. **USER** verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
+3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. Re-test fixes with direct MCP calls.
 5. Brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
@@ -153,7 +153,16 @@
 | Statistics       | `memory://team/statistics` | `configured: true`, `totalEntries`, `authors` array, `source: "team"` |
 | Author breakdown | `memory://team/statistics` | `authors` contains `{ author: "<name>", count: N }` for each author   |
 
-### 10.14 Cleanup
+### 10.14 Insights & Team Collaboration Metrics
+
+| Test                 | Command/Action                                 | Expected Result                                                                |
+| -------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| Matrix structure     | `team_get_collaboration_matrix`                | `authorActivity` and `impactFactor` object arrays present                      |
+| Matrix author        | Inspect `team_get_collaboration_matrix` result | Authors like "alice" and "bob" (from S15-S17) exist in metrics                 |
+| Digest resource      | Read `memory://insights/digest`                | Either full snapshot JSON or graceful "no digest available" message            |
+| Team collab resource | Read `memory://insights/team-collaboration`    | Same payload structure as `team_get_collaboration_matrix` with `success: true` |
+
+### 10.15 Cleanup
 
 | Test        | Command/Action                                     | Expected Result                 |
 | ----------- | -------------------------------------------------- | ------------------------------- |
@@ -203,3 +212,6 @@
 - [ ] `memory://team/statistics` returns `configured: true`, `authors` array with `{ author, count }`
 - [ ] `memory://briefing` includes team entry count ("Team DB" row)
 - [ ] `memory://health` includes `teamDatabase` status block with `configured`, `entryCount`, `path`
+- [ ] `team_get_collaboration_matrix` returns populated `authorActivity` and `impactFactor` metrics
+- [ ] `memory://insights/digest` handles un-configured digest gracefully or returns valid JSON
+- [ ] `memory://insights/team-collaboration` returns static matrix metrics without error

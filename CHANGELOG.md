@@ -5,7 +5,26 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.3.0...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.4.0...HEAD)
+
+## [7.4.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.4.0) - 2026-04-11
+
+### Added
+
+- New agent skills: `python`, `docker`, `tailwind-css`, and `github-actions` (`neverinfamous-agent-skills` updated to `1.1.0`).
+- `sort_by` parameter (`timestamp` or `importance`) for personal and team search tools.
+- `team_get_collaboration_matrix` tool for analyzing author activity density and cross-collaboration patterns.
+- Proactive Data Analytics tasks for background repository health snapshots (configured via `--digest-interval`).
+- `memory://insights/digest` and `memory://insights/team-collaboration` resources for analytics snapshots.
+- Injected analytics metrics into `memory://briefing` payloads.
+
+### Fixed
+
+- Missing `{ success: true }` wrapper on `team_get_cross_project_insights` payload.
+- Output validation crash when calling `close_github_issue_with_entry` with `move_to_done: true` and no configured `project_number`.
+- Missing `sortBy` delegation in text search and sorting logic during cross-database merges.
+- Missing `mj.export.*` API documentation in Code Mode instructions.
+- Incorrect mapping of `io.ts` in `test-server/code-map.md`.
 
 ## [7.3.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.3.0) - 2026-04-10
 

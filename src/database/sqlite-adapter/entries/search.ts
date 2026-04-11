@@ -5,9 +5,30 @@ import {
     type EntriesSharedContext,
     rowsToEntries,
 } from './shared.js'
+import { buildImportanceSqlExpression } from './importance.js'
 
-export function getRecentEntries(context: EntriesSharedContext, limit: number): JournalEntry[] {
+/** Allowed sort dimensions for search results */
+export type SortBy = 'timestamp' | 'importance'
+
+export function getRecentEntries(
+    context: EntriesSharedContext,
+    limit: number,
+    sortBy: SortBy = 'timestamp'
+): JournalEntry[] {
     const { db, tagsMgr } = context
+
+    if (sortBy === 'importance') {
+        const importanceExpr = buildImportanceSqlExpression()
+        const stmt = db.prepare(`
+            SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
+            FROM memory_journal e
+            WHERE e.deleted_at IS NULL
+            ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ?
+        `)
+        const rows = stmt.all([limit])
+        return rowsToEntries(tagsMgr, rows)
+    }
+
     const stmt = db.prepare(`
         SELECT ${ENTRY_COLUMNS} FROM memory_journal 
         WHERE deleted_at IS NULL 
@@ -53,6 +74,7 @@ export function searchEntries(
         entryType?: EntryType
         startDate?: string
         endDate?: string
+        sortBy?: SortBy
     }
 ): JournalEntry[] {
     const { db, tagsMgr } = context
@@ -94,20 +116,26 @@ function buildSearchQuery(
               entryType?: EntryType
               startDate?: string
               endDate?: string
+              sortBy?: SortBy
           }
         | undefined,
     useFts: boolean
 ): { sql: string; params: unknown[] } {
     let query: string
+    const useImportance = options?.sortBy === 'importance'
+    const importanceCol = useImportance
+        ? `, ${buildImportanceSqlExpression()} AS importanceScore`
+        : ''
+
     if (useFts) {
         query = `
-            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}
+            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
             JOIN fts_content fts ON fts.rowid = e.id
         `
     } else {
         query = `
-            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS} 
+            SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
         `
     }
@@ -192,7 +220,10 @@ function buildSearchQuery(
 
     // FTS5: rank by relevance (BM25), then timestamp for tiebreaking
     // LIKE/no-query: rank by timestamp only
-    if (useFts) {
+    // Importance: override ranking with importance score
+    if (useImportance) {
+        query += ` ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
+    } else if (useFts) {
         query += ` ORDER BY rank, e.timestamp DESC, e.id DESC`
     } else {
         query += ` ORDER BY e.timestamp DESC, e.id DESC`
@@ -217,6 +248,7 @@ export function searchByDateRange(
         prNumber?: number
         workflowRunId?: number
         limit?: number
+        sortBy?: SortBy
     }
 ): JournalEntry[] {
     const { db, tagsMgr } = context
@@ -234,8 +266,13 @@ export function searchByDateRange(
         params.push(end)
     }
 
+    const useImportance = options?.sortBy === 'importance'
+    const importanceCol = useImportance
+        ? `, ${buildImportanceSqlExpression()} AS importanceScore`
+        : ''
+
     let query = `
-        SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS} FROM memory_journal e
+        SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
     `
 
     if (options?.tags && options.tags.length > 0) {
@@ -278,7 +315,11 @@ export function searchByDateRange(
         params.push(options.workflowRunId)
     }
 
-    query += ` WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC`
+    if (useImportance) {
+        query += ` WHERE ${conditions.join(' AND ')} ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC`
+    } else {
+        query += ` WHERE ${conditions.join(' AND ')} ORDER BY e.timestamp DESC, e.id DESC`
+    }
 
     query += ` LIMIT ?`
     params.push(options?.limit ?? 500)

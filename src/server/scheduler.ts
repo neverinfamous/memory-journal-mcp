@@ -9,6 +9,8 @@
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { logger } from '../utils/logger.js'
+import { computeDigest, type DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
+import type { Database } from 'better-sqlite3'
 
 // ============================================================================
 // Types
@@ -24,6 +26,8 @@ export interface SchedulerOptions {
     vacuumIntervalMinutes: number
     /** Vector index rebuild interval in minutes (0 = disabled) */
     rebuildIndexIntervalMinutes: number
+    /** Analytics digest interval in minutes (0 = disabled; recommended: 1440 for daily) */
+    digestIntervalMinutes: number
 }
 
 /** Status of a single scheduled job */
@@ -66,6 +70,7 @@ interface JobTimer {
  * - **backup**: Exports database to timestamped file, then prunes old backups.
  * - **vacuum**: Runs `PRAGMA optimize` and flushes database to disk.
  * - **rebuild-index**: Rebuilds vector search index from all entries.
+ * - **digest**: Computes and persists an analytics snapshot for proactive insights.
  */
 export class Scheduler {
     private readonly options: SchedulerOptions
@@ -122,6 +127,13 @@ export class Scheduler {
                     { module: 'Scheduler' }
                 )
             }
+        }
+
+        if (this.options.digestIntervalMinutes > 0) {
+            this.scheduleJob('digest', this.options.digestIntervalMinutes, () => {
+                this.runDigest()
+                return Promise.resolve()
+            })
         }
 
         if (this.timers.length > 0) {
@@ -279,5 +291,41 @@ export class Scheduler {
             operation: 'rebuild-index',
             context: { entriesIndexed: count },
         })
+    }
+
+    // ========================================================================
+    // Private — Digest job
+    // ========================================================================
+
+    /**
+     * Digest job: compute analytics snapshot and persist to database.
+     */
+    private runDigest(): void {
+        const rawDb = this.db.getRawDb() as Database
+        const snapshot = computeDigest(rawDb)
+        this.db.saveAnalyticsSnapshot('digest', snapshot as unknown as Record<string, unknown>)
+        logger.info('Scheduled analytics digest computed', {
+            module: 'Scheduler',
+            operation: 'digest',
+            context: {
+                currentPeriodEntries: snapshot.currentPeriodEntries,
+                activityGrowthPercent: snapshot.activityGrowthPercent,
+                topImportanceCount: snapshot.topImportanceEntries.length,
+            },
+        })
+    }
+
+    // ========================================================================
+    // Public — Digest accessor
+    // ========================================================================
+
+    /**
+     * Get the latest digest snapshot from the database.
+     * Returns null if no digest has been computed yet.
+     */
+    getLatestDigest(): DigestSnapshot | null {
+        const snapshot = this.db.getLatestAnalyticsSnapshot('digest')
+        if (!snapshot) return null
+        return snapshot.data as unknown as DigestSnapshot
     }
 }

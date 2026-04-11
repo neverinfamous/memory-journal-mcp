@@ -61,7 +61,7 @@ export const SIGNIFICANCE_TYPES = [
 export const MAX_CONTENT_LENGTH = 50_000
 
 /** Maximum entries returned by any single search query */
-export const MAX_QUERY_LIMIT = 500
+export const MAX_QUERY_LIMIT = Number('500')
 
 /** Date sentinels for "all time" date range queries */
 export const DATE_MIN_SENTINEL = '1970-01-01'
@@ -117,6 +117,10 @@ export const EntryOutputSchema = z
         workflowName: z.string().nullable().optional(),
         workflowStatus: z.string().nullable().optional(),
         source: z.enum(['personal', 'team']).optional(),
+        importanceScore: z
+            .number()
+            .optional()
+            .describe('Importance score (0.0-1.0), present when sort_by=importance'),
     })
     .extend(ErrorFieldsMixin.shape)
 

@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode Kanban Lifecycle
+# Re-Test memory-journal-mcp — Code Mode Kanban Lifecycle
 
 **Scope:** Automates the testing of `mj.github` Kanban integrations (`addProjectItem`, `moveProjectItem`, `deleteProjectItem`, `getProjectKanban`) natively via sandbox.
 
@@ -115,6 +115,6 @@ try {
 
 ### Verification Checks
 
-- [] Code properly parses internal node IDs natively matching external handler behavior.
-- [] No server crash or GraphQL mutation block.
-- [] The issue is safely restored back to default standalone status with no remnant project linkage.
+- [ ] Code properly parses internal node IDs natively matching external handler behavior.
+- [ ] No server crash or GraphQL mutation block.
+- [ ] The issue is safely restored back to default standalone status with no remnant project linkage.

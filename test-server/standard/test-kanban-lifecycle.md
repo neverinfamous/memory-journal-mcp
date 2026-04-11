@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Kanban Lifecycle
+# Re-Test memory-journal-mcp — Kanban Lifecycle
 
 **Scope:** Tests the new Kanban tools `add_kanban_item` and `delete_kanban_item`, along with `move_kanban_item` and the optimized `get_kanban_board` to verify full lifecycle awareness and control.
 
@@ -12,7 +12,12 @@
 
 **Workflow after testing:**
 
-1. Verify token usage limit adherence in the final summary. The tokens tracked should only count the estimated tokens that actually entered the context window.
+1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
+2. Implement, update `UNRELEASED.md`, commit without push.
+3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. Re-test fixes with direct MCP calls.
+5. Brief final summary.
+   - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
 

@@ -153,8 +153,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { limit } = TeamGetRecentSchema.parse(params)
-                    const entries = teamDb.getRecentEntries(limit)
+                    const { limit, sort_by } = TeamGetRecentSchema.parse(params)
+                    const entries = teamDb.getRecentEntries(limit, undefined, sort_by)
 
                     const authorMap = batchFetchAuthors(
                         teamDb,

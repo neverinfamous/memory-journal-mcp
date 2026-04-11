@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Sandbox Basics
+# Re-Test memory-journal-mcp — Code Mode: Sandbox Basics
 
 Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluation, async support, execution metrics, and timeout handling.
 
@@ -66,9 +66,9 @@ Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluati
 
 ## Success Criteria
 
-- [] Simple expressions return correct types: integer, string, object, null, boolean
-- [] Async/await resolves correctly inside sandbox
-- [] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
-- [] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
-- [] Custom `timeout` parameter accepted and enforced
-- [] Infinite loop terminated with structured error (not hang or crash)
+- [ ] Simple expressions return correct types: integer, string, object, null, boolean
+- [ ] Async/await resolves correctly inside sandbox
+- [ ] Built-in constructors available: JSON, Math, Date, Array, Map, Set, RegExp
+- [ ] `metrics` field present with `wallTimeMs`, `cpuTimeMs`, `memoryUsedMb`
+- [ ] Custom `timeout` parameter accepted and enforced
+- [ ] Infinite loop terminated with structured error (not hang or crash)

@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Output Schemas
+# Re-Test memory-journal-mcp — Output Schemas
 
 **Scope:** Verify all 60 outputSchema tools return `structuredContent` (not raw text). `mj_execute_code` intentionally excluded — its dynamic return type produces a bare `{}` JSON Schema that crashes clients processing `structuredContent`.
 
@@ -10,7 +10,7 @@
 
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
 2. Implement, update `UNRELEASED.md`, commit without push.
-3. **USER** verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
+3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
 4. Re-test fixes with direct MCP calls.
 5. Brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.

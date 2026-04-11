@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **67 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **68 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -26,7 +26,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 | ---------------------- | ---------------------------------------------------------------------------------- |
 | `create_entry`         | Create a new journal entry with context and tags (v2.1.0: GitHub Actions support). |
 | `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
-| `get_recent_entries`   | Get recent journal entries.                                                        |
+| `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance).          |
 | `create_entry_minimal` | Minimal entry creation without context or tags.                                    |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
 | `list_tags`            | List all available tags.                                                           |
@@ -37,12 +37,12 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 Full-text, date-range, and semantic/vector search.
 
-| Tool                     | Description                                                                                                                                                                                                    |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `search_entries`         | Full-text search journal entries using FTS5 (supports phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by relevance). Optional filters for GitHub Projects, Issues, PRs, and Actions. |
-| `search_by_date_range`   | Search journal entries within a date range with optional filters.                                                                                                                                              |
-| `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                         |
-| `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                         |
+| Tool                     | Description                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `search_entries`         | Full-text search journal entries using FTS5 (supports phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by relevance). Optional filters and `sort_by` (timestamp or importance). |
+| `search_by_date_range`   | Search journal entries within a date range with optional filters and `sort_by` (timestamp or importance).                                                                                                |
+| `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                   |
+| `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                   |
 
 ---
 
@@ -134,7 +134,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (20 tools + Code Mode)
+## team (23 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -144,15 +144,15 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | `team_create_entry`    | Create an entry in the team database for sharing with collaborators.                            |
 | `team_get_entry_by_id` | Get a specific team entry by ID with full details including relationships and importance score. |
-| `team_get_recent`      | Get recent entries from the team database.                                                      |
+| `team_get_recent`      | Get recent entries from the team database. Supports `sort_by` (timestamp or importance).        |
 | `team_list_tags`       | List all tags used in the team database with usage counts.                                      |
 
 ### Search
 
-| Tool                        | Description                                                                            |
-| --------------------------- | -------------------------------------------------------------------------------------- |
-| `team_search`               | Search entries in the team database by text and/or tags.                               |
-| `team_search_by_date_range` | Search team entries within a date range with optional filters for entry type and tags. |
+| Tool                        | Description                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `team_search`               | Search entries in the team database by text and/or tags. Supports `sort_by` (timestamp or importance). |
+| `team_search_by_date_range` | Search team entries within a date range with optional filters and `sort_by` (timestamp or importance). |
 
 ### Admin
 
@@ -164,10 +164,11 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 ### Analytics
 
-| Tool                              | Description                                                                                              |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `team_get_statistics`             | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown. |
-| `team_get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in team entries. Requires TEAM_DB_PATH.              |
+| Tool                              | Description                                                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `team_get_statistics`             | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown.    |
+| `team_get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in team entries. Requires TEAM_DB_PATH.                 |
+| `team_get_collaboration_matrix`   | Generate a structural matrix mapping author activity and cross-collaboration impact. Requires TEAM_DB_PATH. |
 
 ### Relationships
 
@@ -208,12 +209,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 67    | All tools (default)      |
+| `full`               | 68    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | ~15   | Disable all mutations    |
-| `-github`            | 45    | Exclude a group          |
-| `-github,-analytics` | 43    | Exclude multiple groups  |
+| `readonly`           | 18    | Disable all mutations    |
+| `-github`            | 50    | Exclude a group          |
+| `-github,-analytics` | 48    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

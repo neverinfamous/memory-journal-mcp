@@ -1,7 +1,7 @@
 import type { ImportanceBreakdown, ImportanceResult } from '../../../types/index.js'
 import { type EntriesSharedContext, rowToObject } from './shared.js'
 
-const IMPORTANCE_WEIGHTS = {
+export const IMPORTANCE_WEIGHTS = {
     significance: 0.3,
     relationships: 0.35,
     causal: 0.2,
@@ -9,11 +9,37 @@ const IMPORTANCE_WEIGHTS = {
 } as const
 
 /** Relationship count at which the relationships component reaches its maximum score (1.0) */
-const MAX_RELATIONSHIP_SCORE_AT = 5
+export const MAX_RELATIONSHIP_SCORE_AT = 5
 /** Causal relationship count at which the causal component reaches its maximum score (1.0) */
-const MAX_CAUSAL_SCORE_AT = 3
+export const MAX_CAUSAL_SCORE_AT = 3
 /** Number of days after which the recency component decays to zero */
-const RECENCY_WINDOW_DAYS = 90
+export const RECENCY_WINDOW_DAYS = 90
+
+/**
+ * Build an inline SQL expression that computes importance score per row.
+ * Uses the same formula and constants as `calculateImportance()` but runs
+ * entirely in SQL via correlated subqueries, enabling single-query sorting.
+ *
+ * Expects the entry table aliased as `e`.
+ */
+export function buildImportanceSqlExpression(): string {
+    const w = IMPORTANCE_WEIGHTS
+    return `(
+    CASE WHEN e.significance_type IS NOT NULL THEN ${String(w.significance)} ELSE 0.0 END
+    + MIN(
+        COALESCE((SELECT COUNT(*) FROM relationships
+                  WHERE from_entry_id = e.id OR to_entry_id = e.id), 0) * 1.0 / ${String(MAX_RELATIONSHIP_SCORE_AT)},
+        1.0
+      ) * ${String(w.relationships)}
+    + MIN(
+        COALESCE((SELECT COUNT(*) FROM relationships
+                  WHERE (from_entry_id = e.id OR to_entry_id = e.id)
+                  AND relationship_type IN ('blocked_by', 'resolved', 'caused')), 0) * 1.0 / ${String(MAX_CAUSAL_SCORE_AT)},
+        1.0
+      ) * ${String(w.causal)}
+    + MAX(0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0) * ${String(w.recency)}
+  )`
+}
 
 export function calculateImportance(
     context: EntriesSharedContext,

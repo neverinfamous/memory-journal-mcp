@@ -6,6 +6,7 @@
 
 import type { BriefingGitHub } from './github-section.js'
 import type { RulesFile, SkillsDir } from './context-section.js'
+import type { BriefingInsights } from './insights-section.js'
 
 const escapeTableCell = (text: string): string =>
     text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')
@@ -24,6 +25,7 @@ export function formatUserMessage(opts: {
     teamTotalEntries?: number
     rulesFile?: RulesFile
     skillsDir?: SkillsDir
+    analyticsInsights?: BriefingInsights
 }): string {
     const {
         repoName,
@@ -34,6 +36,7 @@ export function formatUserMessage(opts: {
         github,
         rulesFile,
         skillsDir,
+        analyticsInsights,
     } = opts
 
     // Build enhanced CI display
@@ -116,6 +119,23 @@ export function formatUserMessage(opts: {
         ? `\n| **Copilot** | ${String(github.copilotReviews.reviewed)} reviewed · ${String(github.copilotReviews.approved)} approved${github.copilotReviews.changesRequested > 0 ? ` · ${String(github.copilotReviews.changesRequested)} changes requested` : ''}${github.copilotReviews.totalComments > 0 ? ` (${String(github.copilotReviews.totalComments)} comments)` : ''} |`
         : ''
 
+    // Proactive Analytics row
+    let analyticsRow = ''
+    if (analyticsInsights) {
+        const parts: string[] = []
+        parts.push(`📈 ${analyticsInsights.activityTrend}`)
+        if (analyticsInsights.significanceSpike !== null)
+            parts.push(`🔥 ${analyticsInsights.significanceSpike}`)
+        if (
+            analyticsInsights.relationshipDensity !== undefined &&
+            analyticsInsights.relationshipDensity >= 0
+        )
+            parts.push(`🔗 Matrix Density: ${analyticsInsights.relationshipDensity}`)
+        if (analyticsInsights.staleProjects.length > 0)
+            parts.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
+        analyticsRow = `\n| **Analytics** | ${escapeTableCell(parts.join(' · '))} |`
+    }
+
     const summariesOutput =
         summaryPreviews && summaryPreviews.length > 0
             ? summaryPreviews.map((s) => `\n| **Summary** | ${escapeTableCell(s)} |`).join('')
@@ -128,5 +148,5 @@ export function formatUserMessage(opts: {
 | **Branch** | ${escapeTableCell(branchName)} |
 | **CI** | ${escapeTableCell(ciDisplay)} |
 | **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${analyticsRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
 }

@@ -207,7 +207,10 @@ lines.push(
     "    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, \"implements\")`' },"
 )
 lines.push(
-    "    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.exportEntries(\"json\")`' },"
+    "    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.importMarkdown(\"content\")`' },"
+)
+lines.push(
+    "    { group: 'io', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries(\"json\")`' },"
 )
 lines.push(
     "    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },"

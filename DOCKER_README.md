@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-97.1%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-96.5%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -17,38 +17,57 @@
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/blob/main/CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
-## 🎯 What This Does
+## 🧠 Stop Experiencing AI Amnesia
 
-### What Sets Us Apart
+When managing large projects with AI assistance, you face a critical challenge:
 
-**67 MCP Tools** · **17 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+- **Thread Amnesia** - Each new conversation starts from zero, unaware of previous work.
+- **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads.
+- **Repeated Work** - AI suggests solutions you've already tried or abandoned.
 
-| Feature                       | Description                                                                                                                                                                                                                                                                                        |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                                                                                                                          |
-| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                                                                                                                                    |
-| **Dynamic Project Routing**   | Switch contexts across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                                                                                                                                                                 |
-| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                                                                                                                      |
-| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5, semantic vector similarity, heuristics, and date filters                                                                                                                                                                                                    |
-| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                                                                                                                         |
-| **Configurable Briefing**     | 14 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness                                                                                                                                                                                       |
-| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                                                                                                                           |
-| **Team Collaboration**        | 22 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution                                                                                                                                                                                   |
-| **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                                                                                                                                   |
-| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                                                                                                              |
-| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                                                                                                                 |
-| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                                                                                                                          |
-| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                                                                                                                       |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `bun`, `gitlab`, `golang`, `mysql`, `playwright-standard`, `postgres`, `react-best-practices`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `typescript`, `vitest-standard`) establishing permanent AI behavior and architecture rules |
-| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                                                                                                                                     |
+Memory Journal solves this by acting as your project's **long-term memory**, bridging the gap between fragmented AI sessions.
+
+**Experience true context-aware development:**
+
+- _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
+- _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
+- _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
+- _"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."_ (Context lifecycles)
+- _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
 ---
 
-Suggested Rule (Add to AGENTS.md, GEMINI.md, etc):
+## 🎯 What Sets Us Apart
 
-🛑 MANDATORY SESSION START ROUTINE
+**68 MCP Tools** · **17 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+
+| Feature                       | Description                                                                                                                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Session Intelligence**      | Agents auto-query project history, create entries at checkpoints, and hand off context between sessions via `/session-summary` and `team-session-summary`                                     |
+| **GitHub Integration**        | 18 tools for Issues, PRs, Actions, Kanban, Milestones (%), Copilot Reviews, and 14-day Insights                                                                                               |
+| **Dynamic Project Routing**   | Switch contexts across multiple repositories using a single server instance via `PROJECT_REGISTRY`                                                                                            |
+| **Knowledge Graphs**          | 8 relationship types linking specs → implementations → tests → PRs with Mermaid visualization                                                                                                 |
+| **Hybrid Search**             | Reciprocal Rank Fusion combining FTS5, semantic vector similarity, heuristics, and date filters                                                                                               |
+| **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                    |
+| **Configurable Briefing**     | 14 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness                                                                                  |
+| **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                      |
+| **Team Collaboration**        | 23 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution                                                                      |
+| **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                              |
+| **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                         |
+| **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                            |
+| **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                     |
+| **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                  |
+| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules |
+| **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                                |
+
+<details>
+<summary><strong>🤖 Click to view the recommended AI Agent Instructions/Rule</strong></summary>
+
+_Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
+
+**🛑 MANDATORY SESSION START ROUTINE**
 
 Execute BEFORE fulfilling any user request in a new session:
 
@@ -61,8 +80,10 @@ Execute BEFORE fulfilling any user request in a new session:
    - **REQUIRED GROUPS**:
      - **GitHub**: Combine Repo, Branch, CI, PRs, and Insights.
      - **GitHub Issues**: List every issue, one per line.
-     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries, Milestones, and Workspaces.
+     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries, Proactive Analytics/Team Density, Milestones, and Workspaces.
 4. **STOP & WAIT**: After rendering the table, execute the user's prompt but do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
+
+</details>
 
 ---
 
@@ -75,12 +96,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 67    | All tools (default)      |
+| `full`               | 68    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 17    | Disable all mutations    |
-| `-github`            | 49    | Exclude a group          |
-| `-github,-analytics` | 47    | Exclude multiple groups  |
+| `-github`            | 50    | Exclude a group          |
+| `-github,-analytics` | 48    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -92,20 +113,20 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **67 MCP Tools** (10 Groups)
+### 🛠️ **68 MCP Tools** (10 Groups)
 
-| Group           | Tools | Description                                                                                                                              |
-| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                  |
-| `core`          | 6     | Entry CRUD, tags, test                                                                                                                   |
-| `search`        | 4     | Text search, date range, semantic, vector stats                                                                                          |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                                       |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                                           |
-| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                           |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                  |
-| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                     |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                           |
-| `team`          | 22    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
+| Group           | Tools | Description                                                                                                                                      |
+| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                          |
+| `core`          | 6     | Entry CRUD, tags, test                                                                                                                           |
+| `search`        | 4     | Text search, date range, semantic, vector stats                                                                                                  |
+| `analytics`     | 2     | Statistics, cross-project insights                                                                                                               |
+| `relationships` | 2     | Link entries, visualize graphs                                                                                                                   |
+| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                   |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                          |
+| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                             |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                   |
+| `team`          | 23    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -116,6 +137,18 @@ Standups, retrospectives, PR summaries, weekly digests, period analysis, milesto
 ### 📡 **34 Resources** (25 Static + 9 Template)
 
 25 static resources (`memory://briefing`, `memory://workflows`, `memory://rules`, `memory://health`, `memory://help`, `memory://help/gotchas`, GitHub status/insights, team stats, and more) plus 9 template resources for dynamic briefings (`memory://briefing/{repo}`), project timelines, issue/PR entries, Kanban boards, milestone details, and per-group help. **[Resources documentation →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Resources)**
+
+## ⚡ Code Mode: Maximum Efficiency (90% Token Savings)
+
+Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
+
+Code executes in a **sandboxed VM context** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+
+- **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
+- **Rate limiting** — 60 executions per minute per client
+- **Hard timeouts** — configurable execution limit (default 30s)
+- **Full API access** — all 10 tool groups are available via `mj.*` (e.g., `mj.core.createEntry()`, `mj.search.searchEntries()`, `mj.github.getGithubIssues()`, `mj.analytics.getStatistics()`)
+- **Strict Readonly Contract** — Calling any mutation method under `--tool-filter readonly` safely halts the sandbox to prevent execution, returning a structured error response to the agent instead of a raw MCP protocol exception.
 
 ## 🚀 Quick Start (2 Minutes)
 
@@ -268,7 +301,7 @@ docker run --rm -p 3000:3000 \
 
 #### Automated Scheduling (HTTP Only)
 
-Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
+Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
 
 ## 🔐 OAuth 2.1 Authentication
 

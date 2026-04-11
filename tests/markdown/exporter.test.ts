@@ -54,7 +54,7 @@ describe('markdown exporter utilities', () => {
 describe('exportEntriesToMarkdown', () => {
     const mockDb = {
         getTagsForEntry: vi.fn(),
-        getRelationshipsForEntry: vi.fn(),
+        getRelationships: vi.fn(),
     }
 
     beforeEach(() => {
@@ -63,7 +63,7 @@ describe('exportEntriesToMarkdown', () => {
         mockHandle.close.mockResolvedValue(undefined)
         vi.mocked(fs.open).mockResolvedValue(mockHandle as any)
         mockDb.getTagsForEntry.mockReturnValue([])
-        mockDb.getRelationshipsForEntry.mockReturnValue([])
+        mockDb.getRelationships.mockReturnValue([])
     })
 
     it('should export an array of entries to files', async () => {
@@ -82,9 +82,16 @@ describe('exportEntriesToMarkdown', () => {
                 entryType: 'project_decision',
                 significance: 'high',
                 tags: ['tag2'],
+                author: 'Test Author',
             },
         ]
-        mockDb.getTagsForEntry.mockImplementation((id) => (id === 1 ? ['tag1'] : ['tag2']))
+        mockDb.getTagsForEntry.mockImplementation((id: number) => (id === 1 ? ['tag1'] : ['tag2']))
+        mockDb.getRelationships.mockImplementation((id: number) => {
+            if (id === 2) {
+                return [{ relationshipType: 'references', fromEntryId: 2, toEntryId: 3 }]
+            }
+            return []
+        })
 
         const result = await exportEntriesToMarkdown(
             entries as any,
@@ -118,6 +125,11 @@ describe('exportEntriesToMarkdown', () => {
         expect(firstWriteContent).toContain('mj_id: 1')
         expect(firstWriteContent).toContain('Test content one')
         expect(firstWriteContent).toContain('tag1')
+
+        const secondWriteContent = vi.mocked(mockHandle.writeFile).mock.calls[1][0] as string
+        expect(secondWriteContent).toContain('author: Test Author')
+        expect(secondWriteContent).toContain('target_id: 3')
+        expect(secondWriteContent).toContain('type: references')
     })
 
     it('should skip entries without content', async () => {

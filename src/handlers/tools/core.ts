@@ -86,12 +86,22 @@ const GetEntryByIdSchemaMcp = z.object({
 const GetRecentEntriesSchema = z.object({
     limit: z.number().min(1).max(MAX_QUERY_LIMIT).optional().default(5),
     is_personal: z.boolean().optional(),
+    sort_by: z
+        .enum(['timestamp', 'importance'])
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const GetRecentEntriesSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(5),
     is_personal: z.boolean().optional(),
+    sort_by: z
+        .string()
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 const CreateEntryMinimalSchema = z.object({
@@ -294,8 +304,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
             handler: (params: unknown) => {
                 try {
-                    const { limit, is_personal } = GetRecentEntriesSchema.parse(params)
-                    const entries = db.getRecentEntries(limit, is_personal)
+                    const { limit, is_personal, sort_by } = GetRecentEntriesSchema.parse(params)
+                    const entries = db.getRecentEntries(limit, is_personal, sort_by)
                     return { success: true, entries, count: entries.length }
                 } catch (err) {
                     return formatHandlerError(err)

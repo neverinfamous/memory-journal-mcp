@@ -13,7 +13,7 @@ export type { ToolFilterConfig } from '../types/index.js'
 /**
  * Tool group definitions mapping group names to tool names
  *
- * All 67 tools are categorized here for filtering support.
+ * All 68 tools are categorized here for filtering support.
  */
 export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
     core: [
@@ -79,6 +79,7 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_rebuild_vector_index',
         'team_add_to_vector_index',
         'team_get_cross_project_insights',
+        'team_get_collaboration_matrix',
     ],
     codemode: ['mj_execute_code'],
 }

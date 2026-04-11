@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Team CRUD & Search
+# Re-Test memory-journal-mcp — Code Mode: Team CRUD & Search
 
 Test team CRUD operations, error paths, and date range search through Code Mode.
 
@@ -139,13 +139,13 @@ return {
 
 ## Success Criteria
 
-- [] `team_create_entry` with auto-detected and explicit `author` works
-- [] `team_get_recent` returns entries with `author` field
-- [] `team_search` filters by text, tags, and combined
-- [] `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
-- [] `team_list_tags` returns tag list from team database
-- [] `team_search_by_date_range` filters by date range, entry_type, and tags
-- [] Invalid `entry_type` on team create returns structured error
-- [] Nonexistent IDs return structured errors for get, update, delete, link
-- [] Invalid date range returns structured error with format hint
-- [] Merge same tag returns structured error
+- [ ] `team_create_entry` with auto-detected and explicit `author` works
+- [ ] `team_get_recent` returns entries with `author` field
+- [ ] `team_search` filters by text, tags, and combined
+- [ ] `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
+- [ ] `team_list_tags` returns tag list from team database
+- [ ] `team_search_by_date_range` filters by date range, entry_type, and tags
+- [ ] Invalid `entry_type` on team create returns structured error
+- [ ] Nonexistent IDs return structured errors for get, update, delete, link
+- [ ] Invalid date range returns structured error with format hint
+- [ ] Merge same tag returns structured error

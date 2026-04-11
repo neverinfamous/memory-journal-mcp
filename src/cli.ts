@@ -63,6 +63,11 @@ program
         '0'
     )
     .option(
+        '--digest-interval <minutes>',
+        'Analytics digest interval in minutes, HTTP only (0 = disabled; recommended: 1440 for daily)',
+        '0'
+    )
+    .option(
         '--sandbox-mode <mode>',
         'Code Mode sandbox: "worker" (production, default) or "vm" (lightweight)',
         'worker'
@@ -178,6 +183,7 @@ program
             keepBackups: string
             vacuumInterval: string
             rebuildIndexInterval: string
+            digestInterval: string
             sandboxMode: string
             codemodeMaxResultSize?: string
             oauthEnabled?: boolean
@@ -268,6 +274,7 @@ program
                         keepBackups: parseInt(options.keepBackups, 10),
                         vacuumIntervalMinutes: parseInt(options.vacuumInterval, 10),
                         rebuildIndexIntervalMinutes: parseInt(options.rebuildIndexInterval, 10),
+                        digestIntervalMinutes: parseInt(options.digestInterval, 10),
                     },
                     sandboxMode: options.sandboxMode as 'vm' | 'worker',
                     // OAuth 2.1

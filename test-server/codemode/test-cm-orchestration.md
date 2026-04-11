@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Cross-Group Orchestration
+# Re-Test memory-journal-mcp — Code Mode: Cross-Group Orchestration
 
 Test cross-group orchestration: journal health dashboards, GitHub-journal coverage, tag analysis pipelines, relationship graph summaries, and full create→index→search pipelines.
 
@@ -148,8 +148,8 @@ return {
 
 ## Success Criteria
 
-- [] Journal health dashboard aggregates stats + recent + tags correctly
-- [] GitHub-journal coverage report iterates issues and searches entries
-- [] Tag analysis pipeline processes multiple tags with search per tag
-- [] Relationship graph summary checks entries for relationship counts
-- [] Full pipeline (create → index → semantic search) completes end-to-end
+- [ ] Journal health dashboard aggregates stats + recent + tags correctly
+- [ ] GitHub-journal coverage report iterates issues and searches entries
+- [ ] Tag analysis pipeline processes multiple tags with search per tag
+- [ ] Relationship graph summary checks entries for relationship counts
+- [ ] Full pipeline (create → index → semantic search) completes end-to-end

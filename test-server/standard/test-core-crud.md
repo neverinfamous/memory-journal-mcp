@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Entry CRUD
+# Re-Test memory-journal-mcp — Entry CRUD
 
 **Scope:** Create, read, update, and delete entry operations (24 core tools — CRUD subset).
 
@@ -10,8 +10,8 @@
 
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
 2. Implement, update `UNRELEASED.md`, commit without push.
-3. **USER** verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
-4. Re-test fixes with **direct MCP calls**, not codemode.
+3. Then, stop so the **USER** can verify with `npm run lint && npm run typecheck`, `npm run test`, and `npm run test:e2e`.
+4. Re-test fixes with direct MCP calls.
 5. Brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
@@ -64,11 +64,11 @@
 
 ## Success Criteria
 
-- [] `create_entry` persists all optional fields: PR fields, workflow fields, `projectOwner`, `autoContext`
-- [] `create_entry` with `share_with_team: true` creates entries in both personal and team DBs
-- [] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors (not raw throws)
-- [] `create_entry` with `issue_number` auto-populates `issueUrl` from cached repo info
-- [] `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
-- [] `get_recent_entries` with `is_personal` filter returns only matching entries
-- [] `update_entry` returns `success: false` for nonexistent entry IDs
-- [] `delete_entry` returns `success: false` for nonexistent entry IDs
+- [ ] `create_entry` persists all optional fields: PR fields, workflow fields, `projectOwner`, `autoContext`
+- [ ] `create_entry` with `share_with_team: true` creates entries in both personal and team DBs
+- [ ] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors (not raw throws)
+- [ ] `create_entry` with `issue_number` auto-populates `issueUrl` from cached repo info
+- [ ] `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
+- [ ] `get_recent_entries` with `is_personal` filter returns only matching entries
+- [ ] `update_entry` returns `success: false` for nonexistent entry IDs
+- [ ] `delete_entry` returns `success: false` for nonexistent entry IDs

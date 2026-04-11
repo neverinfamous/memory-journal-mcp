@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: API Discoverability
+# Re-Test memory-journal-mcp — Code Mode: API Discoverability
 
 Test the `mj.*` API bridge discoverability: top-level help, per-group help, method aliases, and positional argument support.
 
@@ -53,7 +53,7 @@ Test the `mj.*` API bridge discoverability: top-level help, per-group help, meth
 
 ## Success Criteria
 
-- [] `mj.help()` returns all 10 groups with correct `totalMethods` count
-- [] Per-group `help()` returns method names for each group
-- [] Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
-- [] Positional arguments work (e.g., `mj.core.get(id)`)
+- [ ] `mj.help()` returns all 10 groups with correct `totalMethods` count
+- [ ] Per-group `help()` returns method names for each group
+- [ ] Method aliases work (e.g., `mj.core.recent()`, `mj.analytics.stats()`)
+- [ ] Positional arguments work (e.g., `mj.core.get(id)`)

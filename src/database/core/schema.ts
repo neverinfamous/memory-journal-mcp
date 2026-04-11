@@ -87,6 +87,17 @@ CREATE INDEX IF NOT EXISTS idx_relationships_to ON relationships(to_entry_id);
 -- Composite covering index for getRecentEntries (WHERE deleted_at IS NULL ORDER BY timestamp DESC, id DESC)
 CREATE INDEX IF NOT EXISTS idx_memory_journal_recent ON memory_journal(deleted_at, timestamp DESC, id DESC);
 
+-- Analytics snapshots for persisted digest data across server restarts
+CREATE TABLE IF NOT EXISTS analytics_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_type TEXT NOT NULL DEFAULT 'digest',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    data TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_snapshots_type_created
+    ON analytics_snapshots(snapshot_type, created_at DESC);
+
 -- FTS5 full-text search index (content-sync: reads from source table, no duplicate storage)
 CREATE VIRTUAL TABLE IF NOT EXISTS fts_content USING fts5(
     content,

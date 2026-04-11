@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: IO & Markdown Interoperability
+# Re-Test memory-journal-mcp — Code Mode: IO & Markdown Interoperability
 
 Test the unified IO namespace, testing both legacy `exportEntries` formats and the new filesystem-bound `.md` orchestration tools over Code Mode's `mj.io.*` binding.
 
@@ -100,7 +100,7 @@ return {
 
 ## Success Criteria
 
-- [] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
-- [] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
-- [] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
-- [] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.
+- [ ] `mj.io.exportEntries` provides JSON lists and raw markdown contents.
+- [ ] `mj.io.exportMarkdown` dumps files to target directory safely via sandbox mapping.
+- [ ] `mj.io.importMarkdown` successfully executes a simulation dry run using sandbox paths.
+- [ ] `exportMarkdown` cleanly halts and throws structured errors attempting dir traversal.

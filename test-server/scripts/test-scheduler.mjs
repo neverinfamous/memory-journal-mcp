@@ -3,7 +3,7 @@
  *
  * Prerequisites:
  *   npm run build
- *   node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2
+ *   node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups 3 --vacuum-interval 2 --rebuild-index-interval 2 --digest-interval 2
  *
  * Usage:
  *   node test-server/test-scheduler.mjs              # full test (130s wait)
@@ -79,7 +79,7 @@ function checkScheduler(health, label) {
         )
     }
 
-    return scheduler.active && (scheduler.jobs?.length || 0) === 3
+    return scheduler.active && (scheduler.jobs?.length || 0) === 4
 }
 
 async function main() {
@@ -144,6 +144,7 @@ async function main() {
     const backup = jobs2.find((j) => j.name === 'backup')
     const vacuum = jobs2.find((j) => j.name === 'vacuum')
     const rebuild = jobs2.find((j) => j.name === 'rebuild-index')
+    const digest = jobs2.find((j) => j.name === 'digest')
 
     console.log('\n===== Verification =====')
     const checks = [
@@ -153,9 +154,12 @@ async function main() {
         ['vacuum lastResult = success', vacuum?.lastResult === 'success'],
         ['rebuild-index runCount ≥ 1', (rebuild?.runCount ?? 0) >= 1],
         ['rebuild-index lastResult = success', rebuild?.lastResult === 'success'],
+        ['digest runCount ≥ 1', (digest?.runCount ?? 0) >= 1],
+        ['digest lastResult = success', digest?.lastResult === 'success'],
         ['backup lastError = null', !backup?.lastError],
         ['vacuum lastError = null', !vacuum?.lastError],
         ['rebuild lastError = null', !rebuild?.lastError],
+        ['digest lastError = null', !digest?.lastError],
     ]
 
     let passed = 0

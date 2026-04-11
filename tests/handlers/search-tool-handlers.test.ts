@@ -377,4 +377,175 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.count).toBeGreaterThan(0)
         })
     })
+
+    // ========================================================================
+    // search_entries — Importance-Sorted Search
+    // ========================================================================
+
+    describe('Importance-sorted search', () => {
+        let impDb: DatabaseAdapter
+        const impDbPath = './test-importance-sort.db'
+        let lowId: number
+        let highId: number
+        let medId: number
+
+        beforeAll(async () => {
+            impDb = new DatabaseAdapter(impDbPath)
+            await impDb.initialize()
+
+            // Entry with NO significance, NO relationships → lowest importance
+            const low = impDb.createEntry({
+                content: 'ImpSort low — no signals',
+                entryType: 'personal_reflection',
+                tags: ['imp-test'],
+            })
+            lowId = low.id
+
+            // Entry WITH significance (milestone) + relationships → highest importance
+            const high = impDb.createEntry({
+                content: 'ImpSort high — milestone with relationships',
+                entryType: 'project_decision',
+                tags: ['imp-test'],
+                significanceType: 'milestone',
+            })
+            highId = high.id
+
+            // Entry WITH significance (decision) + 1 causal relationship → medium importance
+            const med = impDb.createEntry({
+                content: 'ImpSort med — decision',
+                entryType: 'project_decision',
+                tags: ['imp-test'],
+                significanceType: 'decision',
+            })
+            medId = med.id
+
+            // Add relationships to boost high entry
+            impDb.linkEntries(highId, lowId, 'references')
+            impDb.linkEntries(highId, medId, 'caused')
+            impDb.linkEntries(highId, lowId, 'resolved') // 3 rels, 2 causal
+            // Add one causal relationship to med
+            impDb.linkEntries(medId, lowId, 'references') // med has 2 rels (1 from high), 1 causal (from high)
+        })
+
+        afterAll(() => {
+            impDb.close()
+            try {
+                const fs = require('node:fs')
+                if (fs.existsSync(impDbPath)) fs.unlinkSync(impDbPath)
+            } catch {
+                // Ignore cleanup errors
+            }
+        })
+
+        it('should sort search_entries by importance with importanceScore field', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'ImpSort', sort_by: 'importance', limit: 10 },
+                impDb
+            )) as { entries: { id: number; importanceScore: number }[]; count: number }
+
+            expect(result.count).toBe(3)
+            // Every entry should have importanceScore
+            for (const entry of result.entries) {
+                expect(typeof entry.importanceScore).toBe('number')
+                expect(entry.importanceScore).toBeGreaterThanOrEqual(0)
+                expect(entry.importanceScore).toBeLessThanOrEqual(1)
+            }
+            // Should be sorted descending
+            for (let i = 1; i < result.entries.length; i++) {
+                expect(result.entries[i - 1]!.importanceScore).toBeGreaterThanOrEqual(
+                    result.entries[i]!.importanceScore
+                )
+            }
+            // High entry should be first (has significance + 2 relationships including causal)
+            expect(result.entries[0]!.id).toBe(highId)
+            // Low entry should be last (no signals)
+            expect(result.entries[result.entries.length - 1]!.id).toBe(lowId)
+        })
+
+        it('should NOT include importanceScore when sort_by is default (timestamp)', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'ImpSort', limit: 10 },
+                impDb
+            )) as { entries: Record<string, unknown>[]; count: number }
+
+            expect(result.count).toBe(3)
+            for (const entry of result.entries) {
+                expect(entry['importanceScore']).toBeUndefined()
+            }
+        })
+
+        it('should sort get_recent_entries by importance', async () => {
+            const result = (await callTool(
+                'get_recent_entries',
+                { limit: 10, sort_by: 'importance' },
+                impDb
+            )) as { entries: { id: number; importanceScore: number }[]; count: number }
+
+            expect(result.entries.length).toBeGreaterThan(0)
+            for (const entry of result.entries) {
+                expect(typeof entry.importanceScore).toBe('number')
+            }
+            // Sorted descending
+            for (let i = 1; i < result.entries.length; i++) {
+                expect(result.entries[i - 1]!.importanceScore).toBeGreaterThanOrEqual(
+                    result.entries[i]!.importanceScore
+                )
+            }
+        })
+
+        it('should NOT include importanceScore when get_recent_entries uses default sort', async () => {
+            const result = (await callTool('get_recent_entries', { limit: 10 }, impDb)) as {
+                entries: Record<string, unknown>[]
+            }
+
+            for (const entry of result.entries) {
+                expect(entry['importanceScore']).toBeUndefined()
+            }
+        })
+
+        it('should sort search_by_date_range by importance', async () => {
+            const today = new Date().toISOString().split('T')[0]!
+            const result = (await callTool(
+                'search_by_date_range',
+                { start_date: today, end_date: today, sort_by: 'importance', limit: 10 },
+                impDb
+            )) as { entries: { id: number; importanceScore: number }[]; count: number }
+
+            expect(result.count).toBeGreaterThan(0)
+            for (const entry of result.entries) {
+                expect(typeof entry.importanceScore).toBe('number')
+            }
+            // Sorted descending
+            for (let i = 1; i < result.entries.length; i++) {
+                expect(result.entries[i - 1]!.importanceScore).toBeGreaterThanOrEqual(
+                    result.entries[i]!.importanceScore
+                )
+            }
+        })
+
+        it('should reject invalid sort_by value with Zod error', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'ImpSort', sort_by: 'invalid', limit: 10 },
+                impDb
+            )) as { error: string }
+
+            expect(result.error).toBeDefined()
+        })
+
+        it('should accept sort_by: "timestamp" explicitly', async () => {
+            const result = (await callTool(
+                'search_entries',
+                { query: 'ImpSort', sort_by: 'timestamp', limit: 10 },
+                impDb
+            )) as { entries: Record<string, unknown>[]; count: number }
+
+            expect(result.count).toBe(3)
+            for (const entry of result.entries) {
+                expect(entry['importanceScore']).toBeUndefined()
+            }
+        })
+    })
 })

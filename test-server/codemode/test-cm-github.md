@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: GitHub Tools
+# Re-Test memory-journal-mcp — Code Mode: GitHub Tools
 
 Test all 16 GitHub tools via Code Mode: read-only lookups, error paths, Kanban operations, issue lifecycle, milestone CRUD, insights, and Copilot reviews.
 
@@ -248,16 +248,16 @@ return {
 
 ## Success Criteria
 
-- [] All 16 GitHub tools callable via `mj.github.*`
-- [] `get_github_context` returns repo and branch info
-- [] `get_github_issues` and `get_github_prs` support `state` filter (open/closed/all)
-- [] Single issue/PR lookups return expected fields
-- [] Nonexistent issue/PR/milestone return structured errors
-- [] Kanban board returns columns with statusOptions
-- [] `move_kanban_item` with invalid status returns error with `availableStatuses`
-- [] Issue lifecycle (create → close) works end-to-end via Code Mode
-- [] `close_github_issue_with_entry` returns error for already-closed issues
-- [] Milestone CRUD lifecycle (create → update → close → delete) works via Code Mode
-- [] `get_repo_insights` returns star/fork data
-- [] `get_copilot_reviews` returns review state
-- [] All test artifacts cleaned up
+- [ ] All 16 GitHub tools callable via `mj.github.*`
+- [ ] `get_github_context` returns repo and branch info
+- [ ] `get_github_issues` and `get_github_prs` support `state` filter (open/closed/all)
+- [ ] Single issue/PR lookups return expected fields
+- [ ] Nonexistent issue/PR/milestone return structured errors
+- [ ] Kanban board returns columns with statusOptions
+- [ ] `move_kanban_item` with invalid status returns error with `availableStatuses`
+- [ ] Issue lifecycle (create → close) works end-to-end via Code Mode
+- [ ] `close_github_issue_with_entry` returns error for already-closed issues
+- [ ] Milestone CRUD lifecycle (create → update → close → delete) works via Code Mode
+- [ ] `get_repo_insights` returns star/fork data
+- [ ] `get_copilot_reviews` returns review state
+- [ ] All test artifacts cleaned up

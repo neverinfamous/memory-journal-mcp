@@ -28,6 +28,7 @@ export function ftsSearch(
         entryType?: EntryType
         startDate?: string
         endDate?: string
+        sortBy?: 'timestamp' | 'importance'
     }
 ): { entries: EntryWithSource[]; count: number } {
     const hasFilters =
@@ -48,7 +49,7 @@ export function ftsSearch(
 
     let personalEntries
     if (!query && !hasFilters) {
-        personalEntries = db.getRecentEntries(perDbLimit, options.isPersonal)
+        personalEntries = db.getRecentEntries(perDbLimit, options.isPersonal, options.sortBy)
     } else {
         personalEntries = db.searchEntries(query || '', {
             limit: perDbLimit,
@@ -62,6 +63,7 @@ export function ftsSearch(
             entryType: options.entryType,
             startDate: options.startDate,
             endDate: options.endDate,
+            sortBy: options.sortBy,
         })
     }
 
@@ -70,7 +72,7 @@ export function ftsSearch(
     if (teamDb && options.isPersonal !== true) {
         let teamEntries
         if (!query && !hasFilters) {
-            teamEntries = teamDb.getRecentEntries(perDbLimit)
+            teamEntries = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy)
         } else {
             teamEntries = teamDb.searchEntries(query || '', {
                 limit: perDbLimit,
@@ -83,12 +85,14 @@ export function ftsSearch(
                 entryType: options.entryType,
                 startDate: options.startDate,
                 endDate: options.endDate,
+                sortBy: options.sortBy,
             })
         }
         const merged = mergeAndDedup(
             personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
             teamEntries.map((e) => ({ ...e, source: 'team' as const })),
-            options.limit
+            options.limit,
+            options.sortBy
         )
         return { entries: merged, count: merged.length }
     }

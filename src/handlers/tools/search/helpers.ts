@@ -13,8 +13,6 @@ import { MAX_QUERY_LIMIT } from '../schemas.js'
 import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 
-export { MAX_QUERY_LIMIT }
-
 /** Number of leading characters used as deduplication key */
 const DEDUP_KEY_LENGTH = 200
 
@@ -30,6 +28,7 @@ export interface EntryWithSource {
 }
 
 export interface ISearchFilters {
+    limit?: number
     isPersonal?: boolean
     projectNumber?: number
     issueNumber?: number
@@ -51,6 +50,8 @@ export interface ISearchFilters {
  * ranking in one DB doesn't silently drop entries before the merge.
  */
 export function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
+    // If team DB exists, request up to 2x from each to ensure enough results after merge,
+    // bounded by MAX_QUERY_LIMIT
     return hasTeamDb ? Math.min(limit * 2, MAX_QUERY_LIMIT) : limit
 }
 
@@ -61,13 +62,23 @@ export function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
 export function mergeAndDedup(
     personal: EntryWithSource[],
     team: EntryWithSource[],
-    limit?: number
+    limit?: number,
+    sortBy: 'timestamp' | 'importance' = 'timestamp'
 ): EntryWithSource[] {
     const seen = new Set<string>()
     const merged: EntryWithSource[] = []
 
-    // Concat and sort by timestamp descending (ISO 8601 sorts lexicographically)
-    const all = [...personal, ...team].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    // Concat and sort by requested metric, with timestamp as secondary/fallback (ISO 8601 sorts lexicographically)
+    const all = [...personal, ...team].sort((a, b) => {
+        if (sortBy === 'importance') {
+            const scoreA = Number(a['importanceScore']) || 0
+            const scoreB = Number(b['importanceScore']) || 0
+            if (scoreA !== scoreB) {
+                return scoreB - scoreA
+            }
+        }
+        return b.timestamp.localeCompare(a.timestamp)
+    })
 
     for (const entry of all) {
         // Deduplicate by content (same entry shared to team)

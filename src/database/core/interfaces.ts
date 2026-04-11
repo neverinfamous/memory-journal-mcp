@@ -91,7 +91,11 @@ export interface IDatabaseAdapter {
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null
     getEntriesByIds(ids: number[]): Map<number, JournalEntry>
     calculateImportance(entryId: number): ImportanceResult
-    getRecentEntries(limit?: number, isPersonal?: boolean): JournalEntry[]
+    getRecentEntries(
+        limit?: number,
+        isPersonal?: boolean,
+        sortBy?: 'timestamp' | 'importance'
+    ): JournalEntry[]
     getEntriesPage(offset: number, limit: number): JournalEntry[]
     getActiveEntryCount(): number
     updateEntry(
@@ -118,6 +122,7 @@ export interface IDatabaseAdapter {
             entryType?: EntryType
             startDate?: string
             endDate?: string
+            sortBy?: 'timestamp' | 'importance'
         }
     ): JournalEntry[]
     searchByDateRange(
@@ -132,6 +137,7 @@ export interface IDatabaseAdapter {
             prNumber?: number
             workflowRunId?: number
             limit?: number
+            sortBy?: 'timestamp' | 'importance'
         }
     ): JournalEntry[]
     getStatistics(
@@ -189,4 +195,14 @@ export interface IDatabaseAdapter {
     getRawDb(): unknown
     pragma(command: string): void
     executeRawQuery(sql: string, params?: unknown[]): QueryResult[]
+
+    // Analytics Snapshots
+    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number
+    getLatestAnalyticsSnapshot(
+        type: string
+    ): { id: number; createdAt: string; data: Record<string, unknown> } | null
+    getAnalyticsSnapshots(
+        type: string,
+        limit?: number
+    ): { id: number; createdAt: string; data: Record<string, unknown> }[]
 }
