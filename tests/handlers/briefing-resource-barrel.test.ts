@@ -8,19 +8,15 @@ vi.mock('../../src/handlers/resources/core/briefing/github-section.js', () => ({
     buildGitHubSection: vi.fn().mockResolvedValue({}),
 }))
 
-import {
-    dynamicBriefingResource,
-} from '../../src/handlers/resources/core/briefing/index.js'
+import { dynamicBriefingResource } from '../../src/handlers/resources/core/briefing/index.js'
 import { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
 vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => ({
-    buildJournalContext: vi
-        .fn()
-        .mockReturnValue({
-            totalEntries: 0,
-            latestEntries: [],
-            sessionSummaries: [{ id: 1, type: 'summary', preview: 'test' }],
-        }),
+    buildJournalContext: vi.fn().mockReturnValue({
+        totalEntries: 0,
+        latestEntries: [],
+        sessionSummaries: [{ id: 1, type: 'summary', preview: 'test' }],
+    }),
     buildTeamContext: vi.fn().mockReturnValue(null),
     buildRulesFileInfo: vi.fn().mockReturnValue(null),
     buildSkillsDirInfo: vi.fn().mockReturnValue(null),

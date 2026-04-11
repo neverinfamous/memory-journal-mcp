@@ -49,8 +49,8 @@ Test multi-step workflow execution: read-only pipelines, conditional branching, 
 
 ## Success Criteria
 
-- [ ] Chaining 2+ API calls in single execution works
-- [ ] Data transformation (map, flatMap, sort, reduce) works on results
-- [ ] Conditional branching based on query results works
-- [ ] Create + read round-trip produces matching data
-- [ ] Create + search finds the created entry
+- [] Chaining 2+ API calls in single execution works
+- [] Data transformation (map, flatMap, sort, reduce) works on results
+- [] Conditional branching based on query results works
+- [] Create + read round-trip produces matching data
+- [] Create + search finds the created entry

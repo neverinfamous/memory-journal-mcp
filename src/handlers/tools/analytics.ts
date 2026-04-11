@@ -194,7 +194,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         end_date,
                         project_breakdown
                     )
-                    return { ...(stats as object), groupBy: group_by }
+                    return { success: true, ...(stats as object), groupBy: group_by }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -242,6 +242,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     if (!projectsResult[0] || projectsResult[0].values.length === 0) {
                         return {
+                            success: true,
                             project_count: 0,
                             total_entries: 0,
                             projects: [],
@@ -327,6 +328,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }))
 
                     return {
+                        success: true,
                         project_count: projects.length,
                         total_entries: totalEntries,
                         projects: projects.map((p) => ({

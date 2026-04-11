@@ -78,7 +78,7 @@ const traversal = await mj.io.exportMarkdown({
 return {
   exportSuccess: exportResult.success,
   exportedCount: exportResult.exported_count ?? 0,
-  validDir: exportResult.output_dir === MOCK_DIR,
+  validDir: exportResult.output_dir?.replace(/\\/g, '/') === MOCK_DIR,
   dryRunSuccess: importResult.success,
   isDryRun: importResult.dry_run === true,
   simulatedUpdates: typeof importResult.updated === 'number',

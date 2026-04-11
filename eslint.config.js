@@ -3,7 +3,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-    { ignores: ['dist', 'node_modules', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts'] },
+    { ignores: ['dist', 'node_modules', '**/__tests__/**'] },
     // Main source configuration
     {
         extends: [
@@ -105,6 +105,32 @@ export default tseslint.config(
             // Prevent console.log() which writes to stdout and corrupts MCP stdio transport
             // Only stderr output (error, warn) is safe for MCP servers
             'no-console': ['error', { allow: ['error', 'warn'] }],
+        },
+    },
+    // Test configuration (non-type-aware)
+    {
+        files: ['tests/**/*.ts', 'test-server/**/*.ts'],
+        extends: [js.configs.recommended, ...tseslint.configs.recommended],
+        languageOptions: {
+            ecmaVersion: 2022,
+            globals: {
+                ...globals.node,
+            },
+        },
+        rules: {
+            // Base rules for tests without projectService type information
+            '@typescript-eslint/no-unused-vars': 'off',
+            // Tests can use any and non-null assertions safely
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-non-null-assertion': 'off',
+            // Allow require() style imports for mocks
+            '@typescript-eslint/no-require-imports': 'off',
+            // Allow empty block statements in tests (e.g. catch (e) {})
+            'no-empty': 'off',
+            // Allow console mocking inside tests
+            'no-console': 'off',
+            // Allow generic Function types in mocks
+            '@typescript-eslint/no-unsafe-function-type': 'off',
         },
     }
 )

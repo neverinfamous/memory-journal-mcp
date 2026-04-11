@@ -131,7 +131,7 @@ export class QueryError extends MemoryJournalMcpError {
  */
 export class ValidationError extends MemoryJournalMcpError {
     constructor(message: string, details?: Record<string, unknown>) {
-        super(message, 'VALIDATION_FAILED', ErrorCategory.VALIDATION, {
+        super(message, 'VALIDATION_ERROR', ErrorCategory.VALIDATION, {
             suggestion: 'Check input parameters against the tool schema',
             recoverable: false,
             details,

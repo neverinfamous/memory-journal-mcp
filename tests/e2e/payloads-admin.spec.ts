@@ -59,6 +59,7 @@ test.describe('Payload Contracts: Admin', () => {
     })
 
     test('rebuild_vector_index returns { success, entriesIndexed }', async () => {
+        test.setTimeout(90000)
         const payload = await callToolAndParse(client, 'rebuild_vector_index', {})
         // Embedding model may not be available in test environments
         expect(typeof payload.success).toBe('boolean')

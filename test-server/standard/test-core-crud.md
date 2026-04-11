@@ -64,11 +64,11 @@
 
 ## Success Criteria
 
-- [ ] `create_entry` persists all optional fields: PR fields, workflow fields, `projectOwner`, `autoContext`
-- [ ] `create_entry` with `share_with_team: true` creates entries in both personal and team DBs
-- [ ] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors (not raw throws)
-- [ ] `create_entry` with `issue_number` auto-populates `issueUrl` from cached repo info
-- [ ] `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
-- [ ] `get_recent_entries` with `is_personal` filter returns only matching entries
-- [ ] `update_entry` returns `success: false` for nonexistent entry IDs
-- [ ] `delete_entry` returns `success: false` for nonexistent entry IDs
+- [] `create_entry` persists all optional fields: PR fields, workflow fields, `projectOwner`, `autoContext`
+- [] `create_entry` with `share_with_team: true` creates entries in both personal and team DBs
+- [] `create_entry` rejects invalid `entry_type` and `significance_type` with structured errors (not raw throws)
+- [] `create_entry` with `issue_number` auto-populates `issueUrl` from cached repo info
+- [] `get_entry_by_id` returns `importance` score (0.0-1.0) and `importanceBreakdown`
+- [] `get_recent_entries` with `is_personal` filter returns only matching entries
+- [] `update_entry` returns `success: false` for nonexistent entry IDs
+- [] `delete_entry` returns `success: false` for nonexistent entry IDs

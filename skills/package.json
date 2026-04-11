@@ -1,6 +1,6 @@
 {
     "name": "neverinfamous-agent-skills",
-    "version": "1.0.6",
+    "version": "1.0.8",
     "description": "Foundational AI agent metacognitive skills and workflows for the Adamic ecosystem.",
     "type": "module",
     "main": "README.md",

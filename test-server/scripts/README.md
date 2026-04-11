@@ -12,6 +12,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | Script                         | Tests                                                                                                                                 | Transport     | Duration |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
 | `check-schemas.mjs`            | `tools/list` validates that all tools (except `mj_execute_code`) contain a properly serialized `outputSchema` definition              | stdio         | ~5s      |
+| `cleanup-seed-data.mjs`        | Whitelist-driven database maintenance utility replacing tests/seed artifacts while protecting real projects (#5, #13) and base seeds. | direct SQLite | ~1s      |
 | `test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
 | `test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
 | `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 22 true = 67)                                                                | stdio         | ~5s      |
@@ -19,6 +20,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | `test-scheduler.mjs`           | Scheduler job execution (backup, vacuum, rebuild-index)                                                                               | HTTP stateful | ~130s    |
 | `test-github-auth.ts`          | Tool handler response when GITHUB_TOKEN is completely omitted (validates `requiresUserInput`)                                         | direct        | ~1s      |
 | `test-relationships.ts`        | Tool handler responses for `link_entries` & `visualize_relationships` including depth bounds, error mitigation, and bad inputs        | direct        | ~2s      |
+| `test-team-db-fallback.mjs`    | Verifies the MCP server gracefully handles a missing `TEAM_DB_PATH` environment variable by safely rejecting team-scoped requests.    | stdio         | ~1s      |
 
 ## Scheduler Notes
 

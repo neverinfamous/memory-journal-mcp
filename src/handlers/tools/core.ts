@@ -73,7 +73,7 @@ const CreateEntrySchemaMcp = z.object({
 })
 
 const GetEntryByIdSchema = z.object({
-    entry_id: z.number(),
+    entry_id: z.number().int(),
     include_relationships: z.boolean().optional().default(true),
 })
 
@@ -133,6 +133,7 @@ const EntryByIdOutputSchema = z
 
 const TestSimpleOutputSchema = z
     .object({
+        success: z.boolean().optional(),
         message: z.string(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -269,6 +270,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     const { score: importance, breakdown: importanceBreakdown } =
                         db.calculateImportance(entry_id)
                     const result: Record<string, unknown> = {
+                        success: true,
                         entry,
                         importance,
                         importanceBreakdown,
@@ -294,7 +296,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { limit, is_personal } = GetRecentEntriesSchema.parse(params)
                     const entries = db.getRecentEntries(limit, is_personal)
-                    return { entries, count: entries.length }
+                    return { success: true, entries, count: entries.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -333,7 +335,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const { message } = TestSimpleSchema.parse(params)
-                    return { message: `Test response: ${message}` }
+                    return { success: true, message: `Test response: ${message}` }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -351,7 +353,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const rawTags = db.listTags()
                     const tags = rawTags.map((t) => ({ name: t.name, count: t.usageCount }))
-                    return { tags, count: tags.length }
+                    return { success: true, tags, count: tags.length }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

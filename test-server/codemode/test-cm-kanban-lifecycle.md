@@ -3,15 +3,15 @@
 **Scope:** Automates the testing of `mj.github` Kanban integrations (`addProjectItem`, `moveProjectItem`, `deleteProjectItem`, `getProjectKanban`) natively via sandbox.
 
 **Execution:** Use ONLY the Code Mode Sandbox (`mj_execute_code`).
-Prioritize using `_meta.tokenEstimate` within the sandbox script to guarantee performance logging.
+Extract and report the `_meta.tokenEstimate` from the tool's outer response wrapper to guarantee performance logging. Do not try to reference `_meta` inside the Javascript code itself.
 
 ---
 
 ## 25.1.1 Full Topological Execution
 
-| #   | Test                                   | Command                                             | Expected Result                                                              |
-| --- | -------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 1   | Pipelined Add -> Move -> Map -> Delete | `mj_execute_code` with the pipeline logic natively. | `{ "success": true, "tokens": <count>, "stages": [...] }` returned smoothly. |
+| #   | Test                                   | Command                                             | Expected Result                                                                   |
+| --- | -------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | Pipelined Add -> Move -> Map -> Delete | `mj_execute_code` with the pipeline logic natively. | `{ "success": true, "stages": [...] }` returned smoothly inside the tool wrapper. |
 
 ### The Pipeline Script Setup
 
@@ -115,6 +115,6 @@ try {
 
 ### Verification Checks
 
-- [ ] Code properly parses internal node IDs natively matching external handler behavior.
-- [ ] No server crash or GraphQL mutation block.
-- [ ] The issue is safely restored back to default standalone status with no remnant project linkage.
+- [] Code properly parses internal node IDs natively matching external handler behavior.
+- [] No server crash or GraphQL mutation block.
+- [] The issue is safely restored back to default standalone status with no remnant project linkage.

@@ -315,19 +315,19 @@ describe('GitHubIntegration', () => {
     describe('getIssueComments', () => {
         it('should return mapped comments and limit to 100', async () => {
             octokit.issues.listComments.mockResolvedValue({
-                data: [
-                    { user: { login: 'u1' }, body: 'b1', created_at: '2025-01-01' },
-                ],
+                data: [{ user: { login: 'u1' }, body: 'b1', created_at: '2025-01-01' }],
             })
             // limit requested is 200, should pass 100 to api
             const comments = await gh.getIssueComments('o', 'r', 1, 200)
             expect(comments).toHaveLength(1)
-            expect(octokit.issues.listComments).toHaveBeenCalledWith(expect.objectContaining({
-                owner: 'o',
-                repo: 'r',
-                issue_number: 1,
-                per_page: 100,
-            }))
+            expect(octokit.issues.listComments).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    owner: 'o',
+                    repo: 'r',
+                    issue_number: 1,
+                    per_page: 100,
+                })
+            )
             expect(comments[0]!.author).toBe('u1')
         })
 

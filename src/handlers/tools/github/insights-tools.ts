@@ -65,7 +65,8 @@ export function getGitHubInsightsTools(context: ToolContext): ToolDefinition[] {
                     const repo = resolved.repo
 
                     const section = input.sections
-                    const result: Partial<z.infer<typeof RepoInsightsOutputSchema>> = {
+                    const result: z.infer<typeof RepoInsightsOutputSchema> = {
+                        success: true,
                         owner,
                         repo,
                         section,

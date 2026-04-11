@@ -73,16 +73,14 @@ describe('Workflow Prompts', () => {
         const track = prompts.find((p) => p.name === 'goal-tracker')!
 
         const mockDb = {
-            executeRawQuery: vi
-                .fn()
-                .mockReturnValue([
-                    {
-                        id: 1,
-                        entryType: 'goal',
-                        timestamp: 'test',
-                        content: 'test content '.repeat(20),
-                    },
-                ]),
+            executeRawQuery: vi.fn().mockReturnValue([
+                {
+                    id: 1,
+                    entryType: 'goal',
+                    timestamp: 'test',
+                    content: 'test content '.repeat(20),
+                },
+            ]),
         }
 
         const result = track.handler({}, mockDb as any)
@@ -94,16 +92,14 @@ describe('Workflow Prompts', () => {
         const bundle = prompts.find((p) => p.name === 'get-context-bundle')!
 
         const mockDb = {
-            getRecentEntries: vi
-                .fn()
-                .mockReturnValue([
-                    {
-                        id: 1,
-                        entryType: 'note',
-                        timestamp: 'test',
-                        content: 'test content '.repeat(10),
-                    },
-                ]),
+            getRecentEntries: vi.fn().mockReturnValue([
+                {
+                    id: 1,
+                    entryType: 'note',
+                    timestamp: 'test',
+                    content: 'test content '.repeat(10),
+                },
+            ]),
             getStatistics: vi.fn().mockReturnValue({}),
         }
 

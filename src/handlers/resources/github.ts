@@ -154,31 +154,37 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 }
 
                 // Milestone summary
-                let milestoneSummary:
-                    | {
-                          number: number
-                          title: string
-                          state: string
-                          openIssues: number
-                          closedIssues: number
-                          completionPercentage: number
-                          dueOn: string | null
-                      }[]
-                    | null = null
-                if (milestoneResult.status === 'fulfilled' && milestoneResult.value.length > 0) {
-                    milestoneSummary = milestoneResult.value.map((ms) => {
-                        const pct = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
-                        return {
-                            number: ms.number,
-                            title: ms.title,
-                            state: ms.state,
-                            openIssues: ms.openIssues,
-                            closedIssues: ms.closedIssues,
-                            completionPercentage: pct,
-                            dueOn: ms.dueOn,
-                        }
-                    })
+                let milestoneSummary: null | {
+                    openCount: number
+                    items: {
+                        number: number
+                        title: string
+                        state: string
+                        openIssues: number
+                        closedIssues: number
+                        completionPercentage: number
+                        dueOn: string | null
+                    }[]
+                } = { openCount: 0, items: [] }
+
+                if (milestoneResult.status === 'fulfilled') {
+                    milestoneSummary = {
+                        openCount: milestoneResult.value.length,
+                        items: milestoneResult.value.map((ms) => {
+                            const pct = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
+                            return {
+                                number: ms.number,
+                                title: ms.title,
+                                state: ms.state,
+                                openIssues: ms.openIssues,
+                                closedIssues: ms.closedIssues,
+                                completionPercentage: pct,
+                                dueOn: ms.dueOn,
+                            }
+                        }),
+                    }
                 } else if (milestoneResult.status === 'rejected') {
+                    milestoneSummary = null
                     logger.debug('Failed to fetch milestones', {
                         module: 'RESOURCE',
                         operation: 'github-status',

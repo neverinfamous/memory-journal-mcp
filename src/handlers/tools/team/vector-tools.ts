@@ -19,6 +19,8 @@ import {
     TeamAddToVectorIndexSchemaMcp,
     TeamAddToVectorIndexOutputSchema,
 } from './schemas.js'
+import { passMetadataFilters } from '../search/helpers.js'
+import type { SemanticSearchResult } from '../../../vector/vector-search-manager.js'
 
 // ============================================================================
 // Constants
@@ -81,17 +83,27 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    let results
+                    const hasFilters =
+                        input.tags !== undefined ||
+                        input.entry_type !== undefined ||
+                        input.start_date !== undefined ||
+                        input.end_date !== undefined
+
+                    const internalLimit = hasFilters
+                        ? Math.min(Math.max(input.limit * 10, 100), 1000)
+                        : input.limit * 2
+
+                    let results: SemanticSearchResult[]
                     if (input.entry_id !== undefined) {
                         results = await teamVectorManager.searchByEntryId(
                             input.entry_id,
-                            input.limit ?? 10,
+                            internalLimit,
                             input.similarity_threshold ?? 0.25
                         )
                     } else {
                         results = await teamVectorManager.search(
                             input.query ?? '',
-                            input.limit ?? 10,
+                            internalLimit,
                             input.similarity_threshold ?? 0.25
                         )
                     }
@@ -109,6 +121,23 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             if (!entry) return null
                             if (input.entry_id !== undefined && entry.id === input.entry_id)
                                 return null
+
+                            // Apply filters
+                            if (
+                                !passMetadataFilters(
+                                    entry,
+                                    {
+                                        tags: input.tags,
+                                        entryType: input.entry_type,
+                                        startDate: input.start_date,
+                                        endDate: input.end_date,
+                                    },
+                                    teamDb
+                                )
+                            ) {
+                                return null
+                            }
+
                             return {
                                 ...entry,
                                 author: authorMap.get(r.entryId) ?? null,
@@ -116,6 +145,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             }
                         })
                         .filter((e): e is NonNullable<typeof e> => e !== null)
+                        .slice(0, input.limit)
 
                     const stats = teamVectorManager.getStats()
                     const isIndexEmpty = stats.itemCount === 0
@@ -134,6 +164,7 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                                 : undefined
 
                     return {
+                        success: true,
                         query: input.query,
                         ...(input.entry_id !== undefined ? { entryId: input.entry_id } : {}),
                         entries,

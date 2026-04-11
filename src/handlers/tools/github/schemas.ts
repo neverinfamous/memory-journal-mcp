@@ -250,7 +250,8 @@ export const CreateGitHubIssueWithEntryOutputSchema = z
             .object({
                 projectNumber: z.number(),
                 added: z.boolean(),
-                message: z.string(),
+                message: z.string().optional(),
+                error: z.string().optional(),
                 initialStatus: z
                     .object({
                         status: z.string(),
@@ -392,6 +393,7 @@ export const DeleteMilestoneOutputSchema = z
 
 export const RepoInsightsOutputSchema = z
     .object({
+        success: z.boolean().optional(),
         owner: z.string().optional(),
         repo: z.string().optional(),
         section: z.string().optional(),

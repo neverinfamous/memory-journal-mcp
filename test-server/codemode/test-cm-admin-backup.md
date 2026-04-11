@@ -124,13 +124,13 @@ return {
 
 ## Success Criteria
 
-- [x] `list_tags` returns tag list via Code Mode
-- [x] `merge_tags` consolidates tags correctly — source removed, target exists
-- [x] `merge_tags` returns structured errors for same-tag and nonexistent source
+- [] `list_tags` returns tag list via Code Mode
+- [] `merge_tags` consolidates tags correctly — source removed, target exists
+- [] `merge_tags` returns structured errors for same-tag and nonexistent source
 
-- [x] `backup_journal` named and auto-named both succeed
-- [x] `backup_journal` path traversal blocked with structured error
-- [x] `list_backups` returns backup metadata
-- [x] `restore_backup` succeeds with `revertedChanges` field
-- [x] `restore_backup` nonexistent file returns structured error
-- [x] `cleanup_backups` deletes old backups
+- [] `backup_journal` named and auto-named both succeed
+- [] `backup_journal` path traversal blocked with structured error
+- [] `list_backups` returns backup metadata
+- [] `restore_backup` succeeds with `revertedChanges` field
+- [] `restore_backup` nonexistent file returns structured error
+- [] `cleanup_backups` deletes old backups

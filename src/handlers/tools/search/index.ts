@@ -22,7 +22,7 @@ import {
     EntriesListOutputSchema,
     relaxedNumber,
 } from '../schemas.js'
-import { MAX_QUERY_LIMIT, calcPerDbLimit, mergeAndDedup } from './helpers.js'
+import { MAX_QUERY_LIMIT, calcPerDbLimit, mergeAndDedup, passMetadataFilters } from './helpers.js'
 import { resolveSearchMode, type SearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
@@ -230,7 +230,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             ...formatHandlerError(
                                 new ValidationError(
                                     'Search requires either a query string or at least one filter',
-                                    { suggestion: 'Provide a search query or use get_recent_entries instead' }
+                                    {
+                                        suggestion:
+                                            'Provide a search query or use get_recent_entries instead',
+                                    }
                                 )
                             ),
                             entries: [],
@@ -265,10 +268,13 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
                                 return { ...result, searchMode: 'fts (fallback)' }
                             }
-                            // Use semantic search, then fetch full entries
+                            // Use semantic search with overfetching for filtering reliability
+                            const internalLimit = hasFilters
+                                ? Math.min(Math.max(input.limit * 10, 100), 1000)
+                                : input.limit * 2
                             const semanticResults = await vectorManager.search(
                                 query,
-                                input.limit,
+                                internalLimit,
                                 0.25
                             )
                             const entryIds = semanticResults.map((r) => r.entryId)
@@ -277,15 +283,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
                                     if (!entry) return null
-                                    if (
-                                        input.is_personal !== undefined &&
-                                        entry.isPersonal !== input.is_personal
-                                    )
-                                        return null
+                                    if (!passMetadataFilters(entry, searchOptions, db)) return null
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
                             return {
+                                success: true,
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
@@ -304,6 +307,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 searchOptions
                             )
                             return {
+                                success: true,
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
@@ -314,6 +318,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             const result = ftsSearch(input.query, db, teamDb, searchOptions)
                             return {
                                 ...result,
+                                success: true,
                                 searchMode: isAuto ? 'fts (auto)' : 'fts',
                             }
                         }
@@ -380,10 +385,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             teamEntries.map((e) => ({ ...e, source: 'team' as const })),
                             input.limit
                         )
-                        return { entries: merged, count: merged.length }
+                        return { success: true, entries: merged, count: merged.length }
                     }
 
-                    return { entries: personalEntries, count: personalEntries.length }
+                    return {
+                        success: true,
+                        entries: personalEntries,
+                        count: personalEntries.length,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -432,19 +441,30 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const hasFilters =
+                        input.is_personal !== undefined ||
+                        input.tags !== undefined ||
+                        input.entry_type !== undefined ||
+                        input.start_date !== undefined ||
+                        input.end_date !== undefined
+
+                    const internalLimit = hasFilters
+                        ? Math.min(Math.max(input.limit * 10, 100), 1000)
+                        : input.limit * 2
+
                     // Determine search method: by entry_id or by query
                     let results: SemanticSearchResult[]
                     if (input.entry_id !== undefined) {
                         // Find related by ID: lookup existing embedding, skip re-embedding
                         results = await vectorManager.searchByEntryId(
                             input.entry_id,
-                            input.limit ?? 10,
+                            internalLimit,
                             input.similarity_threshold ?? 0.25
                         )
                     } else {
                         results = await vectorManager.search(
                             input.query ?? '',
-                            input.limit ?? 10,
+                            internalLimit,
                             input.similarity_threshold ?? 0.25
                         )
                     }
@@ -457,27 +477,16 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
-                            // Apply is_personal filter if specified
-                            if (
-                                input.is_personal !== undefined &&
-                                entry.isPersonal !== input.is_personal
-                            )
-                                return null
-                            // Apply metadata filters
-                            if (input.tags && input.tags.length > 0) {
-                                const entryTags = db.getTagsForEntry(entry.id)
-                                if (!input.tags.some((t) => entryTags.includes(t))) return null
+
+                            const filterOptions = {
+                                isPersonal: input.is_personal,
+                                tags: input.tags,
+                                entryType: input.entry_type,
+                                startDate: input.start_date,
+                                endDate: input.end_date,
                             }
-                            if (input.entry_type && entry.entryType !== input.entry_type)
-                                return null
-                            if (input.start_date) {
-                                const entryDate = entry.timestamp.split('T')[0] ?? ''
-                                if (entryDate < input.start_date) return null
-                            }
-                            if (input.end_date) {
-                                const entryDate = entry.timestamp.split('T')[0] ?? ''
-                                if (entryDate > input.end_date) return null
-                            }
+                            if (!passMetadataFilters(entry, filterOptions, db)) return null
+
                             // Exclude the source entry from find-related results
                             if (input.entry_id !== undefined && entry.id === input.entry_id)
                                 return null
@@ -487,6 +496,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             }
                         })
                         .filter((e): e is NonNullable<typeof e> => e !== null)
+                        .slice(0, input.limit)
 
                     const stats = vectorManager.getStats()
                     const isIndexEmpty = stats.itemCount === 0
@@ -511,6 +521,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 : undefined
 
                     return {
+                        success: true,
                         query: input.query,
                         ...(input.entry_id !== undefined ? { entryId: input.entry_id } : {}),
                         entries,

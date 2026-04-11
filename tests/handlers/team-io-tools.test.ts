@@ -79,10 +79,10 @@ describe('getTeamIoTools', () => {
                 (t) => t.name === 'team_export_markdown'
             )!.handler
 
-            const result = (await handler({
+            await handler({
                 output_dir: '/tmp/team-out',
                 start_date: '2025-01-01',
-            })) as any
+            })
             expect((context.teamDb as any).searchByDateRange).toHaveBeenCalled()
         })
 

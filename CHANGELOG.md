@@ -5,7 +5,30 @@ All notable changes to Memory Journal MCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.2.0...HEAD)
+## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.3.0...HEAD)
+
+## [7.3.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.3.0) - 2026-04-10
+
+### Added
+
+- Cleanup utility (`test-server/scripts/cleanup-seed-data.mjs`) to purge testing data without affecting core project entries.
+- Metadata filters (`tags`, `entry_type`, date range) for `team_semantic_search` to achieve parity with personal searches.
+
+### Changed
+
+- Standardized `success: true` response field across all read-only tools.
+- Centralized `passMetadataFilters` evaluation for consistency across search handlers.
+
+### Fixed
+
+- Validation crash in `create_github_issue_with_entry` when Kanban additions fail or boards are unknown.
+- Vector and semantic index filtering failing to properly drop matches after evaluating in-memory criteria.
+- Low result variety in vector searches when metadata filters were applied (resolved via explicit 10x oversampling).
+- `memory://github/status` layout formatting when there are no active milestones.
+- Inconsistent validation errors; schema and programmatic failures now uniformly emit `VALIDATION_ERROR`.
+- `get_entry_by_id` incorrectly accepting float values instead of strict integers.
+- Prompt handlers throwing raw MCP protocol exceptions instead of wrapping them in user-visible boundary messages.
+- `link_entries` allowing the creation of relationships to soft-deleted entries.
 
 ## [7.2.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.2.0) - 2026-04-09
 
