@@ -39,3 +39,4 @@
 - Verified Direct MCP Core Infrastructure (Phase 1), confirming server health data propagation, precise tool annotation statistics, dynamic briefing enrichment, robust workflow status insights, and proper initialization of the test environment.
 - Verified Direct MCP IO & Markdown Interoperability, confirming legacy export functionality, Markdown file orchestration with auto-reconciliation, safe OS path boundaries, and strict path traversal defenses.
 - Verified Direct MCP Core Relationships & Visualization (Phase 4), validating causal arrow synchronization across both code-defined relationships and `memory://graph/recent` components, and strict non-duplicate linkage error boundaries.
+- Verified Direct MCP HTTP Scheduler (Phase 6), confirming automated backup, vacuum, index rebuild, and digest operations execute reliably on isolated timers without cascade failures, while remaining fully dormant in default stdio invocation mode.
