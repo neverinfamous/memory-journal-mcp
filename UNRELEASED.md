@@ -25,4 +25,5 @@
 - Verified Code Mode GitHub Tools (Phase 25), confirming all 16 `mj.github.*` endpoints, read-only limits, Kanban operations, issue and milestone lifecycles correctly surface schema-compliant responses and structured errors instead of raw `-32602` faults.
 - Verified Code Mode IO & Interoperability (Phase 26), confirming legacy export payload hydration, markdown file orchestration within sandbox mapped directories, and strict path traversal halts.
 - Verified Code Mode Cross-Group Orchestration (Phase 23), validating complex, multi-round agent workflows (Journal Dashboards, Tag Analytics, Relationship Graphs, Vector Index Lifecycles) persist state securely across `mj.*` namespaces.
+- Verified Code Mode Payload Optimization (Phase 30), validating that Kanban board throttling (`summary_only`, `item_limit`), schema truncation logic, Code Mode result size caps (100KB limits), and explicit execution limits (MAX_QUERY_LIMIT=500) securely restrict payload sizes without unexpected crashes.
 
