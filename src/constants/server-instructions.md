@@ -100,7 +100,8 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Search        | `mj.search.*`        | `mj.search.searchEntries("performance")`           |
 | Analytics     | `mj.analytics.*`     | `mj.analytics.getStatistics()`                     |
 | Relationships | `mj.relationships.*` | `mj.relationships.linkEntries(1, 2, "implements")` |
-| IO            | `mj.io.*`            | `mj.io.exportEntries("json")`                      |
+| IO            | `mj.io.*`            | `mj.io.importMarkdown("content")`                  |
+| Export        | `mj.export.*`        | `mj.export.exportEntries("json")`                  |
 | Admin         | `mj.admin.*`         | `mj.admin.rebuildVectorIndex()`                    |
 | GitHub        | `mj.github.*`        | `mj.github.getGithubIssues({ state: "open" })`     |
 | Backup        | `mj.backup.*`        | `mj.backup.backupJournal()`                        |

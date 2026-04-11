@@ -184,7 +184,8 @@ const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: st
     { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
     { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
     { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
-    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.exportEntries("json")`' },
+    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.importMarkdown("content")`' },
+    { group: 'io', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries("json")`' },
     { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
     { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
     { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
@@ -233,7 +234,8 @@ This executes JavaScript in a sandboxed environment with all tools available as 
 | Search        | \`mj.search.*\`        | \`mj.search.searchEntries("performance")\`           |
 | Analytics     | \`mj.analytics.*\`     | \`mj.analytics.getStatistics()\`                     |
 | Relationships | \`mj.relationships.*\` | \`mj.relationships.linkEntries(1, 2, "implements")\` |
-| IO            | \`mj.io.*\`            | \`mj.io.exportEntries("json")\`                      |
+| IO            | \`mj.io.*\`            | \`mj.io.importMarkdown("content")\`                  |
+| Export        | \`mj.export.*\`        | \`mj.export.exportEntries("json")\`                  |
 | Admin         | \`mj.admin.*\`         | \`mj.admin.rebuildVectorIndex()\`                    |
 | GitHub        | \`mj.github.*\`        | \`mj.github.getGithubIssues({ state: "open" })\`     |
 | Backup        | \`mj.backup.*\`        | \`mj.backup.backupJournal()\`                        |

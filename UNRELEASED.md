@@ -15,6 +15,7 @@
 ### Fixed
 - Missing `sortBy` forwarding to underlying fetches during `ftsSearch()` delegations.
 - Strict typing and ESLint caching errors regarding filter limits and significance metric validations.
+- Missing `export` tool group namespace (`mj.export.*`) in the Code Mode instruction documentation table, ensuring all 10 API discoverability groups are correctly documented for LLM context.
 
 ### Security
 - Verified Admin tag management, export filters, and Backup/Restore lifecycle through the Code Mode sandbox. All tools strictly return structured `{ success: false }` bounds errors.
