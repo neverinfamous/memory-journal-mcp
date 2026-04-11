@@ -64,13 +64,13 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 
 ---
 
-**Ask Agent naturally:**
+**Experience true context-aware development:**
 
-- "Show me my recent journal entries"
-- "Create a backup of my journal"
-- "Check the server health status"
-- "Find entries related to performance"
-- "Show me the memory-journal-mcp Kanban"
+- *"Why did we choose SQLite over Postgres for this service last month?"* (Semantic search)
+- *"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."* (GitHub operations)
+- *"Who has been touching the auth module recently, and what's our team collaboration density?"* (Team analytics)
+- *"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."* (Context lifecycles)
+- *"Draw a visual graph showing how my last 10 architectural decisions relate to each other."* (Knowledge graph)
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
