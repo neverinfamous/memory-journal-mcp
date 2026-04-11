@@ -442,7 +442,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         const merged = mergeAndDedup(
                             personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
                             teamEntries.map((e) => ({ ...e, source: 'team' as const })),
-                            input.limit
+                            input.limit,
+                            input.sort_by
                         )
                         return { success: true, entries: merged, count: merged.length }
                     }

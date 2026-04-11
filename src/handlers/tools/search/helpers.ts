@@ -64,13 +64,23 @@ export function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
 export function mergeAndDedup(
     personal: EntryWithSource[],
     team: EntryWithSource[],
-    limit?: number
+    limit?: number,
+    sortBy: 'timestamp' | 'importance' = 'timestamp'
 ): EntryWithSource[] {
     const seen = new Set<string>()
     const merged: EntryWithSource[] = []
 
-    // Concat and sort by timestamp descending (ISO 8601 sorts lexicographically)
-    const all = [...personal, ...team].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    // Concat and sort by requested metric, with timestamp as secondary/fallback (ISO 8601 sorts lexicographically)
+    const all = [...personal, ...team].sort((a, b) => {
+        if (sortBy === 'importance') {
+            const scoreA = Number(a['importanceScore']) || 0
+            const scoreB = Number(b['importanceScore']) || 0
+            if (scoreA !== scoreB) {
+                return scoreB - scoreA
+            }
+        }
+        return b.timestamp.localeCompare(a.timestamp)
+    })
 
     for (const entry of all) {
         // Deduplicate by content (same entry shared to team)

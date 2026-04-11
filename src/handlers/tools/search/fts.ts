@@ -91,7 +91,8 @@ export function ftsSearch(
         const merged = mergeAndDedup(
             personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
             teamEntries.map((e) => ({ ...e, source: 'team' as const })),
-            options.limit
+            options.limit,
+            options.sortBy
         )
         return { entries: merged, count: merged.length }
     }
