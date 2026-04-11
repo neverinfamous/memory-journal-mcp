@@ -19,18 +19,18 @@ describe('Briefing Insights Section', () => {
             currentPeriodSignificant: 2,
             historicalAvgSignificant: 1,
             significanceMultiplier: 2.0,
-            staleProjects: [{ projectNumber: 42, daysSilent: 20, lastEntryDate: '2026-03-22T00:00:00Z'}],
+            staleProjects: [
+                { projectNumber: 42, daysSilent: 20, lastEntryDate: '2026-03-22T00:00:00Z' },
+            ],
             currentRelDensity: 0.1,
             previousRelDensity: 0.05,
-            topImportanceEntries: [
-                { id: 1, score: 0.9, preview: 'Top entry' }
-            ]
+            topImportanceEntries: [{ id: 1, score: 0.9, preview: 'Top entry' }],
         }
 
         const context: ResourceContext = {
             scheduler: {
-                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot)
-            } as any
+                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot),
+            } as any,
         }
 
         const result = buildInsightsSection(context)
@@ -54,15 +54,15 @@ describe('Briefing Insights Section', () => {
             staleProjects: [],
             currentRelDensity: 0, // 0 should omit relationshipDensity
             previousRelDensity: 0,
-            topImportanceEntries: []
+            topImportanceEntries: [],
         }
 
         const context: ResourceContext = {
             db: {
                 getLatestAnalyticsSnapshot: vi.fn().mockReturnValue({
-                    data: mockSnapshot
-                })
-            } as any
+                    data: mockSnapshot,
+                }),
+            } as any,
         }
 
         const result = buildInsightsSection(context)
@@ -85,13 +85,13 @@ describe('Briefing Insights Section', () => {
             staleProjects: [],
             currentRelDensity: 0,
             previousRelDensity: 0,
-            topImportanceEntries: []
+            topImportanceEntries: [],
         }
 
         const context: ResourceContext = {
             scheduler: {
-                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot)
-            } as any
+                getLatestDigest: vi.fn().mockReturnValue(mockSnapshot),
+            } as any,
         }
 
         const result = buildInsightsSection(context)

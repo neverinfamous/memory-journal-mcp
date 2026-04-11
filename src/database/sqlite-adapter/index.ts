@@ -76,7 +76,11 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.calculateImportance(entryId)
     }
 
-    getRecentEntries(limit?: number, isPersonal?: boolean, sortBy?: 'timestamp' | 'importance'): JournalEntry[] {
+    getRecentEntries(
+        limit?: number,
+        isPersonal?: boolean,
+        sortBy?: 'timestamp' | 'importance'
+    ): JournalEntry[] {
         return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy)
     }
 

@@ -13,8 +13,6 @@ import { MAX_QUERY_LIMIT } from '../schemas.js'
 import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 
-
-
 /** Number of leading characters used as deduplication key */
 const DEDUP_KEY_LENGTH = 200
 

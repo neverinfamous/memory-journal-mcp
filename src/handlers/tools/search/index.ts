@@ -306,7 +306,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
                                     if (!entry) return null
-                                    if (!passMetadataFilters(entry, searchOptions as ISearchFilters, db)) return null
+                                    if (
+                                        !passMetadataFilters(
+                                            entry,
+                                            searchOptions as ISearchFilters,
+                                            db
+                                        )
+                                    )
+                                        return null
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
@@ -318,7 +325,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     const { score } = db.calculateImportance(e.id)
                                     return { ...e, importanceScore: Math.round(score * 100) / 100 }
                                 })
-                                scored.sort((a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0))
+                                scored.sort(
+                                    (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
+                                )
                                 return {
                                     success: true,
                                     entries: scored,
@@ -354,7 +363,9 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     const { score } = db.calculateImportance(entryId)
                                     return { ...e, importanceScore: Math.round(score * 100) / 100 }
                                 })
-                                scored.sort((a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0))
+                                scored.sort(
+                                    (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
+                                )
                                 return {
                                     success: true,
                                     entries: scored,
@@ -545,7 +556,8 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 startDate: input.start_date,
                                 endDate: input.end_date,
                             }
-                            if (!passMetadataFilters(entry, filterOptions as ISearchFilters, db)) return null
+                            if (!passMetadataFilters(entry, filterOptions as ISearchFilters, db))
+                                return null
 
                             // Exclude the source entry from find-related results
                             if (input.entry_id !== undefined && entry.id === input.entry_id)

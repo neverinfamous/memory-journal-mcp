@@ -26,7 +26,7 @@ Entry lifecycle — create, retrieve, tags, and test.
 | ---------------------- | ---------------------------------------------------------------------------------- |
 | `create_entry`         | Create a new journal entry with context and tags (v2.1.0: GitHub Actions support). |
 | `get_entry_by_id`      | Get a specific journal entry by ID with full details.                              |
-| `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance). |
+| `get_recent_entries`   | Get recent journal entries. Supports `sort_by` (timestamp or importance).          |
 | `create_entry_minimal` | Minimal entry creation without context or tags.                                    |
 | `test_simple`          | Simple test tool that just returns a message.                                      |
 | `list_tags`            | List all available tags.                                                           |
@@ -37,12 +37,12 @@ Entry lifecycle — create, retrieve, tags, and test.
 
 Full-text, date-range, and semantic/vector search.
 
-| Tool                     | Description                                                                                                                                                                                                    |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tool                     | Description                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search_entries`         | Full-text search journal entries using FTS5 (supports phrases `"exact match"`, prefix `auth*`, boolean `NOT`/`OR`/`AND`, ranked by relevance). Optional filters and `sort_by` (timestamp or importance). |
-| `search_by_date_range`   | Search journal entries within a date range with optional filters and `sort_by` (timestamp or importance). |
-| `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                         |
-| `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                         |
+| `search_by_date_range`   | Search journal entries within a date range with optional filters and `sort_by` (timestamp or importance).                                                                                                |
+| `semantic_search`        | Perform semantic/vector search on journal entries using AI embeddings.                                                                                                                                   |
+| `get_vector_index_stats` | Get statistics about the semantic search vector index.                                                                                                                                                   |
 
 ---
 
@@ -144,13 +144,13 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | `team_create_entry`    | Create an entry in the team database for sharing with collaborators.                            |
 | `team_get_entry_by_id` | Get a specific team entry by ID with full details including relationships and importance score. |
-| `team_get_recent`      | Get recent entries from the team database. Supports `sort_by` (timestamp or importance). |
+| `team_get_recent`      | Get recent entries from the team database. Supports `sort_by` (timestamp or importance).        |
 | `team_list_tags`       | List all tags used in the team database with usage counts.                                      |
 
 ### Search
 
-| Tool                        | Description                                                                            |
-| --------------------------- | -------------------------------------------------------------------------------------- |
+| Tool                        | Description                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `team_search`               | Search entries in the team database by text and/or tags. Supports `sort_by` (timestamp or importance). |
 | `team_search_by_date_range` | Search team entries within a date range with optional filters and `sort_by` (timestamp or importance). |
 
@@ -164,10 +164,10 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
 ### Analytics
 
-| Tool                              | Description                                                                                              |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `team_get_statistics`             | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown. |
-| `team_get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in team entries. Requires TEAM_DB_PATH.              |
+| Tool                              | Description                                                                                                 |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `team_get_statistics`             | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown.    |
+| `team_get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in team entries. Requires TEAM_DB_PATH.                 |
 | `team_get_collaboration_matrix`   | Generate a structural matrix mapping author activity and cross-collaboration impact. Requires TEAM_DB_PATH. |
 
 ### Relationships

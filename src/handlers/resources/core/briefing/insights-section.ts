@@ -83,6 +83,8 @@ function formatDigest(snapshot: DigestSnapshot): BriefingInsights {
             score: e.score,
             preview: e.preview,
         })),
-        ...(snapshot.currentRelDensity > 0 ? { relationshipDensity: snapshot.currentRelDensity } : {})
+        ...(snapshot.currentRelDensity > 0
+            ? { relationshipDensity: snapshot.currentRelDensity }
+            : {}),
     }
 }

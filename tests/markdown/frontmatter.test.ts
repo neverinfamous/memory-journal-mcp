@@ -107,7 +107,7 @@ Body`
 author: 'Alice'
 ---
 Body`
-        const { metadata, body } = parseFrontmatter(markdown)
+        const { metadata } = parseFrontmatter(markdown)
         expect(metadata.author).toBe('Alice')
     })
 })

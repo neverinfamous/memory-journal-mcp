@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { digestInsightsResource, teamCollaborationResource } from '../../src/handlers/resources/insights.js'
+import {
+    digestInsightsResource,
+    teamCollaborationResource,
+} from '../../src/handlers/resources/insights.js'
 import type { ResourceContext } from '../../src/handlers/resources/shared.js'
 
 describe('Insights Resources', () => {
@@ -7,8 +10,8 @@ describe('Insights Resources', () => {
         it('should return scheduler digest if available', () => {
             const context: ResourceContext = {
                 scheduler: {
-                    getLatestDigest: vi.fn().mockReturnValue({ scheduled: true })
-                } as any
+                    getLatestDigest: vi.fn().mockReturnValue({ scheduled: true }),
+                } as any,
             }
             const result = digestInsightsResource.handler('memory://insights/digest', context)
             expect(result.data.success).toBe(true)
@@ -21,9 +24,9 @@ describe('Insights Resources', () => {
                 db: {
                     getLatestAnalyticsSnapshot: vi.fn().mockReturnValue({
                         data: { db_snapshot: true },
-                        createdAt: '2026-04-11T12:00:00Z'
-                    })
-                } as any
+                        createdAt: '2026-04-11T12:00:00Z',
+                    }),
+                } as any,
             }
             const result = digestInsightsResource.handler('memory://insights/digest', context)
             expect(result.data.success).toBe(true)
@@ -36,8 +39,8 @@ describe('Insights Resources', () => {
             const context: ResourceContext = {
                 scheduler: {},
                 db: {
-                    getLatestAnalyticsSnapshot: vi.fn().mockReturnValue(null)
-                } as any
+                    getLatestAnalyticsSnapshot: vi.fn().mockReturnValue(null),
+                } as any,
             }
             const result = digestInsightsResource.handler('memory://insights/digest', context)
             expect(result.data.success).toBe(true)
@@ -49,39 +52,51 @@ describe('Insights Resources', () => {
     describe('memory://insights/team-collaboration', () => {
         it('should return not configured if no teamDb', () => {
             const context: ResourceContext = {}
-            const result = teamCollaborationResource.handler('memory://insights/team-collaboration', context)
+            const result = teamCollaborationResource.handler(
+                'memory://insights/team-collaboration',
+                context
+            )
             expect(result.data.success).toBe(true)
             expect((result.data as any).matrix).toBeNull()
         })
 
         it('should return matrix if teamDb provides it', () => {
-             // Mocking the queryRow / queryRows indirectly via teamDb interface
-             // The computeTeamCollaborationMatrix uses execQuery, which calls `teamDb.getRawDb()`
-             const teamDb = {
-                 executeRawQuery: vi.fn()
-                    .mockReturnValueOnce([ { author: 'Alice', period: '2026-04', entry_count: 5 } ]) // Activity
-                    .mockReturnValueOnce([ { from_author: 'Alice', to_author: 'Bob', link_count: 2 } ]) // Cross links
-                    .mockReturnValueOnce([ { author: 'Bob', inbound_links: 2 } ]) // Impact
-                    .mockReturnValueOnce([ { total_authors: 2, total_entries: 10 } ]) // Totals
-             }
-             const context: ResourceContext = { teamDb: teamDb as any }
-             const result = teamCollaborationResource.handler('memory://insights/team-collaboration', context)
-             expect(result.data.success).toBe(true)
-             expect((result.data as any).authorActivity).toBeDefined()
-             expect((result.data as any).crossAuthorLinks).toBeDefined()
-             expect((result.data as any).impactFactor).toBeDefined()
+            // Mocking the queryRow / queryRows indirectly via teamDb interface
+            // The computeTeamCollaborationMatrix uses execQuery, which calls `teamDb.getRawDb()`
+            const teamDb = {
+                executeRawQuery: vi
+                    .fn()
+                    .mockReturnValueOnce([{ author: 'Alice', period: '2026-04', entry_count: 5 }]) // Activity
+                    .mockReturnValueOnce([
+                        { from_author: 'Alice', to_author: 'Bob', link_count: 2 },
+                    ]) // Cross links
+                    .mockReturnValueOnce([{ author: 'Bob', inbound_links: 2 }]) // Impact
+                    .mockReturnValueOnce([{ total_authors: 2, total_entries: 10 }]), // Totals
+            }
+            const context: ResourceContext = { teamDb: teamDb as any }
+            const result = teamCollaborationResource.handler(
+                'memory://insights/team-collaboration',
+                context
+            )
+            expect(result.data.success).toBe(true)
+            expect((result.data as any).authorActivity).toBeDefined()
+            expect((result.data as any).crossAuthorLinks).toBeDefined()
+            expect((result.data as any).impactFactor).toBeDefined()
         })
 
         it('should handle errors from computation', () => {
-             const teamDb = {
-                 executeRawQuery: vi.fn().mockImplementation(() => {
-                     throw new Error('Database connection failed')
-                 })
-             }
-             const context: ResourceContext = { teamDb: teamDb as any }
-             const result = teamCollaborationResource.handler('memory://insights/team-collaboration', context)
-             expect(result.data.success).toBe(false)
-             expect((result.data as any).error).toBe('Database connection failed')
+            const teamDb = {
+                executeRawQuery: vi.fn().mockImplementation(() => {
+                    throw new Error('Database connection failed')
+                }),
+            }
+            const context: ResourceContext = { teamDb: teamDb as any }
+            const result = teamCollaborationResource.handler(
+                'memory://insights/team-collaboration',
+                context
+            )
+            expect(result.data.success).toBe(false)
+            expect((result.data as any).error).toBe('Database connection failed')
         })
     })
 })

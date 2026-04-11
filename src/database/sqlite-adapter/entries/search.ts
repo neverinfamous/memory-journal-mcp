@@ -123,7 +123,9 @@ function buildSearchQuery(
 ): { sql: string; params: unknown[] } {
     let query: string
     const useImportance = options?.sortBy === 'importance'
-    const importanceCol = useImportance ? `, ${buildImportanceSqlExpression()} AS importanceScore` : ''
+    const importanceCol = useImportance
+        ? `, ${buildImportanceSqlExpression()} AS importanceScore`
+        : ''
 
     if (useFts) {
         query = `
@@ -265,7 +267,9 @@ export function searchByDateRange(
     }
 
     const useImportance = options?.sortBy === 'importance'
-    const importanceCol = useImportance ? `, ${buildImportanceSqlExpression()} AS importanceScore` : ''
+    const importanceCol = useImportance
+        ? `, ${buildImportanceSqlExpression()} AS importanceScore`
+        : ''
 
     let query = `
         SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e

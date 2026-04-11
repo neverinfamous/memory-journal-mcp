@@ -216,7 +216,7 @@ on:
     inputs:
       node-version:
         type: string
-        default: "22"
+        default: '22'
     secrets:
       NPM_TOKEN:
         required: true
@@ -246,7 +246,7 @@ jobs:
   build:
     uses: ./.github/workflows/reusable-build.yml
     with:
-      node-version: "22"
+      node-version: '22'
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
@@ -303,13 +303,13 @@ jobs:
 
 ## 8. Anti-Patterns (Never Do These)
 
-| Anti-Pattern | Why It's Wrong | Do This Instead |
-|-------------|---------------|-----------------|
-| `uses: action@v4` | Mutable tag, supply chain risk | Pin to full commit SHA |
-| `permissions: write-all` | Maximum privilege, dangerous | Explicit per-job permissions |
-| `continue-on-error: true` on security steps | Suppresses critical failures | Hard-fail on security gates |
-| `secrets: inherit` | Over-broad secret access | Pass secrets explicitly |
-| Hardcoded `node-version: 22` | Version drift across workflows | Use `.node-version` file |
-| No `concurrency:` | Stale runs waste minutes | Always set with `cancel-in-progress` |
-| `if: always()` on non-cleanup steps | Runs even after critical failures | Use `if: success()` (default) |
-| Caching `node_modules` directly | Fragile, platform-specific | Cache package manager global cache |
+| Anti-Pattern                                | Why It's Wrong                    | Do This Instead                      |
+| ------------------------------------------- | --------------------------------- | ------------------------------------ |
+| `uses: action@v4`                           | Mutable tag, supply chain risk    | Pin to full commit SHA               |
+| `permissions: write-all`                    | Maximum privilege, dangerous      | Explicit per-job permissions         |
+| `continue-on-error: true` on security steps | Suppresses critical failures      | Hard-fail on security gates          |
+| `secrets: inherit`                          | Over-broad secret access          | Pass secrets explicitly              |
+| Hardcoded `node-version: 22`                | Version drift across workflows    | Use `.node-version` file             |
+| No `concurrency:`                           | Stale runs waste minutes          | Always set with `cancel-in-progress` |
+| `if: always()` on non-cleanup steps         | Runs even after critical failures | Use `if: success()` (default)        |
+| Caching `node_modules` directly             | Fragile, platform-specific        | Cache package manager global cache   |

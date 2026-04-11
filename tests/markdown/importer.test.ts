@@ -198,10 +198,15 @@ Content`
     it('should silently catch vector manager errors', async () => {
         const fileContent = `Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
-        
+
         mockVectorManager.addEntry.mockRejectedValueOnce(new Error('Vector failure'))
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any, {}, mockVectorManager as any)
+        const result = await importMarkdownEntries(
+            '/tmp/import',
+            mockDb as any,
+            {},
+            mockVectorManager as any
+        )
 
         expect(result.success).toBe(true)
         expect(mockVectorManager.addEntry).toHaveBeenCalled()

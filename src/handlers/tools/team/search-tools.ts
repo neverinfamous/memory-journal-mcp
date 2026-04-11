@@ -40,11 +40,15 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const { query, tags, limit, sort_by } = TeamSearchSchema.parse(params)
 
-                    const searchLimit = tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), 1000) : limit
+                    const searchLimit =
+                        tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), 1000) : limit
 
                     let entries
                     if (query) {
-                        entries = teamDb.searchEntries(query, { limit: searchLimit, sortBy: sort_by })
+                        entries = teamDb.searchEntries(query, {
+                            limit: searchLimit,
+                            sortBy: sort_by,
+                        })
                     } else {
                         entries = teamDb.getRecentEntries(searchLimit, undefined, sort_by)
                     }

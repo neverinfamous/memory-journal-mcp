@@ -61,22 +61,22 @@ describe('Digest Analytics', () => {
                 projectNumber: 101,
                 significanceType: 'milestone',
             })
-            
+
             // Link them for relationship density
             adapter.linkEntries(entry1.id, entry1.id + 1, 'references')
 
             const digest = computeDigest(db)
-            
+
             // With entries added in the current period, these should update
             expect(digest.currentPeriodEntries).toBeGreaterThanOrEqual(2)
             expect(digest.currentPeriodSignificant).toBeGreaterThanOrEqual(1)
-            
+
             // Stale project shouldn't trigger because threshold is 14 days and we just added them
             expect(digest.staleProjects.length).toBe(0)
-            
+
             // Density should be computed
             expect(digest.currentRelDensity).toBeGreaterThan(0)
-            
+
             // Top importance
             expect(digest.topImportanceEntries.length).toBeGreaterThan(0)
             expect(digest.topImportanceEntries[0]?.id).toBeDefined()
@@ -88,7 +88,7 @@ describe('Digest Analytics', () => {
         it('should save and get analytics snapshot', () => {
             const data = { test: 123 }
             const type = 'test_snapshot'
-            
+
             const insertId = saveAnalyticsSnapshot(db, type, data)
             expect(insertId).toBeGreaterThan(0)
 
@@ -101,7 +101,7 @@ describe('Digest Analytics', () => {
             const type = 'multiple_snapshot'
             saveAnalyticsSnapshot(db, type, { val: 1 })
             saveAnalyticsSnapshot(db, type, { val: 2 })
-            
+
             const snapshots = getAnalyticsSnapshots(db, type, 10)
             // They are returned in descending order of creation, but since they execute rapidly
             // timestamps might be identical in sqlite, so we just check for presence.

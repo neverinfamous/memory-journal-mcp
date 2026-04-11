@@ -21,6 +21,7 @@ This skill codifies 2026 Docker best practices — secure, minimal, reproducible
 ```
 
 Place this as the **first line** of every Dockerfile. It enables:
+
 - Parallel stage execution
 - Cache mounts (`--mount=type=cache`)
 - Secret mounts (`--mount=type=secret`)
@@ -28,12 +29,12 @@ Place this as the **first line** of every Dockerfile. It enables:
 
 ### Base Image Selection
 
-| Use Case | Recommended Base | Why |
-|----------|-----------------|-----|
-| **Node.js** | `node:22-slim` | Debian Slim — small, has essential libs |
-| **Python** | `python:3.13-slim` | Minimal Debian, no build tools |
-| **Go** | `scratch` or `distroless` | Static binary needs nothing |
-| **General** | `debian:bookworm-slim` | Stable, well-patched, small |
+| Use Case    | Recommended Base          | Why                                     |
+| ----------- | ------------------------- | --------------------------------------- |
+| **Node.js** | `node:22-slim`            | Debian Slim — small, has essential libs |
+| **Python**  | `python:3.13-slim`        | Minimal Debian, no build tools          |
+| **Go**      | `scratch` or `distroless` | Static binary needs nothing             |
+| **General** | `debian:bookworm-slim`    | Stable, well-patched, small             |
 
 - **NEVER** use `:latest` — always pin to a specific version tag
 - **Prefer `-slim` variants** over full images to reduce attack surface
@@ -188,9 +189,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runtime           # Target a specific stage
+      target: runtime # Target a specific stage
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       NODE_ENV: production
     depends_on:
@@ -207,7 +208,7 @@ services:
     secrets:
       - db_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -249,13 +250,13 @@ secrets:
 
 ## 7. Anti-Patterns (Never Do These)
 
-| Anti-Pattern | Why It's Wrong | Do This Instead |
-|-------------|---------------|-----------------|
-| `FROM ubuntu:latest` | Unpinned, large, unpredictable | Pin version, use `-slim` |
-| `RUN apt-get update` alone | Cache goes stale across builds | Combine with `install` in one `RUN` |
-| `ADD` for local files | Unpredictable (auto-extracts) | Use `COPY` explicitly |
-| Multiple `RUN apt-get` | Creates unnecessary layers | Chain with `&&` in one `RUN` |
-| `COPY . .` before deps | Breaks layer cache on every code change | Copy lock file first, install, then copy source |
-| Running as root | Security vulnerability | Create and switch to `appuser` |
-| Secrets in `ENV`/`ARG` | Visible in image history | Use `--mount=type=secret` |
-| No `.dockerignore` | Bloated context, potential secret leaks | Always create one |
+| Anti-Pattern               | Why It's Wrong                          | Do This Instead                                 |
+| -------------------------- | --------------------------------------- | ----------------------------------------------- |
+| `FROM ubuntu:latest`       | Unpinned, large, unpredictable          | Pin version, use `-slim`                        |
+| `RUN apt-get update` alone | Cache goes stale across builds          | Combine with `install` in one `RUN`             |
+| `ADD` for local files      | Unpredictable (auto-extracts)           | Use `COPY` explicitly                           |
+| Multiple `RUN apt-get`     | Creates unnecessary layers              | Chain with `&&` in one `RUN`                    |
+| `COPY . .` before deps     | Breaks layer cache on every code change | Copy lock file first, install, then copy source |
+| Running as root            | Security vulnerability                  | Create and switch to `appuser`                  |
+| Secrets in `ENV`/`ARG`     | Visible in image history                | Use `--mount=type=secret`                       |
+| No `.dockerignore`         | Bloated context, potential secret leaks | Always create one                               |

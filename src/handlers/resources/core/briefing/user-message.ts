@@ -124,9 +124,15 @@ export function formatUserMessage(opts: {
     if (analyticsInsights) {
         const parts: string[] = []
         parts.push(`📈 ${analyticsInsights.activityTrend}`)
-        if (analyticsInsights.significanceSpike !== null) parts.push(`🔥 ${analyticsInsights.significanceSpike}`)
-        if (analyticsInsights.relationshipDensity !== undefined && analyticsInsights.relationshipDensity >= 0) parts.push(`🔗 Matrix Density: ${analyticsInsights.relationshipDensity}`)
-        if (analyticsInsights.staleProjects.length > 0) parts.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
+        if (analyticsInsights.significanceSpike !== null)
+            parts.push(`🔥 ${analyticsInsights.significanceSpike}`)
+        if (
+            analyticsInsights.relationshipDensity !== undefined &&
+            analyticsInsights.relationshipDensity >= 0
+        )
+            parts.push(`🔗 Matrix Density: ${analyticsInsights.relationshipDensity}`)
+        if (analyticsInsights.staleProjects.length > 0)
+            parts.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
         analyticsRow = `\n| **Analytics** | ${escapeTableCell(parts.join(' · '))} |`
     }
 

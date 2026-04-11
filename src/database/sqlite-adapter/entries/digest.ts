@@ -140,9 +140,7 @@ export function computeDigest(db: Database): DigestSnapshot {
     const currentRels = (relDensityRow?.['current_rels'] as number) ?? 0
     const previousRels = (relDensityRow?.['previous_rels'] as number) ?? 0
     const currentRelDensity =
-        currentPeriodEntries > 0
-            ? Math.round((currentRels / currentPeriodEntries) * 100) / 100
-            : 0
+        currentPeriodEntries > 0 ? Math.round((currentRels / currentPeriodEntries) * 100) / 100 : 0
     const previousRelDensity =
         previousPeriodEntries > 0
             ? Math.round((previousRels / previousPeriodEntries) * 100) / 100

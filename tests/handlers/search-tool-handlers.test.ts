@@ -496,11 +496,9 @@ describe('Search Tool Handlers - Coverage', () => {
         })
 
         it('should NOT include importanceScore when get_recent_entries uses default sort', async () => {
-            const result = (await callTool(
-                'get_recent_entries',
-                { limit: 10 },
-                impDb
-            )) as { entries: Record<string, unknown>[] }
+            const result = (await callTool('get_recent_entries', { limit: 10 }, impDb)) as {
+                entries: Record<string, unknown>[]
+            }
 
             for (const entry of result.entries) {
                 expect(entry['importanceScore']).toBeUndefined()
@@ -551,4 +549,3 @@ describe('Search Tool Handlers - Coverage', () => {
         })
     })
 })
-

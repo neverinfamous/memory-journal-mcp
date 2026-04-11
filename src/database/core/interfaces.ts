@@ -91,7 +91,11 @@ export interface IDatabaseAdapter {
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null
     getEntriesByIds(ids: number[]): Map<number, JournalEntry>
     calculateImportance(entryId: number): ImportanceResult
-    getRecentEntries(limit?: number, isPersonal?: boolean, sortBy?: 'timestamp' | 'importance'): JournalEntry[]
+    getRecentEntries(
+        limit?: number,
+        isPersonal?: boolean,
+        sortBy?: 'timestamp' | 'importance'
+    ): JournalEntry[]
     getEntriesPage(offset: number, limit: number): JournalEntry[]
     getActiveEntryCount(): number
     updateEntry(

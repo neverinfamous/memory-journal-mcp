@@ -142,7 +142,7 @@ select = [
 ]
 ```
 
-- **NEVER** use `# noqa` to suppress linter errors unless the suppression is explicitly justified by a comment explaining *why*.
+- **NEVER** use `# noqa` to suppress linter errors unless the suppression is explicitly justified by a comment explaining _why_.
 - **NEVER** use `# type: ignore` — fix the type error or use a proper type guard.
 
 ## 4. Error Handling
@@ -239,19 +239,19 @@ class CreateUserRequest(BaseModel):
 
 ## 8. Anti-Patterns (Never Do These)
 
-| Anti-Pattern | Why It's Wrong | Do This Instead |
-|-------------|---------------|-----------------|
-| `import *` | Pollutes namespace, breaks tooling | Explicit imports |
-| Mutable default args (`def f(x=[])`) | Shared across calls | Use `None` + assign |
-| Global mutable state | Thread-unsafe, untestable | Dependency injection |
-| `os.path` for path manipulation | Platform-inconsistent | Use `pathlib.Path` |
-| `print()` for logging | No levels, no rotation | Use `logging` or `structlog` |
-| `== None` / `== True` | Wrong semantics | `is None` / `is True` |
+| Anti-Pattern                         | Why It's Wrong                     | Do This Instead              |
+| ------------------------------------ | ---------------------------------- | ---------------------------- |
+| `import *`                           | Pollutes namespace, breaks tooling | Explicit imports             |
+| Mutable default args (`def f(x=[])`) | Shared across calls                | Use `None` + assign          |
+| Global mutable state                 | Thread-unsafe, untestable          | Dependency injection         |
+| `os.path` for path manipulation      | Platform-inconsistent              | Use `pathlib.Path`           |
+| `print()` for logging                | No levels, no rotation             | Use `logging` or `structlog` |
+| `== None` / `== True`                | Wrong semantics                    | `is None` / `is True`        |
 
 ## 9. Web Frameworks Quick Reference
 
-| Framework | Best For | Key Pattern |
-|-----------|---------|-------------|
-| **FastAPI** | REST APIs, async, auto-docs | Pydantic models, dependency injection, `async def` routes |
-| **Django** | Full-stack, admin, ORM | Models → Views → Templates, `manage.py`, migrations |
-| **Flask** | Lightweight APIs, prototypes | Blueprints, application factory pattern |
+| Framework   | Best For                     | Key Pattern                                               |
+| ----------- | ---------------------------- | --------------------------------------------------------- |
+| **FastAPI** | REST APIs, async, auto-docs  | Pydantic models, dependency injection, `async def` routes |
+| **Django**  | Full-stack, admin, ORM       | Models → Views → Templates, `manage.py`, migrations       |
+| **Flask**   | Lightweight APIs, prototypes | Blueprints, application factory pattern                   |

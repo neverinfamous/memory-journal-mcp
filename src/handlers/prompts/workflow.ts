@@ -445,20 +445,28 @@ function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
     const currentEntries = data['currentPeriodEntries'] as number | undefined
     if (growth !== null && growth !== undefined) {
         const sign = growth >= 0 ? '+' : ''
-        lines.push(`Activity: ${sign}${String(growth)}% vs. last period (${String(currentEntries)} entries)`)
+        lines.push(
+            `Activity: ${sign}${String(growth)}% vs. last period (${String(currentEntries)} entries)`
+        )
     }
 
     // Significance spike
     const sigMultiplier = data['significanceMultiplier'] as number | null | undefined
     const sigCount = data['currentPeriodSignificant'] as number | undefined
     if (sigMultiplier !== null && sigMultiplier !== undefined && sigMultiplier > 1.5) {
-        lines.push(`Significance: ${String(sigCount)} significant entries (${String(sigMultiplier)}× historical avg)`)
+        lines.push(
+            `Significance: ${String(sigCount)} significant entries (${String(sigMultiplier)}× historical avg)`
+        )
     }
 
     // Stale projects
-    const stale = data['staleProjects'] as { projectNumber: number; daysSilent: number }[] | undefined
+    const stale = data['staleProjects'] as
+        | { projectNumber: number; daysSilent: number }[]
+        | undefined
     if (stale && stale.length > 0) {
-        const staleStr = stale.map((p) => `P${String(p.projectNumber)} (${String(p.daysSilent)}d silent)`).join(', ')
+        const staleStr = stale
+            .map((p) => `P${String(p.projectNumber)} (${String(p.daysSilent)}d silent)`)
+            .join(', ')
         lines.push(`⚠ Stale: ${staleStr}`)
     }
 

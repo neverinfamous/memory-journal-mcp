@@ -151,7 +151,9 @@ function openDb(path, Database, sqliteVec) {
             try {
                 sqliteVec.load(db)
             } catch (err) {
-                console.warn(`[WARN] Could not load sqlite-vec for ${path}, vec_embeddings cleanup will be skipped: ${err.message}`)
+                console.warn(
+                    `[WARN] Could not load sqlite-vec for ${path}, vec_embeddings cleanup will be skipped: ${err.message}`
+                )
             }
         }
         db.pragma('journal_mode = WAL')
@@ -277,19 +279,23 @@ function processDatabase({ db, label, seedFingerprints }) {
         } catch (e) {
             // vec_embeddings might not be loaded or exist, ignore safely
         }
-        
+
         for (const id of idList) {
             if (deleteVec) {
                 try {
                     deleteVec.run(id)
-                } catch(e) {}
+                } catch (e) {}
             }
             total += db.prepare('DELETE FROM memory_journal WHERE id = ?').run(id).changes
         }
-        
+
         // Recompute tags usage_count and prune orphans
-        db.prepare(`DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM entry_tags)`).run()
-        db.prepare(`UPDATE tags SET usage_count = (SELECT COUNT(*) FROM entry_tags WHERE tag_id = tags.id)`).run()
+        db.prepare(
+            `DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM entry_tags)`
+        ).run()
+        db.prepare(
+            `UPDATE tags SET usage_count = (SELECT COUNT(*) FROM entry_tags WHERE tag_id = tags.id)`
+        ).run()
 
         return total
     })

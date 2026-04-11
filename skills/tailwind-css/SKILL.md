@@ -20,7 +20,7 @@ Replace all legacy directives with a single import:
 
 ```css
 /* main.css */
-@import "tailwindcss";
+@import 'tailwindcss';
 ```
 
 - **NEVER** use `@tailwind base; @tailwind components; @tailwind utilities;` — this is v3 syntax
@@ -32,7 +32,7 @@ Replace all legacy directives with a single import:
 All design tokens are defined directly in CSS:
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   /* Colors */
@@ -41,8 +41,8 @@ All design tokens are defined directly in CSS:
   --color-primary-900: #1e3a5a;
 
   /* Typography */
-  --font-display: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
+  --font-display: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
   /* Spacing */
   --spacing-container: 1200px;
@@ -82,11 +82,11 @@ By default, Tailwind v4 respects `prefers-color-scheme`. If you want manual clas
 
 ```javascript
 // Toggle dark mode via JavaScript
-document.documentElement.classList.toggle("dark");
+document.documentElement.classList.toggle('dark')
 
 // Or persist to localStorage
-const isDark = localStorage.getItem("theme") === "dark";
-document.documentElement.classList.toggle("dark", isDark);
+const isDark = localStorage.getItem('theme') === 'dark'
+document.documentElement.classList.toggle('dark', isDark)
 ```
 
 ## 3. Responsive Design
@@ -105,13 +105,13 @@ Tailwind uses a **mobile-first** approach — unprefixed utilities apply to all 
 
 ### Default Breakpoints
 
-| Prefix | Min Width | Target |
-|--------|----------|--------|
-| `sm` | 640px | Small tablets |
-| `md` | 768px | Tablets |
-| `lg` | 1024px | Laptops |
-| `xl` | 1280px | Desktops |
-| `2xl` | 1536px | Large screens |
+| Prefix | Min Width | Target        |
+| ------ | --------- | ------------- |
+| `sm`   | 640px     | Small tablets |
+| `md`   | 768px     | Tablets       |
+| `lg`   | 1024px    | Laptops       |
+| `xl`   | 1280px    | Desktops      |
+| `2xl`  | 1536px    | Large screens |
 
 ### Custom Breakpoints
 
@@ -127,7 +127,8 @@ Tailwind uses a **mobile-first** approach — unprefixed utilities apply to all 
 ### Buttons
 
 ```html
-<button class="
+<button
+  class="
   inline-flex items-center justify-center
   rounded-lg px-4 py-2
   bg-primary-500 text-white font-medium
@@ -136,7 +137,8 @@ Tailwind uses a **mobile-first** approach — unprefixed utilities apply to all 
   active:scale-[0.98]
   disabled:opacity-50 disabled:cursor-not-allowed
   transition-all duration-150
-">
+"
+>
   Click me
 </button>
 ```
@@ -144,12 +146,14 @@ Tailwind uses a **mobile-first** approach — unprefixed utilities apply to all 
 ### Cards
 
 ```html
-<article class="
+<article
+  class="
   rounded-xl border border-gray-200 dark:border-gray-700
   bg-white dark:bg-gray-800
   p-6 shadow-sm
   hover:shadow-md transition-shadow
-">
+"
+>
   <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Title</h3>
   <p class="mt-2 text-gray-600 dark:text-gray-400">Description text.</p>
 </article>
@@ -178,9 +182,9 @@ Tailwind uses a **mobile-first** approach — unprefixed utilities apply to all 
 ```html
 <!-- Smooth hover effect -->
 <div class="transition-all duration-300 ease-in-out hover:scale-105">
-
-<!-- Color transitions only -->
-<a class="transition-colors duration-150 text-gray-500 hover:text-primary-500">
+  <!-- Color transitions only -->
+  <a class="transition-colors duration-150 text-gray-500 hover:text-primary-500"></a>
+</div>
 ```
 
 ### Custom Animations
@@ -192,13 +196,23 @@ Tailwind uses a **mobile-first** approach — unprefixed utilities apply to all 
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(1rem); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 ```
 
@@ -219,25 +233,25 @@ Usage: `class="animate-fade-in"` or `class="animate-slide-up"`
 
 ### Key Breaking Changes
 
-| v3 | v4 |
-|----|-----|
-| `tailwind.config.js` | `@theme` in CSS |
-| `darkMode: "class"` | `@custom-variant dark (...)` |
-| `@tailwind base/components/utilities` | `@import "tailwindcss"` |
-| `theme.extend.colors` | `--color-*` in `@theme` |
-| `theme.extend.fontFamily` | `--font-*` in `@theme` |
+| v3                                    | v4                           |
+| ------------------------------------- | ---------------------------- |
+| `tailwind.config.js`                  | `@theme` in CSS              |
+| `darkMode: "class"`                   | `@custom-variant dark (...)` |
+| `@tailwind base/components/utilities` | `@import "tailwindcss"`      |
+| `theme.extend.colors`                 | `--color-*` in `@theme`      |
+| `theme.extend.fontFamily`             | `--font-*` in `@theme`       |
 
 ## 7. Anti-Patterns (Never Do These)
 
-| Anti-Pattern | Why It's Wrong | Do This Instead |
-|-------------|---------------|-----------------|
-| `@apply` everywhere | Defeats utility-first purpose, harder to maintain | Use inline utilities; `@apply` only for highly-repeated patterns |
-| `!important` classes | Specificity wars, unpredictable cascade | Use proper specificity layers |
-| Arbitrary values excessively (`text-[17px]`) | Breaks design system consistency | Define tokens in `@theme` |
-| Inline `style=` alongside utilities | Mixed paradigms, inconsistent | All styling via Tailwind utilities |
-| Using v3 `tailwind.config.js` in v4 | Unnecessary JS dependency | Migrate to `@theme` in CSS |
-| Not using `dark:` variants | Inaccessible for dark-mode users | Always implement dark mode |
-| Ignoring mobile-first | Desktop-only layouts break on phones | Design mobile-first, add breakpoints up |
+| Anti-Pattern                                 | Why It's Wrong                                    | Do This Instead                                                  |
+| -------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
+| `@apply` everywhere                          | Defeats utility-first purpose, harder to maintain | Use inline utilities; `@apply` only for highly-repeated patterns |
+| `!important` classes                         | Specificity wars, unpredictable cascade           | Use proper specificity layers                                    |
+| Arbitrary values excessively (`text-[17px]`) | Breaks design system consistency                  | Define tokens in `@theme`                                        |
+| Inline `style=` alongside utilities          | Mixed paradigms, inconsistent                     | All styling via Tailwind utilities                               |
+| Using v3 `tailwind.config.js` in v4          | Unnecessary JS dependency                         | Migrate to `@theme` in CSS                                       |
+| Not using `dark:` variants                   | Inaccessible for dark-mode users                  | Always implement dark mode                                       |
+| Ignoring mobile-first                        | Desktop-only layouts break on phones              | Design mobile-first, add breakpoints up                          |
 
 ## 8. Accessibility Essentials
 
