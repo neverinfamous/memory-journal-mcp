@@ -15,6 +15,7 @@
         "docker/",
         "github-actions/",
         "github-commander/",
+        "github-copilot-cli/",
         "gitlab/",
         "golang/",
         "mysql/",
