@@ -13,12 +13,16 @@
 - Injected analytics metrics (`relationshipDensity`, `activityTrend`, `significanceSpike`) into `memory://briefing` payloads.
 
 ### Fixed
+- `CloseGitHubIssueWithEntryOutputSchema`: `kanban.projectNumber` was required (`z.number()`) but omitted when no project is configured, causing output validation crash (`-32602`) when calling `close_github_issue_with_entry` with `move_to_done: true` and no `project_number`. Made `.optional()` and added missing `error` field to match handler output.
 - Missing `sortBy` forwarding to underlying fetches during `ftsSearch()` delegations.
 - Strict typing and ESLint caching errors regarding filter limits and significance metric validations.
 - Missing `export` tool group namespace (`mj.export.*`) in the Code Mode instruction documentation table, ensuring all 10 API discoverability groups are correctly documented for LLM context.
 
+
 ### Security
+- Verified Direct MCP GitHub Integration (Phase 12), confirming all 16 GitHub tools: read-only context/issues/PRs, issue lifecycle (create, milestone assignment, close, move_to_done), Kanban board CRUD, milestone CRUD end-to-end, repository insights (all sections), and Copilot review retrieval. Structured errors confirmed for all 404 paths and already-closed issues.
 - Verified Admin tag management, export filters, and Backup/Restore lifecycle through the Code Mode sandbox. All tools strictly return structured `{ success: false }` bounds errors.
+
 - Verified Code Mode API discoverability (Phase 17), confirming top-level and per-group help documentation, method aliases, and positional argument proxying.
 - Verified Code Mode Core CRUD operations (Phase 20), confirming native object hydration for `share_with_team`, `is_personal` toggles, `project_owner`, and `issueUrl` auto-population without raw MCP exceptions.
 - Verified Code Mode Error Matrix and Zod Sweeps (Phase 29), ensuring `{}` empty parameters, type mismatches, and domain boundaries return uniform `{ success: false }` across all 10 `mj.*` API groups without sandbox crashes.

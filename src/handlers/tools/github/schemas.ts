@@ -295,7 +295,8 @@ export const CloseGitHubIssueWithEntryOutputSchema = z
         kanban: z
             .object({
                 moved: z.boolean(),
-                projectNumber: z.number(),
+                projectNumber: z.number().optional(),
+                error: z.string().optional(),
                 message: z.string().optional(),
             })
             .optional(),
