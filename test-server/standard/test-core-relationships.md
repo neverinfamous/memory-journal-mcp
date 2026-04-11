@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Relationships & Visualization
+# Re-Test memory-journal-mcp — Relationships & Visualization
 
 **Scope:** Entry linking, causal relationship types, visualization (Mermaid), and graph resources.
 

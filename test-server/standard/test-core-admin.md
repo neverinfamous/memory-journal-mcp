@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Admin & Backup
+# Re-Test memory-journal-mcp — Admin & Backup
 
 **Scope:** Tag management, entry export, and backup/restore operations.
 

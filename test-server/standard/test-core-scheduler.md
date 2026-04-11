@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Automated Scheduler
+# Re-Test memory-journal-mcp — Automated Scheduler
 
 **Scope:** HTTP/SSE transport scheduler — backup, vacuum, and vector index rebuild jobs.
 

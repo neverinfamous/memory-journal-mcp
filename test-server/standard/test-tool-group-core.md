@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Core Tool Group
+# Re-Test memory-journal-mcp — Core Tool Group
 
 **Scope:** Deterministic verification of the Core tool group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`) against the strict error handling matrix.
 

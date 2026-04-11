@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Output Schemas
+# Re-Test memory-journal-mcp — Output Schemas
 
 **Scope:** Verify all 60 outputSchema tools return `structuredContent` (not raw text). `mj_execute_code` intentionally excluded — its dynamic return type produces a bare `{}` JSON Schema that crashes clients processing `structuredContent`.
 

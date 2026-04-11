@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Error Handling & Structured Responses
+# Re-Test memory-journal-mcp — Error Handling & Structured Responses
 
 **Scope:** Prompt handler validation, structured error response verification across all tool groups, and numeric coercion boundary testing.
 

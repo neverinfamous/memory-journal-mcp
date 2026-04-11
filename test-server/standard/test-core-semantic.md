@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Semantic Search & Analytics
+# Re-Test memory-journal-mcp — Semantic Search & Analytics
 
 **Scope:** Semantic/vector search, vector index management, statistics analytics, and cross-project insights.
 

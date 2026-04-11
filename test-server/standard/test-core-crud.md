@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Entry CRUD
+# Re-Test memory-journal-mcp — Entry CRUD
 
 **Scope:** Create, read, update, and delete entry operations (24 core tools — CRUD subset).
 

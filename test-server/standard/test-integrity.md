@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Data Integrity & Boundary Testing
+# Re-Test memory-journal-mcp — Data Integrity & Boundary Testing
 
 **Scope:** Data round-trip fidelity, boundary value behavior, Unicode handling, concurrent-like operations, and implementation bug detection.
 

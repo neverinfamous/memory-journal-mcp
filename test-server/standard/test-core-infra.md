@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Core Infrastructure
+# Re-Test memory-journal-mcp — Core Infrastructure
 
 **Scope:** Server health, briefing resource, protocol validation scripts, and GitHub status resource.
 

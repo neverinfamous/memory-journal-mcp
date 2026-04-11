@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Text Search
+# Re-Test memory-journal-mcp — Text Search
 
 **Scope:** FTS5 search, phrase/prefix/boolean operators, LIKE fallback, hybrid auto-mode, date range, cross-DB merging, and filter parameters.
 

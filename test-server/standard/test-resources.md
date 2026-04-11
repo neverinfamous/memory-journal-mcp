@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Resources
+# Re-Test memory-journal-mcp — Resources
 
 **Scope:** All 28 resources — static resources, template resources (happy path + error paths).
 

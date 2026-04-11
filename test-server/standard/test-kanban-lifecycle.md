@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Kanban Lifecycle
+# Re-Test memory-journal-mcp — Kanban Lifecycle
 
 **Scope:** Tests the new Kanban tools `add_kanban_item` and `delete_kanban_item`, along with `move_kanban_item` and the optimized `get_kanban_board` to verify full lifecycle awareness and control.
 

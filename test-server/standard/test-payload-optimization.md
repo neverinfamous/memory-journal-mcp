@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Payload Optimization
+# Re-Test memory-journal-mcp — Payload Optimization
 
 **Scope:** Cross-cutting verification of all 4 payload optimization features — Kanban throttling, body truncation, MAX_QUERY_LIMIT enforcement, and Code Mode result cap.
 

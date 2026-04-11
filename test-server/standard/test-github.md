@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — GitHub Integration
+# Re-Test memory-journal-mcp — GitHub Integration
 
 **Scope:** 16 GitHub tools — read-only tools, issue lifecycle, Kanban, milestones, repository insights, Copilot reviews, and test cleanup.
 

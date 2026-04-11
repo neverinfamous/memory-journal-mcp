@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — IO & Markdown Interoperability
+# Re-Test memory-journal-mcp — IO & Markdown Interoperability
 
 **Scope:** Exporting entries, Markdown filesystem roundtripping (import/export), and path validation.
 
