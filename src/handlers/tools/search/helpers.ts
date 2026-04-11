@@ -13,7 +13,7 @@ import { MAX_QUERY_LIMIT } from '../schemas.js'
 import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 
-export { MAX_QUERY_LIMIT }
+
 
 /** Number of leading characters used as deduplication key */
 const DEDUP_KEY_LENGTH = 200
@@ -30,6 +30,7 @@ export interface EntryWithSource {
 }
 
 export interface ISearchFilters {
+    limit?: number
     isPersonal?: boolean
     projectNumber?: number
     issueNumber?: number
@@ -51,6 +52,8 @@ export interface ISearchFilters {
  * ranking in one DB doesn't silently drop entries before the merge.
  */
 export function calcPerDbLimit(limit: number, hasTeamDb: boolean): number {
+    // If team DB exists, request up to 2x from each to ensure enough results after merge,
+    // bounded by MAX_QUERY_LIMIT
     return hasTeamDb ? Math.min(limit * 2, MAX_QUERY_LIMIT) : limit
 }
 

@@ -21,8 +21,10 @@ import {
     EntryOutputSchema,
     EntriesListOutputSchema,
     relaxedNumber,
+    MAX_QUERY_LIMIT,
 } from '../schemas.js'
-import { MAX_QUERY_LIMIT, calcPerDbLimit, mergeAndDedup, passMetadataFilters } from './helpers.js'
+import { calcPerDbLimit, mergeAndDedup, passMetadataFilters } from './helpers.js'
+import type { ISearchFilters } from './helpers.js'
 import { resolveSearchMode, type SearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
@@ -283,7 +285,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
                                     if (!entry) return null
-                                    if (!passMetadataFilters(entry, searchOptions, db)) return null
+                                    if (!passMetadataFilters(entry, searchOptions as ISearchFilters, db)) return null
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
@@ -486,7 +488,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 startDate: input.start_date,
                                 endDate: input.end_date,
                             }
-                            if (!passMetadataFilters(entry, filterOptions, db)) return null
+                            if (!passMetadataFilters(entry, filterOptions as ISearchFilters, db)) return null
 
                             // Exclude the source entry from find-related results
                             if (input.entry_id !== undefined && entry.id === input.entry_id)
