@@ -27,7 +27,7 @@
 
 
 ### Security
-- Verified Direct MCP GitHub Integration (Phase 12), confirming all 16 GitHub tools: read-only context/issues/PRs, issue lifecycle (create, milestone assignment, close, move_to_done), Kanban board CRUD, milestone CRUD end-to-end, repository insights (all sections), and Copilot review retrieval. Structured errors confirmed for all 404 paths and already-closed issues.
+- Verified Direct MCP GitHub Integration (Phase 12), confirming all 16 GitHub tools: read-only context/issues/PRs, issue lifecycle (create, milestone assignment, close, move_to_done), Kanban board CRUD, milestone CRUD end-to-end, repository insights (all sections), and Copilot review retrieval. Structured errors confirmed for all 404 paths, already-closed issues, Zod `{}` empty boundary payloads, and rich meta-error matrices (Kanban `availableStatuses`), ensuring no `OutputSchema` breaks or leaked properties.
 - Verified Admin tag management, export filters, and Backup/Restore lifecycle through the Code Mode sandbox. All tools strictly return structured `{ success: false }` bounds errors.
 - Verified Direct MCP Payload Optimization, validating that Kanban board throttling (`summary_only`, `item_limit`), schema truncation logic (`truncate_body`), explicit `MAX_QUERY_LIMIT` bounds, and Code Mode result size caps securely restrict payload sizes and return structured validation errors across all explicit endpoints.
 
