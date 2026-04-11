@@ -18,3 +18,4 @@
 - Missing `sortBy` delegation in text search and sorting logic during cross-database merges.
 - Missing `mj.export.*` API documentation in Code Mode instructions.
 - Incorrect mapping of `io.ts` in `test-server/code-map.md`.
+- Gaps in unit test coverage across Markdown processors, analytics pipelines, and resource handlers, restoring Line Coverage to >96.5%.

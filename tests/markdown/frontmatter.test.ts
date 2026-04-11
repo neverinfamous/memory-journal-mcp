@@ -84,6 +84,32 @@ Body`
         // Expecting the original text minus spacing because of how split/join might happen
         expect(body).toContain('mj_id: 1')
     })
+
+    it('should return empty metadata and full content if closing delimiter is missing', () => {
+        const markdown = `---
+mj_id: 123
+Body without closing delimiter`
+        const { metadata, body } = parseFrontmatter(markdown)
+        expect(metadata).toEqual({})
+        expect(body).toBe(markdown)
+    })
+
+    it('should throw an error if frontmatter fails schema validation', () => {
+        const markdown = `---
+mj_id: "not-a-number"
+---
+Body`
+        expect(() => parseFrontmatter(markdown)).toThrow(/Invalid frontmatter: mj_id/i)
+    })
+
+    it('should strip single quotes from string values', () => {
+        const markdown = `---
+author: 'Alice'
+---
+Body`
+        const { metadata, body } = parseFrontmatter(markdown)
+        expect(metadata.author).toBe('Alice')
+    })
 })
 
 describe('serializeFrontmatter', () => {
