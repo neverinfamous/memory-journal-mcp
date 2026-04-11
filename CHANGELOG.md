@@ -11,25 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Native zero-dependency cleanup utility (`test-server/scripts/cleanup-seed-data.mjs`) for purging testing data while protecting core project entries.
-- Metadata filters (tags, entry type, date range) for `team_semantic_search` to match personal search parity.
+- Cleanup utility (`test-server/scripts/cleanup-seed-data.mjs`) to purge testing data without affecting core project entries.
+- Metadata filters (`tags`, `entry_type`, date range) for `team_semantic_search` to achieve parity with personal searches.
 
 ### Changed
 
-- Standardized `success: true` response field across all read-only tool happy paths.
-- Replaced hidden `* 2` vector search multiplier with explicit caller-managed 10x oversampling (min 100) to improve metadata-filtered search quality.
-- Centralized `passMetadataFilters` evaluation for consistent usage across personal and team search handlers.
+- Standardized `success: true` response field across all read-only tools.
+- Centralized `passMetadataFilters` evaluation for consistency across search handlers.
 
 ### Fixed
 
-- Schema validation crash in `CreateGitHubIssueWithEntryOutputSchema` when Kanban additions fail or board states are unknown.
-- Gap in vector/semantic index filtering where matches bypassing in-memory filter criteria were not properly dropped.
-- Poor result variety in `team_search` and `semantic_search` when metadata filters were applied by utilizing dynamic oversampling.
-- Layout inconsistency in `memory://github/status` by explicitly returning `{ openCount: 0, items: [] }` when there are no milestones.
-- Inconsistent validation error codes by aligning all schema and programmatic failures to emit `VALIDATION_ERROR`.
-- Issue where `get_entry_by_id` accepted non-integer floats by applying strict `.int()` schema validation.
-- Raw MCP protocol errors thrown by prompt handlers (e.g., missing `TEAM_DB_PATH`) by wrapping them in graceful `try/catch` user-visible messages.
-- Edge case where `link_entries` allowed linking to soft-deleted entries by enforcing `db.getEntryById` existence checks.
+- Validation crash in `create_github_issue_with_entry` when Kanban additions fail or boards are unknown.
+- Vector and semantic index filtering failing to properly drop matches after evaluating in-memory criteria.
+- Low result variety in vector searches when metadata filters were applied (resolved via explicit 10x oversampling).
+- `memory://github/status` layout formatting when there are no active milestones.
+- Inconsistent validation errors; schema and programmatic failures now uniformly emit `VALIDATION_ERROR`.
+- `get_entry_by_id` incorrectly accepting float values instead of strict integers.
+- Prompt handlers throwing raw MCP protocol exceptions instead of wrapping them in user-visible boundary messages.
+- `link_entries` allowing the creation of relationships to soft-deleted entries.
 
 ## [7.2.0](https://github.com/neverinfamous/memory-journal-mcp/releases/tag/v7.2.0) - 2026-04-09
 
