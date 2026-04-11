@@ -88,6 +88,8 @@ export interface JournalEntry {
     workflowRunId?: number | null
     workflowName?: string | null
     workflowStatus?: string | null
+    // Analytics & search
+    importanceScore?: number
 }
 
 /**
