@@ -145,7 +145,7 @@ src/
     │   │   └── hybrid.ts           # RRF (Reciprocal Rank Fusion) hybrid logic
     │   ├── analytics.ts            # Analytics tool group (2 tools)
     │   ├── relationships.ts        # Relationships tool group (2 tools)
-    │   ├── export.ts               # Export tool group (1 tool)
+    │   ├── io.ts                   # IO tool group (3 tools)
     │   ├── admin.ts                # Admin tool group (5 tools)
     │   ├── backup.ts               # Backup tool group (4 tools)
     │   ├── codemode.ts             # Code Mode tool group (1 tool)

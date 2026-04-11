@@ -17,4 +17,4 @@
 - Output validation crash when calling `close_github_issue_with_entry` with `move_to_done: true` and no configured `project_number`.
 - Missing `sortBy` delegation in text search and sorting logic during cross-database merges.
 - Missing `mj.export.*` API documentation in Code Mode instructions.
-- TypeScript (TS4111) and ESLint strict typing errors.
+- Incorrect mapping of `io.ts` in `test-server/code-map.md`.
