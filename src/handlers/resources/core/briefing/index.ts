@@ -103,6 +103,7 @@ async function buildBriefingData(
         teamTotalEntries: team?.teamInfo.totalEntries,
         rulesFile,
         skillsDir,
+        analyticsInsights: insights ?? undefined,
     })
 
     return {
