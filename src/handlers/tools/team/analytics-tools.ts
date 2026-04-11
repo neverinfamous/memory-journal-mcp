@@ -128,6 +128,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     if (!projectsResult[0] || projectsResult[0].values.length === 0) {
                         return {
+                            success: true,
                             project_count: 0,
                             total_entries: 0,
                             projects: [],
@@ -217,6 +218,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }))
 
                     return {
+                        success: true,
                         project_count: projects.length,
                         total_entries: totalEntries,
                         projects: projects.map((p) => ({

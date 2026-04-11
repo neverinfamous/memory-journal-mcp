@@ -20,6 +20,7 @@
 - Injected analytics metrics (`relationshipDensity`, `activityTrend`, `significanceSpike`) into `memory://briefing` payloads.
 
 ### Fixed
+- `team_get_cross_project_insights` returning insight payloads without the standard `{ success: true }` wrapper, which violated output schema standards and normalization expectations.
 - `CloseGitHubIssueWithEntryOutputSchema`: `kanban.projectNumber` was required (`z.number()`) but omitted when no project is configured, causing output validation crash (`-32602`) when calling `close_github_issue_with_entry` with `move_to_done: true` and no `project_number`. Made `.optional()` and added missing `error` field to match handler output.
 - Missing `sortBy` forwarding to underlying fetches during `ftsSearch()` delegations, and fixed `mergeAndDedup` to correctly sort by `importanceScore` across database merges.
 - Fixed TS4111 index signature access error for `importanceScore` in `helpers.ts` during string sorting operations.
