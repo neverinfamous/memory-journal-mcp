@@ -115,6 +115,6 @@ try {
 
 ### Verification Checks
 
-- [] Code properly parses internal node IDs natively matching external handler behavior.
-- [] No server crash or GraphQL mutation block.
-- [] The issue is safely restored back to default standalone status with no remnant project linkage.
+- [ ] Code properly parses internal node IDs natively matching external handler behavior.
+- [ ] No server crash or GraphQL mutation block.
+- [ ] The issue is safely restored back to default standalone status with no remnant project linkage.

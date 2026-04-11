@@ -42,6 +42,6 @@
 
 ## Success Criteria
 
-- [] `export_markdown` reliably targets OS local directories and generates correctly named files.
-- [] `import_markdown` gracefully executes dry run detection parsing.
-- [] IO tooling throws structured path traversal errors `..` on local directory injections.
+- [ ] `export_markdown` reliably targets OS local directories and generates correctly named files.
+- [ ] `import_markdown` gracefully executes dry run detection parsing.
+- [ ] IO tooling throws structured path traversal errors `..` on local directory injections.

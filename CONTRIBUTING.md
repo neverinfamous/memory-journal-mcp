@@ -280,4 +280,3 @@ Contributors are recognized in:
 - **Git history** — Your commits are permanent record
 
 Thank you for helping make Memory Journal MCP Server better for the developer community! 🚀
-```

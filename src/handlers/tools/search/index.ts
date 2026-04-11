@@ -287,6 +287,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
+                                .slice(0, input.limit)
                             return {
                                 success: true,
                                 entries,
