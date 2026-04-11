@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Error Matrix & Zod Sweeps
+# Re-Test memory-journal-mcp — Code Mode: Error Matrix & Zod Sweeps
 
 Systematic verification of structured error handling across all `mj.*` API groups via the Code Mode sandbox. Validates that `{}` empty params, type mismatches, and domain errors all return structured `{success: false}` responses — never raw MCP exceptions.
 

@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: IO & Markdown Interoperability
+# Re-Test memory-journal-mcp — Code Mode: IO & Markdown Interoperability
 
 Test the unified IO namespace, testing both legacy `exportEntries` formats and the new filesystem-bound `.md` orchestration tools over Code Mode's `mj.io.*` binding.
 

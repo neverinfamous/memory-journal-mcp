@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Core CRUD
+# Re-Test memory-journal-mcp — Code Mode: Core CRUD
 
 Test core CRUD operations through the Code Mode `mj.*` API bridge: create, read, update, delete with full parameters and error paths.
 

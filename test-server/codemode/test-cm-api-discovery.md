@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: API Discoverability
+# Re-Test memory-journal-mcp — Code Mode: API Discoverability
 
 Test the `mj.*` API bridge discoverability: top-level help, per-group help, method aliases, and positional argument support.
 

@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Admin, Backup & Export
+# Re-Test memory-journal-mcp — Code Mode: Admin, Backup & Export
 
 Test tag management, export formats/filters, and the backup/restore lifecycle through Code Mode.
 

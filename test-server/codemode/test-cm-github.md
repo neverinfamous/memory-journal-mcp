@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: GitHub Tools
+# Re-Test memory-journal-mcp — Code Mode: GitHub Tools
 
 Test all 16 GitHub tools via Code Mode: read-only lookups, error paths, Kanban operations, issue lifecycle, milestone CRUD, insights, and Copilot reviews.
 
