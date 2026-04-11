@@ -6,6 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { MAX_QUERY_LIMIT } from '../schemas.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors } from './helpers.js'
 import {
     TeamSearchSchema,
@@ -41,7 +42,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { query, tags, limit, sort_by } = TeamSearchSchema.parse(params)
 
                     const searchLimit =
-                        tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), 1000) : limit
+                        tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT) : limit
 
                     let entries
                     if (query) {

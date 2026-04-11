@@ -61,7 +61,7 @@ export const SIGNIFICANCE_TYPES = [
 export const MAX_CONTENT_LENGTH = 50_000
 
 /** Maximum entries returned by any single search query */
-export const MAX_QUERY_LIMIT = Number('500')
+export const MAX_QUERY_LIMIT = 500
 
 /** Date sentinels for "all time" date range queries */
 export const DATE_MIN_SENTINEL = '1970-01-01'

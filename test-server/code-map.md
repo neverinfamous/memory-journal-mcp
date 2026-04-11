@@ -233,9 +233,10 @@ Each file below registers tools with `group` labels. The `index.ts` barrel compo
 | **team**          | `team/core-tools.ts`         | 4     | `team_create_entry`, `team_get_entry_by_id`, `team_get_recent`, `team_list_tags`                                                                   |
 |                   | `team/search-tools.ts`       | 2     | `team_search`, `team_search_by_date_range`                                                                                                         |
 |                   | `team/admin-tools.ts`        | 3     | `team_update_entry`, `team_delete_entry`, `team_merge_tags`                                                                                        |
-|                   | `team/analytics-tools.ts`    | 2     | `team_get_statistics`, `team_get_cross_project_insights`                                                                                           |
+|                   | `team/analytics-tools.ts`    | 3     | `team_get_statistics`, `team_get_cross_project_insights`, `team_get_collaboration_matrix`                                                          |
 |                   | `team/relationship-tools.ts` | 2     | `team_link_entries`, `team_visualize_relationships`                                                                                                |
 |                   | `team/export-tools.ts`       | 1     | `team_export_entries`                                                                                                                              |
+|                   | `team/io-tools.ts`           | 2     | `team_export_markdown`, `team_import_markdown`                                                                                                     |
 |                   | `team/backup-tools.ts`       | 2     | `team_backup`, `team_list_backups`                                                                                                                 |
 |                   | `team/vector-tools.ts`       | 4     | `team_semantic_search`, `team_get_vector_index_stats`, `team_rebuild_vector_index`, `team_add_to_vector_index`                                     |
 

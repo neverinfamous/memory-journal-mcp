@@ -95,7 +95,7 @@ export const teamCollaborationResource: InternalResourceDef = {
         try {
             const matrix = computeTeamCollaborationMatrix(context.teamDb)
             return {
-                data: { success: true, ...matrix },
+                data: { success: true, matrix },
                 annotations: { lastModified },
             }
         } catch (error) {
