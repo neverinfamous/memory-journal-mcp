@@ -77,7 +77,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 - Milestone progress (if any)
 - Template resources count
 - Registered Workspaces (if available - provides automatic repo-to-project routing)
-- Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB)
+- Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB, insights)
 
 - **AntiGravity**: Tools are \`mcp_{name}_{tool}\` → server name = \`memory-journal-mcp\`
 - **Cursor**: Tools are \`user-{name}-{tool}\` → server name = \`user-memory-journal-mcp\`
@@ -90,7 +90,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
-- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction.
+- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction. View \`memory://insights/digest\` and \`memory://insights/team-collaboration\` for automated analytics snapshots.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
 ### Rule & Skill Suggestions
@@ -126,7 +126,7 @@ When you notice the user consistently applies patterns, preferences, or workflow
 
 ### Native Agent Skills (NPM Distribution)
 
-This server leverages the \`neverinfamous-agent-skills\` package. If the user's \`SKILLS_DIR_PATH\` environment variable targets these, you have native access to foundational frameworks (\`mastering-typescript\`, \`react-best-practices\`, \`playwright-standard\`, \`golang\`, \`rust\`, \`shadcn-ui\`) and the \`github-commander\` DevOps workflows (\`issue-triage\`, \`pr-review\`, etc.).
+This server leverages the \`neverinfamous-agent-skills\` package. If the user's \`SKILLS_DIR_PATH\` environment variable targets these, you have native access to foundational frameworks (\`mastering-typescript\`, \`react-best-practices\`, \`playwright-standard\`, \`golang\`, \`rust\`, \`python\`, \`docker\`, \`tailwind-css\`, \`shadcn-ui\`) and the \`github-commander\` DevOps workflows (\`issue-triage\`, \`pr-review\`, \`github-actions\`, etc.).
 
 - The user can distribute or update these skills across their repositories by running \`npx neverinfamous-agent-skills@latest\`.
 - If you need to create a new skill, reference the bundled \`skill-builder\` instructions!
