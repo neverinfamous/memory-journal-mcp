@@ -9,6 +9,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import { execQuery, type InternalPromptDef } from './index.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
 
 interface FormattedPromptEntry {
     id: unknown
@@ -222,6 +223,45 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
                             content: {
                                 type: 'text',
                                 text: `Track milestones for Project #${String(projectNumber)}:\n\nMilestone entries: ${JSON.stringify(formatPromptEntries(entries), null, 2)}\n\nProvide: progress summary, upcoming milestones, timeline.`,
+                            },
+                        },
+                    ],
+                }
+            },
+        },
+        {
+            name: 'load-project-kanban',
+            description: 'Load a GitHub Project Kanban board into context',
+            icons: [ICON_PROMPT],
+            arguments: [
+                { name: 'project_number', description: 'GitHub Project number', required: true },
+            ],
+            handler: async (args: Record<string, string>, _db: IDatabaseAdapter, _teamDb?: IDatabaseAdapter, github?: GitHubIntegration) => {
+                const projectNum = parseInt(args['project_number'] ?? '0', 10)
+                
+                if (!github) {
+                    throw new Error('GitHub integration is not enabled in this server instance.')
+                }
+
+                // Since prompts don't receive resolved owner/repo directly, we use fallback
+                const repoInfo = await github.getRepoInfo()
+                if (repoInfo.owner === null || repoInfo.repo === null || repoInfo.owner === '' || repoInfo.repo === '') {
+                    throw new Error('Could not auto-detect repository context for Kanban fetch. Ensure you are in a valid Git repository.')
+                }
+
+                const board = await github.getProjectKanban(repoInfo.owner, projectNum, repoInfo.repo)
+                
+                if (!board) {
+                    throw new Error(`Project #${String(projectNum)} not found for repo ${repoInfo.owner}/${repoInfo.repo}.`)
+                }
+
+                return {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: {
+                                type: 'text',
+                                text: `Here is the current state of Kanban Project #${String(projectNum)}:\n\n${JSON.stringify(board, null, 2)}\n\nPlease review the board grouping and suggest my next priorities.`,
                             },
                         },
                     ],

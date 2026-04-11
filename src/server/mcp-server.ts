@@ -485,7 +485,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     )
 
     // Register prompts (reusing prompts from instruction generation)
-    registerPrompts(server, prompts as PromptDefinition[], db, teamDb)
+    registerPrompts(server, prompts as PromptDefinition[], db, teamDb, github)
 
     // Start server based on transport
     if (transport === 'stdio') {

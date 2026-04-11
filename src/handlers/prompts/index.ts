@@ -10,6 +10,7 @@ import type { McpIcon } from '../../types/index.js'
 import { getWorkflowPromptDefinitions } from './workflow.js'
 import { getGitHubPromptDefinitions } from './github.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
+import type { GitHubIntegration } from '../../github/github-integration/index.js'
 
 /**
  * Message format for MCP prompts
@@ -37,8 +38,9 @@ export interface InternalPromptDef {
     handler: (
         args: Record<string, string>,
         db: IDatabaseAdapter,
-        teamDb?: IDatabaseAdapter
-    ) => { messages: PromptMessage[] }
+        teamDb?: IDatabaseAdapter,
+        github?: GitHubIntegration
+    ) => Promise<{ messages: PromptMessage[] }> | { messages: PromptMessage[] }
 }
 
 /**
@@ -78,12 +80,13 @@ export function getPrompts(): object[] {
 /**
  * Get a prompt by name
  */
-export function getPrompt(
+export async function getPrompt(
     name: string,
     args: Record<string, string>,
     db: IDatabaseAdapter,
-    teamDb?: IDatabaseAdapter
-): { messages: PromptMessage[] } {
+    teamDb?: IDatabaseAdapter,
+    github?: GitHubIntegration
+): Promise<{ messages: PromptMessage[] }> {
     const prompts = getAllPromptDefinitions()
     const prompt = prompts.find((p) => p.name === name)
 
@@ -91,7 +94,7 @@ export function getPrompt(
         throw new ResourceNotFoundError('Prompt', name)
     }
 
-    return prompt.handler(args, db, teamDb)
+    return prompt.handler(args, db, teamDb, github)
 }
 
 /**

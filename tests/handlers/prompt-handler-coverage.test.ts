@@ -91,22 +91,22 @@ describe('Prompt Handlers - Coverage', () => {
     // ========================================================================
 
     describe('getPrompt', () => {
-        it('should throw for unknown prompt name', () => {
-            expect(() => getPrompt('nonexistent_prompt', {}, db)).toThrow(
+        it('should throw for unknown prompt name', async () => {
+            await expect(getPrompt('nonexistent_prompt', {}, db)).rejects.toThrow(
                 'Prompt not found: nonexistent_prompt'
             )
         })
 
-        it('should throw ConfigurationError if teamDb is missing for team-session-summary', () => {
-            expect(() => getPrompt('team-session-summary', {}, db)).toThrow(
+        it('should throw ConfigurationError if teamDb is missing for team-session-summary', async () => {
+            await expect(getPrompt('team-session-summary', {}, db)).rejects.toThrow(
                 'Team database not configured'
             )
         })
 
-        it('should return messages for a valid prompt', () => {
+        it('should return messages for a valid prompt', async () => {
             const prompts = getPrompts()
             const firstName = (prompts[0] as { name: string }).name
-            const result = getPrompt(firstName, {}, db)
+            const result = await getPrompt(firstName, {}, db)
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })
