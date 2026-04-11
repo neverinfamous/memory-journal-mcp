@@ -191,4 +191,14 @@ export interface IDatabaseAdapter {
     getRawDb(): unknown
     pragma(command: string): void
     executeRawQuery(sql: string, params?: unknown[]): QueryResult[]
+
+    // Analytics Snapshots
+    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number
+    getLatestAnalyticsSnapshot(
+        type: string
+    ): { id: number; createdAt: string; data: Record<string, unknown> } | null
+    getAnalyticsSnapshots(
+        type: string,
+        limit?: number
+    ): { id: number; createdAt: string; data: Record<string, unknown> }[]
 }

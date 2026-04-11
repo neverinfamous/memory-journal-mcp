@@ -8,7 +8,9 @@
                 "-i",
                 "-v",
                 "./data:/app/data",
-                "writenotenow/memory-journal-mcp:latest"
+                "writenotenow/memory-journal-mcp:latest",
+                "--digest-interval",
+                "1440"
             ],
             "env": {
                 "DB_PATH": "/app/data/memory_journal.db",

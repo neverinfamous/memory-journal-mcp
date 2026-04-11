@@ -90,7 +90,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
 - **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
-- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures or cross-cutting abstractions. Use repo insights (\`memory://github/insights\`) to gauge traction.
+- **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures. Use \`team_get_collaboration_matrix\` to evaluate team health, cross-author activity patterns, and collaboration impact. Use repo insights (\`memory://github/insights\`) to gauge traction.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
 ### Rule & Skill Suggestions
@@ -376,7 +376,7 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 - **Team cross-database search**: \`search_entries\` and \`search_by_date_range\` automatically merge team DB results when \`TEAM_DB_PATH\` is configured. Results include a \`source\` field ("personal" or "team").
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
-- **Team tools without \`TEAM_DB_PATH\`**: All 22 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
+- **Team tools without \`TEAM_DB_PATH\`**: All 23 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
 
 

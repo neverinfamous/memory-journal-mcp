@@ -8,7 +8,7 @@
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](https://github.com/neverinfamous/memory-journal-mcp/blob/main/SECURITY.md)
 [![GitHub Stars](https://img.shields.io/github/stars/neverinfamous/memory-journal-mcp?style=social)](https://github.com/neverinfamous/memory-journal-mcp)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96.87%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-95.01%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -21,7 +21,7 @@
 
 ### What Sets Us Apart
 
-**67 MCP Tools** · **18 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+**68 MCP Tools** · **18 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                                                                                                                        |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,7 +33,7 @@
 | **Code Mode**                 | Execute multi-step operations in a secure sandbox — up to 90% token savings via `mj.*` API                                                                                                                                                                                                         |
 | **Configurable Briefing**     | 14 env vars / CLI flags control `memory://briefing` content — entries, team, GitHub detail, skills awareness                                                                                                                                                                                       |
 | **Reports & Analytics**       | Standups, retrospectives, PR summaries, digests, period analyses, and milestone tracking                                                                                                                                                                                                           |
-| **Team Collaboration**        | 22 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, author attribution                                                                                                                                                                                   |
+| **Team Collaboration**        | 23 tools with full parity — CRUD, vector search, relationship graphs, cross-project insights, matrix, author attribution                                                                                                                                                                                   |
 | **Data Interoperability**     | Markdown roundtripping, unified IO namespace, and JSON exports with hard path traversal defenses                                                                                                                                                                                                   |
 | **Backup & Restore**          | One-command backup/restore with automated scheduling, retention policies, and safety-net auto-backups                                                                                                                                                                                              |
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                                                                                                                 |
@@ -75,12 +75,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 67    | All tools (default)      |
+| `full`               | 68    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 17    | Disable all mutations    |
-| `-github`            | 49    | Exclude a group          |
-| `-github,-analytics` | 47    | Exclude multiple groups  |
+| `-github`            | 50    | Exclude a group          |
+| `-github,-analytics` | 48    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -92,7 +92,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **67 MCP Tools** (10 Groups)
+### 🛠️ **68 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                                                              |
 | --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -105,7 +105,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                  |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                     |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                           |
-| `team`          | 22    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
+| `team`          | 23    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -268,7 +268,7 @@ docker run --rm -p 3000:3000 \
 
 #### Automated Scheduling (HTTP Only)
 
-Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
+Enable periodic maintenance jobs (`--backup-interval`, `--vacuum-interval`, `--rebuild-index-interval`, `--digest-interval`) for long-running HTTP containers. **[See the full scheduling documentation in the Wiki →](https://github.com/neverinfamous/memory-journal-mcp/wiki/)**
 
 ## 🔐 OAuth 2.1 Authentication
 

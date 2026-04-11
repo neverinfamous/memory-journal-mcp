@@ -60,13 +60,16 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
 
                 const entries = db.searchByDateRange(yesterday, today)
 
+                // Inject digest signals when available
+                const digestSignal = buildDigestSignalForPrompt(db)
+
                 return {
                     messages: [
                         {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Prepare a standup summary based on these recent entries:\n\n${entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content}`).join('\n\n')}\n\nFormat as:\n- Yesterday: <summary>\n- Today: <planned work>\n- Blockers: <any blockers>`,
+                                text: `${digestSignal}Prepare a standup summary based on these recent entries:\n\n${entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content}`).join('\n\n')}\n\nFormat as:\n- Yesterday: <summary>\n- Today: <planned work>\n- Blockers: <any blockers>`,
                             },
                         },
                     ],
@@ -92,13 +95,16 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
 
                 const entries = db.searchByDateRange(startDate, endDate)
 
+                // Inject digest signals when available
+                const digestSignal = buildDigestSignalForPrompt(db)
+
                 return {
                     messages: [
                         {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Prepare a retrospective for the last ${String(days)} days based on these entries:\n\n${entries
+                                text: `${digestSignal}Prepare a retrospective for the last ${String(days)} days based on these entries:\n\n${entries
                                     .slice(0, 20)
                                     .map(
                                         (e) =>
@@ -421,4 +427,42 @@ ${entrySummary}
             },
         },
     ]
+}
+
+/**
+ * Build a concise analytics signal string for injection into standup/retro prompts.
+ * Returns empty string when no digest is available (graceful degradation).
+ */
+function buildDigestSignalForPrompt(db: IDatabaseAdapter): string {
+    const snapshot = db.getLatestAnalyticsSnapshot?.('digest')
+    if (!snapshot) return ''
+
+    const data = snapshot.data
+    const lines: string[] = ['[Analytics Context]']
+
+    // Activity trend
+    const growth = data['activityGrowthPercent'] as number | null | undefined
+    const currentEntries = data['currentPeriodEntries'] as number | undefined
+    if (growth !== null && growth !== undefined) {
+        const sign = growth >= 0 ? '+' : ''
+        lines.push(`Activity: ${sign}${String(growth)}% vs. last period (${String(currentEntries)} entries)`)
+    }
+
+    // Significance spike
+    const sigMultiplier = data['significanceMultiplier'] as number | null | undefined
+    const sigCount = data['currentPeriodSignificant'] as number | undefined
+    if (sigMultiplier !== null && sigMultiplier !== undefined && sigMultiplier > 1.5) {
+        lines.push(`Significance: ${String(sigCount)} significant entries (${String(sigMultiplier)}× historical avg)`)
+    }
+
+    // Stale projects
+    const stale = data['staleProjects'] as { projectNumber: number; daysSilent: number }[] | undefined
+    if (stale && stale.length > 0) {
+        const staleStr = stale.map((p) => `P${String(p.projectNumber)} (${String(p.daysSilent)}d silent)`).join(', ')
+        lines.push(`⚠ Stale: ${staleStr}`)
+    }
+
+    // Only return if we have actual signals beyond the header
+    if (lines.length <= 1) return ''
+    return lines.join('\\n') + '\\n\\n'
 }

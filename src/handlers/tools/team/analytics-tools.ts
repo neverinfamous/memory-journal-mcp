@@ -1,7 +1,7 @@
 /**
- * Team Analytics Tools - 2 tools
+ * Team Analytics Tools - 3 tools
  *
- * Tools: team_get_statistics, team_get_cross_project_insights
+ * Tools: team_get_statistics, team_get_cross_project_insights, team_get_collaboration_matrix
  */
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
@@ -14,6 +14,9 @@ import {
     TeamCrossProjectInsightsSchema,
     TeamCrossProjectInsightsSchemaMcp,
     TeamCrossProjectInsightsOutputSchema,
+    TeamCollaborationMatrixSchema,
+    TeamCollaborationMatrixSchemaMcp,
+    TeamCollaborationMatrixOutputSchema,
 } from './schemas.js'
 
 // Named constants (magic value extraction)
@@ -223,6 +226,119 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         inactive_projects: inactiveProjects,
                         inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                         time_distribution: distribution,
+                    }
+                } catch (err) {
+                    return formatHandlerError(err)
+                }
+            },
+        },
+        {
+            name: 'team_get_collaboration_matrix',
+            title: 'Team Collaboration Matrix',
+            description:
+                'Analyze cross-author collaboration: activity heatmap per period, cross-linking patterns between authors, and impact factor (inbound links). Requires TEAM_DB_PATH.',
+            group: 'team',
+            inputSchema: TeamCollaborationMatrixSchemaMcp,
+            outputSchema: TeamCollaborationMatrixOutputSchema,
+            annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+            handler: (params: unknown) => {
+                try {
+                    if (!teamDb) {
+                        return { ...TEAM_DB_ERROR_RESPONSE }
+                    }
+
+                    const { period, limit } = TeamCollaborationMatrixSchema.parse(params)
+
+                    // Date format for period grouping
+                    const dateFormat =
+                        period === 'week'
+                            ? '%Y-W%W'
+                            : period === 'quarter'
+                              ? '%Y-Q' // Will post-process
+                              : '%Y-%m'
+
+                    // Author activity heatmap
+                    const activityResult = teamDb.executeRawQuery(
+                        `SELECT
+                            COALESCE(author, 'unknown') AS author,
+                            strftime('${dateFormat}', timestamp) AS period,
+                            COUNT(*) AS entry_count
+                        FROM memory_journal
+                        WHERE deleted_at IS NULL
+                        GROUP BY author, period
+                        ORDER BY period DESC, entry_count DESC
+                        LIMIT ?`,
+                        [limit * 10] // Up to 10 periods per author
+                    )
+                    const authorActivity =
+                        activityResult[0]?.values.map((row: unknown[]) => ({
+                            author: row[0] as string,
+                            period: row[1] as string,
+                            entryCount: row[2] as number,
+                        })) ?? []
+
+                    // Cross-author linking
+                    const crossLinkResult = teamDb.executeRawQuery(
+                        `SELECT
+                            COALESCE(m1.author, 'unknown') AS from_author,
+                            COALESCE(m2.author, 'unknown') AS to_author,
+                            COUNT(*) AS link_count
+                        FROM relationships r
+                        JOIN memory_journal m1 ON r.from_entry_id = m1.id
+                        JOIN memory_journal m2 ON r.to_entry_id = m2.id
+                        WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL
+                            AND COALESCE(m1.author, 'unknown') != COALESCE(m2.author, 'unknown')
+                        GROUP BY from_author, to_author
+                        ORDER BY link_count DESC
+                        LIMIT ?`,
+                        [limit]
+                    )
+                    const crossAuthorLinks =
+                        crossLinkResult[0]?.values.map((row: unknown[]) => ({
+                            fromAuthor: row[0] as string,
+                            toAuthor: row[1] as string,
+                            linkCount: row[2] as number,
+                        })) ?? []
+
+                    // Impact factor
+                    const impactResult = teamDb.executeRawQuery(
+                        `SELECT
+                            COALESCE(m2.author, 'unknown') AS author,
+                            COUNT(*) AS inbound_links
+                        FROM relationships r
+                        JOIN memory_journal m2 ON r.to_entry_id = m2.id
+                        WHERE m2.deleted_at IS NULL
+                        GROUP BY author
+                        ORDER BY inbound_links DESC
+                        LIMIT ?`,
+                        [limit]
+                    )
+                    const impactFactor =
+                        impactResult[0]?.values.map((row: unknown[]) => ({
+                            author: row[0] as string,
+                            inboundLinks: row[1] as number,
+                        })) ?? []
+
+                    // Totals
+                    const totalsResult = teamDb.executeRawQuery(
+                        `SELECT
+                            COUNT(DISTINCT COALESCE(author, 'unknown')) AS total_authors,
+                            COUNT(*) AS total_entries
+                        FROM memory_journal
+                        WHERE deleted_at IS NULL`
+                    )
+                    const totalAuthors =
+                        (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
+                    const totalEntries =
+                        (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0
+
+                    return {
+                        success: true,
+                        totalAuthors,
+                        totalEntries,
+                        authorActivity,
+                        crossAuthorLinks,
+                        impactFactor,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

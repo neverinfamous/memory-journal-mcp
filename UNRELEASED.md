@@ -8,6 +8,10 @@
 - Exported importance weight constants (`IMPORTANCE_WEIGHTS`, `MAX_RELATIONSHIP_SCORE_AT`, `MAX_CAUSAL_SCORE_AT`, `RECENCY_WINDOW_DAYS`) as SSoT shared between the per-entry function and the SQL expression builder.
 - Added `importanceScore` optional field to `EntryOutputSchema` — only present when `sort_by: 'importance'` is used.
 - Post-fetch importance re-sorting for semantic and hybrid search modes, where SQL-level sorting is not available.
+- Added `team_get_collaboration_matrix` tool to analyze author activity density and cross-collaboration impact patterns.
+- Added Proactive Data Analytics scheduled tasks for computing automated JSON snapshots of repository health.
+- Added `memory://insights/digest` and `memory://insights/team-collaboration` resources to expose the pre-computed snapshots.
+- Added CLI initialization argument `--digest-interval` to specify background processing intervals in HTTP mode.
 
 ### Fixed
 - Fixed ESLint AST caching bug causing `@typescript-eslint/no-unsafe-argument` inference errors on `MAX_QUERY_LIMIT` bounds testing across ESM imports by bypassing inference with explicit `Number()` evaluated assignment.

@@ -23,6 +23,7 @@ import {
     buildSkillsDirInfo,
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
+import { buildInsightsSection } from './insights-section.js'
 
 export const briefingResource: InternalResourceDef = {
     uri: 'memory://briefing',
@@ -80,6 +81,7 @@ async function buildBriefingData(
     const team = buildTeamContext(context, config, activeProjectNumber)
     const rulesFile = buildRulesFileInfo(config.rulesFilePath)
     const skillsDir = buildSkillsDirInfo(config.skillsDirPath)
+    const insights = buildInsightsSection(context)
 
     // Format the latest entry preview for user message
     const latestPreview = journal.latestEntries[0]
@@ -119,6 +121,7 @@ async function buildBriefingData(
             ...(team?.teamLatestEntries ? { teamLatestEntries: team.teamLatestEntries } : {}),
             ...(rulesFile ? { rulesFile } : {}),
             ...(skillsDir ? { skillsDir } : {}),
+            ...(insights ? { insights } : {}),
             ...(config.projectRegistry ? { registeredWorkspaces: config.projectRegistry } : {}),
             behaviors: {
                 create: 'implementations, decisions, bug-fixes, milestones',

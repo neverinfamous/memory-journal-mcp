@@ -603,3 +603,58 @@ export const TeamCrossProjectInsightsOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+
+// ============================================================================
+// Collaboration Matrix Schemas
+// ============================================================================
+
+/** team_get_collaboration_matrix — strict */
+export const TeamCollaborationMatrixSchema = z.object({
+    period: z
+        .enum(['week', 'month', 'quarter'])
+        .optional()
+        .default('month')
+        .describe('Time granularity for the activity heatmap'),
+    limit: z.number().max(100).optional().default(20).describe('Max authors to include'),
+})
+
+/** team_get_collaboration_matrix — relaxed */
+export const TeamCollaborationMatrixSchemaMcp = z.object({
+    period: z.string().optional().default('month'),
+    limit: relaxedNumber().optional().default(20),
+})
+
+export const TeamCollaborationMatrixOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        totalAuthors: z.number().optional(),
+        totalEntries: z.number().optional(),
+        authorActivity: z
+            .array(
+                z.object({
+                    author: z.string(),
+                    period: z.string(),
+                    entryCount: z.number(),
+                })
+            )
+            .optional(),
+        crossAuthorLinks: z
+            .array(
+                z.object({
+                    fromAuthor: z.string(),
+                    toAuthor: z.string(),
+                    linkCount: z.number(),
+                })
+            )
+            .optional(),
+        impactFactor: z
+            .array(
+                z.object({
+                    author: z.string(),
+                    inboundLinks: z.number(),
+                })
+            )
+            .optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)

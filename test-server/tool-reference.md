@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **67 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **68 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -134,7 +134,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (20 tools + Code Mode)
+## team (23 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -168,6 +168,7 @@ Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `team_get_statistics`             | Get statistics for the team database including entry counts, types, top tags, and contributor breakdown. |
 | `team_get_cross_project_insights` | Analyze patterns across all GitHub Projects tracked in team entries. Requires TEAM_DB_PATH.              |
+| `team_get_collaboration_matrix`   | Generate a structural matrix mapping author activity and cross-collaboration impact. Requires TEAM_DB_PATH. |
 
 ### Relationships
 
@@ -208,12 +209,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 67    | All tools (default)      |
+| `full`               | 68    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | ~15   | Disable all mutations    |
-| `-github`            | 45    | Exclude a group          |
-| `-github,-analytics` | 43    | Exclude multiple groups  |
+| `readonly`           | 18    | Disable all mutations    |
+| `-github`            | 50    | Exclude a group          |
+| `-github,-analytics` | 48    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 

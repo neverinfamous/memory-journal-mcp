@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-96.87%25-brightgreen.svg)
+![Coverage](https://img.shields.io/badge/Coverage-95.01%25-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -70,6 +70,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 - "Create a backup of my journal"
 - "Check the server health status"
 - "Find entries related to performance"
+- "Show me the memory-journal-mcp Kanban"
 
 **[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
 
@@ -146,12 +147,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 67    | All tools (default)      |
+| `full`               | 68    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 17    | Disable all mutations    |
-| `-github`            | 49    | Exclude a group          |
-| `-github,-analytics` | 47    | Exclude multiple groups  |
+| `readonly`           | 18    | Disable all mutations    |
+| `-github`            | 50    | Exclude a group          |
+| `-github,-analytics` | 48    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -165,7 +166,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ## 📋 Core Capabilities
 
-### 🛠️ **67 MCP Tools** (10 Groups)
+### 🛠️ **68 MCP Tools** (10 Groups)
 
 | Group           | Tools | Description                                                                                                                              |
 | --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -178,7 +179,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                  |
 | `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                     |
 | `backup`        | 4     | Backup, list, restore, cleanup                                                                                                           |
-| `team`          | 22    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights (requires `TEAM_DB_PATH`) |
+| `team`          | 23    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
 
@@ -386,10 +387,10 @@ For remote access or web-based clients, run the server in HTTP mode:
 memory-journal-mcp --transport http --port 3000
 ```
 
-To bind to all interfaces (required for containers):
+To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest):
 
 ```bash
-memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0
+memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-interval 1440
 ```
 
 **Endpoints:**

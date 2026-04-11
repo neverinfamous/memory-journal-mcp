@@ -14,6 +14,12 @@ import { TagsManager } from './tags.js'
 import { EntriesManager } from './entries/index.js'
 import { RelationshipsManager } from './relationships.js'
 import { BackupManager } from './backup.js'
+import {
+    saveAnalyticsSnapshot as saveSnapshot,
+    getLatestAnalyticsSnapshot as getLatestSnapshot,
+    getAnalyticsSnapshots as getSnapshots,
+} from './entries/digest.js'
+import type { Database } from 'better-sqlite3'
 import * as fs from 'node:fs'
 
 /**
@@ -267,5 +273,22 @@ export class DatabaseAdapter implements IDatabaseAdapter {
 
     executeRawQuery(sql: string, params?: unknown[]): QueryResult[] {
         return this.connection.exec(sql, params)
+    }
+
+    saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number {
+        return saveSnapshot(this.connection.getRawDb() as Database, type, data)
+    }
+
+    getLatestAnalyticsSnapshot(
+        type: string
+    ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
+        return getLatestSnapshot(this.connection.getRawDb() as Database, type)
+    }
+
+    getAnalyticsSnapshots(
+        type: string,
+        limit?: number
+    ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
+        return getSnapshots(this.connection.getRawDb() as Database, type, limit)
     }
 }

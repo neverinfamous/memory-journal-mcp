@@ -190,6 +190,28 @@ return {
 | `autoSuccess`    | `true`   |
 | `listHasBackups` | `true`   |
 
+### 28.9 Team Collaboration Matrix & Analytics
+
+```javascript
+// Test code:
+const matrix = await mj.team.teamGetCollaborationMatrix({})
+
+// Return key properties to prove Code Mode boundary bindings work seamlessly
+return {
+  success: matrix.success,
+  hasTotalAuthors: typeof matrix.totalAuthors === 'number',
+  hasActivityList: Array.isArray(matrix.authorActivity),
+  hasEntriesNum: typeof matrix.totalEntries === 'number'
+}
+```
+
+| Check               | Expected |
+| ------------------- | -------- |
+| `success`           | `true`   |
+| `hasTotalAuthors`   | `true`   |
+| `hasActivityList`   | `true`   |
+| `hasEntriesNum`     | `true`   |
+
 ---
 
 ## Success Criteria
@@ -203,3 +225,4 @@ return {
 - [ ] `team_export_entries` exports JSON and markdown with filters
 - [ ] `team_backup` creates named and auto-named backups
 - [ ] `team_list_backups` returns backup metadata
+- [ ] `team_get_collaboration_matrix` correctly streams analytics through Code Mode bindings
