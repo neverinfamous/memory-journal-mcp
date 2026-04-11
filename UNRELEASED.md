@@ -29,3 +29,4 @@
 - Verified Code Mode Readonly Enforcement (Phase 18), confirming that read operations succeed while write operations are structurally blocked and omitted from the API bridge when `readonly: true` is asserted.
 - Verified Code Mode Relationships & Visualization (Phase 24), confirming multi-type relationship linking, duplicate detection, metadata persistence, and successful Markdown visualization with structured `mermaid` and `legend` payloads.
 - Verified Code Mode Sandbox Basics (Phase 16), confirming fundamental expression evaluation, async/await and built-in availability, reliable execution metrics propagation, and infinite loop timeout enforcement with structured errors.
+- Verified Code Mode Search & Semantics (Phase 21), confirming FTS5 boolean logic, single-query filters, cross-database search capabilities, Date Range error paths, Semantic vector integrations, and exact Timestamp vs Importance-sorted ranking across all native endpoints.
