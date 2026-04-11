@@ -1,7 +1,5 @@
 # Token Consumption during codemode Testing of memory-journal-mcp
 
-Last tested: April 7th, 2026
-
 | Test Document                     | Approximate Token Usage |
 | :-------------------------------- | :---------------------- |
 | `test-cm-admin-backup.md`         | ~141                    |

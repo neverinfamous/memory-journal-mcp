@@ -1,7 +1,5 @@
 # Token Consumption during Direct Tool Testing of memory-journal-mcp
 
-Last tested: April 9th, 2026
-
 _Note: The tracked token counts only reflect the estimated tokens that actually entered the context window._
 
 | Test Document                      | Approximate Token Usage |
