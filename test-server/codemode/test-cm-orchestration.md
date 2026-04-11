@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Cross-Group Orchestration
+# Re-Test memory-journal-mcp — Code Mode: Cross-Group Orchestration
 
 Test cross-group orchestration: journal health dashboards, GitHub-journal coverage, tag analysis pipelines, relationship graph summaries, and full create→index→search pipelines.
 

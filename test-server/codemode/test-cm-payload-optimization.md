@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Payload Optimization
+# Re-Test memory-journal-mcp — Code Mode: Payload Optimization
 
 Test all 4 payload optimization features via Code Mode: Kanban throttling (`summary_only`, `item_limit`), body truncation (`truncate_body`, `include_comments`), `MAX_QUERY_LIMIT` enforcement, and Code Mode result size cap.
 

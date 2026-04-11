@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Relationships & Visualization
+# Re-Test memory-journal-mcp — Code Mode: Relationships & Visualization
 
 Test relationship linking (all types), duplicate detection, error paths, and Mermaid visualization through Code Mode.
 
@@ -173,9 +173,9 @@ return { cleaned: results.length, details: results }
 
 ## Success Criteria
 
-- [] All relationship types (`references`, `implements`, `blocked_by`, `resolved`, `caused`) create via Code Mode
-- [] `link_entries` with `description` persists the description
-- [] Duplicate detection returns `duplicate: true`
-- [] Nonexistent IDs return `success: false` with descriptive message
-- [] `visualize_relationships` returns Mermaid with legend, supports tags/depth/limit filters
-- [] Nonexistent entry ID returns "not found" message
+- [ ] All relationship types (`references`, `implements`, `blocked_by`, `resolved`, `caused`) create via Code Mode
+- [ ] `link_entries` with `description` persists the description
+- [ ] Duplicate detection returns `duplicate: true`
+- [ ] Nonexistent IDs return `success: false` with descriptive message
+- [ ] `visualize_relationships` returns Mermaid with legend, supports tags/depth/limit filters
+- [ ] Nonexistent entry ID returns "not found" message

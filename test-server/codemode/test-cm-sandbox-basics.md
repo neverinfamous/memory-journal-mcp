@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Sandbox Basics
+# Re-Test memory-journal-mcp — Code Mode: Sandbox Basics
 
 Test the Code Mode sandbox (`mj_execute_code`) fundamentals: expression evaluation, async support, execution metrics, and timeout handling.
 

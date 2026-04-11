@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Team CRUD & Search
+# Re-Test memory-journal-mcp — Code Mode: Team CRUD & Search
 
 Test team CRUD operations, error paths, and date range search through Code Mode.
 

@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode: Search & Semantics
+# Re-Test memory-journal-mcp — Code Mode: Search & Semantics
 
 Test search, semantic search, date range, analytics, and vector index operations through the Code Mode `mj.*` API bridge.
 
@@ -338,46 +338,46 @@ await mj.admin.deleteEntry({ entry_id: e3.entry.id, permanent: true })
 return {
   searchImportance: {
     count: impSearch.count,
-    hasScores: impSearch.entries?.every(e => typeof e.importanceScore === 'number'),
-    orderCorrect: impSearch.entries?.every((e, i, arr) =>
-      i === 0 || (arr[i-1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
+    hasScores: impSearch.entries?.every((e) => typeof e.importanceScore === 'number'),
+    orderCorrect: impSearch.entries?.every(
+      (e, i, arr) => i === 0 || (arr[i - 1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
     ),
   },
   searchTimestamp: {
-    noScores: tsSearch.entries?.every(e => e.importanceScore === undefined),
+    noScores: tsSearch.entries?.every((e) => e.importanceScore === undefined),
   },
   recentImportance: {
-    hasScores: impRecent.entries?.every(e => typeof e.importanceScore === 'number'),
-    orderCorrect: impRecent.entries?.every((e, i, arr) =>
-      i === 0 || (arr[i-1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
+    hasScores: impRecent.entries?.every((e) => typeof e.importanceScore === 'number'),
+    orderCorrect: impRecent.entries?.every(
+      (e, i, arr) => i === 0 || (arr[i - 1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
     ),
   },
   recentTimestamp: {
-    noScores: tsRecent.entries?.every(e => e.importanceScore === undefined),
+    noScores: tsRecent.entries?.every((e) => e.importanceScore === undefined),
   },
   dateRangeImportance: {
-    hasScores: impDateRange.entries?.every(e => typeof e.importanceScore === 'number'),
-    orderCorrect: impDateRange.entries?.every((e, i, arr) =>
-      i === 0 || (arr[i-1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
+    hasScores: impDateRange.entries?.every((e) => typeof e.importanceScore === 'number'),
+    orderCorrect: impDateRange.entries?.every(
+      (e, i, arr) => i === 0 || (arr[i - 1].importanceScore ?? 0) >= (e.importanceScore ?? 0)
     ),
   },
   dateRangeTimestamp: {
-    noScores: tsDateRange.entries?.every(e => e.importanceScore === undefined),
+    noScores: tsDateRange.entries?.every((e) => e.importanceScore === undefined),
   },
 }
 ```
 
-| Check | Expected |
-| --- | --- |
-| `searchImportance.hasScores` | `true` — every entry has `importanceScore` |
-| `searchImportance.orderCorrect` | `true` — descending importance order |
-| `searchTimestamp.noScores` | `true` — no `importanceScore` (zero overhead) |
-| `recentImportance.hasScores` | `true` — every entry has `importanceScore` |
-| `recentImportance.orderCorrect` | `true` — descending importance order |
-| `recentTimestamp.noScores` | `true` — no `importanceScore` (zero overhead) |
-| `dateRangeImportance.hasScores` | `true` — every entry has `importanceScore` |
-| `dateRangeImportance.orderCorrect` | `true` — descending importance order |
-| `dateRangeTimestamp.noScores` | `true` — no `importanceScore` (zero overhead) |
+| Check                              | Expected                                      |
+| ---------------------------------- | --------------------------------------------- |
+| `searchImportance.hasScores`       | `true` — every entry has `importanceScore`    |
+| `searchImportance.orderCorrect`    | `true` — descending importance order          |
+| `searchTimestamp.noScores`         | `true` — no `importanceScore` (zero overhead) |
+| `recentImportance.hasScores`       | `true` — every entry has `importanceScore`    |
+| `recentImportance.orderCorrect`    | `true` — descending importance order          |
+| `recentTimestamp.noScores`         | `true` — no `importanceScore` (zero overhead) |
+| `dateRangeImportance.hasScores`    | `true` — every entry has `importanceScore`    |
+| `dateRangeImportance.orderCorrect` | `true` — descending importance order          |
+| `dateRangeTimestamp.noScores`      | `true` — no `importanceScore` (zero overhead) |
 
 ---
 

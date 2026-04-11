@@ -1,4 +1,4 @@
-# Test memory-journal-mcp — Code Mode Kanban Lifecycle
+# Re-Test memory-journal-mcp — Code Mode Kanban Lifecycle
 
 **Scope:** Automates the testing of `mj.github` Kanban integrations (`addProjectItem`, `moveProjectItem`, `deleteProjectItem`, `getProjectKanban`) natively via sandbox.
 
