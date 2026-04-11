@@ -24,3 +24,5 @@
 - Verified Code Mode Error Matrix and Zod Sweeps (Phase 29), ensuring `{}` empty parameters, type mismatches, and domain boundaries return uniform `{ success: false }` across all 10 `mj.*` API groups without sandbox crashes.
 - Verified Code Mode GitHub Tools (Phase 25), confirming all 16 `mj.github.*` endpoints, read-only limits, Kanban operations, issue and milestone lifecycles correctly surface schema-compliant responses and structured errors instead of raw `-32602` faults.
 - Verified Code Mode IO & Interoperability (Phase 26), confirming legacy export payload hydration, markdown file orchestration within sandbox mapped directories, and strict path traversal halts.
+- Verified Code Mode Cross-Group Orchestration (Phase 23), validating complex, multi-round agent workflows (Journal Dashboards, Tag Analytics, Relationship Graphs, Vector Index Lifecycles) persist state securely across `mj.*` namespaces.
+
