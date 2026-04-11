@@ -19,6 +19,22 @@ describe('Prompt Handlers', () => {
         await db.initialize()
         // Seed some data for prompts that read from the DB
         db.createEntry({ content: 'Test entry for prompts', tags: ['test-tag'] })
+        
+        // Seed GitHub prompt relevant entries (prNumber, projectNumber, workflowRunId)
+        db.createEntry({ content: 'PR entry with very long content to trigger truncation in formatPromptEntries. '.repeat(10), prNumber: 42 })
+        db.createEntry({ content: 'Project entry', projectNumber: 42, significanceType: 'milestone' })
+        db.createEntry({ content: 'Workflow entry', workflowRunId: 101 })
+
+        // Seed Analytics Snapshot to trigger buildDigestSignalForPrompt coverage
+        if (typeof db.saveAnalyticsSnapshot === 'function') {
+            db.saveAnalyticsSnapshot('digest', {
+                activityGrowthPercent: 120,
+                currentPeriodEntries: 10,
+                significanceMultiplier: 2.0,
+                currentPeriodSignificant: 5,
+                staleProjects: [{ projectNumber: 99, daysSilent: 45 }]
+            })
+        }
 
         teamDb = new DatabaseAdapter(testTeamDbPath)
         await teamDb.initialize()
@@ -78,7 +94,7 @@ describe('Prompt Handlers', () => {
             const names = prompts.map((p) => (p as { name: string }).name)
 
             for (const name of names) {
-                const result = getPrompt(name, {}, db, teamDb)
+                const result = getPrompt(name, { pr_number: '42', project_number: '42' }, db, teamDb)
                 expect(result.messages).toBeDefined()
                 expect(Array.isArray(result.messages)).toBe(true)
                 expect(result.messages.length).toBeGreaterThan(0)

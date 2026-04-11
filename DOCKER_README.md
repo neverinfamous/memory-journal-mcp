@@ -17,11 +17,31 @@
 
 **[GitHub](https://github.com/neverinfamous/memory-journal-mcp)** • **[Wiki](https://github.com/neverinfamous/memory-journal-mcp/wiki)** • **[Changelog](https://github.com/neverinfamous/memory-journal-mcp/blob/main/CHANGELOG.md)** • **[Release Article](https://adamic.tech/articles/memory-journal-mcp-server)**
 
-## 🎯 What This Does
+## 🧠 Stop Experiencing AI Amnesia
 
-### What Sets Us Apart
+When managing large projects with AI assistance, you face a critical challenge:
 
-**68 MCP Tools** · **18 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
+- **Thread Amnesia** - Each new conversation starts from zero, unaware of previous work.
+- **Lost Context** - Decisions, implementations, and learnings scattered across disconnected threads.
+- **Repeated Work** - AI suggests solutions you've already tried or abandoned.
+
+Memory Journal solves this by acting as your project's **long-term memory**, bridging the gap between fragmented AI sessions.
+
+**Experience true context-aware development:**
+
+- *"Why did we choose SQLite over Postgres for this service last month?"* (Semantic search)
+- *"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."* (GitHub operations)
+- *"Who has been touching the auth module recently, and what's our team collaboration density?"* (Team analytics)
+- *"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."* (Context lifecycles)
+- *"Draw a visual graph showing how my last 10 architectural decisions relate to each other."* (Knowledge graph)
+
+**[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
+
+---
+
+## 🎯 What Sets Us Apart
+
+**68 MCP Tools** · **17 Workflow Prompts** · **34 Resources** · **10 Tool Groups** · **Code Mode** · **GitHub Commander** (Issue Triage, PR Review, Milestone Sprints, Security/Quality/Perf Audits) · **GitHub Integration** (Issues, PRs, Actions, Kanban, Milestones, Insights) · **Team Collaboration** (Shared DB, Vector Search, Cross-Project Insights)
 
 | Feature                       | Description                                                                                                                                                                                                                                                                                        |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -39,16 +59,15 @@
 | **Security & Transport**      | OAuth 2.1 (RFC 9728/8414, JWT/JWKS, scopes), Streamable HTTP + SSE, rate limiting, CORS, SQL injection prevention, non-root Docker                                                                                                                                                                 |
 | **Structured Error Handling** | Every tool returns `{success, error, code, category, suggestion, recoverable}` — agents get classification, remediation hints, and recoverability signals                                                                                                                                          |
 | **Agent Collaboration**       | IDE agents and Copilot share context; review findings become searchable knowledge; agents suggest reusable rules and skills ([setup](docs/copilot-setup.md))                                                                                                                                       |
-| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `bun`, `gitlab`, `golang`, `mysql`, `playwright-standard`, `postgres`, `react-best-practices`, `rust`, `shadcn-ui`, `skill-builder`, `sqlite`, `typescript`, `vitest-standard`) establishing permanent AI behavior and architecture rules |
+| **Native Agent Skills**       | Bundled foundational coding paradigms (`autonomous-dev`, `python`, `docker`, `tailwind-css`, `golang`, `playwright-standard`, etc.) establishing permanent AI behavior and architecture rules |
 | **GitHub Commander**          | Skills for issue triage, PR reviews, sprint milestones, and security/quality/performance audits with journal trails ([docs](skills/github-commander/SKILL.md))                                                                                                                                     |
 
-**[See complete examples & prompts →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Examples)**
+<details>
+<summary><strong>🤖 Click to view the recommended AI Agent Instructions/Rule</strong></summary>
 
----
+*Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)*
 
-Suggested Rule (Add to AGENTS.md, GEMINI.md, etc):
-
-🛑 MANDATORY SESSION START ROUTINE
+**🛑 MANDATORY SESSION START ROUTINE**
 
 Execute BEFORE fulfilling any user request in a new session:
 
@@ -63,6 +82,8 @@ Execute BEFORE fulfilling any user request in a new session:
      - **GitHub Issues**: List every issue, one per line.
      - Also include Entry Counts (Journal/Team), Latest Entries/Summaries, Proactive Analytics/Team Density, Milestones, and Workspaces.
 4. **STOP & WAIT**: After rendering the table, execute the user's prompt but do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
+
+</details>
 
 ---
 
