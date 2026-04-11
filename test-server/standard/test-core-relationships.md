@@ -10,9 +10,8 @@
 
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
 2. Implement, update `UNRELEASED.md`, commit without push.
-3. **USER** verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+3. Re-test fixes with direct MCP calls.
+4. Brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
@@ -25,8 +24,8 @@
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Link entries            | `link_entries(from_entry_id: <A>, to_entry_id: <B>, relationship_type: "references")`                                     | Relationship created                                                                                      |
 | Duplicate link          | Call `link_entries` again with same params                                                                                | Returns `duplicate: true`, `message`, existing relationship                                               |
-| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, error: `"Entry not found: 999999"`              |
-| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, error: `"Entry not found: 999999"`              |
+| Link nonexistent source | `link_entries(from_entry_id: 999999, to_entry_id: <B>, ...)`                                                              | Returns `success: false`, error: `"Entry not found: 999999"`                                              |
+| Link nonexistent target | `link_entries(from_entry_id: <A>, to_entry_id: 999999, ...)`                                                              | Returns `success: false`, error: `"Entry not found: 999999"`                                              |
 | Visualize               | `visualize_relationships(entry_id: <A>)`                                                                                  | JSON object with `mermaid` string field containing diagram, `entry_count`, `relationship_count`, `legend` |
 | Link with description   | `link_entries(from_entry_id: <A>, to_entry_id: <C>, relationship_type: "implements", description: "Implements the plan")` | Relationship created with `description` field                                                             |
 | Reverse duplicate       | `link_entries(from_entry_id: <B>, to_entry_id: <A>, relationship_type: "references")`                                     | Succeeds — only same-direction duplicates are checked (confirmed)                                         |

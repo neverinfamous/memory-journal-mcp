@@ -10,9 +10,8 @@
 
 1. Plan fixes (reference `code-map.md` + `mcp-builder` skill).
 2. Implement, update `UNRELEASED.md`, commit without push.
-3. USER verifies: `npm run lint && npm run typecheck`, `npm run test`, `npm run test:e2e`.
-4. Re-test fixes with direct MCP calls.
-5. Brief final summary.
+3. Re-test fixes with direct MCP calls.
+4. Brief final summary.
    - **Include Total Token Estimate:** Sum the `_meta.tokenEstimate` from all tool responses (or read `memory://metrics/summary`) and report the total estimated tokens that actually entered the context window during this test pass.
 
 ---
@@ -47,10 +46,10 @@
 | Date range + personal | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", is_personal: true)`      | Only personal entries in date range                                                                                                                                                           |
 | Date range + project  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", project_number: 5)`      | Only project #5 entries in date range                                                                                                                                                         |
 | Inverted date range   | `search_by_date_range(start_date: "2026-12-31", end_date: "2026-01-01")`                         | Returns `{ success: false, error: "Invalid date range: start_date (...) is after end_date (...)", code: "VALIDATION_ERROR", suggestion: "Ensure start_date is before or equal to end_date" }` |
-| Importance sort       | `search_entries(query: "architecture", sort_by: "importance")`                                    | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry              |
-| Importance sort rcnt  | `get_recent_entries(limit: 5, sort_by: "importance")`                                            | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry              |
-| Importance sort date  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", sort_by: "importance")`  | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry              |
-| Default no overhead   | `search_entries(query: "architecture")`                                                          | No `importanceScore` field present on entries (default `sort_by: 'timestamp'`)                    |
+| Importance sort       | `search_entries(query: "architecture", sort_by: "importance")`                                   | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
+| Importance sort rcnt  | `get_recent_entries(limit: 5, sort_by: "importance")`                                            | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
+| Importance sort date  | `search_by_date_range(start_date: "2026-01-01", end_date: "2026-12-31", sort_by: "importance")`  | Results sorted by `importanceScore` DESC with `importanceScore` field on every entry                                                                                                          |
+| Default no overhead   | `search_entries(query: "architecture")`                                                          | No `importanceScore` field present on entries (default `sort_by: 'timestamp'`)                                                                                                                |
 
 > [!TIP]
 > **Token Conservation in Code Mode:** When testing search across dozens of queries via `mj_execute_code`, do NOT append the full `res` objects to your results array. Map responses to `{ success: true, count: res.entries?.length || 0 }` to prevent returning massive JSON payloads (megabytes in size) that artificially inflate `_meta.tokenEstimate`.
