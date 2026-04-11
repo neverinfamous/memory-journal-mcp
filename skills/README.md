@@ -45,6 +45,7 @@ The markdown body contains the full instructions the agent follows once the skil
 | `docker`               | Production-grade Docker — multi-stage builds, security hardening, Compose v2, BuildKit, and CI/CD integration         |
 | `github-actions`       | GitHub Actions CI/CD — SHA pinning, reusable workflows, caching, matrix strategies, and artifacts v4                  |
 | `github-commander`     | GitHub pipeline workflows for orchestrating issues, regressions, and deployments                                      |
+| `github-copilot-cli`   | Adversarial pre-push validation and full repository code audits driven by the @github/copilot terminal harness        |
 | `gitlab`               | Specialized assistant skill for managing repositories, code search, and CI/CD in GitLab                               |
 | `golang`               | Master Go development with production-grade best practices from Google and Uber style guides                          |
 | `mysql`                | Enterprise MySQL production rules — query safety, connection pooling, strict schema configurations                    |
@@ -67,6 +68,7 @@ This package natively bundles the `github-commander` skill, which equips your AI
 - **`issue-triage`**: End-to-end bug replication, PR submission, and Kanban lifecycle linking.
 - **`milestone-sprint`**: Sequential traversal of all open issues mapped to a specific release target.
 - **`pr-review`**: Exhaustive local execution, typechecking, and heuristic code reviews against base branches.
+- **`copilot-audit`**: AI-evaluating-AI adversarial evaluations covering localized diffs and whole codebases.
 - **`security-audit`**: Deep Trivy/CodeQL supply chain matrix evaluation.
 - **`code-quality-audit`**: Enforcement of project guidelines, strict-typing boundaries, and import normalization.
 - **`perf-audit`**: Bundle-size constraints, runtime hot-path execution, and CI/CD cache-hit evaluations.
