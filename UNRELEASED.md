@@ -15,3 +15,6 @@
 ### Fixed
 - Missing `sortBy` forwarding to underlying fetches during `ftsSearch()` delegations.
 - Strict typing and ESLint caching errors regarding filter limits and significance metric validations.
+
+### Security
+- Verified Admin tag management, export filters, and Backup/Restore lifecycle through the Code Mode sandbox. All tools strictly return structured `{ success: false }` bounds errors.
