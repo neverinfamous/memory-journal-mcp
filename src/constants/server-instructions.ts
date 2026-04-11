@@ -89,7 +89,7 @@ const CORE_INSTRUCTIONS = `# memory-journal-mcp
 
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., \`create_entry\`) by default. ONLY save to the team journal (e.g., \`team_create_entry\`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
-- **Search before**: major decisions, referencing prior work, understanding project context
+- **Search before**: major decisions, referencing prior work, understanding project context. Use \`sort_by: "importance"\` on \`search_entries\`, \`get_recent_entries\`, or \`search_by_date_range\` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
 - **Analyze insights**: Use cross-project insights (\`get_cross_project_insights\`) before defining architectures or cross-cutting abstractions. Use repo insights (\`memory://github/insights\`) to gauge traction.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 
@@ -179,61 +179,16 @@ function buildQuickAccess(groups: Set<ToolGroup>): string {
  * Code Mode namespace row definitions.
  * Each maps a tool group to its Code Mode API namespace.
  */
-const CODE_MODE_NAMESPACE_ROWS: {
-    group: ToolGroup
-    label: string
-    namespace: string
-    example: string
-}[] = [
-    {
-        group: 'core',
-        label: 'Core',
-        namespace: '`mj.core.*`',
-        example: '`mj.core.createEntry("Implemented feature X")`',
-    },
-    {
-        group: 'search',
-        label: 'Search',
-        namespace: '`mj.search.*`',
-        example: '`mj.search.searchEntries("performance")`',
-    },
-    {
-        group: 'analytics',
-        label: 'Analytics',
-        namespace: '`mj.analytics.*`',
-        example: '`mj.analytics.getStatistics()`',
-    },
-    {
-        group: 'relationships',
-        label: 'Relationships',
-        namespace: '`mj.relationships.*`',
-        example: '`mj.relationships.linkEntries(1, 2, "implements")`',
-    },
+const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
+    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
+    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
+    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
+    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
     { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.exportEntries("json")`' },
-    {
-        group: 'admin',
-        label: 'Admin',
-        namespace: '`mj.admin.*`',
-        example: '`mj.admin.rebuildVectorIndex()`',
-    },
-    {
-        group: 'github',
-        label: 'GitHub',
-        namespace: '`mj.github.*`',
-        example: '`mj.github.getGithubIssues({ state: "open" })`',
-    },
-    {
-        group: 'backup',
-        label: 'Backup',
-        namespace: '`mj.backup.*`',
-        example: '`mj.backup.backupJournal()`',
-    },
-    {
-        group: 'team',
-        label: 'Team',
-        namespace: '`mj.team.*`',
-        example: '`mj.team.teamCreateEntry("Team update")`',
-    },
+    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
+    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
+    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
+    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
 ]
 
 /**
@@ -243,10 +198,9 @@ const CODE_MODE_NAMESPACE_ROWS: {
  */
 function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
     // Build namespace table with only enabled groups
-    const rows = CODE_MODE_NAMESPACE_ROWS.filter((r) => groups.has(r.group))
-        .map(
-            (r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`
-        )
+    const rows = CODE_MODE_NAMESPACE_ROWS
+        .filter((r) => groups.has(r.group))
+        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
         .join('\n')
 
     // Build the static behavioral text from the .md source,
@@ -259,10 +213,8 @@ function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
         return '\n' + fullSection
     }
     const beforeTable = fullSection.slice(0, tableStart)
-    const headerLine =
-        '| Group         | Namespace            | Example                                            |'
-    const separatorLine =
-        '| ------------- | -------------------- | -------------------------------------------------- |'
+    const headerLine = '| Group         | Namespace            | Example                                            |'
+    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
     const afterTable = fullSection.slice(tableEnd)
     return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
 }
@@ -427,6 +379,7 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 - **Team tools without \`TEAM_DB_PATH\`**: All 22 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
 
+
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
  *
@@ -534,3 +487,4 @@ export const SERVER_INSTRUCTIONS =
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS
+

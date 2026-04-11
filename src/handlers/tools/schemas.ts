@@ -117,6 +117,10 @@ export const EntryOutputSchema = z
         workflowName: z.string().nullable().optional(),
         workflowStatus: z.string().nullable().optional(),
         source: z.enum(['personal', 'team']).optional(),
+        importanceScore: z
+            .number()
+            .optional()
+            .describe('Importance score (0.0-1.0), present when sort_by=importance'),
     })
     .extend(ErrorFieldsMixin.shape)
 

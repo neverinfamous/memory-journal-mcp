@@ -38,15 +38,15 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit } = TeamSearchSchema.parse(params)
+                    const { query, tags, limit, sort_by } = TeamSearchSchema.parse(params)
 
                     const searchLimit = tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), 1000) : limit
 
                     let entries
                     if (query) {
-                        entries = teamDb.searchEntries(query, { limit: searchLimit })
+                        entries = teamDb.searchEntries(query, { limit: searchLimit, sortBy: sort_by })
                     } else {
-                        entries = teamDb.getRecentEntries(searchLimit)
+                        entries = teamDb.getRecentEntries(searchLimit, undefined, sort_by)
                     }
 
                     // Filter by tags if provided (batch query instead of N+1)
@@ -109,7 +109,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { start_date, end_date, entry_type, tags, limit } =
+                    const { start_date, end_date, entry_type, tags, limit, sort_by } =
                         TeamSearchByDateRangeSchema.parse(params)
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
@@ -128,6 +128,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         entryType: entry_type,
                         tags,
                         limit,
+                        sortBy: sort_by,
                     })
 
                     // Batch-fetch authors

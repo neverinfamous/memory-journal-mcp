@@ -70,8 +70,8 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.calculateImportance(entryId)
     }
 
-    getRecentEntries(limit?: number, isPersonal?: boolean): JournalEntry[] {
-        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal)
+    getRecentEntries(limit?: number, isPersonal?: boolean, sortBy?: 'timestamp' | 'importance'): JournalEntry[] {
+        return this.entriesMgr.getRecentEntries(limit ?? 10, isPersonal, sortBy)
     }
 
     getEntriesPage(offset: number, limit: number): JournalEntry[] {
@@ -112,6 +112,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             entryType?: EntryType
             startDate?: string
             endDate?: string
+            sortBy?: 'timestamp' | 'importance'
         }
     ): JournalEntry[] {
         return this.entriesMgr.searchEntries(query, options)
@@ -129,6 +130,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             prNumber?: number
             workflowRunId?: number
             limit?: number
+            sortBy?: 'timestamp' | 'importance'
         }
     ): JournalEntry[] {
         return this.entriesMgr.searchByDateRange(startDate, endDate, options)

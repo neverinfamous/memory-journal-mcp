@@ -66,11 +66,21 @@ export const TeamCreateEntrySchemaMcp = z.object({
 /** team_get_recent — strict */
 export const TeamGetRecentSchema = z.object({
     limit: z.number().min(1).max(500).optional().default(10),
+    sort_by: z
+        .enum(['timestamp', 'importance'])
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** team_get_recent — relaxed */
 export const TeamGetRecentSchemaMcp = z.object({
     limit: relaxedNumber().optional().default(10),
+    sort_by: z
+        .string()
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** team_search — strict */
@@ -78,6 +88,11 @@ export const TeamSearchSchema = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
     limit: z.number().max(500).optional().default(10),
+    sort_by: z
+        .enum(['timestamp', 'importance'])
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** team_search — relaxed */
@@ -85,6 +100,11 @@ export const TeamSearchSchemaMcp = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
     limit: relaxedNumber().optional().default(10),
+    sort_by: z
+        .string()
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** team_get_entry_by_id — strict */
@@ -110,6 +130,11 @@ export const TeamSearchByDateRangeSchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
     limit: z.number().max(500).optional().default(50),
+    sort_by: z
+        .enum(['timestamp', 'importance'])
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** team_search_by_date_range — relaxed */
@@ -119,6 +144,11 @@ export const TeamSearchByDateRangeSchemaMcp = z.object({
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
     limit: relaxedNumber().optional().default(50),
+    sort_by: z
+        .string()
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 // ============================================================================

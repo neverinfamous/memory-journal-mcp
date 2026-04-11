@@ -28,7 +28,7 @@
 
 - **Personal vs Team**: **ALWAYS use the personal journal** (e.g., `create_entry`) by default. ONLY save to the team journal (e.g., `team_create_entry`) if the user explicitly requests it.
 - **Create entries for**: implementations, decisions, bug fixes, milestones, user requests to "remember"
-- **Search before**: major decisions, referencing prior work, understanding project context
+- **Search before**: major decisions, referencing prior work, understanding project context. Use `sort_by: "importance"` on `search_entries`, `get_recent_entries`, or `search_by_date_range` to surface structurally significant entries (decisions, milestones, highly-connected nodes) over simply recent ones.
 - **Analyze insights**: Use cross-project insights (`get_cross_project_insights`) before defining architectures or cross-cutting abstractions. Use repo insights (`memory://github/insights`) to gauge traction.
 - **Link entries**: implementation→spec, bugfix→issue, followup→prior work
 

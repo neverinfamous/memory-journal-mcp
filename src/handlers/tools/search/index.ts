@@ -55,6 +55,11 @@ const SearchEntriesSchema = z.object({
     entry_type: z.enum(ENTRY_TYPES).optional(),
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
+    sort_by: z
+        .enum(['timestamp', 'importance'])
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -78,6 +83,11 @@ const SearchEntriesSchemaMcp = z.object({
     entry_type: z.string().optional(),
     start_date: z.string().optional(),
     end_date: z.string().optional(),
+    sort_by: z
+        .string()
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -92,6 +102,11 @@ const SearchByDateRangeSchema = z.object({
     pr_number: z.number().optional(),
     workflow_run_id: z.number().optional(),
     limit: z.number().max(MAX_QUERY_LIMIT).optional().default(500),
+    sort_by: z
+        .enum(['timestamp', 'importance'])
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -106,6 +121,11 @@ const SearchByDateRangeSchemaMcp = z.object({
     pr_number: relaxedNumber().optional(),
     workflow_run_id: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(500),
+    sort_by: z
+        .string()
+        .optional()
+        .default('timestamp')
+        .describe('Sort results by timestamp (default) or importance score'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -260,6 +280,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         entryType: input.entry_type,
                         startDate: input.start_date,
                         endDate: input.end_date,
+                        sortBy: input.sort_by,
                     }
 
                     // Route to the appropriate search strategy
@@ -290,6 +311,22 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
                                 .slice(0, input.limit)
+
+                            // Post-fetch importance re-sort for vector results
+                            if (input.sort_by === 'importance') {
+                                const scored = entries.map((e) => {
+                                    const { score } = db.calculateImportance(e.id)
+                                    return { ...e, importanceScore: Math.round(score * 100) / 100 }
+                                })
+                                scored.sort((a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0))
+                                return {
+                                    success: true,
+                                    entries: scored,
+                                    count: scored.length,
+                                    searchMode: isAuto ? 'semantic (auto)' : 'semantic',
+                                }
+                            }
+
                             return {
                                 success: true,
                                 entries,
@@ -309,6 +346,23 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 vectorManager,
                                 searchOptions
                             )
+
+                            // Post-fetch importance re-sort for vector results
+                            if (input.sort_by === 'importance') {
+                                const scored = entries.map((e) => {
+                                    const entryId = e['id'] as number
+                                    const { score } = db.calculateImportance(entryId)
+                                    return { ...e, importanceScore: Math.round(score * 100) / 100 }
+                                })
+                                scored.sort((a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0))
+                                return {
+                                    success: true,
+                                    entries: scored,
+                                    count: scored.length,
+                                    searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
+                                }
+                            }
+
                             return {
                                 success: true,
                                 entries,
@@ -365,6 +419,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         prNumber: input.pr_number,
                         workflowRunId: input.workflow_run_id,
                         limit: perDbLimit,
+                        sortBy: input.sort_by,
                     })
 
                     // Cross-database merge when team DB is available
@@ -381,6 +436,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 prNumber: input.pr_number,
                                 workflowRunId: input.workflow_run_id,
                                 limit: perDbLimit,
+                                sortBy: input.sort_by,
                             }
                         )
                         const merged = mergeAndDedup(

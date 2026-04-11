@@ -50,12 +50,18 @@ export function rowsToEntries(tagsMgr: TagsManager, rows: unknown[]): JournalEnt
     if (rows.length === 0) return []
 
     const entries = rows.map((r) => {
-        const p = r as Partial<JournalEntry>
-        return {
-            ...p,
+        const p = r as Partial<JournalEntry> & { importanceScore?: number }
+        const { importanceScore, ...rest } = p
+        const entry = {
+            ...rest,
             isPersonal: Boolean(p.isPersonal), // SQLite uses 0/1
             tags: [],
+            // Attach importanceScore if the query computed it (importance-sorted results)
+            ...(importanceScore !== undefined
+                ? { importanceScore: Math.round(importanceScore * 100) / 100 }
+                : {}),
         } as JournalEntry
+        return entry
     })
 
     const ids = entries.map((e) => e.id)

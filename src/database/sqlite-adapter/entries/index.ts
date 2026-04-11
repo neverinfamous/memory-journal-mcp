@@ -19,6 +19,7 @@ import {
     getEntriesPage,
     searchEntries,
     searchByDateRange,
+    type SortBy,
 } from './search.js'
 import { calculateImportance } from './importance.js'
 import { getStatistics } from './statistics.js'
@@ -84,11 +85,11 @@ export class EntriesManager {
         return deleteEntry(this.sharedContext, id, permanent)
     }
 
-    getRecentEntries(limit = 10, isPersonal?: boolean): JournalEntry[] {
+    getRecentEntries(limit = 10, isPersonal?: boolean, sortBy?: SortBy): JournalEntry[] {
         if (isPersonal !== undefined) {
-            return searchEntries(this.sharedContext, '', { limit, isPersonal })
+            return searchEntries(this.sharedContext, '', { limit, isPersonal, sortBy })
         }
-        return getRecentEntriesQuery(this.sharedContext, limit)
+        return getRecentEntriesQuery(this.sharedContext, limit, sortBy)
     }
 
     getEntriesPage(offset: number, limit: number, order: 'asc' | 'desc' = 'desc'): JournalEntry[] {
@@ -105,6 +106,7 @@ export class EntriesManager {
             prNumber?: number
             prStatus?: string
             workflowRunId?: number
+            sortBy?: SortBy
         }
     ): JournalEntry[] {
         return searchEntries(this.sharedContext, queryStr, options)
@@ -122,6 +124,7 @@ export class EntriesManager {
             prNumber?: number
             workflowRunId?: number
             limit?: number
+            sortBy?: SortBy
         }
     ): JournalEntry[] {
         return searchByDateRange(this.sharedContext, startDate, endDate, options)

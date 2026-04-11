@@ -91,7 +91,7 @@ export interface IDatabaseAdapter {
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null
     getEntriesByIds(ids: number[]): Map<number, JournalEntry>
     calculateImportance(entryId: number): ImportanceResult
-    getRecentEntries(limit?: number, isPersonal?: boolean): JournalEntry[]
+    getRecentEntries(limit?: number, isPersonal?: boolean, sortBy?: 'timestamp' | 'importance'): JournalEntry[]
     getEntriesPage(offset: number, limit: number): JournalEntry[]
     getActiveEntryCount(): number
     updateEntry(
@@ -118,6 +118,7 @@ export interface IDatabaseAdapter {
             entryType?: EntryType
             startDate?: string
             endDate?: string
+            sortBy?: 'timestamp' | 'importance'
         }
     ): JournalEntry[]
     searchByDateRange(
@@ -132,6 +133,7 @@ export interface IDatabaseAdapter {
             prNumber?: number
             workflowRunId?: number
             limit?: number
+            sortBy?: 'timestamp' | 'importance'
         }
     ): JournalEntry[]
     getStatistics(
