@@ -12,7 +12,6 @@ import { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
-import type { GitHubIntegration } from '../github/github-integration/index.js'
 
 // ============================================================================
 // Types
@@ -105,8 +104,7 @@ export function registerPrompts(
     server: McpServer,
     prompts: PromptDefinition[],
     db: IDatabaseAdapter,
-    teamDb?: IDatabaseAdapter,
-    github?: GitHubIntegration
+    teamDb?: IDatabaseAdapter
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
@@ -127,10 +125,10 @@ export function registerPrompts(
                 ...(argsSchema ? { argsSchema } : {}),
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
-            async (providedArgs) => {
+            (providedArgs) => {
                 try {
                     const args = providedArgs as Record<string, string>
-                    const promptResult = await getPrompt(promptDef.name, args, db, teamDb, github)
+                    const promptResult = getPrompt(promptDef.name, args, db, teamDb)
                     // Map to MCP SDK expected format
                     const result = {
                         messages: promptResult.messages.map((m) => ({
@@ -138,10 +136,10 @@ export function registerPrompts(
                             content: m.content as { type: 'text'; text: string },
                         })),
                     }
-                    return result
+                    return Promise.resolve(result)
                 } catch (err) {
                     const message = err instanceof Error ? err.message : String(err)
-                    return {
+                    return Promise.resolve({
                         messages: [
                             {
                                 role: 'user' as const,
@@ -151,7 +149,7 @@ export function registerPrompts(
                                 },
                             },
                         ],
-                    }
+                    })
                 }
             }
         )

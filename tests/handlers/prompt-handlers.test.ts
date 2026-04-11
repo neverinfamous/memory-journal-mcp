@@ -73,12 +73,12 @@ describe('Prompt Handlers', () => {
     // ========================================================================
 
     describe('getPrompt', () => {
-        it('should return messages for each known prompt', async () => {
+        it('should return messages for each known prompt', () => {
             const prompts = getPrompts()
-            const names = prompts.map((p) => (p as { name: string }).name).filter(n => n !== 'load-project-kanban')
+            const names = prompts.map((p) => (p as { name: string }).name)
 
             for (const name of names) {
-                const result = await getPrompt(name, {}, db, teamDb)
+                const result = getPrompt(name, {}, db, teamDb)
                 expect(result.messages).toBeDefined()
                 expect(Array.isArray(result.messages)).toBe(true)
                 expect(result.messages.length).toBeGreaterThan(0)
@@ -91,13 +91,13 @@ describe('Prompt Handlers', () => {
             }
         })
 
-        it('should throw for unknown prompt name', async () => {
-            await expect(getPrompt('nonexistent_prompt_xyz', {}, db)).rejects.toThrow()
+        it('should throw for unknown prompt name', () => {
+            expect(() => getPrompt('nonexistent_prompt_xyz', {}, db)).toThrow()
         })
 
-        it('should return messages for analyze-period with date arguments', async () => {
+        it('should return messages for analyze-period with date arguments', () => {
             const today = new Date().toISOString().split('T')[0]!
-            const result = await getPrompt('analyze-period', { start_date: today, end_date: today }, db)
+            const result = getPrompt('analyze-period', { start_date: today, end_date: today }, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
@@ -105,8 +105,8 @@ describe('Prompt Handlers', () => {
             expect(text).toContain(today)
         })
 
-        it('should return messages for find-related with query argument', async () => {
-            const result = await getPrompt('find-related', { query: 'test' }, db)
+        it('should return messages for find-related with query argument', () => {
+            const result = getPrompt('find-related', { query: 'test' }, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
@@ -114,29 +114,29 @@ describe('Prompt Handlers', () => {
             expect(text).toContain('test')
         })
 
-        it('should return messages for get-context-bundle prompt', async () => {
-            const result = await getPrompt('get-context-bundle', {}, db)
+        it('should return messages for get-context-bundle prompt', () => {
+            const result = getPrompt('get-context-bundle', {}, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })
 
-        it('should return messages for goal-tracker prompt', async () => {
-            const result = await getPrompt('goal-tracker', {}, db)
+        it('should return messages for goal-tracker prompt', () => {
+            const result = getPrompt('goal-tracker', {}, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })
 
-        it('should return messages for prepare-retro with days argument', async () => {
-            const result = await getPrompt('prepare-retro', { days: '14' }, db)
+        it('should return messages for prepare-retro with days argument', () => {
+            const result = getPrompt('prepare-retro', { days: '14' }, db)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
         })
 
-        it('should return messages for team-session-summary prompt', async () => {
-            const result = await getPrompt('team-session-summary', {}, db, teamDb)
+        it('should return messages for team-session-summary prompt', () => {
+            const result = getPrompt('team-session-summary', {}, db, teamDb)
 
             expect(result.messages).toBeDefined()
             expect(result.messages.length).toBeGreaterThan(0)
