@@ -21,6 +21,7 @@
 - **Constraints**: Enforced `MAX_QUERY_LIMIT` cap (500) against over-fetching from tag-broadened Team Searches instead of relying on a 1000 literal.
 - **Consistency**: Hardened `teamCollaborationResource` returning `{ success: true, matrix: <object> }` rigidly. 
 - **Briefings**: Rebranded the ambiguous `Matrix Density` insight label to `Relationship density`.
+- **Hush Protocol**: Fixed SQLite parameter mapping bug where `autoContext` JSON strings were erroneously being cast to boolean integers (`1`/`0`) in `crud.ts`.
 
 ### Verification
 - **Code Mode Validation**: Certified 100% test-pass rate across all Phase 27 tag management (`mergeTags`, `listTags`) and backup/restore (`backupJournal`, `restoreBackup`, `cleanupBackups`) functional bounds without remediation.
@@ -37,3 +38,4 @@
 - [x] **Code Mode Validation**: Certified 100% test-pass rate across all Phase 19 Error Handling & Security bounds, confirming input validation, blocked patterns, runtime error handling, and nulled globals without remediation.
 - [x] **Code Mode Validation**: Certified 100% test-pass rate across all Phase 28 Team Admin & Collaboration bounds, including team operations (`teamUpdateEntry`, `teamDeleteEntry`, `teamMergeTags`), integrated analytics (`teamGetStatistics`), linking mechanisms (`teamLinkEntries`, `teamVisualizeRelationships`), localized IO handling (`teamExportEntries`, `teamExportMarkdown`, `teamImportMarkdown`), and independent administrative safeguards (`teamBackup`, `teamListBackups`, `teamGetCollaborationMatrix`), validating 100% boundary mapping into Code Mode execution targets without remediation.
 - [x] **Code Mode Validation**: Certified 100% test-pass rate across all Phase 28.1-28.3 Team CRUD & Search bounds, covering `teamCreateEntry`, `teamGetRecent`, `teamSearch`, `teamGetEntryById`, `teamListTags`, and `teamSearchByDateRange`, including their respective structural schemas, required date formats, and error constraint paths without remediation.
+- [x] **Code Mode Validation**: Certified 100% test-pass rate across all Phase 28.12-28.15 Team Flag Tools bounds, verifying `passTeamFlag` and `resolveTeamFlag` vocabulary execution, resolution lifecycles, structured error returns, search, and idempotency, after resolving the `autoContext` typing defect in the SQLite adapter.

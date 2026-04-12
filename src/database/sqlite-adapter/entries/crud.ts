@@ -29,7 +29,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             timestamp,
             (input.isPersonal ?? true) ? 1 : 0,
             input.significanceType || null,
-            input.autoContext ? 1 : 0,
+            input.autoContext ?? null,
             input.projectNumber ?? null,
             input.projectOwner || null,
             input.issueNumber ?? null,
@@ -139,7 +139,7 @@ export function updateEntry(
         tags?: string[]
         isPersonal?: boolean
         significanceType?: string
-        autoContext?: boolean
+        autoContext?: string | null
         projectNumber?: number
         projectOwner?: string
         issueNumber?: number
@@ -179,7 +179,7 @@ export function updateEntry(
     }
     if (input.autoContext !== undefined) {
         updates.push('auto_context = ?')
-        values.push(input.autoContext ? 1 : 0)
+        values.push(input.autoContext ?? null)
     }
     // GitHub extensions
     for (const key of [
