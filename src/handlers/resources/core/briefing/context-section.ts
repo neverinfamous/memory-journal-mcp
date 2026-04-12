@@ -238,3 +238,86 @@ export function buildSkillsDirInfo(skillsDirPath: string | undefined): SkillsDir
         return undefined
     }
 }
+
+// ============================================================================
+// Flags Context (Hush Protocol)
+// ============================================================================
+
+export interface FlagSummary {
+    count: number
+    flags: {
+        id: number
+        flag_type: string
+        target_user: string | null
+        preview: string
+        timestamp: string
+    }[]
+}
+
+/**
+ * Build active (unresolved) flag summary for the briefing.
+ * Returns undefined if team DB is not configured or no active flags exist.
+ */
+export function buildFlagsContext(context: ResourceContext): FlagSummary | undefined {
+    if (!context.teamDb) return undefined
+
+    try {
+        const flagEntries = context.teamDb.searchEntries('', {
+            entryType: 'flag',
+            limit: 20,
+        })
+
+        const activeFlags = flagEntries
+            .map((entry) => {
+                const autoCtx = entry.autoContext
+                if (!autoCtx) return null
+                try {
+                    const parsed: unknown = JSON.parse(autoCtx)
+                    if (
+                        typeof parsed === 'object' &&
+                        parsed !== null &&
+                        'flag_type' in parsed &&
+                        'resolved' in parsed
+                    ) {
+                        const ctx = parsed as Record<string, unknown>
+                        if (ctx['resolved'] === true) return null
+                        const content = entry.content ?? ''
+                        return {
+                            id: entry.id,
+                            flag_type: String(ctx['flag_type']),
+                            target_user: typeof ctx['target_user'] === 'string'
+                                ? ctx['target_user']
+                                : null,
+                            preview:
+                                content.slice(0, 80) +
+                                (content.length > 80 ? '...' : ''),
+                            timestamp: entry.timestamp,
+                        }
+                    }
+                    return null
+                } catch {
+                    return null
+                }
+            })
+            .filter(
+                (
+                    f
+                ): f is NonNullable<typeof f> => f !== null
+            )
+
+        if (activeFlags.length === 0) return undefined
+
+        return {
+            count: activeFlags.length,
+            flags: activeFlags,
+        }
+    } catch (error) {
+        logger.debug('Failed to build flags context', {
+            module: 'BRIEFING',
+            operation: 'flags-context',
+            error: error instanceof Error ? error.message : String(error),
+        })
+        return undefined
+    }
+}
+

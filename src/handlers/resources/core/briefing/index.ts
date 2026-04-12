@@ -21,6 +21,7 @@ import {
     buildTeamContext,
     buildRulesFileInfo,
     buildSkillsDirInfo,
+    buildFlagsContext,
 } from './context-section.js'
 import { formatUserMessage } from './user-message.js'
 import { buildInsightsSection } from './insights-section.js'
@@ -82,6 +83,7 @@ async function buildBriefingData(
     const rulesFile = buildRulesFileInfo(config.rulesFilePath)
     const skillsDir = buildSkillsDirInfo(config.skillsDirPath)
     const insights = buildInsightsSection(context)
+    const flags = buildFlagsContext(context)
 
     // Format the latest entry preview for user message
     const latestPreview = journal.latestEntries[0]
@@ -104,12 +106,18 @@ async function buildBriefingData(
         rulesFile,
         skillsDir,
         analyticsInsights: insights ?? undefined,
+        flagSummary: flags,
     })
 
     return {
         data: {
             version: VERSION,
             serverTime: new Date().toISOString(),
+            localTime: new Intl.DateTimeFormat('en-US', {
+                dateStyle: 'full',
+                timeStyle: 'short',
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            }).format(new Date()),
             journal: {
                 totalEntries: journal.totalEntries,
                 latestEntries: journal.latestEntries,
@@ -123,6 +131,7 @@ async function buildBriefingData(
             ...(rulesFile ? { rulesFile } : {}),
             ...(skillsDir ? { skillsDir } : {}),
             ...(insights ? { insights } : {}),
+            ...(flags ? { activeFlags: flags } : {}),
             ...(config.projectRegistry ? { registeredWorkspaces: config.projectRegistry } : {}),
             behaviors: {
                 create: 'implementations, decisions, bug-fixes, milestones',

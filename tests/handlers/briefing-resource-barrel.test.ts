@@ -20,6 +20,7 @@ vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => (
     buildTeamContext: vi.fn().mockReturnValue(null),
     buildRulesFileInfo: vi.fn().mockReturnValue(null),
     buildSkillsDirInfo: vi.fn().mockReturnValue(null),
+    buildFlagsContext: vi.fn().mockReturnValue(undefined),
 }))
 
 vi.mock('../../src/handlers/resources/core/briefing/user-message.js', () => ({
