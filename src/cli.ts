@@ -164,6 +164,10 @@ program
         '--workflow-summary <text>',
         'Workflow summary for memory://workflows resource (env: MEMORY_JOURNAL_WORKFLOW_SUMMARY)'
     )
+    .option(
+        '--flag-vocabulary <terms>',
+        'Comma-separated flag vocabulary for Hush Protocol (env: FLAG_VOCABULARY, default: blocker,needs_review,help_requested,fyi)'
+    )
     .action(
         async (options: {
             transport: string
@@ -204,6 +208,7 @@ program
             briefingWorkflowStatus?: boolean
             briefingCopilot?: boolean
             workflowSummary?: string
+            flagVocabulary?: string
             instructionLevel: string
             auditLog?: string
             auditRedact?: boolean
@@ -359,6 +364,14 @@ program
                         | 'standard'
                         | 'full',
                     auditConfig,
+                    flagVocabulary: (() => {
+                        const raw = options.flagVocabulary ?? process.env['FLAG_VOCABULARY']
+                        if (!raw) return undefined
+                        return raw
+                            .split(',')
+                            .map((s) => s.trim().toLowerCase())
+                            .filter(Boolean)
+                    })(),
                 })
             } catch (error) {
                 logger.error('Failed to start server', {

@@ -129,6 +129,8 @@ export interface BriefingConfig {
     defaultProjectNumber?: number
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
+    /** Hush Protocol flag vocabulary passed from CLI/env */
+    flagVocabulary?: string[]
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */

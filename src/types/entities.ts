@@ -22,6 +22,7 @@ export type EntryType =
     | 'development_note'
     | 'enhancement'
     | 'milestone'
+    | 'flag'
     | 'system_integration_test'
     | 'test_entry'
     | 'other'

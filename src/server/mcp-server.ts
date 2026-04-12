@@ -74,6 +74,8 @@ export interface ServerOptions {
     instructionLevel?: 'essential' | 'standard' | 'full'
     // Audit configuration
     auditConfig?: AuditConfig
+    // Hush Protocol flag vocabulary
+    flagVocabulary?: string[]
 }
 
 /**
@@ -207,6 +209,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
     const customToolHandlerConfig = {
         defaultProjectNumber,
         projectRegistry: options.projectRegistry,
+        flagVocabulary: options.flagVocabulary,
     }
 
     // Get all tools once (unfiltered) for both instruction generation and registration
@@ -453,6 +456,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             defaultProjectNumber:
                 options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
             projectRegistry: options.projectRegistry,
+            flagVocabulary: options.flagVocabulary,
         }
         const result = await readResource(
             uri.href,

@@ -1,18 +1,11 @@
-/**
- * Team Resource Definitions - 2 resources
- *
- * Resources: memory://team/recent, memory://team/statistics
- *
- * Requires TEAM_DB_PATH to be configured.
- */
-
-import { ICON_CLOCK, ICON_TEAM } from '../../constants/icons.js'
+import { ICON_CLOCK, ICON_TEAM, ICON_FLAG } from '../../constants/icons.js'
 import {
     withPriority,
     ASSISTANT_FOCUSED,
     MEDIUM_PRIORITY,
 } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import { DEFAULT_FLAG_VOCABULARY } from '../tools/team/schemas.js'
 
 // ============================================================================
 // Helpers
@@ -35,6 +28,35 @@ function enrichWithAuthor<T extends { id: number }>(
         const author = (authorResult[0]?.values[0]?.[0] as string) ?? null
         return { ...e, author }
     })
+}
+
+/**
+ * Parse auto_context JSON to extract flag metadata.
+ */
+function parseFlagAutoContext(
+    autoContext: string | null
+): { flag_type: string; target_user: string | null; resolved: boolean; link: string | null } | null {
+    if (!autoContext) return null
+    try {
+        const parsed: unknown = JSON.parse(autoContext)
+        if (
+            typeof parsed === 'object' &&
+            parsed !== null &&
+            'flag_type' in parsed &&
+            'resolved' in parsed
+        ) {
+            const ctx = parsed as Record<string, unknown>
+            return {
+                flag_type: String(ctx['flag_type']),
+                target_user: typeof ctx['target_user'] === 'string' ? ctx['target_user'] : null,
+                resolved: Boolean(ctx['resolved']),
+                link: typeof ctx['link'] === 'string' ? ctx['link'] : null,
+            }
+        }
+        return null
+    } catch {
+        return null
+    }
 }
 
 // ============================================================================
@@ -126,6 +148,92 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                         ...(stats as object),
                         authors,
                         source: 'team',
+                    },
+                }
+            },
+        },
+        // ====================================================================
+        // Flag Resources (Hush Protocol)
+        // ====================================================================
+        {
+            uri: 'memory://flags',
+            name: 'Active Flags',
+            title: 'Active Team Flags Dashboard',
+            description:
+                'Active (unresolved) flags from the Hush Protocol. Shows machine-actionable developer signals that need attention. Requires TEAM_DB_PATH.',
+            mimeType: 'application/json',
+            icons: [ICON_FLAG],
+            annotations: withPriority(0.8, ASSISTANT_FOCUSED),
+            handler: (_uri: string, context: ResourceContext): ResourceResult => {
+                if (!context.teamDb) {
+                    return {
+                        data: {
+                            error: 'Team database not configured. Set TEAM_DB_PATH to enable.',
+                            flags: [],
+                            count: 0,
+                        },
+                    }
+                }
+
+                // Query all flag entries, then filter by resolved status in auto_context
+                const flagEntries = context.teamDb.searchEntries('', {
+                    entryType: 'flag',
+                    limit: 100,
+                })
+
+                const enriched = enrichWithAuthor(flagEntries, context)
+
+                const activeFlags = enriched
+                    .map((entry) => {
+                        const flagCtx = parseFlagAutoContext(entry.autoContext)
+                        if (!flagCtx || flagCtx.resolved) return null
+                        return {
+                            id: entry.id,
+                            flag_type: flagCtx.flag_type,
+                            target_user: flagCtx.target_user,
+                            link: flagCtx.link,
+                            author: entry.author,
+                            timestamp: entry.timestamp,
+                            preview:
+                                entry.content.slice(0, 120) +
+                                (entry.content.length > 120 ? '...' : ''),
+                            tags: entry.tags,
+                            projectNumber: entry.projectNumber ?? null,
+                        }
+                    })
+                    .filter((f): f is NonNullable<typeof f> => f !== null)
+
+                const lastModified =
+                    activeFlags[0]?.timestamp ?? new Date().toISOString()
+
+                return {
+                    data: {
+                        flags: activeFlags,
+                        count: activeFlags.length,
+                    },
+                    annotations: { lastModified },
+                }
+            },
+        },
+        {
+            uri: 'memory://flags/vocabulary',
+            name: 'Flag Vocabulary',
+            title: 'Hush Protocol Flag Vocabulary',
+            description:
+                'Returns the configured flag vocabulary for the Hush Protocol. Static resource reflecting server-wide configuration.',
+            mimeType: 'application/json',
+            icons: [ICON_FLAG],
+            annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
+            handler: (_uri: string, context: ResourceContext): ResourceResult => {
+                const custom = context.briefingConfig?.flagVocabulary
+                const vocabulary =
+                    custom && custom.length > 0 ? custom : [...DEFAULT_FLAG_VOCABULARY]
+
+                return {
+                    data: {
+                        vocabulary,
+                        count: vocabulary.length,
+                        isDefault: !custom || custom.length === 0,
                     },
                 }
             },

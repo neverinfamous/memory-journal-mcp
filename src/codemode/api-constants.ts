@@ -98,6 +98,8 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         rebuildIndex: 'teamRebuildVectorIndex',
         addToIndex: 'teamAddToVectorIndex',
         insights: 'teamGetCrossProjectInsights',
+        passFlag: 'passTeamFlag',
+        resolveFlag: 'resolveTeamFlag',
     },
 }
 
@@ -165,6 +167,8 @@ export const GROUP_EXAMPLES: Record<string, string[]> = {
         'mj.team.teamBackup()',
         'mj.team.teamSemanticSearch({ query: "deployment" })',
         'mj.team.teamGetCrossProjectInsights()',
+        'mj.team.passTeamFlag({ flag_type: "blocker", message: "FK constraint issue" })',
+        'mj.team.resolveTeamFlag({ flag_id: 42 })',
     ],
 }
 
@@ -241,6 +245,8 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamExportEntries: 'format',
     teamSemanticSearch: 'query',
     teamAddToVectorIndex: 'entry_id',
+    passTeamFlag: 'flag_type',
+    resolveTeamFlag: 'flag_id',
 }
 
 // =============================================================================
