@@ -45,6 +45,7 @@ This directory contains agent-optimized test prompts specifically designed to va
 | `test-cm-team-crud.md`          |  28.1–28.3  | Team CRUD, error paths, date range search                             | After Phases 16–19 |
 | `test-cm-team-admin.md`         |  28.4–28.9  | Team admin, analytics, relationships, IO logic, backup                | After Team CRUD    |
 | `test-cm-team-vector-errors.md` | 28.10–28.11 | Team vector/insights, 18-path cross-tool error verification + cleanup | After Team Admin   |
+| `test-cm-team-flags.md`         | 28.12–28.15 | Hush Protocol flags: create, vocabulary, resolve lifecycle, cleanup   | After Team Admin   |
 | `test-cm-error-matrix.md`       |     29      | Systematic `{}` Zod sweeps + type mismatches across all `mj.*` groups | After Phases 16–19 |
 
 ### Cross-Cutting Optimization Tests
@@ -75,7 +76,8 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
          ├── Phase 30 (Payload Optimization)─ independent
          └── Phase 28.1-3 (Team CRUD) ─────── sequential
               └── Phase 28.4-9 (Team Admin)
-                   └── Phase 28.10-11 (Team Vector/Errors + cleanup)
+                   ├── Phase 28.10-11 (Team Vector/Errors + cleanup)
+                   └── Phase 28.12-15 (Team Flags)
 ```
 
 ## Execution Workflow
@@ -84,8 +86,8 @@ Phase 16 (Sandbox Basics) ─── MUST PASS FIRST
 2. Run `test-cm-sandbox-basics.md` (Phase 16) — must pass before proceeding.
 3. Run Phases 17–19 in any order.
 4. Continue with Phases 20–27, 29, and 30 in any order (all independent after 16–19).
-5. Run Phase 28 files sequentially (CRUD → Admin → Vector/Errors).
-6. Cleanup is included in Phase 24 (for 22-24) and Phase 28.10-11 (for 25-28).
+5. Run Phase 28 files sequentially (CRUD → Admin → Vector/Errors → Flags).
+6. Cleanup is included in Phase 24 (for 22-24), Phase 28.10-11 (for 25-28), and Phase 28.15 (for flags).
 
 ## Token Estimate Reporting
 
