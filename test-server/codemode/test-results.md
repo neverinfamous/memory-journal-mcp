@@ -18,6 +18,7 @@
 | `test-cm-security.md`             | ~1,071                  |
 | `test-cm-team-admin.md`           | ~262                    |
 | `test-cm-team-crud.md`            | ~604                    |
+| `test-cm-team-flags.md`           | ~627                    |
 | `test-cm-team-vector-errors.md`   | ~776                    |
 | `test-cm-workflows.md`            | ~279                    |
 | **Total Estimated Tokens**        | **~8,521**              |
