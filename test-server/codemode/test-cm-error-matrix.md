@@ -369,9 +369,9 @@ return {
 
 ## Success Criteria
 
-- [ ] All 10 `mj.*` API groups tested with `{}` empty params
-- [ ] Type mismatches (string where number, number where string) return structured errors
-- [ ] Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
-- [ ] Security boundaries (path traversal, limit overflow) enforced
-- [ ] No sandbox crashes, no raw MCP exceptions leaked through Code Mode
-- [ ] All results map to compact summaries (no large payload inflation)
+- [x] All 10 `mj.*` API groups tested with `{}` empty params
+- [x] Type mismatches (string where number, number where string) return structured errors
+- [x] Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
+- [x] Security boundaries (path traversal, limit overflow) enforced
+- [x] No sandbox crashes, no raw MCP exceptions leaked through Code Mode
+- [x] All results map to compact summaries (no large payload inflation)
