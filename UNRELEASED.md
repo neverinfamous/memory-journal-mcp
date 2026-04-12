@@ -25,3 +25,4 @@
 ### Verification
 - **Code Mode Validation**: Certified 100% test-pass rate across all Phase 27 tag management (`mergeTags`, `listTags`) and backup/restore (`backupJournal`, `restoreBackup`, `cleanupBackups`) functional bounds without remediation.
 - **Code Mode Validation**: Certified 100% test-pass rate across all Phase 17 API Discoverability functional bounds (`mj.help()`, group help, aliases, positional arguments) without remediation.
+- **Code Mode Validation**: Certified 100% test-pass rate across all Phase 20 Core CRUD functional bounds (`createEntry`, `getEntryById`, `updateEntry`, `deleteEntry`, etc.) including correct bridging of all metadata parameters and structural validation schemas without remediation.
