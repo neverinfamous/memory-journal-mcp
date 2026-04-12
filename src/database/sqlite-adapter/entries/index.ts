@@ -65,7 +65,7 @@ export class EntriesManager {
             tags?: string[]
             isPersonal?: boolean
             significanceType?: string
-            autoContext?: boolean
+            autoContext?: string | null
             projectNumber?: number
             projectOwner?: string
             issueNumber?: number
