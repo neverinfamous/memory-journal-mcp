@@ -24,6 +24,7 @@
 - **Hush Protocol**: Fixed SQLite parameter mapping bug where `autoContext` JSON strings were erroneously being cast to boolean integers (`1`/`0`) in `crud.ts`.
 
 ### Verification
+- [x] **Direct Tool Validation**: Certified 100% test-pass rate across all Phase 5 Admin & Backup bounds (`merge_tags`, `list_tags`, `backup_journal`, `restore_backup`, `cleanup_backups`), confirming accurate tag consolidation, auto-timestamped backup creation, valid backup restoration with custom output fields, and absolute refusal of path-traversal without raw exception leaks.
 - **Code Mode Validation**: Certified 100% test-pass rate across all Phase 27 tag management (`mergeTags`, `listTags`) and backup/restore (`backupJournal`, `restoreBackup`, `cleanupBackups`) functional bounds without remediation.
 - **Code Mode Validation**: Certified 100% test-pass rate across all Phase 17 API Discoverability functional bounds (`mj.help()`, group help, aliases, positional arguments) without remediation.
 - **Code Mode Validation**: Certified 100% test-pass rate across all Phase 20 Core CRUD functional bounds (`createEntry`, `getEntryById`, `updateEntry`, `deleteEntry`, etc.) including correct bridging of all metadata parameters and structural validation schemas without remediation.
