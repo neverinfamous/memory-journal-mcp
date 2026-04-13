@@ -6,11 +6,11 @@ _Note: The tracked token counts only reflect the estimated tokens that actually 
 | :--------------------------------- | :---------------------- |
 | `test-core-admin.md`               | ~4,301                  |
 | `test-core-crud.md`                | ~1,015                  |
-| `test-core-infra.md`               | ~1,093                  |
+| `test-core-infra.md`               | ~429                    |
 | `test-core-io.md`                  | ~1,855                  |
 | `test-core-relationships.md`       | ~4,089                  |
-| `test-core-scheduler.md`           | ~18,857                 |
-| `test-core-search.md`              | ~8,600                  |
+| `test-core-scheduler.md`           | ~1,600                  |
+| `test-core-search.md`              | ~6,700                  |
 | `test-core-semantic.md`            | ~3,831                  |
 | `test-github.md`                   | ~6,785                  |
 | `test-integrity.md`                | ~2,850                  |
