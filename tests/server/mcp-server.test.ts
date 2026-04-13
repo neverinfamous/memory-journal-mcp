@@ -1263,6 +1263,7 @@ describe('McpServer', function () {
                     vacuumIntervalMinutes: 120,
                     rebuildIndexIntervalMinutes: 180,
                     keepBackups: 5,
+                    digestIntervalMinutes: 0,
                 },
             })
 
@@ -1281,6 +1282,7 @@ describe('McpServer', function () {
                     vacuumIntervalMinutes: 0,
                     rebuildIndexIntervalMinutes: 0,
                     keepBackups: 5,
+                    digestIntervalMinutes: 0,
                 },
             })
 
@@ -1296,6 +1298,7 @@ describe('McpServer', function () {
                     vacuumIntervalMinutes: 0,
                     rebuildIndexIntervalMinutes: 0,
                     keepBackups: 5,
+                    digestIntervalMinutes: 0,
                 },
             })
 

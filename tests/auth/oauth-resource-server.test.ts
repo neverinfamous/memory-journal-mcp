@@ -4,7 +4,7 @@
  * Tests for RFC 9728 Protected Resource Metadata.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
     OAuthResourceServer,
     createOAuthResourceServer,
