@@ -12,8 +12,8 @@
 | `test-cm-orchestration.md`        | ~317                    |
 | `test-cm-payload-optimization.md` | ~278                    |
 | `test-cm-readonly.md`             | ~1,024                  |
-| `test-cm-relationships.md`        | ~312                    |
-| `test-cm-sandbox-basics.md`       | ~507                    |
+| `test-cm-relationships.md`        | ~287                    |
+| `test-cm-sandbox-basics.md`       | ~505                    |
 | `test-cm-search.md`               | ~378                    |
 | `test-cm-security.md`             | ~1,071                  |
 | `test-cm-team-admin.md`           | ~262                    |

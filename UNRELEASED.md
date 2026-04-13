@@ -39,4 +39,5 @@
 - **Code Mode**: Validated Phase 30 Payload Optimization, confirming Kanban throttling (`summary_only`, `item_limit`), issue body truncation (`truncate_body`), global query limits (500), and 100KB sandbox payload caps via `mj_execute_code`.
 - **Code Mode**: Validated Phase 24 Relationships & Visualization tools via `mj_execute_code`, fully verifying creation of all 5 connection types, duplicate constraint checking, error path handling, and Mermaid diagram output generation.
 - **Code Mode**: Validated Phase 16 Sandbox Basics via `mj_execute_code`, confirming expression evaluations, async/await resolution, runtime metrics, and timeout terminations.
+- **Code Mode**: Validated Phase 19 Security Constraints via `mj_execute_code`, fully verifying input validation, detection of blocked patterns, wrapped runtime exceptions, and nulled globals.
 - **Code Mode**: Validated Phase 21 Search, Semantics, Analytics, and Vector Index management tools via `mj_execute_code`, fully verifying FTS5 patterns, date-range filters, embedding hints, importance sorting, cross-DB search, and vector stat rebuilding.
