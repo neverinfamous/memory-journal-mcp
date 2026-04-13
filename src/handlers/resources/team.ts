@@ -236,16 +236,15 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_FLAG],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
-                const config = context.briefingConfig as BriefingConfig | undefined
-                const custom = config?.flagVocabulary
-                const hasCustom: boolean = Array.isArray(custom) && custom.length > 0
-                const vocabulary: string[] = hasCustom ? custom! : [...DEFAULT_FLAG_VOCABULARY]
+                const custom = context.briefingConfig?.flagVocabulary
+                const vocabulary: string[] = 
+                    (Array.isArray(custom) && custom.length > 0) ? custom : [...DEFAULT_FLAG_VOCABULARY]
 
                 return {
                     data: {
                         vocabulary,
                         count: vocabulary.length,
-                        isDefault: !hasCustom,
+                        isDefault: !(Array.isArray(custom) && custom.length > 0),
                     },
                 }
             },
