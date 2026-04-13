@@ -23,7 +23,7 @@ _Note: The tracked token counts only reflect the estimated tokens that actually 
 | `test-team.md`                 | ~7,200                  |
 | `test-tool-group-admin.md`     | ~2,181                  |
 | `test-tool-group-backup.md`    | ~498                    |
-| `test-tool-group-core.md`      | ~2,190                  |
+| `test-tool-group-core.md`      | ~2,146                  |
 | `test-tool-group-github.md`    | ~1,010                  |
 | `test-tool-group-search.md`    | ~4,650                  |
 | `test-tool-group-team.md`      | ~1,858                  |

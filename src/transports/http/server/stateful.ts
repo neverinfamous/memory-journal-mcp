@@ -138,11 +138,18 @@ export function setupStateful(
                                 error: e instanceof Error ? e.message : String(e),
                             })
                             // Force clear the SDK's internal transport state to unblock reconnect
+                            interface InternalProtocol {
+                                _onclose?: () => void
+                            }
+                            interface InternalServer {
+                                server?: InternalProtocol
+                            }
+                            const internalServer = server as unknown as InternalServer
                             if (
-                                (server as typeof server & { server?: any }).server &&
-                                typeof (server as typeof server & { server?: any }).server._onclose === 'function'
+                                internalServer.server !== undefined &&
+                                typeof internalServer.server._onclose === 'function'
                             ) {
-                                ;(server as typeof server & { server?: any }).server._onclose()
+                                internalServer.server._onclose()
                             }
                         }
                     }
