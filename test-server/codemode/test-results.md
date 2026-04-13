@@ -8,7 +8,7 @@
 | `test-cm-error-matrix.md`         | ~592                    |
 | `test-cm-github.md`               | ~757                    |
 | `test-cm-io.md`                   | ~98                     |
-| `test-cm-kanban.md`               | ~94                     |
+| `test-cm-kanban-lifecycle.md`     | ~91                     |
 | `test-cm-orchestration.md`        | ~317                    |
 | `test-cm-payload-optimization.md` | ~350                    |
 | `test-cm-readonly.md`             | ~1,024                  |
