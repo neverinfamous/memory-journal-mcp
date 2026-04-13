@@ -16,7 +16,7 @@
 | `test-cm-sandbox-basics.md`       | ~505                    |
 | `test-cm-search.md`               | ~378                    |
 | `test-cm-security.md`             | ~1,045                  |
-| `test-cm-team-admin.md`           | ~262                    |
+| `test-cm-team-admin.md`           | ~220                    |
 | `test-cm-team-crud.md`            | ~604                    |
 | `test-cm-team-flags.md`           | ~627                    |
 | `test-cm-team-vector-errors.md`   | ~776                    |
