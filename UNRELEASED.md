@@ -41,3 +41,4 @@
 - **Code Mode**: Validated Phase 16 Sandbox Basics via `mj_execute_code`, confirming expression evaluations, async/await resolution, runtime metrics, and timeout terminations.
 - **Code Mode**: Validated Phase 19 Security Constraints via `mj_execute_code`, fully verifying input validation, detection of blocked patterns, wrapped runtime exceptions, and nulled globals.
 - **Code Mode**: Validated Phase 21 Search, Semantics, Analytics, and Vector Index management tools via `mj_execute_code`, fully verifying FTS5 patterns, date-range filters, embedding hints, importance sorting, cross-DB search, and vector stat rebuilding.
+- **Code Mode**: Validated Phase 28 Team Admin & Collaboration via `mj_execute_code`, successfully testing team tag merging, analytics grouping, collaboration matrix generation, relationship mapping with diagrams, dataset IO exports, and seamless backups.
