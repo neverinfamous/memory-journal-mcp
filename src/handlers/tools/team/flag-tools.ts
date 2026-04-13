@@ -1,7 +1,7 @@
 /**
  * Team Flag Tools — Hush Protocol - 2 tools
  *
- * Tools: pass_team_flag, resolve_team_flag
+ * Tools: team_pass_flag, team_resolve_flag
  *
  * Flags are team entries with entry_type: 'flag' and structured auto_context.
  * They replace communication noise with machine-actionable developer flags.
@@ -78,7 +78,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
     return [
         {
-            name: 'pass_team_flag',
+            name: 'team_pass_flag',
             title: 'Pass Team Flag',
             description:
                 'Create a machine-actionable flag in the team database. Flags replace communication noise with structured, searchable signals. Vocabulary: blocker, needs_review, help_requested, fyi (configurable via FLAG_VOCABULARY).',
@@ -168,7 +168,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
             },
         },
         {
-            name: 'resolve_team_flag',
+            name: 'team_resolve_flag',
             title: 'Resolve Team Flag',
             description:
                 'Mark a team flag as resolved with an optional resolution comment. Idempotent — resolving an already-resolved flag returns success with the existing state.',
@@ -208,7 +208,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                             error: `Entry ${String(input.flag_id)} is not a flag (type: ${entry.entryType})`,
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
-                            suggestion: 'Use resolve_team_flag only on entries created by pass_team_flag',
+                            suggestion: 'Use team_resolve_flag only on entries created by team_pass_flag',
                             recoverable: true,
                         }
                     }

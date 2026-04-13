@@ -29,6 +29,21 @@ describe('Team Resource Handlers', () => {
         })
         const entry2 = teamDb.createEntry({ content: 'Team resource test beta' })
 
+        const flagContext = {
+            flag_type: 'blocker',
+            target_user: 'neverinfamous',
+            link: null,
+            resolved: false,
+            resolved_at: null,
+            resolution: null,
+            author: 'Alice'
+        }
+        const entry3 = teamDb.createEntry({
+            content: 'flag:blocker @neverinfamous: API is down',
+            entryType: 'flag',
+            autoContext: JSON.stringify(flagContext)
+        })
+
         // Set author on entries via raw SQL
         teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
             'Alice',
@@ -37,6 +52,10 @@ describe('Team Resource Handlers', () => {
         teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
             'Bob',
             entry2.id,
+        ])
+        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+            'Alice',
+            entry3.id,
         ])
     })
 
@@ -156,6 +175,97 @@ describe('Team Resource Handlers', () => {
             const data = result.data as { configured: boolean; error: string }
             expect(data.configured).toBe(false)
             expect(data.error).toContain('Team database not configured')
+        })
+    })
+    // ========================================================================
+    // memory://flags
+    // ========================================================================
+
+    describe('memory://flags', () => {
+        it('should return active team flags', async () => {
+            const result = await readResource(
+                'memory://flags',
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )
+
+            const data = result.data as {
+                activeFlags: { flag_type: string; target_user: string | null; author: string | null }[]
+                count: number
+            }
+            expect(data.count).toBeGreaterThan(0)
+            expect(data.activeFlags.length).toBeGreaterThan(0)
+
+            const flag = data.activeFlags[0]
+            expect(flag.flag_type).toBe('blocker')
+            expect(flag.target_user).toBe('neverinfamous')
+            expect(flag.author).toBe('Alice')
+        })
+
+        it('should return error structure when team DB not configured', async () => {
+            const result = await readResource(
+                'memory://flags',
+                personalDb
+                // No teamDb
+            )
+
+            const data = result.data as { error: string; activeFlags: unknown[]; count: number }
+            expect(data.error).toContain('Team database not configured')
+            expect(data.count).toBe(0)
+            expect(data.activeFlags).toEqual([])
+        })
+    })
+
+    // ========================================================================
+    // memory://flags/vocabulary
+    // ========================================================================
+
+    describe('memory://flags/vocabulary', () => {
+        it('should return default flag vocabulary', async () => {
+            const result = await readResource(
+                'memory://flags/vocabulary',
+                personalDb,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                teamDb
+            )
+
+            const data = result.data as {
+                vocabulary: string[]
+                count: number
+                isDefault: boolean
+            }
+            expect(data.isDefault).toBe(true)
+            expect(data.vocabulary).toContain('blocker')
+            expect(data.count).toBeGreaterThan(0)
+        })
+
+        it('should return custom flag vocabulary if configured', async () => {
+            const result = await readResource(
+                'memory://flags/vocabulary',
+                personalDb,
+                undefined, // vectorManager
+                undefined, // filterConfig
+                undefined, // github
+                undefined, // scheduler
+                teamDb,    // teamDb
+                { flagVocabulary: ['urgent', 'review'] } as any // briefingConfig
+            )
+
+            const data = result.data as {
+                vocabulary: string[]
+                count: number
+                isDefault: boolean
+            }
+            expect(data.isDefault).toBe(false)
+            expect(data.vocabulary).toEqual(['urgent', 'review'])
+            expect(data.count).toBe(2)
         })
     })
 })

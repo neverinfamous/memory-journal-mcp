@@ -1,5 +1,5 @@
 /**
- * Team Tool Group - 24 tools
+ * Team Tool Group - 25 tools
  *
  * Barrel re-export composing all team tool sub-modules.
  *
@@ -14,7 +14,7 @@
  *   Backup:        team_backup, team_list_backups
  *   Vector:        team_semantic_search, team_get_vector_index_stats,
  *                  team_rebuild_vector_index, team_add_to_vector_index
- *   Flags:         pass_team_flag, resolve_team_flag
+ *   Flags:         team_pass_flag, team_resolve_flag
  *
  * Requires TEAM_DB_PATH to be configured. All tools return structured
  * errors when the team database is not available.
@@ -33,7 +33,7 @@ import { getTeamVectorTools } from './vector-tools.js'
 import { getTeamFlagTools } from './flag-tools.js'
 
 /**
- * Get all team tool definitions (24 tools).
+ * Get all team tool definitions (25 tools).
  */
 export function getTeamTools(context: ToolContext): ToolDefinition[] {
     return [

@@ -7,7 +7,7 @@
 - **Skills**: Integrated `github-copilot-cli` skill for interactive, terminal-native code reviews.
 - **Workflows**: Added `copilot-audit` pre-push review loop for evaluating uncommitted changes via Copilot.
 - **Hush Protocol**: Introduced a machine-actionable team communication system:
-  - Tools: Added `pass_team_flag` and `resolve_team_flag`.
+  - Tools: Added `team_pass_flag` and `team_resolve_flag`.
   - Resources: Added `memory://flags` dashboard and `memory://flags/vocabulary`.
   - Config: Added `--flag-vocabulary` CLI argument and `FLAG_VOCABULARY` env var.
   - Core: Added `'flag'` entry type, `ICON_FLAG`, and behavioral instructions.

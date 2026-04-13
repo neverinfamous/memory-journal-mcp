@@ -255,7 +255,7 @@ describe('Team resources — branch coverage', () => {
                     .mockReturnValue([
                         { id: 1, entryType: 'note', timestamp: '2025-01-01', content: 'test' },
                     ]),
-                executeRawQuery: vi.fn().mockReturnValue([{ values: [['alice']] }]),
+                executeRawQuery: vi.fn().mockReturnValue([{ values: [[1, 'alice']] }]),
             })
             const context = createMockContext({ teamDb })
             const resource = resources.find((r) => r.uri === 'memory://team/recent')!

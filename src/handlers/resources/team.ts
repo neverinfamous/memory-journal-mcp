@@ -19,15 +19,26 @@ function enrichWithAuthor<T extends { id: number }>(
     context: ResourceContext
 ): (T & { author: string | null })[] {
     const teamDb = context.teamDb
-    if (!teamDb) return entries.map((e: T) => ({ ...e, author: null }))
-    return entries.map((e: T) => {
-        const authorResult = teamDb.executeRawQuery(
-            'SELECT author FROM memory_journal WHERE id = ?',
-            [e.id]
-        )
-        const author = (authorResult[0]?.values[0]?.[0] as string) ?? null
-        return { ...e, author }
-    })
+    if (!teamDb || entries.length === 0) return entries.map((e: T) => ({ ...e, author: null }))
+    
+    const ids = entries.map(e => e.id)
+    const placeholders = ids.map(() => '?').join(',')
+    const authorResult = teamDb.executeRawQuery(
+        `SELECT id, author FROM memory_journal WHERE id IN (${placeholders})`,
+        ids
+    )
+    
+    const authorMap = new Map<number, string | null>()
+    if (authorResult[0]) {
+        authorResult[0].values.forEach((row: unknown[]) => {
+            authorMap.set(row[0] as number, row[1] as string | null)
+        })
+    }
+    
+    return entries.map((e: T) => ({
+        ...e,
+        author: authorMap.get(e.id) ?? null
+    }))
 }
 
 /**
@@ -169,7 +180,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     return {
                         data: {
                             error: 'Team database not configured. Set TEAM_DB_PATH to enable.',
-                            flags: [],
+                            activeFlags: [],
                             count: 0,
                         },
                     }
@@ -208,7 +219,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        flags: activeFlags,
+                        activeFlags,
                         count: activeFlags.length,
                     },
                     annotations: { lastModified },
