@@ -38,3 +38,4 @@
 - **Code Mode**: Validated Phase 23 Cross-Group Orchestration, completely testing token-efficient multi-step pipelines (health, GitHub coverage, tag pipelines, relationship graphs, and create-index-search) via `mj_execute_code`.
 - **Code Mode**: Validated Phase 30 Payload Optimization, confirming Kanban throttling (`summary_only`, `item_limit`), issue body truncation (`truncate_body`), global query limits (500), and 100KB sandbox payload caps via `mj_execute_code`.
 - **Code Mode**: Validated Phase 24 Relationships & Visualization tools via `mj_execute_code`, fully verifying creation of all 5 connection types, duplicate constraint checking, error path handling, and Mermaid diagram output generation.
+- **Code Mode**: Validated Phase 16 Sandbox Basics via `mj_execute_code`, confirming expression evaluations, async/await resolution, runtime metrics, and timeout terminations.
