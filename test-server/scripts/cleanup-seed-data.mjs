@@ -232,7 +232,8 @@ function processDatabase({ db, label, seedFingerprints }) {
             if (
                 row.content.includes('# Session Summary') ||
                 row.content.includes('memory-journal-mcp') ||
-                row.content.includes('postgres-mcp')
+                row.content.includes('postgres-mcp') ||
+                row.entry_type === 'flag'
             ) {
                 isProtectedProject = true
             }
