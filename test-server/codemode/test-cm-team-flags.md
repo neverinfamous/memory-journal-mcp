@@ -57,7 +57,7 @@ const help = await mj.team.passTeamFlag({
 const detail = await mj.team.teamGetEntryById({ entry_id: blocker.entry?.id })
 const autoCtx = detail.entry?.autoContext ? JSON.parse(detail.entry.autoContext) : null
 
-return {
+const result = {
   blockerSuccess: blocker.success,
   blockerFlagType: blocker.flag_type,
   blockerTarget: blocker.target_user,
@@ -73,7 +73,8 @@ return {
   autoCtxTarget: autoCtx?.target_user,
   autoCtxLink: autoCtx?.link,
   autoCtxResolved: autoCtx?.resolved,
-}
+};
+return result;
 ```
 
 | Check             | Expected                                |
@@ -124,7 +125,7 @@ if (nonFlagEntry) {
   resolveWrongType = await mj.team.resolveTeamFlag({ flag_id: nonFlagEntry.id })
 }
 
-return {
+const result = {
   badTypeError: badType.success === false,
   badTypeCode: badType.code,
   badTypeHasSuggestion: typeof badType.suggestion === 'string',
@@ -135,7 +136,8 @@ return {
   resolveGhostCode: resolveGhost.code,
   resolveEmptyError: resolveEmpty.success === false,
   resolveWrongTypeError: resolveWrongType.success === false || resolveWrongType.skipped === true,
-}
+};
+return result;
 ```
 
 | Check                  | Expected                                      |
@@ -186,7 +188,7 @@ const flag2 = await mj.team.passTeamFlag({
 })
 const bareResolved = await mj.team.resolveTeamFlag({ flag_id: flag2.entry?.id })
 
-return {
+const result = {
   resolveSuccess: resolved.success,
   resolvedFlagType: resolved.flag_type,
   resolvedState: resolved.resolved,
@@ -200,7 +202,8 @@ return {
   reResolveOriginal: reResolved.resolution === 'Fixed by migration hotfix',
   bareResolveSuccess: bareResolved.success,
   bareResolveNoComment: bareResolved.resolution === null,
-}
+};
+return result;
 ```
 
 | Check                  | Expected                              |
@@ -256,13 +259,14 @@ for (const id of uniqueIds) {
   if (r.success) deleted++
 }
 
-return {
+const result = {
   tagSearchCount: tagSearch.entries?.length ?? 0,
   typeSearchCount: typeSearch.entries?.length ?? 0,
   typeSearchAllFlags: typeSearch.entries?.every((e) => e.entryType === 'flag') ?? true,
   cleanedUp: deleted,
   cleanedAll: deleted === uniqueIds.length,
-}
+};
+return result;
 ```
 
 | Check               | Expected                         |
