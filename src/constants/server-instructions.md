@@ -7,17 +7,12 @@
 1. You **MUST** read the `memory://briefing/{repo_name}` at the start of each chat!
 2. Use the standard MCP `read_resource` tool for this (do NOT use Code Mode/execute_code).
 3. Infer the `repo_name` from the user's prompt or your active workspace context.
-4. Once read, present the `userMessage` from the briefing to the user as a formatted bullet list containing the key facts for all available fields including:
-
-- Project Name:
-- Entry counts (journal + team)
-- Latest Entry (journal + team):
-- GitHub: repo, branch, CI status, open issues/PRs, insights
-- Milestone progress (if any)
-- Template resources count
-- Registered Workspaces (if available - provides automatic repo-to-project routing)
-- Optional metadata present (rulesFile, skillsDir, workflowSummary, copilotReviews, Team DB, insights)
-
+4. **ACKNOWLEDGE FLAGS**: If the briefing JSON contains `activeFlags` (count > 0), you MUST print an alert ABOVE the table: `⚠️ **{count} active flag(s)** — review before proceeding.` followed by each flag (`🚩 {flag_type} → @{target_user}: {preview}`).
+5. **RENDER TABLE**: Parse the remaining JSON into a dense 2-column Markdown Table (Field, Value).
+   - **RESTRICTION**: NO bulleted lists inside the table. Do NOT truncate summaries or issues.
+   - **FORMATTING**: Group related properties (use `<br>` for line breaks).
+   - **REQUIRED GROUPS**: GitHub, Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
+6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
 - **AntiGravity**: Tools are `mcp_{name}_{tool}` → server name = `memory-journal-mcp`
 - **Cursor**: Tools are `user-{name}-{tool}` → server name = `user-memory-journal-mcp`
 - **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.

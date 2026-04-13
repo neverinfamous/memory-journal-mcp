@@ -76,16 +76,12 @@ Execute BEFORE fulfilling any user request in a new session:
 1. **TARGET**: Infer `repo_name` from the active workspace context or user prompt. If the task is not associated with a specific project, fallback to using the generic resource without a repo name (which defaults to the first registered workspace).
 2. **FETCH**: Use the MCP `read_resource` tool (Server: `memory-journal-mcp`) to read `memory://briefing/{repo_name}` (or `memory://briefing` if falling back).
    - **RESTRICTION**: Do NOT use `execute_code` for this step.
-3. **RENDER TABLE**: Parse the briefing JSON and output a dense 2-column Markdown Table (Field, Value) capturing the core context.
-   - **RESTRICTION**: NO bulleted lists. Do NOT truncate issues or summaries.
-   - **FORMATTING**: Group related properties to save vertical space. Use `<br>` tags for inner-cell line breaks.
-   - **REQUIRED GROUPS**:
-     - **GitHub**: Combine Repo, Branch, CI, PRs, and Insights.
-     - **GitHub Issues**: List every issue, one per line.
-     - **Active Flags (Hush Protocol)**: If the briefing JSON contains an `activeFlags` object (with `count > 0`), render each flag in a dedicated row using format: `🚩 {flag_type} → @{target_user}: {preview}`. If `count` is 0 or the field is absent, omit the row entirely.
-     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries (titles only), Proactive Analytics/Team Density, Milestones, and Workspaces.
-   - **FLAG PROMINENCE**: When `activeFlags.count > 0`, prepend a bold callout line **above** the table: `⚠️ **{count} active flag(s)** — review before proceeding.` This ensures blockers and review requests are impossible to miss.
-4. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
+3. **ACKNOWLEDGE FLAGS**: If the briefing JSON contains `activeFlags` (count > 0), you MUST print an alert ABOVE the table: `⚠️ **{count} active flag(s)** — review before proceeding.` followed by each flag (`🚩 {flag_type} → @{target_user}: {preview}`).
+4. **RENDER TABLE**: Parse the remaining JSON into a dense 2-column Markdown Table (Field, Value).
+   - **RESTRICTION**: NO bulleted lists inside the table. Do NOT truncate summaries or issues.
+   - **FORMATTING**: Group related properties (use `<br>` for line breaks).
+   - **REQUIRED GROUPS**: GitHub (Repo, Branch, CI, PRs, Insights), Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
+5. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
 
 </details>
 
