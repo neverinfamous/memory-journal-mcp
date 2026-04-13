@@ -15,6 +15,10 @@
 
 ### Changed
 
+- **Dependency Updates**:
+  - Bumped `better-sqlite3` to v12.9.0
+  - Bumped `globals` to v17.5.0
+  - Bumped `simple-git` to v3.36.0
 - **Briefing**: Renamed the ambiguous `Matrix Density` insight label to `Relationship density`.
 
 ### Fixed
