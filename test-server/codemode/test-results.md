@@ -21,4 +21,4 @@
 | `test-cm-team-flags.md`           | ~627                    |
 | `test-cm-team-vector-errors.md`   | ~617                    |
 | `test-cm-workflows.md`            | ~279                    |
-| **Total Estimated Tokens**        | **~8,521**              |
+| **Total Estimated Tokens**        | **~8,899**              |

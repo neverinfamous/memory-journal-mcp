@@ -27,4 +27,4 @@ _Note: The tracked token counts only reflect the estimated tokens that actually 
 | `test-tool-group-github.md`    | ~1,010                  |
 | `test-tool-group-search.md`    | ~4,650                  |
 | `test-tool-group-team.md`      | ~1,858                  |
-| **Total Estimated Tokens**     | **~79,269**             |
+| **Total Estimated Tokens**     | **~62,949**             |
