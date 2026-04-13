@@ -31,3 +31,4 @@
 - **Hush Protocol**: Fixed SQLite mapping bug inadvertently casting `autoContext` JSON strings to booleans.
 - **Code Mode**: Validated Phase 26 Admin and Backup & Export tool structures and safe execution boundaries.
 - **Code Mode**: Validated Phase 17 API Discoverability (top-level help, groups, aliases, positional arguments).
+- **Code Mode**: Validated Phase 20 Core CRUD operations (create, read, update, delete) via `mj_execute_code`.

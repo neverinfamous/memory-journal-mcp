@@ -3,7 +3,7 @@
 | Test Document                     | Approximate Token Usage |
 | :-------------------------------- | :---------------------- |
 | `test-cm-admin-backup.md`         | ~141                    |
-| `test-cm-api-discovery.md`        | ~376                    |
+| `test-cm-api-discovery.md`        | ~228                    |
 | `test-cm-crud.md`                 | ~933                    |
 | `test-cm-error-matrix.md`         | ~592                    |
 | `test-cm-github.md`               | ~757                    |
