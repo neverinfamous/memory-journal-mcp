@@ -42,6 +42,7 @@ Memory Journal solves this by acting as your project's **long-term memory**, bri
 - _"Why did we choose SQLite over Postgres for this service last month?"_ (Semantic search)
 - _"Run the `/issue-triage` workflow on the top priority ticket in the Kanban board."_ (GitHub operations)
 - _"Who has been touching the auth module recently, and what's our team collaboration density?"_ (Team analytics)
+- _"I'm stuck on this database error. Raise a 'blocker' flag for @sarah so her agent sees it next session."_ (Hush Protocol)
 - _"Close issue #42 and log an entry explaining our architectural fix for the parsing bug."_ (Context lifecycles)
 - _"Draw a visual graph showing how my last 10 architectural decisions relate to each other."_ (Knowledge graph)
 
