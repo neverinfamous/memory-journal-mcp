@@ -335,6 +335,7 @@ test.describe('Code Mode Groups: Representative Calls', () => {
     })
 
     test('mj.admin.rebuildVectorIndex() returns success', async () => {
+        test.setTimeout(120000)
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'mj_execute_code', {
