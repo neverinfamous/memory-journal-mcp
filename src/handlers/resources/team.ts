@@ -4,7 +4,7 @@ import {
     ASSISTANT_FOCUSED,
     MEDIUM_PRIORITY,
 } from '../../utils/resource-annotations.js'
-import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
+import type { InternalResourceDef, ResourceContext, ResourceResult, BriefingConfig } from './shared.js'
 import { DEFAULT_FLAG_VOCABULARY } from '../tools/team/schemas.js'
 
 // ============================================================================
@@ -236,9 +236,10 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_FLAG],
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: (_uri: string, context: ResourceContext): ResourceResult => {
-                const custom: string[] | undefined = context.briefingConfig?.flagVocabulary
-                const hasCustom: boolean = custom !== undefined && custom.length > 0
-                const vocabulary: string[] = hasCustom ? (custom as string[]) : [...DEFAULT_FLAG_VOCABULARY]
+                const config = context.briefingConfig as BriefingConfig | undefined
+                const custom = config?.flagVocabulary
+                const hasCustom: boolean = Array.isArray(custom) && custom.length > 0
+                const vocabulary: string[] = hasCustom ? custom! : [...DEFAULT_FLAG_VOCABULARY]
 
                 return {
                     data: {
