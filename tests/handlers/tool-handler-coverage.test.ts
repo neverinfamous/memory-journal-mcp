@@ -43,6 +43,7 @@ describe('Tool Handler Coverage', () => {
         await db.initialize()
         teamDb = new DatabaseAdapter(teamDbPath)
         await teamDb.initialize()
+        await teamDb.applyTeamSchema()
     })
 
     afterAll(() => {

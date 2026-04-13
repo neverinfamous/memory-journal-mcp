@@ -50,8 +50,7 @@ describe('VectorSearchManager — branch coverage', () => {
         } as any)
         Object.assign(manager, { initialized: true })
 
-        const result = await manager.search('test query')
-        expect(result).toEqual([])
+        await expect(manager.search('test query')).rejects.toThrow('Vector database not available')
     })
 
     it('should return 0 from rebuildIndex when no db', async () => {
@@ -111,9 +110,8 @@ describe('VectorSearchManager — branch coverage', () => {
             Object.assign(manager, { initialized: true })
         })
 
-        const result = await manager.search('query')
+        await expect(manager.search('query')).rejects.toThrow('Vector database not available')
         expect(initSpy).toHaveBeenCalled()
-        expect(result).toEqual([])
     })
 
     it('should auto-initialize when calling rebuildIndex on uninitialized manager', async () => {

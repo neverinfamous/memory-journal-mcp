@@ -181,8 +181,12 @@ export const rulesResource: InternalResourceDef = {
                 }
             }
 
+            const stat = await fs.promises.stat(rulesPath)
+            if (stat.size > 1024 * 1024) { // 1MB limit for rules
+                throw new Error('Rules file exceeds 1MB limit')
+            }
+
             const content = await fs.promises.readFile(rulesPath, 'utf8')
-            const stat = await fs.promises.stat(rulesPath).catch(() => ({ mtimeMs: Date.now() }))
             const mtimeMs = stat.mtimeMs
 
             cachedRulesContent = content
@@ -200,7 +204,7 @@ export const rulesResource: InternalResourceDef = {
                 data: {
                     configured: true,
                     error: `Could not read rules file: ${message}`,
-                    path: rulesPath,
+                    // Removed configuration path disclosure
                 },
             }
         }
@@ -333,9 +337,8 @@ export const skillsResource: InternalResourceDef = {
                 return {
                     data: {
                         configured: true,
-                        ...(userSkillsDir ? { skillsDir: userSkillsDir } : {}),
-                        ...(shippedSkillsDir ? { shippedSkillsDir } : {}),
-                        skills: cachedSkills,
+                        // Prevent path disclosure of host directories
+                        skills: cachedSkills.map(s => ({ name: s.name, excerpt: s.excerpt, source: s.source })),
                         count: cachedSkills.length,
                     },
                 }
@@ -368,9 +371,8 @@ export const skillsResource: InternalResourceDef = {
             return {
                 data: {
                     configured: true,
-                    ...(userSkillsDir ? { skillsDir: userSkillsDir } : {}),
-                    ...(shippedSkillsDir ? { shippedSkillsDir } : {}),
-                    skills,
+                    // Prevent path disclosure of host directories
+                    skills: skills.map(s => ({ name: s.name, excerpt: s.excerpt, source: s.source })),
                     count: skills.length,
                 },
             }

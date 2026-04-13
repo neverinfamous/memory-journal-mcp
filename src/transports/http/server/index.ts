@@ -85,7 +85,17 @@ export class HttpTransport {
     async start(server: McpServer, scheduler: Scheduler | null): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
 
-        if (!corsOrigins || corsOrigins.includes('*')) {
+        const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+        const hasCorsOpen = !corsOrigins || corsOrigins.includes('*')
+        const hasAuth = this.config.oauthEnabled ?? Boolean(authToken)
+
+        if (!isLocalhost && (!hasAuth || hasCorsOpen)) {
+            const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication or restricted CORS. You MUST specify --auth-token (or OAuth) and --cors-origin to bind publicly.`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
+
+        if (hasCorsOpen) {
             logger.warning(
                 'CORS origin is set to "*" (all origins). ' +
                     'Set --cors-origin or MCP_CORS_ORIGIN for production deployments.',
@@ -93,7 +103,7 @@ export class HttpTransport {
             )
         }
 
-        if (!authToken) {
+        if (!hasAuth) {
             logger.warning(
                 'No authentication configured for HTTP transport. ' +
                     'Set --auth-token or MCP_AUTH_TOKEN for production deployments.',

@@ -273,7 +273,7 @@ describe('setupStateful', () => {
         await vi.advanceTimersByTimeAsync(10)
 
         expect(ctx.touchSession).toHaveBeenCalledWith('existing-session')
-        expect(mockTransport.handleRequest).toHaveBeenCalled()
+        expect(mockHandleRequest).toHaveBeenCalled()
 
         clearInterval(timer)
     })
@@ -324,49 +324,16 @@ describe('setupStateful', () => {
 
         await vi.advanceTimersByTimeAsync(10)
 
-        expect(server.connect).toHaveBeenCalled()
-        expect(mockHandleRequest).toHaveBeenCalled()
-
-        // Verify onclose cleanup
-        expect(ctx.transports.size).toBeGreaterThan(0)
-        const sid = Array.from(ctx.transports.keys())[0]!
-        const createdTransport = ctx.transports.get(sid) as any
-        if (createdTransport && createdTransport.onclose) {
-            createdTransport.onclose()
-            expect(ctx.transports.has(sid)).toBe(false)
-        }
-
-        clearInterval(timer)
-    })
-
-    it('should close existing server connection before reconnecting', async () => {
-        vi.mocked(isInitializeRequest).mockReturnValue(true)
-
-        const ctx = createMockCtx()
-        ctx.serverConnected = true
-        const app = createMockApp()
-        const server = createMockServer()
-
-        const timer = setupStateful(ctx, app as never, server as never)
-        const handler = app.routes['post']!['/mcp']!
-
-        const req = mockReq({ headers: {}, body: { method: 'initialize' } })
-        handler(req, mockRes())
-
-        await vi.advanceTimersByTimeAsync(10)
-
-        expect(server.close).toHaveBeenCalled()
-        expect(server.connect).toHaveBeenCalled()
+        expect(server.connect).toHaveBeenCalled() // Called once on setup
+        expect(mockHandleRequest).toHaveBeenCalled() // Handled the init request
 
         clearInterval(timer)
     })
 
     it('should handle 500 error when request throws', async () => {
         const ctx = createMockCtx()
-        const mockTransport = {
-            handleRequest: vi.fn().mockRejectedValue(new Error('transport error')),
-        }
-        ctx.transports.set('error-session', mockTransport as never)
+        mockHandleRequest.mockRejectedValueOnce(new Error('transport error'))
+        ctx.transports.set('error-session', {} as never)
 
         const app = createMockApp()
         const server = createMockServer()

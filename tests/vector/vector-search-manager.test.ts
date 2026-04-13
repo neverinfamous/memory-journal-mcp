@@ -221,8 +221,7 @@ describe('VectorSearchManager', () => {
             await initManager(vm)
             mockEmbedderFn.mockRejectedValue('Embed fail string error')
 
-            const results = await vm.search('query')
-            expect(results).toEqual([])
+            await expect(vm.search('query')).rejects.toThrow('Embed fail string error')
         })
 
         it('should return empty if initialization fails', async () => {
@@ -231,8 +230,7 @@ describe('VectorSearchManager', () => {
                 'Init failed during search string error'
             )
             const vm2 = new VectorSearchManager(adapter)
-            const results = await vm2.search('query')
-            expect(results).toEqual([])
+            await expect(vm2.search('query')).rejects.toThrow('Init failed during search string error')
         })
     })
 
@@ -272,8 +270,7 @@ describe('VectorSearchManager', () => {
                 throw 'SQL error string'
             })
 
-            const results = await vm.searchByEntryId(1)
-            expect(results).toEqual([])
+            await expect(vm.searchByEntryId(1)).rejects.toThrow('SQL error string')
         })
 
         it('should return empty if initialization fails', async () => {
@@ -282,8 +279,7 @@ describe('VectorSearchManager', () => {
                 'Init fail string error'
             )
             const vm2 = new VectorSearchManager(adapter)
-            const results = await vm2.searchByEntryId(1)
-            expect(results).toEqual([])
+            await expect(vm2.searchByEntryId(1)).rejects.toThrow('Init fail string error')
         })
 
         it('should return empty if db not available', async () => {
@@ -294,8 +290,7 @@ describe('VectorSearchManager', () => {
             ;(adapter.getRawDb as any).mockImplementation(() => {
                 throw new Error('No db')
             })
-            const results = await vm3.searchByEntryId(1)
-            expect(results).toEqual([])
+            await expect(vm3.searchByEntryId(1)).rejects.toThrow('Vector database not available')
         })
     })
 

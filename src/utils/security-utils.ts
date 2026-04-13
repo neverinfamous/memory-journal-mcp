@@ -118,21 +118,61 @@ export function assertNoPathTraversal(filename: string): void {
     }
 }
 
+import path from 'node:path'
+
 /**
- * Validates that a directory path does not contain path traversal components.
+ * Validates that a directory path is strictly bounded within the active memory journal context.
  *
- * Unlike assertNoPathTraversal() (which rejects all separators for filenames),
- * this allows `/` and `\` but rejects `..` path components that could escape
- * the intended directory boundary.
+ * This enforces strict file-system isolation. The target path MUST reside within:
+ * 1. The current working directory (where the server was started)
+ * 2. OR any explicitly configured path inside the PROJECT_REGISTRY map.
  *
  * @param dirPath - The directory path to validate
- * @throws PathTraversalError if `..` components are detected
+ * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
 export function assertSafeDirectoryPath(dirPath: string): void {
+    // 1. Initial basic check for traversal strings
     const normalized = dirPath.replace(/\\/g, '/')
     const segments = normalized.split('/')
     if (segments.some((s) => s === '..')) {
         throw new PathTraversalError(dirPath)
+    }
+
+    const resolved = path.resolve(dirPath)
+    
+    // 2. Define safe boundaries: default to CWD
+    const allowedRoots: string[] = [process.cwd()]
+    
+    // 3. Add explicit PROJECT_REGISTRY boundaries if configured
+    const registryStr = process.env['PROJECT_REGISTRY']
+    if (registryStr) {
+        try {
+            const registry = JSON.parse(registryStr) as Record<string, unknown>
+            for (const key of Object.keys(registry)) {
+                const entry = registry[key]
+                if (
+                    entry !== null &&
+                    typeof entry === 'object' &&
+                    'path' in entry &&
+                    typeof (entry as { path: unknown }).path === 'string'
+                ) {
+                    allowedRoots.push(path.resolve((entry as { path: string }).path))
+                }
+            }
+        } catch {
+            // Ignore parse errors here; cli.ts handles configuration validation on boot
+        }
+    }
+
+    // 4. Verify the resolved path is structurally inside at least one allowed root
+    const isAllowed = allowedRoots.some(root => {
+        const rel = path.relative(root, resolved)
+        // If relative path is '..' or starts with '../' (or '..\'), it escapes the root
+        return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
+    })
+
+    if (!isAllowed) {
+        throw new PathTraversalError(`Directory path escapes allowed sandbox boundaries: ${dirPath}`)
     }
 }
 

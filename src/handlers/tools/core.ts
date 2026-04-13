@@ -237,11 +237,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {
-                            logger.debug('Failed to share entry with team DB', {
+                            logger.error('Failed to share entry with team DB', {
                                 module: 'TOOL',
                                 operation: 'create-entry',
-                                error,
+                                error: error instanceof Error ? error.message : String(error),
                             })
+                            throw new Error(
+                                `Failed to share entry with team DB: ${error instanceof Error ? error.message : String(error)}`,
+                                { cause: error }
+                            )
                         }
                     }
 

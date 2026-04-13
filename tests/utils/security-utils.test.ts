@@ -12,16 +12,16 @@ import {
 } from '../../src/utils/security-utils.js'
 
 describe('assertSafeDirectoryPath', () => {
-    it('should validate normal directory paths', () => {
-        expect(() => assertSafeDirectoryPath('C:/Users/chris/Documents')).not.toThrow()
-        expect(() => assertSafeDirectoryPath('/usr/local/bin')).not.toThrow()
+    it('should validate normal directory paths within CWD', () => {
+        // Safe relative paths resolvable within CWD
         expect(() => assertSafeDirectoryPath('export')).not.toThrow()
         expect(() => assertSafeDirectoryPath('./export')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('nested/export/dir')).not.toThrow()
     })
 
-    it('should validate Windows style paths safely', () => {
-        expect(() => assertSafeDirectoryPath('C:\\Users\\chris\\Documents')).not.toThrow()
-        expect(() => assertSafeDirectoryPath('.\\export')).not.toThrow()
+    it('should throw when path escapes CWD boundaries', () => {
+        // Absolute paths outside CWD
+        expect(() => assertSafeDirectoryPath(process.platform === 'win32' ? 'C:/Windows/System32' : '/usr/local/bin')).toThrow(PathTraversalError)
     })
 
     it('should throw PathTraversalError for `..` segments with forward slash', () => {
@@ -37,10 +37,12 @@ describe('assertSafeDirectoryPath', () => {
         expect(() => assertSafeDirectoryPath('C:\\Users\\..\\Admin')).toThrow(PathTraversalError)
     })
 
-    it('should NOT throw on valid directory names containing `..` like `..foo` or `foo..`', () => {
-        expect(() => assertSafeDirectoryPath('/var/logs/..foo/')).not.toThrow()
-        expect(() => assertSafeDirectoryPath('/var/logs/foo../')).not.toThrow()
-        expect(() => assertSafeDirectoryPath('..foo')).not.toThrow()
+    it('should throw on valid directory names containing `..` like `..foo` or `foo..` if they escape CWD, but allow if inside', () => {
+        // If they don't escape CWD, they should be fine
+        expect(() => assertSafeDirectoryPath('./..foo')).not.toThrow()
+        expect(() => assertSafeDirectoryPath('./foo..')).not.toThrow()
+        // If absolute outside CWD, they throw
+        expect(() => assertSafeDirectoryPath(process.platform === 'win32' ? 'C:/var/logs/..foo' : '/var/logs/..foo/')).toThrow(PathTraversalError)
     })
 })
 

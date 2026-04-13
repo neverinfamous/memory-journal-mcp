@@ -335,24 +335,29 @@ export function searchByDateRange(
 // ============================================================================
 
 /**
- * Sanitize an FTS5 query string to handle porter-stemmer phrase mismatch.
+ * Rigorous FTS5 Query Sanitization
  *
- * FTS5 phrase queries (e.g. `"error handling"`) require exact token sequences.
- * However the porter stemmer stores stems: `handling` → `handl`, so the phrase
- * `"error handling"` never matches even when the content contains "error handling".
+ * Prevents FTS5 catastrophic backtracking (ReDoS) and application-level syntax crashes 
+ * by aggressively stripping FTS control syntax and forcing queries into safe, 
+ * implicit AND-token sequences.
  *
- * Fix: detect a *pure* quoted phrase (the entire query is one quoted phrase)
- * and rewrite it as AND-joined individual terms. This lets the stemmer apply
- * to each word and correctly finds documents containing all the terms.
- *
- * Non-phrase queries are passed through unchanged.
- *
- * Examples:
- *   `"error handling"` → `error AND handling`
- *   `deploy OR release` → `deploy OR release` (unchanged)
- *   `auth*` → `auth*` (unchanged)
- *   `deploy NOT staging` → `deploy NOT staging` (unchanged)
+ * Threat Vectors Mitigated:
+ * - Unbalanced quotes & parentheses causing SQLITE_ERROR syntax crashes
+ * - Deeply nested or hallucinated `NEAR/xxx` proximity operators causing FTS planner ReDoS
+ * - Column filters (`col:val`) leaking unintended field traversals
+ * - Naked booleans (`word AND OR NOT word`) confusing the FTS AST parser
  */
 function sanitizeFtsQuery(query: string): string {
-    return query;
+    if (!query) return '';
+
+    // 1. Strip FTS5 structural control characters entirely
+    let safe = query.replace(/["'()^:{}[\]]/g, ' ');
+
+    // 2. Clear known FTS operator keywords (case-insensitive) to prevent invalid operand crashes
+    safe = safe.replace(/\b(AND|OR|NOT|NEAR(?:[/]\d+)?)\b/ig, ' ');
+
+    // 3. Compact whitespace and trim
+    safe = safe.replace(/\s+/g, ' ').trim();
+
+    return safe;
 }

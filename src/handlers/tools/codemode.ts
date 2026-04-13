@@ -14,6 +14,8 @@ import { relaxedNumber } from './schemas.js'
 import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
+import { getRequestContext } from '../../utils/request-context.js'
+import { getAuthContext } from '../../auth/auth-context.js'
 import { getCoreTools } from './core.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
@@ -161,8 +163,13 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // Context extraction for rate limiting
+                    const reqCtx = getRequestContext()
+                    const authCtx = getAuthContext()
+                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'default'
+
                     // Rate limiting
-                    if (!security.checkRateLimit('default')) {
+                    if (!security.checkRateLimit(clientId)) {
                         return {
                             success: false,
                             error: 'Rate limit exceeded (60 executions per minute)',

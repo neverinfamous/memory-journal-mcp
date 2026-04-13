@@ -187,15 +187,11 @@ export class VectorSearchManager {
         similarityThreshold = 0.3
     ): Promise<SemanticSearchResult[]> {
         if (!this.initialized) {
-            try {
-                await this.initialize()
-            } catch {
-                return []
-            }
+            await this.initialize()
         }
 
         if (!this.db) {
-            return []
+            throw new ConfigurationError('Vector database not available')
         }
 
         try {
@@ -230,7 +226,7 @@ export class VectorSearchManager {
                 module: 'VectorSearch',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -248,15 +244,11 @@ export class VectorSearchManager {
         similarityThreshold = 0.3
     ): Promise<SemanticSearchResult[]> {
         if (!this.initialized) {
-            try {
-                await this.initialize()
-            } catch {
-                return []
-            }
+            await this.initialize()
         }
 
         if (!this.db) {
-            return []
+            throw new ConfigurationError('Vector database not available')
         }
 
         try {
@@ -308,7 +300,7 @@ export class VectorSearchManager {
                 entityId: entryId,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 

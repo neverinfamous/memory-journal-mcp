@@ -48,8 +48,7 @@ describe('VectorSearchManager - error coverage', () => {
         vi.spyOn(manager, 'generateEmbedding').mockResolvedValue([0.1])
         ;(manager as any).initialized = true
 
-        const res = await manager.search('query')
-        expect(res).toEqual([])
+        await expect(manager.search('query')).rejects.toThrow('db search err')
     })
 
     it('covers error path in searchByEntryId', async () => {
@@ -64,8 +63,7 @@ describe('VectorSearchManager - error coverage', () => {
         vi.spyOn(manager, 'initialize').mockResolvedValue()
         ;(manager as any).initialized = true
 
-        const res = await manager.searchByEntryId(1)
-        expect(res).toEqual([])
+        await expect(manager.searchByEntryId(1)).rejects.toThrow('db search id err')
     })
 
     it('covers initError in rebuildIndex', async () => {

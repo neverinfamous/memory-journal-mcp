@@ -12,6 +12,7 @@ import {
     JSONRPC_INTERNAL_ERROR,
 } from '../types.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
+import { requestContextStorage } from '../../../utils/request-context.js'
 
 export interface StatefulContext {
     transports: Map<string, StreamableHTTPServerTransport>
@@ -67,15 +68,30 @@ export function setupStateful(
     }, SESSION_SWEEP_INTERVAL_MS)
     sessionSweepTimer.unref()
 
+    // Initialize a single global transport for streamable HTTP.
+    // This transport handles internal connection multiplexing automatically.
+    const streamableTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (sid: string) => {
+            logger.info('HTTP session initialized', {
+                module: 'HTTP',
+                sessionId: sid,
+            })
+            ctx.transports.set(sid, streamableTransport)
+            ctx.touchSession(sid)
+        },
+    })
+
+    // Connect this multi-session transport once
+    void server.connect(streamableTransport)
+
     // POST /mcp — Handle JSON-RPC requests
     app.post('/mcp', (req: Request, res: Response): void => {
         const sessionId = req.headers['mcp-session-id'] as string | undefined
 
         void (async () => {
             try {
-                let httpTransport: StreamableHTTPServerTransport | undefined
-
-                if (sessionId !== undefined && ctx.transports.has(sessionId)) {
+                if (sessionId !== undefined) {
                     // Cross-protocol guard: reject SSE session IDs on /mcp
                     if (ctx.sseTransports.has(sessionId)) {
                         res.status(400).json({
@@ -90,79 +106,16 @@ export function setupStateful(
                         return
                     }
 
-                    // Reuse existing transport and refresh session activity
+                    if (!ctx.transports.has(sessionId)) {
+                        res.status(400).json({
+                            jsonrpc: '2.0',
+                            error: { code: JSONRPC_SERVER_ERROR, message: 'Session not found' },
+                            id: null,
+                        })
+                        return
+                    }
                     ctx.touchSession(sessionId)
-                    httpTransport = ctx.transports.get(sessionId)
-                } else if (sessionId === undefined && isInitializeRequest(req.body)) {
-                    // New initialization request — create transport
-                    const newTransport = new StreamableHTTPServerTransport({
-                        sessionIdGenerator: () => randomUUID(),
-                        onsessioninitialized: (sid: string) => {
-                            logger.info('HTTP session initialized', {
-                                module: 'HTTP',
-                                sessionId: sid,
-                            })
-                            ctx.transports.set(sid, newTransport)
-                            ctx.touchSession(sid)
-                        },
-                    })
-
-                    // Clean up on transport close
-                    newTransport.onclose = () => {
-                        const sid = newTransport.sessionId
-                        if (sid !== undefined && ctx.transports.has(sid)) {
-                            logger.info('HTTP transport closed', {
-                                module: 'HTTP',
-                                sessionId: sid,
-                            })
-                            ctx.transports.delete(sid)
-                            ctx.sessionLastActivity.delete(sid)
-                        }
-                    }
-
-                    // Connect transport to server
-                    // SDK requires close() before reconnecting to a new transport.
-                    // This cleanly supports sequential sessions; concurrent sessions
-                    // are an SDK limitation (only one transport at a time).
-                    if (ctx.serverConnected) {
-                        try {
-                            await Promise.race([
-                                server.close(),
-                                new Promise((_, reject) =>
-                                    setTimeout(() => reject(new Error('Timeout closing SDK transport')), 250)
-                                ),
-                            ])
-                        } catch (e) {
-                            logger.error('Forcing server transport close due to timeout', {
-                                module: 'HTTP',
-                                error: e instanceof Error ? e.message : String(e),
-                            })
-                            // Force clear the SDK's internal transport state to unblock reconnect
-                            interface InternalProtocol {
-                                _onclose?: () => void
-                            }
-                            interface InternalServer {
-                                server?: InternalProtocol
-                            }
-                            const internalServer = server as unknown as InternalServer
-                            if (
-                                internalServer.server !== undefined &&
-                                typeof internalServer.server._onclose === 'function'
-                            ) {
-                                internalServer.server._onclose()
-                            }
-                        }
-                    }
-                    await server.connect(newTransport)
-                    ctx.serverConnected = true
-                    await newTransport.handleRequest(
-                        req as IncomingMessage,
-                        res as ServerResponse,
-                        req.body
-                    )
-                    return
-                } else {
-                    // Invalid request — no session ID or not initialization
+                } else if (!isInitializeRequest(req.body)) {
                     res.status(400).json({
                         jsonrpc: '2.0',
                         error: {
@@ -174,14 +127,13 @@ export function setupStateful(
                     return
                 }
 
-                // Handle request with existing transport
-                if (httpTransport !== undefined) {
-                    await httpTransport.handleRequest(
+                await requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
+                    await streamableTransport.handleRequest(
                         req as IncomingMessage,
                         res as ServerResponse,
                         req.body
                     )
-                }
+                })
             } catch (error) {
                 logger.error('Error handling MCP request', {
                     module: 'HTTP',

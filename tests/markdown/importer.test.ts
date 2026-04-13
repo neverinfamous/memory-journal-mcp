@@ -5,6 +5,11 @@ import * as fs from 'node:fs/promises'
 vi.mock('node:fs/promises', () => ({
     readdir: vi.fn(),
     readFile: vi.fn(),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
+}))
+
+vi.mock('../../src/utils/security-utils.js', () => ({
+    assertSafeDirectoryPath: vi.fn(),
 }))
 
 describe('importMarkdownEntries', () => {

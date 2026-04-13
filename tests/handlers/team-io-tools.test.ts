@@ -30,6 +30,8 @@ vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
     return {
         ...actual,
         resolveAuthor: vi.fn().mockReturnValue('TestAuthor'),
+        assertSafeDirectoryPath: vi.fn(),
+        assertAllowedPathBoundaries: vi.fn(),
     }
 })
 

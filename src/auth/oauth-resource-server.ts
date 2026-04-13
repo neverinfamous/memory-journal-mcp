@@ -73,7 +73,7 @@ export class OAuthResourceServer {
         return (_req, res) => {
             const metadata = this.getMetadata()
 
-            res.setHeader('Content-Type', 'application/json')
+            res.setHeader('Content-Type', 'application/oauth-protected-resource-metadata+json')
             res.setHeader('Cache-Control', 'public, max-age=3600')
             res.json(metadata)
 

@@ -6,7 +6,7 @@
  * relationship linking, and dry-run mode.
  */
 
-import { readdir, readFile } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
@@ -127,6 +127,13 @@ export async function importMarkdownEntries(
     for (const filename of mdFiles) {
         try {
             const filepath = join(sourceDir, filename)
+
+            // Prevent memory amplification DoS: skip egregiously large markdown files (>5MB)
+            const stats = await stat(filepath)
+            if (stats.size > 5 * 1024 * 1024) {
+                throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
+            }
+
             const content = await readFile(filepath, 'utf-8')
 
             // Parse frontmatter

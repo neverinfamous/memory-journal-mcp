@@ -187,7 +187,7 @@ describe('HttpTransport', () => {
         it('should create instance with config', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: false,
             }
@@ -204,7 +204,7 @@ describe('HttpTransport', () => {
         it('should register routes and start server', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -212,14 +212,14 @@ describe('HttpTransport', () => {
             await transport.start(mockServer, null)
 
             expect(mockApp.use).toHaveBeenCalled()
-            expect(mockApp.listen).toHaveBeenCalledWith(3000, '0.0.0.0', expect.any(Function))
+            expect(mockApp.listen).toHaveBeenCalledWith(3000, '127.0.0.1', expect.any(Function))
         })
 
         it('should warn about wildcard CORS and no auth', async () => {
             const { logger } = await import('../../src/utils/logger.js')
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -245,7 +245,7 @@ describe('HttpTransport', () => {
         it('should setup auth middleware when token provided', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigin: 'http://localhost',
                 stateless: false,
                 authToken: 'test-token-123',
@@ -282,7 +282,7 @@ describe('HttpTransport', () => {
         it('should set security headers on requests', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -313,7 +313,7 @@ describe('HttpTransport', () => {
         it('should set HSTS when enableHSTS is true', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
                 enableHSTS: true,
@@ -343,7 +343,7 @@ describe('HttpTransport', () => {
         it('should handle CORS OPTIONS preflight with 204', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -381,7 +381,7 @@ describe('HttpTransport', () => {
         it('should pass non-OPTIONS requests through CORS middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -407,7 +407,7 @@ describe('HttpTransport', () => {
         it('should return healthy on GET /health', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -428,7 +428,7 @@ describe('HttpTransport', () => {
         it('should return server info on GET /', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -448,7 +448,7 @@ describe('HttpTransport', () => {
         it('should return 204 for OPTIONS via middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -486,7 +486,7 @@ describe('HttpTransport', () => {
         it('should pass non-OPTIONS requests through OPTIONS middleware', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -506,7 +506,7 @@ describe('HttpTransport', () => {
         it('should return 404 for unknown routes', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -531,7 +531,7 @@ describe('HttpTransport', () => {
         it('should return 405 for GET /mcp in stateless mode', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -549,7 +549,7 @@ describe('HttpTransport', () => {
         it('should return 204 for DELETE /mcp in stateless mode', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -573,7 +573,7 @@ describe('HttpTransport', () => {
         it('should start scheduler after server listen', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -596,7 +596,7 @@ describe('HttpTransport', () => {
         it('should clean up on stop', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -609,7 +609,7 @@ describe('HttpTransport', () => {
         it('should stop scheduler on stop', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigin: '*',
                 stateless: true,
             }
@@ -627,7 +627,7 @@ describe('HttpTransport', () => {
         it('should catch errors when closing active transports and SSE transports', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
             }
@@ -656,7 +656,7 @@ describe('HttpTransport', () => {
         it('should enforce rate limits and bypass health check', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
                 enableRateLimit: true,
@@ -705,7 +705,7 @@ describe('HttpTransport', () => {
         it('should reject bad tokens with 401', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['http://localhost'],
                 stateless: true,
                 authToken: 'secret-token',
@@ -761,7 +761,7 @@ describe('HttpTransport', () => {
         it('should setup OAuth 2.1 authentication when enabled', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
                 oauthEnabled: true,
@@ -778,7 +778,7 @@ describe('HttpTransport', () => {
         it('should enforce OAuth scopes on tools/call requests', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
-                host: '0.0.0.0',
+                host: '127.0.0.1',
                 corsOrigins: ['*'],
                 stateless: true,
                 oauthEnabled: true,

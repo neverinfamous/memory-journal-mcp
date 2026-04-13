@@ -369,11 +369,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     // - structuredContent: validated JSON for clients that support it
                     // - content: compact text fallback (~15-20% payload reduction per §3.1)
                     if (hasOutputSchema) {
+                        // Protocol Optimization: Return structured objects natively without redundant text stringification.
+                        // Emits a lightweight marker for clients that don't support structuredContent.
                         return {
                             content: [
                                 {
                                     type: 'text' as const,
-                                    text: JSON.stringify(result),
+                                    text: '[Structured output attached]',
                                 },
                             ],
                             structuredContent: result as Record<string, unknown>,

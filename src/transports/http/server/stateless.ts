@@ -4,6 +4,7 @@ import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logger } from '../../../utils/logger.js'
 import { JSONRPC_SERVER_ERROR } from '../types.js'
+import { requestContextStorage } from '../../../utils/request-context.js'
 
 export async function setupStateless(app: Express, server: McpServer): Promise<void> {
     const statelessTransport = new StreamableHTTPServerTransport({
@@ -16,11 +17,14 @@ export async function setupStateless(app: Express, server: McpServer): Promise<v
 
     // POST /mcp — all requests go to the same transport
     app.post('/mcp', (req: Request, res: Response): void => {
-        void statelessTransport.handleRequest(
-            req as IncomingMessage,
-            res as ServerResponse,
-            req.body
-        )
+        const sessionId = req.headers['mcp-session-id'] as string | undefined
+        void requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
+            await statelessTransport.handleRequest(
+                req as IncomingMessage,
+                res as ServerResponse,
+                req.body
+            )
+        })
     })
 
     // GET /mcp — SSE not available in stateless mode
