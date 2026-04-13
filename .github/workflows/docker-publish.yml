@@ -237,7 +237,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./DOCKER_README.md
-          short-description: 'MCP Server: AI Memory, Code Mode, GitHub Integration, Knowledge Graphs, Search, and Audit Logs.'
+          short-description: 'MCP Server- AI Memory with Code Mode, GitHub Integration, Hush, Knowledge Graphs, Search, Audit Log.'
 
       - name: Deployment Summary
         if: github.ref == 'refs/heads/main'
