@@ -125,7 +125,26 @@ export function setupStateful(
                     // This cleanly supports sequential sessions; concurrent sessions
                     // are an SDK limitation (only one transport at a time).
                     if (ctx.serverConnected) {
-                        await server.close()
+                        try {
+                            await Promise.race([
+                                server.close(),
+                                new Promise((_, reject) =>
+                                    setTimeout(() => reject(new Error('Timeout closing SDK transport')), 250)
+                                ),
+                            ])
+                        } catch (e) {
+                            logger.error('Forcing server transport close due to timeout', {
+                                module: 'HTTP',
+                                error: e instanceof Error ? e.message : String(e),
+                            })
+                            // Force clear the SDK's internal transport state to unblock reconnect
+                            if (
+                                (server as typeof server & { server?: any }).server &&
+                                typeof (server as typeof server & { server?: any }).server._onclose === 'function'
+                            ) {
+                                ;(server as typeof server & { server?: any }).server._onclose()
+                            }
+                        }
                     }
                     await server.connect(newTransport)
                     ctx.serverConnected = true

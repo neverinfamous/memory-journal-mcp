@@ -30,6 +30,7 @@
 - **Consistency**: Hardened `teamCollaborationResource` return payload structure.
 - **Hush Protocol**: Fixed SQLite mapping bug inadvertently casting `autoContext` JSON strings to booleans.
 - **Analytics**: Fixed an issue in `get_statistics` where the date range filter was inadvertently ignored for causal relationship metrics.
+- **Transport**: Resolved an E2E testing timeout in `session-advanced.spec.ts` caused by dangling MCP SDK Server transports preventing sequential reconnections. `server.close()` is now wrapped in a `Promise.race` to forcefully detach SDK transport state and unblock the event loop.
 
 ### Validation
 
@@ -41,3 +42,4 @@
 - **Admin**: Completed deterministic verification of Admin Tool Group (`update_entry`, `delete_entry`, `merge_tags`, `list_tags`, `add_to_vector_index`, `rebuild_vector_index`). Validated rigid structured error patterns governing domain boundary tests (e.g. self-referencing tag merges and non-existent entry targets), strictly typed schema mutations, and graceful vector indexing fallback compliance avoiding unexpected crash cases.
 - **Backup**: Completed deterministic verification of Backup & Export Tool Group (`backup_journal`, `restore_backup`, `export_entries`, `cleanup_backups`). Validated strict path traversal blockers, resource not found responses, Zod type conformity, and correct filter enforcement (out-of-bounds dates and missing tags returning structured empty payloads rather than silent omissions).
 - **Core**: Completed deterministic verification of the Core tool group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`). Validated structured error responses against Zod validations, handled round-trip fidelity checks, boundary empty payloads, array length constraints, and verified the successful resolution of the relationship tracking date bound bug.
+- **Transports**: Verified stateful session isolation and Sequential MCP execution lifecycle directly against the `@modelcontextprotocol/sdk` StreamableHTTP client via exhaustive Playwright E2E simulation.
