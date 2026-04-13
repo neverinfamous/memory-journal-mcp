@@ -80,8 +80,8 @@ export const TOOL_GROUPS: Record<ToolGroup, string[]> = {
         'team_add_to_vector_index',
         'team_get_cross_project_insights',
         'team_get_collaboration_matrix',
-        'pass_team_flag',
-        'resolve_team_flag',
+        'team_pass_flag',
+        'team_resolve_flag',
     ],
     codemode: ['mj_execute_code'],
 }
