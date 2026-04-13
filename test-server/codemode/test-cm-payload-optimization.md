@@ -241,13 +241,13 @@ return 'z'.repeat(50 * 1024)
 
 ## Success Criteria
 
-- [ ] Kanban `summary_only` returns zero items per column with `itemCount` metadata
-- [ ] Kanban `item_limit` truncates columns and sets `truncated: true`
-- [ ] Zero `item_limit` behaves identically to `summary_only: true`
-- [ ] Body truncation defaults to 800 chars with `bodyTruncated`/`bodyFullLength` metadata
-- [ ] `include_comments: true` returns `comments` array and `commentCount`
-- [ ] `MAX_QUERY_LIMIT` (500) enforced — `limit: 501` produces structured errors on core, github, and search tools
-- [ ] Code Mode 100KB cap produces structured error with "aggregate" guidance and KB sizes
-- [ ] Results under 100KB pass through without error
-- [ ] All test scripts return `{ success: true, failures: [] }`
-- [ ] Agent reports the Total Token Estimate in the final summary
+- [x] Kanban `summary_only` returns zero items per column with `itemCount` metadata
+- [x] Kanban `item_limit` truncates columns and sets `truncated: true`
+- [x] Zero `item_limit` behaves identically to `summary_only: true`
+- [x] Body truncation defaults to 800 chars with `bodyTruncated`/`bodyFullLength` metadata
+- [x] `include_comments: true` returns `comments` array and `commentCount`
+- [x] `MAX_QUERY_LIMIT` (500) enforced — `limit: 501` produces structured errors on core, github, and search tools
+- [x] Code Mode 100KB cap produces structured error with "aggregate" guidance and KB sizes
+- [x] Results under 100KB pass through without error
+- [x] All test scripts return `{ success: true, failures: [] }`
+- [x] Agent reports the Total Token Estimate in the final summary

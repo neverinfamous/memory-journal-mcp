@@ -10,7 +10,7 @@
 | `test-cm-io.md`                   | ~98                     |
 | `test-cm-kanban-lifecycle.md`     | ~91                     |
 | `test-cm-orchestration.md`        | ~317                    |
-| `test-cm-payload-optimization.md` | ~350                    |
+| `test-cm-payload-optimization.md` | ~278                    |
 | `test-cm-readonly.md`             | ~1,024                  |
 | `test-cm-relationships.md`        | ~312                    |
 | `test-cm-sandbox-basics.md`       | ~507                    |

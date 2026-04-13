@@ -36,3 +36,4 @@
 - **Code Mode**: Validated Phase 29 Error Matrix & Zod Sweeps, confirming 100% structured error handling across all 10 `mj.*` API groups without sandbox crashes.
 - **Code Mode**: Validated Phase 26 IO & Markdown Interoperability tools via `mj_execute_code`, fully verifying legacy exports, path traversal protection, and sandbox directory mapping.
 - **Code Mode**: Validated Phase 23 Cross-Group Orchestration, completely testing token-efficient multi-step pipelines (health, GitHub coverage, tag pipelines, relationship graphs, and create-index-search) via `mj_execute_code`.
+- **Code Mode**: Validated Phase 30 Payload Optimization, confirming Kanban throttling (`summary_only`, `item_limit`), issue body truncation (`truncate_body`), global query limits (500), and 100KB sandbox payload caps via `mj_execute_code`.
