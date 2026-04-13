@@ -313,6 +313,8 @@ When you encounter a blocker, need a review, or want to broadcast a milestone, y
 
 **Dashboard & Operations**: Read `memory://flags` to see an active dashboard overview and use `mj.team.passTeamFlag()` / `mj.team.resolveTeamFlag()` to manage them programmatically in Code Mode.
 
+**[Complete Hush Protocol guide and Mermaid sequence diagrams →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Hush-Protocol)**
+
 ---
 
 ## 🚀 Quick Start
