@@ -98,8 +98,10 @@ export const METHOD_ALIASES: Record<string, Record<string, string>> = {
         rebuildIndex: 'teamRebuildVectorIndex',
         addToIndex: 'teamAddToVectorIndex',
         insights: 'teamGetCrossProjectInsights',
-        passFlag: 'passTeamFlag',
-        resolveFlag: 'resolveTeamFlag',
+        passTeamFlag: 'teamPassFlag',
+        resolveTeamFlag: 'teamResolveFlag',
+        passFlag: 'teamPassFlag',
+        resolveFlag: 'teamResolveFlag',
     },
 }
 
@@ -245,6 +247,8 @@ export const POSITIONAL_PARAM_MAP: Record<string, string | string[]> = {
     teamExportEntries: 'format',
     teamSemanticSearch: 'query',
     teamAddToVectorIndex: 'entry_id',
+    teamPassFlag: 'flag_type',
+    teamResolveFlag: 'flag_id',
     passTeamFlag: 'flag_type',
     resolveTeamFlag: 'flag_id',
 }

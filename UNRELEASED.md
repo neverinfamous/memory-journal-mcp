@@ -43,3 +43,5 @@
 - **Code Mode**: Validated Phase 21 Search, Semantics, Analytics, and Vector Index management tools via `mj_execute_code`, fully verifying FTS5 patterns, date-range filters, embedding hints, importance sorting, cross-DB search, and vector stat rebuilding.
 - **Code Mode**: Validated Phase 28 Team Admin & Collaboration via `mj_execute_code`, successfully testing team tag merging, analytics grouping, collaboration matrix generation, relationship mapping with diagrams, dataset IO exports, and seamless backups.
 - **Code Mode**: Validated Phase 28 Team CRUD & Search via `mj_execute_code`, fully verifying team entry management (CRUD), error paths, date range filtering, tag searching, and explicit/auto-author tracking.
+- **Code Mode**: Validated Phase 28 Team Flags via `mj_execute_code`, successfully testing Hush Protocol flag creation, resolution lifecycle, vocabulary constraints, and team tag cleanup operations. 
+- **Code Mode**: Fixed missing API alias configuration for `passTeamFlag` and `resolveTeamFlag`, aligning the sandbox JavaScript environment with the expected camelCase tool conventions.
