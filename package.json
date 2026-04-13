@@ -88,6 +88,7 @@
     "overrides": {
         "axios": "^1.13.6",
         "brace-expansion": "^2.0.2",
+        "diff": "9.0.0",
         "glob": "^11.1.0",
         "onnxruntime-web": "npm:empty-npm-package@1.0.0",
         "sharp": "npm:empty-npm-package@1.0.0",

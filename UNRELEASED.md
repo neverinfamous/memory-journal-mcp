@@ -19,6 +19,13 @@
   - Bumped `better-sqlite3` to v12.9.0
   - Bumped `globals` to v17.5.0
   - Bumped `simple-git` to v3.36.0
+  - Bumped `typescript-eslint` from 8.58.1 to 8.58.2
+  - Bumped `diff` from 8.0.4 to 9.0.0 (docker bundle optimization)
+  - Bumped `trufflesecurity/trufflehog` to 3.94.3
+  - Bumped `hashgraph-online/skill-publish` to 1.0.13
+  - Bumped `github/gh-aw-actions` (c7a6a831 to 0048fdad)
+  - Bumped `docker/login-action` to 4.1.0
+  - Bumped `actions/upload-artifact` to 7.0.1
 - **Briefing**: Renamed the ambiguous `Matrix Density` insight label to `Relationship density`.
 
 ### Fixed
@@ -31,16 +38,3 @@
 - **Hush Protocol**: Fixed SQLite mapping bug inadvertently casting `autoContext` JSON strings to booleans.
 - **Analytics**: Fixed an issue in `get_statistics` where the date range filter was inadvertently ignored for causal relationship metrics.
 - **Transport**: Resolved an E2E testing timeout in `session-advanced.spec.ts` caused by dangling MCP SDK Server transports preventing sequential reconnections. `server.close()` is now wrapped in a `Promise.race` to forcefully detach SDK transport state and unblock the event loop.
-
-### Validation
-
-- **Integrity**: Completed Phase 12 Data Integrity Verification mapping round-trip fidelity, strict search/soft-delete isolations, unicode edge cases, FTS/semantic bounds, and native relationship boundaries utilizing direct MCP routines without logical fault or SQL leak.
-- **Kanban**: Completed End-to-End Lifecycle Verification encompassing `add_kanban_item`, `move_kanban_item`, `delete_kanban_item`, and optimized `get_kanban_board` payload structures matching architectural assertions.
-- **Optimization**: Completed Payload Optimization Verification confirming Kanban throttling (`summary_only`, `item_limit`), Issue/PR body truncation (default 800 chars), `MAX_QUERY_LIMIT` validation hooks (≤500), and Code Mode execution boundaries (≤100KB) across all test vectors seamlessly emitting structured `VALIDATION_ERROR` objects as intended.
-- **Resources**: Completed full deterministic verification covering all 24 static and 14 template resource endpoints. Verified dynamic ID injection for timelines, issues, and Kanban boards with graceful structured fallback nodes on non-existent `99999` constraints avoiding runtime transport failures.
-- **Output Schema**: Completed deterministic enumeration of all 68 registered tools to verify strict adherence to the `structuredContent` paradigm via programmatic evaluation of Zod schema definitions (`ErrorFieldsMixin`). Confirmed that unpredicted errors consistently wrap back into strict validation payloads, while nominal tools deliver explicitly decoupled `content` fallback arrays simultaneously with structured objects.
-- **Admin**: Completed deterministic verification of Admin Tool Group (`update_entry`, `delete_entry`, `merge_tags`, `list_tags`, `add_to_vector_index`, `rebuild_vector_index`). Validated rigid structured error patterns governing domain boundary tests (e.g. self-referencing tag merges and non-existent entry targets), strictly typed schema mutations, and graceful vector indexing fallback compliance avoiding unexpected crash cases.
-- **Backup**: Completed deterministic verification of Backup & Export Tool Group (`backup_journal`, `restore_backup`, `export_entries`, `cleanup_backups`). Validated strict path traversal blockers, resource not found responses, Zod type conformity, and correct filter enforcement (out-of-bounds dates and missing tags returning structured empty payloads rather than silent omissions).
-- **Core**: Completed deterministic verification of the Core tool group (`create_entry`, `create_entry_minimal`, `get_entry_by_id`, `get_recent_entries`, `get_statistics`). Validated structured error responses against Zod validations, handled round-trip fidelity checks, boundary empty payloads, array length constraints, and verified the successful resolution of the relationship tracking date bound bug.
-- **Transports**: Verified stateful session isolation and Sequential MCP execution lifecycle directly against the `@modelcontextprotocol/sdk` StreamableHTTP client via exhaustive Playwright E2E simulation.
-- **GitHub**: Completed deterministic verification of the GitHub integration toolset against the strict error handling matrix. Validated graceful structuring of `-32602` error boundary permutations (e.g. `RESOURCE_NOT_FOUND` on invalid identifiers and `VALIDATION_ERROR` for empty schemas). Confirmed OutputSchema compliance does not crash underlying MCP bindings when surfacing enriched metadata (e.g., `availableStatuses`).
