@@ -224,6 +224,9 @@ jobs:
           docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
 
       # Update Docker Hub description
+      # WARNING: Docker Hub API does NOT allow updating descriptions using a Personal Access Token (PAT).
+      # If DOCKER_PASSWORD is a PAT, this step will fail silently (continue-on-error: true).
+      # You must either use your actual Docker Hub password, or continue copy/pasting DOCKER_README.md manually.
       - name: Update Docker Hub Description
         if: github.ref == 'refs/heads/main'
         uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5
@@ -234,7 +237,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ env.IMAGE_NAME }}
           readme-filepath: ./DOCKER_README.md
-          short-description: 'MCP Server- AI Memory with Code Mode, GitHub Integration, Knowledge Graphs, Search, Audit+Token Log.'
+          short-description: 'MCP Server: AI Memory, Code Mode, GitHub Integration, Knowledge Graphs, Search, and Audit Logs.'
 
       - name: Deployment Summary
         if: github.ref == 'refs/heads/main'
