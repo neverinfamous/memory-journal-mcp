@@ -33,3 +33,4 @@
 ### Validation
 
 - **Integrity**: Completed Phase 12 Data Integrity Verification mapping round-trip fidelity, strict search/soft-delete isolations, unicode edge cases, FTS/semantic bounds, and native relationship boundaries utilizing direct MCP routines without logical fault or SQL leak.
+- **Kanban**: Completed End-to-End Lifecycle Verification encompassing `add_kanban_item`, `move_kanban_item`, `delete_kanban_item`, and optimized `get_kanban_board` payload structures matching architectural assertions.
