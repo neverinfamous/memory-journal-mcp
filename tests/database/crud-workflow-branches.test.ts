@@ -131,7 +131,7 @@ describe('CRUD — branch coverage', () => {
                 workflowName: 'CI',
                 workflowStatus: 'success',
                 significanceType: 'decision',
-                autoContext: true,
+                autoContext: '1.0',
                 isPersonal: false,
                 entryType: 'decision',
             })
@@ -222,7 +222,7 @@ describe('CRUD — branch coverage', () => {
 
         it('should update autoContext', () => {
             const entry = createEntry(context, { content: 'test' })
-            const updated = updateEntry(context, entry.id, { autoContext: true })
+            const updated = updateEntry(context, entry.id, { autoContext: '1.0' })
             expect(updated).not.toBeNull()
         })
 

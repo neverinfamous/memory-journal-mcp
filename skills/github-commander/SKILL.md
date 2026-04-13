@@ -39,6 +39,7 @@ Load this skill when any of these apply:
 | ----------------------- | --------------------------------- | ------------------------------------------- |
 | **Issue Triage**        | `workflows/issue-triage.md`       | Fix a single GitHub issue end-to-end        |
 | **PR Review**           | `workflows/pr-review.md`          | Review a PR with validation pipeline        |
+| **Copilot Audit**       | `workflows/copilot-audit.md`      | Adversarial Copilot CLI repo/PR review      |
 | **Milestone Sprint**    | `workflows/milestone-sprint.md`   | Work through milestone issues sequentially  |
 | **Roadmap Kickoff**     | `workflows/roadmap-kickoff.md`    | Translate planning epics into Kanban issues |
 | **Update Dependencies** | `workflows/update-deps.md`        | Dependency update with audit trail          |

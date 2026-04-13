@@ -130,6 +130,25 @@ This server leverages the \`neverinfamous-agent-skills\` package. If the user's 
 
 - The user can distribute or update these skills across their repositories by running \`npx neverinfamous-agent-skills@latest\`.
 - If you need to create a new skill, reference the bundled \`skill-builder\` instructions!
+
+### Hush Protocol (Team Flags)
+
+Flags are machine-actionable signals stored in the team database. They replace Slack/Teams noise with structured, searchable entries that surface automatically in the briefing.
+
+**When to create a flag** (\`pass_team_flag\`):
+
+- \`blocker\` — work is blocked and requires another person's action
+- \`needs_review\` — code, document, or decision needs peer review
+- \`help_requested\` — stuck and need guidance or pairing
+- \`fyi\` — non-blocking awareness signal (completed migration, config change, etc.)
+
+**When to resolve** (\`resolve_team_flag\`): After the blocking condition is cleared. Include a brief resolution comment describing what was done. Resolving is idempotent — safe to call on already-resolved flags.
+
+**Briefing integration**: The \`memory://briefing\` payload includes \`activeFlags\` when unresolved flags exist. The user's agent rules may instruct you to render these prominently. Always check for and acknowledge active flags at session start.
+
+**Dashboard**: Read \`memory://flags\` to see all active (unresolved) flags. Read \`memory://flags/vocabulary\` to see the configured flag types.
+
+**Code Mode**: \`mj.team.passTeamFlag({ flag_type, message })\` and \`mj.team.resolveTeamFlag({ flag_id })\`.
 `
 
 /**
@@ -179,72 +198,17 @@ function buildQuickAccess(groups: Set<ToolGroup>): string {
  * Code Mode namespace row definitions.
  * Each maps a tool group to its Code Mode API namespace.
  */
-const CODE_MODE_NAMESPACE_ROWS: {
-    group: ToolGroup
-    label: string
-    namespace: string
-    example: string
-}[] = [
-    {
-        group: 'core',
-        label: 'Core',
-        namespace: '`mj.core.*`',
-        example: '`mj.core.createEntry("Implemented feature X")`',
-    },
-    {
-        group: 'search',
-        label: 'Search',
-        namespace: '`mj.search.*`',
-        example: '`mj.search.searchEntries("performance")`',
-    },
-    {
-        group: 'analytics',
-        label: 'Analytics',
-        namespace: '`mj.analytics.*`',
-        example: '`mj.analytics.getStatistics()`',
-    },
-    {
-        group: 'relationships',
-        label: 'Relationships',
-        namespace: '`mj.relationships.*`',
-        example: '`mj.relationships.linkEntries(1, 2, "implements")`',
-    },
-    {
-        group: 'io',
-        label: 'IO',
-        namespace: '`mj.io.*`',
-        example: '`mj.io.importMarkdown("content")`',
-    },
-    {
-        group: 'io',
-        label: 'Export',
-        namespace: '`mj.export.*`',
-        example: '`mj.export.exportEntries("json")`',
-    },
-    {
-        group: 'admin',
-        label: 'Admin',
-        namespace: '`mj.admin.*`',
-        example: '`mj.admin.rebuildVectorIndex()`',
-    },
-    {
-        group: 'github',
-        label: 'GitHub',
-        namespace: '`mj.github.*`',
-        example: '`mj.github.getGithubIssues({ state: "open" })`',
-    },
-    {
-        group: 'backup',
-        label: 'Backup',
-        namespace: '`mj.backup.*`',
-        example: '`mj.backup.backupJournal()`',
-    },
-    {
-        group: 'team',
-        label: 'Team',
-        namespace: '`mj.team.*`',
-        example: '`mj.team.teamCreateEntry("Team update")`',
-    },
+const CODE_MODE_NAMESPACE_ROWS: { group: ToolGroup; label: string; namespace: string; example: string }[] = [
+    { group: 'core', label: 'Core', namespace: '`mj.core.*`', example: '`mj.core.createEntry("Implemented feature X")`' },
+    { group: 'search', label: 'Search', namespace: '`mj.search.*`', example: '`mj.search.searchEntries("performance")`' },
+    { group: 'analytics', label: 'Analytics', namespace: '`mj.analytics.*`', example: '`mj.analytics.getStatistics()`' },
+    { group: 'relationships', label: 'Relationships', namespace: '`mj.relationships.*`', example: '`mj.relationships.linkEntries(1, 2, "implements")`' },
+    { group: 'io', label: 'IO', namespace: '`mj.io.*`', example: '`mj.io.importMarkdown("content")`' },
+    { group: 'io', label: 'Export', namespace: '`mj.export.*`', example: '`mj.export.exportEntries("json")`' },
+    { group: 'admin', label: 'Admin', namespace: '`mj.admin.*`', example: '`mj.admin.rebuildVectorIndex()`' },
+    { group: 'github', label: 'GitHub', namespace: '`mj.github.*`', example: '`mj.github.getGithubIssues({ state: "open" })`' },
+    { group: 'backup', label: 'Backup', namespace: '`mj.backup.*`', example: '`mj.backup.backupJournal()`' },
+    { group: 'team', label: 'Team', namespace: '`mj.team.*`', example: '`mj.team.teamCreateEntry("Team update")`' },
 ]
 
 /**
@@ -254,10 +218,9 @@ const CODE_MODE_NAMESPACE_ROWS: {
  */
 function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
     // Build namespace table with only enabled groups
-    const rows = CODE_MODE_NAMESPACE_ROWS.filter((r) => groups.has(r.group))
-        .map(
-            (r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`
-        )
+    const rows = CODE_MODE_NAMESPACE_ROWS
+        .filter((r) => groups.has(r.group))
+        .map((r) => `| ${r.label.padEnd(13)} | ${r.namespace.padEnd(20)} | ${r.example.padEnd(50)} |`)
         .join('\n')
 
     // Build the static behavioral text from the .md source,
@@ -270,10 +233,8 @@ function buildCodeModeInstructions(groups: Set<ToolGroup>): string {
         return '\n' + fullSection
     }
     const beforeTable = fullSection.slice(0, tableStart)
-    const headerLine =
-        '| Group         | Namespace            | Example                                            |'
-    const separatorLine =
-        '| ------------- | -------------------- | -------------------------------------------------- |'
+    const headerLine = '| Group         | Namespace            | Example                                            |'
+    const separatorLine = '| ------------- | -------------------- | -------------------------------------------------- |'
     const afterTable = fullSection.slice(tableEnd)
     return '\n' + beforeTable + headerLine + '\n' + separatorLine + '\n' + rows + afterTable
 }
@@ -436,8 +397,9 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 - **Team cross-database search**: \`search_entries\` and \`search_by_date_range\` automatically merge team DB results when \`TEAM_DB_PATH\` is configured. Results include a \`source\` field ("personal" or "team").
 - **Team vector search**: Team has its own isolated vector index. Use \`team_rebuild_vector_index\` if the team index drifts. \`team_semantic_search\` works identically to personal \`semantic_search\`.
-- **Team tools without \`TEAM_DB_PATH\`**: All 23 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
+- **Team tools without \`TEAM_DB_PATH\`**: All 25 team tools return \`{ success: false, error: "Team collaboration is not configured..." }\` — no crash, no partial results.
 `
+
 
 /**
  * Generate dynamic instructions based on enabled tools, resources, prompts, and latest entry.
@@ -546,3 +508,4 @@ export const SERVER_INSTRUCTIONS =
     buildQuickAccess(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     buildCodeModeInstructions(new Set(Object.keys(TOOL_GROUPS) as ToolGroup[])) +
     GITHUB_INSTRUCTIONS
+

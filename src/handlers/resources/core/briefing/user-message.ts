@@ -5,7 +5,7 @@
  */
 
 import type { BriefingGitHub } from './github-section.js'
-import type { RulesFile, SkillsDir } from './context-section.js'
+import type { RulesFile, SkillsDir, FlagSummary } from './context-section.js'
 import type { BriefingInsights } from './insights-section.js'
 
 const escapeTableCell = (text: string): string =>
@@ -26,6 +26,7 @@ export function formatUserMessage(opts: {
     rulesFile?: RulesFile
     skillsDir?: SkillsDir
     analyticsInsights?: BriefingInsights
+    flagSummary?: FlagSummary
 }): string {
     const {
         repoName,
@@ -126,11 +127,8 @@ export function formatUserMessage(opts: {
         parts.push(`📈 ${analyticsInsights.activityTrend}`)
         if (analyticsInsights.significanceSpike !== null)
             parts.push(`🔥 ${analyticsInsights.significanceSpike}`)
-        if (
-            analyticsInsights.relationshipDensity !== undefined &&
-            analyticsInsights.relationshipDensity >= 0
-        )
-            parts.push(`🔗 Matrix Density: ${analyticsInsights.relationshipDensity}`)
+        if (analyticsInsights.relationshipDensity !== undefined)
+            parts.push(`🔗 Relationship density: ${analyticsInsights.relationshipDensity}`)
         if (analyticsInsights.staleProjects.length > 0)
             parts.push(`💤 ${analyticsInsights.staleProjects.length} stale projects`)
         analyticsRow = `\n| **Analytics** | ${escapeTableCell(parts.join(' · '))} |`
@@ -141,6 +139,18 @@ export function formatUserMessage(opts: {
             ? summaryPreviews.map((s) => `\n| **Summary** | ${escapeTableCell(s)} |`).join('')
             : ''
 
+    // Flags row (Hush Protocol)
+    let flagsRow = ''
+    if (opts.flagSummary && opts.flagSummary.count > 0) {
+        const flagParts = opts.flagSummary.flags
+            .slice(0, 5)
+            .map((f) => {
+                const target = f.target_user ? ` → @${f.target_user}` : ''
+                return `🚩 ${f.flag_type}${target}: ${f.preview.slice(0, 50)}`
+            })
+        flagsRow = `\n| **Flags** | ${escapeTableCell(flagParts.join(' · '))}${opts.flagSummary.count > 5 ? ` (+${String(opts.flagSummary.count - 5)} more)` : ''} |`
+    }
+
     return `📋 **Session Context Loaded**
 | Context | Value |
 |---------|-------|
@@ -148,5 +158,5 @@ export function formatUserMessage(opts: {
 | **Branch** | ${escapeTableCell(branchName)} |
 | **CI** | ${escapeTableCell(ciDisplay)} |
 | **Journal** | ${totalEntries} entries |${opts.teamTotalEntries !== undefined ? `\n| **Team DB** | ${opts.teamTotalEntries} entries |` : ''}
-| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${analyticsRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
+| **Latest** | ${escapeTableCell(latestPreview)} |${summariesOutput}${issuesRow}${prsRow}${milestoneRow}${insightsRow}${copilotRow}${analyticsRow}${flagsRow}${rulesFile ? `\n| **Rules** | ${escapeTableCell(rulesFile.name)} (${String(rulesFile.sizeKB)} KB, updated ${rulesFile.lastModified}) |` : ''}${skillsDir ? `\n| **Skills** | ${String(skillsDir.count)} skill${skillsDir.count !== 1 ? 's' : ''} available |` : ''}`
 }

@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Team Collaboration
 
-**Scope:** 22 team tools + 2 team resources — happy paths, core error paths, and feature verification for all team collaboration features.
+**Scope:** 24 team tools + 4 team resources — happy paths, core error paths, and feature verification for all team collaboration features including Hush Protocol flags.
 
 **Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
 
@@ -17,7 +17,7 @@
 
 ---
 
-## Phase 10: Team Collaboration (22 tools + 2 resources)
+## Phase 10: Team Collaboration (24 tools + 4 resources)
 
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`. Team entries are stored in a separate public database with author attribution.
@@ -168,6 +168,52 @@
 | ----------- | -------------------------------------------------- | ------------------------------- |
 | Delete test | `delete_entry(entry_id: <team_test_id>)` on teamDb | Test entries removed (optional) |
 
+### 10.16 Hush Protocol — Flag Creation
+
+| Test                | Command/Action                                                                                                            | Expected Result                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Blocker flag        | `pass_team_flag(flag_type: "blocker", message: "FK constraint blocks migration", target_user: "@sarah")`                  | `success: true`, `flag_type: "blocker"`, `target_user: "sarah"`       |
+| FYI flag            | `pass_team_flag(flag_type: "fyi", message: "New lint rule added")`                                                        | `success: true`, no `target_user`                                     |
+| Needs review        | `pass_team_flag(flag_type: "needs_review", message: "Auth refactor ready", target_user: "chris", issue_number: <N>)`      | Entry has `issueNumber` set                                           |
+| Help requested      | `pass_team_flag(flag_type: "help_requested", message: "Race condition on Windows")`                                       | `success: true`, all 4 vocabulary types accepted                      |
+| With link           | `pass_team_flag(flag_type: "blocker", message: "Migration file", link: "src/db/migrations/005.ts")`                        | `auto_context.link` populated                                         |
+| With project_number | `pass_team_flag(flag_type: "fyi", message: "Scoped flag", project_number: 5)`                                             | Entry has `projectNumber: 5`                                          |
+| Entry structure     | `team_get_entry_by_id(entry_id: <flag_id>)`                                                                               | `entryType: "flag"`, tags include `flag:blocker` and `@sarah`         |
+| Auto_context shape  | Inspect `autoContext` JSON from entry detail                                                                              | Contains `flag_type`, `target_user`, `link`, `resolved: false`        |
+| Invalid vocab       | `pass_team_flag(flag_type: "urgent", message: "test")`                                                                    | `{ success: false, code: "VALIDATION_ERROR" }`, lists valid types     |
+| Missing message     | `pass_team_flag(flag_type: "blocker")`                                                                                    | Structured error: message required                                    |
+| Missing flag_type   | `pass_team_flag(message: "test")`                                                                                         | Structured error: flag_type required                                  |
+| Empty params        | `pass_team_flag({})`                                                                                                      | Structured error: both required                                       |
+
+### 10.17 Hush Protocol — Flag Resolution
+
+| Test                  | Command/Action                                                        | Expected Result                                                    |
+| --------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Resolve with comment  | `resolve_team_flag(flag_id: <id>, resolution: "Fixed by migration")` | `success: true`, `resolved: true`, `resolution` set               |
+| Content marker        | `team_get_entry_by_id(entry_id: <id>)` after resolve                  | Content contains `[RESOLVED: Fixed by migration]`                  |
+| Auto_context resolved | Inspect `autoContext` JSON after resolve                              | `resolved: true`, `resolved_at` ISO timestamp, `resolution` set   |
+| Idempotent re-resolve | `resolve_team_flag(flag_id: <id>, resolution: "Should not override")` | `success: true`, original resolution retained                     |
+| Bare resolve          | `resolve_team_flag(flag_id: <new_flag>)` without resolution           | `success: true`, content contains `[RESOLVED]` (no comment)       |
+| Nonexistent flag ID   | `resolve_team_flag(flag_id: 999999)`                                  | `{ success: false, code: "RESOURCE_NOT_FOUND" }`                  |
+| Non-flag entry        | `resolve_team_flag(flag_id: <non_flag_entry_id>)`                     | `{ success: false, code: "VALIDATION_ERROR" }`                    |
+| Empty params          | `resolve_team_flag({})`                                               | Structured error: flag_id required                                 |
+
+### 10.18 Hush Protocol — Flag Resources
+
+| Test              | URI                          | Expected Result                                                           |
+| ----------------- | ---------------------------- | ------------------------------------------------------------------------- |
+| Active flags      | `memory://flags`             | JSON with `activeFlags` array, each with `flag_type`, `target_user`, etc. |
+| No active flags   | `memory://flags`             | After resolving all flags — `activeFlags` empty or resource returns `[]`  |
+| Flag vocabulary   | `memory://flags/vocabulary`  | JSON with default vocabulary: blocker, needs_review, help_requested, fyi  |
+| Briefing flags    | `memory://briefing`          | `activeFlags` section present when unresolved flags exist                 |
+| Briefing localTime| `memory://briefing`          | `localTime` field present with human-readable timestamp                   |
+
+### 10.19 Hush Protocol — Cleanup
+
+| Test           | Command/Action                                          | Expected Result                 |
+| -------------- | ------------------------------------------------------- | ------------------------------- |
+| Delete flags   | `team_delete_entry(entry_id: <flag_id>)` for each flag  | All test flag entries removed   |
+
 ---
 
 ## Success Criteria
@@ -207,7 +253,20 @@
 - [ ] `team_get_cross_project_insights` returns `project_count ≥ 1` with seed entries S15–S17 present (project 5 has 3 entries, meeting `min_entries: 3`)
 - [ ] `team_get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
 - [ ] `team_get_cross_project_insights` returns `project_count: 0`, `projects: []`, and `message` when no projects meet the threshold
-- [ ] All 20 team tools return structured errors when `TEAM_DB_PATH` not configured
+- [ ] All 22 team tools return structured errors when `TEAM_DB_PATH` not configured
+- [ ] `pass_team_flag` creates entries with `entry_type: "flag"` and structured `auto_context`
+- [ ] `pass_team_flag` strips `@` prefix from `target_user` before storage
+- [ ] `pass_team_flag` generates `flag:{type}` and `@{user}` tags automatically
+- [ ] `pass_team_flag` validates against configured vocabulary (rejects invalid types)
+- [ ] `pass_team_flag` requires both `flag_type` and `message`
+- [ ] `resolve_team_flag` transitions flag to resolved state with `[RESOLVED]` content marker
+- [ ] `resolve_team_flag` is idempotent — re-resolving returns success with original state
+- [ ] `resolve_team_flag` rejects non-flag entries with `VALIDATION_ERROR`
+- [ ] `resolve_team_flag` returns `RESOURCE_NOT_FOUND` for nonexistent IDs
+- [ ] `memory://flags` returns active (unresolved) flag dashboard
+- [ ] `memory://flags/vocabulary` returns the server-wide flag vocabulary
+- [ ] `memory://briefing` includes `activeFlags` when unresolved flags exist
+- [ ] `memory://briefing` includes `localTime` for chronological grounding
 - [ ] `memory://team/recent` returns author-enriched entries with `source: "team"`
 - [ ] `memory://team/statistics` returns `configured: true`, `authors` array with `{ author, count }`
 - [ ] `memory://briefing` includes team entry count ("Team DB" row)

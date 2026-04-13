@@ -2,7 +2,7 @@
 
 Systematic verification of structured error handling across all `mj.*` API groups via the Code Mode sandbox. Validates that `{}` empty params, type mismatches, and domain errors all return structured `{success: false}` responses — never raw MCP exceptions.
 
-**Scope:** 1 tool (`mj_execute_code`), Phase 29 — consolidated Zod sweep and type mismatch tests across all 10 API groups.
+**Scope:** 1 tool (`mj_execute_code`), Phase 29 — consolidated Zod sweep and type mismatch tests across all 10 API groups (including Hush Protocol flag tools).
 
 **Prerequisites:**
 
@@ -288,10 +288,13 @@ const semanticEmpty = await mj.team.teamSemanticSearch({})
 const vecStatsEmpty = await mj.team.teamGetVectorIndexStats({})
 const statsEmpty = await mj.team.teamGetStatistics({})
 const insightsEmpty = await mj.team.teamGetCrossProjectInsights({})
+const passFlagEmpty = await mj.team.passTeamFlag({})
+const resolveFlagEmpty = await mj.team.resolveTeamFlag({})
 
 // Type mismatches
 const createNumContent = await mj.team.teamCreateEntry({ content: 123 })
 const updateStrId = await mj.team.teamUpdateEntry({ entry_id: 'abc', content: 'test' })
+const resolveFlagStrId = await mj.team.resolveTeamFlag({ flag_id: 'abc' })
 
 return {
   createEmptyError: createEmpty.success === false,
@@ -308,23 +311,29 @@ return {
   semanticEmptyError: semanticEmpty.success === false,
   statsOk: typeof statsEmpty.totalEntries === 'number',
   insightsOk: typeof insightsEmpty.project_count === 'number',
+  passFlagEmptyError: passFlagEmpty.success === false,
+  resolveFlagEmptyError: resolveFlagEmpty.success === false,
   createNumContentError: createNumContent.success === false,
   updateStrIdError: updateStrId.success === false,
+  resolveFlagStrIdError: resolveFlagStrId.success === false,
 }
 ```
 
-| Check                   | Expected                           |
-| ----------------------- | ---------------------------------- |
-| `createEmptyError`      | `true` (content required)          |
-| `getByIdEmptyError`     | `true` (entry_id required)         |
-| `recentOk`              | `true` (uses defaults)             |
-| `tagsOk`                | `true` (no params needed)          |
-| `dateRangeEmptyError`   | `true` (start/end date required)   |
-| `updateEmptyError`      | `true` (entry_id required)         |
-| `deleteEmptyError`      | `true` (entry_id required)         |
-| `mergeEmptyError`       | `true` (source/target required)    |
-| `linkEmptyError`        | `true` (from/to entry_id required) |
-| `createNumContentError` | `true` (content must be string)    |
+| Check                   | Expected                              |
+| ----------------------- | ------------------------------------- |
+| `createEmptyError`      | `true` (content required)             |
+| `getByIdEmptyError`     | `true` (entry_id required)            |
+| `recentOk`              | `true` (uses defaults)                |
+| `tagsOk`                | `true` (no params needed)             |
+| `dateRangeEmptyError`   | `true` (start/end date required)      |
+| `updateEmptyError`      | `true` (entry_id required)            |
+| `deleteEmptyError`      | `true` (entry_id required)            |
+| `mergeEmptyError`       | `true` (source/target required)       |
+| `linkEmptyError`        | `true` (from/to entry_id required)    |
+| `passFlagEmptyError`    | `true` (flag_type + message required) |
+| `resolveFlagEmptyError` | `true` (flag_id required)             |
+| `createNumContentError` | `true` (content must be string)       |
+| `resolveFlagStrIdError` | `true` (flag_id must be number)       |
 
 ### 29.8 IO Group — Empty Params & Security
 

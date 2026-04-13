@@ -79,9 +79,9 @@ describe('Insights Resources', () => {
                 context
             )
             expect(result.data.success).toBe(true)
-            expect((result.data as any).authorActivity).toBeDefined()
-            expect((result.data as any).crossAuthorLinks).toBeDefined()
-            expect((result.data as any).impactFactor).toBeDefined()
+            expect((result.data as any).matrix.authorActivity).toBeDefined()
+            expect((result.data as any).matrix.crossAuthorLinks).toBeDefined()
+            expect((result.data as any).matrix.impactFactor).toBeDefined()
         })
 
         it('should handle errors from computation', () => {

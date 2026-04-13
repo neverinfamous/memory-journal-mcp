@@ -16,6 +16,7 @@
                 "DB_PATH": "/app/data/memory_journal.db",
                 "TEAM_DB_PATH": "/app/data/team.db",
                 "TEAM_AUTHOR": "",
+                "FLAG_VOCABULARY": "blocker,needs_review,help_requested,fyi",
                 "GITHUB_TOKEN": "your_github_token_here",
                 "DEFAULT_PROJECT_NUMBER": "1",
                 "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1}}",

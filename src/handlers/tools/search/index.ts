@@ -302,7 +302,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             )
                             const entryIds = semanticResults.map((r) => r.entryId)
                             const entriesMap = db.getEntriesByIds(entryIds)
-                            const entries = semanticResults
+                            let entries = semanticResults
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
                                     if (!entry) return null
@@ -317,7 +317,6 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
-                                .slice(0, input.limit)
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
@@ -328,13 +327,10 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 scored.sort(
                                     (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
                                 )
-                                return {
-                                    success: true,
-                                    entries: scored,
-                                    count: scored.length,
-                                    searchMode: isAuto ? 'semantic (auto)' : 'semantic',
-                                }
+                                entries = scored
                             }
+
+                            entries = entries.slice(0, input.limit)
 
                             return {
                                 success: true,

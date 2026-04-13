@@ -22,6 +22,7 @@ export type EntryType =
     | 'development_note'
     | 'enhancement'
     | 'milestone'
+    | 'flag'
     | 'system_integration_test'
     | 'test_entry'
     | 'other'
@@ -88,6 +89,8 @@ export interface JournalEntry {
     workflowRunId?: number | null
     workflowName?: string | null
     workflowStatus?: string | null
+    // Analytics & search
+    importanceScore?: number
 }
 
 /**

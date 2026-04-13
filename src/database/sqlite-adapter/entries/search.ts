@@ -354,22 +354,5 @@ export function searchByDateRange(
  *   `deploy NOT staging` → `deploy NOT staging` (unchanged)
  */
 function sanitizeFtsQuery(query: string): string {
-    const trimmed = query.trim()
-    // Pure phrase: starts and ends with double-quote, no other quotes inside
-    if (
-        trimmed.startsWith('"') &&
-        trimmed.endsWith('"') &&
-        trimmed.length > 2 &&
-        !trimmed.slice(1, -1).includes('"')
-    ) {
-        const inner = trimmed.slice(1, -1).trim()
-        // Split on whitespace, drop empty tokens, join with AND
-        const words = inner.split(/\s+/).filter(Boolean)
-        if (words.length > 1) {
-            return words.join(' AND ')
-        }
-        // Single-word phrase: strip quotes (no AND needed)
-        return inner
-    }
-    return query
+    return query;
 }

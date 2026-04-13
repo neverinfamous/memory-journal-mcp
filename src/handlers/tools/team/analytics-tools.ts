@@ -251,19 +251,19 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     const { period, limit } = TeamCollaborationMatrixSchema.parse(params)
 
-                    // Date format for period grouping
-                    const dateFormat =
+                    // Date expression for period grouping
+                    const dateExpression =
                         period === 'week'
-                            ? '%Y-W%W'
+                            ? `strftime('%Y-W%W', timestamp)`
                             : period === 'quarter'
-                              ? '%Y-Q' // Will post-process
-                              : '%Y-%m'
+                              ? `strftime('%Y-Q', timestamp) || cast(((cast(strftime('%m', timestamp) as integer) + 2) / 3) as integer)`
+                              : `strftime('%Y-%m', timestamp)`
 
                     // Author activity heatmap
                     const activityResult = teamDb.executeRawQuery(
                         `SELECT
                             COALESCE(author, 'unknown') AS author,
-                            strftime('${dateFormat}', timestamp) AS period,
+                            ${dateExpression} AS period,
                             COUNT(*) AS entry_count
                         FROM memory_journal
                         WHERE deleted_at IS NULL

@@ -347,11 +347,11 @@ describe('generateInstructions', () => {
             // Should include enabled groups
             expect(result).toContain('mj.core')
             expect(result).toContain('mj.search')
-            // Should NOT include disabled groups
-            expect(result).not.toContain('mj.github')
-            expect(result).not.toContain('mj.team')
-            expect(result).not.toContain('mj.admin')
-            expect(result).not.toContain('mj.backup')
+            // Should NOT include disabled groups in Code Mode namespace table
+            expect(result).not.toContain('mj.github.*')
+            expect(result).not.toContain('mj.team.*')
+            expect(result).not.toContain('mj.admin.*')
+            expect(result).not.toContain('mj.backup.*')
         })
 
         it('starter shortcut includes Code Mode but not Copilot', () => {

@@ -171,6 +171,8 @@ export interface ToolHandlerConfig {
     defaultProjectNumber?: number
     /** Project registry mapping dynamic repo IDs to local paths and kanban boards */
     projectRegistry?: Record<string, ProjectRegistryEntry>
+    /** Hush Protocol flag vocabulary */
+    flagVocabulary?: string[]
 }
 
 /**
@@ -277,6 +279,9 @@ export interface ServerConfig {
 
     /** Briefing depth for AI client instructions */
     instructionLevel?: 'essential' | 'standard' | 'full'
+
+    /** Hush Protocol flag vocabulary (defaults: blocker, needs_review, help_requested, fyi) */
+    flagVocabulary?: string[]
 }
 
 /**

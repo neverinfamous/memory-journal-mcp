@@ -658,3 +658,77 @@ export const TeamCollaborationMatrixOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
+
+// ============================================================================
+// Flag Tool Schemas (Hush Protocol)
+// ============================================================================
+
+/** Default flag vocabulary */
+export const DEFAULT_FLAG_VOCABULARY = [
+    'blocker',
+    'needs_review',
+    'help_requested',
+    'fyi',
+] as const
+
+/** pass_team_flag — strict */
+export const PassTeamFlagSchema = z.object({
+    flag_type: z.string().min(1).describe('Flag type from vocabulary (e.g., blocker, needs_review)'),
+    message: z.string().min(1).max(50_000).describe('Flag message describing the issue or request'),
+    target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
+    link: z.string().optional().describe('Related file path, URL, or reference'),
+    project_number: z.number().optional(),
+    issue_number: z.number().optional(),
+    author: z.string().optional(),
+})
+
+/** pass_team_flag — relaxed */
+export const PassTeamFlagSchemaMcp = z.object({
+    flag_type: z.string().optional(),
+    message: z.string().optional(),
+    target_user: z.string().optional(),
+    link: z.string().optional(),
+    project_number: relaxedNumber().optional(),
+    issue_number: relaxedNumber().optional(),
+    author: z.string().optional(),
+})
+
+/** resolve_team_flag — strict */
+export const ResolveTeamFlagSchema = z.object({
+    flag_id: z.number().describe('Entry ID of the flag to resolve'),
+    resolution: z.string().optional().describe('Optional resolution comment'),
+})
+
+/** resolve_team_flag — relaxed */
+export const ResolveTeamFlagSchemaMcp = z.object({
+    flag_id: relaxedNumber().optional(),
+    resolution: z.string().optional(),
+})
+
+// ============================================================================
+// Flag Output Schemas
+// ============================================================================
+
+export const FlagOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: TeamEntryOutputSchema.optional(),
+        flag_type: z.string().optional(),
+        target_user: z.string().nullable().optional(),
+        resolved: z.boolean().optional(),
+        author: z.string().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
+export const ResolveFlagOutputSchema = z
+    .object({
+        success: z.boolean().optional(),
+        entry: TeamEntryOutputSchema.optional(),
+        flag_type: z.string().optional(),
+        resolved: z.boolean().optional(),
+        resolution: z.string().nullable().optional(),
+        error: z.string().optional(),
+    })
+    .extend(ErrorFieldsMixin.shape)
+
