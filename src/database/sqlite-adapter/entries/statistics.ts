@@ -86,7 +86,18 @@ export function getStatistics(
             significantCount: r.significant_count,
         }))
 
-    const relCountRow = db.prepare('SELECT COUNT(*) as count FROM relationships').get() as {
+    let relDateFilter = ''
+    const relDateParams: unknown[] = []
+    if (startDate) {
+        relDateFilter += ' AND DATE(created_at) >= DATE(?)'
+        relDateParams.push(startDate)
+    }
+    if (endDate) {
+        relDateFilter += ' AND DATE(created_at) <= DATE(?)'
+        relDateParams.push(endDate)
+    }
+
+    const relCountRow = db.prepare(`SELECT COUNT(*) as count FROM relationships WHERE 1=1${relDateFilter}`).get(...relDateParams) as {
         count: number
     }
     const relTypeRows = db
@@ -94,11 +105,11 @@ export function getStatistics(
             `
         SELECT relationship_type, COUNT(*) as count
         FROM relationships
-        WHERE relationship_type IN ('blocked_by', 'resolved', 'caused')
+        WHERE relationship_type IN ('blocked_by', 'resolved', 'caused')${relDateFilter}
         GROUP BY relationship_type
     `
         )
-        .all() as { relationship_type: 'blocked_by' | 'resolved' | 'caused'; count: number }[]
+        .all(...relDateParams) as { relationship_type: 'blocked_by' | 'resolved' | 'caused'; count: number }[]
 
     const totalRelationships = relCountRow.count
     const avgPerEntry = totalEntries > 0 ? totalRelationships / totalEntries : 0

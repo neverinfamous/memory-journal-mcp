@@ -20,9 +20,9 @@ _Note: The tracked token counts only reflect the estimated tokens that actually 
 | `test-resources.md`            | ~359                    |
 | `test-schemas.md`              | ~2,733                  |
 | `test-seed.md`                 | ~6,800                  |
-| `test-team.md`                 | ~10,082                 |
-| `test-tool-group-admin.md`     | ~3,068                  |
-| `test-tool-group-backup.md`    | ~561                    |
+| `test-team.md`                 | ~7,200                  |
+| `test-tool-group-admin.md`     | ~2,181                  |
+| `test-tool-group-backup.md`    | ~498                    |
 | `test-tool-group-core.md`      | ~2,190                  |
 | `test-tool-group-github.md`    | ~1,010                  |
 | `test-tool-group-search.md`    | ~4,650                  |
