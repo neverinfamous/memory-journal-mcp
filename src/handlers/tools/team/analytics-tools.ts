@@ -256,7 +256,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         period === 'week'
                             ? `strftime('%Y-W%W', timestamp)`
                             : period === 'quarter'
-                              ? `strftime('%Y-Q', timestamp) || cast(((cast(strftime('%m', timestamp) as integer) + 2) / 3) as integer)`
+                              ? `strftime('%Y-Q', timestamp) || CAST(((CAST(strftime('%m', timestamp) AS INTEGER) + 2) / 3) AS INTEGER)`
                               : `strftime('%Y-%m', timestamp)`
 
                     // Author activity heatmap

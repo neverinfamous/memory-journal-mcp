@@ -60,7 +60,7 @@ function parseFlagAutoContext(
             return {
                 flag_type: String(ctx['flag_type']),
                 target_user: typeof ctx['target_user'] === 'string' ? ctx['target_user'] : null,
-                resolved: Boolean(ctx['resolved']),
+                resolved: ctx['resolved'] === true,
                 link: typeof ctx['link'] === 'string' ? ctx['link'] : null,
             }
         }

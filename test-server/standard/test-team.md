@@ -1,6 +1,6 @@
 # Re-Test memory-journal-mcp — Team Collaboration
 
-**Scope:** 24 team tools + 4 team resources — happy paths, core error paths, and feature verification for all team collaboration features including Hush Protocol flags.
+**Scope:** 25 team tools + 4 team resources — happy paths, core error paths, and feature verification for all team collaboration features including Hush Protocol flags.
 
 **Execution Strategy:** **Use direct MCP tools, NOT Code Mode or scripts!** Code Mode is preferred to scripts if absolutely necessary to supplement direct tool calls.
 
@@ -17,7 +17,7 @@
 
 ---
 
-## Phase 10: Team Collaboration (24 tools + 4 resources)
+## Phase 10: Team Collaboration (25 tools + 4 resources)
 
 > [!NOTE]
 > Requires `TEAM_DB_PATH` to be configured in `mcp_config.json`. Team entries are stored in a separate public database with author attribution.

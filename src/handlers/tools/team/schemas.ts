@@ -674,7 +674,7 @@ export const DEFAULT_FLAG_VOCABULARY = [
 /** pass_team_flag — strict */
 export const PassTeamFlagSchema = z.object({
     flag_type: z.string().min(1).describe('Flag type from vocabulary (e.g., blocker, needs_review)'),
-    message: z.string().min(1).max(50_000).describe('Flag message describing the issue or request'),
+    message: z.string().min(1).max(49_000).describe('Flag message describing the issue or request'),
     target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
     link: z.string().optional().describe('Related file path, URL, or reference'),
     project_number: z.number().optional(),
