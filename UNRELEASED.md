@@ -45,4 +45,5 @@
 - **Code Mode**: Validated Phase 28 Team CRUD & Search via `mj_execute_code`, fully verifying team entry management (CRUD), error paths, date range filtering, tag searching, and explicit/auto-author tracking.
 - **Code Mode**: Validated Phase 28 Team Flags via `mj_execute_code`, successfully testing Hush Protocol flag creation, resolution lifecycle, vocabulary constraints, and team tag cleanup operations. 
 - **Code Mode**: Validated Phase 28 Team Vector, Insights & Cross-Tool Error Paths via `mj_execute_code`, fully verifying team semantic search, vector rebuilding/adding, cross-project analytics, and ensuring that all 18 tested cross-tool error paths return 100% structured JSON boundaries (not raw throws).
+- **Code Mode**: Validated Phase 22 Multi-Step Workflows via `mj_execute_code`, successfully verifying read-only pipelines, conditional branching, cross-api data transformations, and create-read/create-search loopbacks without token bloat.
 - **Code Mode**: Fixed missing API alias configuration for `passTeamFlag` and `resolveTeamFlag`, aligning the sandbox JavaScript environment with the expected camelCase tool conventions.
