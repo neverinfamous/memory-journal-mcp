@@ -319,21 +319,21 @@ return {
 }
 ```
 
-| Check                   | Expected                           |
-| ----------------------- | ---------------------------------- |
-| `createEmptyError`      | `true` (content required)          |
-| `getByIdEmptyError`     | `true` (entry_id required)         |
-| `recentOk`              | `true` (uses defaults)             |
-| `tagsOk`                | `true` (no params needed)          |
-| `dateRangeEmptyError`   | `true` (start/end date required)   |
-| `updateEmptyError`      | `true` (entry_id required)         |
-| `deleteEmptyError`      | `true` (entry_id required)         |
-| `mergeEmptyError`       | `true` (source/target required)    |
-| `linkEmptyError`        | `true` (from/to entry_id required)        |
-| `passFlagEmptyError`    | `true` (flag_type + message required)     |
-| `resolveFlagEmptyError` | `true` (flag_id required)                 |
-| `createNumContentError` | `true` (content must be string)           |
-| `resolveFlagStrIdError` | `true` (flag_id must be number)           |
+| Check                   | Expected                              |
+| ----------------------- | ------------------------------------- |
+| `createEmptyError`      | `true` (content required)             |
+| `getByIdEmptyError`     | `true` (entry_id required)            |
+| `recentOk`              | `true` (uses defaults)                |
+| `tagsOk`                | `true` (no params needed)             |
+| `dateRangeEmptyError`   | `true` (start/end date required)      |
+| `updateEmptyError`      | `true` (entry_id required)            |
+| `deleteEmptyError`      | `true` (entry_id required)            |
+| `mergeEmptyError`       | `true` (source/target required)       |
+| `linkEmptyError`        | `true` (from/to entry_id required)    |
+| `passFlagEmptyError`    | `true` (flag_type + message required) |
+| `resolveFlagEmptyError` | `true` (flag_id required)             |
+| `createNumContentError` | `true` (content must be string)       |
+| `resolveFlagStrIdError` | `true` (flag_id must be number)       |
 
 ### 29.8 IO Group — Empty Params & Security
 
@@ -369,9 +369,9 @@ return {
 
 ## Success Criteria
 
-- [x] All 10 `mj.*` API groups tested with `{}` empty params
-- [x] Type mismatches (string where number, number where string) return structured errors
-- [x] Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
-- [x] Security boundaries (path traversal, limit overflow) enforced
-- [x] No sandbox crashes, no raw MCP exceptions leaked through Code Mode
-- [x] All results map to compact summaries (no large payload inflation)
+- [ ] All 10 `mj.*` API groups tested with `{}` empty params
+- [ ] Type mismatches (string where number, number where string) return structured errors
+- [ ] Domain errors (nonexistent IDs, same-tag merge, 404s) return `{success: false}`
+- [ ] Security boundaries (path traversal, limit overflow) enforced
+- [ ] No sandbox crashes, no raw MCP exceptions leaked through Code Mode
+- [ ] All results map to compact summaries (no large payload inflation)

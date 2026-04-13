@@ -32,4 +32,5 @@
 - **Code Mode**: Validated Phase 26 Admin and Backup & Export tool structures and safe execution boundaries.
 - **Code Mode**: Validated Phase 17 API Discoverability (top-level help, groups, aliases, positional arguments).
 - **Code Mode**: Validated Phase 20 Core CRUD operations (create, read, update, delete) via `mj_execute_code`.
+- **Code Mode**: Validated Phase 25 GitHub Tools (16 tools), covering Kanban, Issue/Milestone lifecycle, and Repo Insights via `mj_execute_code`.
 - **Code Mode**: Validated Phase 29 Error Matrix & Zod Sweeps, confirming 100% structured error handling across all 10 `mj.*` API groups without sandbox crashes.
