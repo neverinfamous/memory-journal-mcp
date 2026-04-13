@@ -117,7 +117,7 @@ flowchart TB
 ---
 
 <details>
-<summary><strong>🤖 Click to view the recommended AI Agent Instructions/Rule</strong></summary>
+<summary><strong>🤖 Recommended AI Agent Instructions/Rule</strong></summary>
 
 _Suggested Rule (Add to AGENTS.md, GEMINI.md, system prompts, etc.)_
 
@@ -134,7 +134,9 @@ Execute BEFORE fulfilling any user request in a new session:
    - **REQUIRED GROUPS**:
      - **GitHub**: Combine Repo, Branch, CI, PRs, and Insights.
      - **GitHub Issues**: List every issue, one per line.
-     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries, Proactive Analytics/Team Density, Milestones, and Workspaces.
+     - **Active Flags (Hush Protocol)**: If the briefing JSON contains an `activeFlags` object (with `count > 0`), render each flag in a dedicated row using format: `🚩 {flag_type} → @{target_user}: {preview}`. If `count` is 0 or the field is absent, omit the row entirely.
+     - Also include Entry Counts (Journal/Team), Latest Entries/Summaries (titles only), Proactive Analytics/Team Density, Milestones, and Workspaces.
+   - **FLAG PROMINENCE**: When `activeFlags.count > 0`, prepend a bold callout line **above** the table: `⚠️ **{count} active flag(s)** — review before proceeding.` This ensures blockers and review requests are impossible to miss.
 4. **STOP & WAIT**: After rendering the table, execute the user's prompt but do NOT autonomously resume past tasks or start work on new issues mentioned in the session summary. The briefing is strictly for context.
 
 </details>
@@ -171,17 +173,17 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 ### 🛠️ **70 MCP Tools** (10 Groups)
 
-| Group           | Tools | Description                                                                                                                                      |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                          |
-| `core`          | 6     | Entry CRUD, tags, test                                                                                                                           |
-| `search`        | 4     | Text search, date range, semantic, vector stats                                                                                                  |
-| `analytics`     | 2     | Statistics, cross-project insights                                                                                                               |
-| `relationships` | 2     | Link entries, visualize graphs                                                                                                                   |
-| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                   |
-| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                          |
-| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                             |
-| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                   |
+| Group           | Tools | Description                                                                                                                                                               |
+| --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`      | 1     | Code Mode (sandboxed code execution) 🌟 **Recommended**                                                                                                                   |
+| `core`          | 6     | Entry CRUD, tags, test                                                                                                                                                    |
+| `search`        | 4     | Text search, date range, semantic, vector stats                                                                                                                           |
+| `analytics`     | 2     | Statistics, cross-project insights                                                                                                                                        |
+| `relationships` | 2     | Link entries, visualize graphs                                                                                                                                            |
+| `io`            | 3     | JSON/Markdown export and File-level Markdown Data Integration Interoperability (Import/Export)                                                                            |
+| `admin`         | 5     | Update, delete, rebuild/add to vector index, merge tags                                                                                                                   |
+| `github`        | 18    | Issues, PRs, context, Kanban, **Milestones**, **Insights**, **issue lifecycle**, **Copilot Reviews**                                                                      |
+| `backup`        | 4     | Backup, list, restore, cleanup                                                                                                                                            |
 | `team`          | 25    | CRUD, search, stats, relationships, IO (Markdown import/export), backup, vector search, cross-project insights, matrix, **Hush Protocol flags** (requires `TEAM_DB_PATH`) |
 
 **[Complete tools reference →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Tools)**
