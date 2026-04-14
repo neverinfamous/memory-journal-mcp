@@ -8,7 +8,7 @@
 
 import { test, expect } from '@playwright/test'
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { startServer, stopServer, createClient } from './helpers.js'
+import { startServer, stopServer, createClient, callToolAndParse } from './helpers.js'
 import { tmpdir } from 'node:os'
 
 const GITHUB_DEGRADE_PORT = 3115
@@ -45,27 +45,14 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
     })
 
     test('get_github_issues returns requiresUserInput: true without auto-detect env', async () => {
-        const response = await client.callTool({
-            name: 'get_github_issues',
-            arguments: {}, // Empty properties to fail auto-detect
-        })
+        const payload = await callToolAndParse(client, 'get_github_issues', {}) as any
 
-        expect(Array.isArray(response.content)).toBe(true)
-        const text = (response.content as Array<{ text: string }>)[0]!.text
-        console.log('GitHub Degrade Response:', text)
-        // Check for presence of requiresUserInput flag due to missing token / auto-detect failure
-        expect(text).toContain('"requiresUserInput":true')
+        expect(typeof payload).toBe('object')
+        expect(payload.requiresUserInput).toBe(true)
     })
 
     test('get_github_context degrades gracefully to returning missing state', async () => {
-        const response = await client.callTool({
-            name: 'get_github_context',
-            arguments: {},
-        })
-
-        expect(Array.isArray(response.content)).toBe(true)
-        const text = (response.content as Array<{ text: string }>)[0]!.text
-        const payload = JSON.parse(text)
+        const payload = await callToolAndParse(client, 'get_github_context', {}) as any
 
         expect(payload.repoName).toBeNull()
         expect(payload.issueCount).toBe(0)

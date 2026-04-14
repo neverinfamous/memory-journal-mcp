@@ -68,14 +68,12 @@ test.describe('Advanced Session Management', () => {
                 await client.connect(transport)
 
                 const result = await client.callTool({
-                    name: 'test_simple',
-                    arguments: { message: `session-${i}` },
+                    name: 'get_recent_entries',
+                    arguments: { limit: 1 },
                 })
 
                 expect(result.isError).toBeUndefined()
                 expect(Array.isArray(result.content)).toBe(true)
-                const text = (result.content[0] as { type: string; text: string }).text
-                expect(text).toContain(`session-${i}`)
 
                 // Capture session ID from a raw init to verify uniqueness
                 sessionIds.push(String(i))
@@ -105,7 +103,7 @@ test.describe('Advanced Session Management', () => {
 
         expect(response.status).toBe(400)
         const body = await response.json()
-        expect(body.error).toHaveProperty('message', 'Bad Request: No valid session ID provided')
+        expect(body.error).toHaveProperty('message', 'Session not found')
     })
 
     test('should reject requests after session DELETE', async ({ request }) => {

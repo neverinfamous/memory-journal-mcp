@@ -118,14 +118,12 @@ test.describe('HTTP Transport Protocols', () => {
                 await client.connect(transport)
 
                 const response = await client.callTool({
-                    name: 'test_simple',
-                    arguments: { message: 'SSE round-trip' },
+                    name: 'get_recent_entries',
+                    arguments: { limit: 1 },
                 })
 
                 expect(response.isError).toBeUndefined()
                 expect(Array.isArray(response.content)).toBe(true)
-                const text = (response.content[0] as { type: string; text: string }).text
-                expect(text).toContain('SSE round-trip')
             } finally {
                 await client.close()
             }

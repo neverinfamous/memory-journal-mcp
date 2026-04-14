@@ -67,16 +67,23 @@ test.describe('Errors: Core', () => {
                 content: 'Valid content',
                 entry_type: '_e2e_invalid_type_xyz',
             })
-            const text = response.content[0]?.text
-            expect(text).toBeDefined()
-            // Accept either structured handler error or raw Zod validation error
-            try {
-                const parsed = JSON.parse(text)
+            const text = response.content[0]?.text ?? ''
+            const structural =
+                'structuredContent' in response ? response.structuredContent : undefined
+
+            // Use structured object if present
+            if (text === '[Structured output attached]' && structural) {
+                const parsed = structural as any
                 expect(parsed.success).toBe(false)
-            } catch {
-                // Non-JSON response: must NOT be a raw MCP -32602 leak
-                expect(text).not.toContain('-32602')
-                expect(text.toLowerCase()).toContain('error')
+            } else {
+                // Try JSON, fallback to raw text verification
+                try {
+                    const parsed = JSON.parse(text)
+                    expect(parsed.success).toBe(false)
+                } catch {
+                    expect(text).not.toContain('-32602')
+                    expect(text.toLowerCase()).toContain('error')
+                }
             }
         } finally {
             await client.close()
@@ -109,13 +116,20 @@ test.describe('Errors: Search', () => {
                 start_date: 'not-a-date',
                 end_date: '2030-12-31',
             })
-            const text = response.content[0]?.text
-            expect(text).toBeDefined()
-            try {
-                const parsed = JSON.parse(text)
+            const text = response.content[0]?.text ?? ''
+            const structural =
+                'structuredContent' in response ? response.structuredContent : undefined
+
+            if (text === '[Structured output attached]' && structural) {
+                const parsed = structural as any
                 expect(parsed.success).toBe(false)
-            } catch {
-                expect(text.toLowerCase()).toContain('error')
+            } else {
+                try {
+                    const parsed = JSON.parse(text)
+                    expect(parsed.success).toBe(false)
+                } catch {
+                    expect(text.toLowerCase()).toContain('error')
+                }
             }
         } finally {
             await client.close()
@@ -193,13 +207,20 @@ test.describe('Errors: Admin', () => {
                 source_tags: [],
                 target_tag: '',
             })
-            const text = response.content[0]?.text
-            expect(text).toBeDefined()
-            try {
-                const parsed = JSON.parse(text)
+            const text = response.content[0]?.text ?? ''
+            const structural =
+                'structuredContent' in response ? response.structuredContent : undefined
+
+            if (text === '[Structured output attached]' && structural) {
+                const parsed = structural as any
                 expect(parsed.success).toBe(false)
-            } catch {
-                expect(text.length).toBeGreaterThan(0)
+            } else {
+                try {
+                    const parsed = JSON.parse(text)
+                    expect(parsed.success).toBe(false)
+                } catch {
+                    expect(text.length).toBeGreaterThan(0)
+                }
             }
         } finally {
             await client.close()
@@ -233,12 +254,14 @@ test.describe('Errors: Backup', () => {
                 filename: '_e2e_nonexistent_backup_xyz.db',
             })
             const text = response.content[0]?.text ?? ''
-            expect(text.length).toBeGreaterThan(0)
+            const structural =
+                'structuredContent' in response ? (response.structuredContent as any) : undefined
 
-            // Accept either MCP-level isError or structured handler error
             if (response.isError) {
                 // MCP-level error — valid rejection
                 expect(text.length).toBeGreaterThan(0)
+            } else if (text === '[Structured output attached]' && structural) {
+                expectHandlerError(structural)
             } else {
                 const parsed = JSON.parse(text)
                 expectHandlerError(parsed)

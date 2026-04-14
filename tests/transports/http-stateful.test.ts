@@ -273,7 +273,7 @@ describe('setupStateful', () => {
         await vi.advanceTimersByTimeAsync(10)
 
         expect(ctx.touchSession).toHaveBeenCalledWith('existing-session')
-        expect(mockHandleRequest).toHaveBeenCalled()
+        expect(mockTransport.handleRequest).toHaveBeenCalled()
 
         clearInterval(timer)
     })

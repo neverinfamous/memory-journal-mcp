@@ -68,22 +68,8 @@ export function setupStateful(
     }, SESSION_SWEEP_INTERVAL_MS)
     sessionSweepTimer.unref()
 
-    // Initialize a single global transport for streamable HTTP.
-    // This transport handles internal connection multiplexing automatically.
-    const streamableTransport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (sid: string) => {
-            logger.info('HTTP session initialized', {
-                module: 'HTTP',
-                sessionId: sid,
-            })
-            ctx.transports.set(sid, streamableTransport)
-            ctx.touchSession(sid)
-        },
-    })
-
-    // Connect this multi-session transport once
-    void server.connect(streamableTransport)
+    // Transports are instantiated dynamically upon receiving an initialize request
+    // to support sequential test resets and client reconnections.
 
     // POST /mcp — Handle JSON-RPC requests
     app.post('/mcp', (req: Request, res: Response): void => {
@@ -127,8 +113,58 @@ export function setupStateful(
                     return
                 }
 
+                let targetTransport: StreamableHTTPServerTransport
+
+                if (sessionId !== undefined) {
+                    const t = ctx.transports.get(sessionId)
+                    if (!t) {
+                        logger.error('Missing transport for active session', { module: 'HTTP', sessionId })
+                        throw new Error('Critical: session ID exists but transport was lost')
+                    }
+                    targetTransport = t
+                } else {
+                    // This MUST be an initialize request due to the guard above.
+                    // Instantiate a fresh transport for the new session lifecycle.
+                    const newTransport = new StreamableHTTPServerTransport({
+                        sessionIdGenerator: () => randomUUID(),
+                        onsessioninitialized: (sid: string) => {
+                            logger.info('HTTP session initialized', {
+                                module: 'HTTP',
+                                sessionId: sid,
+                            })
+                            ctx.transports.set(sid, newTransport)
+                            ctx.touchSession(sid)
+
+                            // Attach close handler specifically for this session ID, preserving any existing handlers
+                            // (e.g., from server.connect wrapper).
+                            const existingOnClose = newTransport.onclose
+                            newTransport.onclose = () => {
+                                logger.info('HTTP transport closed', {
+                                    module: 'HTTP',
+                                    sessionId: sid,
+                                })
+                                ctx.transports.delete(sid)
+                                if (existingOnClose) existingOnClose()
+                            }
+                        },
+                    })
+
+                    // Sequentially disconnect the server from any prior transport
+                    // and attach it to the new one, enforcing 1:1 active client semantics.
+                    if (ctx.serverConnected) {
+                        try {
+                            await server.close()
+                        } catch {
+                            logger.warning('Error closing prior server transport', { module: 'HTTP' })
+                        }
+                    }
+                    await server.connect(newTransport)
+                    ctx.serverConnected = true
+                    targetTransport = newTransport
+                }
+
                 await requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
-                    await streamableTransport.handleRequest(
+                    await targetTransport.handleRequest(
                         req as IncomingMessage,
                         res as ServerResponse,
                         req.body
