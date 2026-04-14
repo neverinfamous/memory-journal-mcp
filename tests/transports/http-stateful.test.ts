@@ -149,7 +149,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
 
         expect(timer).toBeDefined()
         clearInterval(timer)
@@ -160,7 +160,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
 
         expect(app.post).toHaveBeenCalledWith('/mcp', expect.any(Function))
         expect(app.get).toHaveBeenCalledWith('/mcp', expect.any(Function))
@@ -178,7 +178,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
 
         vi.advanceTimersByTime(5 * 60 * 1000) // SESSION_SWEEP_INTERVAL_MS = 5 min
 
@@ -197,7 +197,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
 
         vi.advanceTimersByTime(60_000)
 
@@ -215,7 +215,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
 
         vi.advanceTimersByTime(5 * 60 * 1000)
 
@@ -233,7 +233,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/mcp']!
 
         const req = mockReq({ headers: {} })
@@ -263,7 +263,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/mcp']!
 
         const req = mockReq({ headers: { 'mcp-session-id': 'existing-session' } })
@@ -287,7 +287,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/mcp']!
 
         const req = mockReq({ headers: { 'mcp-session-id': 'cross-session' } })
@@ -315,7 +315,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/mcp']!
 
         const req = mockReq({ headers: {}, body: { method: 'initialize' } })
@@ -338,7 +338,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/mcp']!
 
         const req = mockReq({ headers: { 'mcp-session-id': 'error-session' } })
@@ -361,7 +361,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/mcp']!
 
         const req = mockReq({ headers: {} })
@@ -381,7 +381,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/mcp']!
 
         const req = mockReq({ headers: { 'mcp-session-id': 'unknown' } })
@@ -401,7 +401,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/mcp']!
 
         const req = mockReq({ headers: { 'mcp-session-id': 'sse-session' } })
@@ -422,7 +422,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/mcp']!
 
         const req = mockReq({
@@ -448,7 +448,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['delete']!['/mcp']!
 
         const req = mockReq({ headers: {} })
@@ -468,7 +468,7 @@ describe('setupStateful', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        const timer = setupStateful(ctx, app as never, server as never)
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['delete']!['/mcp']!
 
         const req = mockReq({ headers: { 'mcp-session-id': 'delete-session' } })

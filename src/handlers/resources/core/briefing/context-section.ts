@@ -203,7 +203,7 @@ export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile
                   : 'just now'
 
         return {
-            path: rulesFilePath,
+            path: path.basename(rulesFilePath),
             name: path.basename(rulesFilePath),
             sizeKB: Math.round(stat.size / 1024),
             lastModified: agoStr,
@@ -225,7 +225,7 @@ export function buildSkillsDirInfo(skillsDirPath: string | undefined): SkillsDir
         const entries = fs.readdirSync(skillsDirPath, { withFileTypes: true })
         const skillDirs = entries.filter((e) => e.isDirectory())
         return {
-            path: skillsDirPath,
+            path: path.basename(skillsDirPath),
             count: skillDirs.length,
             names: skillDirs.map((d) => d.name),
         }

@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServerFactory } from '../../../server/mcp-server.js'
 import { randomUUID } from 'node:crypto'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -22,12 +22,14 @@ export interface StatefulContext {
     touchSession: (sid: string) => void
     /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     serverConnected: boolean
+    /** Serialize concurrent transport connections to the singleton server */
+    connectionLock?: Promise<void>
 }
 
 export function setupStateful(
     ctx: StatefulContext,
     app: Express,
-    server: McpServer
+    serverFactory: McpServerFactory
 ): ReturnType<typeof setInterval> {
     const sessionSweepTimer = setInterval(() => {
         const now = Date.now()
@@ -149,17 +151,17 @@ export function setupStateful(
                         },
                     })
 
-                    // Sequentially disconnect the server from any prior transport
-                    // and attach it to the new one, enforcing 1:1 active client semantics.
-                    if (ctx.serverConnected) {
-                        try {
-                            await server.close()
-                        } catch {
-                            logger.warning('Error closing prior server transport', { module: 'HTTP' })
-                        }
-                    }
-                    await server.connect(newTransport)
-                    ctx.serverConnected = true
+                    // Attach the new transport to the server, supporting concurrent clients.
+                    const doConnect = async (): Promise<void> => {
+                        const newServer = serverFactory()
+                        await newServer.connect(newTransport)
+                        ctx.serverConnected = true
+                        targetTransport = newTransport
+                                            }
+                    
+                    const priorLock: Promise<void> = ctx.connectionLock ?? Promise.resolve()
+                    ctx.connectionLock = priorLock.then(doConnect).catch(doConnect)
+                    await ctx.connectionLock
                     targetTransport = newTransport
                 }
 

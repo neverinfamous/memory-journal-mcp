@@ -19,6 +19,12 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+function isPathWithinSandbox(targetPath: string, sandboxPath: string = process.cwd()): boolean {
+    const resolvedTarget = path.resolve(targetPath)
+    const resolvedSandbox = path.resolve(sandboxPath)
+    return resolvedTarget.startsWith(resolvedSandbox + path.sep) || resolvedTarget === resolvedSandbox
+}
+
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
     name: 'Recent Entries',
@@ -165,6 +171,14 @@ export const rulesResource: InternalResourceDef = {
                     configured: false,
                     message:
                         'RULES_FILE_PATH is not configured. Set this env var to serve rules content.',
+                },
+            }
+        }
+        if (!isPathWithinSandbox(rulesPath)) {
+            return {
+                data: {
+                    configured: true,
+                    error: 'RULES_FILE_PATH must resolve within the current working directory sandbox.',
                 },
             }
         }
@@ -316,6 +330,17 @@ export const skillsResource: InternalResourceDef = {
         const userSkillsDir = context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
         const shippedSkillsDir = getShippedSkillsDir()
         const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
+
+        if (userSkillsDir && !isPathWithinSandbox(userSkillsDir)) {
+            return {
+                data: {
+                    configured: true,
+                    error: 'SKILLS_DIR_PATH must resolve within the current working directory sandbox.',
+                    skills: [],
+                    count: 0
+                },
+            }
+        }
 
         if (!hasAnySource) {
             return {

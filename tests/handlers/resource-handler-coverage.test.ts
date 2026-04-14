@@ -257,7 +257,7 @@ describe('Resource Handler Coverage', () => {
         })
 
         it('should return shipped skills when SKILLS_DIR_PATH points to nonexistent directory', async () => {
-            process.env['SKILLS_DIR_PATH'] = '/nonexistent/skills/dir'
+            process.env['SKILLS_DIR_PATH'] = './nonexistent/skills/dir'
 
             const result = await readResource('memory://skills', db)
             const data = result.data as {

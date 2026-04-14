@@ -122,7 +122,7 @@ describe('setupLegacySSE', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        setupLegacySSE(ctx, app as never, server as never)
+        setupLegacySSE(ctx, app as never, (() => server) as never)
 
         expect(app.get).toHaveBeenCalledWith('/sse', expect.any(Function))
         expect(app.post).toHaveBeenCalledWith('/messages', expect.any(Function))
@@ -137,7 +137,7 @@ describe('setupLegacySSE', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        setupLegacySSE(ctx, app as never, server as never)
+        setupLegacySSE(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/sse']!
 
         const req = mockReq()
@@ -159,7 +159,7 @@ describe('setupLegacySSE', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        setupLegacySSE(ctx, app as never, server as never)
+        setupLegacySSE(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/sse']!
 
         const req = mockReq()
@@ -190,7 +190,7 @@ describe('setupLegacySSE', () => {
         server.connect.mockRejectedValue(new Error('connect error'))
         server.close.mockRejectedValue(new Error('close also fails'))
 
-        setupLegacySSE(ctx, app as never, server as never)
+        setupLegacySSE(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/sse']!
 
         const req = mockReq()
@@ -212,7 +212,7 @@ describe('setupLegacySSE', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        setupLegacySSE(ctx, app as never, server as never)
+        setupLegacySSE(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/messages']!
 
         const req = mockReq({ query: {} })
@@ -234,7 +234,7 @@ describe('setupLegacySSE', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        setupLegacySSE(ctx, app as never, server as never)
+        setupLegacySSE(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/messages']!
 
         const req = mockReq({ query: { sessionId: 'unknown-session' } })
@@ -259,7 +259,7 @@ describe('setupLegacySSE', () => {
         const app = createMockApp()
         const server = createMockServer()
 
-        setupLegacySSE(ctx, app as never, server as never)
+        setupLegacySSE(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/messages']!
 
         const req = mockReq({

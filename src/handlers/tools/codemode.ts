@@ -123,8 +123,43 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 }
 
 // =============================================================================
-// Tool Definitions
+// Tool Definitions & Access Control
 // =============================================================================
+
+/** Hardcoded Capability Access Control List for Safe (Read-Only) Code Mode execution */
+const SAFE_READ_TOOLS = new Set([
+    'get_recent_entries',
+    'get_entry_by_id',
+    'get_statistics',
+    'search_entries',
+    'search_by_date_range',
+    'semantic_search',
+    'suggest_tags',
+    'get_cross_project_insights',
+    'get_causal_chain',
+    'get_entry_relationships',
+    'list_tags',
+    'export_entries',
+    'read_resource',
+    'gh_get_repo_info',
+    'gh_search_issues',
+    'gh_get_issue',
+    'gh_get_pull_request',
+    'gh_get_workflow_runs',
+    'gh_verify_gh_auth',
+    'team_get_recent_entries',
+    'team_get_entry_by_id',
+    'team_get_statistics',
+    'team_search_entries',
+    'team_search_by_date_range',
+    'team_semantic_search',
+    'team_suggest_tags',
+    'team_get_causal_chain',
+    'team_get_entry_relationships',
+    'team_list_tags',
+    'team_read_resource',
+    'team_get_user_status',
+])
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     return [
@@ -185,8 +220,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             try {
                                 // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
                                 await injectedGithub.getRepoInfo()
-                            } catch {
-                                // Ignore failing silently if repo is invalid
+                            } catch (error) {
+                                return {
+                                    success: false,
+                                    error: `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`,
+                                }
                             }
                             sessionContext = {
                                 ...context,
@@ -204,9 +242,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Build tool list (excluding codemode to prevent recursion)
                     const allTools = collectNonCodeModeTools(sessionContext)
 
-                    // Filter out write operations if readonly mode
+                    // Filter out write operations if readonly mode using ACL
                     const tools = readonlyMode
-                        ? allTools.filter((t) => t.annotations.readOnlyHint === true)
+                        ? allTools.filter((t) => SAFE_READ_TOOLS.has(t.name))
                         : allTools
 
                     // Build the API bridge

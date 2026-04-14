@@ -12,9 +12,8 @@
 import { MAX_QUERY_LIMIT } from '../schemas.js'
 import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
+import * as crypto from 'node:crypto'
 
-/** Number of leading characters used as deduplication key */
-const DEDUP_KEY_LENGTH = 200
 
 // ============================================================================
 // Types
@@ -81,8 +80,8 @@ export function mergeAndDedup(
     })
 
     for (const entry of all) {
-        // Deduplicate by content (same entry shared to team)
-        const key = entry.content.slice(0, DEDUP_KEY_LENGTH)
+        // Deduplicate by content hash (same entry shared to team)
+        const key = crypto.createHash('sha256').update(entry.content).digest('hex')
         if (!seen.has(key)) {
             seen.add(key)
             merged.push(entry)

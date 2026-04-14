@@ -7,6 +7,7 @@
  */
 
 import { DEFAULT_SECURITY_CONFIG, type SecurityConfig, type ValidationResult } from './types.js'
+import * as v8 from 'node:v8'
 
 // =============================================================================
 // Rate Limiter
@@ -122,13 +123,16 @@ export class CodeModeSecurityManager {
     validateResultSize(result: unknown): ValidationResult {
         const errors: string[] = []
         try {
-            // Stringify and measure length iteratively or just check the resulting buffer bounds safely.
-            // In Node, creating a huge string can trigger V8 allocation limits (max ~1GB).
-            // A safer bounds check limits string allocation immediately.
-            const serialized = JSON.stringify(result)
+            // Use v8.serialize for high-performance memory footprint calculation
+            // without triggering V8 cross-thread string allocation limits.
+            let actualBytes = 0
+            try {
+                actualBytes = v8.serialize(result).length
+            } catch {
+                // Fallback to fast JSON serialization if v8 encounters uncloneable data
+                actualBytes = Buffer.byteLength(JSON.stringify(result) || '', 'utf-8')
+            }
 
-            // If stringification succeeded but the string itself is larger than the limit
-            const actualBytes = Buffer.byteLength(serialized, 'utf-8')
             if (actualBytes > this.config.maxResultSize) {
                 const actualKb = Math.ceil(actualBytes / 1024)
                 const limitKb = Math.ceil(this.config.maxResultSize / 1024)

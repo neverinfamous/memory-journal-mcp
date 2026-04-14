@@ -58,6 +58,13 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 // Resolve default project number — skip kanban fetch when not configured
                 const defaultProjectNumber = context.briefingConfig?.defaultProjectNumber
 
+                const withTimeout = <T>(promise: Promise<T>, ms: number, desc: string): Promise<T> => {
+                    return Promise.race([
+                        promise,
+                        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`GitHub API timeout: ${desc}`)), ms))
+                    ])
+                }
+
                 // Parallelize independent API calls for performance
                 const [
                     commitResult,
@@ -67,14 +74,14 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     kanbanResult,
                     milestoneResult,
                 ] = await Promise.allSettled([
-                    github.getRepoContext(),
-                    github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT),
-                    github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT),
-                    github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT),
+                    withTimeout(github.getRepoContext(), 10000, 'getRepoContext'),
+                    withTimeout(github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT), 10000, 'getIssues'),
+                    withTimeout(github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT), 10000, 'getPullRequests'),
+                    withTimeout(github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT), 10000, 'getWorkflowRuns'),
                     defaultProjectNumber !== undefined
-                        ? github.getProjectKanban(owner, defaultProjectNumber, repo)
+                        ? withTimeout(github.getProjectKanban(owner, defaultProjectNumber, repo), 10000, 'getProjectKanban')
                         : Promise.resolve(null),
-                    github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT),
+                    withTimeout(github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT), 10000, 'getMilestones'),
                 ])
 
                 // Extract results with safe defaults

@@ -16,7 +16,7 @@
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServerFactory } from '../../../server/mcp-server.js'
 import express from 'express'
 import type { Express, Request, Response, RequestHandler } from 'express'
 import { logger } from '../../../utils/logger.js'
@@ -39,7 +39,7 @@ import {
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
 import { getRequiredScope } from '../../../auth/scope-map.js'
-import { hasScope } from '../../../auth/scopes.js'
+import { hasScope, SCOPES } from '../../../auth/scopes.js'
 import {
     hostHeaderValidation,
     localhostHostValidation,
@@ -83,7 +83,7 @@ export class HttpTransport {
     /**
      * Initialize and start the HTTP transport
      */
-    async start(server: McpServer, scheduler: Scheduler | null): Promise<void> {
+    async start(serverFactory: McpServerFactory, scheduler: Scheduler | null): Promise<void> {
         const { port, host, authToken, corsOrigins } = this.config
 
         const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
@@ -131,7 +131,11 @@ export class HttpTransport {
         // Security headers middleware
         this.app.use((req: Request, res: Response, next: () => void) => {
             setSecurityHeaders(res, this.config)
-            setCorsHeaders(req, res, this.config)
+            const allowed = setCorsHeaders(req, res, this.config)
+            if (!allowed) {
+                res.status(403).json({ error: 'CORS policy violation' })
+                return
+            }
             next()
         })
 
@@ -266,6 +270,17 @@ export class HttpTransport {
                             return
                         }
                     }
+                } else if (
+                    typeof body?.method === 'string' &&
+                    (body.method.startsWith('resources/') || body.method.startsWith('prompts/'))
+                ) {
+                    if (!hasScope(req.auth?.scopes ?? [], SCOPES.READ)) {
+                        res.status(403).json({
+                            error: 'insufficient_scope',
+                            message: new InsufficientScopeError(SCOPES.READ).message,
+                        })
+                        return
+                    }
                 }
             }
             next()
@@ -279,10 +294,10 @@ export class HttpTransport {
 
         // Set up MCP endpoints based on mode
         if (this.config.stateless) {
-            await setupStateless(this.app, server)
+            await setupStateless(this.app, serverFactory)
         } else {
-            this.sessionSweepTimer = setupStateful(this, this.app, server)
-            setupLegacySSE(this, this.app, server)
+            this.sessionSweepTimer = setupStateful(this, this.app, serverFactory)
+            setupLegacySSE(this, this.app, serverFactory)
         }
         // 404 handler — must be after all routes
         this.app.use((_req: Request, res: Response): void => {

@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { CodeModeSecurityManager, DEFAULT_SECURITY_CONFIG } from '../../src/codemode/index.js'
+import * as v8 from 'node:v8'
 
 describe('CodeModeSecurityManager', () => {
     let security: CodeModeSecurityManager
@@ -233,7 +234,8 @@ describe('CodeModeSecurityManager', () => {
         })
 
         it('should reject non-serializable results', () => {
-            const circular: Record<string, unknown> = {}
+            // Function makes v8.serialize throw, circular ref makes JSON.stringify throw
+            const circular: Record<string, unknown> = { fn: () => {} }
             circular['self'] = circular
             const result = security.validateResultSize(circular)
             expect(result.valid).toBe(false)
@@ -241,13 +243,12 @@ describe('CodeModeSecurityManager', () => {
         })
 
         it('should handle RangeError from V8 string length limits', () => {
-            // Mock JSON.stringify to throw a RangeError simulating V8 limits
+            // Function triggers the fallback to JSON.stringify
+            // Mock JSON.stringify to throw RangeError for size limits
             const origStringify = JSON.stringify
-            JSON.stringify = () => {
-                throw new RangeError('Invalid string length')
-            }
+            JSON.stringify = () => { throw new RangeError('Invalid string length') }
             try {
-                const result = security.validateResultSize({ data: 'test' })
+                const result = security.validateResultSize({ data: 'test', fn: () => {} })
                 expect(result.valid).toBe(false)
                 expect(result.errors[0]).toContain('V8 string length')
             } finally {

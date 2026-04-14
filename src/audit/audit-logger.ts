@@ -127,6 +127,11 @@ export class AuditLogger {
                 process.stderr.write(`[AUDIT] Write failed: ${message}\n`)
                 // Re-queue the failed lines so they aren't lost
                 this.buffer.unshift(...lines)
+                // Prevent infinite memory leak under permanent IO failure
+                if (this.buffer.length > 5000) {
+                    process.stderr.write(`[AUDIT] Buffer overflow (${String(this.buffer.length)} entries), dropping oldest entries\n`)
+                    this.buffer = this.buffer.slice(-5000)
+                }
             }
         }
 

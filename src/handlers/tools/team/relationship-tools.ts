@@ -197,7 +197,12 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                     for (const eid of entryIds) {
                         const entry = teamDb.getEntryById(eid)
                         if (entry) {
-                            const label = entry.content.substring(0, 40).replace(/"/g, "'")
+                            let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
+                            if (entry.content.length > 40) label += '...'
+                            label = label
+                                .replace(/"/g, "'")
+                                .replace(/\[/g, '(')
+                                .replace(/\]/g, ')')
                             nodes.set(eid, label)
                         }
 

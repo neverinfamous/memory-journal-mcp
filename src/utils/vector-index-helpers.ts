@@ -6,6 +6,7 @@
  */
 
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
+import { logger } from './logger.js'
 
 /**
  * Auto-index an entry to the vector store for semantic search.
@@ -18,7 +19,10 @@ export function autoIndexEntry(
     content: string
 ): void {
     if (vectorManager === undefined) return
-    vectorManager.addEntry(entryId, content).catch(() => {
-        // Non-critical failure — entry already saved to DB
+    vectorManager.addEntry(entryId, content).catch((error: unknown) => {
+        logger.error(`Failed to auto-index entry #${String(entryId)}`, {
+            module: 'VectorIndex',
+            error: error instanceof Error ? error.message : String(error),
+        })
     })
 }

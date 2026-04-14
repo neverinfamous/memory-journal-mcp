@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import * as fs from 'node:fs'
+import { z } from 'zod'
 import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
 import { VERSION } from './version.js'
@@ -90,7 +91,7 @@ program
         '--audit-log <path>',
         'Enable audit logging to the specified JSONL file path, or "stderr" for container mode (env: AUDIT_LOG_PATH)'
     )
-    .option('--audit-redact', 'Redact tool arguments from audit entries (env: AUDIT_REDACT)')
+    .option('--no-audit-redact', 'Disable redaction of tool arguments from audit entries (env: AUDIT_REDACT=false)')
     .option(
         '--audit-reads',
         'Enable audit logging for read-scoped tool calls (default: off, env: AUDIT_READS)'
@@ -245,7 +246,7 @@ program
                     ? {
                           enabled: true,
                           logPath: auditLogPath,
-                          redact: options.auditRedact ?? process.env['AUDIT_REDACT'] === 'true',
+                          redact: options.auditRedact ?? (process.env['AUDIT_REDACT'] ? process.env['AUDIT_REDACT'] === 'true' : true),
                           auditReads: options.auditReads ?? process.env['AUDIT_READS'] === 'true',
                           maxSizeBytes: parseInt(
                               process.env['AUDIT_LOG_MAX_SIZE'] ?? options.auditLogMaxSize,
@@ -296,7 +297,16 @@ program
                         const raw = process.env['PROJECT_REGISTRY']
                         if (!raw) return undefined
                         try {
-                            return JSON.parse(raw) as Record<string, ProjectRegistryEntry>
+                            // Zod validation for structural integrity
+                            const registrySchema = z.record(
+                                z.string(),
+                                z.object({
+                                    path: z.string().min(1),
+                                    project_number: z.number().nullable().optional(),
+                                }).loose()
+                            )
+                            const parsed: unknown = JSON.parse(raw)
+                            return registrySchema.parse(parsed) as Record<string, ProjectRegistryEntry>
                         } catch (e: unknown) {
                             const errName = e instanceof Error ? e.message : String(e)
                             throw new Error(

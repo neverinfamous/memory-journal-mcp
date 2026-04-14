@@ -145,7 +145,7 @@ export function registerPrompts(
                                 role: 'user' as const,
                                 content: {
                                     type: 'text' as const,
-                                    text: `[Prompt handler error] ${message}`,
+                                    text: JSON.stringify({ success: false, error: message }, null, 2),
                                 },
                             },
                         ],

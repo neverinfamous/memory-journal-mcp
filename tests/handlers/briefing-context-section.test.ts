@@ -290,7 +290,7 @@ describe('buildRulesFileInfo', () => {
         expect(result!.name).toBe('.rules')
         expect(result!.sizeKB).toBe(2)
         expect(result!.lastModified).toBe('2h ago')
-        expect(result!.path).toBe('/path/to/.rules')
+        expect(result!.path).toBe('.rules')
     })
 
     it('should format age as days when > 1 day', async () => {
@@ -359,7 +359,7 @@ describe('buildSkillsDirInfo', () => {
         expect(result).toBeDefined()
         expect(result!.count).toBe(2)
         expect(result!.names).toEqual(['skill-a', 'skill-b'])
-        expect(result!.path).toBe('/path/to/skills')
+        expect(result!.path).toBe('skills')
     })
 
     it('should return empty when no directories', async () => {

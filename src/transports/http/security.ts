@@ -114,8 +114,8 @@ export function setSecurityHeaders(res: Response, config: HttpTransportConfig): 
  * Wildcard subdomain patterns (`*.example.com`) are not supported when
  * `corsAllowCredentials` is true. For credentialed CORS, list explicit origins.
  */
-export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): void {
-    const corsOrigins = config.corsOrigins ?? ['*']
+export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): boolean {
+    const corsOrigins = config.corsOrigins ?? []
     const isWildcard = corsOrigins.includes('*')
     const origin = req.headers.origin
 
@@ -144,4 +144,11 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     )
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id')
     res.setHeader('Access-Control-Max-Age', String(CORS_PREFLIGHT_MAX_AGE_SECONDS))
+
+    if (origin && !isWildcard) {
+        const whitelist: Record<string, true> = {}
+        for (const allowed of corsOrigins) whitelist[allowed] = true
+        if (!(origin in whitelist)) return false
+    }
+    return true
 }

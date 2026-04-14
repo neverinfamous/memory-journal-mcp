@@ -497,7 +497,8 @@ describe('McpServer', function () {
             // Should NOT call connect for stateful mode (connects per-session)
             // The server.connect is only called once for stateless or stdio
             // For stateful, connect is called per new session initialization
-            expect(mockRegisterTool).toHaveBeenCalled()
+            // Tools are not registered until session connects.
+            expect(mockHandlers.post['/mcp']).toBeDefined()
         })
 
         it('should configure CORS origin from options', async function () {
@@ -505,9 +506,10 @@ describe('McpServer', function () {
                 transport: 'http',
                 dbPath: './test-server.db',
                 corsOrigins: ['https://example.com'],
+                statelessHttp: false,
             })
 
-            expect(mockRegisterTool).toHaveBeenCalled()
+            expect(mockHandlers.post['/mcp']).toBeDefined()
         })
     })
 

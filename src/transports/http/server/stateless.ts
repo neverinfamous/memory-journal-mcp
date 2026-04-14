@@ -1,17 +1,18 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServerFactory } from '../../../server/mcp-server.js'
 import type { Request, Response, Express } from 'express'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logger } from '../../../utils/logger.js'
 import { JSONRPC_SERVER_ERROR } from '../types.js'
 import { requestContextStorage } from '../../../utils/request-context.js'
 
-export async function setupStateless(app: Express, server: McpServer): Promise<void> {
+export async function setupStateless(app: Express, serverFactory: McpServerFactory): Promise<void> {
     const statelessTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
     })
 
+    const server = serverFactory()
     await server.connect(statelessTransport)
     logger.info('Stateless transport connected', { module: 'HTTP' })
 
