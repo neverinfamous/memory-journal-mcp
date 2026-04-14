@@ -72,6 +72,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.entriesMgr.getEntriesByIds(ids)
     }
 
+    getEntriesByIdsWithImportance(
+        ids: number[]
+    ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
+        return this.entriesMgr.getEntriesByIdsWithImportance(ids)
+    }
+
     calculateImportance(entryId: number): ImportanceResult {
         return this.entriesMgr.calculateImportance(entryId)
     }
@@ -186,6 +192,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
 
     getRelationships(entryId: number): Relationship[] {
         return this.relationshipsMgr.getRelationships(entryId)
+    }
+
+    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]> {
+        return this.relationshipsMgr.getRelationshipsForEntries(entryIds)
     }
 
     getBackupsDir(): string {

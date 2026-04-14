@@ -252,8 +252,10 @@ export class AuditLogger {
             // Rename current to .1
             const rotatedPath = `${this.config.logPath}.1`
             await rename(this.config.logPath, rotatedPath)
-        } catch {
+        } catch (err) {
             // Rotation failure must not block logging
+            const message = err instanceof Error ? err.message : String(err)
+            process.stderr.write(`[AUDIT] Rotate failed: ${message}\n`)
         }
     }
 }

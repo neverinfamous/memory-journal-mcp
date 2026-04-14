@@ -11,3 +11,6 @@
 - **Testing**: Removed deterministic failure in `security-utils.test.ts` regarding `..foo` string processing bounded to `path.relative` instead of CWD startsWith checks. 
 - **Linting**: General cleanup in `search.ts`, `core.ts` handling errors dynamically and removing `unnecessary-escape` conditions across the repository.
 - **Protocol**: Fixed RFC 9728 Content-Type emission in OAuth metadata endpoint to correctly use `application/oauth-protected-resource-metadata+json`.
+- **Security**: Enforced filesystem boundary safety in I/O operations (`io`, `team/io-tools`) by correctly passing explicit `allowedRoots` instead of relying on environment variable fallbacks.
+- **Security**: Restored HTTP Transport OAuth scope enforcement middleware, properly checking tool-level permissions against `auth.scopes` and throwing 403 Forbiden for missing grants.
+- **Performance**: Eliminated critical N+1 database queries during Markdown Exports and Semantic Search (BM25 fallback) by introducing the batched methods `getEntriesByIdsWithImportance` and `getRelationshipsForEntries`.

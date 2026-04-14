@@ -38,6 +38,11 @@ import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../obser
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
 import type { AuditConfig, AuditInterceptor } from '../../audit/index.js'
 
+import { authStorage } from '../../auth/context.js'
+import { getRequiredScope } from '../../auth/scope-map.js'
+import { hasScope } from '../../auth/scopes.js'
+import { logger } from '../../utils/logger.js'
+
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
 
@@ -266,6 +271,20 @@ export async function callTool(
 
     if (!tool) {
         return Promise.reject(new Error(`Unknown tool: ${name}`))
+    }
+
+    // Authorization Hook: Enforce scope if auth context exists
+    const auth = authStorage.getStore()
+    if (auth) {
+        const requiredScope = getRequiredScope(name)
+        if (!hasScope(auth.scopes, requiredScope)) {
+            logger.warning(`Insufficient scope for tool: ${name}`, {
+                module: 'AUTH',
+                operation: 'scope-check',
+                entityId: name,
+            })
+            return Promise.reject(new Error(`Access to tool '${name}' denied: insufficient scope.`))
+        }
     }
 
     // When progress context is provided, rebuild the handler with it.

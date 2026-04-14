@@ -47,6 +47,7 @@ import {
 import { setupStateless } from './stateless.js'
 import { setupStateful } from './stateful.js'
 import { setupLegacySSE } from './legacy-sse.js'
+import { authStorage } from '../../../auth/context.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -87,7 +88,7 @@ export class HttpTransport {
 
         const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
         const hasCorsOpen = !corsOrigins || corsOrigins.includes('*')
-        const hasAuth = this.config.oauthEnabled ?? Boolean(authToken)
+        const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
 
         if (!isLocalhost && (!hasAuth || hasCorsOpen)) {
             const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication or restricted CORS. You MUST specify --auth-token (or OAuth) and --cors-origin to bind publicly.`
@@ -222,60 +223,6 @@ export class HttpTransport {
             // OAuth error handler
             this.app.use(oauthErrorHandler)
 
-            // Per-tool scope enforcement for tools/call requests
-            // Applied after auth middleware so req.auth is already populated.
-            this.app.use((req: Request, res: Response, next: () => void): void => {
-                interface JsonRpcBody {
-                    method?: string
-                    params?: { name?: string }
-                }
-                const body = req.body as JsonRpcBody | null | undefined
-                if (req.method !== 'POST' || body?.method !== 'tools/call') {
-                    next()
-                    return
-                }
-
-                const toolName = body.params?.name
-                if (!toolName) {
-                    next()
-                    return
-                }
-
-                const auth = req.auth
-                if (!auth) {
-                    // Auth middleware should have rejected already; defensive guard
-                    res.status(401).json({
-                        error: 'unauthorized',
-                        error_description: 'Authentication required',
-                    })
-                    return
-                }
-
-                const requiredScope = getRequiredScope(toolName)
-                const granted = hasScope(auth.scopes, requiredScope)
-
-                if (!granted) {
-                    const err = new InsufficientScopeError(`Tool access: ${toolName}`, auth.scopes)
-                    logger.warning(`Insufficient scope for tool: ${toolName}`, {
-                        module: 'AUTH',
-                        operation: 'scope-check',
-                        entityId: toolName,
-                    })
-                    res.status(err.httpStatus)
-                    if (err.wwwAuthenticate) {
-                        res.setHeader('WWW-Authenticate', err.wwwAuthenticate)
-                    }
-                    res.json({
-                        error: 'insufficient_scope',
-                        error_description: `Access to tool '${toolName}' denied`,
-                        tool: toolName,
-                    })
-                    return
-                }
-
-                next()
-            })
-
             logger.info('OAuth 2.1 authentication enabled', {
                 module: 'HTTP',
                 issuer: this.config.oauthIssuer,
@@ -285,6 +232,44 @@ export class HttpTransport {
             // Simple bearer token authentication (non-OAuth)
             this.app.use(createAuthMiddleware(authToken))
         }
+
+        // Propagate authenticated context into core dispatch
+        this.app.use((req: Request, _res: Response, next: () => void) => {
+            if (req.auth) {
+                authStorage.run(req.auth, next)
+            } else {
+                next()
+            }
+        })
+
+        // Scope enforcement middleware
+        this.app.use((req: Request, res: Response, next: () => void) => {
+            if (!this.config.oauthEnabled) {
+                next()
+                return
+            }
+
+            if (req.method === 'POST') {
+                const body = req.body as
+                    | { method?: unknown; params?: { name?: unknown } }
+                    | null
+                    | undefined
+                if (body?.method === 'tools/call') {
+                    const toolName = body.params?.name
+                    if (typeof toolName === 'string') {
+                        const requiredScope = getRequiredScope(toolName)
+                        if (requiredScope && !hasScope(req.auth?.scopes ?? [], requiredScope)) {
+                            res.status(403).json({
+                                error: 'insufficient_scope',
+                                message: new InsufficientScopeError(requiredScope).message,
+                            })
+                            return
+                        }
+                    }
+                }
+            }
+            next()
+        })
 
         // Health check endpoint
         this.app.get('/health', handleHealthCheck)

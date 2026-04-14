@@ -75,8 +75,9 @@ export function wrapWithMetrics(
                     outputTokens: 0,
                     isError: true,
                 })
-            } catch {
+            } catch (err) {
                 // Swallow accumulator errors — never crash the main process
+                process.stderr.write(`[METRICS] Accumulator failed to record metrics error: ${err instanceof Error ? err.message : String(err)}\n`)
             }
             throw err
         }
@@ -91,8 +92,9 @@ export function wrapWithMetrics(
                 outputTokens: estimatePayloadTokens(result),
                 isError,
             })
-        } catch {
+        } catch (err) {
             // Swallow accumulator errors — never crash the main process
+            process.stderr.write(`[METRICS] Accumulator failed to record metrics: ${err instanceof Error ? err.message : String(err)}\n`)
         }
 
         return result

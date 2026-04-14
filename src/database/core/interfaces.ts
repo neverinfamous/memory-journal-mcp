@@ -90,6 +90,9 @@ export interface IDatabaseAdapter {
     getEntryById(id: number): JournalEntry | null
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null
     getEntriesByIds(ids: number[]): Map<number, JournalEntry>
+    getEntriesByIdsWithImportance(
+        ids: number[]
+    ): Map<number, { entry: JournalEntry; importance: ImportanceResult }>
     calculateImportance(entryId: number): ImportanceResult
     getRecentEntries(
         limit?: number,
@@ -163,6 +166,7 @@ export interface IDatabaseAdapter {
         description?: string
     ): Relationship
     getRelationships(entryId: number): Relationship[]
+    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]>
 
     // Backup Manager
     getBackupsDir(): string

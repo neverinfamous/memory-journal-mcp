@@ -150,7 +150,16 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamExportMarkdownSchema.parse(params)
-                    assertSafeDirectoryPath(input.output_dir)
+
+                    // Determine allowed roots from project registry and CWD
+                    const allowedRoots = [process.cwd()]
+                    if (context.config?.projectRegistry) {
+                        for (const entry of Object.values(context.config.projectRegistry)) {
+                            allowedRoots.push(entry.path)
+                        }
+                    }
+
+                    assertSafeDirectoryPath(input.output_dir, allowedRoots)
 
                     await sendProgress(progress, 0, 3, 'Fetching team entries...')
 
@@ -221,7 +230,16 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             handler: async (params: unknown) => {
                 try {
                     const input = TeamImportMarkdownSchema.parse(params)
-                    assertSafeDirectoryPath(input.source_dir)
+
+                    // Determine allowed roots from project registry and CWD
+                    const allowedRoots = [process.cwd()]
+                    if (context.config?.projectRegistry) {
+                        for (const entry of Object.values(context.config.projectRegistry)) {
+                            allowedRoots.push(entry.path)
+                        }
+                    }
+
+                    assertSafeDirectoryPath(input.source_dir, allowedRoots)
 
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 

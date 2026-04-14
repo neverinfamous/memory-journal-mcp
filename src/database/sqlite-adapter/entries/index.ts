@@ -21,7 +21,7 @@ import {
     searchByDateRange,
     type SortBy,
 } from './search.js'
-import { calculateImportance } from './importance.js'
+import { calculateImportance, getEntriesByIdsWithImportance } from './importance.js'
 import { getStatistics } from './statistics.js'
 
 export class EntriesManager {
@@ -47,6 +47,12 @@ export class EntriesManager {
 
     getEntriesByIds(ids: number[]): Map<number, JournalEntry> {
         return getEntriesByIds(this.sharedContext, ids)
+    }
+
+    getEntriesByIdsWithImportance(
+        ids: number[]
+    ): Map<number, { entry: JournalEntry; importance: ImportanceResult }> {
+        return getEntriesByIdsWithImportance(this.sharedContext, ids)
     }
 
     getEntryByIdIncludeDeleted(id: number): JournalEntry | null {

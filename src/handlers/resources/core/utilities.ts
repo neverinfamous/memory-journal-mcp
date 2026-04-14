@@ -157,8 +157,8 @@ export const rulesResource: InternalResourceDef = {
     mimeType: 'text/markdown',
     icons: [ICON_BRIEFING],
     annotations: withPriority(0.7, ASSISTANT_FOCUSED),
-    handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
-        const rulesPath = process.env['RULES_FILE_PATH']
+    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+        const rulesPath = context.briefingConfig?.rulesFilePath ?? process.env['RULES_FILE_PATH']
         if (!rulesPath) {
             return {
                 data: {
@@ -312,8 +312,8 @@ export const skillsResource: InternalResourceDef = {
     mimeType: 'application/json',
     icons: [ICON_BRIEFING],
     annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
-    handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
-        const userSkillsDir = process.env['SKILLS_DIR_PATH']
+    handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
+        const userSkillsDir = context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
         const shippedSkillsDir = getShippedSkillsDir()
         const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
 

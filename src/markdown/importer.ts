@@ -12,6 +12,7 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
+import { logger } from '../utils/logger.js'
 
 // ============================================================================
 // Types
@@ -212,16 +213,28 @@ export async function importMarkdownEntries(
                         if (targetExists) {
                             db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
                         }
-                    } catch {
+                    } catch (err) {
                         // Relationship linking failure is non-fatal
+                        logger.warning('Failed to link relationship during import', {
+                            module: 'Importer',
+                            entryId,
+                            targetId: rel.target_id,
+                            error: err instanceof Error ? err.message : String(err)
+                        })
+                        result.errors.push({ file: filename, error: `Link failed: ${rel.type} -> ${String(rel.target_id)}` })
                     }
                 }
             }
 
             // Vector re-indexing (fire-and-forget)
             if (vectorManager) {
-                void vectorManager.addEntry(entryId, body).catch(() => {
+                void vectorManager.addEntry(entryId, body).catch((err: unknown) => {
                     // Vector indexing failure is non-fatal
+                    logger.warning('Failed to index vector during import', {
+                        module: 'Importer',
+                        entryId,
+                        error: err instanceof Error ? err.message : String(err)
+                    })
                 })
             }
         } catch (err) {

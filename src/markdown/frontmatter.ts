@@ -159,8 +159,10 @@ export function parseFrontmatter(content: string): ParseResult {
                     }
                     currentRelObj = {}
                     const key = itemContent.slice(0, colonIdx).trim()
-                    const value = itemContent.slice(colonIdx + 1).trim()
-                    currentRelObj[key] = parseScalar(value)
+                    if (key === 'type' || key === 'target_id') {
+                        const value = itemContent.slice(colonIdx + 1).trim()
+                        currentRelObj[key] = parseScalar(value)
+                    }
                 }
             } else if (currentArray !== null) {
                 currentArray.push(itemContent.trim())
@@ -173,8 +175,10 @@ export function parseFrontmatter(content: string): ParseResult {
             const colonIdx = line.indexOf(':')
             if (colonIdx !== -1) {
                 const key = line.slice(0, colonIdx).trim()
-                const value = line.slice(colonIdx + 1).trim()
-                currentRelObj[key] = parseScalar(value)
+                if (key === 'type' || key === 'target_id') {
+                    const value = line.slice(colonIdx + 1).trim()
+                    currentRelObj[key] = parseScalar(value)
+                }
             }
             continue
         }

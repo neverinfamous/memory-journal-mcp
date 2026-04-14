@@ -11,6 +11,8 @@ import { join, resolve, sep } from 'node:path'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
 import type { FrontmatterData } from './frontmatter.js'
+import { logger } from '../utils/logger.js'
+import type { Relationship } from '../types/index.js'
 
 // ============================================================================
 // Types
@@ -102,13 +104,21 @@ export async function exportEntriesToMarkdown(
     const files: string[] = []
     let skipped = 0
 
-    for (const entry of entries) {
-        // Skip entries with empty content
-        if (!entry.content.trim()) {
-            skipped++
-            continue
-        }
+    const validEntries = entries.filter((e) => e.content.trim())
+    skipped += entries.length - validEntries.length
+    
+    // Batch fetch relationships
+    let relationshipsMap = new Map<number, Relationship[]>()
+    try {
+        relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
+    } catch (err) {
+        logger.warning('Failed to lookup relationships during export (batch)', {
+            module: 'Exporter',
+            error: err instanceof Error ? err.message : String(err)
+        })
+    }
 
+    for (const entry of validEntries) {
         // Build frontmatter data
         const fmData: FrontmatterData = {
             mj_id: entry.id,
@@ -129,17 +139,13 @@ export async function exportEntriesToMarkdown(
             fmData.author = entry.author
         }
 
-        // Fetch relationships for this entry
-        try {
-            const relationships = db.getRelationships(entry.id)
-            if (relationships.length > 0) {
-                fmData.relationships = relationships.map((r) => ({
-                    type: r.relationshipType,
-                    target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
-                }))
-            }
-        } catch {
-            // Relationship lookup failure is non-fatal
+        // Apply pre-fetched relationships for this entry
+        const relationships = relationshipsMap.get(entry.id) ?? []
+        if (relationships.length > 0) {
+            fmData.relationships = relationships.map((r) => ({
+                type: r.relationshipType,
+                target_id: r.fromEntryId === entry.id ? r.toEntryId : r.fromEntryId,
+            }))
         }
 
         // Generate file content

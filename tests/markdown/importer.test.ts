@@ -8,9 +8,13 @@ vi.mock('node:fs/promises', () => ({
     stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
 }))
 
-vi.mock('../../src/utils/security-utils.js', () => ({
-    assertSafeDirectoryPath: vi.fn(),
-}))
+vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../src/utils/security-utils.js')>()
+    return {
+        ...actual,
+        assertSafeDirectoryPath: vi.fn(),
+    }
+})
 
 describe('importMarkdownEntries', () => {
     const mockDb = {

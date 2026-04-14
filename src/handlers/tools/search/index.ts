@@ -320,9 +320,11 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
+                                const ids = entries.map((e) => e.id)
+                                const importanceMap = db.getEntriesByIdsWithImportance(ids)
                                 const scored = entries.map((e) => {
-                                    const { score } = db.calculateImportance(e.id)
-                                    return { ...e, importanceScore: Math.round(score * 100) / 100 }
+                                    const imp = importanceMap.get(e.id)?.importance.score ?? 0
+                                    return { ...e, importanceScore: Math.round(imp * 100) / 100 }
                                 })
                                 scored.sort(
                                     (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)
@@ -354,10 +356,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                             // Post-fetch importance re-sort for vector results
                             if (input.sort_by === 'importance') {
+                                const ids = entries.map((e) => e['id'] as number)
+                                const importanceMap = db.getEntriesByIdsWithImportance(ids)
                                 const scored = entries.map((e) => {
                                     const entryId = e['id'] as number
-                                    const { score } = db.calculateImportance(entryId)
-                                    return { ...e, importanceScore: Math.round(score * 100) / 100 }
+                                    const imp = importanceMap.get(entryId)?.importance.score ?? 0
+                                    return { ...e, importanceScore: Math.round(imp * 100) / 100 }
                                 })
                                 scored.sort(
                                     (a, b) => (b.importanceScore ?? 0) - (a.importanceScore ?? 0)

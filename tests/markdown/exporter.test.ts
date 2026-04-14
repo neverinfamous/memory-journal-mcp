@@ -55,6 +55,7 @@ describe('exportEntriesToMarkdown', () => {
     const mockDb = {
         getTagsForEntry: vi.fn(),
         getRelationships: vi.fn(),
+        getRelationshipsForEntries: vi.fn(),
     }
 
     beforeEach(() => {
@@ -64,6 +65,7 @@ describe('exportEntriesToMarkdown', () => {
         vi.mocked(fs.open).mockResolvedValue(mockHandle as any)
         mockDb.getTagsForEntry.mockReturnValue([])
         mockDb.getRelationships.mockReturnValue([])
+        mockDb.getRelationshipsForEntries.mockReturnValue(new Map())
     })
 
     it('should export an array of entries to files', async () => {
@@ -86,11 +88,16 @@ describe('exportEntriesToMarkdown', () => {
             },
         ]
         mockDb.getTagsForEntry.mockImplementation((id: number) => (id === 1 ? ['tag1'] : ['tag2']))
-        mockDb.getRelationships.mockImplementation((id: number) => {
-            if (id === 2) {
-                return [{ relationshipType: 'references', fromEntryId: 2, toEntryId: 3 }]
+        mockDb.getRelationshipsForEntries.mockImplementation((ids: number[]) => {
+            const map = new Map()
+            for (const id of ids) {
+                if (id === 2) {
+                    map.set(2, [{ relationshipType: 'references', fromEntryId: 2, toEntryId: 3 }])
+                } else {
+                    map.set(id, [])
+                }
             }
-            return []
+            return map
         })
 
         const result = await exportEntriesToMarkdown(

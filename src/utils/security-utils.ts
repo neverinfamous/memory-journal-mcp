@@ -118,6 +118,7 @@ export function assertNoPathTraversal(filename: string): void {
     }
 }
 
+import fs from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -130,7 +131,7 @@ import path from 'node:path'
  * @param dirPath - The directory path to validate
  * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
-export function assertSafeDirectoryPath(dirPath: string): void {
+export function assertSafeDirectoryPath(dirPath: string, providedRoots?: string[]): void {
     // 1. Initial basic check for traversal strings
     const normalized = dirPath.replace(/\\/g, '/')
     const segments = normalized.split('/')
@@ -139,34 +140,30 @@ export function assertSafeDirectoryPath(dirPath: string): void {
     }
 
     const resolved = path.resolve(dirPath)
+
+    // 2. Attempt to get the realpath; if it fails (doesn't exist yet), rely on resolved.
+    let targetPath = resolved
+    try {
+        targetPath = fs.realpathSync(resolved)
+    } catch {
+        targetPath = resolved
+    }
     
-    // 2. Define safe boundaries: default to CWD
-    const allowedRoots: string[] = [process.cwd()]
-    
-    // 3. Add explicit PROJECT_REGISTRY boundaries if configured
-    const registryStr = process.env['PROJECT_REGISTRY']
-    if (registryStr) {
+    // 3. Define safe boundaries
+    const rawRoots: string[] = providedRoots ?? [process.cwd()]
+    const allowedRoots: string[] = []
+
+    for (const root of rawRoots) {
         try {
-            const registry = JSON.parse(registryStr) as Record<string, unknown>
-            for (const key of Object.keys(registry)) {
-                const entry = registry[key]
-                if (
-                    entry !== null &&
-                    typeof entry === 'object' &&
-                    'path' in entry &&
-                    typeof (entry as { path: unknown }).path === 'string'
-                ) {
-                    allowedRoots.push(path.resolve((entry as { path: string }).path))
-                }
-            }
+            allowedRoots.push(fs.realpathSync(path.resolve(root)))
         } catch {
-            // Ignore parse errors here; cli.ts handles configuration validation on boot
+            allowedRoots.push(path.resolve(root))
         }
     }
 
-    // 4. Verify the resolved path is structurally inside at least one allowed root
+    // 4. Verify the targetPath is structurally inside at least one allowed root
     const isAllowed = allowedRoots.some(root => {
-        const rel = path.relative(root, resolved)
+        const rel = path.relative(root, targetPath)
         // If relative path is '..' or starts with '../' (or '..\'), it escapes the root
         return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
     })

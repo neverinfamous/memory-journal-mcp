@@ -246,7 +246,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigin: 'http://localhost',
+                corsOrigins: ['http://localhost'],
                 stateless: false,
                 authToken: 'test-token-123',
             }
@@ -610,7 +610,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigin: '*',
+                corsOrigins: ['*'],
                 stateless: true,
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
@@ -800,7 +800,7 @@ describe('HttpTransport', () => {
                 try {
                     mw(req, res, () => {})
                 } catch {}
-                if ((res['status'] as any).mock.calls.some((c: any) => c[0] === 401)) {
+                if ((res['status'] as any).mock.calls.some((c: any) => c[0] === 403)) {
                     scopeMw = mw
                     break
                 }

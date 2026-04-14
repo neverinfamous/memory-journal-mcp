@@ -27,9 +27,13 @@ interface RateLimitEntry {
 export class CodeModeSecurityManager {
     private readonly config: SecurityConfig
     private readonly rateLimits = new Map<string, RateLimitEntry>()
+    private readonly cleanupInterval: NodeJS.Timeout
 
     constructor(config?: Partial<SecurityConfig>) {
         this.config = { ...DEFAULT_SECURITY_CONFIG, ...config }
+        // Periodically drop expired rate limit entries to prevent memory leaks
+        this.cleanupInterval = setInterval(() => this.cleanupRateLimits(), 60_000)
+        this.cleanupInterval.unref() // Don't block process exit
     }
 
     // =========================================================================

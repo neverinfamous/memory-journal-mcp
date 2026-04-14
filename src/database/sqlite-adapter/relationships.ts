@@ -67,4 +67,53 @@ export class RelationshipsManager {
 
         return rows
     }
+
+    getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]> {
+        const result = new Map<number, Relationship[]>()
+        if (entryIds.length === 0) return result
+        
+        for (const id of entryIds) {
+            result.set(id, [])
+        }
+
+        const marks = entryIds.map(() => '?').join(', ')
+        const rows = this.db
+            .prepare(
+                `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
+                        relationship_type as relationshipType, description, created_at as createdAt
+                 FROM relationships
+                 WHERE from_entry_id IN (${marks}) OR to_entry_id IN (${marks})`
+            )
+            .all(...entryIds, ...entryIds) as {
+            id: number
+            fromEntryId: number
+            toEntryId: number
+            relationshipType: RelationshipType
+            description: string | null
+            createdAt: string
+        }[]
+
+        for (const row of rows) {
+            const rel = {
+                id: row.id,
+                fromEntryId: row.fromEntryId,
+                toEntryId: row.toEntryId,
+                relationshipType: row.relationshipType,
+                description: row.description,
+                createdAt: row.createdAt,
+            }
+            const fromList = result.get(row.fromEntryId)
+            if (fromList) {
+                fromList.push(rel)
+            }
+            if (row.fromEntryId !== row.toEntryId) {
+                const toList = result.get(row.toEntryId)
+                if (toList) {
+                    toList.push(rel)
+                }
+            }
+        }
+
+        return result
+    }
 }
