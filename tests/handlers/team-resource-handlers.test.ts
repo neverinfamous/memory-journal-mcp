@@ -45,15 +45,15 @@ describe('Team Resource Handlers', () => {
         })
 
         // Set author on entries via raw SQL
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+        teamDb._executeRawQueryUnsafe('UPDATE memory_journal SET author = ? WHERE id = ?', [
             'Alice',
             entry1.id,
         ])
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+        teamDb._executeRawQueryUnsafe('UPDATE memory_journal SET author = ? WHERE id = ?', [
             'Bob',
             entry2.id,
         ])
-        teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+        teamDb._executeRawQueryUnsafe('UPDATE memory_journal SET author = ? WHERE id = ?', [
             'Alice',
             entry3.id,
         ])

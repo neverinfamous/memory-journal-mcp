@@ -101,7 +101,7 @@ describe('Team Analytics Tool Handlers', () => {
             isPersonal: false,
             projectNumber: 303,
         })
-        teamDb.executeRawQuery(
+        teamDb._executeRawQueryUnsafe(
             `UPDATE memory_journal SET timestamp = datetime('now', '-10 days') WHERE id = ?`,
             [oldEntry.id]
         )

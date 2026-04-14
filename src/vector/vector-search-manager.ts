@@ -53,7 +53,7 @@ export class VectorSearchManager {
     }
     private readonly modelName: string
     private initialized = false
-    private initializing = false
+    private initPromise: Promise<void> | null = null
 
     constructor(
         private readonly dbAdapter: IDatabaseAdapter,
@@ -73,36 +73,39 @@ export class VectorSearchManager {
      * Initialize the vector search manager (lazy loading)
      */
     async initialize(): Promise<void> {
-        if (this.initialized || this.initializing) return
+        if (this.initialized) return
+        if (this.initPromise) return this.initPromise
 
-        this.initializing = true
+        this.initPromise = (async () => {
+            try {
+                logger.info('Initializing vector search...', { module: 'VectorSearch' })
 
-        try {
-            logger.info('Initializing vector search...', { module: 'VectorSearch' })
+                // Load embedding model (downloads on first use, ~23MB)
+                // Dynamic import avoids 1.5s cold-start penalty from eagerly loading the module
+                logger.info(`Loading embedding model: ${this.modelName}`, { module: 'VectorSearch' })
+                const { pipeline } = await import('@huggingface/transformers')
+                this.embedder = await pipeline('feature-extraction', this.modelName, {
+                    dtype: 'q8', // Quantized int8 for faster inference and smaller model size
+                })
+                logger.info('Embedding model loaded', { module: 'VectorSearch' })
 
-            // Load embedding model (downloads on first use, ~23MB)
-            // Dynamic import avoids 1.5s cold-start penalty from eagerly loading the module
-            logger.info(`Loading embedding model: ${this.modelName}`, { module: 'VectorSearch' })
-            const { pipeline } = await import('@huggingface/transformers')
-            this.embedder = await pipeline('feature-extraction', this.modelName, {
-                dtype: 'q8', // Quantized int8 for faster inference and smaller model size
-            })
-            logger.info('Embedding model loaded', { module: 'VectorSearch' })
+                // Get the raw better-sqlite3 database instance
+                // sqlite-vec extension is already loaded by NativeConnectionManager
 
-            // Get the raw better-sqlite3 database instance
-            // sqlite-vec extension is already loaded by NativeConnectionManager
-
-            this.initialized = true
-            this.initializing = false
-            logger.info('Vector search initialized successfully', { module: 'VectorSearch' })
-        } catch (error) {
-            this.initializing = false
-            logger.error('Failed to initialize vector search', {
-                module: 'VectorSearch',
-                error: error instanceof Error ? error.message : String(error),
-            })
-            throw error
-        }
+                this.initialized = true
+                logger.info('Vector search initialized successfully', { module: 'VectorSearch' })
+            } catch (error) {
+                logger.error('Failed to initialize vector search', {
+                    module: 'VectorSearch',
+                    error: error instanceof Error ? error.message : String(error),
+                })
+                throw error
+            } finally {
+                this.initPromise = null
+            }
+        })()
+        
+        return this.initPromise
     }
 
     /**

@@ -72,7 +72,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         prStatus: input.pr_status,
                     })
 
-                    teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+                    teamDb._executeRawQueryUnsafe('UPDATE memory_journal SET author = ? WHERE id = ?', [
                         author,
                         entry.id,
                     ])

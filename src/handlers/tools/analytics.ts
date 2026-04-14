@@ -226,7 +226,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Get active projects with stats
-                    const projectsResult = db.executeRawQuery(
+                    const projectsResult = db._executeRawQueryUnsafe(
                         `
                         SELECT project_number, COUNT(*) as entry_count,
                                MIN(DATE(timestamp)) as first_entry,
@@ -267,7 +267,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const projectNumbers = projects.map((p) => p['project_number'] as number)
                     if (projectNumbers.length > 0) {
                         const tagPlaceholders = projectNumbers.map(() => '?').join(',')
-                        const allTagsResult = db.executeRawQuery(
+                        const allTagsResult = db._executeRawQueryUnsafe(
                             `
                             SELECT m.project_number, t.name, COUNT(*) as count
                             FROM tags t
@@ -297,7 +297,7 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const cutoffDate = new Date(Date.now() - INACTIVE_THRESHOLD_DAYS * MS_PER_DAY)
                         .toISOString()
                         .split('T')[0]
-                    const inactiveResult = db.executeRawQuery(
+                    const inactiveResult = db._executeRawQueryUnsafe(
                         `
                         SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
                         FROM memory_journal

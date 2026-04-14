@@ -86,8 +86,19 @@ export function searchEntries(
             const stmt = db.prepare(sql)
             const rows = stmt.all(params)
             return rowsToEntries(tagsMgr, rows)
-        } catch {
+        } catch (error) {
             // FTS5 syntax error (e.g. unbalanced quotes, special chars) — fall back to LIKE
+            // Rethrow if it's an infrastructural error (like missing extension)
+            const isSyntaxError = error instanceof Error && (
+                error.message.includes('syntax error') ||
+                error.message.includes('no such column') ||
+                error.message.includes('unterminated string') ||
+                error.message.includes('unrecognized token')
+            )
+            
+            if (!isSyntaxError) {
+                throw error
+            }
         }
     }
 

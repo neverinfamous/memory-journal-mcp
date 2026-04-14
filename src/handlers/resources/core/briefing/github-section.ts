@@ -60,7 +60,7 @@ export async function buildGitHubSection(
         const { owner, repo } = resolved
 
         // Parallel fetch — all calls are independent and each has its own error handling
-        const [ciStatus, issuesAndPrs, milestones, insights, copilotReviews] = await Promise.all([
+        const [ciStatusResult, issuesAndPrsResult, milestonesResult, insightsResult, copilotReviewsResult] = await Promise.allSettled([
             fetchCiStatus(github, owner, repo, config),
             fetchIssuesAndPrs(github, owner, repo, config),
             fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
@@ -69,6 +69,13 @@ export async function buildGitHubSection(
                 ? fetchCopilotReviews(github, owner, repo)
                 : Promise.resolve(undefined),
         ])
+
+        const ciStatus = ciStatusResult.status === 'fulfilled' ? ciStatusResult.value : { status: 'unknown' as const, workflowSummary: undefined }
+        const issuesAndPrs = issuesAndPrsResult.status === 'fulfilled' ? issuesAndPrsResult.value : { openIssues: 0, openIssueList: undefined, openPRs: 0, openPrList: undefined }
+        const milestones = milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
+        const insights = insightsResult.status === 'fulfilled' ? insightsResult.value : undefined
+        const copilotReviews = copilotReviewsResult.status === 'fulfilled' ? copilotReviewsResult.value : undefined
+
         const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
 
@@ -224,7 +231,7 @@ async function fetchIssuesAndPrs(
             config.issueCount > 0 && issues.length > 0
                 ? issues
                       .slice(0, config.issueCount)
-                      .map((i) => ({ number: i.number, title: i.title }))
+                      .map((i) => ({ number: i.number, title: `<untrusted_remote_content>${i.title}</untrusted_remote_content>` }))
                 : undefined
 
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
@@ -243,7 +250,7 @@ async function fetchIssuesAndPrs(
             config.prCount > 0 && prs.length > 0
                 ? prs.slice(0, config.prCount).map((p) => ({
                       number: p.number,
-                      title: p.title,
+                      title: `<untrusted_remote_content>${p.title}</untrusted_remote_content>`,
                       state: p.state,
                   }))
                 : undefined

@@ -32,7 +32,7 @@ import { getPrompts } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/server-instructions.js'
 import { Scheduler, type SchedulerOptions } from './scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
-import { setDefaultSandboxMode, type SandboxMode } from '../codemode/index.js'
+
 import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
 import type { ProjectRegistryEntry } from '../types/index.js'
 import type { AuditConfig } from '../audit/index.js'
@@ -61,7 +61,7 @@ export interface ServerOptions {
     authToken?: string
     enableHSTS?: boolean
     scheduler?: SchedulerOptions
-    sandboxMode?: SandboxMode
+
     // OAuth 2.1 options
     oauthEnabled?: boolean
     oauthIssuer?: string
@@ -86,14 +86,6 @@ export interface ServerOptions {
 export async function createServer(options: ServerOptions): Promise<void> {
     const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
 
-    // Configure sandbox mode for Code Mode
-    if (options.sandboxMode) {
-        setDefaultSandboxMode(options.sandboxMode)
-        logger.info('Code Mode sandbox configured', {
-            module: 'McpServer',
-            sandboxMode: options.sandboxMode,
-        })
-    }
 
     // Initialize database
     const db = await DatabaseAdapterFactory.create(dbPath)

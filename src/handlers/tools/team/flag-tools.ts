@@ -148,7 +148,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     })
 
                     // Set author column
-                    teamDb.executeRawQuery('UPDATE memory_journal SET author = ? WHERE id = ?', [
+                    teamDb._executeRawQueryUnsafe('UPDATE memory_journal SET author = ? WHERE id = ?', [
                         author,
                         entry.id,
                     ])
@@ -252,7 +252,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     // Update auto_context and content via raw SQL (auto_context is not
                     // exposed via the updateEntry interface, same pattern as author column)
-                    teamDb.executeRawQuery(
+                    teamDb._executeRawQueryUnsafe(
                         'UPDATE memory_journal SET auto_context = ?, content = ? WHERE id = ?',
                         [JSON.stringify(updatedContext), updatedContent, input.flag_id]
                     )

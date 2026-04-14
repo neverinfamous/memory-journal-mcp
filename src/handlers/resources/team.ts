@@ -22,18 +22,7 @@ function enrichWithAuthor<T extends { id: number }>(
     if (!teamDb || entries.length === 0) return entries.map((e: T) => ({ ...e, author: null }))
     
     const ids = entries.map(e => e.id)
-    const placeholders = ids.map(() => '?').join(',')
-    const authorResult = teamDb.executeRawQuery(
-        `SELECT id, author FROM memory_journal WHERE id IN (${placeholders})`,
-        ids
-    )
-    
-    const authorMap = new Map<number, string | null>()
-    if (authorResult[0]) {
-        authorResult[0].values.forEach((row: unknown[]) => {
-            authorMap.set(row[0] as number, row[1] as string | null)
-        })
-    }
+    const authorMap = teamDb.getAuthorsForEntries(ids)
     
     return entries.map((e: T) => ({
         ...e,
@@ -136,21 +125,9 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 // Author breakdown
                 let authors: { author: string; count: number }[] = []
                 try {
-                    const authorResult = context.teamDb.executeRawQuery(
-                        `SELECT COALESCE(author, 'unknown') as author, COUNT(*) as count
-                         FROM memory_journal
-                         WHERE deleted_at IS NULL
-                         GROUP BY COALESCE(author, 'unknown')
-                         ORDER BY count DESC`
-                    )
-                    if (authorResult[0]) {
-                        authors = authorResult[0].values.map((row: unknown[]) => ({
-                            author: row[0] as string,
-                            count: row[1] as number,
-                        }))
-                    }
+                    authors = context.teamDb.getAuthorStatistics()
                 } catch {
-                    // Author column may not exist yet
+                    // Author query failure (e.g., column may not exist yet or locked DB)
                 }
 
                 return {

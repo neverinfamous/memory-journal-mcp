@@ -17,6 +17,8 @@ import { performance } from 'node:perf_hooks'
 import type { AuditLogger } from './audit-logger.js'
 import type { AuditCategory } from './types.js'
 import { getRequiredScope } from '../auth/scope-map.js'
+import { getAuthContext } from '../auth/auth-context.js'
+import { getRequestContext } from '../utils/request-context.js'
 
 // ============================================================================
 // Types
@@ -96,6 +98,13 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
             }
 
             const isReadScope = scope === 'read'
+            
+            const authCtx = getAuthContext()
+            const reqCtx = getRequestContext()
+            const user = authCtx?.claims?.sub ?? null
+            const scopes = authCtx?.claims?.scopes ?? []
+            const sessionId = reqCtx?.sessionId
+
             const requestId = generateRequestId()
             const start = performance.now()
             let success = true
@@ -151,8 +160,9 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                         tool: toolName,
                         category: 'read' as AuditCategory,
                         scope,
-                        user: null,
-                        scopes: [],
+                        user,
+                        scopes,
+                        sessionId,
                         durationMs,
                         success,
                         error,
@@ -165,8 +175,9 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                         tool: toolName,
                         category: scopeToCategory(scope),
                         scope,
-                        user: null,
-                        scopes: [],
+                        user,
+                        scopes,
+                        sessionId,
                         durationMs,
                         success,
                         error,
@@ -178,5 +189,67 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                 }
             }
         },
+    }
+}
+
+/**
+ * Execute an operation with audit logging.
+ * Intended for resources and prompts which operate outside the standard tool interceptor.
+ */
+export async function auditOperation<T>(
+    auditLogger: AuditLogger | null,
+    operationType: 'resource' | 'prompt',
+    name: string,
+    fn: () => Promise<T> | T
+): Promise<T> {
+    if (!auditLogger?.config.auditReads) {
+        return Promise.resolve(fn())
+    }
+
+    const authCtx = getAuthContext()
+    const reqCtx = getRequestContext()
+    const user = authCtx?.claims?.sub ?? null
+    const scopes = authCtx?.claims?.scopes ?? []
+    const sessionId = reqCtx?.sessionId
+
+    const requestId = generateRequestId()
+    const start = performance.now()
+    let success = true
+    let error: string | undefined
+    let tokenEstimate: number | undefined
+
+    try {
+        const result = await fn()
+        if (typeof result === 'object' && result !== null) {
+            try {
+                const json = JSON.stringify(result)
+                tokenEstimate = Math.ceil(Buffer.byteLength(json, 'utf8') / 4)
+            } catch {
+                // Serialization failure must not block execution
+            }
+        } else if (typeof result === 'string') {
+            tokenEstimate = Math.ceil(Buffer.byteLength(result, 'utf8') / 4)
+        }
+        return result
+    } catch (err) {
+        success = false
+        error = err instanceof Error ? err.message : String(err)
+        throw err
+    } finally {
+        const durationMs = Math.round(performance.now() - start)
+        auditLogger.log({
+            timestamp: new Date().toISOString(),
+            requestId,
+            sessionId,
+            tool: `${operationType}:${name}`,
+            category: 'read',
+            scope: 'read',
+            user,
+            scopes,
+            durationMs,
+            success,
+            error,
+            tokenEstimate,
+        })
     }
 }

@@ -12,6 +12,9 @@ import { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
+import { getGlobalAuditLogger } from '../handlers/tools/index.js'
+import { auditOperation } from '../audit/interceptor.js'
+import { assertNotInMaintenanceMode } from '../utils/maintenance-lock.js'
 
 // ============================================================================
 // Types
@@ -78,12 +81,20 @@ export function registerResources(
                 resDef.name,
                 template,
                 meta,
-                async (uri: URL, _variables: Variables) => handleResourceRead(uri, mimeType)
+                async (uri: URL, _variables: Variables) => {
+                    return auditOperation(getGlobalAuditLogger(), 'resource', resDef.name, async () => {
+                        assertNotInMaintenanceMode()
+                        return handleResourceRead(uri, mimeType)
+                    })
+                }
             )
         } else {
-            server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) =>
-                handleResourceRead(uri, mimeType)
-            )
+            server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
+                return auditOperation(getGlobalAuditLogger(), 'resource', resDef.name, async () => {
+                    assertNotInMaintenanceMode()
+                    return handleResourceRead(uri, mimeType)
+                })
+            })
         }
     }
 }
@@ -126,31 +137,34 @@ export function registerPrompts(
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
-                try {
-                    const args = providedArgs as Record<string, string>
-                    const promptResult = getPrompt(promptDef.name, args, db, teamDb)
-                    // Map to MCP SDK expected format
-                    const result = {
-                        messages: promptResult.messages.map((m) => ({
-                            role: m.role as 'user' | 'assistant',
-                            content: m.content as { type: 'text'; text: string },
-                        })),
-                    }
-                    return Promise.resolve(result)
-                } catch (err) {
-                    const message = err instanceof Error ? err.message : String(err)
-                    return Promise.resolve({
-                        messages: [
-                            {
-                                role: 'user' as const,
-                                content: {
-                                    type: 'text' as const,
-                                    text: JSON.stringify({ success: false, error: message }, null, 2),
+                return auditOperation(getGlobalAuditLogger(), 'prompt', promptDef.name, () => {
+                    try {
+                        assertNotInMaintenanceMode()
+                        const args = providedArgs as Record<string, string>
+                        const promptResult = getPrompt(promptDef.name, args, db, teamDb)
+                        // Map to MCP SDK expected format
+                        const result = {
+                            messages: promptResult.messages.map((m) => ({
+                                role: m.role as 'user' | 'assistant',
+                                content: m.content as { type: 'text'; text: string },
+                            })),
+                        }
+                        return result
+                    } catch (err) {
+                        const message = err instanceof Error ? err.message : String(err)
+                        return {
+                            messages: [
+                                {
+                                    role: 'user' as const,
+                                    content: {
+                                        type: 'text' as const,
+                                        text: JSON.stringify({ success: false, error: message }, null, 2),
+                                    },
                                 },
-                            },
-                        ],
-                    })
-                }
+                            ],
+                        }
+                    }
+                })
             }
         )
     }

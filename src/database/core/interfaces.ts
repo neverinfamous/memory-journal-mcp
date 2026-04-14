@@ -149,6 +149,8 @@ export interface IDatabaseAdapter {
         endDate?: string,
         projectBreakdown?: boolean
     ): Record<string, unknown>
+    getAuthorStatistics(): { author: string; count: number }[]
+    getAuthorsForEntries(entryIds: number[]): Map<number, string | null>
 
     // Tags Manager
     getTagsForEntry(entryId: number): string[]
@@ -198,7 +200,12 @@ export interface IDatabaseAdapter {
 
     getRawDb(): unknown
     pragma(command: string): void
-    executeRawQuery(sql: string, params?: unknown[]): QueryResult[]
+
+    /**
+     * @warning Raw SQL execution compromises the adapter boundary.
+     * Migrate to strongly-typed methods instead.
+     */
+    _executeRawQueryUnsafe(sql: string, params?: unknown[]): QueryResult[]
 
     // Analytics Snapshots
     saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number

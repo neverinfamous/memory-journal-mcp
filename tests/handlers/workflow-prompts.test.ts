@@ -73,7 +73,7 @@ describe('Workflow Prompts', () => {
         const track = prompts.find((p) => p.name === 'goal-tracker')!
 
         const mockDb = {
-            executeRawQuery: vi.fn().mockReturnValue([
+            _executeRawQueryUnsafe: vi.fn().mockReturnValue([
                 {
                     id: 1,
                     entryType: 'goal',

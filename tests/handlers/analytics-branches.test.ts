@@ -35,7 +35,7 @@ function createMockDb(overrides: Partial<Record<string, unknown>> = {}) {
             },
             causalMetrics: { blocked_by: 1, resolved: 2, caused: 3 },
         }),
-        executeRawQuery: vi.fn(),
+        _executeRawQueryUnsafe: vi.fn(),
         ...overrides,
     }
 }
@@ -98,7 +98,7 @@ describe('analytics tools — branch coverage', () => {
     describe('get_cross_project_insights', () => {
         it('should return empty result when no projects match', () => {
             const db = createMockDb({
-                executeRawQuery: vi.fn().mockReturnValue([{ columns: [], values: [] }]),
+                _executeRawQueryUnsafe: vi.fn().mockReturnValue([{ columns: [], values: [] }]),
             })
             const handler = getInsightsHandler(db)
 
@@ -109,14 +109,14 @@ describe('analytics tools — branch coverage', () => {
 
         it('should filter by start_date and end_date', () => {
             const db = createMockDb({
-                executeRawQuery: vi.fn().mockReturnValue([{ columns: [], values: [] }]),
+                _executeRawQueryUnsafe: vi.fn().mockReturnValue([{ columns: [], values: [] }]),
             })
             const handler = getInsightsHandler(db)
 
             handler({ start_date: '2025-01-01', end_date: '2025-03-31' })
 
             // First call should include both date params
-            const firstCall = db.executeRawQuery.mock.calls[0] as [string, unknown[]]
+            const firstCall = db._executeRawQueryUnsafe.mock.calls[0] as [string, unknown[]]
             expect(firstCall[0]).toContain('DATE(timestamp) >= DATE(?)')
             expect(firstCall[0]).toContain('DATE(timestamp) <= DATE(?)')
             expect(firstCall[1]).toContain('2025-01-01')
@@ -125,7 +125,7 @@ describe('analytics tools — branch coverage', () => {
 
         it('should compute project data with tags and distribution', () => {
             const db = createMockDb({
-                executeRawQuery: vi
+                _executeRawQueryUnsafe: vi
                     .fn()
                     // 1st call: project stats
                     .mockReturnValueOnce([
@@ -182,7 +182,7 @@ describe('analytics tools — branch coverage', () => {
 
         it('should handle missing tag results gracefully', () => {
             const db = createMockDb({
-                executeRawQuery: vi
+                _executeRawQueryUnsafe: vi
                     .fn()
                     .mockReturnValueOnce([
                         {

@@ -198,7 +198,7 @@ export function execQuery(
     sql: string,
     params: unknown[] = []
 ): Record<string, unknown>[] {
-    const result = db.executeRawQuery(sql, params)
+    const result = db._executeRawQueryUnsafe(sql, params)
     if (result.length === 0) return []
 
     const columns = result[0]?.columns ?? []

@@ -53,7 +53,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     // Author breakdown
                     let authors: { author: string; count: number }[] = []
                     try {
-                        const authorResult = teamDb.executeRawQuery(
+                        const authorResult = teamDb._executeRawQueryUnsafe(
                             `SELECT COALESCE(author, 'unknown') as author, COUNT(*) as count
                              FROM memory_journal
                              WHERE deleted_at IS NULL
@@ -111,7 +111,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Get active projects with stats
-                    const projectsResult = teamDb.executeRawQuery(
+                    const projectsResult = teamDb._executeRawQueryUnsafe(
                         `
                         SELECT project_number, COUNT(*) as entry_count,
                                MIN(DATE(timestamp)) as first_entry,
@@ -150,10 +150,10 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
 
                     // Get top tags per project (batch query instead of N+1)
                     const projectTags: Record<number, { name: string; count: number }[]> = {}
-                    const projectNumbers = projects.map((p) => p['project_number'] as number)
+                    const projectNumbers = projects.map((p: Record<string, unknown>) => p['project_number'] as number)
                     if (projectNumbers.length > 0) {
                         const tagPlaceholders = projectNumbers.map(() => '?').join(',')
-                        const allTagsResult = teamDb.executeRawQuery(
+                        const allTagsResult = teamDb._executeRawQueryUnsafe(
                             `
                             SELECT m.project_number, t.name, COUNT(*) as count
                             FROM tags t
@@ -185,7 +185,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                     const cutoffDate = new Date(Date.now() - INACTIVE_THRESHOLD_DAYS * MS_PER_DAY)
                         .toISOString()
                         .split('T')[0]
-                    const inactiveResult = teamDb.executeRawQuery(
+                    const inactiveResult = teamDb._executeRawQueryUnsafe(
                         `
                         SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
                         FROM memory_journal
@@ -221,7 +221,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         project_count: projects.length,
                         total_entries: totalEntries,
-                        projects: projects.map((p) => ({
+                        projects: projects.map((p: Record<string, unknown>) => ({
                             ...p,
                             top_tags: projectTags[p['project_number'] as number] ?? [],
                         })),
@@ -260,7 +260,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                               : `strftime('%Y-%m', timestamp)`
 
                     // Author activity heatmap
-                    const activityResult = teamDb.executeRawQuery(
+                    const activityResult = teamDb._executeRawQueryUnsafe(
                         `SELECT
                             COALESCE(author, 'unknown') AS author,
                             ${dateExpression} AS period,
@@ -280,7 +280,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         })) ?? []
 
                     // Cross-author linking
-                    const crossLinkResult = teamDb.executeRawQuery(
+                    const crossLinkResult = teamDb._executeRawQueryUnsafe(
                         `SELECT
                             COALESCE(m1.author, 'unknown') AS from_author,
                             COALESCE(m2.author, 'unknown') AS to_author,
@@ -303,7 +303,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         })) ?? []
 
                     // Impact factor
-                    const impactResult = teamDb.executeRawQuery(
+                    const impactResult = teamDb._executeRawQueryUnsafe(
                         `SELECT
                             COALESCE(m2.author, 'unknown') AS author,
                             COUNT(*) AS inbound_links
@@ -322,7 +322,7 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                         })) ?? []
 
                     // Totals
-                    const totalsResult = teamDb.executeRawQuery(
+                    const totalsResult = teamDb._executeRawQueryUnsafe(
                         `SELECT
                             COUNT(DISTINCT COALESCE(author, 'unknown')) AS total_authors,
                             COUNT(*) AS total_entries

@@ -254,13 +254,9 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = ExportMarkdownSchema.parse(params)
 
-                    // Determine allowed roots from project registry and CWD
+                    // Determine allowed roots
+                    // Security fix: Restrict to CWD to prevent cross-workspace access
                     const allowedRoots = [process.cwd()]
-                    if (context.config?.projectRegistry) {
-                        for (const entry of Object.values(context.config.projectRegistry)) {
-                            allowedRoots.push(entry.path)
-                        }
-                    }
 
                     assertSafeDirectoryPath(input.output_dir, allowedRoots)
 
@@ -343,13 +339,9 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = ImportMarkdownSchema.parse(params)
 
-                    // Determine allowed roots from project registry and CWD
+                    // Determine allowed roots
+                    // Security fix: Restrict to CWD to prevent cross-workspace access
                     const allowedRoots = [process.cwd()]
-                    if (context.config?.projectRegistry) {
-                        for (const entry of Object.values(context.config.projectRegistry)) {
-                            allowedRoots.push(entry.path)
-                        }
-                    }
 
                     assertSafeDirectoryPath(input.source_dir, allowedRoots)
 

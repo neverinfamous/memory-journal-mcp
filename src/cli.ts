@@ -68,11 +68,7 @@ program
         'Analytics digest interval in minutes, HTTP only (0 = disabled; recommended: 1440 for daily)',
         '0'
     )
-    .option(
-        '--sandbox-mode <mode>',
-        'Code Mode sandbox: "worker" (production, default) or "vm" (lightweight)',
-        'worker'
-    )
+
     .option(
         '--codemode-max-result-size <bytes>',
         'Maximum Code Mode result size in bytes (default: 102400 / 100KB, env: CODE_MODE_MAX_RESULT_SIZE)'
@@ -189,7 +185,7 @@ program
             vacuumInterval: string
             rebuildIndexInterval: string
             digestInterval: string
-            sandboxMode: string
+
             codemodeMaxResultSize?: string
             oauthEnabled?: boolean
             oauthIssuer?: string
@@ -282,7 +278,7 @@ program
                         rebuildIndexIntervalMinutes: parseInt(options.rebuildIndexInterval, 10),
                         digestIntervalMinutes: parseInt(options.digestInterval, 10),
                     },
-                    sandboxMode: options.sandboxMode as 'vm' | 'worker',
+
                     // OAuth 2.1
                     oauthEnabled: options.oauthEnabled ?? process.env['OAUTH_ENABLED'] === 'true',
                     oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],

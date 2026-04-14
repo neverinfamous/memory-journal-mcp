@@ -40,8 +40,9 @@ export function buildJournalContext(
             id: e.id,
             timestamp: e.timestamp,
             type: e.entryType,
-            preview:
-                content.slice(0, PREVIEW_LENGTH) + (content.length > PREVIEW_LENGTH ? '...' : ''),
+            preview: `<untrusted_remote_content>${
+                content.slice(0, PREVIEW_LENGTH) + (content.length > PREVIEW_LENGTH ? '...' : '')
+            }</untrusted_remote_content>`,
         }
     })
 
@@ -84,7 +85,7 @@ export function buildJournalContext(
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : ''),
+                preview: `<untrusted_remote_content>${c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')}</untrusted_remote_content>`,
             }
         })
         latestSessionSummary = sessionSummaries[0]
@@ -126,7 +127,7 @@ export function buildTeamContext(
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
             : ''
         const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry['id'])}: ${teamContent.slice(0, TEAM_PREVIEW_LENGTH)}${teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''}`
+            ? `#${String(teamLatestEntry['id'])}: <untrusted_remote_content>${teamContent.slice(0, TEAM_PREVIEW_LENGTH)}${teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''}</untrusted_remote_content>`
             : null
         const teamInfo = {
             totalEntries: teamTotalEntries,
@@ -148,9 +149,10 @@ export function buildTeamContext(
                     id: e.id,
                     timestamp: e.timestamp,
                     type: e.entryType,
-                    preview:
+                    preview: `<untrusted_remote_content>${
                         content.slice(0, TEAM_PREVIEW_LENGTH) +
-                        (content.length > TEAM_PREVIEW_LENGTH ? '...' : ''),
+                        (content.length > TEAM_PREVIEW_LENGTH ? '...' : '')
+                    }</untrusted_remote_content>`,
                 }
             })
         }
@@ -288,9 +290,10 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
                             target_user: typeof ctx['target_user'] === 'string'
                                 ? ctx['target_user']
                                 : null,
-                            preview:
+                            preview: `<untrusted_remote_content>${
                                 content.slice(0, 80) +
-                                (content.length > 80 ? '...' : ''),
+                                (content.length > 80 ? '...' : '')
+                            }</untrusted_remote_content>`,
                             timestamp: entry.timestamp,
                         }
                     }

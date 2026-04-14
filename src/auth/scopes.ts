@@ -28,6 +28,10 @@ export const SCOPES = {
     ADMIN: 'admin',
     /** Unrestricted access to all operations */
     FULL: 'full',
+    /** Team operations access */
+    TEAM: 'team',
+    /** Audit log access */
+    AUDIT: 'audit',
 } as const
 
 export type StandardScope = (typeof SCOPES)[keyof typeof SCOPES]
@@ -35,12 +39,12 @@ export type StandardScope = (typeof SCOPES)[keyof typeof SCOPES]
 /**
  * Base scopes supported by the server
  */
-export const BASE_SCOPES = ['read', 'write', 'admin', 'full'] as const
+export const BASE_SCOPES = ['read', 'write', 'admin', 'full', 'team', 'audit'] as const
 
 /**
  * All supported scope patterns for metadata
  */
-export const SUPPORTED_SCOPES = ['read', 'write', 'admin', 'full'] as const
+export const SUPPORTED_SCOPES = ['read', 'write', 'admin', 'full', 'team', 'audit'] as const
 
 // =============================================================================
 // Scope to Tool Group Mapping
@@ -75,6 +79,8 @@ const groupsForScope = (maxScope: StandardScope): ToolGroup[] => {
     const hierarchy: Record<StandardScope, number> = {
         read: 0,
         write: 1,
+        team: 1.5,
+        audit: 1.5,
         admin: 2,
         full: 3,
     }
@@ -139,8 +145,13 @@ export function hasScope(grantedScopes: string[], requiredScope: string): boolea
         return true
     }
 
-    // Admin scope includes write and read
-    if (requiredScope === SCOPES.READ || requiredScope === SCOPES.WRITE) {
+    // Admin scope includes write, read, team, and audit
+    if (
+        requiredScope === SCOPES.READ ||
+        requiredScope === SCOPES.WRITE ||
+        requiredScope === SCOPES.TEAM ||
+        requiredScope === SCOPES.AUDIT
+    ) {
         if (grantedScopes.includes(SCOPES.ADMIN)) {
             return true
         }
@@ -250,6 +261,10 @@ export function getScopeDisplayName(scope: string): string {
             return 'Administrative'
         case SCOPES.FULL:
             return 'Full Access'
+        case SCOPES.TEAM:
+            return 'Team Access'
+        case SCOPES.AUDIT:
+            return 'Audit Log Access'
         default:
             return scope
     }

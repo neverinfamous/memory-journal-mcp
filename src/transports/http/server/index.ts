@@ -47,7 +47,7 @@ import {
 import { setupStateless } from './stateless.js'
 import { setupStateful } from './stateful.js'
 import { setupLegacySSE } from './legacy-sse.js'
-import { authStorage } from '../../../auth/context.js'
+import { runWithAuthContext } from '../../../auth/auth-context.js'
 
 /**
  * HTTP Transport for Memory Journal MCP Server
@@ -240,7 +240,7 @@ export class HttpTransport {
         // Propagate authenticated context into core dispatch
         this.app.use((req: Request, _res: Response, next: () => void) => {
             if (req.auth) {
-                authStorage.run(req.auth, next)
+                runWithAuthContext({ authenticated: true, claims: req.auth, scopes: req.auth.scopes }, next)
             } else {
                 next()
             }
@@ -274,12 +274,37 @@ export class HttpTransport {
                     typeof body?.method === 'string' &&
                     (body.method.startsWith('resources/') || body.method.startsWith('prompts/'))
                 ) {
-                    if (!hasScope(req.auth?.scopes ?? [], SCOPES.READ)) {
-                        res.status(403).json({
-                            error: 'insufficient_scope',
-                            message: new InsufficientScopeError(SCOPES.READ).message,
-                        })
-                        return
+                    // Extract URI if available
+                    const paramsObj = body?.params as Record<string, unknown> | undefined
+                    const uriValue = paramsObj?.['uri']
+                    const uri = typeof uriValue === 'string' ? uriValue : ''
+                    
+                    // Enforce granular scopes for specific URI namespaces
+                    if (uri.startsWith('memory://team/')) {
+                        if (!hasScope(req.auth?.scopes ?? [], SCOPES.TEAM || 'team')) {
+                            res.status(403).json({
+                                error: 'insufficient_scope',
+                                message: new InsufficientScopeError('team').message,
+                            })
+                            return
+                        }
+                    } else if (uri.startsWith('memory://audit/')) {
+                        if (!hasScope(req.auth?.scopes ?? [], SCOPES.AUDIT || 'audit')) {
+                            res.status(403).json({
+                                error: 'insufficient_scope',
+                                message: new InsufficientScopeError('audit').message,
+                            })
+                            return
+                        }
+                    } else {
+                        // Standard read scope for all other resources/prompts
+                        if (!hasScope(req.auth?.scopes ?? [], SCOPES.READ)) {
+                            res.status(403).json({
+                                error: 'insufficient_scope',
+                                message: new InsufficientScopeError(SCOPES.READ).message,
+                            })
+                            return
+                        }
                     }
                 }
             }

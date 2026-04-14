@@ -64,7 +64,7 @@ describe('Insights Resources', () => {
             // Mocking the queryRow / queryRows indirectly via teamDb interface
             // The computeTeamCollaborationMatrix uses execQuery, which calls `teamDb.getRawDb()`
             const teamDb = {
-                executeRawQuery: vi
+                _executeRawQueryUnsafe: vi
                     .fn()
                     .mockReturnValueOnce([{ author: 'Alice', period: '2026-04', entry_count: 5 }]) // Activity
                     .mockReturnValueOnce([
@@ -86,7 +86,7 @@ describe('Insights Resources', () => {
 
         it('should handle errors from computation', () => {
             const teamDb = {
-                executeRawQuery: vi.fn().mockImplementation(() => {
+                _executeRawQueryUnsafe: vi.fn().mockImplementation(() => {
                     throw new Error('Database connection failed')
                 }),
             }

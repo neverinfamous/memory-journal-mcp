@@ -20,8 +20,6 @@ export type {
 
 export { DEFAULT_SANDBOX_OPTIONS, DEFAULT_POOL_OPTIONS, DEFAULT_SECURITY_CONFIG } from './types.js'
 
-// Sandbox (VM-based)
-export { CodeModeSandbox, SandboxPool } from './sandbox.js'
 
 // Worker Sandbox (worker_threads-based)
 export { WorkerSandbox, WorkerSandboxPool } from './worker-sandbox.js'

@@ -59,7 +59,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         const entryIds = entries.map((e) => e.id)
                         if (entryIds.length > 0) {
                             const placeholders = entryIds.map(() => '?').join(',')
-                            const tagResult = teamDb.executeRawQuery(
+                            const tagResult = teamDb._executeRawQueryUnsafe(
                                 `SELECT et.entry_id, t.name FROM tags t JOIN entry_tags et ON t.id = et.tag_id WHERE et.entry_id IN (${placeholders})`,
                                 entryIds
                             )

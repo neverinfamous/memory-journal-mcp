@@ -254,7 +254,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
 
-                        entriesResult = db.executeRawQuery(
+                        entriesResult = db._executeRawQueryUnsafe(
                             `
                             WITH RECURSIVE connected_entries(id, distance) AS (
                                 SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
@@ -279,7 +279,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         )
                     } else if (input.tags && input.tags.length > 0) {
                         const placeholders = input.tags.map(() => '?').join(',')
-                        entriesResult = db.executeRawQuery(
+                        entriesResult = db._executeRawQueryUnsafe(
                             `
                             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                             FROM memory_journal mj
@@ -294,7 +294,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             [...input.tags, input.limit]
                         )
                     } else {
-                        entriesResult = db.executeRawQuery(
+                        entriesResult = db._executeRawQueryUnsafe(
                             `
                             SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
                             FROM memory_journal mj
@@ -360,7 +360,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         relsParams.push(input.relationship_type)
                     }
 
-                    const relsResult = db.executeRawQuery(relsQuery, relsParams)
+                    const relsResult = db._executeRawQueryUnsafe(relsQuery, relsParams)
 
                     const relationships = relsResult[0]?.values ?? []
 

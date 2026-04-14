@@ -11,6 +11,7 @@ import { sendProgress } from '../../utils/progress-utils.js'
 import { relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
+import { acquireMaintenanceLock, releaseMaintenanceLock } from '../../utils/maintenance-lock.js'
 
 // ============================================================================
 // Output Schemas
@@ -188,7 +189,14 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 3, 'Preparing restore...')
                     await sendProgress(progress, 2, 3, 'Restoring database from backup...')
-                    const result = await db.restoreFromFile(input.filename)
+                    
+                    acquireMaintenanceLock()
+                    let result
+                    try {
+                        result = await db.restoreFromFile(input.filename)
+                    } finally {
+                        releaseMaintenanceLock()
+                    }
 
                     // Send directly using captured primitives (db.restoreFromFile reinitializes DB)
                     if (progressServer !== undefined && progressTokenValue !== undefined) {

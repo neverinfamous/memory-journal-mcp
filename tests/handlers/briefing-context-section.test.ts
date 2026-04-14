@@ -89,7 +89,7 @@ describe('buildJournalContext', () => {
         expect(result.latestEntries[0]!.id).toBe(1)
         expect(result.latestEntries[0]!.type).toBe('note')
         expect(result.latestEntries[0]!.preview).toBe(
-            'This is a sample entry for testing purposes.'
+            '<untrusted_remote_content>This is a sample entry for testing purposes.</untrusted_remote_content>'
         )
     })
 
@@ -109,8 +109,8 @@ describe('buildJournalContext', () => {
 
         const result = buildJournalContext(context, createMockConfig() as never)
 
-        expect(result.latestEntries[0]!.preview).toHaveLength(83) // 80 + '...'
-        expect(result.latestEntries[0]!.preview).toMatch(/\.\.\.$/)
+        expect(result.latestEntries[0]!.preview).toHaveLength(83 + 53) // 80 + '...' + 53 for tags
+        expect(result.latestEntries[0]!.preview).toMatch(/\.\.\.<\/untrusted_remote_content>$/)
     })
 
     it('should handle empty database', () => {
@@ -143,7 +143,7 @@ describe('buildJournalContext', () => {
 
         const result = buildJournalContext(context, createMockConfig() as never)
 
-        expect(result.latestEntries[0]!.preview).toBe('')
+        expect(result.latestEntries[0]!.preview).toBe('<untrusted_remote_content></untrusted_remote_content>')
     })
 })
 
@@ -257,7 +257,7 @@ describe('buildTeamContext', () => {
 
         // Team info preview uses 60 chars, team entries preview uses 80 chars
         expect(result!.teamInfo.latestPreview).toContain('...')
-        expect(result!.teamLatestEntries![0]!.preview).toMatch(/\.\.\.$/)
+        expect(result!.teamLatestEntries![0]!.preview).toMatch(/\.\.\.<\/untrusted_remote_content>$/)
     })
 })
 

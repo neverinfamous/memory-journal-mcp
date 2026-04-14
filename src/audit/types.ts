@@ -19,6 +19,9 @@ export interface AuditEntry {
     /** Correlates with RequestContext.requestId (or generated UUID) */
     requestId: string
 
+    /** The transport session ID */
+    sessionId?: string | undefined
+
     /** MCP tool name (e.g. "create_entry") */
     tool: string
 

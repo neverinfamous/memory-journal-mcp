@@ -98,13 +98,13 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
                 const openIssues = issues.map((i) => ({
                     number: i.number,
-                    title: i.title.slice(0, 50),
+                    title: `<untrusted_remote_content>${i.title.slice(0, 50)}</untrusted_remote_content>`,
                 }))
 
                 const prs = prsResult.status === 'fulfilled' ? prsResult.value : []
                 const openPrs = prs.map((pr) => ({
                     number: pr.number,
-                    title: pr.title.slice(0, 50),
+                    title: `<untrusted_remote_content>${pr.title.slice(0, 50)}</untrusted_remote_content>`,
                     state: pr.state,
                 }))
 
@@ -181,7 +181,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                             const pct = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
                             return {
                                 number: ms.number,
-                                title: ms.title,
+                                title: `<untrusted_remote_content>${ms.title}</untrusted_remote_content>`,
                                 state: ms.state,
                                 openIssues: ms.openIssues,
                                 closedIssues: ms.closedIssues,
@@ -305,7 +305,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                         ms.openIssues,
                         ms.closedIssues
                     )
-                    return { ...ms, completionPercentage }
+                    return { ...ms, title: `<untrusted_remote_content>${ms.title}</untrusted_remote_content>`, completionPercentage }
                 })
 
                 return {
@@ -365,7 +365,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 return {
                     data: {
                         repository: `${owner}/${repo}`,
-                        milestone: { ...milestone, completionPercentage },
+                        milestone: { ...milestone, title: `<untrusted_remote_content>${milestone.title}</untrusted_remote_content>`, completionPercentage },
                         hint: 'Use get_github_issues tool to list issues associated with this milestone.',
                     },
                     annotations: { lastModified },

@@ -230,7 +230,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status,
                             })
-                            teamDb.executeRawQuery(
+                            teamDb._executeRawQueryUnsafe(
                                 'UPDATE memory_journal SET author = ? WHERE id = ?',
                                 [author, teamEntry.id]
                             )

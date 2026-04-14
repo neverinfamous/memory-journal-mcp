@@ -285,8 +285,51 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.connection.getRawDb()
     }
 
-    executeRawQuery(sql: string, params?: unknown[]): QueryResult[] {
+    _executeRawQueryUnsafe(sql: string, params?: unknown[]): QueryResult[] {
         return this.connection.exec(sql, params)
+    }
+
+    getAuthorStatistics(): { author: string; count: number }[] {
+        let authors: { author: string; count: number }[] = []
+        try {
+            const authorResult = this.connection.exec(
+                `SELECT COALESCE(author, 'unknown') as author, COUNT(*) as count
+                 FROM memory_journal
+                 WHERE deleted_at IS NULL
+                 GROUP BY COALESCE(author, 'unknown')
+                 ORDER BY count DESC`
+            )
+            if (authorResult[0]) {
+                authors = authorResult[0].values.map((row: unknown[]) => ({
+                    author: row[0] as string,
+                    count: row[1] as number,
+                }))
+            }
+        } catch {
+            // Author column may not exist yet
+        }
+        return authors
+    }
+
+    getAuthorsForEntries(entryIds: number[]): Map<number, string | null> {
+        const authorMap = new Map<number, string | null>()
+        if (entryIds.length === 0) return authorMap
+
+        const placeholders = entryIds.map(() => '?').join(',')
+        try {
+            const authorResult = this.connection.exec(
+                `SELECT id, author FROM memory_journal WHERE id IN (${placeholders})`,
+                entryIds
+            )
+            if (authorResult[0]) {
+                authorResult[0].values.forEach((row: unknown[]) => {
+                    authorMap.set(row[0] as number, row[1] as string | null)
+                })
+            }
+        } catch {
+            // Author column may not exist yet
+        }
+        return authorMap
     }
 
     saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number {

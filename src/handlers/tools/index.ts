@@ -38,10 +38,11 @@ import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../obser
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
 import type { AuditConfig, AuditInterceptor } from '../../audit/index.js'
 
-import { authStorage } from '../../auth/context.js'
+import { getAuthContext } from '../../auth/auth-context.js'
 import { getRequiredScope } from '../../auth/scope-map.js'
 import { hasScope } from '../../auth/scopes.js'
 import { logger } from '../../utils/logger.js'
+import { assertNotInMaintenanceMode } from '../../utils/maintenance-lock.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -273,11 +274,19 @@ export async function callTool(
         return Promise.reject(new Error(`Unknown tool: ${name}`))
     }
 
+    if (name !== 'restore_backup') {
+        try {
+            assertNotInMaintenanceMode()
+        } catch (error) {
+            return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+        }
+    }
+
     // Authorization Hook: Enforce scope if auth context exists
-    const auth = authStorage.getStore()
+    const auth = getAuthContext()
     if (auth) {
         const requiredScope = getRequiredScope(name)
-        if (!hasScope(auth.scopes, requiredScope)) {
+        if (!hasScope(auth.claims?.scopes ?? [], requiredScope)) {
             logger.warning(`Insufficient scope for tool: ${name}`, {
                 module: 'AUTH',
                 operation: 'scope-check',

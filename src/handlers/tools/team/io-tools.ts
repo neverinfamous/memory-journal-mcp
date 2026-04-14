@@ -252,7 +252,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             limit: input.limit,
                             author,
                         },
-                        context.vectorManager
+                        context.teamVectorManager
                     )
 
                     await sendProgress(progress, 2, 2, 'Team import complete')
