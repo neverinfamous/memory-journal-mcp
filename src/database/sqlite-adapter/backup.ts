@@ -136,17 +136,29 @@ export class BackupManager {
         )
         const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
 
-        await this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
+        const preRestoreResult = await this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
 
         // Close old DB via manager
         this.ctx.closeDbBeforeRestore()
 
-        // Native better-sqlite3 connection
-        await fs.promises.copyFile(backupPath, this.ctx.getDbPath())
+        try {
+            // Native better-sqlite3 connection
+            await fs.promises.copyFile(backupPath, this.ctx.getDbPath())
 
-        // Re-initialize using the connection's standard initialize method
-        // This ensures extensions like sqlite-vec are properly loaded
-        await this.ctx.initialize()
+            // Re-initialize using the connection's standard initialize method
+            // This ensures extensions like sqlite-vec are properly loaded
+            await this.ctx.initialize()
+        } catch (error) {
+            logger.error('Restore failed, rolling back to pre-restore backup', {
+                module: 'SqliteAdapter',
+                operation: 'restoreFromFile',
+                error: error instanceof Error ? error.message : String(error)
+            })
+            // Rollback
+            await fs.promises.copyFile(preRestoreResult.path, this.ctx.getDbPath())
+            await this.ctx.initialize()
+            throw error
+        }
 
         const newCountResult = this.ctx.exec(
             'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'

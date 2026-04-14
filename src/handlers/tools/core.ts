@@ -212,7 +212,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (input.share_with_team && teamDb) {
                         try {
                             author = resolveAuthor()
-                            const teamEntry = teamDb.createEntry({
+                            teamDb.createEntry({
                                 content: input.content,
                                 entryType: input.entry_type,
                                 tags: input.tags,
@@ -229,11 +229,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowRunId: input.workflow_run_id,
                                 workflowName: input.workflow_name,
                                 workflowStatus: input.workflow_status,
+                                author,
                             })
-                            teamDb._executeRawQueryUnsafe(
-                                'UPDATE memory_journal SET author = ? WHERE id = ?',
-                                [author, teamEntry.id]
-                            )
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {

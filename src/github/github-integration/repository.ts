@@ -18,7 +18,7 @@ export class RepositoryManager {
             const { owner, repo } = this.parseRemoteUrl(remoteUrl)
 
             const repoInfo = { owner, repo, branch, remoteUrl }
-            this.client.cachedRepoInfo = repoInfo
+            this.client.setCache('repoInfo', repoInfo)
             return repoInfo
         } catch (error) {
             logger.debug('Failed to get repo info (may not be a git repo)', {
@@ -30,11 +30,11 @@ export class RepositoryManager {
     }
 
     getCachedRepoInfo(): RepoInfo | null {
-        return this.client.cachedRepoInfo
+        return (this.client.getCached('repoInfo') as RepoInfo | undefined) ?? null
     }
 
     setCachedRepoInfo(info: RepoInfo): void {
-        this.client.cachedRepoInfo = info
+        this.client.setCache('repoInfo', info)
     }
 
     private parseRemoteUrl(remoteUrl: string | null): {

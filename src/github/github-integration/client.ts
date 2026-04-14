@@ -2,7 +2,6 @@ import { Octokit } from '@octokit/rest'
 import { graphql } from '@octokit/graphql'
 import * as simpleGitImport from 'simple-git'
 import { logger } from '../../utils/logger.js'
-import type { RepoInfo } from './types.js'
 
 export const CACHE_TTL_MS = 5 * 60 * 1000
 export const TRAFFIC_CACHE_TTL_MS = 10 * 60 * 1000
@@ -20,7 +19,6 @@ export class GitHubClient {
     public graphqlWithAuth: typeof graphql | null = null
     public git: simpleGitImport.SimpleGit
     public token: string | undefined
-    public cachedRepoInfo: RepoInfo | null = null
 
     public readonly apiCache = new Map<string, CacheEntry<unknown>>()
 

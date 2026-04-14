@@ -145,13 +145,9 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         autoContext: JSON.stringify(flagContext),
                         projectNumber: input.project_number,
                         issueNumber: input.issue_number,
+                        author,
                     })
 
-                    // Set author column
-                    teamDb._executeRawQueryUnsafe('UPDATE memory_journal SET author = ? WHERE id = ?', [
-                        author,
-                        entry.id,
-                    ])
                     teamDb.flushSave()
 
                     return {
@@ -250,12 +246,11 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         : ' [RESOLVED]'
                     const updatedContent = entry.content + resolutionSuffix
 
-                    // Update auto_context and content via raw SQL (auto_context is not
-                    // exposed via the updateEntry interface, same pattern as author column)
-                    teamDb._executeRawQueryUnsafe(
-                        'UPDATE memory_journal SET auto_context = ?, content = ? WHERE id = ?',
-                        [JSON.stringify(updatedContext), updatedContent, input.flag_id]
-                    )
+                    // Update auto_context and content
+                    teamDb.updateEntry(input.flag_id, {
+                        autoContext: JSON.stringify(updatedContext),
+                        content: updatedContent,
+                    })
                     teamDb.flushSave()
 
                     const updatedEntry = teamDb.getEntryById(input.flag_id)

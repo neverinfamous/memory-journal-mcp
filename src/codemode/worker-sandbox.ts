@@ -59,7 +59,12 @@ export class WorkerSandbox {
         apiBindings: Record<string, unknown>,
         timeoutMs?: number
     ): Promise<SandboxResult> {
-        const effectiveTimeout = timeoutMs ?? this.options.timeoutMs
+        let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
+        // Strict cap ensuring timeout never exceeds 30,000ms
+        if (effectiveTimeout > 30000) {
+            effectiveTimeout = 30000
+        }
+        
         const startTime = performance.now()
         const startRss = process.memoryUsage.rss()
 

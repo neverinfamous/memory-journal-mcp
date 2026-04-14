@@ -143,6 +143,7 @@ export interface CreateEntryInput {
     workflowRunId?: number
     workflowName?: string
     workflowStatus?: 'queued' | 'in_progress' | 'completed'
+    author?: string
 }
 
 /**

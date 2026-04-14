@@ -70,12 +70,9 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         prNumber: input.pr_number,
                         prUrl: input.pr_url,
                         prStatus: input.pr_status,
+                        author,
                     })
 
-                    teamDb._executeRawQueryUnsafe('UPDATE memory_journal SET author = ? WHERE id = ?', [
-                        author,
-                        entry.id,
-                    ])
                     teamDb.flushSave()
 
                     return {

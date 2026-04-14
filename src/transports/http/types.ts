@@ -129,4 +129,10 @@ export interface HttpTransportConfig {
 
     /** Clock tolerance in seconds for token validation (default: 60) */
     oauthClockTolerance?: number
+
+    /** 
+     * The public resource origin for OAuth RFC 9728 metadata (e.g. "https://example.com").
+     * If omitted, falls back to the dynamic http://${host}:${port}.
+     */
+    publicOrigin?: string
 }

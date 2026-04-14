@@ -31,6 +31,7 @@ for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
 // Per-tool scope overrides — import tools mutate the journal and require write
 toolScopeMap.set('import_markdown', SCOPES.WRITE)
 toolScopeMap.set('team_import_markdown', SCOPES.WRITE)
+toolScopeMap.set('mj_execute_code', SCOPES.ADMIN)
 
 /**
  * Get the required scope for a tool by name.

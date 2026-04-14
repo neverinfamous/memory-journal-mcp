@@ -300,7 +300,7 @@ describe('RepositoryManager — branch coverage', () => {
 
     it('should return cached repo info', () => {
         const info = { owner: 'o', repo: 'r', branch: 'main', remoteUrl: null }
-        client.cachedRepoInfo = info
+        client.getCached = vi.fn().mockReturnValue(info)
         const result = manager.getCachedRepoInfo()
         expect(result).toBe(info)
     })

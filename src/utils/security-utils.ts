@@ -229,15 +229,24 @@ export function sanitizeAuthor(raw: string): string {
 // Author Resolution
 // ============================================================================
 
+let cachedAuthor: string | null = null
+
 /**
  * Resolve the author name for team-shared entries.
- * Priority: TEAM_AUTHOR env → git config user.name → 'unknown'
+ * Priority: TEAM_AUTHOR env → git config user.name → 'unknown'.
+ * Caches the result after the first lookup.
  *
  * Uses sanitizeAuthor() to strip control characters and cap length.
  */
 export function resolveAuthor(): string {
+    if (cachedAuthor !== null) return cachedAuthor
+
     const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
-    if (envAuthor) return sanitizeAuthor(envAuthor)
+    if (envAuthor) {
+        cachedAuthor = sanitizeAuthor(envAuthor)
+        return cachedAuthor
+    }
+
     try {
         const gitUser = execFileSync('git', ['config', 'user.name'], {
             encoding: 'utf-8',
@@ -245,9 +254,14 @@ export function resolveAuthor(): string {
         })
             .trim()
             .replace(/"/g, '')
-        if (gitUser) return sanitizeAuthor(gitUser)
+        if (gitUser) {
+            cachedAuthor = sanitizeAuthor(gitUser)
+            return cachedAuthor
+        }
     } catch {
         // Git not available
     }
-    return 'unknown'
+
+    cachedAuthor = 'unknown'
+    return cachedAuthor
 }

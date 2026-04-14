@@ -207,7 +207,7 @@ export class HttpTransport {
             })
 
             const resourceServer = createOAuthResourceServer({
-                resource: `http://${host}:${String(port)}`,
+                resource: this.config.publicOrigin ?? `http://${host}:${String(port)}`,
                 authorizationServers: [this.config.oauthIssuer],
                 scopesSupported: [...SUPPORTED_SCOPES],
             })

@@ -13,17 +13,13 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
     let insertId!: number
     const txn = db.transaction(() => {
-        // Insert main entry
-        const stmt = db.prepare(
-            `
-            INSERT INTO memory_journal (
-                entry_type, content, timestamp, is_personal, significance_type, auto_context,
-                project_number, project_owner, issue_number, issue_url, pr_number, pr_url, pr_status,
-                workflow_run_id, workflow_name, workflow_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `
-        )
-        const result = stmt.run(
+        // Build dynamic columns and values
+        const columns = [
+            'entry_type', 'content', 'timestamp', 'is_personal', 'significance_type', 'auto_context',
+            'project_number', 'project_owner', 'issue_number', 'issue_url', 'pr_number', 'pr_url', 'pr_status',
+            'workflow_run_id', 'workflow_name', 'workflow_status'
+        ]
+        const values = [
             input.entryType ?? 'personal_reflection',
             input.content,
             timestamp,
@@ -40,7 +36,18 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.workflowRunId ?? null,
             input.workflowName || null,
             input.workflowStatus || null
+        ]
+
+        if (input.author !== undefined) {
+            columns.push('author')
+            values.push(input.author)
+        }
+
+        const placeholders = columns.map(() => '?').join(', ')
+        const stmt = db.prepare(
+            `INSERT INTO memory_journal (${columns.join(', ')}) VALUES (${placeholders})`
         )
+        const result = stmt.run(...values)
         insertId = result.lastInsertRowid as number
 
         // Link tags

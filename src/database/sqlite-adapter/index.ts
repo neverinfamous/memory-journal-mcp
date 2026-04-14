@@ -105,6 +105,18 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             entryType?: EntryType
             tags?: string[]
             isPersonal?: boolean
+            significanceType?: string
+            autoContext?: string | null
+            projectNumber?: number
+            projectOwner?: string
+            issueNumber?: number
+            issueUrl?: string
+            prNumber?: number
+            prUrl?: string
+            prStatus?: string
+            workflowRunId?: number
+            workflowName?: string
+            workflowStatus?: string
         }
     ): JournalEntry | null {
         return this.entriesMgr.updateEntry(id, updates)
