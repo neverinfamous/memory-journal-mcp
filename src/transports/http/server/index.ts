@@ -90,8 +90,14 @@ export class HttpTransport {
         const hasCorsOpen = !corsOrigins || corsOrigins.includes('*')
         const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
 
-        if (!isLocalhost && (!hasAuth || hasCorsOpen)) {
-            const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication or restricted CORS. You MUST specify --auth-token (or OAuth) and --cors-origin to bind publicly.`
+        if (!hasAuth && hasCorsOpen) {
+            const errorMsg = `FATAL: Refusing to bind HTTP with open wildcard CORS ('*') without explicit authentication. You MUST specify --auth-token (or OAuth) or restrict --cors-origin to specific trusted origins.`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
+
+        if (!isLocalhost && !hasAuth) {
+            const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
             logger.error(errorMsg, { module: 'HTTP' })
             throw new Error(errorMsg)
         }
@@ -152,46 +158,7 @@ export class HttpTransport {
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
         this.app.use(express.json({ limit: maxBody }) as RequestHandler)
 
-        // Built-in rate limiting (replaces express-rate-limit)
-        if (this.config.enableRateLimit !== false) {
-            this.app.use((req: Request, res: Response, next: () => void) => {
-                // Health check bypasses rate limiting
-                if (req.path === '/health') {
-                    next()
-                    return
-                }
 
-                const result = checkRateLimit(req, this.config, this.rateLimitMap)
-                if (!result.allowed) {
-                    if (result.retryAfterSeconds !== undefined) {
-                        res.setHeader('Retry-After', String(result.retryAfterSeconds))
-                    }
-                    res.status(429).json({
-                        error: 'Too Many Requests',
-                        retryAfter: result.retryAfterSeconds,
-                    })
-                    return
-                }
-
-                next()
-            })
-
-            // Periodic cleanup of expired entries
-            this.rateLimitCleanupTimer = setInterval(() => {
-                const now = Date.now()
-                for (const [ip, entry] of this.rateLimitMap) {
-                    if (now > entry.resetTime) {
-                        this.rateLimitMap.delete(ip)
-                    }
-                }
-            }, 60_000)
-            // Don't block process exit
-            this.rateLimitCleanupTimer.unref()
-
-            logger.info('Rate limiting enabled: 100 requests/minute per IP', {
-                module: 'HTTP',
-            })
-        }
 
         // Authentication middleware
         if (this.config.oauthEnabled && this.config.oauthIssuer && this.config.oauthAudience) {
@@ -246,6 +213,47 @@ export class HttpTransport {
             }
         })
 
+        // Built-in rate limiting
+        if (this.config.enableRateLimit !== false) {
+            this.app.use((req: Request, res: Response, next: () => void) => {
+                // Health check bypasses rate limiting
+                if (req.path === '/health') {
+                    next()
+                    return
+                }
+
+                const result = checkRateLimit(req, this.config, this.rateLimitMap)
+                if (!result.allowed) {
+                    if (result.retryAfterSeconds !== undefined) {
+                        res.setHeader('Retry-After', String(result.retryAfterSeconds))
+                    }
+                    res.status(429).json({
+                        error: 'Too Many Requests',
+                        retryAfter: result.retryAfterSeconds,
+                    })
+                    return
+                }
+
+                next()
+            })
+
+            // Periodic cleanup of expired entries
+            this.rateLimitCleanupTimer = setInterval(() => {
+                const now = Date.now()
+                for (const [key, entry] of this.rateLimitMap) {
+                    if (now > entry.resetTime) {
+                        this.rateLimitMap.delete(key)
+                    }
+                }
+            }, 60_000)
+            // Don't block process exit
+            this.rateLimitCleanupTimer.unref()
+
+            logger.info('Rate limiting enabled (using identity or IP)', {
+                module: 'HTTP',
+            })
+        }
+
         // Scope enforcement middleware
         this.app.use((req: Request, res: Response, next: () => void) => {
             if (!this.config.oauthEnabled) {
@@ -280,7 +288,7 @@ export class HttpTransport {
                     const uri = typeof uriValue === 'string' ? uriValue : ''
                     
                     // Enforce granular scopes for specific URI namespaces
-                    if (uri.startsWith('memory://team/')) {
+                    if (uri.startsWith('memory://team/') || uri === 'memory://team' || uri.startsWith('memory://flags')) {
                         if (!hasScope(req.auth?.scopes ?? [], SCOPES.TEAM || 'team')) {
                             res.status(403).json({
                                 error: 'insufficient_scope',
@@ -288,7 +296,7 @@ export class HttpTransport {
                             })
                             return
                         }
-                    } else if (uri.startsWith('memory://audit/')) {
+                    } else if (uri.startsWith('memory://audit/') || uri === 'memory://audit') {
                         if (!hasScope(req.auth?.scopes ?? [], SCOPES.AUDIT || 'audit')) {
                             res.status(403).json({
                                 error: 'insufficient_scope',

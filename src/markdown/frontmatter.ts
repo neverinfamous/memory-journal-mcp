@@ -60,6 +60,13 @@ const FrontmatterSchema = z.object({
 // Serializer
 // ============================================================================
 
+function quoteYamlString(val: string): string {
+    if (/[:\n'"\-#]/g.test(val) || val.trim() === '') {
+        return JSON.stringify(val);
+    }
+    return val;
+}
+
 /**
  * Serialize frontmatter data into a YAML frontmatter block.
  * Output: `---\nkey: value\n---\n`
@@ -69,23 +76,23 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
     const lines: string[] = ['---']
 
     if (data.mj_id !== undefined) lines.push(`mj_id: ${String(data.mj_id)}`)
-    if (data.entry_type !== undefined) lines.push(`entry_type: ${data.entry_type}`)
-    if (data.author !== undefined) lines.push(`author: ${data.author}`)
-    if (data.timestamp !== undefined) lines.push(`timestamp: ${data.timestamp}`)
-    if (data.significance !== undefined) lines.push(`significance: ${data.significance}`)
-    if (data.source !== undefined) lines.push(`source: ${data.source}`)
+    if (data.entry_type !== undefined) lines.push(`entry_type: ${quoteYamlString(data.entry_type)}`)
+    if (data.author !== undefined) lines.push(`author: ${quoteYamlString(data.author)}`)
+    if (data.timestamp !== undefined) lines.push(`timestamp: ${quoteYamlString(data.timestamp)}`)
+    if (data.significance !== undefined) lines.push(`significance: ${quoteYamlString(data.significance)}`)
+    if (data.source !== undefined) lines.push(`source: ${quoteYamlString(data.source)}`)
 
     if (data.tags && data.tags.length > 0) {
         lines.push('tags:')
         for (const tag of data.tags) {
-            lines.push(`  - ${tag}`)
+            lines.push(`  - ${quoteYamlString(tag)}`)
         }
     }
 
     if (data.relationships !== undefined && data.relationships.length > 0) {
         lines.push('relationships:')
         for (const rel of data.relationships) {
-            lines.push(`  - type: ${rel.type}`)
+            lines.push(`  - type: ${quoteYamlString(rel.type)}`)
             lines.push(`    target_id: ${String(rel.target_id)}`)
         }
     }

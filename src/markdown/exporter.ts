@@ -5,7 +5,7 @@
  * Deterministic filenames allow re-export to overwrite identically.
  */
 
-import { mkdir, open } from 'node:fs/promises'
+import { mkdir, open, lstat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
@@ -157,6 +157,21 @@ export async function exportEntriesToMarkdown(
         // Satisfies both CodeQL js/insecure-temporary-file and js/file-system-race.
         const filename = generateFilename(entry.id, entry.content)
         const filepath = join(resolvedOutputDir, filename)
+
+        try {
+            const stats = await lstat(filepath)
+            if (stats.isSymbolicLink()) {
+                logger.warning('Refusing to overwrite symlink during export', {
+                    module: 'Exporter',
+                    filepath
+                })
+                skipped++
+                continue
+            }
+        } catch {
+            // File does not exist, safe to create
+        }
+
         const handle = await open(filepath, 'w', 0o600)
         try {
             await handle.writeFile(fileContent, 'utf-8')

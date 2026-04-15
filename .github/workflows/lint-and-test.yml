@@ -40,6 +40,12 @@ jobs:
       - name: Run unit tests
         run: npm run test
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
   security-scan:
     runs-on: ubuntu-latest
     steps:

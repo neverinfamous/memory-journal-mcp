@@ -188,7 +188,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: false,
             }
             const transport = new HttpTransport(config)
@@ -205,7 +205,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -215,8 +215,7 @@ describe('HttpTransport', () => {
             expect(mockApp.listen).toHaveBeenCalledWith(3000, '127.0.0.1', expect.any(Function))
         })
 
-        it('should warn about wildcard CORS and no auth', async () => {
-            const { logger } = await import('../../src/utils/logger.js')
+        it('should throw on wildcard CORS and no auth', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
@@ -224,16 +223,7 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
-
-            expect(logger.warning).toHaveBeenCalledWith(
-                expect.stringContaining('CORS origin'),
-                expect.any(Object)
-            )
-            expect(logger.warning).toHaveBeenCalledWith(
-                expect.stringContaining('No authentication'),
-                expect.any(Object)
-            )
+            await expect(transport.start((() => mockServer) as never, null)).rejects.toThrow(/FATAL/)
         })
     })
 
@@ -283,7 +273,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -314,7 +304,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
                 enableHSTS: true,
             }
@@ -344,7 +334,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -382,7 +372,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -408,7 +398,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -429,7 +419,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -449,7 +439,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -487,7 +477,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -507,7 +497,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -532,7 +522,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -550,7 +540,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -574,7 +564,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
@@ -596,7 +586,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -609,7 +599,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
@@ -626,7 +616,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
             }
             const transport = new HttpTransport(config)
@@ -655,7 +645,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
                 enableRateLimit: true,
             }
@@ -760,7 +750,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
                 oauthEnabled: true,
                 oauthIssuer: 'https://auth.example.com',
@@ -777,7 +767,7 @@ describe('HttpTransport', () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
-                corsOrigins: ['*'],
+                corsOrigins: ['http://localhost'],
                 stateless: true,
                 oauthEnabled: true,
                 oauthIssuer: 'https://auth.example.com',

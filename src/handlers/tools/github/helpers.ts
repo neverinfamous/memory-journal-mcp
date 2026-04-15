@@ -123,9 +123,6 @@ export async function resolveOwnerRepo(
     }
 
     const repoInfo = await toolGithub.getRepoInfo()
-    if (context.github && toolGithub !== context.github) {
-        context.github.setCachedRepoInfo(repoInfo)
-    }
 
     const detectedOwner = repoInfo.owner
     const detectedRepo = repoInfo.repo

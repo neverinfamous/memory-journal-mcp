@@ -167,8 +167,12 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
     // Code Mode from calling gh_* tools internally).
     const filterConfig = context.config?.filterConfig
 
+    // Exception: If the filter exclusively allows mj_execute_code (codemode-only preset),
+    // then Code Mode retains full internal access to all underlying capabilities.
+    const isCodeModePresetOnly = filterConfig?.enabledTools.size === 1 && filterConfig.enabledTools.has('mj_execute_code')
+
     cachedNonCodeModeTools =
-        filterConfig
+        filterConfig && !isCodeModePresetOnly
             ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
             : allTools
 

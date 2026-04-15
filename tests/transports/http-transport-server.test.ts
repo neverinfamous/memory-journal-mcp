@@ -160,20 +160,14 @@ describe('HttpTransport', () => {
         expect(mockSetupStateful).not.toHaveBeenCalled()
     })
 
-    it('should warn when no CORS origins or wildcard CORS', async () => {
+    it('should throw when no CORS origins or wildcard CORS', async () => {
         const transport = new HttpTransport({
             port: 3000,
             host: 'localhost',
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await transport.start(mockServer as never, null)
-
-        const { logger } = await import('../../src/utils/logger.js')
-        expect(logger.warning).toHaveBeenCalledWith(
-            expect.stringContaining('CORS'),
-            expect.any(Object)
-        )
+        await expect(transport.start(mockServer as never, null)).rejects.toThrow(/FATAL.*wildcard CORS/i)
     })
 
     it('should warn when no auth token configured', async () => {

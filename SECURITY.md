@@ -148,12 +148,12 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 
 ## 🔍 **Data Privacy**
 
-### **Local-First Architecture**
+### **Architecture Characteristics**
 
-- ✅ **No external services**: All processing happens locally
-- ✅ **No telemetry**: No data sent to external servers
 - ✅ **Full data ownership**: SQLite database stays on your machine
-- ✅ **Semantic search**: ML model runs locally via `@huggingface/transformers`
+- ✅ **No telemetry**: No data sent to external telemetry endpoints
+- ⚠️ **External Services**: If configured, communicates with GitHub API and fetches OAuth discovery (JWKS) endpoints.
+- ⚠️ **Semantic search**: ML models are executed locally via `@huggingface/transformers`, but the model weights are downloaded from the Hugging Face registry on first run if not cached locally.
 
 ### **Context Security**
 

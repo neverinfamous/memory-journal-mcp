@@ -204,7 +204,7 @@ Content`
         expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references')
     })
 
-    it('should silently catch vector manager errors', async () => {
+    it('should record vector manager errors without crashing', async () => {
         const fileContent = `Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
@@ -217,9 +217,10 @@ Content`
             mockVectorManager as any
         )
 
-        expect(result.success).toBe(true)
+        expect(result.success).toBe(false)
         expect(mockVectorManager.addEntry).toHaveBeenCalled()
-        // No hard errors thrown
-        expect(result.errors).toEqual([])
+        // No hard errors thrown, but it should be recorded
+        expect(result.errors.length).toBe(1)
+        expect(result.errors[0]?.error).toContain('Vector fail')
     })
 })

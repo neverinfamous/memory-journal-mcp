@@ -88,7 +88,7 @@ export class BackupManager {
         return backups
     }
 
-    deleteOldBackups(keepCount: number): { deleted: string[]; kept: number } {
+    deleteOldBackups(keepCount: number): { deleted: string[]; failed: string[]; kept: number } {
         const backups = this.listBackups()
 
         if (keepCount < 1 || Number.isNaN(keepCount)) {
@@ -98,23 +98,24 @@ export class BackupManager {
         const toKeep = backups.slice(0, keepCount)
         const toDelete = backups.slice(keepCount)
         const deleted: string[] = []
+        const failed: string[] = []
 
         for (const backup of toDelete) {
             try {
                 fs.unlinkSync(backup.path)
                 deleted.push(backup.filename)
             } catch {
-                // Skip files that can't be deleted
+                failed.push(backup.filename)
             }
         }
 
         logger.info('Old backups cleaned up', {
             module: 'SqliteAdapter',
             operation: 'deleteOldBackups',
-            context: { kept: toKeep.length, deleted: deleted.length },
+            context: { kept: toKeep.length, deleted: deleted.length, failed: failed.length },
         })
 
-        return { deleted, kept: toKeep.length }
+        return { deleted, failed, kept: toKeep.length }
     }
 
     async restoreFromFile(filename: string): Promise<{
@@ -152,12 +153,20 @@ export class BackupManager {
             // Re-initialize using the connection's standard initialize method
             // This ensures extensions like sqlite-vec are properly loaded
             await this.ctx.initialize()
+
+            // Run explicit integrity check
+            const integrityResult = this.ctx.exec('PRAGMA integrity_check');
+            if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
+                throw new Error(`Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`)
+            }
         } catch (error) {
             logger.error('Restore failed, rolling back to pre-restore backup', {
                 module: 'SqliteAdapter',
                 operation: 'restoreFromFile',
                 error: error instanceof Error ? error.message : String(error)
             })
+            // Close old DB via manager before rollback
+            this.ctx.closeDbBeforeRestore()
             // Rollback using the same atomic strategy for recovery
             const recoveryDbPath = `${this.ctx.getDbPath()}.recover_tmp_${Date.now()}`
             await fs.promises.copyFile(preRestoreResult.path, recoveryDbPath)

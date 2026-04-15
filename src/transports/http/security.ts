@@ -50,7 +50,8 @@ export function checkRateLimit(
         return { allowed: true }
     }
 
-    const clientIp = getClientIp(req, config.trustProxy ?? false)
+    const subject = req.auth?.['subject']
+    const clientIdentity = typeof subject === 'string' && subject ? subject : getClientIp(req, config.trustProxy ?? false)
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
     const maxRequests =
@@ -59,10 +60,10 @@ export function checkRateLimit(
             ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10)
             : DEFAULT_RATE_LIMIT_MAX_REQUESTS)
 
-    const entry = rateLimitMap.get(clientIp)
+    const entry = rateLimitMap.get(clientIdentity)
 
     if (!entry || now > entry.resetTime) {
-        rateLimitMap.set(clientIp, { count: 1, resetTime: now + windowMs })
+        rateLimitMap.set(clientIdentity, { count: 1, resetTime: now + windowMs })
         return { allowed: true }
     }
 

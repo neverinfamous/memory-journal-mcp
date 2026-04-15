@@ -44,3 +44,11 @@
 - **Testing/Security**: Fully migrated all remaining legacy `_executeRawQueryUnsafe` and `execQuery` calls within Prompt and Resource handlers to strictly typed and parameterized `IDatabaseAdapter` methods.
 - **Testing**: Resolved E2E OAuth testing regressions in `tests/e2e/oauth-scopes.spec.ts` by adhering mock configurations to strict Server-Side Issuer-to-JWKS origin match validation.
 - **Infrastructure**: Standardized Docker orchestration by adding HTTP service-level `curl` container health-checks to `docker-compose.yml`.
+- **Security**: Hardened HTTP transport by refusing wildcard CORS (`'*'`) without explicit authentication, and reordering middleware to execute rate-limiting against authenticated identities (`req.auth.subject`).
+- **Security**: Enforced filesystem boundary safety in markdown importer/exporter by explicitly preventing path traversal and symlink boundary escapes via `fs.realpath`/`fs.lstat` protections.
+- **Security**: Mitigated metadata-structure injection vectors in frontmatter serialization by implementing rigorous `quoteYamlString` escape barriers.
+- **Integrity**: Addressed `EPERM` rollback failures on Windows in `BackupManager` by ensuring database connections are explicitly closed before initiating atomic file swaps. 
+- **Integrity**: Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist, unlocking array-based constraint evaluation.
+- **Integrity**: Eliminated context-bleed vulnerabilities by permanently deprecating the global state cache across GitHub integration pipelines, localizing mutation states exclusively to per-request lifetimes.
+- **Testing**: Aligned mock filesystem boundaries and `importer` expected outputs for structural database failures (e.g. vector re-indexing faults) to strictly execute correct `.success = false` expectations.
+- **CI/CD**: Promoted the comprehensive Playwright E2E suite to execute synchronously within `.github/workflows/lint-and-test.yml` using the new `npm run test:e2e` execution script target.

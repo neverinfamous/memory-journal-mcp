@@ -6,8 +6,8 @@
  * relationship linking, and dry-run mode.
  */
 
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readdir, readFile, stat, realpath } from 'node:fs/promises'
+import { join, relative, isAbsolute, sep } from 'node:path'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
@@ -34,6 +34,8 @@ export interface ImportResult {
     created: number
     updated: number
     skipped: number
+    relationshipsLinked: number
+    vectorsIndexed: number
     errors: { file: string; error: string }[]
     dry_run: boolean
 }
@@ -121,6 +123,8 @@ export async function importMarkdownEntries(
         created: 0,
         updated: 0,
         skipped: 0,
+        relationshipsLinked: 0,
+        vectorsIndexed: 0,
         errors: [],
         dry_run,
     }
@@ -129,8 +133,18 @@ export async function importMarkdownEntries(
         try {
             const filepath = join(sourceDir, filename)
 
+            // Prevent symlink traversal out of sourceDir
+            let resolvedSourceDir = sourceDir;
+            try { resolvedSourceDir = await realpath(sourceDir); } catch { /* ignore */ }
+            let resolvedFilePath = filepath;
+            try { resolvedFilePath = await realpath(filepath); } catch { /* ignore */ }
+            const relPath = relative(resolvedSourceDir, resolvedFilePath)
+            if (relPath === '..' || relPath.startsWith('..' + sep) || isAbsolute(relPath)) {
+                throw new Error(`File escapes allowed source directory boundaries via symlink: ${filename}`)
+            }
+
             // Prevent memory amplification DoS: skip egregiously large markdown files (>5MB)
-            const stats = await stat(filepath)
+            const stats = await stat(resolvedFilePath)
             if (stats.size > 5 * 1024 * 1024) {
                 throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
             }
@@ -216,6 +230,7 @@ export async function importMarkdownEntries(
                         const targetExists = db.getEntryById(rel.target_id)
                         if (targetExists) {
                             db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
+                            result.relationshipsLinked++
                         }
                     } catch (err) {
                         // Relationship linking failure is non-fatal
@@ -226,26 +241,33 @@ export async function importMarkdownEntries(
                             error: err instanceof Error ? err.message : String(err)
                         })
                         result.errors.push({ file: filename, error: `Link failed: ${rel.type} -> ${String(rel.target_id)}` })
+                        result.success = false
                     }
                 }
             }
 
-            // Vector re-indexing (fire-and-forget)
+            // Vector re-indexing
             if (vectorManager) {
-                void vectorManager.addEntry(entryId, body).catch((err: unknown) => {
+                try {
+                    await vectorManager.addEntry(entryId, body)
+                    result.vectorsIndexed++
+                } catch (err: unknown) {
                     // Vector indexing failure is non-fatal
                     logger.warning('Failed to index vector during import', {
                         module: 'Importer',
                         entryId,
                         error: err instanceof Error ? err.message : String(err)
                     })
-                })
+                    result.errors.push({ file: filename, error: `Vector index failed: ${err instanceof Error ? err.message : String(err)}` })
+                    result.success = false
+                }
             }
         } catch (err) {
             result.errors.push({
                 file: filename,
                 error: err instanceof Error ? err.message : String(err),
             })
+            result.success = false
         }
     }
 
