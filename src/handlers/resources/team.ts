@@ -6,6 +6,8 @@ import {
 } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult, BriefingConfig } from './shared.js'
 import { DEFAULT_FLAG_VOCABULARY } from '../tools/team/schemas.js'
+import { parseFlagContext } from '../../types/auto-context.js'
+import { logger } from '../../utils/logger.js'
 
 // ============================================================================
 // Helpers
@@ -28,35 +30,6 @@ function enrichWithAuthor<T extends { id: number }>(
         ...e,
         author: authorMap.get(e.id) ?? null
     }))
-}
-
-/**
- * Parse auto_context JSON to extract flag metadata.
- */
-function parseFlagAutoContext(
-    autoContext: string | null
-): { flag_type: string; target_user: string | null; resolved: boolean; link: string | null } | null {
-    if (!autoContext) return null
-    try {
-        const parsed: unknown = JSON.parse(autoContext)
-        if (
-            typeof parsed === 'object' &&
-            parsed !== null &&
-            'flag_type' in parsed &&
-            'resolved' in parsed
-        ) {
-            const ctx = parsed as Record<string, unknown>
-            return {
-                flag_type: String(ctx['flag_type']),
-                target_user: typeof ctx['target_user'] === 'string' ? ctx['target_user'] : null,
-                resolved: ctx['resolved'] === true,
-                link: typeof ctx['link'] === 'string' ? ctx['link'] : null,
-            }
-        }
-        return null
-    } catch {
-        return null
-    }
 }
 
 // ============================================================================
@@ -126,8 +99,11 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 let authors: { author: string; count: number }[] = []
                 try {
                     authors = context.teamDb.getAuthorStatistics()
-                } catch {
-                    // Author query failure (e.g., column may not exist yet or locked DB)
+                } catch (error: unknown) {
+                    logger.warning('Failed to get team author statistics', {
+                        module: 'ResourceHandler',
+                        error: error instanceof Error ? error.message : 'Unknown error'
+                    })
                 }
 
                 return {
@@ -173,7 +149,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
 
                 const activeFlags = enriched
                     .map((entry) => {
-                        const flagCtx = parseFlagAutoContext(entry.autoContext)
+                        const flagCtx = parseFlagContext(entry.autoContext)
                         if (!flagCtx || flagCtx.resolved) return null
                         return {
                             id: entry.id,

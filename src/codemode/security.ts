@@ -37,6 +37,13 @@ export class CodeModeSecurityManager {
         this.cleanupInterval.unref() // Don't block process exit
     }
 
+    /**
+     * Stop the cleanup interval to prevent memory leaks when this manager is evicted.
+     */
+    dispose(): void {
+        clearInterval(this.cleanupInterval)
+    }
+
     // =========================================================================
     // Code Validation
     // =========================================================================

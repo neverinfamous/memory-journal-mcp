@@ -7,13 +7,18 @@
 - **Auth**: Modified TokenValidator configuration to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured or inaccessible.
 - **Codemode**: Removed the legacy filter bypass for Code Mode tools; executing `mj_execute_code` now cleanly respects the active session's `--tool-filter` context, including when exclusively scoped to Code Mode.
 - **Sanitization**: Standardized SQL `LIKE` wildcard escaping logic across database adapters (specifically SQLite) to mitigate native expanding boundaries and excessive table scan exposure.
+- **Validation**: Introduced `AutoContextSchema` boundary validation using Zod to safely parse JSON context, replacing unsafe `JSON.parse()` methods inside team and briefing resources.
 
 ### Performance
 - **Database**: Resolved significant N+1 latency loops inside the `ResourceTools` generation functions by converting sequential relationship boundary queries to batched, in-memory aggregate lookup tables.
 - **GitHub**: Integrated an active `Map` caching layer tightly coupled to fully-qualified local repository working paths (CWD) to radially constrain redundant OctoKit and Git instantiation cycles.
+- **Database**: Refactored importance score evaluation via `buildImportanceSqlExpression` to use a Common Table Expression (CTE) combined with a `LEFT JOIN` in database searches, eliminating correlated O(N^2) nested subqueries.
+- **Initialization**: Optimized startup behavior by hoisting execution-invariant server state (tools, prompts, filter sets) out of `createServerInstance()` to bypass redundant cycles during HTTP/SSE connections.
 
 ### Fixed
 - **Integrity**: Revamped the internal SQLite `restore_backup` pipeline to utilize an atomic `.tmp` swap and secondary rename operation to prevent mid-operation failures from leaving the primary DB permanently malformed.
+- **Memory**: Resolved persistent memory leak in `CodeModeSecurityManager` by implementing explicit `dispose()` cleanup for bounded interval timers on cache eviction.
+- **Logging**: Eliminated silent `catch` block error suppression inside `mcp-server.ts`, `backup.ts`, and `team.ts`, ensuring warnings appropriately propagate to stderr.
 - **Integrity**: Fixed numeric limit validation logic for session thresholds, ensuring robustness against invalid `parseInt` boundaries during HTTP socket instantiations.
 - **Testing**: Fixed legacy graceful-empty array fallback assertions in `github-integration` specs to strictly enforce thrown rejected promises reflecting the modernized fail-fast API structures. Updated all template URI expectations in E2E playwright suites.
 - **Testing**: Fixed failing analytics test assertions (`analytics-branches.test.ts`) by properly passing tag and distribution data from the `getCrossProjectInsights` query migration.

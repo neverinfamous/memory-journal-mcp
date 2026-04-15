@@ -17,27 +17,36 @@ export const MAX_CAUSAL_SCORE_AT = 3
 export const RECENCY_WINDOW_DAYS = 90
 
 /**
+ * Build a Common Table Expression (CTE) which aggregates a relationship
+ * count (rel_count) and a causal_count for every entry_id present in the relationships table.
+ * Used with buildImportanceSqlExpression.
+ */
+export function buildImportanceCte(): string {
+    return `
+        rel_stats AS (
+            SELECT entry_id,
+                   COUNT(*) AS rel_count,
+                   SUM(CASE WHEN relationship_type IN ('blocked_by', 'resolved', 'caused') THEN 1 ELSE 0 END) AS causal_count
+            FROM (
+                SELECT from_entry_id AS entry_id, relationship_type FROM relationships
+                UNION ALL
+                SELECT to_entry_id AS entry_id, relationship_type FROM relationships
+            )
+            GROUP BY entry_id
+        )
+    `
+}
+
+/**
  * Build an inline SQL expression that computes importance score per row.
- * Uses the same formula and constants as `calculateImportance()` but runs
- * entirely in SQL via correlated subqueries, enabling single-query sorting.
- *
- * Expects the entry table aliased as `e`.
+ * Expects the entry table aliased as `e` and a LEFT JOIN on `rel_stats` aliased as `rs`.
  */
 export function buildImportanceSqlExpression(): string {
     const w = IMPORTANCE_WEIGHTS
     return `(
     CASE WHEN e.significance_type IS NOT NULL THEN ${String(w.significance)} ELSE 0.0 END
-    + MIN(
-        COALESCE((SELECT COUNT(*) FROM relationships
-                  WHERE from_entry_id = e.id OR to_entry_id = e.id), 0) * 1.0 / ${String(MAX_RELATIONSHIP_SCORE_AT)},
-        1.0
-      ) * ${String(w.relationships)}
-    + MIN(
-        COALESCE((SELECT COUNT(*) FROM relationships
-                  WHERE (from_entry_id = e.id OR to_entry_id = e.id)
-                  AND relationship_type IN ('blocked_by', 'resolved', 'caused')), 0) * 1.0 / ${String(MAX_CAUSAL_SCORE_AT)},
-        1.0
-      ) * ${String(w.causal)}
+    + MIN(COALESCE(rs.rel_count, 0) * 1.0 / ${String(MAX_RELATIONSHIP_SCORE_AT)}, 1.0) * ${String(w.relationships)}
+    + MIN(COALESCE(rs.causal_count, 0) * 1.0 / ${String(MAX_CAUSAL_SCORE_AT)}, 1.0) * ${String(w.causal)}
     + MAX(0, 1.0 - (julianday('now') - julianday(e.timestamp)) / ${String(RECENCY_WINDOW_DAYS)}.0) * ${String(w.recency)}
   )`
 }

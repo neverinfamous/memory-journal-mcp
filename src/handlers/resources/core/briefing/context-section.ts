@@ -9,6 +9,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
+import { parseFlagContext } from '../../../../types/auto-context.js'
 
 // ============================================================================
 // Journal Context
@@ -271,35 +272,19 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
 
         const activeFlags = flagEntries
             .map((entry) => {
-                const autoCtx = entry.autoContext
-                if (!autoCtx) return null
-                try {
-                    const parsed: unknown = JSON.parse(autoCtx)
-                    if (
-                        typeof parsed === 'object' &&
-                        parsed !== null &&
-                        'flag_type' in parsed &&
-                        'resolved' in parsed
-                    ) {
-                        const ctx = parsed as Record<string, unknown>
-                        if (ctx['resolved'] === true) return null
-                        const content = entry.content ?? ''
-                        return {
-                            id: entry.id,
-                            flag_type: String(ctx['flag_type']),
-                            target_user: typeof ctx['target_user'] === 'string'
-                                ? ctx['target_user']
-                                : null,
-                            preview: `<untrusted_remote_content>${
-                                content.slice(0, 80) +
-                                (content.length > 80 ? '...' : '')
-                            }</untrusted_remote_content>`,
-                            timestamp: entry.timestamp,
-                        }
-                    }
-                    return null
-                } catch {
-                    return null
+                const ctx = parseFlagContext(entry.autoContext)
+                if (!ctx || ctx.resolved) return null
+                
+                const content = entry.content ?? ''
+                return {
+                    id: entry.id,
+                    flag_type: ctx.flag_type,
+                    target_user: ctx.target_user ?? null,
+                    preview: `<untrusted_remote_content>${
+                        content.slice(0, 80) +
+                        (content.length > 80 ? '...' : '')
+                    }</untrusted_remote_content>`,
+                    timestamp: entry.timestamp,
                 }
             })
             .filter(

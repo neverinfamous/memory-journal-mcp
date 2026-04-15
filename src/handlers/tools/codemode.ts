@@ -79,7 +79,10 @@ function sweepCaches(): void {
     lastSweepTime = now
 
     for (const [id, entry] of securityManagerMap.entries()) {
-        if (now - entry.lastAccessed > TTL_MS) securityManagerMap.delete(id)
+        if (now - entry.lastAccessed > TTL_MS) {
+            entry.instance.dispose()
+            securityManagerMap.delete(id)
+        }
     }
     for (const [id, entry] of sandboxPoolMap.entries()) {
         if (now - entry.lastAccessed > TTL_MS) sandboxPoolMap.delete(id)

@@ -5,7 +5,7 @@ import {
     type EntriesSharedContext,
     rowsToEntries,
 } from './shared.js'
-import { buildImportanceSqlExpression } from './importance.js'
+import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
 
 /** Allowed sort dimensions for search results */
 export type SortBy = 'timestamp' | 'importance'
@@ -19,9 +19,12 @@ export function getRecentEntries(
 
     if (sortBy === 'importance') {
         const importanceExpr = buildImportanceSqlExpression()
+        const cte = buildImportanceCte()
         const stmt = db.prepare(`
+            WITH ${cte}
             SELECT ${ALIASED_ENTRY_COLUMNS}, ${importanceExpr} AS importanceScore
             FROM memory_journal e
+            LEFT JOIN rel_stats rs ON e.id = rs.entry_id
             WHERE e.deleted_at IS NULL
             ORDER BY importanceScore DESC, e.timestamp DESC, e.id DESC LIMIT ?
         `)
@@ -138,16 +141,27 @@ function buildSearchQuery(
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
 
+    let ctePrefix = ''
+    let joinClause = ''
+    if (useImportance) {
+        ctePrefix = `WITH ${buildImportanceCte()}`
+        joinClause = `LEFT JOIN rel_stats rs ON e.id = rs.entry_id`
+    }
+
     if (useFts) {
         query = `
+            ${ctePrefix}
             SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
             JOIN fts_content fts ON fts.rowid = e.id
+            ${joinClause}
         `
     } else {
         query = `
+            ${ctePrefix}
             SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol}
             FROM memory_journal e
+            ${joinClause}
         `
     }
     if (options?.tags && options.tags.length > 0) {
@@ -282,9 +296,17 @@ export function searchByDateRange(
         ? `, ${buildImportanceSqlExpression()} AS importanceScore`
         : ''
 
-    let query = `
+    let query = ''
+    if (useImportance) {
+        query += `WITH ${buildImportanceCte()} `
+    }
+    
+    query += `
         SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
     `
+    if (useImportance) {
+        query += `LEFT JOIN rel_stats rs ON e.id = rs.entry_id `
+    }
 
     if (options?.tags && options.tags.length > 0) {
         query += `

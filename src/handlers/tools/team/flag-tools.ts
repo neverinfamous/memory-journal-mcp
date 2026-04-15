@@ -21,20 +21,7 @@ import {
     ResolveFlagOutputSchema,
     DEFAULT_FLAG_VOCABULARY,
 } from './schemas.js'
-
-// ============================================================================
-// Flag Auto-Context Shape
-// ============================================================================
-
-interface FlagAutoContext {
-    flag_type: string
-    target_user: string | null
-    link: string | null
-    resolved: boolean
-    resolved_at: string | null
-    resolution: string | null
-    author: string
-}
+import { parseFlagContext, type FlagContext } from '../../../types/auto-context.js'
 
 // ============================================================================
 // Helpers
@@ -46,28 +33,6 @@ interface FlagAutoContext {
 function getVocabulary(context: ToolContext): readonly string[] {
     const custom = context.config?.flagVocabulary
     return custom && custom.length > 0 ? custom : DEFAULT_FLAG_VOCABULARY
-}
-
-/**
- * Parse auto_context JSON for a flag entry.
- * Returns undefined if parsing fails or entry is not a flag.
- */
-function parseFlagContext(autoContext: string | null): FlagAutoContext | undefined {
-    if (!autoContext) return undefined
-    try {
-        const parsed: unknown = JSON.parse(autoContext)
-        if (
-            typeof parsed === 'object' &&
-            parsed !== null &&
-            'flag_type' in parsed &&
-            'resolved' in parsed
-        ) {
-            return parsed as FlagAutoContext
-        }
-        return undefined
-    } catch {
-        return undefined
-    }
 }
 
 // ============================================================================
@@ -131,7 +96,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     const targetUser = input.target_user?.replace(/^@/, '') ?? null
 
                     // Build auto_context for structured flag metadata
-                    const flagContext: FlagAutoContext = {
+                    const flagContext: FlagContext = {
                         flag_type: input.flag_type,
                         target_user: targetUser,
                         link: input.link ?? null,
@@ -248,7 +213,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Update auto_context with resolution
-                    const updatedContext: FlagAutoContext = {
+                    const updatedContext: FlagContext = {
                         ...flagCtx,
                         resolved: true,
                         resolved_at: new Date().toISOString(),

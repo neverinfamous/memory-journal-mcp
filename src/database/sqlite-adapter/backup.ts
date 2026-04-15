@@ -79,8 +79,13 @@ export class BackupManager {
                         createdAt: stats.birthtime.toISOString(),
                     })
                 }
-            } catch {
-                // Skip files that can't be read
+            } catch (error: unknown) {
+                logger.warning('Failed to read backup file stats', {
+                    module: 'SqliteAdapter',
+                    operation: 'listBackups',
+                    filename,
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                })
             }
         }
 
@@ -104,7 +109,13 @@ export class BackupManager {
             try {
                 fs.unlinkSync(backup.path)
                 deleted.push(backup.filename)
-            } catch {
+            } catch (error: unknown) {
+                logger.warning('Failed to delete old backup', {
+                    module: 'SqliteAdapter',
+                    operation: 'deleteOldBackups',
+                    filename: backup.filename,
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                })
                 failed.push(backup.filename)
             }
         }

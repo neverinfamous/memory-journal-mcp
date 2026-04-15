@@ -159,8 +159,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
     try {
         // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
         await github.getRepoInfo()
-    } catch {
-        // Ignore failing silently if not within a git repository workspace
+    } catch (error: unknown) {
+        logger.warning('Failed to pre-populate GitHub repository cache', {
+            module: 'McpServer',
+            path: githubPath,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        })
     }
 
     logger.info('GitHub integration initialized', {
@@ -207,84 +211,95 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     }
 
+    // ========================================================================
+    // CACHED SESSION-INVARIANT STATE
+    // Extracting heavy initialization out of createServerInstance improves
+    // stateful HTTP/SSE connection time by bypassing redundant iterations.
+    // ========================================================================
+    const resources = getResources()
+    const prompts = getPrompts()
+    
+    const baseConfig: ToolHandlerConfig = {
+        defaultProjectNumber,
+        projectRegistry: options.projectRegistry,
+        flagVocabulary: options.flagVocabulary,
+        filterConfig,
+    }
+
+    const dispatch = (
+        name: string,
+        args: Record<string, unknown>
+    ): Promise<unknown> =>
+        callTool(
+            name,
+            args,
+            db,
+            vectorManager,
+            github,
+            baseConfig,
+            undefined,
+            teamDb,
+            teamVectorManager
+        )
+
+    const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
+
+    const allTools = getTools(
+        db,
+        null,
+        vectorManager,
+        github,
+        customToolHandlerConfig,
+        teamDb,
+        teamVectorManager
+    )
+    const allToolNames = new Set(allTools.map((t) => t.name))
+
+    for (const toolName of allToolNames) {
+        getRequiredScope(toolName)
+    }
+
+    const enabledToolSet = filterConfig?.enabledTools ?? allToolNames
+    const enabledGroups = filterConfig ? getEnabledGroups(filterConfig.enabledTools) : undefined
+
+    const staticTools = filterConfig
+        ? getTools(
+              db,
+              filterConfig,
+              vectorManager,
+              github,
+              customToolHandlerConfig,
+              teamDb,
+              teamVectorManager
+          )
+        : allTools
+
     const createServerInstance = (): McpServer => {
-        // Get resources and prompts for instruction generation
-            const resources = getResources()
-            const prompts = getPrompts()
+        // Fetch latest entry for initial briefing context
+        const recentEntries = db.getRecentEntries(1)
+        const latestEntry = recentEntries[0]
+            ? {
+                  id: recentEntries[0].id,
+                  timestamp: recentEntries[0].timestamp,
+                  entryType: recentEntries[0].entryType,
+                  content: recentEntries[0].content,
+              }
+            : undefined
         
-            // Fetch latest entry for initial briefing context
-            const recentEntries = db.getRecentEntries(1)
-            const latestEntry = recentEntries[0]
-                ? {
-                      id: recentEntries[0].id,
-                      timestamp: recentEntries[0].timestamp,
-                      entryType: recentEntries[0].entryType,
-                      content: recentEntries[0].content,
-                  }
-                : undefined
+        // Generate dynamic instructions based on enabled tools, prompts, and latest entry
+        const instructions = generateInstructions(
+            enabledToolSet,
+            prompts.map((p) => {
+                const prompt = p as { name: string; description?: string }
+                return { name: prompt.name, description: prompt.description }
+            }),
+            latestEntry,
+            options.instructionLevel ?? 'standard',
+            enabledGroups
+        )
         
-            const baseConfig: ToolHandlerConfig = {
-                defaultProjectNumber,
-                projectRegistry: options.projectRegistry,
-                flagVocabulary: options.flagVocabulary,
-                // SEC-1.2: Thread active filter into Code Mode so --tool-filter is enforced inside sandbox
-                filterConfig,
-            }
-
-            // SEC-1.1: Build a callTool()-backed dispatcher for Code Mode.
-            // Uses baseConfig (without dispatch itself) to prevent recursive self-referencing.
-            const dispatch = (
-                name: string,
-                args: Record<string, unknown>
-            ): Promise<unknown> =>
-                callTool(
-                    name,
-                    args,
-                    db,
-                    vectorManager,
-                    github,
-                    baseConfig,
-                    undefined,
-                    teamDb,
-                    teamVectorManager
-                )
-
-            const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
-
-            // Get all tools once (unfiltered) for both instruction generation and registration
-            const allTools = getTools(
-                db,
-                null,
-                vectorManager,
-                github,
-                customToolHandlerConfig,
-                teamDb,
-                teamVectorManager
-            )
-            const allToolNames = new Set(allTools.map((t) => t.name))
-        
-            // SECURITY CHECK: Verify all tools have an explicit scope mapping natively at startup.
-            // This will crash early (fail-closed) if any new tools bypass the authorization mapping.
-            for (const toolName of allToolNames) {
-                getRequiredScope(toolName)
-            }
-        
-            // Generate dynamic instructions based on enabled tools, prompts, and latest entry
-            const enabledToolSet = filterConfig?.enabledTools ?? allToolNames
-            const enabledGroups = filterConfig ? getEnabledGroups(filterConfig.enabledTools) : undefined
-            const instructions = generateInstructions(
-                enabledToolSet,
-                prompts.map((p) => {
-                    const prompt = p as { name: string; description?: string }
-                    return { name: prompt.name, description: prompt.description }
-                }),
-                latestEntry,
-                options.instructionLevel ?? 'standard',
-                enabledGroups
-            )
-        
-            // Create MCP server with capabilities and instructions
-            const server = new McpServer(
+        // Create MCP server with capabilities and instructions
+        const server = new McpServer(
                 {
                     name: 'memory-journal-mcp',
                     version: VERSION,
@@ -297,19 +312,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 }
             )
         
-            // Apply filter to get the set of tools to register
-            const tools = filterConfig
-                ? getTools(
-                      db,
-                      filterConfig,
-                      vectorManager,
-                      github,
-                      customToolHandlerConfig,
-                      teamDb,
-                      teamVectorManager
-                  )
-                : allTools
-            for (const tool of tools) {
+            for (const tool of staticTools) {
                 // Build tool options matching MCP SDK expectations
                 const toolOptions: Record<string, unknown> = {
                     description: tool.description,
