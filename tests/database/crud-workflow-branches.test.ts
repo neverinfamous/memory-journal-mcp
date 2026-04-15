@@ -314,13 +314,13 @@ describe('Workflow prompts — branch coverage', () => {
             }),
             searchEntries: vi.fn().mockReturnValue(entries),
             getRecentEntries: vi.fn().mockReturnValue(entries),
-            _executeRawQueryUnsafe: vi.fn().mockReturnValue(
+            getSignificantEntries: vi.fn().mockReturnValue(
                 entries.map((e) => ({
                     id: e.id,
                     content: e.content,
-                    entry_type: e.entryType,
+                    entryType: e.entryType,
                     timestamp: e.timestamp,
-                    significance_type: 'decision',
+                    significanceType: 'decision',
                 }))
             ),
         } as unknown as IDatabaseAdapter

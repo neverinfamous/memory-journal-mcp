@@ -2,15 +2,12 @@
  * Prompt Handler Coverage Tests
  *
  * Tests for handlers/prompts/index.ts uncovered paths:
- * - execQuery with empty result set
- * - execQuery with multi-row results
- * - getPrompt with unknown name (throws)
- * - getPrompts listing
+ * - getPrompt with unknown name
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import { execQuery, getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
+import { getPrompts, getPrompt } from '../../src/handlers/prompts/index.js'
 
 describe('Prompt Handlers - Coverage', () => {
     let db: DatabaseAdapter
@@ -32,41 +29,6 @@ describe('Prompt Handlers - Coverage', () => {
         } catch {
             // Ignore cleanup errors
         }
-    })
-
-    // ========================================================================
-    // execQuery
-    // ========================================================================
-
-    describe('execQuery', () => {
-        it('should return rows for a valid query', () => {
-            const rows = execQuery(db, 'SELECT id, content FROM memory_journal LIMIT 2')
-            expect(rows.length).toBe(2)
-            expect(rows[0]).toHaveProperty('id')
-            expect(rows[0]).toHaveProperty('content')
-        })
-
-        it('should return empty array for no-match query', () => {
-            const rows = execQuery(
-                db,
-                "SELECT id FROM memory_journal WHERE content = 'nonexistent_xyz_12345'"
-            )
-            expect(rows).toEqual([])
-        })
-
-        it('should handle parameterized queries', () => {
-            const rows = execQuery(
-                db,
-                'SELECT id, content FROM memory_journal WHERE content LIKE ?',
-                ['%Prompt test%']
-            )
-            expect(rows.length).toBe(2)
-        })
-
-        it('should return empty array for query that returns no columns', () => {
-            const rows = execQuery(db, 'SELECT id FROM memory_journal WHERE id = -1')
-            expect(rows).toEqual([])
-        })
     })
 
     // ========================================================================

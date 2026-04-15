@@ -1,7 +1,7 @@
 /**
  * Vector Index Helpers
  *
- * Shared fire-and-forget vector indexing logic used by entry-creation
+ * Shared vector indexing logic used by entry-creation
  * handlers (create_entry, create_entry_minimal, restore_entry, etc.).
  */
 
@@ -10,19 +10,22 @@ import { logger } from './logger.js'
 
 /**
  * Auto-index an entry to the vector store for semantic search.
- * Non-critical — failures are silently ignored because the entry
- * is already persisted in the database.
+ * Catch errors so as not to revert the database commit, but surface the state.
  */
-export function autoIndexEntry(
+export async function autoIndexEntry(
     vectorManager: VectorSearchManager | undefined,
     entryId: number,
     content: string
-): void {
-    if (vectorManager === undefined) return
-    vectorManager.addEntry(entryId, content).catch((error: unknown) => {
+): Promise<'success' | 'failed' | 'disabled'> {
+    if (vectorManager === undefined) return 'disabled'
+    try {
+        await vectorManager.addEntry(entryId, content)
+        return 'success'
+    } catch (error) {
         logger.error(`Failed to auto-index entry #${String(entryId)}`, {
             module: 'VectorIndex',
             error: error instanceof Error ? error.message : String(error),
         })
-    })
+        return 'failed'
+    }
 }

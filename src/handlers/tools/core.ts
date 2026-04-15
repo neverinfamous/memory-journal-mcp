@@ -127,6 +127,8 @@ const CreateEntryOutputSchema = z
         entry: EntryOutputSchema.optional(),
         sharedWithTeam: z.boolean().optional(),
         author: z.string().optional(),
+        teamError: z.string().optional(),
+        indexStatus: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -203,12 +205,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: input.workflow_status,
                     })
 
-                    // Auto-index to vector store for semantic search (fire-and-forget)
-                    autoIndexEntry(vectorManager, entry.id, entry.content)
+                    // Auto-index to vector store for semantic search
+                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     // Share with team if requested
                     let sharedWithTeam = false
                     let author: string | undefined
+                    let teamError: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
                             author = resolveAuthor()
@@ -239,17 +242,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 operation: 'create-entry',
                                 error: error instanceof Error ? error.message : String(error),
                             })
-                            throw new Error(
-                                `Failed to share entry with team DB: ${error instanceof Error ? error.message : String(error)}`,
-                                { cause: error }
-                            )
+                            // We do not throw here to prevent repeating personal writes (partial commit issue)
+                            teamError = error instanceof Error ? error.message : String(error)
                         }
                     }
 
                     return {
                         success: true,
                         entry,
+                        indexStatus,
                         ...(sharedWithTeam ? { sharedWithTeam: true, author } : {}),
+                        ...(teamError ? { sharedWithTeam: false, teamError } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -321,15 +324,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
                     const entry = db.createEntry({ content })
 
-                    // Auto-index to vector store for semantic search (fire-and-forget)
-                    autoIndexEntry(vectorManager, entry.id, entry.content)
+                    // Auto-index to vector store for semantic search
+                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
 
-                    return { success: true, entry }
+                    return { success: true, entry, indexStatus }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

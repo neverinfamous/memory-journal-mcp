@@ -305,11 +305,101 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.connection.getRawDb()
     }
 
-    /**
-     * @deprecated Exposes raw SQL execution, posing injection risks and coupling to SQLite. Migrate to targeted adapter methods.
-     */
-    _executeRawQueryUnsafe(sql: string, params?: unknown[]): QueryResult[] {
-        return this.connection.exec(sql, params)
+    getWorkflowActionEntries(limit: number): JournalEntry[] {
+        const rows = this.connection.exec(`
+            SELECT * FROM memory_journal
+            WHERE workflow_run_id IS NOT NULL AND deleted_at IS NULL
+            ORDER BY timestamp DESC
+            LIMIT ?
+        `, [limit])
+        
+        if (!rows[0] || rows[0].values.length === 0) return []
+        
+        const cols = rows[0].columns
+        return rows[0].values.map((row: unknown[]): JournalEntry => {
+            const getVal = (idx: number): unknown => row[idx]
+            return {
+                id: getVal(cols.indexOf('id')) as number,
+                entryType: getVal(cols.indexOf('entry_type')) as EntryType,
+                content: getVal(cols.indexOf('content')) as string,
+                timestamp: getVal(cols.indexOf('timestamp')) as string,
+                tags: this.getTagsForEntry(getVal(cols.indexOf('id')) as number),
+                isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
+                projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
+                issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,
+                prNumber: getVal(cols.indexOf('pr_number')) as number | undefined,
+                prStatus: getVal(cols.indexOf('pr_status')) as string | undefined,
+                workflowRunId: getVal(cols.indexOf('workflow_run_id')) as number | undefined,
+                workflowName: getVal(cols.indexOf('workflow_name')) as string | undefined,
+                workflowStatus: getVal(cols.indexOf('workflow_status')) as string | undefined,
+                significanceType: getVal(cols.indexOf('significance_type')) as string | undefined,
+                autoContext: getVal(cols.indexOf('auto_context')) as string | undefined,
+            } as JournalEntry
+        })
+    }
+
+    getSignificantEntries(limit: number, projectNumber?: number): JournalEntry[] {
+        let sql = `
+            SELECT * FROM memory_journal
+            WHERE significance_type IS NOT NULL AND deleted_at IS NULL
+        `
+        const params: unknown[] = []
+        if (projectNumber !== undefined) {
+            sql += ` AND project_number = ?`
+            params.push(projectNumber)
+        }
+        sql += ` ORDER BY timestamp DESC LIMIT ?`
+        params.push(limit)
+
+        const rows = this.connection.exec(sql, params)
+        
+        if (!rows[0] || rows[0].values.length === 0) return []
+        
+        const cols = rows[0].columns
+        return rows[0].values.map((row: unknown[]): JournalEntry => {
+            const getVal = (idx: number): unknown => row[idx]
+            return {
+                id: getVal(cols.indexOf('id')) as number,
+                entryType: getVal(cols.indexOf('entry_type')) as EntryType,
+                content: getVal(cols.indexOf('content')) as string,
+                timestamp: getVal(cols.indexOf('timestamp')) as string,
+                tags: this.getTagsForEntry(getVal(cols.indexOf('id')) as number),
+                isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
+                projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
+                issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,
+                prNumber: getVal(cols.indexOf('pr_number')) as number | undefined,
+                significanceType: getVal(cols.indexOf('significance_type')) as string | undefined,
+            } as JournalEntry
+        })
+    }
+
+    getRecentGraphRelationships(limit: number): {
+        from_entry_id: number; to_entry_id: number; relationship_type: string;
+        from_content: string; to_content: string;
+    }[] {
+        const rows = this.connection.exec(`
+            SELECT
+                r.from_entry_id, r.to_entry_id, r.relationship_type,
+                e1.content as from_content,
+                e2.content as to_content
+            FROM relationships r
+            JOIN memory_journal e1 ON r.from_entry_id = e1.id
+            JOIN memory_journal e2 ON r.to_entry_id = e2.id
+            WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL
+            ORDER BY r.created_at DESC
+            LIMIT ?
+        `, [limit])
+
+        if (!rows[0] || rows[0].values.length === 0) return []
+        
+        const cols = rows[0].columns
+        return rows[0].values.map(row => ({
+            from_entry_id: row[cols.indexOf('from_entry_id')] as number,
+            to_entry_id: row[cols.indexOf('to_entry_id')] as number,
+            relationship_type: row[cols.indexOf('relationship_type')] as string,
+            from_content: row[cols.indexOf('from_content')] as string,
+            to_content: row[cols.indexOf('to_content')] as string,
+        }))
     }
 
     getAuthorStatistics(): { author: string; count: number }[] {

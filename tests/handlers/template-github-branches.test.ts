@@ -25,7 +25,7 @@ function createMockDb(overrides: Record<string, unknown> = {}) {
         searchByDateRange: vi.fn().mockReturnValue([]),
         getRecentEntries: vi.fn().mockReturnValue([]),
         getStatistics: vi.fn().mockReturnValue({ totalEntries: 0 }),
-        _executeRawQueryUnsafe: vi.fn().mockReturnValue([]),
+
         ...overrides,
     }
 }

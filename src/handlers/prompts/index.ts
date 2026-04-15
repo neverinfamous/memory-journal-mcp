@@ -42,28 +42,6 @@ export interface InternalPromptDef {
 }
 
 /**
- * Execute a raw SQL query on the database
- */
-export function execQuery(
-    db: IDatabaseAdapter,
-    sql: string,
-    params: unknown[] = []
-): Record<string, unknown>[] {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    const result = db._executeRawQueryUnsafe(sql, params)
-    if (result.length === 0) return []
-
-    const columns = result[0]?.columns ?? []
-    return (result[0]?.values ?? []).map((values: unknown[]) => {
-        const obj: Record<string, unknown> = {}
-        columns.forEach((col: string, i: number) => {
-            obj[col] = values[i]
-        })
-        return obj
-    })
-}
-
-/**
  * Get all prompt definitions for MCP list
  */
 export function getPrompts(): object[] {

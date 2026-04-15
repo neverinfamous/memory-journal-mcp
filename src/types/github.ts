@@ -213,4 +213,5 @@ export interface KanbanBoard {
     statusOptions: ProjectV2StatusOption[]
     columns: KanbanColumn[]
     totalItems: number
+    truncated?: boolean
 }

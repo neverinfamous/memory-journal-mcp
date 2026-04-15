@@ -191,55 +191,6 @@ export interface InternalResourceDef {
 }
 
 /**
- * Execute a raw SQL query on the database
- */
-export function execQuery(
-    db: IDatabaseAdapter,
-    sql: string,
-    params: unknown[] = []
-): Record<string, unknown>[] {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    const result = db._executeRawQueryUnsafe(sql, params)
-    if (result.length === 0) return []
-
-    const columns = result[0]?.columns ?? []
-    return (result[0]?.values ?? []).map((values: unknown[]) => {
-        const obj: Record<string, unknown> = {}
-        columns.forEach((col: string, i: number) => {
-            obj[col] = values[i]
-        })
-        return obj
-    })
-}
-
-/**
- * Transform snake_case SQL row to camelCase entry object
- * Ensures consistency with SqliteAdapter.getRecentEntries() output
- */
-export function transformEntryRow(row: Record<string, unknown>): Record<string, unknown> {
-    return {
-        id: row['id'],
-        entryType: row['entry_type'],
-        content: row['content'],
-        timestamp: row['timestamp'],
-        isPersonal: row['is_personal'] === 1 || row['is_personal'] === true,
-        significanceType: row['significance_type'] ?? null,
-        autoContext: row['auto_context'] ?? null,
-        deletedAt: row['deleted_at'] ?? null,
-        projectNumber: row['project_number'] ?? null,
-        projectOwner: row['project_owner'] ?? null,
-        issueNumber: row['issue_number'] ?? null,
-        issueUrl: row['issue_url'] ?? null,
-        prNumber: row['pr_number'] ?? null,
-        prUrl: row['pr_url'] ?? null,
-        prStatus: row['pr_status'] ?? null,
-        workflowRunId: row['workflow_run_id'] ?? null,
-        workflowName: row['workflow_name'] ?? null,
-        workflowStatus: row['workflow_status'] ?? null,
-    }
-}
-
-/**
  * Calculate milestone completion percentage from open/closed issue counts.
  * Shared helper to avoid duplicated logic across resource handlers.
  */

@@ -57,7 +57,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         })
 
         // 3. Generate tokens
-        const issuer = 'https://auth.example.com/mock'
+        const issuer = `http://localhost:${JWKS_PORT}`
         const audience = 'memory-journal-mcp'
 
         const makeToken = async (scope: string) => {

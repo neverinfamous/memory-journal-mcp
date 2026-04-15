@@ -52,6 +52,7 @@ const UpdateEntryOutputSchema = z
     .object({
         success: z.boolean().optional(),
         entry: EntryOutputSchema.optional(),
+        indexStatus: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -109,7 +110,7 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
             inputSchema: UpdateEntrySchemaMcp,
             outputSchema: UpdateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const input = UpdateEntrySchema.parse(params)
                     const entry = db.updateEntry(input.entry_id, {
@@ -130,11 +131,12 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Re-index if content changed
+                    let indexStatus: string | undefined
                     if (input.content) {
-                        autoIndexEntry(vectorManager, entry.id, entry.content)
+                        indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
                     }
 
-                    return { success: true, entry }
+                    return { success: true, entry, ...(indexStatus ? { indexStatus } : {}) }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

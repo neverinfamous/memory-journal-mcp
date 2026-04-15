@@ -62,12 +62,34 @@ const ExecuteCodeSchemaMcp = z.object({
 // Singleton State
 // =============================================================================
 
-const securityManagerMap = new Map<string, CodeModeSecurityManager>()
-const sandboxPoolMap = new Map<string, ISandboxPool>()
+interface CacheEntry<T> {
+    instance: T
+    lastAccessed: number
+}
+
+const securityManagerMap = new Map<string, CacheEntry<CodeModeSecurityManager>>()
+const sandboxPoolMap = new Map<string, CacheEntry<ISandboxPool>>()
+
+const TTL_MS = 60 * 60 * 1000 // 1 hour eviction
+let lastSweepTime = Date.now()
+
+function sweepCaches(): void {
+    const now = Date.now()
+    if (now - lastSweepTime < 5 * 60 * 1000) return // Sweep at most every 5 mins
+    lastSweepTime = now
+
+    for (const [id, entry] of securityManagerMap.entries()) {
+        if (now - entry.lastAccessed > TTL_MS) securityManagerMap.delete(id)
+    }
+    for (const [id, entry] of sandboxPoolMap.entries()) {
+        if (now - entry.lastAccessed > TTL_MS) sandboxPoolMap.delete(id)
+    }
+}
 
 function getSecurityManager(clientId: string): CodeModeSecurityManager {
-    let mgr = securityManagerMap.get(clientId)
-    if (!mgr) {
+    sweepCaches()
+    let entry = securityManagerMap.get(clientId)
+    if (!entry) {
         const envMaxSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
         const parsedMaxSize =
             envMaxSize && /^\d+$/.test(envMaxSize) ? parseInt(envMaxSize, 10) : undefined
@@ -78,23 +100,31 @@ function getSecurityManager(clientId: string): CodeModeSecurityManager {
             parsedMaxSize > 0
                 ? { maxResultSize: parsedMaxSize }
                 : undefined
-        mgr = new CodeModeSecurityManager(overrides)
-        securityManagerMap.set(clientId, mgr)
         
-        // Prevent memory leak by periodically cleaning up inactive managers
-        // (Note: Since we create one per client, in a high-turnover env we'd need TTL sweepers
-        // extending this Map. For now, matching the singleton's behavior per requested isolation level)
+        entry = {
+            instance: new CodeModeSecurityManager(overrides),
+            lastAccessed: Date.now()
+        }
+        securityManagerMap.set(clientId, entry)
+    } else {
+        entry.lastAccessed = Date.now()
     }
-    return mgr
+    return entry.instance
 }
 
 function getSandboxPool(clientId: string): ISandboxPool {
-    let pool = sandboxPoolMap.get(clientId)
-    if (!pool) {
-        pool = createSandboxPool()
-        sandboxPoolMap.set(clientId, pool)
+    sweepCaches()
+    let entry = sandboxPoolMap.get(clientId)
+    if (!entry) {
+        entry = {
+            instance: createSandboxPool(),
+            lastAccessed: Date.now()
+        }
+        sandboxPoolMap.set(clientId, entry)
+    } else {
+        entry.lastAccessed = Date.now()
     }
-    return pool
+    return entry.instance
 }
 
 // =============================================================================

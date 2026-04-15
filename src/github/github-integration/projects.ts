@@ -38,6 +38,9 @@ export class ProjectsManager {
                     }
                 }
                 items(first: 100) {
+                    pageInfo {
+                        hasNextPage
+                    }
                     nodes {
                         id
                         type
@@ -135,6 +138,7 @@ export class ProjectsManager {
                 }[]
             }
             items: {
+                pageInfo?: { hasNextPage: boolean }
                 nodes: {
                     id: string
                     type: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE'
@@ -292,11 +296,12 @@ export class ProjectsManager {
         }
 
         const totalItems = project.items.nodes.length
+        const truncated = project.items.pageInfo?.hasNextPage ?? false
 
         logger.info('Fetched Kanban board', {
             module: 'GitHub',
             entityId: projectNumber,
-            context: { columns: columns.length, items: totalItems, source },
+            context: { columns: columns.length, items: totalItems, source, truncated },
         })
 
         return {
@@ -307,6 +312,7 @@ export class ProjectsManager {
             statusOptions,
             columns,
             totalItems,
+            truncated,
         }
     }
 

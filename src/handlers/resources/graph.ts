@@ -5,10 +5,10 @@
  */
 
 import { ICON_GRAPH, ICON_GITHUB } from '../../constants/icons.js'
-import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
+// removed ENTRY_COLUMNS
 import { MEDIUM_PRIORITY, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-import { execQuery, transformEntryRow } from './shared.js'
+// removed transformEntryRow
 
 /**
  * Get graph resource definitions
@@ -24,27 +24,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             icons: [ICON_GRAPH],
             annotations: MEDIUM_PRIORITY,
             handler: (_uri: string, context: ResourceContext) => {
-                const relationships = execQuery(
-                    context.db,
-                    `
-                    SELECT
-                        r.id, r.from_entry_id, r.to_entry_id, r.relationship_type, r.description,
-                        e1.content as from_content,
-                        e2.content as to_content
-                    FROM relationships r
-                    JOIN memory_journal e1 ON r.from_entry_id = e1.id
-                    JOIN memory_journal e2 ON r.to_entry_id = e2.id
-                    WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL
-                    ORDER BY r.created_at DESC
-                    LIMIT 20
-                `
-                ) as {
-                    from_entry_id: number
-                    to_entry_id: number
-                    relationship_type: string
-                    from_content: string
-                    to_content: string
-                }[]
+                const relationships = context.db.getRecentGraphRelationships(20)
 
                 if (relationships.length === 0) {
                     return 'graph TD\n  NoData["No relationships found — use link_entries to create relationships"]'
@@ -200,17 +180,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const rows = execQuery(
-                    context.db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE workflow_run_id IS NOT NULL
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                    LIMIT 10
-                `
-                )
-                const entries = rows.map(transformEntryRow)
+                const entries = context.db.getWorkflowActionEntries(10)
                 return { entries, count: entries.length, source: 'database' }
             },
         },

@@ -7,10 +7,8 @@
  */
 
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
-import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-import { execQuery, transformEntryRow } from './shared.js'
 
 /**
  * Get template resource definitions
@@ -32,18 +30,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     return { error: 'Invalid project number' }
                 }
 
-                const rows = execQuery(
-                    context.db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE project_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                    LIMIT 50
-                `,
-                    [projectNumber]
-                )
-                const entries = rows.map(transformEntryRow)
+                const entries = context.db.searchEntries('', { projectNumber, limit: 50 })
                 return { projectNumber, entries, count: entries.length }
             },
         },
@@ -63,17 +50,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     return { error: 'Invalid issue number' }
                 }
 
-                const rows = execQuery(
-                    context.db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE issue_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                `,
-                    [issueNumber]
-                )
-                const entries = rows.map(transformEntryRow)
+                const entries = context.db.searchEntries('', { issueNumber, limit: 100 })
                 return { issueNumber, entries, count: entries.length }
             },
         },
@@ -93,17 +70,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     return { error: 'Invalid PR number' }
                 }
 
-                const rows = execQuery(
-                    context.db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE pr_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                `,
-                    [prNumber]
-                )
-                const entries = rows.map(transformEntryRow)
+                const entries = context.db.searchEntries('', { prNumber, limit: 100 })
                 return {
                     prNumber,
                     entries,
@@ -171,17 +138,7 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
-                const rows = execQuery(
-                    context.db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE pr_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                `,
-                    [prNumber]
-                )
-                const entries = rows.map(transformEntryRow)
+                const entries = context.db.searchEntries('', { prNumber, limit: 100 })
 
                 let timelineNote: string
                 if (prMetadata) {

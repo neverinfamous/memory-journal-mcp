@@ -254,13 +254,15 @@ export interface IDatabaseAdapter {
         impactFactor: { author: string; inboundLinks: number }[]
     }
 
+    getWorkflowActionEntries(limit: number): JournalEntry[]
+    getSignificantEntries(limit: number, projectNumber?: number): JournalEntry[]
+    getRecentGraphRelationships(limit: number): {
+        from_entry_id: number; to_entry_id: number; relationship_type: string;
+        from_content: string; to_content: string;
+    }[]
+
     /**
      * @deprecated Exposes underlying database instance, violating adapter boundaries. Slated for removal.
      */
     getRawDb(): unknown
-
-    /**
-     * @deprecated Exposes raw SQL execution, posing injection risks and coupling to SQLite. Migrate to targeted adapter methods. 
-     */
-    _executeRawQueryUnsafe(sql: string, params?: unknown[]): QueryResult[]
 }

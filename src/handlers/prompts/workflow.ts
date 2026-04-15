@@ -7,9 +7,8 @@
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
-import { execQuery, type InternalPromptDef } from './index.js'
+import type { InternalPromptDef } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
 
 /** Milliseconds in one day */
@@ -186,27 +185,16 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const entries = execQuery(
-                    db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE significance_type IS NOT NULL
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                    LIMIT 20
-                `
-                )
+                const entries = db.getSignificantEntries(20)
 
-                const mappedEntries = entries.map((e: Record<string, unknown>) => ({
-                    id: e['id'],
-                    type:
-                        (e['entry_type'] as string | undefined) ??
-                        (e['entryType'] as string | undefined),
-                    timestamp: e['timestamp'],
+                const mappedEntries = entries.map((e) => ({
+                    id: e.id,
+                    type: e.entryType,
+                    timestamp: e.timestamp,
                     content:
-                        typeof e['content'] === 'string' && e['content'].length > 250
-                            ? e['content'].slice(0, 250) + '...'
-                            : e['content'],
+                        e.content.length > 250
+                            ? e.content.slice(0, 250) + '...'
+                            : e.content,
                 }))
 
                 return {

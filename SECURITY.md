@@ -35,6 +35,7 @@ are safely handled by the database layer and do not pose injection risks.
 
 ### **SQL Injection Prevention**
 
+- ✅ **No Raw SQL Execution** — All raw SQL methods (`_executeRawQueryUnsafe`) have been removed. All handlers must use strict, parameterized methods defined by `IDatabaseAdapter`.
 - ✅ **Parameterized queries** used throughout
 - ✅ **Input validation** via Zod schemas before database operations
 - ✅ **Warning system** for potentially dangerous content patterns

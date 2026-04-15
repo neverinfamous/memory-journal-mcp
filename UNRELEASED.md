@@ -29,3 +29,6 @@
 - **Fixed (SEC-2.4)**: `team_import_markdown` no longer silently drops `options.author`. Both `createEntry()` call paths in the markdown importer now receive the `author` field from import options, preventing silent attribution loss during bulk team imports.
 - **Fixed (SEC-2.8)**: Prompt handler failures are now surfaced as proper MCP protocol errors instead of being caught and returned as synthetic `{success: false}` user messages, which masked failures from clients.
 - **Fixed (SEC-3.5)**: Corrected JSDoc comment on `HttpTransportOptions.corsOrigins`: the default is `[]` (strict, no origins allowed), not `["*"]` (all origins). This was documentation drift from a security-hardening change in an earlier release.
+- **Testing/Security**: Fully migrated all remaining legacy `_executeRawQueryUnsafe` and `execQuery` calls within Prompt and Resource handlers to strictly typed and parameterized `IDatabaseAdapter` methods.
+- **Testing**: Resolved E2E OAuth testing regressions in `tests/e2e/oauth-scopes.spec.ts` by adhering mock configurations to strict Server-Side Issuer-to-JWKS origin match validation.
+- **Infrastructure**: Standardized Docker orchestration by adding HTTP service-level `curl` container health-checks to `docker-compose.yml`.

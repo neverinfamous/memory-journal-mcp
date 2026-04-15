@@ -6,29 +6,19 @@
  */
 
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
-import { RAW_ENTRY_COLUMNS as ENTRY_COLUMNS } from '../../database/core/entry-columns.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
-import { execQuery, type InternalPromptDef } from './index.js'
-
-interface FormattedPromptEntry {
-    id: unknown
-    type: unknown
-    timestamp: unknown
-    content: unknown
-}
+import type { InternalPromptDef } from './index.js'
+import type { JournalEntry } from '../../types/index.js'
 
 function formatPromptEntries(
-    entries: Record<string, unknown>[],
+    entries: JournalEntry[],
     maxCount = 50
-): FormattedPromptEntry[] {
-    return entries.slice(0, maxCount).map((e) => ({
-        id: e['id'],
-        type: (e['entry_type'] as string | undefined) ?? (e['entryType'] as string | undefined),
-        timestamp: e['timestamp'],
-        content:
-            typeof e['content'] === 'string' && e['content'].length > 250
-                ? e['content'].slice(0, 250) + '...'
-                : e['content'],
+): { id: number; type: string; timestamp: string; content: string }[] {
+    return entries.slice(0, maxCount).map((e: JournalEntry): { id: number; type: string; timestamp: string; content: string } => ({
+        id: e.id,
+        type: e.entryType,
+        timestamp: e.timestamp,
+        content: e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content,
     }))
 }
 
@@ -46,17 +36,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             ],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const projectNumber = parseInt(args['project_number'] ?? '0', 10)
-                const entries = execQuery(
-                    db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE project_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                    LIMIT 20
-                `,
-                    [projectNumber]
-                )
+                const entries = db.searchEntries('', { projectNumber, limit: 20 })
 
                 return {
                     messages: [
@@ -78,16 +58,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = execQuery(
-                    db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE pr_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp ASC
-                `,
-                    [prNumber]
-                )
+                const entries = db.searchEntries('', { prNumber, limit: 100 }).reverse()
 
                 return {
                     messages: [
@@ -109,16 +80,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = execQuery(
-                    db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE pr_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp ASC
-                `,
-                    [prNumber]
-                )
+                const entries = db.searchEntries('', { prNumber, limit: 100 }).reverse()
 
                 return {
                     messages: [
@@ -140,16 +102,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             arguments: [{ name: 'pr_number', description: 'Pull request number', required: true }],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const prNumber = parseInt(args['pr_number'] ?? '0', 10)
-                const entries = execQuery(
-                    db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE pr_number = ?
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp ASC
-                `,
-                    [prNumber]
-                )
+                const entries = db.searchEntries('', { prNumber, limit: 100 }).reverse()
 
                 return {
                     messages: [
@@ -170,16 +123,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             icons: [ICON_PROMPT],
             arguments: [],
             handler: (_args: Record<string, string>, db: IDatabaseAdapter) => {
-                const entries = execQuery(
-                    db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE workflow_run_id IS NOT NULL
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                    LIMIT 20
-                `
-                )
+                const entries = db.getWorkflowActionEntries(20)
 
                 return {
                     messages: [
@@ -203,17 +147,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
             ],
             handler: (args: Record<string, string>, db: IDatabaseAdapter) => {
                 const projectNumber = parseInt(args['project_number'] ?? '0', 10)
-                const entries = execQuery(
-                    db,
-                    `
-                    SELECT ${ENTRY_COLUMNS} FROM memory_journal
-                    WHERE project_number = ?
-                    AND significance_type IS NOT NULL
-                    AND deleted_at IS NULL
-                    ORDER BY timestamp DESC
-                `,
-                    [projectNumber]
-                )
+                const entries = db.getSignificantEntries(100, projectNumber)
 
                 return {
                     messages: [

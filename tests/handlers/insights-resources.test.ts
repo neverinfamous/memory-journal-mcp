@@ -64,14 +64,12 @@ describe('Insights Resources', () => {
             // Mocking the queryRow / queryRows indirectly via teamDb interface
             // The computeTeamCollaborationMatrix uses execQuery, which calls `teamDb.getRawDb()`
             const teamDb = {
-                _executeRawQueryUnsafe: vi
-                    .fn()
-                    .mockReturnValueOnce([{ author: 'Alice', period: '2026-04', entry_count: 5 }]) // Activity
-                    .mockReturnValueOnce([
-                        { from_author: 'Alice', to_author: 'Bob', link_count: 2 },
-                    ]) // Cross links
-                    .mockReturnValueOnce([{ author: 'Bob', inbound_links: 2 }]) // Impact
-                    .mockReturnValueOnce([{ total_authors: 2, total_entries: 10 }]), // Totals
+                getTeamCollaborationMatrix: vi.fn().mockReturnValue({
+                    authorActivity: [{ author: 'Alice', period: '2026-04', entry_count: 5 }],
+                    crossAuthorLinks: [{ from_author: 'Alice', to_author: 'Bob', link_count: 2 }],
+                    impactFactor: [{ author: 'Bob', inbound_links: 2 }],
+                    globalTotals: [{ total_authors: 2, total_entries: 10 }]
+                })
             }
             const context: ResourceContext = { teamDb: teamDb as any }
             const result = teamCollaborationResource.handler(
@@ -86,7 +84,7 @@ describe('Insights Resources', () => {
 
         it('should handle errors from computation', () => {
             const teamDb = {
-                _executeRawQueryUnsafe: vi.fn().mockImplementation(() => {
+                getTeamCollaborationMatrix: vi.fn().mockImplementation(() => {
                     throw new Error('Database connection failed')
                 }),
             }
