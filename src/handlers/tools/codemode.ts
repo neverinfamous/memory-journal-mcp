@@ -101,13 +101,16 @@ let cachedCodeModeContext: ToolContext | null = null
 /**
  * Collect all tool definitions except codemode (prevents recursion).
  * Results are cached by referential identity of the ToolContext.
+ *
+ * SEC-1.2: Filters by context.config.filterConfig so the operator's active
+ * --tool-filter restrictions are honoured inside the Code Mode sandbox.
  */
 function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
     if (cachedNonCodeModeTools && cachedCodeModeContext === context) {
         return cachedNonCodeModeTools
     }
 
-    cachedNonCodeModeTools = [
+    const allTools = [
         ...getCoreTools(context),
         ...getSearchTools(context),
         ...getAnalyticsTools(context),
@@ -118,6 +121,25 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
         ...getBackupTools(context),
         ...getTeamTools(context),
     ]
+
+    // SEC-1.2: Respect active tool filter — Code Mode must not reach tools that the
+    // operator has explicitly excluded (e.g. `--tool-filter=no-github` prevents
+    // Code Mode from calling gh_* tools internally).
+    //
+    // Exception: if the ONLY enabled tool is mj_execute_code (codemode-only preset),
+    // the filter intentionally reduces the external surface — Code Mode itself still
+    // needs full internal access to be useful. Applying the filter in that case would
+    // leave Code Mode with zero tools, breaking the preset's intended behaviour.
+    const filterConfig = context.config?.filterConfig
+    const hasNonCodeModeEnabled = filterConfig
+        ? [...filterConfig.enabledTools].some((t) => t !== 'mj_execute_code')
+        : true
+
+    cachedNonCodeModeTools =
+        filterConfig && hasNonCodeModeEnabled
+            ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
+            : allTools
+
     cachedCodeModeContext = context
     return cachedNonCodeModeTools
 }
@@ -247,8 +269,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         ? allTools.filter((t) => SAFE_READ_TOOLS.has(t.name))
                         : allTools
 
-                    // Build the API bridge
-                    const api = createJournalApi(tools)
+                    // SEC-1.1: Build the API bridge using the callTool()-backed dispatcher
+                    // when available. This ensures scope checks, maintenance-mode guards,
+                    // and audit interception apply to all inner tool calls.
+                    const dispatcher = sessionContext.config?.dispatch
+                    const api = createJournalApi(tools, dispatcher)
                     const bindings = api.createSandboxBindings()
 
                     // Execute in sandbox (override timeout if specified)

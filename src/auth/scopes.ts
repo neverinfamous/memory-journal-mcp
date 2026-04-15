@@ -63,7 +63,10 @@ export const TOOL_GROUP_SCOPES: Record<ToolGroup, StandardScope> = {
     admin: SCOPES.ADMIN,
     github: SCOPES.WRITE,
     backup: SCOPES.ADMIN,
-    team: SCOPES.WRITE,
+    // SEC-1.3: Team tools require the dedicated `team` scope, not generic `write`.
+    // This aligns tool-level enforcement with the resource-level boundary at memory://team/*.
+    // Tokens with `admin` or `full` scope still implicitly include `team` via hasScope().
+    team: SCOPES.TEAM,
     codemode: SCOPES.ADMIN,
 }
 

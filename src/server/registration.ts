@@ -138,31 +138,15 @@ export function registerPrompts(
             },
             (providedArgs) => {
                 return auditOperation(getGlobalAuditLogger(), 'prompt', promptDef.name, () => {
-                    try {
-                        assertNotInMaintenanceMode()
-                        const args = providedArgs as Record<string, string>
-                        const promptResult = getPrompt(promptDef.name, args, db, teamDb)
-                        // Map to MCP SDK expected format
-                        const result = {
-                            messages: promptResult.messages.map((m) => ({
-                                role: m.role as 'user' | 'assistant',
-                                content: m.content as { type: 'text'; text: string },
-                            })),
-                        }
-                        return result
-                    } catch (err) {
-                        const message = err instanceof Error ? err.message : String(err)
-                        return {
-                            messages: [
-                                {
-                                    role: 'user' as const,
-                                    content: {
-                                        type: 'text' as const,
-                                        text: JSON.stringify({ success: false, error: message }, null, 2),
-                                    },
-                                },
-                            ],
-                        }
+                    assertNotInMaintenanceMode()
+                    const args = providedArgs as Record<string, string>
+                    const promptResult = getPrompt(promptDef.name, args, db, teamDb)
+                    // Map to MCP SDK expected format
+                    return {
+                        messages: promptResult.messages.map((m) => ({
+                            role: m.role as 'user' | 'assistant',
+                            content: m.content as { type: 'text'; text: string },
+                        })),
                     }
                 })
             }

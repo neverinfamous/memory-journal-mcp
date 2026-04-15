@@ -23,6 +23,13 @@ import {
 } from './api-constants.js'
 
 /**
+ * Dispatcher function signature for SEC-1.1 Code Mode dispatch gate.
+ * When provided, sandbox tool calls are routed through callTool() instead
+ * of calling raw tool handlers, ensuring scope/maintenance/audit apply.
+ */
+export type ToolDispatcher = (name: string, args: Record<string, unknown>) => Promise<unknown>
+
+/**
  * Convert tool name to camelCase method name.
  *
  * Examples:
@@ -133,8 +140,17 @@ type GroupApiRecord = Record<string, (...args: unknown[]) => Promise<unknown>>
 /**
  * Create a group API from tool definitions.
  * Each tool becomes a method on the group object.
+ *
+ * @param groupName - Tool group name (e.g., 'core', 'search')
+ * @param tools - Tool definitions for this group
+ * @param dispatcher - Optional SEC-1.1 dispatch gate; when provided, calls go
+ *   through callTool() rather than tool.handler() for full middleware enforcement.
  */
-function createGroupApi(groupName: string, tools: ToolDefinition[]): GroupApiRecord {
+function createGroupApi(
+    groupName: string,
+    tools: ToolDefinition[],
+    dispatcher?: ToolDispatcher
+): GroupApiRecord {
     const api: GroupApiRecord = {}
 
     for (const tool of tools) {
@@ -142,6 +158,11 @@ function createGroupApi(groupName: string, tools: ToolDefinition[]): GroupApiRec
 
         api[methodName] = (...args: unknown[]): Promise<unknown> => {
             const normalizedParams = normalizeParams(methodName, args) ?? {}
+            // SEC-1.1: Route through dispatcher (callTool gate) when available.
+            // Dispatcher enforces scope checks, maintenance mode, and audit.
+            if (dispatcher) {
+                return dispatcher(tool.name, normalizedParams as Record<string, unknown>)
+            }
             return Promise.resolve(tool.handler(normalizedParams))
         }
     }
@@ -197,7 +218,7 @@ export class JournalApi {
 
     private readonly toolsByGroup: Map<string, ToolDefinition[]>
 
-    constructor(tools: ToolDefinition[]) {
+    constructor(tools: ToolDefinition[], dispatcher?: ToolDispatcher) {
         // Group tools by their group property
         this.toolsByGroup = new Map()
         for (const tool of tools) {
@@ -210,18 +231,19 @@ export class JournalApi {
         }
 
         // Create group-specific APIs for all 9 groups
-        this.core = createGroupApi('core', this.toolsByGroup.get('core') ?? [])
-        this.search = createGroupApi('search', this.toolsByGroup.get('search') ?? [])
-        this.analytics = createGroupApi('analytics', this.toolsByGroup.get('analytics') ?? [])
+        this.core = createGroupApi('core', this.toolsByGroup.get('core') ?? [], dispatcher)
+        this.search = createGroupApi('search', this.toolsByGroup.get('search') ?? [], dispatcher)
+        this.analytics = createGroupApi('analytics', this.toolsByGroup.get('analytics') ?? [], dispatcher)
         this.relationships = createGroupApi(
             'relationships',
-            this.toolsByGroup.get('relationships') ?? []
+            this.toolsByGroup.get('relationships') ?? [],
+            dispatcher
         )
-        this.io = createGroupApi('io', this.toolsByGroup.get('io') ?? [])
-        this.admin = createGroupApi('admin', this.toolsByGroup.get('admin') ?? [])
-        this.github = createGroupApi('github', this.toolsByGroup.get('github') ?? [])
-        this.backup = createGroupApi('backup', this.toolsByGroup.get('backup') ?? [])
-        this.team = createGroupApi('team', this.toolsByGroup.get('team') ?? [])
+        this.io = createGroupApi('io', this.toolsByGroup.get('io') ?? [], dispatcher)
+        this.admin = createGroupApi('admin', this.toolsByGroup.get('admin') ?? [], dispatcher)
+        this.github = createGroupApi('github', this.toolsByGroup.get('github') ?? [], dispatcher)
+        this.backup = createGroupApi('backup', this.toolsByGroup.get('backup') ?? [], dispatcher)
+        this.team = createGroupApi('team', this.toolsByGroup.get('team') ?? [], dispatcher)
     }
 
     /**
@@ -298,7 +320,10 @@ export class JournalApi {
 /**
  * Create a JournalApi instance from tool definitions.
  * Convenience factory for use in tool handler setup.
+ *
+ * @param tools - All non-codemode tool definitions
+ * @param dispatcher - Optional SEC-1.1 dispatch gate (routes calls through callTool())
  */
-export function createJournalApi(tools: ToolDefinition[]): JournalApi {
-    return new JournalApi(tools)
+export function createJournalApi(tools: ToolDefinition[], dispatcher?: ToolDispatcher): JournalApi {
+    return new JournalApi(tools, dispatcher)
 }

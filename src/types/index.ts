@@ -112,7 +112,7 @@ export interface McpIcon {
 // Tool, Resource, Prompt Definitions
 // ============================================================================
 
-import type { ToolGroup } from './filtering.js'
+import type { ToolGroup, ToolFilterConfig } from './filtering.js'
 
 /**
  * Tool definition for registration
@@ -173,6 +173,19 @@ export interface ToolHandlerConfig {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Hush Protocol flag vocabulary */
     flagVocabulary?: string[]
+    /**
+     * SEC-1.1: Central dispatch function for Code Mode.
+     * Routes sandbox tool calls through callTool() so OAuth scope checks,
+     * maintenance-mode guards, and audit interception apply to inner calls.
+     * When absent, Code Mode falls back to calling raw tool handlers directly.
+     */
+    dispatch?: (name: string, args: Record<string, unknown>) => Promise<unknown>
+    /**
+     * SEC-1.2: Active tool filter for Code Mode universe scoping.
+     * When set, Code Mode only exposes tools that are in filterConfig.enabledTools,
+     * ensuring operators' --tool-filter restrictions are enforced inside the sandbox.
+     */
+    filterConfig?: ToolFilterConfig | null
 }
 
 /**

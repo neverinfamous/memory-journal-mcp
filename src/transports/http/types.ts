@@ -75,8 +75,9 @@ export interface HttpTransportConfig {
     authToken?: string
 
     /**
-     * Allowed CORS origins. Defaults to ["*"] (all origins).
-     * Supports wildcard subdomains (e.g., "*.example.com" matches "app.example.com").
+     * Allowed CORS origins. Defaults to `[]` (no origins allowed — strict by default).
+     * To allow all origins, pass `["*"]`. For production, list explicit origins.
+     * Note: `corsAllowCredentials` cannot be combined with the `"*"` wildcard.
      */
     corsOrigins?: string[]
 

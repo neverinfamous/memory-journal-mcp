@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
+import { getAuthContext } from '../../../auth/auth-context.js'
 import { resolveIssueUrl } from '../../../utils/github-helpers.js'
 import { TEAM_DB_ERROR_RESPONSE, batchFetchAuthors, fetchAuthor } from './helpers.js'
 import {
@@ -47,7 +48,23 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamCreateEntrySchema.parse(params)
-                    const author = input.author ?? resolveAuthor()
+
+                    // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
+                    // Hard-reject if caller supplies a mismatched author — prevents impersonation.
+                    const authCtx = getAuthContext()
+                    if (authCtx?.authenticated && authCtx.claims?.sub && input.author !== undefined) {
+                        if (input.author !== authCtx.claims.sub) {
+                            return {
+                                success: false,
+                                error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authCtx.claims.sub}". Omit the author field to use your identity automatically.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'Omit the author field to use your authenticated identity automatically.',
+                                recoverable: false,
+                            }
+                        }
+                    }
+                    const author = authCtx?.claims?.sub ?? input.author ?? resolveAuthor()
 
                     const resolvedIssueUrl = await resolveIssueUrl(
                         context,

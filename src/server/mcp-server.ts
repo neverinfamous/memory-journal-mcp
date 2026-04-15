@@ -34,7 +34,7 @@ import { Scheduler, type SchedulerOptions } from './scheduler.js'
 import { HttpTransport } from '../transports/http/index.js'
 
 import { DEFAULT_BRIEFING_CONFIG, type BriefingConfig } from '../handlers/resources/shared.js'
-import type { ProjectRegistryEntry } from '../types/index.js'
+import type { ProjectRegistryEntry, ToolHandlerConfig } from '../types/index.js'
 import type { AuditConfig } from '../audit/index.js'
 import {
     registerResources,
@@ -222,12 +222,34 @@ export async function createServer(options: ServerOptions): Promise<void> {
                   }
                 : undefined
         
-            const customToolHandlerConfig = {
+            const baseConfig: ToolHandlerConfig = {
                 defaultProjectNumber,
                 projectRegistry: options.projectRegistry,
                 flagVocabulary: options.flagVocabulary,
+                // SEC-1.2: Thread active filter into Code Mode so --tool-filter is enforced inside sandbox
+                filterConfig,
             }
-        
+
+            // SEC-1.1: Build a callTool()-backed dispatcher for Code Mode.
+            // Uses baseConfig (without dispatch itself) to prevent recursive self-referencing.
+            const dispatch = (
+                name: string,
+                args: Record<string, unknown>
+            ): Promise<unknown> =>
+                callTool(
+                    name,
+                    args,
+                    db,
+                    vectorManager,
+                    github,
+                    baseConfig,
+                    undefined,
+                    teamDb,
+                    teamVectorManager
+                )
+
+            const customToolHandlerConfig: ToolHandlerConfig = { ...baseConfig, dispatch }
+
             // Get all tools once (unfiltered) for both instruction generation and registration
             const allTools = getTools(
                 db,

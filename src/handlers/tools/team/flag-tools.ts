@@ -10,6 +10,7 @@
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { resolveAuthor } from '../../../utils/security-utils.js'
+import { getAuthContext } from '../../../auth/auth-context.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
 import {
     PassTeamFlagSchema,
@@ -112,7 +113,21 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const author = input.author ?? resolveAuthor()
+                    // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
+                    const authCtx = getAuthContext()
+                    if (authCtx?.authenticated && authCtx.claims?.sub && input.author !== undefined) {
+                        if (input.author !== authCtx.claims.sub) {
+                            return {
+                                success: false,
+                                error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authCtx.claims.sub}". Omit the author field to use your identity automatically.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'Omit the author field to use your authenticated identity automatically.',
+                                recoverable: false,
+                            }
+                        }
+                    }
+                    const author = authCtx?.claims?.sub ?? input.author ?? resolveAuthor()
                     const targetUser = input.target_user?.replace(/^@/, '') ?? null
 
                     // Build auto_context for structured flag metadata

@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { logger } from '../../../utils/logger.js'
 import type { StatefulContext } from './stateful.js'
 import { JSONRPC_SERVER_ERROR } from '../types.js'
+import { requestContextStorage } from '../../../utils/request-context.js'
 
 export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory: McpServerFactory): void {
     app.get('/sse', (req: Request, res: Response): void => {
@@ -22,7 +23,9 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
             ctx.sseTransports.delete(sseTransport.sessionId)
         }
 
-        void (async () => {
+        // SEC-2.1: Run legacy SSE connection within request context so rate limiting
+        // and audit attribution work under the legacy transport (mirrors Streamable HTTP).
+        void requestContextStorage.run({ ip: req.ip }, async () => {
             try {
                 const doConnect = async (): Promise<void> => {
                     const newServer = serverFactory()
@@ -49,7 +52,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
                     res.status(500).end()
                 }
             }
-        })()
+        })
 
         // Clean up when client disconnects
         req.on('close', () => {
@@ -85,6 +88,10 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
         // Refresh session activity on message receipt
         ctx.touchSession(sessionId)
 
-        void transport.handlePostMessage(req as IncomingMessage, res as ServerResponse, req.body)
+        // SEC-2.1: Thread request context into the message dispatch so per-request
+        // attributes (IP, sessionId) are visible to rate limiters and audit loggers.
+        requestContextStorage.run({ ip: req.ip, sessionId }, () => {
+            void transport.handlePostMessage(req as IncomingMessage, res as ServerResponse, req.body)
+        })
     })
 }

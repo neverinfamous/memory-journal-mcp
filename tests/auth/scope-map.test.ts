@@ -51,11 +51,15 @@ describe('scope-map', () => {
             const map = getToolScopeMap()
 
             for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
-                const expectedScope = TOOL_GROUP_SCOPES[group as ToolGroup]
+            const expectedScope = TOOL_GROUP_SCOPES[group as ToolGroup]
                 for (const tool of tools) {
                     let expected = expectedScope
-                    if (tool === 'import_markdown' || tool === 'team_import_markdown') {
+                    // import_markdown (personal journal) stays at write
+                    // team_import_markdown now requires team scope (SEC-1.3)
+                    if (tool === 'import_markdown') {
                         expected = 'write'
+                    } else if (tool === 'team_import_markdown') {
+                        expected = 'team'
                     }
                     expect(map.get(tool)).toBe(expected)
                 }

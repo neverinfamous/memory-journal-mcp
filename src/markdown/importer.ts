@@ -110,7 +110,7 @@ export async function importMarkdownEntries(
     options: ImportOptions = {},
     vectorManager?: VectorSearchManager
 ): Promise<ImportResult> {
-    const { dry_run = false, limit = 100 } = options
+    const { dry_run = false, limit = 100, author } = options
 
     // Read directory for .md files
     const allFiles = await readdir(sourceDir)
@@ -184,6 +184,8 @@ export async function importMarkdownEntries(
                         ...(metadata.significance !== undefined && {
                             significanceType: metadata.significance as SignificanceType,
                         }),
+                        // SEC-2.4: Preserve author attribution from team import options
+                        ...(author !== undefined && { author }),
                     })
                     entryId = newEntry.id
                     result.created++
@@ -197,6 +199,8 @@ export async function importMarkdownEntries(
                     ...(metadata.significance !== undefined && {
                         significanceType: metadata.significance as SignificanceType,
                     }),
+                    // SEC-2.4: Preserve author attribution from team import options
+                    ...(author !== undefined && { author }),
                 })
                 entryId = newEntry.id
                 result.created++
