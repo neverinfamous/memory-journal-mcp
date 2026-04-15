@@ -51,7 +51,7 @@ export interface AuditInterceptor {
  * Write/admin scopes are always audited.
  * Read scope is audited only when `auditReads` is enabled.
  */
-const ALWAYS_AUDITED_SCOPES = new Set(['write', 'admin'])
+const ALWAYS_AUDITED_SCOPES = new Set(['write', 'admin', 'team', 'audit'])
 
 // ============================================================================
 // Helpers

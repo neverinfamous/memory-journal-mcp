@@ -299,6 +299,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     /**
+     * @internal QUARANTINED
      * @deprecated Exposes underlying database instance, violating adapter boundaries. Slated for removal.
      */
     getRawDb(): unknown {

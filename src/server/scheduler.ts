@@ -57,6 +57,7 @@ interface JobTimer {
     lastResult: 'success' | 'error' | null
     lastError: string | null
     runCount: number
+    isRunning?: boolean
 }
 
 // ============================================================================
@@ -214,6 +215,10 @@ export class Scheduler {
      * Execute a job with error isolation and status tracking.
      */
     private async executeJob(job: JobTimer, fn: () => Promise<void>): Promise<void> {
+        if (job.isRunning) {
+            return
+        }
+
         if (isMaintenanceModeActive()) {
             logger.info(`Skipping scheduled job '${job.name}' due to active maintenance mode`, {
                 module: 'Scheduler',
@@ -222,6 +227,7 @@ export class Scheduler {
             return
         }
 
+        job.isRunning = true
         const startTime = Date.now()
         try {
             await fn()
@@ -239,6 +245,8 @@ export class Scheduler {
                 operation: job.name,
                 error: job.lastError,
             })
+        } finally {
+            job.isRunning = false
         }
     }
 

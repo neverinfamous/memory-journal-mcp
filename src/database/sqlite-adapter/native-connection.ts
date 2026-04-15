@@ -195,6 +195,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     /**
+     * @internal QUARANTINED
      * Maps better-sqlite3 results to the legacy `{ columns: string[], values: unknown[][] }[]` shape
      * Because better-sqlite3 returns arrays of objects instantly, we map them out.
      */
@@ -239,6 +240,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     /**
+     * @internal QUARANTINED
      * Wrapper for INSERT/UPDATE/DELETE
      */
     run(sql: string, params?: unknown[]): void {
@@ -284,6 +286,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
         db.pragma(command)
     }
 
+    /**
+     * @internal QUARANTINED
+     */
     getRawDb(): unknown {
         return this.ensureDb()
     }

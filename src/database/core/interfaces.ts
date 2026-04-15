@@ -20,12 +20,14 @@ export interface QueryResult {
  */
 export interface IDatabaseConnection {
     /**
+     * @internal QUARANTINED: Internal schema and migration use only.
      * Executes queries that return results (SELECT, PRAGMA)
      * Must return the shape: { columns: string[], values: unknown[][] }[]
      */
     exec(sql: string, params?: unknown[]): QueryResult[]
 
     /**
+     * @internal QUARANTINED: Internal schema and migration use only.
      * Executes queries that modify data (INSERT, UPDATE, DELETE)
      */
     run(sql: string, params?: unknown[]): void
@@ -58,6 +60,7 @@ export interface IDatabaseConnection {
     getDbPath(): string
 
     /**
+     * @internal QUARANTINED
      * Provides the underlying better-sqlite3 Database instance.
      * Note: Avoid using this in business logic to prevent driver-coupling
      */
@@ -262,6 +265,7 @@ export interface IDatabaseAdapter {
     }[]
 
     /**
+     * @internal QUARANTINED
      * @deprecated Exposes underlying database instance, violating adapter boundaries. Slated for removal.
      */
     getRawDb(): unknown

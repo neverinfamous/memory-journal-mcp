@@ -55,8 +55,8 @@ When running in HTTP mode (`--transport http`), the following security measures 
 
 - ✅ **Configurable multiple origins** via comma-separated `--cors-origin` flag or `MCP_CORS_ORIGIN` environment variable
 - ✅ **Exact-match verification** (no wildcard matching for custom domains)
-- ⚠️ **Default: `*`** (allow all origins) for backward compatibility
-- 🔒 **Recommended**: Set specific origins for production deployments
+- 🔒 **Default: None** (no external origins allowed by default). You MUST explicitly configure CORS for browsers.
+- 🔒 **Required**: Set specific origins for production deployments, or wildcard (`*`) will only be accepted if HTTP Authentication is enabled.
 
 ```bash
 # Restrict CORS to specific origins
@@ -112,7 +112,7 @@ GITHUB_TOKEN=ghp_...            # GitHub personal access token
 GITHUB_ORG_TOKEN=ghp_...        # For organization projects
 PROJECT_REGISTRY='{"my-repo":{"path":"/path/to/repo","project_number":1}}'  # Multi-project routing
 DEFAULT_PROJECT_NUMBER=1         # Default project for issue assignment
-MCP_CORS_ORIGIN=*               # CORS origin (default: *)
+MCP_CORS_ORIGIN=                 # CORS origin (default: none)
 MCP_HOST=localhost               # Server bind host
 AUTO_REBUILD_INDEX=true          # Rebuild vector index on startup
 ```

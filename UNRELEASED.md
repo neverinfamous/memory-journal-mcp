@@ -7,6 +7,10 @@
 - **Auth**: Modified TokenValidator configuration to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured or inaccessible.
 - **Codemode**: Removed the legacy filter bypass for Code Mode tools; executing `mj_execute_code` now cleanly respects the active session's `--tool-filter` context, including when exclusively scoped to Code Mode.
 - **Sanitization**: Standardized SQL `LIKE` wildcard escaping logic across database adapters (specifically SQLite) to mitigate native expanding boundaries and excessive table scan exposure.
+- **Audit**: Expanded `ALWAYS_AUDITED_SCOPES` to guarantee `'team'` and `'audit'` operations are securely monitored.
+- **Authorship**: Fortified HTTP-authenticated authorship tracing by extracting trusted origin properties (`email` or `preferred_username`) dynamically from `getAuthContext()` rather than defaulting to system `resolveAuthor()` during team sync operations.
+- **Boundaries**: Quarantined core `.getRawDb()` and execution mechanisms behind `@deprecated` and `@internal` tags strictly restricting them to internal database-adapter implementations, mitigating undocumented system queries.
+- **Stability**: Standardized sequential long-running task locks via `isRunning` boundary states on the `JobTimer` class, terminating concurrency-related SQLite lock exhaustion failures.
 - **Validation**: Introduced `AutoContextSchema` boundary validation using Zod to safely parse JSON context, replacing unsafe `JSON.parse()` methods inside team and briefing resources.
 
 ### Performance
