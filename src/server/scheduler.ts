@@ -9,8 +9,8 @@
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { logger } from '../utils/logger.js'
-import { computeDigest, type DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
-import type { Database } from 'better-sqlite3'
+import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
+import { isMaintenanceModeActive } from '../utils/maintenance-lock.js'
 
 // ============================================================================
 // Types
@@ -214,6 +214,14 @@ export class Scheduler {
      * Execute a job with error isolation and status tracking.
      */
     private async executeJob(job: JobTimer, fn: () => Promise<void>): Promise<void> {
+        if (isMaintenanceModeActive()) {
+            logger.info(`Skipping scheduled job '${job.name}' due to active maintenance mode`, {
+                module: 'Scheduler',
+                operation: job.name
+            })
+            return
+        }
+
         const startTime = Date.now()
         try {
             await fn()
@@ -301,8 +309,7 @@ export class Scheduler {
      * Digest job: compute analytics snapshot and persist to database.
      */
     private runDigest(): void {
-        const rawDb = this.db.getRawDb() as Database
-        const snapshot = computeDigest(rawDb)
+        const snapshot = (this.db.computeDigest() as unknown) as DigestSnapshot
         this.db.saveAnalyticsSnapshot('digest', snapshot as unknown as Record<string, unknown>)
         logger.info('Scheduled analytics digest computed', {
             module: 'Scheduler',

@@ -225,14 +225,12 @@ describe('Tool Handler Coverage', () => {
     describe('visualize_relationships - coverage', () => {
         it('should return no entries for nonexistent entry_id', async () => {
             const result = (await callTool('visualize_relationships', { entry_id: 99999 }, db)) as {
-                entry_count: number
-                mermaid: null
-                message: string
+                success: boolean
+                error: string
             }
 
-            expect(result.entry_count).toBe(0)
-            expect(result.mermaid).toBeNull()
-            expect(result.message).toContain('not found')
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('not found')
         })
 
         it('should filter by tags', async () => {

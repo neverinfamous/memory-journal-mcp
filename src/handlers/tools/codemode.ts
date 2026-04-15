@@ -62,11 +62,12 @@ const ExecuteCodeSchemaMcp = z.object({
 // Singleton State
 // =============================================================================
 
-let securityManager: CodeModeSecurityManager | null = null
-let sandboxPool: ISandboxPool | null = null
+const securityManagerMap = new Map<string, CodeModeSecurityManager>()
+const sandboxPoolMap = new Map<string, ISandboxPool>()
 
-function getSecurityManager(): CodeModeSecurityManager {
-    if (!securityManager) {
+function getSecurityManager(clientId: string): CodeModeSecurityManager {
+    let mgr = securityManagerMap.get(clientId)
+    if (!mgr) {
         const envMaxSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
         const parsedMaxSize =
             envMaxSize && /^\d+$/.test(envMaxSize) ? parseInt(envMaxSize, 10) : undefined
@@ -77,14 +78,23 @@ function getSecurityManager(): CodeModeSecurityManager {
             parsedMaxSize > 0
                 ? { maxResultSize: parsedMaxSize }
                 : undefined
-        securityManager = new CodeModeSecurityManager(overrides)
+        mgr = new CodeModeSecurityManager(overrides)
+        securityManagerMap.set(clientId, mgr)
+        
+        // Prevent memory leak by periodically cleaning up inactive managers
+        // (Note: Since we create one per client, in a high-turnover env we'd need TTL sweepers
+        // extending this Map. For now, matching the singleton's behavior per requested isolation level)
     }
-    return securityManager
+    return mgr
 }
 
-function getSandboxPool(): ISandboxPool {
-    sandboxPool ??= createSandboxPool()
-    return sandboxPool
+function getSandboxPool(clientId: string): ISandboxPool {
+    let pool = sandboxPoolMap.get(clientId)
+    if (!pool) {
+        pool = createSandboxPool()
+        sandboxPoolMap.set(clientId, pool)
+    }
+    return pool
 }
 
 // =============================================================================
@@ -210,8 +220,13 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         repo,
                     } = ExecuteCodeSchema.parse(params)
 
+                    // Context extraction for rate limiting and tenant isolation
+                    const reqCtx = getRequestContext()
+                    const authCtx = getAuthContext()
+                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'default'
+
                     // Security validation
-                    const security = getSecurityManager()
+                    const security = getSecurityManager(clientId)
                     const validation = security.validateCode(code)
                     if (!validation.valid) {
                         return {
@@ -219,11 +234,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             error: `Security validation failed: ${validation.errors.join('; ')}`,
                         }
                     }
-
-                    // Context extraction for rate limiting
-                    const reqCtx = getRequestContext()
-                    const authCtx = getAuthContext()
-                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'default'
 
                     // Rate limiting
                     if (!security.checkRateLimit(clientId)) {
@@ -277,7 +287,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const bindings = api.createSandboxBindings()
 
                     // Execute in sandbox (override timeout if specified)
-                    const pool = getSandboxPool()
+                    const pool = getSandboxPool(clientId)
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records

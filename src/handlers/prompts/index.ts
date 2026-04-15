@@ -49,6 +49,7 @@ export function execQuery(
     sql: string,
     params: unknown[] = []
 ): Record<string, unknown>[] {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     const result = db._executeRawQueryUnsafe(sql, params)
     if (result.length === 0) return []
 

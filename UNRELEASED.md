@@ -4,6 +4,8 @@
 
 ### Fixed
 - **Testing**: Fixed 61 failing tests associated with architectural shifts, including fixing obsolete "empty array" expectations in `vector-search-manager.test.ts` to now assert exact structued thrown errors.
+- **Testing**: Fixed failing analytics test assertions (`analytics-branches.test.ts`) by properly passing tag and distribution data from the `getCrossProjectInsights` query migration.
+- **Testing**: Aligned `visualize_relationships` to throw a `ResourceNotFoundError` for missing root nodes, solving assertion divergence in `targeted-gap-closure-2.test.ts` and `tool-handler-coverage.test.ts`.
 - **Testing**: Remedied file boundary traversal test failures in `tests/handlers/io-tools.test.ts` and `tests/handlers/team-io-tools.test.ts` by correctly mocking new path boundary bounds via `security-utils`.
 - **Testing**: Aligned `tests/transports/http-stateful.test.ts` with the new single-transport global architecture, dropping disconnected multiplex mock assertions and preventing race failures.
 - **Testing**: Resolved `[Structured output attached]` assertion failures in `mcp-server.test.ts` by evaluating the modernized `structuredContent` natively mapped from outputSchemas.

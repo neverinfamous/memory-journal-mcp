@@ -20,9 +20,20 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 function isPathWithinSandbox(targetPath: string, sandboxPath: string = process.cwd()): boolean {
-    const resolvedTarget = path.resolve(targetPath)
-    const resolvedSandbox = path.resolve(sandboxPath)
-    return resolvedTarget.startsWith(resolvedSandbox + path.sep) || resolvedTarget === resolvedSandbox
+    let resolvedTarget = path.resolve(targetPath)
+    let resolvedSandbox = path.resolve(sandboxPath)
+    try {
+        resolvedTarget = fs.realpathSync(resolvedTarget)
+    } catch {
+        // Path might not exist yet, fallback to raw resolved string
+    }
+    try {
+        resolvedSandbox = fs.realpathSync(resolvedSandbox)
+    } catch {
+        // Sandbox might not exist, fallback to raw resolved string
+    }
+    const sandboxPrefix = resolvedSandbox.endsWith(path.sep) ? resolvedSandbox : resolvedSandbox + path.sep
+    return resolvedTarget.startsWith(sandboxPrefix) || resolvedTarget === resolvedSandbox
 }
 
 export const recentResource: InternalResourceDef = {

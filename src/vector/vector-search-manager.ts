@@ -46,6 +46,7 @@ export class VectorSearchManager {
         | null = null
     private get db(): BetterSqlite3Database | null {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-deprecated
             return this.dbAdapter.getRawDb() as BetterSqlite3Database
         } catch {
             return null

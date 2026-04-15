@@ -36,20 +36,8 @@ export function batchFetchAuthors(
     teamDb: NonNullable<ToolContext['teamDb']>,
     entryIds: number[]
 ): Map<number, string | null> {
-    const authorMap = new Map<number, string | null>()
-    if (entryIds.length === 0) return authorMap
-
-    const placeholders = entryIds.map(() => '?').join(',')
-    const result = teamDb._executeRawQueryUnsafe(
-        `SELECT id, author FROM memory_journal WHERE id IN (${placeholders})`,
-        entryIds
-    )
-    if (result[0]) {
-        for (const row of result[0].values) {
-            authorMap.set(row[0] as number, (row[1] as string) ?? null)
-        }
-    }
-    return authorMap
+    if (entryIds.length === 0) return new Map<number, string | null>()
+    return teamDb.getAuthorsForEntries(entryIds)
 }
 
 /**
@@ -59,8 +47,6 @@ export function fetchAuthor(
     teamDb: NonNullable<ToolContext['teamDb']>,
     entryId: number
 ): string | null {
-    const result = teamDb._executeRawQueryUnsafe('SELECT author FROM memory_journal WHERE id = ?', [
-        entryId,
-    ])
-    return (result[0]?.values[0]?.[0] as string) ?? null
+    const authorMap = teamDb.getAuthorsForEntries([entryId])
+    return authorMap.get(entryId) ?? null
 }

@@ -126,6 +126,20 @@ export function setupStateful(
                     targetTransport = t
                 } else {
                     // This MUST be an initialize request due to the guard above.
+                    // Enforce session limit to prevent unbounded memory growth
+                    const maxSessions = process.env['MAX_STATEFUL_SESSIONS'] 
+                        ? parseInt(process.env['MAX_STATEFUL_SESSIONS'], 10) 
+                        : 1000
+                    
+                    if (ctx.transports.size >= maxSessions) {
+                        res.status(429).json({
+                            jsonrpc: '2.0',
+                            error: { code: JSONRPC_SERVER_ERROR, message: 'Too Many Requests: Maximum active sessions reached' },
+                            id: null,
+                        })
+                        return
+                    }
+
                     // Instantiate a fresh transport for the new session lifecycle.
                     const newTransport = new StreamableHTTPServerTransport({
                         sessionIdGenerator: () => randomUUID(),

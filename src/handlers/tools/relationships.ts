@@ -10,7 +10,6 @@ import { formatHandlerError } from '../../utils/error-helpers.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
-import type { QueryResult } from '../../database/core/interfaces.js'
 
 // ============================================================================
 // Input Schemas
@@ -235,83 +234,27 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
             handler: (params: unknown) => {
                 try {
                     const input = VisualizeInputSchema.parse(params)
-                    let entriesResult: QueryResult[]
-
                     if (input.entry_id !== undefined) {
                         const entry = db.getEntryById(input.entry_id)
-                        if (!entry) {
+                        if (!entry || entry.deletedAt) {
                             return {
                                 ...formatHandlerError(
                                     new ResourceNotFoundError('Entry', String(input.entry_id))
                                 ),
                                 success: false,
-                                entry_count: 0,
-                                relationship_count: 0,
-                                root_entry: input.entry_id,
-                                depth: input.depth,
-                                mermaid: null,
-                                message: `Entry ${String(input.entry_id)} not found`,
                             }
                         }
-
-                        entriesResult = db._executeRawQueryUnsafe(
-                            `
-                            WITH RECURSIVE connected_entries(id, distance) AS (
-                                SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
-                                UNION
-                                SELECT DISTINCT
-                                    CASE
-                                        WHEN r.from_entry_id = ce.id THEN r.to_entry_id
-                                        ELSE r.from_entry_id
-                                    END,
-                                    ce.distance + 1
-                                FROM connected_entries ce
-                                JOIN relationships r ON r.from_entry_id = ce.id OR r.to_entry_id = ce.id
-                                WHERE ce.distance < ?
-                            )
-                            SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
-                            FROM memory_journal mj
-                            JOIN connected_entries ce ON mj.id = ce.id
-                            WHERE mj.deleted_at IS NULL
-                            LIMIT ?
-                        `,
-                            [input.entry_id, input.depth, input.limit]
-                        )
-                    } else if (input.tags && input.tags.length > 0) {
-                        const placeholders = input.tags.map(() => '?').join(',')
-                        entriesResult = db._executeRawQueryUnsafe(
-                            `
-                            SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
-                            FROM memory_journal mj
-                            WHERE mj.deleted_at IS NULL
-                              AND mj.id IN (
-                                  SELECT et.entry_id FROM entry_tags et
-                                  JOIN tags t ON et.tag_id = t.id
-                                  WHERE t.name IN (${placeholders})
-                              )
-                            LIMIT ?
-                        `,
-                            [...input.tags, input.limit]
-                        )
-                    } else {
-                        entriesResult = db._executeRawQueryUnsafe(
-                            `
-                            SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
-                            FROM memory_journal mj
-                            WHERE mj.deleted_at IS NULL
-                              AND mj.id IN (
-                                  SELECT DISTINCT from_entry_id FROM relationships
-                                  UNION
-                                  SELECT DISTINCT to_entry_id FROM relationships
-                              )
-                            ORDER BY mj.id DESC
-                            LIMIT ?
-                        `,
-                            [input.limit]
-                        )
                     }
 
-                    if (!entriesResult[0] || entriesResult[0].values.length === 0) {
+                    const results = db.visualizeRelationships({
+                        entryId: input.entry_id,
+                        tags: input.tags,
+                        relationshipType: input.relationship_type,
+                        depth: input.depth,
+                        limit: input.limit
+                    })
+
+                    if (results.nodes.length === 0) {
                         return {
                             entry_count: 0,
                             relationship_count: 0,
@@ -322,64 +265,23 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Build entries map
-                    const entries: Record<
-                        number,
-                        {
-                            id: number
-                            entry_type: string
-                            content: string
-                            is_personal: boolean
-                        }
-                    > = {}
-                    const cols = entriesResult[0].columns
-                    for (const row of entriesResult[0].values) {
-                        const id = row[cols.indexOf('id')] as number
-                        entries[id] = {
-                            id,
-                            entry_type: row[cols.indexOf('entry_type')] as string,
-                            content: row[cols.indexOf('content')] as string,
-                            is_personal: Boolean(row[cols.indexOf('is_personal')]),
-                        }
-                    }
-
-                    const entryIds = Object.keys(entries).map(Number)
-                    const placeholders = entryIds.map(() => '?').join(',')
-
-                    let relsQuery = `
-                        SELECT from_entry_id, to_entry_id, relationship_type
-                        FROM relationships
-                        WHERE from_entry_id IN (${placeholders})
-                          AND to_entry_id IN (${placeholders})
-                    `
-                    const relsParams: unknown[] = [...entryIds, ...entryIds]
-
-                    // Apply relationship_type filter if specified
-                    if (input.relationship_type) {
-                        relsQuery += ' AND relationship_type = ?'
-                        relsParams.push(input.relationship_type)
-                    }
-
-                    const relsResult = db._executeRawQueryUnsafe(relsQuery, relsParams)
-
-                    const relationships = relsResult[0]?.values ?? []
-
                     // Generate Mermaid diagram
                     const MERMAID_CONTENT_PREVIEW_LENGTH = 40
-                    let mermaid = '```mermaid\\ngraph TD\\n'
+                    let mermaid = '```mermaid\ngraph TD\n'
 
-                    for (const [idStr, entry] of Object.entries(entries)) {
-                        let contentPreview = entry.content
+                    for (const node of results.nodes) {
+                        const content = (node.metadata?.['content'] as string) || ''
+                        let contentPreview = content
                             .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
-                            .replace(/\\n/g, ' ')
-                        if (entry.content.length > MERMAID_CONTENT_PREVIEW_LENGTH)
+                            .replace(/\n/g, ' ')
+                        if (content.length > MERMAID_CONTENT_PREVIEW_LENGTH)
                             contentPreview += '...'
                         contentPreview = contentPreview
                             .replace(/"/g, "'")
                             .replace(/\[/g, '(')
                             .replace(/\]/g, ')')
-                        const entryTypeShort = entry.entry_type.slice(0, 20)
-                        mermaid += `    E${idStr}["#${idStr}: ${contentPreview}<br/>${entryTypeShort}"]\\n`
+                        const entryTypeShort = node.group.slice(0, 20)
+                        mermaid += `    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]\\n`
                     }
 
                     mermaid += '\\n'
@@ -395,27 +297,25 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         caused: '-.->',
                     }
 
-                    for (const rel of relationships) {
-                        const fromId = rel[0] as number
-                        const toId = rel[1] as number
-                        const relType = rel[2] as string
-                        const arrow = relSymbols[relType] ?? '-->'
-                        mermaid += `    E${String(fromId)} ${arrow}|${relType}| E${String(toId)}\\n`
+                    for (const edge of results.edges) {
+                        const arrow = relSymbols[edge.type] ?? '-->'
+                        mermaid += `    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}\\n`
                     }
 
                     mermaid += '\\n'
-                    for (const [idStr, entry] of Object.entries(entries)) {
-                        if (entry.is_personal) {
-                            mermaid += `    style E${idStr} fill:#E3F2FD\\n`
+                    for (const node of results.nodes) {
+                        const isPersonal = Boolean(node.metadata?.['is_personal'])
+                        if (isPersonal) {
+                            mermaid += `    style E${node.id} fill:#E3F2FD\\n`
                         } else {
-                            mermaid += `    style E${idStr} fill:#FFF3E0\\n`
+                            mermaid += `    style E${node.id} fill:#FFF3E0\\n`
                         }
                     }
                     mermaid += '```'
 
                     return {
-                        entry_count: Object.keys(entries).length,
-                        relationship_count: relationships.length,
+                        entry_count: results.nodes.length,
+                        relationship_count: results.edges.length,
                         root_entry: input.entry_id ?? null,
                         depth: input.depth,
                         mermaid,

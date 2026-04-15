@@ -228,11 +228,11 @@ describe('Targeted Gap Closure — Batch 2', () => {
         it('visualize_relationships with nonexistent entry_id should return not found', async () => {
             const result = (await callTool('visualize_relationships', { entry_id: 99999 }, db)) as {
                 success: boolean
-                message: string
+                error: string
             }
 
             expect(result.success).toBe(false)
-            expect(result.message).toContain('not found')
+            expect(result.error).toContain('not found')
         })
 
         it('visualize_relationships with no filters should return graph', async () => {

@@ -315,7 +315,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 
@@ -334,7 +334,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 
@@ -353,7 +353,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 
@@ -372,7 +372,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
             expect(typeof result.error).toBe('string')
         } else {
             expect(result.success).toBe(true)
-            expect(typeof result.content).toBe('string')
+            expect(typeof result.data).toBe('string')
         }
     })
 

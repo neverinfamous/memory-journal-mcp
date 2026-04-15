@@ -62,6 +62,29 @@ export class AuthorizationServerDiscovery {
         }
 
         const metadataUrl = `${this.authServerUrl}/.well-known/oauth-authorization-server`
+        
+        let parsedUrl: URL
+        try {
+            parsedUrl = new URL(metadataUrl)
+        } catch {
+            throw new ConfigurationError(`Invalid authorization server URL: ${metadataUrl}`)
+        }
+
+        // SSRF Protection: Enforce HTTPS
+        if (parsedUrl.protocol !== 'https:') {
+            throw new ConfigurationError(`Authorization server URL must use HTTPS: ${metadataUrl}`)
+        }
+
+        // SSRF Protection: Block private and loopback IP spaces
+        const host = parsedUrl.hostname.toLowerCase()
+        const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.startsWith('127.')
+        const isPrivateV4 = host.startsWith('10.') || host.startsWith('192.168.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
+        const isLinkLocal = host.startsWith('169.254.')
+        const isPrivateV6 = host.startsWith('[fc') || host.startsWith('[fd')
+        
+        if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
+            throw new ConfigurationError(`SSRF Protection: Requests to private/loopback network addresses are prohibited: ${host}`)
+        }
 
         logger.info(`Fetching authorization server metadata from: ${metadataUrl}`, {
             module: 'AUTH',

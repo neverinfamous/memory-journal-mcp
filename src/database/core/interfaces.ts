@@ -166,6 +166,7 @@ export interface IDatabaseAdapter {
 
     // Tags Manager
     getTagsForEntry(entryId: number): string[]
+    getTagsForEntries(entryIds: number[]): Map<number, string[]>
     listTags(): Tag[]
     mergeTags(
         sourceTag: string,
@@ -210,15 +211,6 @@ export interface IDatabaseAdapter {
         }
     }
 
-    getRawDb(): unknown
-    pragma(command: string): void
-
-    /**
-     * @warning Raw SQL execution compromises the adapter boundary.
-     * Migrate to strongly-typed methods instead.
-     */
-    _executeRawQueryUnsafe(sql: string, params?: unknown[]): QueryResult[]
-
     // Analytics Snapshots
     saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number
     getLatestAnalyticsSnapshot(
@@ -228,4 +220,47 @@ export interface IDatabaseAdapter {
         type: string,
         limit?: number
     ): { id: number; createdAt: string; data: Record<string, unknown> }[]
+    computeDigest(): Record<string, unknown>
+
+    pragma(command: string): void
+
+    // Advanced Analytic and Relationship queries (Replaces raw queries)
+    getCrossProjectInsights(options: { 
+        startDate?: string; 
+        endDate?: string; 
+        minEntries: number; 
+        inactiveThresholdDays: number 
+    }): {
+        projects: Record<string, unknown>[]
+        inactiveProjects: { project_number: number; last_entry_date: string }[]
+    }
+
+    visualizeRelationships(options: {
+        entryId?: number
+        tags?: string[]
+        relationshipType?: string
+        depth: number
+        limit: number
+    }): {
+        nodes: { id: string | number; label: string; group: string; metadata?: Record<string, unknown> }[]
+        edges: { from: string | number; to: string | number; label: string; type: string }[]
+    }
+
+    getTeamCollaborationMatrix(options: { period: string; limit: number }): {
+        totalAuthors: number
+        totalEntries: number
+        authorActivity: { author: string; period: string; entryCount: number }[]
+        crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[]
+        impactFactor: { author: string; inboundLinks: number }[]
+    }
+
+    /**
+     * @deprecated Exposes underlying database instance, violating adapter boundaries. Slated for removal.
+     */
+    getRawDb(): unknown
+
+    /**
+     * @deprecated Exposes raw SQL execution, posing injection risks and coupling to SQLite. Migrate to targeted adapter methods. 
+     */
+    _executeRawQueryUnsafe(sql: string, params?: unknown[]): QueryResult[]
 }

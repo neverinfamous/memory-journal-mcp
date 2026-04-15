@@ -58,21 +58,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     if (tags && tags.length > 0) {
                         const entryIds = entries.map((e) => e.id)
                         if (entryIds.length > 0) {
-                            const placeholders = entryIds.map(() => '?').join(',')
-                            const tagResult = teamDb._executeRawQueryUnsafe(
-                                `SELECT et.entry_id, t.name FROM tags t JOIN entry_tags et ON t.id = et.tag_id WHERE et.entry_id IN (${placeholders})`,
-                                entryIds
-                            )
-                            const entryTagMap = new Map<number, string[]>()
-                            if (tagResult[0]) {
-                                for (const row of tagResult[0].values) {
-                                    const entryId = row[0] as number
-                                    const tagName = row[1] as string
-                                    const existing = entryTagMap.get(entryId) ?? []
-                                    existing.push(tagName)
-                                    entryTagMap.set(entryId, existing)
-                                }
-                            }
+                            const entryTagMap = teamDb.getTagsForEntries(entryIds)
                             entries = entries.filter((e) => {
                                 const entryTags = entryTagMap.get(e.id) ?? []
                                 return tags.some((t: string) => entryTags.includes(t))

@@ -18,6 +18,7 @@ import {
     saveAnalyticsSnapshot as saveSnapshot,
     getLatestAnalyticsSnapshot as getLatestSnapshot,
     getAnalyticsSnapshots as getSnapshots,
+    computeDigest,
 } from './entries/digest.js'
 import type { Database } from 'better-sqlite3'
 import * as fs from 'node:fs'
@@ -177,6 +178,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.tagsMgr.getTagsForEntry(entryId)
     }
 
+    getTagsForEntries(entryIds: number[]): Map<number, string[]> {
+        return this.tagsMgr.batchGetTagsForEntries(entryIds)
+    }
+
     listTags(): Tag[] {
         return this.tagsMgr.listTags()
     }
@@ -293,10 +298,16 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.connection.pragma(command)
     }
 
+    /**
+     * @deprecated Exposes underlying database instance, violating adapter boundaries. Slated for removal.
+     */
     getRawDb(): unknown {
         return this.connection.getRawDb()
     }
 
+    /**
+     * @deprecated Exposes raw SQL execution, posing injection risks and coupling to SQLite. Migrate to targeted adapter methods.
+     */
     _executeRawQueryUnsafe(sql: string, params?: unknown[]): QueryResult[] {
         return this.connection.exec(sql, params)
     }
@@ -359,5 +370,339 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         limit?: number
     ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
         return getSnapshots(this.connection.getRawDb() as Database, type, limit)
+    }
+
+    computeDigest(): Record<string, unknown> {
+        return computeDigest(this.connection.getRawDb() as Database) as unknown as Record<string, unknown>
+    }
+
+    getCrossProjectInsights(options: { 
+        startDate?: string; 
+        endDate?: string; 
+        minEntries: number; 
+        inactiveThresholdDays: number 
+    }): {
+        projects: Record<string, unknown>[]
+        inactiveProjects: { project_number: number; last_entry_date: string }[]
+    } {
+        let where = 'WHERE deleted_at IS NULL AND project_number IS NOT NULL'
+        const sqlParams: unknown[] = []
+
+        if (options.startDate) {
+            where += ' AND DATE(timestamp) >= DATE(?)'
+            sqlParams.push(options.startDate)
+        }
+        if (options.endDate) {
+            where += ' AND DATE(timestamp) <= DATE(?)'
+            sqlParams.push(options.endDate)
+        }
+
+        const projectsResult = this.connection.exec(
+            `
+            SELECT project_number, COUNT(*) as entry_count,
+                   MIN(DATE(timestamp)) as first_entry,
+                   MAX(DATE(timestamp)) as last_entry,
+                   COUNT(DISTINCT DATE(timestamp)) as active_days
+            FROM memory_journal ${where}
+            GROUP BY project_number
+            HAVING entry_count >= ?
+            ORDER BY entry_count DESC
+            `,
+            [...sqlParams, options.minEntries]
+        )
+
+        const projects: Record<string, unknown>[] = []
+        if (projectsResult[0] && projectsResult[0].values.length > 0) {
+            const columns = projectsResult[0].columns
+            for (const row of projectsResult[0].values) {
+                const obj: Record<string, unknown> = {}
+                columns.forEach((col: string, i: number) => {
+                    obj[col] = row[i]
+                })
+                projects.push(obj)
+            }
+        }
+
+        if (projects.length > 0) {
+            const projectNumbers = projects.map(p => p['project_number'] as number)
+            const placeholders = projectNumbers.map(() => '?').join(',')
+            const tagsResult = this.connection.exec(
+                `
+                SELECT mj.project_number, t.name, COUNT(*) as count
+                FROM memory_journal mj
+                JOIN entry_tags et ON mj.id = et.entry_id
+                JOIN tags t ON et.tag_id = t.id
+                WHERE mj.deleted_at IS NULL AND mj.project_number IN (${placeholders})
+                GROUP BY mj.project_number, t.name
+                ORDER BY count DESC
+                `,
+                projectNumbers
+            )
+            const tagMap = new Map<number, {name: string, count: number}[]>()
+            if (tagsResult[0]) {
+                for (const row of tagsResult[0].values) {
+                    const pNum = row[0] as number
+                    const list = tagMap.get(pNum) ?? []
+                    list.push({ name: row[1] as string, count: row[2] as number })
+                    tagMap.set(pNum, list)
+                }
+            }
+            for (const p of projects) {
+                p['top_tags'] = (tagMap.get(p['project_number'] as number) ?? []).slice(0, 5)
+            }
+        } else {
+            for (const p of projects) {
+                p['top_tags'] = []
+            }
+        }
+
+        const msPerDay = 86_400_000
+        const cutoffDate = new Date(Date.now() - options.inactiveThresholdDays * msPerDay)
+            .toISOString()
+            .split('T')[0]
+            
+        const inactiveResult = this.connection.exec(
+            `
+            SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
+            FROM memory_journal
+            WHERE deleted_at IS NULL AND project_number IS NOT NULL
+            GROUP BY project_number
+            HAVING last_entry_date < ?
+            `,
+            [cutoffDate]
+        )
+
+        const inactiveProjects: { project_number: number; last_entry_date: string }[] = []
+        if (inactiveResult[0]) {
+            for (const row of inactiveResult[0].values) {
+                inactiveProjects.push({
+                    project_number: row[0] as number,
+                    last_entry_date: row[1] as string,
+                })
+            }
+        }
+
+        return { projects, inactiveProjects }
+    }
+
+    visualizeRelationships(options: {
+        entryId?: number
+        tags?: string[]
+        relationshipType?: string
+        depth: number
+        limit: number
+    }): {
+        nodes: { id: string | number; label: string; group: string; metadata?: Record<string, unknown> }[]
+        edges: { from: string | number; to: string | number; label: string; type: string }[]
+    } {
+        let entriesResult: QueryResult[]
+
+        if (options.entryId !== undefined) {
+            entriesResult = this.connection.exec(
+                `
+                WITH RECURSIVE connected_entries(id, distance) AS (
+                    SELECT id, 0 FROM memory_journal WHERE id = ? AND deleted_at IS NULL
+                    UNION
+                    SELECT DISTINCT
+                        CASE
+                            WHEN r.from_entry_id = ce.id THEN r.to_entry_id
+                            ELSE r.from_entry_id
+                        END,
+                        ce.distance + 1
+                    FROM connected_entries ce
+                    JOIN relationships r ON r.from_entry_id = ce.id OR r.to_entry_id = ce.id
+                    WHERE ce.distance < ?
+                )
+                SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+                FROM memory_journal mj
+                JOIN connected_entries ce ON mj.id = ce.id
+                WHERE mj.deleted_at IS NULL
+                LIMIT ?
+            `,
+                [options.entryId, options.depth, options.limit]
+            )
+        } else if (options.tags && options.tags.length > 0) {
+            const placeholders = options.tags.map(() => '?').join(',')
+            entriesResult = this.connection.exec(
+                `
+                SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+                FROM memory_journal mj
+                WHERE mj.deleted_at IS NULL
+                  AND mj.id IN (
+                      SELECT et.entry_id FROM entry_tags et
+                      JOIN tags t ON et.tag_id = t.id
+                      WHERE t.name IN (${placeholders})
+                  )
+                LIMIT ?
+            `,
+                [...options.tags, options.limit]
+            )
+        } else {
+            entriesResult = this.connection.exec(
+                `
+                SELECT DISTINCT mj.id, mj.entry_type, mj.content, mj.is_personal
+                FROM memory_journal mj
+                WHERE mj.deleted_at IS NULL
+                  AND mj.id IN (
+                      SELECT DISTINCT from_entry_id FROM relationships
+                      UNION
+                      SELECT DISTINCT to_entry_id FROM relationships
+                  )
+                ORDER BY mj.id DESC
+                LIMIT ?
+            `,
+                [options.limit]
+            )
+        }
+
+        const nodes: { id: string | number; label: string; group: string; metadata: { is_personal: boolean, content: string } }[] = []
+        if (entriesResult[0] && entriesResult[0].values.length > 0) {
+            const cols = entriesResult[0].columns
+            for (const row of entriesResult[0].values) {
+                nodes.push({
+                    id: row[cols.indexOf('id')] as number,
+                    group: row[cols.indexOf('entry_type')] as string,
+                    label: `Node ${row[cols.indexOf('id')] as number}`,
+                    metadata: {
+                        content: row[cols.indexOf('content')] as string,
+                        is_personal: Boolean(row[cols.indexOf('is_personal')])
+                    }
+                })
+            }
+        }
+
+        const edges: { from: string | number; to: string | number; label: string; type: string }[] = []
+        if (nodes.length > 0) {
+            const entryIds = nodes.map(n => n.id as number)
+            const placeholders = entryIds.map(() => '?').join(',')
+
+            let relsQuery = `
+                SELECT from_entry_id, to_entry_id, relationship_type
+                FROM relationships
+                WHERE from_entry_id IN (${placeholders})
+                  AND to_entry_id IN (${placeholders})
+            `
+            const relsParams: unknown[] = [...entryIds, ...entryIds]
+
+            if (options.relationshipType) {
+                relsQuery += ' AND relationship_type = ?'
+                relsParams.push(options.relationshipType)
+            }
+
+            const relsResult = this.connection.exec(relsQuery, relsParams)
+            if (relsResult[0]) {
+                for (const row of relsResult[0].values) {
+                    edges.push({
+                        from: row[0] as number,
+                        to: row[1] as number,
+                        label: row[2] as string,
+                        type: row[2] as string
+                    })
+                }
+            }
+        }
+
+        return { nodes, edges }
+    }
+
+    getTeamCollaborationMatrix(options: { period: string; limit: number }): {
+        totalAuthors: number
+        totalEntries: number
+        authorActivity: { author: string; period: string; entryCount: number }[]
+        crossAuthorLinks: { fromAuthor: string; toAuthor: string; linkCount: number }[]
+        impactFactor: { author: string; inboundLinks: number }[]
+    } {
+        const limit = options.limit
+        const period = options.period
+
+        const dateExpression =
+            period === 'week'
+                ? `strftime('%Y-W%W', timestamp)`
+                : period === 'quarter'
+                  ? `strftime('%Y-Q', timestamp) || CAST(((CAST(strftime('%m', timestamp) AS INTEGER) + 2) / 3) AS INTEGER)`
+                  : `strftime('%Y-%m', timestamp)`
+
+        // Author activity heatmap
+        const activityResult = this.connection.exec(
+            `SELECT
+                COALESCE(author, 'unknown') AS author,
+                ${dateExpression} AS period,
+                COUNT(*) AS entry_count
+            FROM memory_journal
+            WHERE deleted_at IS NULL
+            GROUP BY author, period
+            ORDER BY period DESC, entry_count DESC
+            LIMIT ?`,
+            [limit * 10]
+        )
+        const authorActivity =
+            activityResult[0]?.values.map((row: unknown[]) => ({
+                author: row[0] as string,
+                period: row[1] as string,
+                entryCount: row[2] as number,
+            })) ?? []
+
+        // Cross-author linking
+        const crossLinkResult = this.connection.exec(
+            `SELECT
+                COALESCE(m1.author, 'unknown') AS from_author,
+                COALESCE(m2.author, 'unknown') AS to_author,
+                COUNT(*) AS link_count
+            FROM relationships r
+            JOIN memory_journal m1 ON r.from_entry_id = m1.id
+            JOIN memory_journal m2 ON r.to_entry_id = m2.id
+            WHERE m1.deleted_at IS NULL AND m2.deleted_at IS NULL
+                AND COALESCE(m1.author, 'unknown') != COALESCE(m2.author, 'unknown')
+            GROUP BY from_author, to_author
+            ORDER BY link_count DESC
+            LIMIT ?`,
+            [limit]
+        )
+        const crossAuthorLinks =
+            crossLinkResult[0]?.values.map((row: unknown[]) => ({
+                fromAuthor: row[0] as string,
+                toAuthor: row[1] as string,
+                linkCount: row[2] as number,
+            })) ?? []
+
+        // Impact factor
+        const impactResult = this.connection.exec(
+            `SELECT
+                COALESCE(m2.author, 'unknown') AS author,
+                COUNT(*) AS inbound_links
+            FROM relationships r
+            JOIN memory_journal m2 ON r.to_entry_id = m2.id
+            WHERE m2.deleted_at IS NULL
+            GROUP BY author
+            ORDER BY inbound_links DESC
+            LIMIT ?`,
+            [limit]
+        )
+        const impactFactor =
+            impactResult[0]?.values.map((row: unknown[]) => ({
+                author: row[0] as string,
+                inboundLinks: row[1] as number,
+            })) ?? []
+
+        // Totals
+        const totalsResult = this.connection.exec(
+            `SELECT
+                COUNT(DISTINCT COALESCE(author, 'unknown')) AS total_authors,
+                COUNT(*) AS total_entries
+            FROM memory_journal
+            WHERE deleted_at IS NULL`
+        )
+        const totalAuthors =
+            (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
+        const totalEntries =
+            (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0
+
+        return {
+            totalAuthors,
+            totalEntries,
+            authorActivity,
+            crossAuthorLinks,
+            impactFactor,
+        }
     }
 }
