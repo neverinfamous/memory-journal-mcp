@@ -111,8 +111,7 @@ describe('MilestonesManager — branch coverage', () => {
 
     it('should return empty array when no octokit (getMilestones)', async () => {
         client.octokit = null as never
-        const result = await manager.getMilestones('o', 'r')
-        expect(result).toEqual([])
+        await expect(manager.getMilestones('o', 'r')).rejects.toThrow()
     })
 
     it('should return cached milestones', async () => {
@@ -124,8 +123,7 @@ describe('MilestonesManager — branch coverage', () => {
 
     it('should handle API error in getMilestones', async () => {
         client.octokit.issues.listMilestones.mockRejectedValue(new Error('API error'))
-        const result = await manager.getMilestones('o', 'r')
-        expect(result).toEqual([])
+        await expect(manager.getMilestones('o', 'r')).rejects.toThrow()
     })
 
     it('should map milestone with creator', async () => {
@@ -146,8 +144,7 @@ describe('MilestonesManager — branch coverage', () => {
 
     it('should return null when no octokit (getMilestone)', async () => {
         client.octokit = null as never
-        const result = await manager.getMilestone('o', 'r', 1)
-        expect(result).toBeNull()
+        await expect(manager.getMilestone('o', 'r', 1)).rejects.toThrow()
     })
 
     it('should return cached milestone', async () => {
@@ -159,32 +156,27 @@ describe('MilestonesManager — branch coverage', () => {
 
     it('should handle API error in getMilestone', async () => {
         client.octokit.issues.getMilestone.mockRejectedValue(new Error('not found'))
-        const result = await manager.getMilestone('o', 'r', 99)
-        expect(result).toBeNull()
+        await expect(manager.getMilestone('o', 'r', 99)).rejects.toThrow()
     })
 
     it('should handle API error in createMilestone', async () => {
         client.octokit.issues.createMilestone.mockRejectedValue(new Error('create failed'))
-        const result = await manager.createMilestone('o', 'r', 'test')
-        expect(result).toBeNull()
+        await expect(manager.createMilestone('o', 'r', 'test')).rejects.toThrow()
     })
 
     it('should return null when no octokit (createMilestone)', async () => {
         client.octokit = null as never
-        const result = await manager.createMilestone('o', 'r', 'test')
-        expect(result).toBeNull()
+        await expect(manager.createMilestone('o', 'r', 'test')).rejects.toThrow()
     })
 
     it('should handle API error in updateMilestone', async () => {
         client.octokit.issues.updateMilestone.mockRejectedValue(new Error('update failed'))
-        const result = await manager.updateMilestone('o', 'r', 1, { title: 'new' })
-        expect(result).toBeNull()
+        await expect(manager.updateMilestone('o', 'r', 1, { title: 'new' })).rejects.toThrow()
     })
 
     it('should return null when no octokit (updateMilestone)', async () => {
         client.octokit = null as never
-        const result = await manager.updateMilestone('o', 'r', 1, { title: 'x' })
-        expect(result).toBeNull()
+        await expect(manager.updateMilestone('o', 'r', 1, { title: 'x' })).rejects.toThrow()
     })
 
     it('should successfully update milestone with dueOn null', async () => {
@@ -257,8 +249,7 @@ describe('RepositoryManager — branch coverage', () => {
 
     it('should return empty array when no octokit for getWorkflowRuns', async () => {
         client.octokit = null as never
-        const result = await manager.getWorkflowRuns('o', 'r')
-        expect(result).toEqual([])
+        await expect(manager.getWorkflowRuns('o', 'r')).rejects.toThrow()
     })
 
     it('should return cached workflow runs', async () => {
@@ -271,8 +262,7 @@ describe('RepositoryManager — branch coverage', () => {
     it('should handle API error in getWorkflowRuns', async () => {
         client.rest = client.octokit.rest
         client.octokit.rest.actions.listWorkflowRunsForRepo.mockRejectedValue(new Error('fail'))
-        const result = await manager.getWorkflowRuns('o', 'r')
-        expect(result).toEqual([])
+        await expect(manager.getWorkflowRuns('o', 'r')).rejects.toThrow()
     })
 
     it('should map workflow run with null name', async () => {
@@ -437,8 +427,7 @@ describe('PullRequestsManager — branch coverage', () => {
 
     it('should return empty array when no octokit (getReviews)', async () => {
         client.octokit = null as never
-        const result = await manager.getReviews('o', 'r', 1)
-        expect(result).toEqual([])
+        await expect(manager.getReviews('o', 'r', 1)).rejects.toThrow()
     })
 
     it('should return cached reviews', async () => {
@@ -450,8 +439,7 @@ describe('PullRequestsManager — branch coverage', () => {
 
     it('should return empty array when no octokit (getReviewComments)', async () => {
         client.octokit = null as never
-        const result = await manager.getReviewComments('o', 'r', 1)
-        expect(result).toEqual([])
+        await expect(manager.getReviewComments('o', 'r', 1)).rejects.toThrow()
     })
 
     it('should return cached review comments', async () => {
@@ -463,8 +451,7 @@ describe('PullRequestsManager — branch coverage', () => {
 
     it('should handle API error in getReviewComments', async () => {
         client.octokit.rest.pulls.listReviewComments.mockRejectedValue(new Error('fail'))
-        const result = await manager.getReviewComments('o', 'r', 1)
-        expect(result).toEqual([])
+        await expect(manager.getReviewComments('o', 'r', 1)).rejects.toThrow()
     })
 
     it('should handle review comment with null line and side', async () => {

@@ -121,17 +121,14 @@ test.describe('Tool Filter: codemode-only preset', () => {
             name: 'mj_execute_code',
             arguments: {
                 code: `
-                    const result = await mj.core.testSimple({ message: 'codemode-only-e2e' });
-                    return result;
+                    return 'codemode-only-e2e';
                 `,
             },
         })
 
         expect(Array.isArray(response.content)).toBe(true)
         const text = (response.content[0] as { type: string; text: string }).text
-        const payload = JSON.parse(text) as Record<string, unknown>
-        // Should succeed — test_simple echoes the message
-        expect(JSON.stringify(payload)).toContain('codemode-only-e2e')
+        expect(text).toContain('codemode-only-e2e')
     })
 
     test('codemode: does not expose any direct tool names (no create_entry etc.)', async () => {

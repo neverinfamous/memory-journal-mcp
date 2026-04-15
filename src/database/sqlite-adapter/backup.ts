@@ -142,8 +142,12 @@ export class BackupManager {
         this.ctx.closeDbBeforeRestore()
 
         try {
-            // Native better-sqlite3 connection
-            await fs.promises.copyFile(backupPath, this.ctx.getDbPath())
+            // Stage the backup file directly adjacent to ensure cross-device consistency avoids failure
+            const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${Date.now()}`
+            await fs.promises.copyFile(backupPath, tempDbPath)
+            
+            // Perform atomic swap
+            await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
 
             // Re-initialize using the connection's standard initialize method
             // This ensures extensions like sqlite-vec are properly loaded
@@ -154,8 +158,10 @@ export class BackupManager {
                 operation: 'restoreFromFile',
                 error: error instanceof Error ? error.message : String(error)
             })
-            // Rollback
-            await fs.promises.copyFile(preRestoreResult.path, this.ctx.getDbPath())
+            // Rollback using the same atomic strategy for recovery
+            const recoveryDbPath = `${this.ctx.getDbPath()}.recover_tmp_${Date.now()}`
+            await fs.promises.copyFile(preRestoreResult.path, recoveryDbPath)
+            await fs.promises.rename(recoveryDbPath, this.ctx.getDbPath())
             await this.ctx.initialize()
             throw error
         }

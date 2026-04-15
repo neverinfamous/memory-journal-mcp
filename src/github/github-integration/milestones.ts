@@ -12,7 +12,7 @@ export class MilestonesManager {
         limit = 20
     ): Promise<GitHubMilestone[]> {
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `milestones:${owner}:${repo}:${state}:${String(limit)}`
@@ -50,7 +50,7 @@ export class MilestonesManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -60,7 +60,7 @@ export class MilestonesManager {
         milestoneNumber: number
     ): Promise<GitHubMilestone | null> {
         if (!this.client.octokit) {
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `milestone:${owner}:${repo}:${String(milestoneNumber)}`
@@ -97,7 +97,7 @@ export class MilestonesManager {
                 entityId: milestoneNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         }
     }
 
@@ -112,7 +112,7 @@ export class MilestonesManager {
             logger.error('Cannot create milestone: GitHub API not available', {
                 module: 'GitHub',
             })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -151,7 +151,7 @@ export class MilestonesManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { title, owner, repo },
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`milestones:${owner}:${repo}`)
             this.client.invalidateCache('context:')
@@ -173,7 +173,7 @@ export class MilestonesManager {
             logger.error('Cannot update milestone: GitHub API not available', {
                 module: 'GitHub',
             })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -214,7 +214,7 @@ export class MilestonesManager {
                 entityId: milestoneNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`milestones:${owner}:${repo}`)
             this.client.invalidateCache(`milestone:${owner}:${repo}:${String(milestoneNumber)}`)

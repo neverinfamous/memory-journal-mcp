@@ -44,26 +44,14 @@ export class TokenValidator {
         this.clockTolerance = config.clockTolerance ?? 60
         this.jwksCacheTtl = config.jwksCacheTtl ?? 3600
 
-        try {
-            const issuerOrigin = new URL(this.issuer).origin
-            const jwksOrigin = new URL(this.jwksUri).origin
+        const issuerOrigin = new URL(this.issuer).origin
+        const jwksOrigin = new URL(this.jwksUri).origin
 
-            if (issuerOrigin !== jwksOrigin) {
-                throw new Error(`Security Violation: JWKS URI origin (${jwksOrigin}) does not match Issuer origin (${issuerOrigin})`)
-            }
-        } catch (error) {
-            if (error instanceof Error && error.message.startsWith('Security Violation')) {
-                throw error
-            }
+        if (issuerOrigin !== jwksOrigin) {
+            throw new Error(`Security Violation: JWKS URI origin (${jwksOrigin}) does not match Issuer origin (${issuerOrigin})`)
         }
 
-        const issuerHost = (() => {
-            try {
-                return new URL(this.issuer).hostname
-            } catch {
-                return '[configured]'
-            }
-        })()
+        const issuerHost = new URL(this.issuer).hostname
         logger.info(`Token Validator initialized for issuer: ${issuerHost}`, {
             module: 'AUTH',
             operation: 'init',

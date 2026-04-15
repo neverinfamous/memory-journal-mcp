@@ -31,7 +31,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('groups')
         expect(Array.isArray(parsed.groups)).toBe(true)
@@ -44,7 +44,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('group', 'core')
         expect(parsed).toHaveProperty('tools')
@@ -58,7 +58,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         // Gotchas content should be a non-trivial text block
         expect(text.length).toBeGreaterThan(50)
     })
@@ -70,7 +70,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('configured', false)
     })
@@ -81,7 +81,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(parsed).toHaveProperty('configured', false)
     })
@@ -92,7 +92,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         // Without SKILLS_DIR_PATH, should return { configured: false } or empty skills
         expect(typeof parsed).toBe('object')
@@ -105,7 +105,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         // May return error or partial data without token — either is valid
         expect(typeof text).toBe('string')
         expect(text.length).toBeGreaterThan(0)
@@ -117,31 +117,18 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         expect(typeof text).toBe('string')
         expect(text.length).toBeGreaterThan(0)
     })
 
     test('should read memory://github/milestones', async () => {
-        const response = await client.readResource({ uri: 'memory://github/milestones' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = response.contents[0]!.text as string
-        expect(typeof text).toBe('string')
-        expect(text.length).toBeGreaterThan(0)
+        await expect(client.readResource({ uri: 'memory://github/milestones' })).rejects.toThrow('GitHub API not available')
     })
 
     // --- Graph resources ---
     test('should read memory://graph/actions', async () => {
-        const response = await client.readResource({ uri: 'memory://graph/actions' })
-
-        expect(response.contents).toBeDefined()
-        expect(response.contents.length).toBeGreaterThan(0)
-
-        const text = response.contents[0]!.text as string
-        expect(typeof text).toBe('string')
+        await expect(client.readResource({ uri: 'memory://graph/actions' })).rejects.toThrow('GitHub API not available')
     })
 
     test('should read memory://actions/recent', async () => {
@@ -150,7 +137,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         expect(typeof text).toBe('string')
     })
 
@@ -161,7 +148,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         // Without team DB, should return a not-configured indicator
         expect(typeof parsed).toBe('object')
@@ -173,7 +160,7 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         expect(response.contents).toBeDefined()
         expect(response.contents.length).toBeGreaterThan(0)
 
-        const text = response.contents[0]!.text as string
+        const text = (response.contents[0] as { text: string }).text
         const parsed = JSON.parse(text)
         expect(typeof parsed).toBe('object')
     })

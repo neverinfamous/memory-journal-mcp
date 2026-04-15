@@ -12,7 +12,7 @@ import type { z } from 'zod'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { DatabaseAdapterFactory } from '../database/adapter-factory.js'
 import { VectorSearchManager } from '../vector/vector-search-manager.js'
-import { GitHubIntegration } from '../github/github-integration/index.js'
+import { getGitHubIntegration } from '../github/github-integration/index.js'
 import { logger } from '../utils/logger.js'
 import {
     parseToolFilter,
@@ -27,6 +27,7 @@ import {
     initializeAuditLogger,
     getGlobalAuditLogger,
 } from '../handlers/tools/index.js'
+import { getRequiredScope } from '../auth/scope-map.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts } from '../handlers/prompts/index.js'
 import { generateInstructions } from '../constants/server-instructions.js'
@@ -154,7 +155,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             }
         }
     }
-    const github = new GitHubIntegration(githubPath)
+    const github = getGitHubIntegration(githubPath)
     try {
         // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
         await github.getRepoInfo()
@@ -261,6 +262,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 teamVectorManager
             )
             const allToolNames = new Set(allTools.map((t) => t.name))
+        
+            // SECURITY CHECK: Verify all tools have an explicit scope mapping natively at startup.
+            // This will crash early (fail-closed) if any new tools bypass the authorization mapping.
+            for (const toolName of allToolNames) {
+                getRequiredScope(toolName)
+            }
         
             // Generate dynamic instructions based on enabled tools, prompts, and latest entry
             const enabledToolSet = filterConfig?.enabledTools ?? allToolNames

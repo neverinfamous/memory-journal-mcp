@@ -25,6 +25,24 @@ import type {
 export type { RepoInfo, IssueDetails, PullRequestDetails }
 
 /**
+ * Module-scoped cache of integration instances bound to specific working directories
+ */
+const integrationCache = new Map<string, GitHubIntegration>()
+
+/**
+ * Factory method for retrieving a cached GitHubIntegration instance
+ * Helps prevent blocking the Node.js event loop with excessive class instantiations
+ */
+export function getGitHubIntegration(workingDir = '.'): GitHubIntegration {
+    const cached = integrationCache.get(workingDir)
+    if (cached) return cached
+    
+    const newIntegration = new GitHubIntegration(workingDir)
+    integrationCache.set(workingDir, newIntegration)
+    return newIntegration
+}
+
+/**
  * GitHubIntegration - Handles GitHub API and local git operations
  * Uses composition over sub-modules to maintain the exact same API surface.
  */

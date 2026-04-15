@@ -212,10 +212,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     let bodyFullLength: number | undefined
                     if (truncateBody > 0 && issue.body && issue.body.length > truncateBody) {
                         bodyFullLength = issue.body.length
-                        const remaining = issue.body.length - truncateBody
-                        issue.body =
-                            issue.body.slice(0, truncateBody) +
-                            `\n[Truncated. Re-run with truncate_body: 0 to view remaining ${String(remaining)} chars]`
+                        issue.body = issue.body.slice(0, truncateBody) + `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
                         bodyTruncated = true
                     }
 
@@ -308,10 +305,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         pullRequest.body.length > truncateBody
                     ) {
                         bodyFullLength = pullRequest.body.length
-                        const remaining = pullRequest.body.length - truncateBody
-                        pullRequest.body =
-                            pullRequest.body.slice(0, truncateBody) +
-                            `\n[Truncated. Re-run with truncate_body: 0 to view remaining ${String(remaining)} chars]`
+                        pullRequest.body = pullRequest.body.slice(0, truncateBody) + `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
                         bodyTruncated = true
                     }
 

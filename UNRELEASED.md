@@ -2,8 +2,20 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
+### Security
+- **Auth**: Enforced strict tool-to-scope verification during MCP server initialization, forcing the server to hard-fault if any tool group is discovered without a mapped scope boundary.
+- **Auth**: Modified TokenValidator configuration to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured or inaccessible.
+- **Codemode**: Removed the legacy filter bypass for Code Mode tools; executing `mj_execute_code` now cleanly respects the active session's `--tool-filter` context, including when exclusively scoped to Code Mode.
+- **Sanitization**: Standardized SQL `LIKE` wildcard escaping logic across database adapters (specifically SQLite) to mitigate native expanding boundaries and excessive table scan exposure.
+
+### Performance
+- **Database**: Resolved significant N+1 latency loops inside the `ResourceTools` generation functions by converting sequential relationship boundary queries to batched, in-memory aggregate lookup tables.
+- **GitHub**: Integrated an active `Map` caching layer tightly coupled to fully-qualified local repository working paths (CWD) to radially constrain redundant OctoKit and Git instantiation cycles.
+
 ### Fixed
-- **Testing**: Fixed 61 failing tests associated with architectural shifts, including fixing obsolete "empty array" expectations in `vector-search-manager.test.ts` to now assert exact structued thrown errors.
+- **Integrity**: Revamped the internal SQLite `restore_backup` pipeline to utilize an atomic `.tmp` swap and secondary rename operation to prevent mid-operation failures from leaving the primary DB permanently malformed.
+- **Integrity**: Fixed numeric limit validation logic for session thresholds, ensuring robustness against invalid `parseInt` boundaries during HTTP socket instantiations.
+- **Testing**: Fixed legacy graceful-empty array fallback assertions in `github-integration` specs to strictly enforce thrown rejected promises reflecting the modernized fail-fast API structures. Updated all template URI expectations in E2E playwright suites.
 - **Testing**: Fixed failing analytics test assertions (`analytics-branches.test.ts`) by properly passing tag and distribution data from the `getCrossProjectInsights` query migration.
 - **Testing**: Aligned `visualize_relationships` to throw a `ResourceNotFoundError` for missing root nodes, solving assertion divergence in `targeted-gap-closure-2.test.ts` and `tool-handler-coverage.test.ts`.
 - **Testing**: Remedied file boundary traversal test failures in `tests/handlers/io-tools.test.ts` and `tests/handlers/team-io-tools.test.ts` by correctly mocking new path boundary bounds via `security-utils`.

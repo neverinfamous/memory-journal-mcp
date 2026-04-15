@@ -12,7 +12,7 @@ import {
     ASSISTANT_FOCUSED,
 } from '../../../../utils/resource-annotations.js'
 import { VERSION } from '../../../../version.js'
-import { GitHubIntegration } from '../../../../github/github-integration/index.js'
+import { getGitHubIntegration } from '../../../../github/github-integration/index.js'
 import { DEFAULT_BRIEFING_CONFIG } from '../../shared.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from '../../shared.js'
 import { buildGitHubSection } from './github-section.js'
@@ -72,7 +72,7 @@ async function buildBriefingData(
 
     if (targetRepo && config.projectRegistry?.[targetRepo]) {
         const repoPath = config.projectRegistry[targetRepo].path
-        activeGithub = new GitHubIntegration(repoPath)
+        activeGithub = getGitHubIntegration(repoPath)
         activeProjectNumber = config.projectRegistry[targetRepo].project_number ?? undefined
     }
 

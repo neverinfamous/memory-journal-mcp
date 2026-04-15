@@ -36,8 +36,8 @@ describe('scope-map', () => {
             }
         })
 
-        it('should return read as safe default for unknown tools', () => {
-            expect(getRequiredScope('nonexistent_tool_xyz')).toBe('read')
+        it('should throw error for unknown tools', () => {
+            expect(() => getRequiredScope('nonexistent_tool_xyz')).toThrow('CRITICAL SECURITY FAILURE')
         })
     })
 

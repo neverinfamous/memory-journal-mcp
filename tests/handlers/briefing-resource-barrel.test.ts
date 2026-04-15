@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../../src/github/github-integration/index.js', () => ({
     GitHubIntegration: vi.fn(),
+    getGitHubIntegration: vi.fn().mockImplementation(() => new (vi.mocked(GitHubIntegration))()),
 }))
 
 vi.mock('../../src/handlers/resources/core/briefing/github-section.js', () => ({
@@ -9,7 +10,7 @@ vi.mock('../../src/handlers/resources/core/briefing/github-section.js', () => ({
 }))
 
 import { dynamicBriefingResource } from '../../src/handlers/resources/core/briefing/index.js'
-import { GitHubIntegration } from '../../src/github/github-integration/index.js'
+import { GitHubIntegration, getGitHubIntegration } from '../../src/github/github-integration/index.js'
 
 vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => ({
     buildJournalContext: vi.fn().mockReturnValue({
@@ -41,9 +42,9 @@ describe('Briefing Resources', () => {
             },
         } as any)
 
-        expect(result.data).toBeDefined()
-        expect(GitHubIntegration).toHaveBeenCalledTimes(1)
-        expect(GitHubIntegration).toHaveBeenCalledWith('/tmp/test')
+        expect((result as any).data).toBeDefined()
+        expect(getGitHubIntegration).toHaveBeenCalledTimes(1)
+        expect(getGitHubIntegration).toHaveBeenCalledWith('/tmp/test')
     })
 
     it('dynamicBriefingResource handles URI extraction with missing repo in registry', async () => {
@@ -53,6 +54,6 @@ describe('Briefing Resources', () => {
             },
         } as any)
 
-        expect(result.data).toBeDefined()
+        expect((result as any).data).toBeDefined()
     })
 })

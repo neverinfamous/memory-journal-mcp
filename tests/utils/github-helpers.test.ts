@@ -8,12 +8,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { resolveIssueUrl } from '../../src/utils/github-helpers.js'
 
 vi.mock('../../src/github/github-integration/index.js', () => {
+    class MockGitHubIntegration {
+        async getRepoInfo() {
+            return { owner: 'dynamic-owner', repo: 'dynamic-test-repo' }
+        }
+    }
     return {
-        GitHubIntegration: class {
-            async getRepoInfo() {
-                return { owner: 'dynamic-owner', repo: 'dynamic-test-repo' }
-            }
-        },
+        GitHubIntegration: MockGitHubIntegration,
+        getGitHubIntegration: () => new MockGitHubIntegration(),
     }
 })
 

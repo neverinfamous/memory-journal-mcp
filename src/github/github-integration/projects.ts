@@ -17,7 +17,7 @@ export class ProjectsManager {
     ): Promise<KanbanBoard | null> {
         if (!this.client.graphqlWithAuth) {
             logger.debug('GraphQL not available - no token', { module: 'GitHub' })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const projectFragment = `

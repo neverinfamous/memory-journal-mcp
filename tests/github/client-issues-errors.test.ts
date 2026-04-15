@@ -141,8 +141,7 @@ describe('IssuesManager — branch coverage', () => {
 
     describe('getIssues', () => {
         it('should return empty array when no octokit', async () => {
-            const result = await issues.getIssues('o', 'r')
-            expect(result).toEqual([])
+            await expect(issues.getIssues('o', 'r')).rejects.toThrow()
         })
 
         it('should return cached issues', async () => {
@@ -159,8 +158,7 @@ describe('IssuesManager — branch coverage', () => {
                     listForRepo: vi.fn().mockRejectedValue(new Error('API down')),
                 },
             } as any
-            const result = await issues.getIssues('o', 'r')
-            expect(result).toEqual([])
+            await expect(issues.getIssues('o', 'r')).rejects.toThrow()
         })
 
         it('should filter out PRs and map milestone/state', async () => {
@@ -207,8 +205,7 @@ describe('IssuesManager — branch coverage', () => {
 
     describe('getIssue', () => {
         it('should return null when no octokit', async () => {
-            const result = await issues.getIssue('o', 'r', 1)
-            expect(result).toBeNull()
+            await expect(issues.getIssue('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should return cached issue', async () => {
@@ -266,15 +263,13 @@ describe('IssuesManager — branch coverage', () => {
                     get: vi.fn().mockRejectedValue(new Error('Not found')),
                 },
             } as any
-            const result = await issues.getIssue('o', 'r', 999)
-            expect(result).toBeNull()
+            await expect(issues.getIssue('o', 'r', 999)).rejects.toThrow()
         })
     })
 
     describe('createIssue', () => {
         it('should return null when no octokit', async () => {
-            const result = await issues.createIssue('o', 'r', 'title')
-            expect(result).toBeNull()
+            await expect(issues.createIssue('o', 'r', 'title')).rejects.toThrow()
         })
 
         it('should handle API error', async () => {
@@ -284,15 +279,13 @@ describe('IssuesManager — branch coverage', () => {
                 },
             } as any
             // Need to set apiCache just so invalidateCache doesn't break
-            const result = await issues.createIssue('o', 'r', 'title')
-            expect(result).toBeNull()
+            await expect(issues.createIssue('o', 'r', 'title')).rejects.toThrow()
         })
     })
 
     describe('closeIssue', () => {
         it('should return null when no octokit', async () => {
-            const result = await issues.closeIssue('o', 'r', 1)
-            expect(result).toBeNull()
+            await expect(issues.closeIssue('o', 'r', 1)).rejects.toThrow()
         })
 
         it('should close without comment', async () => {
@@ -334,8 +327,7 @@ describe('IssuesManager — branch coverage', () => {
                     update: vi.fn().mockRejectedValue(new Error('fail')),
                 },
             } as any
-            const result = await issues.closeIssue('o', 'r', 1)
-            expect(result).toBeNull()
+            await expect(issues.closeIssue('o', 'r', 1)).rejects.toThrow()
         })
     })
 })

@@ -72,8 +72,11 @@ export const significantResource: InternalResourceDef = {
         const MAX_REL_SCORE_AT = 5
         const MAX_CAUSAL_SCORE_AT = 3
 
+        const entryIds = entries.map(e => e.id)
+        const relationshipsMap = context.db.getRelationshipsForEntries(entryIds)
+
         const entriesWithImportance = entries.map((entry) => {
-            const relationships = context.db.getRelationships(entry.id)
+            const relationships = relationshipsMap.get(entry.id) ?? []
             const relCount = relationships.length
             const causalCount = relationships.filter(r => ['blocked_by', 'resolved', 'caused'].includes(r.relationshipType)).length
             

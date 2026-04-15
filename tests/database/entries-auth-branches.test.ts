@@ -74,13 +74,12 @@ function createTagsMgr() {
 // ============================================================================
 
 describe('TokenValidator — branch coverage', () => {
-    it('should handle invalid issuer URL gracefully in constructor', () => {
-        const validator = new TokenValidator({
+    it('should throw on invalid issuer URL in constructor', () => {
+        expect(() => new TokenValidator({
             jwksUri: 'https://example.com/.well-known/jwks.json',
             issuer: 'not-a-url',
             audience: 'test',
-        })
-        expect(validator).toBeDefined()
+        })).toThrow()
     })
 
     it('should use cached JWKS on second call', () => {
@@ -106,14 +105,12 @@ describe('TokenValidator — branch coverage', () => {
         expect(validator).toBeDefined()
     })
 
-    it('should handle invalid JWKS URI gracefully', () => {
-        const validator = new TokenValidator({
+    it('should throw on invalid JWKS URI gracefully', () => {
+        expect(() => new TokenValidator({
             jwksUri: 'not-a-url',
             issuer: 'https://example.com',
             audience: 'test',
-        })
-        // getJwks internally — URL constructor may throw for invalid jwksUri
-        expect(() => validator.refreshJwks()).toThrow()
+        })).toThrow()
     })
 
     describe('handleValidationError dispatch', () => {

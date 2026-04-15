@@ -70,7 +70,7 @@ export class RepositoryManager {
     async getWorkflowRuns(owner: string, repo: string, limit = 10): Promise<GitHubWorkflowRun[]> {
         if (!this.client.octokit) {
             logger.debug('GitHub API not available - no token', { module: 'GitHub' })
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `workflows:${owner}:${repo}:${String(limit)}`
@@ -108,7 +108,7 @@ export class RepositoryManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 }

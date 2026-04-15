@@ -25,7 +25,7 @@ export class PullRequestsManager {
         limit = 20
     ): Promise<GitHubPullRequest[]> {
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `prs:${owner}:${repo}:${state}:${String(limit)}`
@@ -60,7 +60,7 @@ export class PullRequestsManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -70,7 +70,7 @@ export class PullRequestsManager {
         prNumber: number
     ): Promise<PullRequestDetails | null> {
         if (!this.client.octokit) {
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `pr:${owner}:${repo}:${String(prNumber)}`
@@ -113,7 +113,7 @@ export class PullRequestsManager {
                 entityId: prNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         }
     }
 
@@ -125,7 +125,7 @@ export class PullRequestsManager {
     }
 
     async getReviews(owner: string, repo: string, prNumber: number): Promise<GitHubReview[]> {
-        if (!this.client.octokit) return []
+        if (!this.client.octokit) throw new Error('GitHub API not available')
 
         const cacheKey = `reviews:${owner}:${repo}:${String(prNumber)}`
         const cached = this.client.getCached(cacheKey) as GitHubReview[] | undefined
@@ -156,7 +156,7 @@ export class PullRequestsManager {
                 entityId: prNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -165,7 +165,7 @@ export class PullRequestsManager {
         repo: string,
         prNumber: number
     ): Promise<GitHubReviewComment[]> {
-        if (!this.client.octokit) return []
+        if (!this.client.octokit) throw new Error('GitHub API not available')
 
         const cacheKey = `review-comments:${owner}:${repo}:${String(prNumber)}`
         const cached = this.client.getCached(cacheKey) as GitHubReviewComment[] | undefined
@@ -198,7 +198,7 @@ export class PullRequestsManager {
                 entityId: prNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 

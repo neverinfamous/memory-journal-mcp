@@ -10,8 +10,7 @@ describe('PullRequestsManager - coverage', () => {
             setCache: vi.fn(),
         } as unknown as GitHubClient
         const manager = new PullRequestsManager(mockClient)
-        const result = await manager.getPullRequests('owner', 'repo')
-        expect(result).toEqual([])
+        await expect(manager.getPullRequests('owner', 'repo')).rejects.toThrow()
     })
 
     it('getPullRequest handles string error and draft', async () => {
@@ -51,8 +50,7 @@ describe('PullRequestsManager - coverage', () => {
             setCache: vi.fn(),
         } as unknown as GitHubClient
         const errManager = new PullRequestsManager(errClient)
-        const errResult = await errManager.getPullRequest('owner', 'repo', 1)
-        expect(errResult).toBeNull()
+        await expect(errManager.getPullRequest('owner', 'repo', 1)).rejects.toThrow()
     })
 
     it('getReviews handles string error and missing submitted_at', async () => {
@@ -89,8 +87,7 @@ describe('PullRequestsManager - coverage', () => {
             setCache: vi.fn(),
         } as unknown as GitHubClient
         const errManager = new PullRequestsManager(errClient)
-        const errResult = await errManager.getReviews('owner', 'repo', 1)
-        expect(errResult).toEqual([])
+        await expect(errManager.getReviews('owner', 'repo', 1)).rejects.toThrow()
     })
 
     it('getReviewComments handles string error', async () => {
@@ -102,8 +99,7 @@ describe('PullRequestsManager - coverage', () => {
             setCache: vi.fn(),
         } as unknown as GitHubClient
         const errManager = new PullRequestsManager(errClient)
-        const errResult = await errManager.getReviewComments('owner', 'repo', 1)
-        expect(errResult).toEqual([])
+        await expect(errManager.getReviewComments('owner', 'repo', 1)).rejects.toThrow()
     })
 
     it('getCopilotReviewSummary handles COMMENTED state', async () => {

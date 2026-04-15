@@ -13,7 +13,7 @@ export class IssuesManager {
         limit = 20
     ): Promise<GitHubIssue[]> {
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `issues:${owner}:${repo}:${state}:${String(limit)}`
@@ -53,13 +53,13 @@ export class IssuesManager {
                 module: 'GitHub',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
     async getIssue(owner: string, repo: string, issueNumber: number): Promise<IssueDetails | null> {
         if (!this.client.octokit) {
-            return null
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `issue:${owner}:${repo}:${String(issueNumber)}`
@@ -105,7 +105,7 @@ export class IssuesManager {
                 entityId: issueNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         }
     }
 
@@ -118,7 +118,7 @@ export class IssuesManager {
         const _limit = Math.min(limit, 100)
         if (_limit <= 0) return []
         if (!this.client.octokit) {
-            return []
+            throw new Error('GitHub API not available')
         }
 
         const cacheKey = `issue-comments:${owner}:${repo}:${String(issueNumber)}:${String(_limit)}`
@@ -151,7 +151,7 @@ export class IssuesManager {
                 entityId: issueNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return []
+            throw error
         }
     }
 
@@ -166,7 +166,7 @@ export class IssuesManager {
     ): Promise<{ number: number; url: string; title: string; nodeId: string } | null> {
         if (!this.client.octokit) {
             logger.error('Cannot create issue: GitHub API not available', { module: 'GitHub' })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -198,7 +198,7 @@ export class IssuesManager {
                 error: error instanceof Error ? error.message : String(error),
                 context: { title, owner, repo },
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`issues:${owner}:${repo}`)
             this.client.invalidateCache('context:')
@@ -213,7 +213,7 @@ export class IssuesManager {
     ): Promise<{ success: boolean; url: string } | null> {
         if (!this.client.octokit) {
             logger.error('Cannot close issue: GitHub API not available', { module: 'GitHub' })
-            return null
+            throw new Error('GitHub API not available')
         }
 
         try {
@@ -249,7 +249,7 @@ export class IssuesManager {
                 entityId: issueNumber,
                 error: error instanceof Error ? error.message : String(error),
             })
-            return null
+            throw error
         } finally {
             this.client.invalidateCache(`issues:${owner}:${repo}`)
             this.client.invalidateCache(`issue:${owner}:${repo}:${String(issueNumber)}`)

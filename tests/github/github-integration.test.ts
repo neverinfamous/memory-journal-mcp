@@ -245,14 +245,12 @@ describe('GitHubIntegration', () => {
         it('should return empty when no octokit', async () => {
             injectMocks(gh, null as unknown as ReturnType<typeof createOctokitMock>)
             ;(gh as any).client.octokit = null
-            const issues = await gh.getIssues('o', 'r')
-            expect(issues).toEqual([])
+            await expect(gh.getIssues('o', 'r')).rejects.toThrow()
         })
 
         it('should handle API errors gracefully', async () => {
             octokit.issues.listForRepo.mockRejectedValue(new Error('Network error'))
-            const issues = await gh.getIssues('o', 'r')
-            expect(issues).toEqual([])
+            await expect(gh.getIssues('o', 'r')).rejects.toThrow()
         })
     })
 
@@ -307,8 +305,7 @@ describe('GitHubIntegration', () => {
 
         it('should handle API error', async () => {
             octokit.issues.get.mockRejectedValue(new Error('Not found'))
-            const issue = await gh.getIssue('o', 'r', 999)
-            expect(issue).toBeNull()
+            await expect(gh.getIssue('o', 'r', 999)).rejects.toThrow()
         })
     })
 
@@ -345,8 +342,7 @@ describe('GitHubIntegration', () => {
 
         it('should return empty when no octokit', async () => {
             ;(gh as any).client.octokit = null
-            const comments = await gh.getIssueComments('o', 'r', 1)
-            expect(comments).toEqual([])
+            await expect(gh.getIssueComments('o', 'r', 1)).rejects.toThrow()
         })
     })
 
@@ -369,14 +365,12 @@ describe('GitHubIntegration', () => {
 
         it('should return null on error', async () => {
             octokit.issues.create.mockRejectedValue(new Error('403'))
-            const result = await gh.createIssue('o', 'r', 'Fail')
-            expect(result).toBeNull()
+            await expect(gh.createIssue('o', 'r', 'Fail')).rejects.toThrow()
         })
 
         it('should return null when no octokit', async () => {
             ;(gh as any).client.octokit = null
-            const result = await gh.createIssue('o', 'r', 'No API')
-            expect(result).toBeNull()
+            await expect(gh.createIssue('o', 'r', 'No API')).rejects.toThrow()
         })
     })
 
@@ -408,8 +402,7 @@ describe('GitHubIntegration', () => {
 
         it('should return null on error', async () => {
             octokit.issues.update.mockRejectedValue(new Error('fail'))
-            const result = await gh.closeIssue('o', 'r', 1)
-            expect(result).toBeNull()
+            await expect(gh.closeIssue('o', 'r', 1)).rejects.toThrow()
         })
     })
 
@@ -446,8 +439,7 @@ describe('GitHubIntegration', () => {
 
         it('should return empty when no octokit', async () => {
             ;(gh as any).client.octokit = null
-            const prs = await gh.getPullRequests('o', 'r')
-            expect(prs).toEqual([])
+            await expect(gh.getPullRequests('o', 'r')).rejects.toThrow()
         })
     })
 
@@ -483,8 +475,7 @@ describe('GitHubIntegration', () => {
 
         it('should handle error', async () => {
             octokit.pulls.get.mockRejectedValue(new Error('Not found'))
-            const pr = await gh.getPullRequest('o', 'r', 999)
-            expect(pr).toBeNull()
+            await expect(gh.getPullRequest('o', 'r', 999)).rejects.toThrow()
         })
     })
 
@@ -520,8 +511,7 @@ describe('GitHubIntegration', () => {
 
         it('should return empty when no octokit', async () => {
             ;(gh as any).client.octokit = null
-            const runs = await gh.getWorkflowRuns('o', 'r')
-            expect(runs).toEqual([])
+            await expect(gh.getWorkflowRuns('o', 'r')).rejects.toThrow()
         })
     })
 
@@ -585,8 +575,7 @@ describe('GitHubIntegration', () => {
 
         it('should return empty when no octokit', async () => {
             ;(gh as any).client.octokit = null
-            const ms = await gh.getMilestones('o', 'r')
-            expect(ms).toEqual([])
+            await expect(gh.getMilestones('o', 'r')).rejects.toThrow()
         })
     })
 
@@ -616,8 +605,7 @@ describe('GitHubIntegration', () => {
 
         it('should handle error', async () => {
             octokit.issues.getMilestone.mockRejectedValue(new Error('Not found'))
-            const ms = await gh.getMilestone('o', 'r', 999)
-            expect(ms).toBeNull()
+            await expect(gh.getMilestone('o', 'r', 999)).rejects.toThrow()
         })
     })
 
@@ -646,8 +634,7 @@ describe('GitHubIntegration', () => {
 
         it('should return null when no octokit', async () => {
             ;(gh as any).client.octokit = null
-            const ms = await gh.createMilestone('o', 'r', 'v2.0')
-            expect(ms).toBeNull()
+            await expect(gh.createMilestone('o', 'r', 'v2.0')).rejects.toThrow()
         })
     })
 
@@ -676,8 +663,7 @@ describe('GitHubIntegration', () => {
 
         it('should return null when no octokit', async () => {
             ;(gh as any).client.octokit = null
-            const ms = await gh.updateMilestone('o', 'r', 1, { title: 'x' })
-            expect(ms).toBeNull()
+            await expect(gh.updateMilestone('o', 'r', 1, { title: 'x' })).rejects.toThrow()
         })
     })
 
@@ -708,8 +694,7 @@ describe('GitHubIntegration', () => {
 
     describe('getProjectKanban', () => {
         it('should return null when no graphql', async () => {
-            const board = await gh.getProjectKanban('o', 1)
-            expect(board).toBeNull()
+            await expect(gh.getProjectKanban('o', 1)).rejects.toThrow()
         })
 
         it('should search user projects first', async () => {

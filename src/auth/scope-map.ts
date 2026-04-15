@@ -34,14 +34,12 @@ toolScopeMap.set('import_markdown', SCOPES.WRITE)
 toolScopeMap.set('team_import_markdown', SCOPES.TEAM)
 toolScopeMap.set('mj_execute_code', SCOPES.ADMIN)
 
-/**
- * Get the required scope for a tool by name.
- *
- * @param toolName - The MCP tool name (e.g., "create_entry")
- * @returns The required scope, or "read" as a safe default for unknown tools
- */
 export function getRequiredScope(toolName: string): StandardScope {
-    return toolScopeMap.get(toolName) ?? SCOPES.READ
+    const scope = toolScopeMap.get(toolName)
+    if (!scope) {
+        throw new Error(`CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`)
+    }
+    return scope
 }
 
 /**

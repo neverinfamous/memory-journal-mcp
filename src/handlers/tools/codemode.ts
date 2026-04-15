@@ -25,7 +25,7 @@ import { getAdminTools } from './admin.js'
 import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
-import { GitHubIntegration } from '../../github/github-integration/index.js'
+import { getGitHubIntegration } from '../../github/github-integration/index.js'
 
 // =============================================================================
 // Input / Output Schemas
@@ -165,18 +165,10 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
     // SEC-1.2: Respect active tool filter — Code Mode must not reach tools that the
     // operator has explicitly excluded (e.g. `--tool-filter=no-github` prevents
     // Code Mode from calling gh_* tools internally).
-    //
-    // Exception: if the ONLY enabled tool is mj_execute_code (codemode-only preset),
-    // the filter intentionally reduces the external surface — Code Mode itself still
-    // needs full internal access to be useful. Applying the filter in that case would
-    // leave Code Mode with zero tools, breaking the preset's intended behaviour.
     const filterConfig = context.config?.filterConfig
-    const hasNonCodeModeEnabled = filterConfig
-        ? [...filterConfig.enabledTools].some((t) => t !== 'mj_execute_code')
-        : true
 
     cachedNonCodeModeTools =
-        filterConfig && hasNonCodeModeEnabled
+        filterConfig
             ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
             : allTools
 
@@ -278,7 +270,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     if (repo && context.config?.projectRegistry) {
                         const registryEntry = context.config.projectRegistry[repo]
                         if (registryEntry) {
-                            const injectedGithub = new GitHubIntegration(registryEntry.path)
+                            const injectedGithub = getGitHubIntegration(registryEntry.path)
                             try {
                                 // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
                                 await injectedGithub.getRepoInfo()

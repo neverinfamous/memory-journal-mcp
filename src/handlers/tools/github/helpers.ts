@@ -3,7 +3,8 @@
  */
 
 import type { ToolContext } from '../../../types/index.js'
-import { GitHubIntegration } from '../../../github/github-integration/index.js'
+import { getGitHubIntegration } from '../../../github/github-integration/index.js'
+import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 
 /**
  * Resolve project number explicitly or via ProjectRegistry mapping
@@ -101,7 +102,7 @@ export async function resolveOwnerRepo(
             : undefined
 
     if (registryEntry) {
-        toolGithub = new GitHubIntegration(registryEntry.path)
+        toolGithub = getGitHubIntegration(registryEntry.path)
     } else if (context.github) {
         toolGithub = context.github
     }

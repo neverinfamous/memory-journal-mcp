@@ -81,6 +81,15 @@ const {
     mockSigintHandlers: [] as Function[],
 }))
 
+vi.mock('../../src/auth/scope-map.js', () => ({
+    getRequiredScope: vi.fn().mockImplementation((toolName: string) => {
+        // Return a default scope for fake test tools
+        if (toolName.startsWith('fake_')) return 'core'
+        // Fallback or throw if we wanted to enforce it here
+        return 'core'
+    })
+}))
+
 // ============================================================================
 // Module mocks
 // ============================================================================
@@ -200,6 +209,31 @@ vi.mock('../../src/github/github-integration/index.js', () => ({
             invalidateCache: vi.fn(),
         }
     },
+    getGitHubIntegration: function () {
+        return {
+            isApiAvailable: mockGitHubIsApiAvailable,
+            getRepoInfo: vi.fn().mockResolvedValue({ owner: null, repo: null, branch: null }),
+            getCachedRepoInfo: vi.fn().mockReturnValue(null),
+            getRepoContext: vi.fn().mockResolvedValue(null),
+            getIssues: vi.fn().mockResolvedValue([]),
+            getIssue: vi.fn().mockResolvedValue(null),
+            createIssue: vi.fn().mockResolvedValue(null),
+            closeIssue: vi.fn().mockResolvedValue(null),
+            getPullRequests: vi.fn().mockResolvedValue([]),
+            getPullRequest: vi.fn().mockResolvedValue(null),
+            getWorkflowRuns: vi.fn().mockResolvedValue([]),
+            getProjectKanban: vi.fn().mockResolvedValue(null),
+            getMilestones: vi.fn().mockResolvedValue([]),
+            getMilestone: vi.fn().mockResolvedValue(null),
+            createMilestone: vi.fn().mockResolvedValue(null),
+            updateMilestone: vi.fn().mockResolvedValue(null),
+            deleteMilestone: vi.fn().mockResolvedValue(null),
+            moveProjectItem: vi.fn().mockResolvedValue({ success: false }),
+            addProjectItem: vi.fn().mockResolvedValue({ success: false }),
+            clearCache: vi.fn(),
+            invalidateCache: vi.fn(),
+        }
+    }
 }))
 
 // Mock express to avoid actual HTTP server creation
@@ -636,8 +670,7 @@ describe('McpServer', function () {
             const spyCall = vi.spyOn(toolsModule, 'callTool').mockResolvedValueOnce({
                 invalidField: 10n,
             })
-
-            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+            const server = await createServer({ transport: 'stdio', dbPath: './test-server.db' })
 
             const toolCalls = mockRegisterTool.mock.calls.filter(
                 (call: unknown[]) => call[0] === 'fake_boom_tool'
