@@ -24,8 +24,8 @@ test.describe.configure({ mode: 'serial' })
 test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
     let serverProcess: ChildProcess
     let jwksServer: Server
-    let privateKey: jose.KeyLike
-    let publicKey: jose.KeyLike
+    let privateKey: any
+    let publicKey: any
 
     // JWTs
     let readToken: string
