@@ -287,8 +287,19 @@ export class HttpTransport {
                     const uriValue = paramsObj?.['uri']
                     const uri = typeof uriValue === 'string' ? uriValue : ''
                     
+                    let namespace = ''
+                    try {
+                        if (uri) {
+                            const parsedUri = new URL(uri)
+                            // memory://team -> host is 'team', memory://github/insights -> host is 'github'
+                            namespace = parsedUri.host
+                        }
+                    } catch {
+                        // Invalid URI falls back to empty namespace
+                    }
+
                     // Enforce granular scopes for specific URI namespaces
-                    if (uri.startsWith('memory://team/') || uri === 'memory://team' || uri.startsWith('memory://flags')) {
+                    if (namespace === 'team' || namespace === 'flags') {
                         if (!hasScope(req.auth?.scopes ?? [], SCOPES.TEAM || 'team')) {
                             res.status(403).json({
                                 error: 'insufficient_scope',
@@ -296,7 +307,7 @@ export class HttpTransport {
                             })
                             return
                         }
-                    } else if (uri.startsWith('memory://audit/') || uri === 'memory://audit') {
+                    } else if (namespace === 'audit') {
                         if (!hasScope(req.auth?.scopes ?? [], SCOPES.AUDIT || 'audit')) {
                             res.status(403).json({
                                 error: 'insufficient_scope',

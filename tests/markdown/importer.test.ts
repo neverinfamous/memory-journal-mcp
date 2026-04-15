@@ -5,7 +5,9 @@ import * as fs from 'node:fs/promises'
 vi.mock('node:fs/promises', () => ({
     readdir: vi.fn(),
     readFile: vi.fn(),
-    stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
+    stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 100 }),
+    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
+    realpath: vi.fn(),
 }))
 
 vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {

@@ -6,13 +6,12 @@
  * relationship linking, and dry-run mode.
  */
 
-import { readdir, readFile, stat, realpath } from 'node:fs/promises'
-import { join, relative, isAbsolute, sep } from 'node:path'
+import { readdir, readFile, stat, lstat } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
-import { logger } from '../utils/logger.js'
 
 // ============================================================================
 // Types
@@ -133,18 +132,14 @@ export async function importMarkdownEntries(
         try {
             const filepath = join(sourceDir, filename)
 
-            // Prevent symlink traversal out of sourceDir
-            let resolvedSourceDir = sourceDir;
-            try { resolvedSourceDir = await realpath(sourceDir); } catch { /* ignore */ }
-            let resolvedFilePath = filepath;
-            try { resolvedFilePath = await realpath(filepath); } catch { /* ignore */ }
-            const relPath = relative(resolvedSourceDir, resolvedFilePath)
-            if (relPath === '..' || relPath.startsWith('..' + sep) || isAbsolute(relPath)) {
-                throw new Error(`File escapes allowed source directory boundaries via symlink: ${filename}`)
+            // Prevent strict symlink traversal by refusing to read symlinks
+            const lstats = await lstat(filepath)
+            if (lstats.isSymbolicLink()) {
+                throw new Error(`Refusing to read symlink during import: ${filename}`)
             }
 
             // Prevent memory amplification DoS: skip egregiously large markdown files (>5MB)
-            const stats = await stat(resolvedFilePath)
+            const stats = await stat(filepath)
             if (stats.size > 5 * 1024 * 1024) {
                 throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
             }
@@ -226,41 +221,18 @@ export async function importMarkdownEntries(
                     if (!VALID_RELATIONSHIP_TYPES.has(rel.type)) continue
 
                     // Only link if target entry exists
-                    try {
-                        const targetExists = db.getEntryById(rel.target_id)
-                        if (targetExists) {
-                            db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
-                            result.relationshipsLinked++
-                        }
-                    } catch (err) {
-                        // Relationship linking failure is non-fatal
-                        logger.warning('Failed to link relationship during import', {
-                            module: 'Importer',
-                            entryId,
-                            targetId: rel.target_id,
-                            error: err instanceof Error ? err.message : String(err)
-                        })
-                        result.errors.push({ file: filename, error: `Link failed: ${rel.type} -> ${String(rel.target_id)}` })
-                        result.success = false
+                    const targetExists = db.getEntryById(rel.target_id)
+                    if (targetExists) {
+                        db.linkEntries(entryId, rel.target_id, rel.type as RelationshipType)
+                        result.relationshipsLinked++
                     }
                 }
             }
 
             // Vector re-indexing
             if (vectorManager) {
-                try {
-                    await vectorManager.addEntry(entryId, body)
-                    result.vectorsIndexed++
-                } catch (err: unknown) {
-                    // Vector indexing failure is non-fatal
-                    logger.warning('Failed to index vector during import', {
-                        module: 'Importer',
-                        entryId,
-                        error: err instanceof Error ? err.message : String(err)
-                    })
-                    result.errors.push({ file: filename, error: `Vector index failed: ${err instanceof Error ? err.message : String(err)}` })
-                    result.success = false
-                }
+                await vectorManager.addEntry(entryId, body)
+                result.vectorsIndexed++
             }
         } catch (err) {
             result.errors.push({

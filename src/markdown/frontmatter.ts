@@ -61,7 +61,7 @@ const FrontmatterSchema = z.object({
 // ============================================================================
 
 function quoteYamlString(val: string): string {
-    if (/[:\n'"\-#]/g.test(val) || val.trim() === '') {
+    if (!/^[A-Za-z0-9_ .]+$/.test(val) || val.trim() === '') {
         return JSON.stringify(val);
     }
     return val;

@@ -50,7 +50,8 @@ export function checkRateLimit(
         return { allowed: true }
     }
 
-    const subject = req.auth?.['subject']
+    const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+    const subject = authReq.auth?.sub ?? authReq.auth?.subject
     const clientIdentity = typeof subject === 'string' && subject ? subject : getClientIp(req, config.trustProxy ?? false)
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
@@ -116,7 +117,15 @@ export function setSecurityHeaders(res: Response, config: HttpTransportConfig): 
  * `corsAllowCredentials` is true. For credentialed CORS, list explicit origins.
  */
 export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): boolean {
-    const corsOrigins = config.corsOrigins ?? []
+    let corsOrigins = config.corsOrigins ?? []
+    const isLocalhost = config.host === 'localhost' || config.host === '127.0.0.1' || config.host === '::1'
+    const hasAuth = Boolean(config.authToken) || config.oauthEnabled === true
+
+    // Hard-block wildcard CORS on localhost if no auth is configured to prevent local-browser CSRF
+    if (isLocalhost && !hasAuth && corsOrigins.includes('*')) {
+        corsOrigins = corsOrigins.filter(o => o !== '*')
+    }
+
     const isWildcard = corsOrigins.includes('*')
     const origin = req.headers.origin
 
@@ -149,7 +158,13 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     if (origin && !isWildcard) {
         const whitelist: Record<string, true> = {}
         for (const allowed of corsOrigins) whitelist[allowed] = true
-        if (!(origin in whitelist)) return false
+        // Allow same-origin requests even if no CORS config is active
+        if (!(origin in whitelist)) {
+            // Check if origin exactly matches our own host/port (e.g. self-referential)
+            const hostHeader = typeof req.get === 'function' ? req.get('host') : req.headers?.host
+            const selfUrl = req.protocol + '://' + (hostHeader || `${config.host}:${config.port}`)
+            if (origin !== selfUrl) return false
+        }
     }
     return true
 }

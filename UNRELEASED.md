@@ -51,4 +51,5 @@
 - **Integrity**: Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist, unlocking array-based constraint evaluation.
 - **Integrity**: Eliminated context-bleed vulnerabilities by permanently deprecating the global state cache across GitHub integration pipelines, localizing mutation states exclusively to per-request lifetimes.
 - **Testing**: Aligned mock filesystem boundaries and `importer` expected outputs for structural database failures (e.g. vector re-indexing faults) to strictly execute correct `.success = false` expectations.
+- **Testing**: Resolved minor TypeScript generic type assertion conflicts and defensive mocking fallbacks for un-mocked `req.get` calls in testing suites.
 - **CI/CD**: Promoted the comprehensive Playwright E2E suite to execute synchronously within `.github/workflows/lint-and-test.yml` using the new `npm run test:e2e` execution script target.

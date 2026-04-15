@@ -173,6 +173,28 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots?: string[
     }
 }
 
+/**
+ * Validates that a file path is strictly bounded and refuses symlinks to prevent
+ * any file-level traversal tricks.
+ */
+export function assertSafeFilePath(filePath: string, providedRoots?: string[]): void {
+    // First ensure the logical path is within boundaries
+    assertSafeDirectoryPath(path.dirname(filePath), providedRoots)
+
+    // Second, if the file exists, ensure it is not a symlink that could trick the system
+    try {
+        const stats = fs.lstatSync(filePath)
+        if (stats.isSymbolicLink()) {
+            throw new PathTraversalError(`Symlinks are strictly forbidden for file operations: ${filePath}`)
+        }
+    } catch (err: unknown) {
+        // If file doesn't exist, that's fine, but if it's our error, throw it
+        if (err instanceof PathTraversalError) {
+            throw err
+        }
+    }
+}
+
 // ============================================================================
 // Error Message Sanitization
 // ============================================================================
