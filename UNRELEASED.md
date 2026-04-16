@@ -18,6 +18,7 @@
 - **GitHub**: Integrated an active `Map` caching layer tightly coupled to fully-qualified local repository working paths (CWD) to radially constrain redundant OctoKit and Git instantiation cycles.
 - **Database**: Refactored importance score evaluation via `buildImportanceSqlExpression` to use a Common Table Expression (CTE) combined with a `LEFT JOIN` in database searches, eliminating correlated O(N^2) nested subqueries.
 - **Initialization**: Optimized startup behavior by hoisting execution-invariant server state (tools, prompts, filter sets) out of `createServerInstance()` to bypass redundant cycles during HTTP/SSE connections.
+- **GitHub**: Integrated native `AbortController` signaling for all GitHub integration API requests, resolving runaway Octokit network queries during global task timeouts.
 
 ### Fixed
 - **Testing/Architecture**: Successfully migrated legacy `getRawDb()` test mocks to explicitly mock `IDatabaseAdapter` vector methods across Vector and Database test suites, achieving 100% pass rate with decoupled interface boundaries.

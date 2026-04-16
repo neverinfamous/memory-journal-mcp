@@ -6,6 +6,7 @@ import {
     rowsToEntries,
 } from './shared.js'
 import { buildImportanceSqlExpression, buildImportanceCte } from './importance.js'
+import { sanitizeSearchQuery } from '../../../utils/security-utils.js'
 
 /** Allowed sort dimensions for search results */
 export type SortBy = 'timestamp' | 'importance'
@@ -179,8 +180,8 @@ function buildSearchQuery(
             conditions.push(`fts_content MATCH ?`)
             params.push(sanitizeFtsQuery(queryStr))
         } else {
-            conditions.push(`e.content LIKE '%' || ? || '%'`)
-            params.push(queryStr)
+            conditions.push(`e.content LIKE '%' || ? || '%' ESCAPE '\\'`)
+            params.push(sanitizeSearchQuery(queryStr))
         }
     }
 

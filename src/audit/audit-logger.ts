@@ -20,6 +20,7 @@
 import { appendFile, mkdir, open, rename, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { AuditConfig, AuditEntry } from './types.js'
+import { logger } from '../utils/logger.js'
 
 // ============================================================================
 // Constants
@@ -124,12 +125,12 @@ export class AuditLogger {
             } catch (err) {
                 // Never throw — audit must not break tool execution
                 const message = err instanceof Error ? err.message : String(err)
-                process.stderr.write(`[AUDIT] Write failed: ${message}\n`)
+                logger.error(`Write failed: ${message}`, { module: 'Audit' })
                 // Re-queue the failed lines so they aren't lost
                 this.buffer.unshift(...lines)
                 // Prevent infinite memory leak under permanent IO failure
                 if (this.buffer.length > 5000) {
-                    process.stderr.write(`[AUDIT] Buffer overflow (${String(this.buffer.length)} entries), dropping oldest entries\n`)
+                    logger.error(`Buffer overflow (${String(this.buffer.length)} entries), dropping oldest entries`, { module: 'Audit' })
                     this.buffer = this.buffer.slice(-5000)
                 }
             }
@@ -260,7 +261,7 @@ export class AuditLogger {
         } catch (err) {
             // Rotation failure must not block logging
             const message = err instanceof Error ? err.message : String(err)
-            process.stderr.write(`[AUDIT] Rotate failed: ${message}\n`)
+            logger.error(`Rotate failed: ${message}`, { module: 'Audit' })
         }
     }
 }

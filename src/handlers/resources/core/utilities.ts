@@ -19,22 +19,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-function isPathWithinSandbox(targetPath: string, sandboxPath: string = process.cwd()): boolean {
-    let resolvedTarget = path.resolve(targetPath)
-    let resolvedSandbox = path.resolve(sandboxPath)
-    try {
-        resolvedTarget = fs.realpathSync(resolvedTarget)
-    } catch {
-        // Path might not exist yet, fallback to raw resolved string
-    }
-    try {
-        resolvedSandbox = fs.realpathSync(resolvedSandbox)
-    } catch {
-        // Sandbox might not exist, fallback to raw resolved string
-    }
-    const sandboxPrefix = resolvedSandbox.endsWith(path.sep) ? resolvedSandbox : resolvedSandbox + path.sep
-    return resolvedTarget.startsWith(sandboxPrefix) || resolvedTarget === resolvedSandbox
-}
+import { assertSafeFilePath, assertSafeDirectoryPath } from '../../../utils/security-utils.js'
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -142,8 +127,11 @@ export const statisticsResource: InternalResourceDef = {
     },
 }
 
-let cachedRulesContent: string | null = null
-let rulesLastScanTime = 0
+interface CachedRuleEntry {
+    content: string
+    timestamp: number
+}
+const cachedRulesMap = new Map<string, CachedRuleEntry>()
 const RULES_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export const rulesResource: InternalResourceDef = {
@@ -165,21 +153,25 @@ export const rulesResource: InternalResourceDef = {
                 },
             }
         }
-        if (!isPathWithinSandbox(rulesPath)) {
+        try {
+            assertSafeFilePath(rulesPath)
+        } catch (err) {
             return {
                 data: {
                     configured: true,
-                    error: 'RULES_FILE_PATH must resolve within the current working directory sandbox.',
+                    error: err instanceof Error ? err.message : String(err),
                 },
             }
         }
+
         try {
-            if (cachedRulesContent && Date.now() - rulesLastScanTime < RULES_CACHE_TTL_MS) {
+            const cached = cachedRulesMap.get(rulesPath)
+            if (cached && Date.now() - cached.timestamp < RULES_CACHE_TTL_MS) {
                 const stat = await fs.promises
                     .stat(rulesPath)
                     .catch(() => ({ mtimeMs: Date.now() }))
                 return {
-                    data: cachedRulesContent,
+                    data: cached.content,
                     annotations: {
                         lastModified: new Date(stat.mtimeMs).toISOString(),
                     },
@@ -194,8 +186,16 @@ export const rulesResource: InternalResourceDef = {
             const content = await fs.promises.readFile(rulesPath, 'utf8')
             const mtimeMs = stat.mtimeMs
 
-            cachedRulesContent = content
-            rulesLastScanTime = Date.now()
+            cachedRulesMap.set(rulesPath, {
+                content,
+                timestamp: Date.now()
+            })
+
+            // Bounded cache
+            if (cachedRulesMap.size > 100) {
+                const firstKey = cachedRulesMap.keys().next().value
+                if (firstKey) cachedRulesMap.delete(firstKey)
+            }
 
             return {
                 data: content,
@@ -249,9 +249,11 @@ export const workflowsResource: InternalResourceDef = {
     },
 }
 
-let cachedSkills: { name: string; path: string; excerpt: string; source: string }[] | null = null
-let lastScanTime = 0
-let lastScanDirs: string | null = null // cache key: serialized dir paths
+interface CachedSkillEntry {
+    skills: { name: string; path: string; excerpt: string; source: string }[]
+    timestamp: number
+}
+const cachedSkillsMap = new Map<string, CachedSkillEntry>()
 const SKILLS_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 /** Resolve the package's own skills/ directory (ships with npm package). */
@@ -322,14 +324,18 @@ export const skillsResource: InternalResourceDef = {
         const shippedSkillsDir = getShippedSkillsDir()
         const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
 
-        if (userSkillsDir && !isPathWithinSandbox(userSkillsDir)) {
-            return {
-                data: {
-                    configured: true,
-                    error: 'SKILLS_DIR_PATH must resolve within the current working directory sandbox.',
-                    skills: [],
-                    count: 0
-                },
+        if (userSkillsDir) {
+            try {
+                assertSafeDirectoryPath(userSkillsDir)
+            } catch (err) {
+                return {
+                    data: {
+                        configured: true,
+                        error: err instanceof Error ? err.message : String(err),
+                        skills: [],
+                        count: 0
+                    },
+                }
             }
         }
 
@@ -345,17 +351,17 @@ export const skillsResource: InternalResourceDef = {
         try {
             const currentDirs = `${userSkillsDir ?? ''}|${shippedSkillsDir ?? ''}`
 
+            const cached = cachedSkillsMap.get(currentDirs)
             if (
-                cachedSkills &&
-                Date.now() - lastScanTime < SKILLS_CACHE_TTL_MS &&
-                lastScanDirs === currentDirs
+                cached &&
+                Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS
             ) {
                 return {
                     data: {
                         configured: true,
                         // Prevent path disclosure of host directories
-                        skills: cachedSkills.map(s => ({ name: s.name, excerpt: s.excerpt, source: s.source })),
-                        count: cachedSkills.length,
+                        skills: cached.skills.map(s => ({ name: s.name, excerpt: s.excerpt, source: s.source })),
+                        count: cached.skills.length,
                     },
                 }
             }
@@ -380,9 +386,16 @@ export const skillsResource: InternalResourceDef = {
 
             const skills = [...skillMap.values()].sort((a, b) => a.name.localeCompare(b.name))
 
-            cachedSkills = skills
-            lastScanTime = Date.now()
-            lastScanDirs = currentDirs
+            cachedSkillsMap.set(currentDirs, {
+                skills,
+                timestamp: Date.now()
+            })
+
+            // Bounded cache
+            if (cachedSkillsMap.size > 100) {
+                const firstKey = cachedSkillsMap.keys().next().value
+                if (firstKey) cachedSkillsMap.delete(firstKey)
+            }
 
             return {
                 data: {

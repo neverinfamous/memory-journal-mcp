@@ -49,15 +49,19 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
 
         // 2. Start mock JWKS HTTP server
         const app = express()
+        app.use((req, res, next) => {
+            console.log('JWKS Mock Received:', req.method, req.url)
+            next()
+        })
         app.get('/jwks', (req, res) => {
             res.json({ keys: [jwk] })
         })
         await new Promise<void>((resolve) => {
-            jwksServer = app.listen(JWKS_PORT, () => resolve())
+            jwksServer = app.listen(JWKS_PORT, '127.0.0.1', () => resolve())
         })
 
         // 3. Generate tokens
-        const issuer = `http://localhost:${JWKS_PORT}`
+        const issuer = `http://127.0.0.1:${JWKS_PORT}`
         const audience = 'memory-journal-mcp'
 
         const makeToken = async (scope: string) => {
@@ -91,7 +95,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                 '--oauth-audience',
                 audience,
                 '--oauth-jwks-uri',
-                `http://localhost:${JWKS_PORT}/jwks`,
+                `http://127.0.0.1:${JWKS_PORT}/jwks`,
                 '--oauth-allow-plaintext-loopback',
             ],
             {

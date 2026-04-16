@@ -127,9 +127,14 @@ export function setupStateful(
                 } else {
                     // This MUST be an initialize request due to the guard above.
                     // Enforce session limit to prevent unbounded memory growth
-                    const maxSessions = process.env['MAX_STATEFUL_SESSIONS'] 
-                        ? parseInt(process.env['MAX_STATEFUL_SESSIONS'], 10) 
-                        : 1000
+                    const envMax = process.env['MAX_STATEFUL_SESSIONS']
+                    let maxSessions = 1000
+                    if (envMax) {
+                        const parsed = parseInt(envMax, 10)
+                        if (!Number.isNaN(parsed) && parsed > 0) {
+                            maxSessions = parsed
+                        }
+                    }
                     
                     if (ctx.transports.size >= maxSessions) {
                         res.status(429).json({

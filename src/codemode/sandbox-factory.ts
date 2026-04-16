@@ -33,6 +33,7 @@ export interface ISandboxPool {
         timeoutMs?: number
     ): Promise<SandboxResult>
     getActiveCount(): number
+    dispose(): void
     readonly poolId: string
 }
 

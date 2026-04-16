@@ -16,6 +16,7 @@
 import { performance } from 'node:perf_hooks'
 import { estimatePayloadTokens } from './token-estimator.js'
 import type { MetricsAccumulator } from './metrics.js'
+import { logger } from '../utils/logger.js'
 
 // ============================================================================
 // Types
@@ -76,8 +77,7 @@ export function wrapWithMetrics(
                     isError: true,
                 })
             } catch (err) {
-                // Swallow accumulator errors — never crash the main process
-                process.stderr.write(`[METRICS] Accumulator failed to record metrics error: ${err instanceof Error ? err.message : String(err)}\n`)
+                logger.error(`Accumulator failed to record metrics error`, { module: 'Metrics', error: err instanceof Error ? err.message : String(err) })
             }
             throw err
         }
@@ -93,8 +93,7 @@ export function wrapWithMetrics(
                 isError,
             })
         } catch (err) {
-            // Swallow accumulator errors — never crash the main process
-            process.stderr.write(`[METRICS] Accumulator failed to record metrics: ${err instanceof Error ? err.message : String(err)}\n`)
+            logger.error(`Accumulator failed to record metrics:`, { module: 'Metrics', error: err instanceof Error ? err.message : String(err) })
         }
 
         return result

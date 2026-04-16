@@ -10,7 +10,8 @@ export class IssuesManager {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubIssue[]> {
         if (!this.client.octokit) {
             throw new Error('GitHub API not available')
@@ -28,6 +29,7 @@ export class IssuesManager {
                 per_page: Math.min(limit * 2, 100),
                 sort: 'updated',
                 direction: 'desc',
+                request: { signal: abortSignal },
             })
 
             const result = response.data

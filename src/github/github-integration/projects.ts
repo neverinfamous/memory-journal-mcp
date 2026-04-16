@@ -13,7 +13,8 @@ export class ProjectsManager {
     async getProjectKanban(
         owner: string,
         projectNumber: number,
-        repo?: string
+        repo?: string,
+        abortSignal?: AbortSignal
     ): Promise<KanbanBoard | null> {
         if (!this.client.graphqlWithAuth) {
             logger.debug('GraphQL not available - no token', { module: 'GitHub' })
@@ -178,6 +179,7 @@ export class ProjectsManager {
             const response = await this.client.graphqlWithAuth<UserResponse>(userQuery, {
                 owner,
                 number: projectNumber,
+                request: { signal: abortSignal },
             })
             if (response.user?.projectV2) {
                 project = response.user.projectV2
@@ -193,6 +195,7 @@ export class ProjectsManager {
                     owner,
                     repo,
                     number: projectNumber,
+                    request: { signal: abortSignal },
                 })
                 if (response.repository?.projectV2) {
                     project = response.repository.projectV2
@@ -210,6 +213,7 @@ export class ProjectsManager {
                 const response = await this.client.graphqlWithAuth<OrgResponse>(orgQuery, {
                     owner,
                     number: projectNumber,
+                    request: { signal: abortSignal },
                 })
                 if (response.organization?.projectV2) {
                     project = response.organization.projectV2

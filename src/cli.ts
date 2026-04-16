@@ -83,6 +83,8 @@ program
         '60'
     )
     .option('--oauth-allow-plaintext-loopback', 'Allow plaintext loopback OAuth issuer (env: OAUTH_ALLOW_PLAINTEXT_LOOPBACK)')
+    .option('--trust-proxy', 'Trust reverse proxy headers (e.g. X-Forwarded-For env: TRUST_PROXY)')
+    .option('--public-origin <url>', 'Public origin URL for webhook verification and OAuth redirects (env: PUBLIC_ORIGIN)')
     // Audit options
     .option(
         '--audit-log <path>',
@@ -194,6 +196,8 @@ program
             oauthJwksUri?: string
             oauthClockTolerance: string
             oauthAllowPlaintextLoopback?: boolean
+            trustProxy?: boolean
+            publicOrigin?: string
             briefingEntries: string
             briefingSummaries: string
             briefingIncludeTeam?: boolean
@@ -291,6 +295,8 @@ program
                         10
                     ),
                     allowPlaintextLoopbackOAuth: options.oauthAllowPlaintextLoopback ?? (process.env['OAUTH_ALLOW_PLAINTEXT_LOOPBACK'] === 'true'),
+                    trustProxy: options.trustProxy ?? (process.env['TRUST_PROXY'] === 'true'),
+                    publicOrigin: options.publicOrigin ?? process.env['PUBLIC_ORIGIN'],
                     // Project Registry
                     projectRegistry: (() => {
                         const raw = process.env['PROJECT_REGISTRY']

@@ -131,6 +131,19 @@ export class WorkerSandbox {
         this.worker = null
     }
 
+    dispose(): void {
+        this.isBusy = false
+        if (this.currentExecution) {
+            clearTimeout(this.currentExecution.timeoutHandle)
+            this.currentExecution.hostPort.close()
+            this.currentExecution = null
+        }
+        if (this.worker) {
+            this.worker.terminate().catch(() => undefined)
+            this.worker = null
+        }
+    }
+
     /**
      * Execute code in the worker thread with RPC bridge.
      */
@@ -249,10 +262,6 @@ export class WorkerSandboxPool {
     constructor(sandboxOptions?: SandboxOptions, poolOptions?: PoolOptions) {
         this.sandboxOptions = sandboxOptions ?? {}
         this.options = { ...DEFAULT_POOL_OPTIONS, ...poolOptions }
-
-        for (let i = 0; i < this.options.maxInstances; i++) {
-            this.pool.push(new WorkerSandbox(this.sandboxOptions))
-        }
     }
 
     async execute(
@@ -260,13 +269,18 @@ export class WorkerSandboxPool {
         apiBindings: Record<string, unknown>,
         timeoutMs?: number
     ): Promise<SandboxResult> {
-        const availableSandbox = this.pool.find(s => !s.isBusy)
+        let availableSandbox = this.pool.find(s => !s.isBusy)
 
         if (!availableSandbox) {
-            return {
-                success: false,
-                error: `Sandbox pool exhausted (max ${String(this.options.maxInstances)} concurrent executions)`,
-                metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+            if (this.pool.length < this.options.maxInstances) {
+                availableSandbox = new WorkerSandbox(this.sandboxOptions)
+                this.pool.push(availableSandbox)
+            } else {
+                return {
+                    success: false,
+                    error: `Sandbox pool exhausted (max ${String(this.options.maxInstances)} concurrent executions)`,
+                    metrics: { wallTimeMs: 0, cpuTimeMs: 0, memoryUsedMb: 0 },
+                }
             }
         }
 
@@ -275,6 +289,13 @@ export class WorkerSandboxPool {
 
     getActiveCount(): number {
         return this.pool.filter(s => s.isBusy).length
+    }
+
+    dispose(): void {
+        for (const worker of this.pool) {
+            worker.dispose()
+        }
+        this.pool = []
     }
 
     readonly poolId = crypto.randomUUID()

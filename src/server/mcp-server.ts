@@ -70,6 +70,8 @@ export interface ServerOptions {
     oauthJwksUri?: string
     oauthClockTolerance?: number
     allowPlaintextLoopbackOAuth?: boolean
+    trustProxy?: boolean
+    publicOrigin?: string
     // Briefing configuration
     briefingConfig?: BriefingConfig
     // Project Registry
@@ -570,6 +572,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             oauthJwksUri: options.oauthJwksUri,
             oauthClockTolerance: options.oauthClockTolerance,
             allowPlaintextLoopbackOAuth: options.allowPlaintextLoopbackOAuth,
+            trustProxy: options.trustProxy,
+            publicOrigin: options.publicOrigin,
         })
 
         await httpTransport.start(createServerInstance, scheduler)

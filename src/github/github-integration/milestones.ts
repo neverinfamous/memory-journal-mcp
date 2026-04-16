@@ -9,7 +9,8 @@ export class MilestonesManager {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubMilestone[]> {
         if (!this.client.octokit) {
             throw new Error('GitHub API not available')
@@ -27,6 +28,7 @@ export class MilestonesManager {
                 per_page: limit,
                 sort: 'due_on',
                 direction: 'asc',
+                request: { signal: abortSignal },
             })
 
             const result = response.data.map((ms) => ({

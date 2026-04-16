@@ -80,9 +80,10 @@ export class GitHubIntegration {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubIssue[]> {
-        return this.issuesManager.getIssues(owner, repo, state, limit)
+        return this.issuesManager.getIssues(owner, repo, state, limit, abortSignal)
     }
 
     async getIssue(owner: string, repo: string, issueNumber: number): Promise<IssueDetails | null> {
@@ -131,9 +132,10 @@ export class GitHubIntegration {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubPullRequest[]> {
-        return this.pullRequestsManager.getPullRequests(owner, repo, state, limit)
+        return this.pullRequestsManager.getPullRequests(owner, repo, state, limit, abortSignal)
     }
 
     async getPullRequest(
@@ -164,11 +166,11 @@ export class GitHubIntegration {
         return this.pullRequestsManager.getCopilotReviewSummary(owner, repo, prNumber)
     }
 
-    async getWorkflowRuns(owner: string, repo: string, limit = 10): Promise<GitHubWorkflowRun[]> {
-        return this.repositoryManager.getWorkflowRuns(owner, repo, limit)
+    async getWorkflowRuns(owner: string, repo: string, limit = 10, abortSignal?: AbortSignal): Promise<GitHubWorkflowRun[]> {
+        return this.repositoryManager.getWorkflowRuns(owner, repo, limit, abortSignal)
     }
 
-    async getRepoContext(): Promise<ProjectContext> {
+    async getRepoContext(abortSignal?: AbortSignal): Promise<ProjectContext> {
         const cached = this.client.getCached('context:repo') as ProjectContext | undefined
         if (cached) return cached
 
@@ -195,10 +197,10 @@ export class GitHubIntegration {
 
         if (repoInfo.owner && repoInfo.repo) {
             const [issuesResult, prsResult, runsResult, milestonesResult] = await Promise.allSettled([
-                this.issuesManager.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10),
-                this.pullRequestsManager.getPullRequests(repoInfo.owner, repoInfo.repo, 'open', 10),
-                this.repositoryManager.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10),
-                this.milestonesManager.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10)
+                this.issuesManager.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10, abortSignal),
+                this.pullRequestsManager.getPullRequests(repoInfo.owner, repoInfo.repo, 'open', 10, abortSignal),
+                this.repositoryManager.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10, abortSignal),
+                this.milestonesManager.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10, abortSignal)
             ])
 
             context.issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
@@ -214,9 +216,10 @@ export class GitHubIntegration {
     async getProjectKanban(
         owner: string,
         projectNumber: number,
-        repo?: string
+        repo?: string,
+        abortSignal?: AbortSignal
     ): Promise<KanbanBoard | null> {
-        return this.projectsManager.getProjectKanban(owner, projectNumber, repo)
+        return this.projectsManager.getProjectKanban(owner, projectNumber, repo, abortSignal)
     }
 
     async moveProjectItem(
@@ -251,9 +254,10 @@ export class GitHubIntegration {
         owner: string,
         repo: string,
         state: 'open' | 'closed' | 'all' = 'open',
-        limit = 20
+        limit = 20,
+        abortSignal?: AbortSignal
     ): Promise<GitHubMilestone[]> {
-        return this.milestonesManager.getMilestones(owner, repo, state, limit)
+        return this.milestonesManager.getMilestones(owner, repo, state, limit, abortSignal)
     }
 
     async getMilestone(

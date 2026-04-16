@@ -85,7 +85,46 @@ function sweepCaches(): void {
         }
     }
     for (const [id, entry] of sandboxPoolMap.entries()) {
-        if (now - entry.lastAccessed > TTL_MS) sandboxPoolMap.delete(id)
+        if (now - entry.lastAccessed > TTL_MS) {
+            entry.instance.dispose()
+            sandboxPoolMap.delete(id)
+        }
+    }
+}
+
+const MAX_SANDBOX_POOLS = 50
+
+function evictExcessCaches(): void {
+    if (sandboxPoolMap.size < MAX_SANDBOX_POOLS && securityManagerMap.size < MAX_SANDBOX_POOLS) return
+
+    if (sandboxPoolMap.size >= MAX_SANDBOX_POOLS) {
+        let oldestId: string | null = null
+        let oldestTime = Infinity
+        for (const [id, entry] of sandboxPoolMap.entries()) {
+            if (entry.lastAccessed < oldestTime) {
+                oldestTime = entry.lastAccessed
+                oldestId = id
+            }
+        }
+        if (oldestId) {
+            sandboxPoolMap.get(oldestId)?.instance.dispose()
+            sandboxPoolMap.delete(oldestId)
+        }
+    }
+
+    if (securityManagerMap.size >= MAX_SANDBOX_POOLS) {
+        let oldestSecId: string | null = null
+        let oldestSecTime = Infinity
+        for (const [id, entry] of securityManagerMap.entries()) {
+            if (entry.lastAccessed < oldestSecTime) {
+                oldestSecTime = entry.lastAccessed
+                oldestSecId = id
+            }
+        }
+        if (oldestSecId) {
+            securityManagerMap.get(oldestSecId)?.instance.dispose()
+            securityManagerMap.delete(oldestSecId)
+        }
     }
 }
 
@@ -93,6 +132,7 @@ function getSecurityManager(clientId: string): CodeModeSecurityManager {
     sweepCaches()
     let entry = securityManagerMap.get(clientId)
     if (!entry) {
+        evictExcessCaches()
         const envMaxSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
         const parsedMaxSize =
             envMaxSize && /^\d+$/.test(envMaxSize) ? parseInt(envMaxSize, 10) : undefined
@@ -119,6 +159,7 @@ function getSandboxPool(clientId: string): ISandboxPool {
     sweepCaches()
     let entry = sandboxPoolMap.get(clientId)
     if (!entry) {
+        evictExcessCaches()
         entry = {
             instance: createSandboxPool(),
             lastAccessed: Date.now()

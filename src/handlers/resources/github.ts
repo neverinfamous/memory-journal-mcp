@@ -58,10 +58,18 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 // Resolve default project number — skip kanban fetch when not configured
                 const defaultProjectNumber = context.briefingConfig?.defaultProjectNumber
 
-                const withTimeout = <T>(promise: Promise<T>, ms: number, desc: string): Promise<T> => {
+                const withTimeout = <T>(
+                   operation: (signal: AbortSignal) => Promise<T>,
+                   ms: number, 
+                   desc: string
+                ): Promise<T> => {
+                    const controller = new AbortController()
                     return Promise.race([
-                        promise,
-                        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`GitHub API timeout: ${desc}`)), ms))
+                        operation(controller.signal),
+                        new Promise<T>((_, reject) => setTimeout(() => {
+                            controller.abort()
+                            reject(new Error(`GitHub API timeout: ${desc}`))
+                        }, ms))
                     ])
                 }
 
@@ -74,14 +82,14 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     kanbanResult,
                     milestoneResult,
                 ] = await Promise.allSettled([
-                    withTimeout(github.getRepoContext(), 10000, 'getRepoContext'),
-                    withTimeout(github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT), 10000, 'getIssues'),
-                    withTimeout(github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT), 10000, 'getPullRequests'),
-                    withTimeout(github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT), 10000, 'getWorkflowRuns'),
+                    withTimeout((s) => github.getRepoContext(s), 10000, 'getRepoContext'),
+                    withTimeout((s) => github.getIssues(owner, repo, 'open', RESOURCE_ISSUE_LIMIT, s), 10000, 'getIssues'),
+                    withTimeout((s) => github.getPullRequests(owner, repo, 'open', RESOURCE_PR_LIMIT, s), 10000, 'getPullRequests'),
+                    withTimeout((s) => github.getWorkflowRuns(owner, repo, RESOURCE_WORKFLOW_LIMIT, s), 10000, 'getWorkflowRuns'),
                     defaultProjectNumber !== undefined
-                        ? withTimeout(github.getProjectKanban(owner, defaultProjectNumber, repo), 10000, 'getProjectKanban')
+                        ? withTimeout((s) => github.getProjectKanban(owner, defaultProjectNumber, repo, s), 10000, 'getProjectKanban')
                         : Promise.resolve(null),
-                    withTimeout(github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT), 10000, 'getMilestones'),
+                    withTimeout((s) => github.getMilestones(owner, repo, 'open', RESOURCE_STATUS_MILESTONE_LIMIT, s), 10000, 'getMilestones'),
                 ])
 
                 // Extract results with safe defaults
