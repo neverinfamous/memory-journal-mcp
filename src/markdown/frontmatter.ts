@@ -137,7 +137,7 @@ export function parseFrontmatter(content: string): ParseResult {
     }
 
     if (closingIndex === -1) {
-        return { metadata: {}, body: content }
+        throw new Error('Invalid frontmatter: Found opening --- fence but no closing --- fence')
     }
 
     // Parse frontmatter lines

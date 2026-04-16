@@ -66,22 +66,26 @@ export class TagsManager {
         const tagMap = new Map<number, string[]>()
         if (ids.length === 0) return tagMap
 
-        const placeholders = ids.map(() => '?').join(', ')
-        const rows = this.db
-            .prepare(
-                `SELECT et.entry_id, t.name
-                 FROM entry_tags et
-                 JOIN tags t ON et.tag_id = t.id
-                 WHERE et.entry_id IN (${placeholders})`
-            )
-            .all(...ids) as { entry_id: number; name: string }[]
+        const CHUNK_SIZE = 900
+        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+            const chunk = ids.slice(i, i + CHUNK_SIZE)
+            const placeholders = chunk.map(() => '?').join(', ')
+            const rows = this.db
+                .prepare(
+                    `SELECT et.entry_id, t.name
+                     FROM entry_tags et
+                     JOIN tags t ON et.tag_id = t.id
+                     WHERE et.entry_id IN (${placeholders})`
+                )
+                .all(...chunk) as { entry_id: number; name: string }[]
 
-        for (const row of rows) {
-            const existing = tagMap.get(row.entry_id)
-            if (existing) {
-                existing.push(row.name)
-            } else {
-                tagMap.set(row.entry_id, [row.name])
+            for (const row of rows) {
+                const existing = tagMap.get(row.entry_id)
+                if (existing) {
+                    existing.push(row.name)
+                } else {
+                    tagMap.set(row.entry_id, [row.name])
+                }
             }
         }
         return tagMap

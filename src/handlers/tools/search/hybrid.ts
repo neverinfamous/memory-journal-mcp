@@ -69,7 +69,7 @@ export async function hybridSearch(
     options: ISearchFilters & {
         limit: number
     }
-): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number> }> {
+): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number>; degraded?: boolean }> {
     const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
 
     // Run FTS5 and semantic search in parallel
@@ -122,5 +122,7 @@ export async function hybridSearch(
         entries.push({ ...entry, source: 'personal' as const })
     }
 
-    return { entries, fusionScores }
+    const isDegraded = (ftsResults as unknown as { degraded?: boolean }).degraded === true
+
+    return { entries, fusionScores, degraded: isDegraded || undefined }
 }

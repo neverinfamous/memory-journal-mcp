@@ -75,11 +75,12 @@ describe('NativeConnectionManager exec branches', () => {
         expect(result).toEqual([])
     })
 
-    it('should handle multi-statement mutation (semicolon path)', () => {
-        const result = conn.exec(
-            "INSERT INTO tags (name, usage_count) VALUES ('a', 1); INSERT INTO tags (name, usage_count) VALUES ('b', 2);"
-        )
-        expect(result).toEqual([])
+    it('should reject multi-statement mutations (semicolon path) as forbidden', () => {
+        expect(() => {
+            conn.exec(
+                "INSERT INTO tags (name, usage_count) VALUES ('a', 1); INSERT INTO tags (name, usage_count) VALUES ('b', 2);"
+            )
+        }).toThrow('Multi-statement mutations via exec() are strictly forbidden')
     })
 
     it('should handle SELECT returning rows with columns/values', () => {

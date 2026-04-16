@@ -26,7 +26,7 @@ export class IssuesManager {
                 owner,
                 repo,
                 state,
-                per_page: Math.min(limit * 2, 100),
+                per_page: Math.min(limit + 5, 100),
                 sort: 'updated',
                 direction: 'desc',
                 request: { signal: abortSignal },

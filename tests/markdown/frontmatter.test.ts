@@ -85,13 +85,11 @@ Body`
         expect(body).toContain('mj_id: 1')
     })
 
-    it('should return empty metadata and full content if closing delimiter is missing', () => {
+    it('should throw an error if the closing delimiter is missing', () => {
         const markdown = `---
 mj_id: 123
 Body without closing delimiter`
-        const { metadata, body } = parseFrontmatter(markdown)
-        expect(metadata).toEqual({})
-        expect(body).toBe(markdown)
+        expect(() => parseFrontmatter(markdown)).toThrow('Invalid frontmatter: Found opening --- fence but no closing --- fence')
     })
 
     it('should throw an error if frontmatter fails schema validation', () => {

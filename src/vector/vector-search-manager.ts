@@ -298,7 +298,8 @@ export class VectorSearchManager {
      */
     async rebuildIndex(
         db: IDatabaseAdapter,
-        progress?: ProgressContext
+        progress?: ProgressContext,
+        options?: { budget?: number; isCancelled?: () => boolean }
     ): Promise<{ indexed: number; failed: number; firstError: string | null }> {
         if (!this.initialized) {
             try {
@@ -335,8 +336,11 @@ export class VectorSearchManager {
 
         let indexed = 0
         let failed = 0
+        let processed = 0
+        const budget = options?.budget ?? 10000
         let firstError: string | null = null
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
+            if (options?.isCancelled?.() || processed >= budget) break
             const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
 
             // Generate embeddings in parallel batches
@@ -396,6 +400,17 @@ export class VectorSearchManager {
                         totalEntries,
                         `Indexed ${String(indexed)} of ${String(totalEntries)} entries`
                     )
+                }
+                
+                processed += batch.length
+                
+                if (options?.isCancelled?.()) {
+                    firstError ??= 'Operation cancelled'
+                    break
+                }
+                if (processed >= budget) {
+                    firstError ??= `Rebuild index budget of ${String(budget)} items reached`
+                    break
                 }
             }
         }

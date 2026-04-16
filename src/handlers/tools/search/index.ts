@@ -347,7 +347,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 const result = ftsSearch(input.query, db, teamDb, searchOptions)
                                 return { ...result, searchMode: 'fts (fallback)' }
                             }
-                            const { entries } = await hybridSearch(
+                            const { entries, degraded } = await hybridSearch(
                                 query,
                                 db,
                                 vectorManager,
@@ -371,6 +371,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     entries: scored,
                                     count: scored.length,
                                     searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
+                                    ...(degraded ? { degraded } : {}),
                                 }
                             }
 
@@ -379,6 +380,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
+                                ...(degraded ? { degraded } : {}),
                             }
                         }
                         case 'fts':

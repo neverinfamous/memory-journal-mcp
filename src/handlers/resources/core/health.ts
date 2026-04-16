@@ -82,6 +82,12 @@ export const healthResource: InternalResourceDef = {
                 scheduler: context.scheduler
                     ? context.scheduler.getStatus()
                     : { active: false, jobs: [] },
+                audit: context.runtime?.auditLogger
+                    ? {
+                          droppedCount: context.runtime.auditLogger.droppedCount,
+                          status: context.runtime.auditLogger.droppedCount > 0 ? 'degraded' : 'ok',
+                      }
+                    : { status: 'unknown' },
                 metrics: metricsSummary,
                 timestamp: lastModified,
             },

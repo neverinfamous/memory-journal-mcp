@@ -61,6 +61,8 @@ export class AuditLogger {
     private closed = false
     private dirEnsured = false
     private readonly stderrMode: boolean
+    
+    private _droppedCount = 0
 
     constructor(config: AuditConfig) {
         this.config = config
@@ -76,6 +78,13 @@ export class AuditLogger {
     }
 
     /**
+     * Total number of events dropped due to memory limits or persistent I/O failure.
+     */
+    get droppedCount(): number {
+        return this._droppedCount
+    }
+
+    /**
      * Append an audit entry to the buffer.
      * Non-blocking — the entry is serialised and queued; the
      * actual file write happens on the next flush cycle.
@@ -88,6 +97,7 @@ export class AuditLogger {
         // Hard cap to prevent unbounded heap growth if flush loop hangs
         if (this.buffer.length > 5000) {
             this.buffer.shift()
+            this._droppedCount++
         }
 
         // Eagerly flush when the buffer is full
@@ -136,7 +146,9 @@ export class AuditLogger {
                 // Prevent infinite memory leak under permanent IO failure
                 if (this.buffer.length > 5000) {
                     logger.error(`Buffer overflow (${String(this.buffer.length)} entries), dropping oldest entries`, { module: 'Audit' })
+                    const toDrop = this.buffer.length - 5000
                     this.buffer = this.buffer.slice(-5000)
+                    this._droppedCount += toDrop
                 }
             }
         }

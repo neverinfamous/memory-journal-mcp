@@ -134,6 +134,7 @@ export const EntriesListOutputSchema = z
         entries: z.array(EntryOutputSchema).optional(),
         count: z.number().optional(),
         searchMode: z.string().optional(),
+        degraded: z.boolean().optional().describe('True if the search degraded to a slower fallback method due to infrastructure failure'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })

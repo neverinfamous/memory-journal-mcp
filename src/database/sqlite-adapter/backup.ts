@@ -143,60 +143,83 @@ export class BackupManager {
             throw new ResourceNotFoundError('Backup', filename)
         }
 
-        const currentCountResult = this.ctx.exec(
-            'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
-        )
-        const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
-
-        const preRestoreResult = await this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
-
-        // Close old DB via manager
-        this.ctx.closeDbBeforeRestore()
-
+        const lockPath = `${this.ctx.getDbPath()}.lock`
+        let lockFd: number
         try {
-            // Stage the backup file directly adjacent to ensure cross-device consistency avoids failure
-            const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${Date.now()}`
-            await fs.promises.copyFile(backupPath, tempDbPath)
-            
-            // Perform atomic swap
-            await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
-
-            // Re-initialize using the connection's standard initialize method
-            // This ensures extensions like sqlite-vec are properly loaded
-            await this.ctx.initialize()
-
-            // Run explicit integrity check
-            const integrityResult = this.ctx.exec('PRAGMA integrity_check');
-            if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
-                throw new Error(`Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`)
+            lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
+        } catch (lockError: unknown) {
+            if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError as { code: unknown }).code === 'EEXIST') {
+                throw new Error(`Another process is currently holding the database lock at ${lockPath}. Backup restore cannot safely proceed.`, { cause: lockError })
             }
-        } catch (error) {
-            logger.error('Restore failed, rolling back to pre-restore backup', {
+            throw lockError
+        }
+        
+        try {
+            const currentCountResult = this.ctx.exec(
+                'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
+            )
+            const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
+
+            const preRestoreResult = await this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
+
+            // Close old DB via manager
+            this.ctx.closeDbBeforeRestore()
+
+            try {
+                // Stage the backup file directly adjacent to ensure cross-device consistency avoids failure
+                const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${Date.now()}`
+                await fs.promises.copyFile(backupPath, tempDbPath)
+                
+                // Perform atomic swap
+                await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
+
+                // Re-initialize using the connection's standard initialize method
+                // This ensures extensions like sqlite-vec are properly loaded
+                await this.ctx.initialize()
+
+                // Run explicit integrity check
+                const integrityResult = this.ctx.exec('PRAGMA integrity_check');
+                if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
+                    throw new Error(`Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`)
+                }
+            } catch (error) {
+                logger.error('Restore failed, rolling back to pre-restore backup', {
+                    module: 'SqliteAdapter',
+                    operation: 'restoreFromFile',
+                    error: error instanceof Error ? error.message : String(error)
+                })
+                // Close old DB via manager before rollback
+                this.ctx.closeDbBeforeRestore()
+                // Rollback using the same atomic strategy for recovery
+                const recoveryDbPath = `${this.ctx.getDbPath()}.recover_tmp_${Date.now()}`
+                await fs.promises.copyFile(preRestoreResult.path, recoveryDbPath)
+                await fs.promises.rename(recoveryDbPath, this.ctx.getDbPath())
+                await this.ctx.initialize()
+                throw error
+            }
+
+            const newCountResult = this.ctx.exec(
+                'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
+            )
+            const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0
+
+            logger.info('Database restored from backup', {
                 module: 'SqliteAdapter',
                 operation: 'restoreFromFile',
-                error: error instanceof Error ? error.message : String(error)
+                context: { backupPath, previousEntryCount, newEntryCount },
             })
-            // Close old DB via manager before rollback
-            this.ctx.closeDbBeforeRestore()
-            // Rollback using the same atomic strategy for recovery
-            const recoveryDbPath = `${this.ctx.getDbPath()}.recover_tmp_${Date.now()}`
-            await fs.promises.copyFile(preRestoreResult.path, recoveryDbPath)
-            await fs.promises.rename(recoveryDbPath, this.ctx.getDbPath())
-            await this.ctx.initialize()
-            throw error
+            
+            return { restoredFrom: filename, previousEntryCount, newEntryCount }
+        } finally {
+            try {
+                fs.closeSync(lockFd)
+                fs.unlinkSync(lockPath)
+            } catch (err: unknown) {
+                logger.warning('Failed to release OS lock file during restore', { 
+                    path: lockPath, 
+                    error: err instanceof Error ? err.message : String(err) 
+                })
+            }
         }
-
-        const newCountResult = this.ctx.exec(
-            'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
-        )
-        const newEntryCount = (newCountResult[0]?.values[0]?.[0] as number) ?? 0
-
-        logger.info('Database restored from backup', {
-            module: 'SqliteAdapter',
-            operation: 'restoreFromFile',
-            context: { backupPath, previousEntryCount, newEntryCount },
-        })
-
-        return { restoredFrom: filename, previousEntryCount, newEntryCount }
     }
 }

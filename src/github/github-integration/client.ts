@@ -18,7 +18,7 @@ export class GitHubClient {
     public octokit: Octokit | null = null
     public graphqlWithAuth: typeof graphql | null = null
     public git: simpleGitImport.SimpleGit
-    public token: string | undefined
+    private readonly token: string | undefined
 
     public readonly apiCache = new Map<string, CacheEntry<unknown>>()
 

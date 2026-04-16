@@ -30,7 +30,7 @@ export function ftsSearch(
         endDate?: string
         sortBy?: 'timestamp' | 'importance'
     }
-): { entries: EntryWithSource[]; count: number } {
+): { entries: EntryWithSource[]; count: number; degraded?: boolean } {
     const hasFilters =
         options.projectNumber !== undefined ||
         options.issueNumber !== undefined ||
@@ -94,11 +94,16 @@ export function ftsSearch(
             options.limit,
             options.sortBy
         )
-        return { entries: merged, count: merged.length }
+        const isTeamDegraded = (teamEntries as unknown as { degraded?: boolean }).degraded === true
+        const isPersonalDegraded = (personalEntries as unknown as { degraded?: boolean }).degraded === true
+        return { entries: merged, count: merged.length, degraded: isPersonalDegraded || isTeamDegraded || undefined }
     }
+
+    const isPersonalDegraded = (personalEntries as unknown as { degraded?: boolean }).degraded === true
 
     return {
         entries: personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
         count: personalEntries.length,
+        degraded: isPersonalDegraded || undefined
     }
 }

@@ -208,8 +208,29 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     })
                 }
 
+                let fetchStatus: 'ok' | 'degraded' | 'failed' = 'ok'
+                const failures: string[] = []
+
+                if (commitResult.status === 'rejected') failures.push('commit')
+                if (issuesResult.status === 'rejected') failures.push('issues')
+                if (prsResult.status === 'rejected') failures.push('pullRequests')
+                if (workflowsResult.status === 'rejected') failures.push('ci')
+                if (kanbanResult.status === 'rejected') failures.push('kanban')
+                if (milestoneResult.status === 'rejected') failures.push('milestones')
+
+                if (failures.length > 0) {
+                    const totalAttempts = defaultProjectNumber !== undefined ? 6 : 5
+                    if (failures.length === totalAttempts) {
+                        fetchStatus = 'failed'
+                    } else {
+                        fetchStatus = 'degraded'
+                    }
+                }
+
                 return {
                     data: {
+                        status: fetchStatus,
+                        failures: failures.length > 0 ? failures : undefined,
                         repository: `${owner}/${repo}`,
                         branch,
                         commit: commit?.slice(0, 7) ?? null,

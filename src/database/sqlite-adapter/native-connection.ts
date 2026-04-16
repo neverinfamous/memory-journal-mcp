@@ -205,10 +205,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
         // Use pre-compiled regex to detect true mutations that should return an empty set
         const isMutation = IS_MUTATION_RE.test(sql)
 
-        // For multiple statements separated by semicolon where they just want it to run
+        // Reject multiple statements separated by semicolon to prevent unparameterized footguns
         if (isMutation && sql.includes(';')) {
-            db.exec(sql)
-            return []
+            throw new Error('Multi-statement mutations via exec() are strictly forbidden. Use properly parameterized adapter methods instead.')
         }
 
         const stmt = db.prepare(sql)
