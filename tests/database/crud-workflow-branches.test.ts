@@ -74,7 +74,7 @@ function createTestDb() {
 
 /** Creates a mock NativeConnectionManager for TagsManager */
 function makeCtx(db: InstanceType<typeof Database>) {
-    return { getRawDb: () => db } as ConstructorParameters<typeof TagsManager>[0]
+    return { getNativeDb: () => db } as ConstructorParameters<typeof TagsManager>[0]
 }
 
 function createContext(db: InstanceType<typeof Database>) {

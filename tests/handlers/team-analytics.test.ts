@@ -101,7 +101,7 @@ describe('Team Analytics Tool Handlers', () => {
             isPersonal: false,
             projectNumber: 303,
         })
-        const rawDb = teamDb.getRawDb() as any
+        const rawDb = teamDb["connection"].getNativeDb() as any
         rawDb.prepare(`UPDATE memory_journal SET timestamp = datetime('now', '-10 days') WHERE id = ?`).run(oldEntry.id)
         teamDb.flushSave()
     })

@@ -6,12 +6,14 @@
  * relationship linking, and dry-run mode.
  */
 
-import { readdir, readFile, stat, lstat } from 'node:fs/promises'
+import { readdir, open } from 'node:fs/promises'
 import { join } from 'node:path'
+import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
+import { assertSafeDirectoryPath } from '../utils/security-utils.js'
 
 // ============================================================================
 // Types
@@ -109,9 +111,13 @@ export async function importMarkdownEntries(
     sourceDir: string,
     db: IDatabaseAdapter,
     options: ImportOptions = {},
-    vectorManager?: VectorSearchManager
+    vectorManager?: VectorSearchManager,
+    allowedRoots?: string[]
 ): Promise<ImportResult> {
     const { dry_run = false, limit = 100, author } = options
+    
+    // Dynamically enforce bounded root
+    assertSafeDirectoryPath(sourceDir, allowedRoots)
 
     // Read directory for .md files
     const allFiles = await readdir(sourceDir)
@@ -128,23 +134,30 @@ export async function importMarkdownEntries(
         dry_run,
     }
 
+
     for (const filename of mdFiles) {
+        let handle;
         try {
             const filepath = join(sourceDir, filename)
 
-            // Prevent strict symlink traversal by refusing to read symlinks
-            const lstats = await lstat(filepath)
-            if (lstats.isSymbolicLink()) {
-                throw new Error(`Refusing to read symlink during import: ${filename}`)
+            // Open the file with O_NOFOLLOW to atomically prevent symlink traversal
+            try {
+                handle = await open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
+            } catch (err: unknown) {
+                const code = err instanceof Error && 'code' in err ? (err as {code?: string}).code : undefined;
+                if (code === 'ELOOP') {
+                    throw new Error(`Refusing to read symlink during import: ${filename}`, { cause: err })
+                }
+                throw err
             }
 
-            // Prevent memory amplification DoS: skip egregiously large markdown files (>5MB)
-            const stats = await stat(filepath)
+            // Provide atomic size check using the file handle
+            const stats = await handle.stat()
             if (stats.size > 5 * 1024 * 1024) {
                 throw new Error(`File exceeds maximum size limit of 5MB (${stats.size} bytes)`)
             }
 
-            const content = await readFile(filepath, 'utf-8')
+            const content = await handle.readFile('utf-8')
 
             // Parse frontmatter
             const { metadata, body } = parseFrontmatter(content)
@@ -240,6 +253,10 @@ export async function importMarkdownEntries(
                 error: err instanceof Error ? err.message : String(err),
             })
             result.success = false
+        } finally {
+            if (handle) {
+                await handle.close()
+            }
         }
     }
 

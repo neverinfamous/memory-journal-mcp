@@ -8,6 +8,14 @@ vi.mock('node:fs/promises', () => ({
     stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 100 }),
     lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
     realpath: vi.fn(),
+    open: vi.fn().mockImplementation(async (path) => {
+        const fsPromises = await import('node:fs/promises');
+        return {
+            stat: vi.fn().mockResolvedValue({ size: 100 }),
+            readFile: () => fsPromises.readFile(path),
+            close: vi.fn()
+        };
+    }),
 }))
 
 vi.mock('../../src/utils/security-utils.js', async (importOriginal) => {
@@ -47,7 +55,7 @@ New content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
         const result = await importMarkdownEntries(
-            '/tmp/import',
+            './import',
             mockDb as any,
             {},
             mockVectorManager as any
@@ -76,7 +84,7 @@ Updated decision content`
         // Mock finding the entry
         mockDb.getEntryById.mockReturnValue({ id: 42 })
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any)
 
         expect(result.success).toBe(true)
         expect(result.updated).toBe(1)
@@ -101,7 +109,7 @@ Restored entry`
         // Mock NOT finding the entry
         mockDb.getEntryById.mockReturnValue(null)
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any)
 
         expect(result.success).toBe(true)
         // From importer perspective, if it brings its own ID but it's new, it counts as creation
@@ -124,7 +132,7 @@ Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
         mockDb.getEntryById.mockReturnValue({ id: 42 })
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any, { dry_run: true })
+        const result = await importMarkdownEntries('./import', mockDb as any, { dry_run: true })
 
         expect(result.success).toBe(true)
         expect(result.dry_run).toBe(true)
@@ -150,7 +158,7 @@ Content`
         // Mock the target missing
         mockDb.getEntryById.mockImplementation((id) => (id === 999 ? null : undefined))
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any)
 
         expect(result.success).toBe(true)
         expect(result.errors).toEqual([]) // It shouldn't be a hard error, just skipped quietly in importer mapping
@@ -166,7 +174,7 @@ tags:
   \n  `
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any)
         expect(result.skipped).toBe(1)
         expect(result.created).toBe(0)
     })
@@ -182,7 +190,7 @@ tags:
         })
         mockDb.getEntryById.mockReturnValue(null) // mj_id 100 not found
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any, { dry_run: true })
+        const result = await importMarkdownEntries('./import', mockDb as any, { dry_run: true })
         expect(result.dry_run).toBe(true)
         expect(result.created).toBe(2) // Both should count as created
         expect(result.updated).toBe(0)
@@ -200,7 +208,7 @@ Content`
         // Target exists
         mockDb.getEntryById.mockImplementation((id) => (id === 999 ? { id: 999 } : undefined))
 
-        const result = await importMarkdownEntries('/tmp/import', mockDb as any)
+        const result = await importMarkdownEntries('./import', mockDb as any)
 
         expect(result.success).toBe(true)
         expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references')
@@ -213,7 +221,7 @@ Content`
         mockVectorManager.addEntry.mockRejectedValueOnce(new Error('Vector failure'))
 
         const result = await importMarkdownEntries(
-            '/tmp/import',
+            './import',
             mockDb as any,
             {},
             mockVectorManager as any

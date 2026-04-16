@@ -92,6 +92,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                 audience,
                 '--oauth-jwks-uri',
                 `http://localhost:${JWKS_PORT}/jwks`,
+                '--oauth-allow-plaintext-loopback',
             ],
             {
                 cwd: process.cwd(),
@@ -100,13 +101,20 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             }
         )
 
+        serverProcess.stderr?.on('data', (d) => console.error('E2E SERVER STDERR:', d.toString()))
+        serverProcess.stdout?.on('data', (d) => console.log('E2E SERVER STDOUT:', d.toString()))
+        let ready = false
         for (let i = 0; i < 30; i++) {
             try {
                 const res = await fetch(`http://localhost:${OAUTH_SCOPES_PORT}/health`)
-                if (res.ok) break
+                if (res.ok) {
+                    ready = true
+                    break
+                }
             } catch {}
             await delay(500)
         }
+        if (!ready) throw new Error('MCP server failed to start within 15 seconds')
     })
 
     test.afterAll(async () => {

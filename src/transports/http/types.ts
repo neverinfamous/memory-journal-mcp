@@ -136,4 +136,10 @@ export interface HttpTransportConfig {
      * If omitted, falls back to the dynamic http://${host}:${port}.
      */
     publicOrigin?: string
+
+    /**
+     * Explicit flag to allow plaintext (http://) loopback URLs for OAuth operations.
+     * Prevents accidental deployment of insecure issuers.
+     */
+    allowPlaintextLoopbackOAuth?: boolean
 }

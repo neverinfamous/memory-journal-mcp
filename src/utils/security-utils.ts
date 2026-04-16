@@ -141,14 +141,32 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots?: string[
 
     const resolved = path.resolve(dirPath)
 
-    // 2. Attempt to get the realpath; if it fails (doesn't exist yet), rely on resolved.
-    let targetPath = resolved
-    try {
-        targetPath = fs.realpathSync(resolved)
-    } catch {
-        targetPath = resolved
+    // 2. Resolve realpath iteratively by stepping up the tree until an existing directory is found.
+    // This prevents symlink traversal bypasses where the final node does not exist but a parent is a symlink pointing outside.
+    let currentDir = resolved
+    let existingRealPath = ''
+
+    while (currentDir !== path.parse(currentDir).root) {
+        try {
+            existingRealPath = fs.realpathSync(currentDir)
+            break
+        } catch {
+            currentDir = path.dirname(currentDir)
+        }
     }
-    
+
+    if (!existingRealPath) {
+        try {
+            existingRealPath = fs.realpathSync(currentDir) // root resolution
+        } catch {
+            existingRealPath = currentDir
+        }
+    }
+
+    // The target path is the successfully evaluated real path plus any non-existent trailing segments
+    const remainder = path.relative(currentDir, resolved)
+    const targetPath = remainder ? path.join(existingRealPath, remainder) : existingRealPath
+
     // 3. Define safe boundaries
     const rawRoots: string[] = providedRoots ?? [process.cwd()]
     const allowedRoots: string[] = []

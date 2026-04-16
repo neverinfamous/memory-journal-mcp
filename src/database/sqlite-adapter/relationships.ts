@@ -13,7 +13,7 @@ export class RelationshipsManager {
     }
 
     private get db(): Database {
-        return this.ctx.getRawDb() as Database
+        return this.ctx.getNativeDb()
     }
 
     linkEntries(

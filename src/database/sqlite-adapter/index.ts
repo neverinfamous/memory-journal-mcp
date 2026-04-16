@@ -20,7 +20,7 @@ import {
     getAnalyticsSnapshots as getSnapshots,
     computeDigest,
 } from './entries/digest.js'
-import type { Database } from 'better-sqlite3'
+
 import * as fs from 'node:fs'
 
 /**
@@ -298,12 +298,55 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.connection.pragma(command)
     }
 
-    /**
-     * @internal QUARANTINED
-     * @deprecated Exposes underlying database instance, violating adapter boundaries. Slated for removal.
-     */
-    getRawDb(): unknown {
-        return this.connection.getRawDb()
+    // ========================================================================
+    // Vector Search Primitives
+    // ========================================================================
+
+    upsertVector(entryId: number, embedding: Float32Array): void {
+        const bigId = BigInt(entryId)
+        const db = this.connection.getNativeDb()
+        db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(bigId)
+        db.prepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)').run(
+            bigId,
+            embedding
+        )
+    }
+
+    searchVectors(
+        embedding: Float32Array,
+        limit: number
+    ): { entry_id: number; distance: number }[] {
+        const db = this.connection.getNativeDb()
+        return db
+            .prepare(
+                `SELECT entry_id, distance FROM vec_embeddings WHERE embedding MATCH ? ORDER BY distance LIMIT ?`
+            )
+            .all(embedding, limit) as { entry_id: number; distance: number }[]
+    }
+
+    getVector(entryId: number): Float32Array | null {
+        const db = this.connection.getNativeDb()
+        const row = db
+            .prepare('SELECT embedding FROM vec_embeddings WHERE entry_id = ?')
+            .get(BigInt(entryId)) as { embedding: Buffer } | undefined
+        if (!row) return null
+        return new Float32Array(row.embedding.buffer, row.embedding.byteOffset, 384)
+    }
+
+    deleteVector(entryId: number): void {
+        this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(BigInt(entryId))
+    }
+
+    clearVectors(): void {
+        this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings').run()
+    }
+
+    getVectorCount(): number {
+        const row = this.connection
+            .getNativeDb()
+            .prepare('SELECT COUNT(*) as count FROM vec_embeddings')
+            .get() as { count: number } | undefined
+        return row?.count ?? 0
     }
 
     getWorkflowActionEntries(limit: number): JournalEntry[] {
@@ -447,24 +490,24 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     saveAnalyticsSnapshot(type: string, data: Record<string, unknown>): number {
-        return saveSnapshot(this.connection.getRawDb() as Database, type, data)
+        return saveSnapshot(this.connection.getNativeDb(), type, data)
     }
 
     getLatestAnalyticsSnapshot(
         type: string
     ): { id: number; createdAt: string; data: Record<string, unknown> } | null {
-        return getLatestSnapshot(this.connection.getRawDb() as Database, type)
+        return getLatestSnapshot(this.connection.getNativeDb(), type)
     }
 
     getAnalyticsSnapshots(
         type: string,
         limit?: number
     ): { id: number; createdAt: string; data: Record<string, unknown> }[] {
-        return getSnapshots(this.connection.getRawDb() as Database, type, limit)
+        return getSnapshots(this.connection.getNativeDb(), type, limit)
     }
 
     computeDigest(): Record<string, unknown> {
-        return computeDigest(this.connection.getRawDb() as Database) as unknown as Record<string, unknown>
+        return computeDigest(this.connection.getNativeDb()) as unknown as Record<string, unknown>
     }
 
     getCrossProjectInsights(options: { 

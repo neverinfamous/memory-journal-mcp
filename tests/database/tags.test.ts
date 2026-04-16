@@ -48,7 +48,7 @@ describe('TagsManager', () => {
     })
 
     it('should link tags to entry', () => {
-        const db = conn.getRawDb() as Database
+        const db = conn.getNativeDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
 
         manager.linkTagsToEntry(1, ['tag1', 'tag2'])
@@ -63,7 +63,7 @@ describe('TagsManager', () => {
     })
 
     it('should support batch retrieval', () => {
-        const db = conn.getRawDb() as Database
+        const db = conn.getNativeDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         db.prepare('INSERT INTO memory_journal (id) VALUES (2)').run()
 
@@ -81,7 +81,7 @@ describe('TagsManager', () => {
     })
 
     it('should list tags ordered by usage', () => {
-        const db = conn.getRawDb() as Database
+        const db = conn.getNativeDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         manager.linkTagsToEntry(1, ['tag1', 'tag2'])
 
@@ -92,7 +92,7 @@ describe('TagsManager', () => {
     })
 
     it('should merge tags properly', () => {
-        const db = conn.getRawDb() as Database
+        const db = conn.getNativeDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         manager.linkTagsToEntry(1, ['sourceTag'])
 
@@ -106,7 +106,7 @@ describe('TagsManager', () => {
     })
 
     it('should merge tags when target already has it but ignore duplicates', () => {
-        const db = conn.getRawDb() as Database
+        const db = conn.getNativeDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         db.prepare('INSERT INTO memory_journal (id) VALUES (2)').run()
 
@@ -120,7 +120,7 @@ describe('TagsManager', () => {
     })
 
     it('should handle merge when target tag does not exist yet', () => {
-        const db = conn.getRawDb() as Database
+        const db = conn.getNativeDb() as Database
         db.prepare('INSERT INTO memory_journal (id) VALUES (1)').run()
         manager.linkTagsToEntry(1, ['sourceTag'])
 

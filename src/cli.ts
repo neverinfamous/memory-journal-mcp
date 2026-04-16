@@ -82,6 +82,7 @@ program
         'OAuth clock tolerance in seconds (default: 60)',
         '60'
     )
+    .option('--oauth-allow-plaintext-loopback', 'Allow plaintext loopback OAuth issuer (env: OAUTH_ALLOW_PLAINTEXT_LOOPBACK)')
     // Audit options
     .option(
         '--audit-log <path>',
@@ -192,6 +193,7 @@ program
             oauthAudience?: string
             oauthJwksUri?: string
             oauthClockTolerance: string
+            oauthAllowPlaintextLoopback?: boolean
             briefingEntries: string
             briefingSummaries: string
             briefingIncludeTeam?: boolean
@@ -288,6 +290,7 @@ program
                         process.env['OAUTH_CLOCK_TOLERANCE'] ?? options.oauthClockTolerance,
                         10
                     ),
+                    allowPlaintextLoopbackOAuth: options.oauthAllowPlaintextLoopback ?? (process.env['OAUTH_ALLOW_PLAINTEXT_LOOPBACK'] === 'true'),
                     // Project Registry
                     projectRegistry: (() => {
                         const raw = process.env['PROJECT_REGISTRY']

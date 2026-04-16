@@ -162,6 +162,16 @@ export class HttpTransport {
 
         // Authentication middleware
         if (this.config.oauthEnabled && this.config.oauthIssuer && this.config.oauthAudience) {
+            
+            // Hard-pin Token Validator execution bounds: prevent dynamic plaintext loopbacks
+            if (this.config.oauthIssuer.startsWith('http://')) {
+                if (!this.config.allowPlaintextLoopbackOAuth) {
+                    const errorMsg = `FATAL: OAuth issuer '${this.config.oauthIssuer}' targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
+                    logger.error(errorMsg, { module: 'HTTP' })
+                    throw new Error(errorMsg)
+                }
+            }
+            
             // OAuth 2.1 authentication
             const jwksUri =
                 this.config.oauthJwksUri ?? `${this.config.oauthIssuer}/.well-known/jwks.json`

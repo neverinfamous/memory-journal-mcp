@@ -39,20 +39,100 @@ function getWorkerScriptPath(): string {
 
 /**
  * Worker-thread sandbox for secure code execution.
- * Each execution spawns a fresh worker for clean state.
+ * Maintains a persistent worker thread internally.
  */
 export class WorkerSandbox {
     private readonly options: Required<SandboxOptions>
+    private worker: Worker | null = null
+    public isBusy = false
+    private currentExecution: {
+        resolve: (result: SandboxResult) => void
+        timeoutHandle: NodeJS.Timeout
+        hostPort: MessagePort
+        startTime: number
+        startRss: number
+    } | null = null
+    private executionId = 0
 
     constructor(options?: SandboxOptions) {
         this.options = { ...DEFAULT_SANDBOX_OPTIONS, ...options }
+        this.initWorker()
+    }
+
+    private initWorker(): void {
+        const resourceLimits: ResourceLimits = {
+            maxOldGenerationSizeMb: this.options.memoryLimitMb,
+            maxYoungGenerationSizeMb: Math.max(8, Math.floor(this.options.memoryLimitMb / 8)),
+        }
+
+        this.worker = new Worker(getWorkerScriptPath(), {
+            workerData: {}, // Initialized without specific execution data
+            resourceLimits,
+        })
+
+        this.worker.on('message', (msg: { type: string; id: number; result: SandboxResult }) => {
+            if (msg.type === 'RESULT' && this.currentExecution) {
+                clearTimeout(this.currentExecution.timeoutHandle)
+                this.currentExecution.hostPort.close()
+
+                const endTime = performance.now()
+                const endRss = process.memoryUsage.rss()
+                const result = msg.result
+
+                result.metrics = {
+                    wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
+                    cpuTimeMs: result.metrics.cpuTimeMs,
+                    memoryUsedMb: Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024),
+                }
+
+                const resolve = this.currentExecution.resolve
+                this.currentExecution = null
+                this.isBusy = false
+                resolve(result)
+            }
+        })
+
+        this.worker.on('error', (err: Error) => {
+            this.handleWorkerDeath(err.message, err.stack)
+        })
+
+        this.worker.on('exit', (exitCode) => {
+            if (exitCode !== 0) {
+                this.handleWorkerDeath(`Worker exited with code ${String(exitCode)} (likely timeout or OOM)`)
+            }
+        })
+    }
+
+    private handleWorkerDeath(errorMsg: string, stack?: string): void {
+        if (this.currentExecution) {
+            clearTimeout(this.currentExecution.timeoutHandle)
+            this.currentExecution.hostPort.close()
+
+            const endTime = performance.now()
+            const endRss = process.memoryUsage.rss()
+
+            const resolve = this.currentExecution.resolve
+            const startTime = this.currentExecution.startTime
+            const startRss = this.currentExecution.startRss
+            this.currentExecution = null
+            this.isBusy = false
+
+            resolve({
+                success: false,
+                error: errorMsg,
+                stack: stack,
+                metrics: {
+                    wallTimeMs: Math.round(endTime - startTime),
+                    cpuTimeMs: 0,
+                    memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
+                },
+            })
+        }
+        this.worker = null
     }
 
     /**
-     * Execute code in a worker thread with RPC bridge.
-     *
-     * @param code - JavaScript code to execute
-     * @param apiBindings - Map of group → method record for RPC dispatch
+     * Execute code in the worker thread with RPC bridge.
      */
     async execute(
         code: string,
@@ -60,17 +140,17 @@ export class WorkerSandbox {
         timeoutMs?: number
     ): Promise<SandboxResult> {
         let effectiveTimeout = timeoutMs ?? this.options.timeoutMs
-        // Strict cap ensuring timeout never exceeds 30,000ms
-        if (effectiveTimeout > 30000) {
-            effectiveTimeout = 30000
-        }
-        
+        if (effectiveTimeout > 30000) effectiveTimeout = 30000
+
+        if (!this.worker) this.initWorker()
+
+        this.isBusy = true
+        this.executionId++
+
         const startTime = performance.now()
         const startRss = process.memoryUsage.rss()
 
         return new Promise<SandboxResult>((resolve) => {
-            // Serialize bindings: group objects → method name arrays,
-            // top-level functions → collected under '_topLevel'
             const methodList: Record<string, string[]> = {}
             const topLevel: string[] = []
 
@@ -86,104 +166,36 @@ export class WorkerSandbox {
                             methods.push(methodName)
                         }
                     }
-                    if (methods.length > 0) {
-                        methodList[key] = methods
-                    }
+                    if (methods.length > 0) methodList[key] = methods
                 }
             }
 
-            if (topLevel.length > 0) {
-                methodList['_topLevel'] = topLevel
-            }
+            if (topLevel.length > 0) methodList['_topLevel'] = topLevel
 
-            // Create MessageChannel for RPC
             const { port1: hostPort, port2: workerPort } = new MessageChannel()
 
-            // Resource limits
-            const resourceLimits: ResourceLimits = {
-                maxOldGenerationSizeMb: this.options.memoryLimitMb,
-                maxYoungGenerationSizeMb: Math.max(8, Math.floor(this.options.memoryLimitMb / 8)),
+            this.currentExecution = {
+                resolve,
+                hostPort,
+                startTime,
+                startRss,
+                timeoutHandle: setTimeout(() => {
+                    this.worker?.terminate().catch(() => undefined)
+                }, effectiveTimeout + 1000)
             }
 
-            const worker = new Worker(getWorkerScriptPath(), {
-                workerData: {
-                    code,
-                    methodList,
-                    timeoutMs: effectiveTimeout,
-                    rpcPort: workerPort,
-                },
-                transferList: [workerPort],
-                resourceLimits,
-            })
-
-            // Hard timeout — terminate worker if it runs too long
-            const timeoutHandle = setTimeout(() => {
-                worker.terminate().catch(() => {
-                    // Worker already dead
-                })
-            }, effectiveTimeout + 1000) // +1s grace for cleanup
-
-            // Handle RPC requests from the worker (via MessageChannel)
             hostPort.on('message', (msg: RpcRequest) => {
                 void handleRpcRequest(msg, apiBindings, hostPort)
             })
 
-            // Handle worker completion (results sent via parentPort)
-            worker.on('message', (msg: SandboxResult) => {
-                clearTimeout(timeoutHandle)
-                hostPort.close()
-
-                const endTime = performance.now()
-                const endRss = process.memoryUsage.rss()
-                const result = msg
-                result.metrics = {
-                    wallTimeMs: Math.round(endTime - startTime),
-                    cpuTimeMs: result.metrics.cpuTimeMs,
-                    memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
-                }
-
-                resolve(result)
-            })
-
-            // Handle worker errors and exit
-            worker.on('error', (err: Error) => {
-                clearTimeout(timeoutHandle)
-                hostPort.close()
-
-                const endTime = performance.now()
-                const endRss = process.memoryUsage.rss()
-                const errorMessage: string = err.message
-                const errorStack: string | undefined = err.stack
-                resolve({
-                    success: false,
-                    error: errorMessage,
-                    stack: errorStack,
-                    metrics: {
-                        wallTimeMs: Math.round(endTime - startTime),
-                        cpuTimeMs: 0,
-                        memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
-                    },
-                })
-            })
-
-            worker.on('exit', (exitCode) => {
-                clearTimeout(timeoutHandle)
-                hostPort.close()
-
-                if (exitCode !== 0) {
-                    const endTime = performance.now()
-                    const endRss = process.memoryUsage.rss()
-                    resolve({
-                        success: false,
-                        error: `Worker exited with code ${String(exitCode)} (likely timeout or OOM)`,
-                        metrics: {
-                            wallTimeMs: Math.round(endTime - startTime),
-                            cpuTimeMs: 0,
-                            memoryUsedMb: Math.round((endRss - startRss) / 1024 / 1024),
-                        },
-                    })
-                }
-            })
+            this.worker?.postMessage({
+                type: 'EXECUTE',
+                id: this.executionId,
+                code,
+                methodList,
+                timeoutMs: effectiveTimeout,
+                rpcPort: workerPort
+            }, [workerPort])
         })
     }
 }
@@ -192,10 +204,6 @@ export class WorkerSandbox {
 // RPC Handler (Main Thread)
 // =============================================================================
 
-/**
- * Handle an RPC request from the worker thread.
- * Looks up the method in apiBindings and sends the response back.
- */
 async function handleRpcRequest(
     req: RpcRequest,
     apiBindings: Record<string, unknown>,
@@ -204,7 +212,6 @@ async function handleRpcRequest(
     const response: RpcResponse = { id: req.id }
 
     try {
-        // _topLevel methods are direct keys on apiBindings
         let target: unknown
         if (req.group === '_topLevel') {
             target = apiBindings[req.method]
@@ -216,9 +223,7 @@ async function handleRpcRequest(
         }
 
         if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(
-                ...req.args
-            )
+            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...req.args)
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
         }
@@ -234,28 +239,30 @@ async function handleRpcRequest(
 // =============================================================================
 
 /**
- * Pool of worker-thread sandboxes for concurrent execution.
- * Creates a fresh worker for every execution to guarantee clean state.
+ * Pool of persistent worker-thread sandboxes.
  */
 export class WorkerSandboxPool {
     private readonly options: Required<PoolOptions>
     private readonly sandboxOptions: SandboxOptions
-    private activeCount = 0
+    private pool: WorkerSandbox[] = []
 
     constructor(sandboxOptions?: SandboxOptions, poolOptions?: PoolOptions) {
         this.sandboxOptions = sandboxOptions ?? {}
         this.options = { ...DEFAULT_POOL_OPTIONS, ...poolOptions }
+
+        for (let i = 0; i < this.options.maxInstances; i++) {
+            this.pool.push(new WorkerSandbox(this.sandboxOptions))
+        }
     }
 
-    /**
-     * Execute code in a pooled worker sandbox.
-     */
     async execute(
         code: string,
         apiBindings: Record<string, unknown>,
         timeoutMs?: number
     ): Promise<SandboxResult> {
-        if (this.activeCount >= this.options.maxInstances) {
+        const availableSandbox = this.pool.find(s => !s.isBusy)
+
+        if (!availableSandbox) {
             return {
                 success: false,
                 error: `Sandbox pool exhausted (max ${String(this.options.maxInstances)} concurrent executions)`,
@@ -263,20 +270,12 @@ export class WorkerSandboxPool {
             }
         }
 
-        this.activeCount++
-        try {
-            const sandbox = new WorkerSandbox(this.sandboxOptions)
-            return await sandbox.execute(code, apiBindings, timeoutMs)
-        } finally {
-            this.activeCount--
-        }
+        return await availableSandbox.execute(code, apiBindings, timeoutMs)
     }
 
-    /** Get the current active execution count */
     getActiveCount(): number {
-        return this.activeCount
+        return this.pool.filter(s => s.isBusy).length
     }
 
-    /** Unique pool identifier */
     readonly poolId = crypto.randomUUID()
 }

@@ -5,14 +5,16 @@
  * Deterministic filenames allow re-export to overwrite identically.
  */
 
-import { mkdir, open, lstat } from 'node:fs/promises'
+import { mkdir, open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
+import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
 import type { FrontmatterData } from './frontmatter.js'
 import { logger } from '../utils/logger.js'
 import type { Relationship } from '../types/index.js'
+import { assertSafeDirectoryPath } from '../utils/security-utils.js'
 
 // ============================================================================
 // Types
@@ -89,8 +91,12 @@ export function generateFilename(id: number, content: string): string {
 export async function exportEntriesToMarkdown(
     entries: ExportableEntry[],
     outputDir: string,
-    db: IDatabaseAdapter
+    db: IDatabaseAdapter,
+    allowedRoots?: string[]
 ): Promise<ExportResult> {
+    // Dynamically enforce bounded root
+    assertSafeDirectoryPath(outputDir, allowedRoots)
+
     // Guard: refuse to export into the OS temporary directory (CodeQL js/insecure-temporary-file)
     const resolvedOutputDir = resolve(outputDir)
     const resolvedTmpDir = resolve(tmpdir())
@@ -117,6 +123,7 @@ export async function exportEntriesToMarkdown(
             error: err instanceof Error ? err.message : String(err)
         })
     }
+
 
     for (const entry of validEntries) {
         // Build frontmatter data
@@ -152,33 +159,37 @@ export async function exportEntriesToMarkdown(
         const frontmatter = serializeFrontmatter(fmData)
         const fileContent = frontmatter + '\n' + entry.content + '\n'
 
-        // Write file — 'w' flag is O_WRONLY|O_CREAT|O_TRUNC: atomic create-or-overwrite via
-        // file descriptor with owner-only permissions. No check-then-act, no race window.
-        // Satisfies both CodeQL js/insecure-temporary-file and js/file-system-race.
+        // Write file atomically preventing symlink traversal via O_NOFOLLOW
         const filename = generateFilename(entry.id, entry.content)
         const filepath = join(resolvedOutputDir, filename)
 
+        let handle;
         try {
-            const stats = await lstat(filepath)
-            if (stats.isSymbolicLink()) {
+            // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
+            handle = await open(filepath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600)
+            await handle.writeFile(fileContent, 'utf-8')
+            files.push(filename)
+        } catch (err: unknown) {
+            const code = err instanceof Error && 'code' in err ? (err as {code?: string}).code : undefined;
+            if (code === 'ELOOP' || code === 'EEXIST') {
                 logger.warning('Refusing to overwrite symlink during export', {
                     module: 'Exporter',
                     filepath
                 })
                 skipped++
-                continue
+            } else {
+                logger.error('Failed to write markdown file', {
+                    module: 'Exporter',
+                    filepath,
+                    error: err instanceof Error ? err.message : String(err)
+                })
+                skipped++
             }
-        } catch {
-            // File does not exist, safe to create
-        }
-
-        const handle = await open(filepath, 'w', 0o600)
-        try {
-            await handle.writeFile(fileContent, 'utf-8')
         } finally {
-            await handle.close()
+            if (handle) {
+                await handle.close()
+            }
         }
-        files.push(filename)
     }
 
     return {

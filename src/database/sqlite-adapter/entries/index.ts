@@ -1,6 +1,5 @@
 import type { JournalEntry, EntryType, ImportanceResult } from '../../../types/index.js'
 import type { CreateEntryInput } from '../../core/schema.js'
-import type { Database } from 'better-sqlite3'
 import type { NativeConnectionManager } from '../native-connection.js'
 import type { TagsManager } from '../tags.js'
 
@@ -32,7 +31,7 @@ export class EntriesManager {
             ctx,
             tagsMgr,
             get db() {
-                return ctx.getRawDb() as Database
+                return ctx.getNativeDb()
             },
         }
     }

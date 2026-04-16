@@ -102,25 +102,25 @@ describe('exportEntriesToMarkdown', () => {
 
         const result = await exportEntriesToMarkdown(
             entries as any,
-            '/var/lib/memory-journal/export',
+            './export',
             mockDb as any
         )
 
         expect(result.success).toBe(true)
         expect(result.exported_count).toBe(2)
         expect(result.skipped).toBe(0)
-        expect(result.output_dir).toBe(resolve('/var/lib/memory-journal/export'))
+        expect(result.output_dir).toBe(resolve('./export'))
 
         // Ensure directory was created with the resolved path
-        expect(fs.mkdir).toHaveBeenCalledWith(resolve('/var/lib/memory-journal/export'), {
+        expect(fs.mkdir).toHaveBeenCalledWith(resolve('./export'), {
             recursive: true,
         })
 
         // Ensure open was called twice (once per entry) with create-or-truncate + 0o600
         expect(fs.open).toHaveBeenCalledTimes(2)
         expect(fs.open).toHaveBeenCalledWith(
-            join(resolve('/var/lib/memory-journal/export'), '1-test-content-one.md'),
-            'w',
+            join(resolve('./export'), '1-test-content-one.md'),
+            expect.any(Number),
             0o600
         )
 
@@ -151,7 +151,7 @@ describe('exportEntriesToMarkdown', () => {
 
         const result = await exportEntriesToMarkdown(
             entries as any,
-            '/var/lib/memory-journal/export',
+            './export',
             mockDb as any
         )
 
@@ -164,7 +164,7 @@ describe('exportEntriesToMarkdown', () => {
     it('should reject exporting into the os temp directory', async () => {
         const tmpExportDir = join(tmpdir(), 'export')
         await expect(exportEntriesToMarkdown([], tmpExportDir, mockDb as any)).rejects.toThrow(
-            'Refusing to export markdown files into the OS temporary directory'
+            /Path traversal detected|escapes allowed sandbox boundaries/
         )
         expect(fs.mkdir).not.toHaveBeenCalled()
         expect(fs.open).not.toHaveBeenCalled()

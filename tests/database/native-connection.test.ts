@@ -49,7 +49,7 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH)
             await mgr.initialize()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             expect(db).toBeDefined()
 
             // DB should be usable
@@ -64,7 +64,7 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             await mgr.initialize() // should not throw
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             expect(db).toBeDefined()
             mgr.close()
         })
@@ -99,7 +99,7 @@ describe('NativeConnectionManager', () => {
     describe('ensureDb', () => {
         it('should throw ConnectionError when DB is not initialized', () => {
             const mgr = new NativeConnectionManager(':memory:')
-            expect(() => mgr.getRawDb()).toThrow()
+            expect(() => mgr.getNativeDb()).toThrow()
         })
     })
 
@@ -113,8 +113,8 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             mgr.close()
 
-            // getRawDb should throw after close
-            expect(() => mgr.getRawDb()).toThrow()
+            // getNativeDb should throw after close
+            expect(() => mgr.getNativeDb()).toThrow()
         })
 
         it('should be safe to call close() multiple times', async () => {
@@ -135,7 +135,7 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH)
             await mgr.initialize()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             // Verify some migration columns exist
             const info = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
             const cols = info.map((r) => r.name)
@@ -150,7 +150,7 @@ describe('NativeConnectionManager', () => {
         it('should populate FTS5 on existing DBs missing FTS rows', async () => {
             const mgr = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr.initialize()
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
 
             // Drop insert trigger so insertion doesn't hit FTS index
             db.exec('DROP TRIGGER IF EXISTS fts_content_ai')
@@ -161,7 +161,7 @@ describe('NativeConnectionManager', () => {
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr2.initialize()
 
-            const db2 = mgr2.getRawDb() as Database
+            const db2 = mgr2.getNativeDb() as Database
             const ftsCount = (
                 db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
             ).c
@@ -173,7 +173,7 @@ describe('NativeConnectionManager', () => {
             // First DB is initialized
             const mgr = new NativeConnectionManager(TEST_DB_PATH)
             await mgr.initialize()
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
 
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('foo', 'test')")
             db.exec("INSERT INTO memory_journal(content, entry_type) VALUES ('bar', 'test')")
@@ -188,7 +188,7 @@ describe('NativeConnectionManager', () => {
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH)
             await mgr2.initialize()
 
-            const db2 = mgr2.getRawDb() as Database
+            const db2 = mgr2.getNativeDb() as Database
             const ftsCount = (
                 db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
             ).c
@@ -207,7 +207,7 @@ describe('NativeConnectionManager', () => {
             await mgr.initialize()
             mgr.applyTeamSchema()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             const info = db.prepare('PRAGMA table_info(memory_journal)').all() as { name: string }[]
             const cols = info.map((r) => r.name)
             expect(cols).toContain('author')
@@ -234,7 +234,7 @@ describe('NativeConnectionManager', () => {
             const mgr = new NativeConnectionManager(':memory:')
             await mgr.initialize()
 
-            const db = mgr.getRawDb() as Database
+            const db = mgr.getNativeDb() as Database
             db.exec(
                 "INSERT INTO memory_journal (entry_type, content, timestamp, is_personal) VALUES ('test_entry', 'test content', datetime('now'), 1)"
             )

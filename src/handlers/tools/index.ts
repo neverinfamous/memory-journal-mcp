@@ -43,6 +43,7 @@ import { getRequiredScope } from '../../auth/scope-map.js'
 import { hasScope } from '../../auth/scopes.js'
 import { logger } from '../../utils/logger.js'
 import { assertNotInMaintenanceMode } from '../../utils/maintenance-lock.js'
+import { PermissionError } from '../../types/errors.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -292,7 +293,7 @@ export async function callTool(
                 operation: 'scope-check',
                 entityId: name,
             })
-            return Promise.reject(new Error(`Access to tool '${name}' denied: insufficient scope.`))
+            return Promise.reject(new PermissionError(`Access to tool '${name}' denied: insufficient scope.`))
         }
     }
 

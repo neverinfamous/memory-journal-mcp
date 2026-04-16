@@ -69,6 +69,7 @@ export interface ServerOptions {
     oauthAudience?: string
     oauthJwksUri?: string
     oauthClockTolerance?: number
+    allowPlaintextLoopbackOAuth?: boolean
     // Briefing configuration
     briefingConfig?: BriefingConfig
     // Project Registry
@@ -443,13 +444,18 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                 ],
                             }
                         } catch (error) {
-                            const errorMessage = error instanceof Error ? error.message : String(error)
-                            const errorResult = {
-                                success: false,
-                                error: errorMessage,
-                                code: 'INTERNAL_ERROR',
-                                category: 'internal',
-                                recoverable: false,
+                            let errorResult: Record<string, unknown>
+                            if (error instanceof Error && 'toResponse' in error && typeof (error as { toResponse?: unknown }).toResponse === 'function') {
+                                errorResult = (error as { toResponse: () => Record<string, unknown> }).toResponse()
+                            } else {
+                                const errorMessage = error instanceof Error ? error.message : String(error)
+                                errorResult = {
+                                    success: false,
+                                    error: errorMessage,
+                                    code: 'INTERNAL_ERROR',
+                                    category: 'internal',
+                                    recoverable: false,
+                                }
                             }
                             return {
                                 content: [
@@ -563,6 +569,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             oauthAudience: options.oauthAudience,
             oauthJwksUri: options.oauthJwksUri,
             oauthClockTolerance: options.oauthClockTolerance,
+            allowPlaintextLoopbackOAuth: options.allowPlaintextLoopbackOAuth,
         })
 
         await httpTransport.start(createServerInstance, scheduler)

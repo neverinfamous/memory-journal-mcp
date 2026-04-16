@@ -6,27 +6,14 @@
  * within a secondary `vm.createContext` boundary.
  */
 
-import { parentPort, workerData } from 'node:worker_threads'
+import { parentPort } from 'node:worker_threads'
 import * as vm from 'node:vm'
 import type { MessagePort } from 'node:worker_threads'
 import type { RpcRequest, RpcResponse, SandboxResult, ExecutionMetrics } from './types.js'
 import { transformAutoReturn } from './auto-return.js'
 
 // =============================================================================
-// Worker Data
-// =============================================================================
-
-interface WorkerInit {
-    code: string
-    methodList: Record<string, string[]>
-    timeoutMs: number
-    rpcPort: MessagePort
-}
-
-const { code, methodList, timeoutMs, rpcPort: workerRpcPort } = workerData as WorkerInit
-
-// =============================================================================
-// RPC Client (Worker Side)
+// Execution State
 // =============================================================================
 
 let rpcPort: MessagePort | null = null
@@ -58,16 +45,10 @@ function rpcCall(group: string, method: string, args: unknown[]): Promise<unknow
 // API Proxy Builder
 // =============================================================================
 
-/**
- * Build the `mj` API proxy object from the method list.
- * Each group becomes a namespace with async methods that call
- * back to the main thread via RPC.
- */
 function buildApiProxy(methods: Record<string, string[]>): Record<string, unknown> {
     const api: Record<string, unknown> = {}
 
     for (const [group, methodNames] of Object.entries(methods)) {
-        // _topLevel methods go directly on the api object (mj.createEntry, etc.)
         if (group === '_topLevel') {
             for (const methodName of methodNames) {
                 api[methodName] = (...args: unknown[]) => rpcCall('_topLevel', methodName, args)
@@ -81,28 +62,18 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
             groupProxy[methodName] = (...args: unknown[]) => rpcCall(group, methodName, args)
         }
 
-        // Per-group help()
         groupProxy['help'] = () =>
             Promise.resolve({
                 group,
                 methods: methodNames,
             })
 
-        // Wrap in a Proxy so that calling an undefined method (e.g. a mutation
-        // that was stripped in readonly mode) throws a rejected Promise instead of
-        // silently returning { success: false } — this halts control flow in the
-        // sandbox and surfaces a proper error to the caller.
         const groupProxyWrapped = new Proxy(groupProxy, {
             get(target, prop) {
-                // Symbols (Symbol.toPrimitive, Symbol.iterator, etc.) — pass through
                 if (typeof prop === 'symbol') return undefined
                 const key = prop
                 if (key in target) return target[key]
-                // `then` must return undefined so the Proxy is never treated as a
-                // thenable. Without this, `return mj.core` would trigger Promise
-                // resolution → `.then()` → immediate reject with a misleading error.
                 if (key === 'then') return undefined
-                // Unknown/stripped method — reject so the sandbox try/catch catches it
                 const available = methodNames.join(', ') || 'none'
                 const reason =
                     methodNames.length === 0
@@ -115,7 +86,6 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
         api[group] = groupProxyWrapped
     }
 
-    // Top-level help()
     api['help'] = () => {
         const groups = Object.keys(methods).filter((g) => g !== '_topLevel')
         let totalMethods = 0
@@ -136,15 +106,13 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
 // Execution
 // =============================================================================
 
-async function executeCode(): Promise<SandboxResult> {
+async function executeCode(code: string, methodList: Record<string, string[]>, timeoutMs: number): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
 
     try {
         const mjApi = buildApiProxy(methodList)
 
-        // Build sandbox context with nulled dangerous globals
-        // Built-ins (JSON, Math, Promise, etc.) inherit from the worker's global scope
         const sandbox: Record<string, unknown> = {
             mj: mjApi,
             console: {
@@ -154,7 +122,6 @@ async function executeCode(): Promise<SandboxResult> {
                 info: (...args: unknown[]) => args,
                 debug: (...args: unknown[]) => args,
             },
-            // Nulled globals
             setTimeout: undefined,
             setInterval: undefined,
             setImmediate: undefined,
@@ -186,7 +153,7 @@ async function executeCode(): Promise<SandboxResult> {
         const metrics: ExecutionMetrics = {
             wallTimeMs: Math.round(endTime - startTime),
             cpuTimeMs: Math.round((endCpu.user + endCpu.system) / 1000),
-            memoryUsedMb: 0, // Measured on host side via RSS delta
+            memoryUsedMb: 0,
         }
 
         return { success: true, result, metrics }
@@ -210,30 +177,43 @@ async function executeCode(): Promise<SandboxResult> {
 }
 
 // =============================================================================
-// Startup — Port from workerData, execute immediately
+// Master Listener
 // =============================================================================
 
-// Initialize RPC port from workerData (transferred via constructor)
-rpcPort = workerRpcPort
-rpcPort.ref() // Keep event loop alive while RPC is active
+parentPort?.on('message', (msg: unknown) => {
+    void (async () => {
+        if (msg !== null && msg !== undefined && typeof msg === 'object' && 'type' in msg && (msg as { type: string }).type === 'EXECUTE') {
+            const executeMsg = msg as unknown as {
+                id: number
+                code: string
+                methodList: Record<string, string[]>
+                timeoutMs?: number
+                rpcPort: MessagePort
+            }
+            const { id, code, methodList, timeoutMs, rpcPort: newRpcPort } = executeMsg
 
-// Listen for RPC responses from the main thread
-rpcPort.on('message', (response: RpcResponse) => {
-    const pending = pendingRpcRequests.get(response.id)
-    if (pending) {
-        pendingRpcRequests.delete(response.id)
-        if (response.error) {
-            pending.reject(new Error(response.error))
-        } else {
-            pending.resolve(response.result)
+            rpcPort = newRpcPort
+            rpcIdCounter = 0
+            pendingRpcRequests.clear()
+
+            rpcPort?.on('message', (response: RpcResponse) => {
+                const pending = pendingRpcRequests.get(response.id)
+                if (pending) {
+                    pendingRpcRequests.delete(response.id)
+                    if (response.error) {
+                        pending.reject(new Error(response.error))
+                    } else {
+                        pending.resolve(response.result)
+                    }
+                }
+            })
+
+            const result = await executeCode(code, methodList, timeoutMs ?? 30000)
+
+            rpcPort?.close()
+            rpcPort = null
+
+            parentPort?.postMessage({ type: 'RESULT', id, result })
         }
-    }
-})
-
-// Execute code and send result back to the host via parentPort
-void executeCode().then((result) => {
-    // Close the RPC port before sending result (allows worker to exit)
-    rpcPort?.unref()
-    rpcPort?.close()
-    parentPort?.postMessage(result)
+    })()
 })

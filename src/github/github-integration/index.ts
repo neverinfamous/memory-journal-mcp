@@ -194,29 +194,17 @@ export class GitHubIntegration {
         }
 
         if (repoInfo.owner && repoInfo.repo) {
-            context.issues = await this.issuesManager.getIssues(
-                repoInfo.owner,
-                repoInfo.repo,
-                'open',
-                10
-            )
-            context.pullRequests = await this.pullRequestsManager.getPullRequests(
-                repoInfo.owner,
-                repoInfo.repo,
-                'open',
-                10
-            )
-            context.workflowRuns = await this.repositoryManager.getWorkflowRuns(
-                repoInfo.owner,
-                repoInfo.repo,
-                10
-            )
-            context.milestones = await this.milestonesManager.getMilestones(
-                repoInfo.owner,
-                repoInfo.repo,
-                'open',
-                10
-            )
+            const [issuesResult, prsResult, runsResult, milestonesResult] = await Promise.allSettled([
+                this.issuesManager.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10),
+                this.pullRequestsManager.getPullRequests(repoInfo.owner, repoInfo.repo, 'open', 10),
+                this.repositoryManager.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10),
+                this.milestonesManager.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10)
+            ])
+
+            context.issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
+            context.pullRequests = prsResult.status === 'fulfilled' ? prsResult.value : []
+            context.workflowRuns = runsResult.status === 'fulfilled' ? runsResult.value : []
+            context.milestones = milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
         }
 
         this.client.setCache('context:repo', context)

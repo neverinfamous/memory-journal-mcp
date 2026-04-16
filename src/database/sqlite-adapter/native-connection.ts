@@ -287,9 +287,10 @@ export class NativeConnectionManager implements IDatabaseConnection {
     }
 
     /**
-     * @internal QUARANTINED
+     * @internal
+     * Restricted to internal SQLite components only
      */
-    getRawDb(): unknown {
+    getNativeDb(): Database {
         return this.ensureDb()
     }
 

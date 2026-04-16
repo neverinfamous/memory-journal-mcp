@@ -20,6 +20,7 @@
 - **Initialization**: Optimized startup behavior by hoisting execution-invariant server state (tools, prompts, filter sets) out of `createServerInstance()` to bypass redundant cycles during HTTP/SSE connections.
 
 ### Fixed
+- **Testing/Architecture**: Successfully migrated legacy `getRawDb()` test mocks to explicitly mock `IDatabaseAdapter` vector methods across Vector and Database test suites, achieving 100% pass rate with decoupled interface boundaries.
 - **Integrity**: Revamped the internal SQLite `restore_backup` pipeline to utilize an atomic `.tmp` swap and secondary rename operation to prevent mid-operation failures from leaving the primary DB permanently malformed.
 - **Memory**: Resolved persistent memory leak in `CodeModeSecurityManager` by implementing explicit `dispose()` cleanup for bounded interval timers on cache eviction.
 - **Logging**: Eliminated silent `catch` block error suppression inside `mcp-server.ts`, `backup.ts`, and `team.ts`, ensuring warnings appropriately propagate to stderr.

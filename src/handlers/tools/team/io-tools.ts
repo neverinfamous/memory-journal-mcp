@@ -11,7 +11,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { sendProgress } from '../../../utils/progress-utils.js'
-import { assertSafeDirectoryPath } from '../../../utils/security-utils.js'
+
 import { resolveAuthor } from '../../../utils/security-utils.js'
 import { exportEntriesToMarkdown } from '../../../markdown/index.js'
 import { importMarkdownEntries } from '../../../markdown/index.js'
@@ -159,7 +159,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    assertSafeDirectoryPath(input.output_dir, allowedRoots)
+
 
                     await sendProgress(progress, 0, 3, 'Fetching team entries...')
 
@@ -201,7 +201,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     const result = await exportEntriesToMarkdown(
                         exportable,
                         input.output_dir,
-                        teamDb
+                        teamDb,
+                        allowedRoots
                     )
 
                     await sendProgress(progress, 3, 3, 'Team export complete')
@@ -239,7 +240,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    assertSafeDirectoryPath(input.source_dir, allowedRoots)
+
 
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 
@@ -252,7 +253,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             limit: input.limit,
                             author,
                         },
-                        context.teamVectorManager
+                        context.teamVectorManager,
+                        allowedRoots
                     )
 
                     await sendProgress(progress, 2, 2, 'Team import complete')

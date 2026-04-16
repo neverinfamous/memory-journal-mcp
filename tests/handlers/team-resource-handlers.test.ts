@@ -45,7 +45,7 @@ describe('Team Resource Handlers', () => {
         })
 
         // Set author on entries via raw SQL
-        const rawDb = teamDb.getRawDb() as any
+        const rawDb = teamDb["connection"].getNativeDb() as any
         rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Alice', entry1.id)
         rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Bob', entry2.id)
         rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Alice', entry3.id)

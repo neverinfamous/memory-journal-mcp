@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
-import { assertSafeDirectoryPath } from '../../utils/security-utils.js'
+
 import { exportEntriesToMarkdown } from '../../markdown/index.js'
 import { importMarkdownEntries } from '../../markdown/index.js'
 import type { ExportableEntry } from '../../markdown/index.js'
@@ -258,8 +258,6 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     // Security fix: Restrict to CWD to prevent cross-workspace access
                     const allowedRoots = [process.cwd()]
 
-                    assertSafeDirectoryPath(input.output_dir, allowedRoots)
-
                     await sendProgress(progress, 0, 3, 'Fetching entries...')
 
                     const limit = input.limit ?? 100
@@ -305,7 +303,7 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         significance: e.significanceType ?? undefined,
                     }))
 
-                    const result = await exportEntriesToMarkdown(exportable, input.output_dir, db)
+                    const result = await exportEntriesToMarkdown(exportable, input.output_dir, db, allowedRoots)
 
                     await sendProgress(progress, 3, 3, 'Export complete')
                     return result
@@ -343,8 +341,6 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     // Security fix: Restrict to CWD to prevent cross-workspace access
                     const allowedRoots = [process.cwd()]
 
-                    assertSafeDirectoryPath(input.source_dir, allowedRoots)
-
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 
                     const result = await importMarkdownEntries(
@@ -354,7 +350,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                         },
-                        context.vectorManager
+                        context.vectorManager,
+                        allowedRoots
                     )
 
                     await sendProgress(progress, 2, 2, 'Import complete')

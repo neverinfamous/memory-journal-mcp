@@ -59,12 +59,7 @@ export interface IDatabaseConnection {
     getBackupsDir(): string
     getDbPath(): string
 
-    /**
-     * @internal QUARANTINED
-     * Provides the underlying better-sqlite3 Database instance.
-     * Note: Avoid using this in business logic to prevent driver-coupling
-     */
-    getRawDb(): unknown
+
 
     /**
      * Execute a PRAGMA command.
@@ -264,9 +259,11 @@ export interface IDatabaseAdapter {
         from_content: string; to_content: string;
     }[]
 
-    /**
-     * @internal QUARANTINED
-     * @deprecated Exposes underlying database instance, violating adapter boundaries. Slated for removal.
-     */
-    getRawDb(): unknown
+    // Vector Search Primitives
+    upsertVector(entryId: number, embedding: Float32Array): void
+    searchVectors(embedding: Float32Array, limit: number): { entry_id: number; distance: number }[]
+    getVector(entryId: number): Float32Array | null
+    deleteVector(entryId: number): void
+    clearVectors(): void
+    getVectorCount(): number
 }
