@@ -209,10 +209,14 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 
     // SEC-1.2: Respect active tool filter — Code Mode must not reach tools that the
     // operator has explicitly excluded. Strict enforcement.
+    // Exception: If the ONLY enabled tool is mj_execute_code (i.e. codemode-only preset), 
+    // allow all internal tools.
     const filterConfig = context.config?.filterConfig
+    
+    const isCodeModeOnly = filterConfig?.enabledTools.size === 1 && filterConfig.enabledTools.has('mj_execute_code')
 
     cachedNonCodeModeTools =
-        filterConfig
+        filterConfig && !isCodeModeOnly
             ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
             : allTools
 

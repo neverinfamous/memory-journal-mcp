@@ -72,4 +72,6 @@
 - **Testing**: Fixed `template-github-branches.test.ts` branch coverage tests by directly mocking internal array states inside the mocked `getRepoContext`.
 - **Testing**: Repaired broken test file imports referencing incorrect relative `GitHubIntegration` module declarations.
 - **Testing**: Updated the `oauth-scopes.spec.ts` E2E test to properly handle extraction of JSON payloads from Server-Sent Events (SSE) data streams during HTTP execution-point scope authorization validations.
+- **Security (SEC-1.2)**: Fixed a bug in the `codemode-only` preset exception where all remaining `mj.*` tools were incorrectly filtered out. The Code Mode API bridge now correctly retains full internal access when running inside a strict `mj_execute_code` filter constraint.
+- **Linting**: Conformed strict typescript validation rules by employing ES-next optional chaining semantics in `src/handlers/tools/codemode.ts`.
 - **CI/CD**: Promoted the comprehensive Playwright E2E suite to execute synchronously within `.github/workflows/lint-and-test.yml` using the new `npm run test:e2e` execution script target.
