@@ -7,7 +7,7 @@
  */
 
 /** Category of the audited operation */
-export type AuditCategory = 'read' | 'write' | 'admin'
+export type AuditCategory = 'read' | 'write' | 'admin' | 'team' | 'audit'
 
 /**
  * Single audit log entry — serialised as one line of JSONL.

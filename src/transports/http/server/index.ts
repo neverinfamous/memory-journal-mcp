@@ -35,11 +35,8 @@ import {
     createOAuthResourceServer,
     createAuthMiddleware as createOAuthMiddleware,
     oauthErrorHandler,
-    InsufficientScopeError,
     SUPPORTED_SCOPES,
 } from '../../../auth/index.js'
-import { getRequiredScope } from '../../../auth/scope-map.js'
-import { hasScope, SCOPES } from '../../../auth/scopes.js'
 import {
     hostHeaderValidation,
     localhostHostValidation,
@@ -265,80 +262,8 @@ export class HttpTransport {
         }
 
         // Scope enforcement middleware
-        this.app.use((req: Request, res: Response, next: () => void) => {
-            if (!this.config.oauthEnabled) {
-                next()
-                return
-            }
-
-            if (req.method === 'POST') {
-                const body = req.body as
-                    | { method?: unknown; params?: { name?: unknown } }
-                    | null
-                    | undefined
-                if (body?.method === 'tools/call') {
-                    const toolName = body.params?.name
-                    if (typeof toolName === 'string') {
-                        const requiredScope = getRequiredScope(toolName)
-                        if (requiredScope && !hasScope(req.auth?.scopes ?? [], requiredScope)) {
-                            res.status(403).json({
-                                error: 'insufficient_scope',
-                                message: new InsufficientScopeError(requiredScope).message,
-                            })
-                            return
-                        }
-                    }
-                } else if (
-                    typeof body?.method === 'string' &&
-                    (body.method.startsWith('resources/') || body.method.startsWith('prompts/'))
-                ) {
-                    // Extract URI if available
-                    const paramsObj = body?.params as Record<string, unknown> | undefined
-                    const uriValue = paramsObj?.['uri']
-                    const uri = typeof uriValue === 'string' ? uriValue : ''
-                    
-                    let namespace = ''
-                    try {
-                        if (uri) {
-                            const parsedUri = new URL(uri)
-                            // memory://team -> host is 'team', memory://github/insights -> host is 'github'
-                            namespace = parsedUri.host
-                        }
-                    } catch {
-                        // Invalid URI falls back to empty namespace
-                    }
-
-                    // Enforce granular scopes for specific URI namespaces
-                    if (namespace === 'team' || namespace === 'flags') {
-                        if (!hasScope(req.auth?.scopes ?? [], SCOPES.TEAM || 'team')) {
-                            res.status(403).json({
-                                error: 'insufficient_scope',
-                                message: new InsufficientScopeError('team').message,
-                            })
-                            return
-                        }
-                    } else if (namespace === 'audit') {
-                        if (!hasScope(req.auth?.scopes ?? [], SCOPES.AUDIT || 'audit')) {
-                            res.status(403).json({
-                                error: 'insufficient_scope',
-                                message: new InsufficientScopeError('audit').message,
-                            })
-                            return
-                        }
-                    } else {
-                        // Standard read scope for all other resources/prompts
-                        if (!hasScope(req.auth?.scopes ?? [], SCOPES.READ)) {
-                            res.status(403).json({
-                                error: 'insufficient_scope',
-                                message: new InsufficientScopeError(SCOPES.READ).message,
-                            })
-                            return
-                        }
-                    }
-                }
-            }
-            next()
-        })
+        // REMOVED: Scope validation is now handled comprehensively at the dispatch layer
+        // (Tool execution in index.ts, Resource/Prompt execution in registration.ts).
 
         // Health check endpoint
         this.app.get('/health', handleHealthCheck)

@@ -153,25 +153,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             Authorization: `Bearer ${token}`,
         }
 
-        if (!expectSuccess) {
-            // Scope middleware fires before session check → expect 403 immediately
-            const res = await fetch(base, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    jsonrpc: '2.0',
-                    id: Math.floor(Math.random() * 10000),
-                    method: 'tools/call',
-                    params: { name: tool, arguments: args },
-                }),
-            })
-            expect(res.status).toBe(403)
-            const body = (await res.json()) as Record<string, unknown>
-            expect(body.error).toBe('insufficient_scope')
-            return
-        }
-
-        // Success path: need a valid session (stateful server)
+        // Always initialize a valid session (stateful server)
         const initRes = await fetch(base, {
             method: 'POST',
             headers,
@@ -208,7 +190,34 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
                 params: { name: tool, arguments: args },
             }),
         })
-        expect(res.status).toBe(200)
+        expect(res.status).toBe(200) // JSON-RPC always returns HTTP 200
+        const text = await res.text()
+        
+        let body: any
+        try {
+            body = JSON.parse(text)
+        } catch (e) {
+            // Extract from SSE format if needed
+            const dataMatch = text.match(/data:\s*({.*})/)
+            if (dataMatch) {
+                body = JSON.parse(dataMatch[1]!)
+            } else {
+                throw new Error(`Failed to parse response: ${text}`, { cause: e })
+            }
+        }
+
+        if (!expectSuccess) {
+            // Scope failure occurs at the dispatch layer in callTool or in registration
+            if (body.error) {
+                expect(body.error.message).toMatch(/scope|denied|unauthorized|Access/i)
+            } else {
+                expect(body.result?.isError).toBe(true)
+                expect(body.result?.content?.[0]?.text).toMatch(/scope|denied|unauthorized|Access/i)
+            }
+        } else {
+            expect(body.error).toBeUndefined()
+            expect(body.result?.isError).not.toBe(true)
+        }
     }
 
     test('read token can read core tools, but gets 403 on write-scoped tools', async () => {

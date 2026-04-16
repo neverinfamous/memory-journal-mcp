@@ -108,10 +108,29 @@ Body`
         const { metadata } = parseFrontmatter(markdown)
         expect(metadata.author).toBe('Alice')
     })
+    it('should correctly parse JSON frontmatter', () => {
+        const markdown = `---
+{
+  "mj_id": 123,
+  "entry_type": "decision",
+  "author": "Alice"
+}
+---
+This is the content.`
+
+        const { metadata, body } = parseFrontmatter(markdown)
+
+        expect(metadata).toEqual({
+            mj_id: 123,
+            entry_type: 'decision',
+            author: 'Alice',
+        })
+        expect(body).toBe('This is the content.')
+    })
 })
 
 describe('serializeFrontmatter', () => {
-    it('should serialize metadata to YAML-like format', () => {
+    it('should serialize metadata to JSON format', () => {
         const metadata = {
             mj_id: 123,
             entry_type: 'decision',
@@ -128,17 +147,17 @@ describe('serializeFrontmatter', () => {
 
         const serialized = serializeFrontmatter(metadata)
         expect(serialized).toContain('---')
-        expect(serialized).toContain('mj_id: 123')
-        expect(serialized).toContain('entry_type: decision')
-        expect(serialized).toContain('author: Alice')
-        expect(serialized).toContain('tags:')
-        expect(serialized).toContain('  - architecture')
-        expect(serialized).toContain('  - backend')
-        expect(serialized).toContain('relationships:')
-        expect(serialized).toContain('  - type: blocked_by')
-        expect(serialized).toContain('    target_id: 456')
-        expect(serialized).toContain('  - type: references')
-        expect(serialized).toContain('    target_id: 789')
+        expect(serialized).toContain('"mj_id": 123')
+        expect(serialized).toContain('"entry_type": "decision"')
+        expect(serialized).toContain('"author": "Alice"')
+        expect(serialized).toContain('"tags": [')
+        expect(serialized).toContain('"architecture"')
+        expect(serialized).toContain('"backend"')
+        expect(serialized).toContain('"relationships": [')
+        expect(serialized).toContain('"type": "blocked_by"')
+        expect(serialized).toContain('"target_id": 456')
+        expect(serialized).toContain('"type": "references"')
+        expect(serialized).toContain('"target_id": 789')
     })
 
     it('should return empty string if no metadata provided', () => {
@@ -150,6 +169,6 @@ describe('serializeFrontmatter', () => {
     it('should serialize only provided fields', () => {
         const metadata = { mj_id: 42 }
         const serialized = serializeFrontmatter(metadata)
-        expect(serialized).toBe('---\nmj_id: 42\n---\n')
+        expect(serialized).toBe('---\n{\n  "mj_id": 42\n}\n---\n')
     })
 })

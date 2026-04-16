@@ -240,7 +240,11 @@ export class Scheduler {
         job.isRunning = true
         const startTime = Date.now()
         try {
-            await fn()
+            if (this.runtime) {
+                await this.runtime.maintenanceManager.withActiveJob(fn)
+            } else {
+                await fn()
+            }
             job.lastRun = new Date(startTime)
             job.lastResult = 'success'
             job.lastError = null

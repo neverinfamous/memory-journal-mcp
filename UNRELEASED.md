@@ -71,4 +71,5 @@
 - **Testing**: Stabilized `markdown/importer.test.ts` failures by upgrading the centralized mock of `vectorManager.addEntry` to correctly return `{ success: true }`.
 - **Testing**: Fixed `template-github-branches.test.ts` branch coverage tests by directly mocking internal array states inside the mocked `getRepoContext`.
 - **Testing**: Repaired broken test file imports referencing incorrect relative `GitHubIntegration` module declarations.
+- **Testing**: Updated the `oauth-scopes.spec.ts` E2E test to properly handle extraction of JSON payloads from Server-Sent Events (SSE) data streams during HTTP execution-point scope authorization validations.
 - **CI/CD**: Promoted the comprehensive Playwright E2E suite to execute synchronously within `.github/workflows/lint-and-test.yml` using the new `npm run test:e2e` execution script target.

@@ -10,6 +10,7 @@ import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 import { parseFlagContext } from '../../../../types/auto-context.js'
+import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 
 // ============================================================================
 // Journal Context
@@ -41,9 +42,9 @@ export function buildJournalContext(
             id: e.id,
             timestamp: e.timestamp,
             type: e.entryType,
-            preview: `<untrusted_remote_content>${
+            preview: markUntrustedContentInline(
                 content.slice(0, PREVIEW_LENGTH) + (content.length > PREVIEW_LENGTH ? '...' : '')
-            }</untrusted_remote_content>`,
+            ),
         }
     })
 
@@ -86,7 +87,7 @@ export function buildJournalContext(
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: `<untrusted_remote_content>${c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')}</untrusted_remote_content>`,
+                preview: markUntrustedContentInline(c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')),
             }
         })
         latestSessionSummary = sessionSummaries[0]
@@ -128,7 +129,7 @@ export function buildTeamContext(
             ? ((teamLatestEntry['content'] as string | undefined) ?? '')
             : ''
         const teamLatest = teamLatestEntry
-            ? `#${String(teamLatestEntry['id'])}: <untrusted_remote_content>${teamContent.slice(0, TEAM_PREVIEW_LENGTH)}${teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''}</untrusted_remote_content>`
+            ? `#${String(teamLatestEntry['id'])}: ${markUntrustedContentInline(teamContent.slice(0, TEAM_PREVIEW_LENGTH) + (teamContent.length > TEAM_PREVIEW_LENGTH ? '...' : ''))}`
             : null
         const teamInfo = {
             totalEntries: teamTotalEntries,
@@ -150,10 +151,10 @@ export function buildTeamContext(
                     id: e.id,
                     timestamp: e.timestamp,
                     type: e.entryType,
-                    preview: `<untrusted_remote_content>${
+                    preview: markUntrustedContentInline(
                         content.slice(0, TEAM_PREVIEW_LENGTH) +
                         (content.length > TEAM_PREVIEW_LENGTH ? '...' : '')
-                    }</untrusted_remote_content>`,
+                    ),
                 }
             })
         }
@@ -280,10 +281,10 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
                     id: entry.id,
                     flag_type: ctx.flag_type,
                     target_user: ctx.target_user ?? null,
-                    preview: `<untrusted_remote_content>${
+                    preview: markUntrustedContentInline(
                         content.slice(0, 80) +
                         (content.length > 80 ? '...' : '')
-                    }</untrusted_remote_content>`,
+                    ),
                     timestamp: entry.timestamp,
                 }
             })

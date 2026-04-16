@@ -249,6 +249,42 @@ export function sanitizeErrorForLogging(message: string): string {
 }
 
 // ============================================================================
+// Untrusted Content Boundaries
+// ============================================================================
+
+/**
+ * Marks free-text content as untrusted remote origin for LLM instruction consumption.
+ * Defends against prompt-injection by surrounding external inputs with tags.
+ * 
+ * Will not insert nested tags if the content is already marked.
+ */
+export function markUntrustedContent(content: string | undefined | null): string {
+    if (!content) return ''
+    const trimmed = content.trim()
+    if (!trimmed) return ''
+    
+    // Prevent double-wrapping if already marked
+    if (trimmed.startsWith('<untrusted_remote_content>') && trimmed.endsWith('</untrusted_remote_content>')) {
+        return trimmed
+    }
+    
+    return `<untrusted_remote_content>\n${trimmed}\n</untrusted_remote_content>`
+}
+
+/**
+ * Utility for formatting remote content natively for inline single-line contexts.
+ */
+export function markUntrustedContentInline(content: string | undefined | null): string {
+    if (!content) return ''
+    let cleaned = content
+    
+    // Strip existing wrappers to normalize for inline layout
+    cleaned = cleaned.replace(/<\/?untrusted_remote_content>/g, '')
+    
+    return `<untrusted_remote_content>${cleaned}</untrusted_remote_content>`
+}
+
+// ============================================================================
 // Author Sanitization
 // ============================================================================
 

@@ -15,6 +15,9 @@ import { getPrompt } from '../handlers/prompts/index.js'
 import { getGlobalAuditLogger } from '../handlers/tools/index.js'
 import { auditOperation } from '../audit/interceptor.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
+import { getAuthContext } from '../auth/auth-context.js'
+import { hasScope, SCOPES } from '../auth/scopes.js'
+import { InsufficientScopeError } from '../auth/index.js'
 
 // ============================================================================
 // Types
@@ -83,6 +86,24 @@ export function registerResources(
                 template,
                 meta,
                 async (uri: URL, _variables: Variables) => {
+                    const auth = getAuthContext()
+                    if (auth) {
+                        const namespace = uri.host
+                        if (namespace === 'team' || namespace === 'flags') {
+                            if (!hasScope(auth.claims?.scopes ?? [], SCOPES.TEAM || 'team')) {
+                                throw new InsufficientScopeError('team')
+                            }
+                        } else if (namespace === 'audit') {
+                            if (!hasScope(auth.claims?.scopes ?? [], SCOPES.AUDIT || 'audit')) {
+                                throw new InsufficientScopeError('audit')
+                            }
+                        } else {
+                            if (!hasScope(auth.claims?.scopes ?? [], SCOPES.READ)) {
+                                throw new InsufficientScopeError(SCOPES.READ)
+                            }
+                        }
+                    }
+
                     const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
                     return auditOperation(auditLog, 'resource', resDef.name, async () => {
                         if (!runtime && process.env['NODE_ENV'] !== 'test') {
@@ -94,6 +115,24 @@ export function registerResources(
             )
         } else {
             server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
+                const auth = getAuthContext()
+                if (auth) {
+                    const namespace = uri.host
+                    if (namespace === 'team' || namespace === 'flags') {
+                        if (!hasScope(auth.claims?.scopes ?? [], SCOPES.TEAM || 'team')) {
+                            throw new InsufficientScopeError('team')
+                        }
+                    } else if (namespace === 'audit') {
+                        if (!hasScope(auth.claims?.scopes ?? [], SCOPES.AUDIT || 'audit')) {
+                            throw new InsufficientScopeError('audit')
+                        }
+                    } else {
+                        if (!hasScope(auth.claims?.scopes ?? [], SCOPES.READ)) {
+                            throw new InsufficientScopeError(SCOPES.READ)
+                        }
+                    }
+                }
+
                 const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
                 return auditOperation(auditLog, 'resource', resDef.name, async () => {
                     if (!runtime && process.env['NODE_ENV'] !== 'test') {
@@ -145,6 +184,19 @@ export function registerPrompts(
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
+                const auth = getAuthContext()
+                if (auth) {
+                    if (promptDef.name.startsWith('team_')) {
+                        if (!hasScope(auth.claims?.scopes ?? [], SCOPES.TEAM || 'team')) {
+                            throw new InsufficientScopeError('team')
+                        }
+                    } else {
+                        if (!hasScope(auth.claims?.scopes ?? [], SCOPES.READ)) {
+                            throw new InsufficientScopeError(SCOPES.READ)
+                        }
+                    }
+                }
+
                 const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
                 return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
                     if (!runtime && process.env['NODE_ENV'] !== 'test') {

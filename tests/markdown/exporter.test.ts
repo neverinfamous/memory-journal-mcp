@@ -129,14 +129,15 @@ describe('exportEntriesToMarkdown', () => {
         expect(mockHandle.close).toHaveBeenCalledTimes(2)
 
         const firstWriteContent = vi.mocked(mockHandle.writeFile).mock.calls[0][0] as string
-        expect(firstWriteContent).toContain('mj_id: 1')
+        expect(firstWriteContent).toContain('"mj_id": 1')
         expect(firstWriteContent).toContain('Test content one')
         expect(firstWriteContent).toContain('tag1')
 
         const secondWriteContent = vi.mocked(mockHandle.writeFile).mock.calls[1][0] as string
-        expect(secondWriteContent).toContain('author: Test Author')
-        expect(secondWriteContent).toContain('target_id: 3')
-        expect(secondWriteContent).toContain('type: references')
+        expect(secondWriteContent).toContain('"mj_id": 2')
+        expect(secondWriteContent).toContain('"author": "Test Author"')
+        expect(secondWriteContent).toContain('"target_id": 3')
+        expect(secondWriteContent).toContain('"type": "references"')
     })
 
     it('should skip entries without content', async () => {

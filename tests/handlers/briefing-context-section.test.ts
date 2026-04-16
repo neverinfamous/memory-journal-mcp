@@ -143,7 +143,7 @@ describe('buildJournalContext', () => {
 
         const result = buildJournalContext(context, createMockConfig() as never)
 
-        expect(result.latestEntries[0]!.preview).toBe('<untrusted_remote_content></untrusted_remote_content>')
+        expect(result.latestEntries[0]!.preview).toBe('')
     })
 })
 

@@ -175,6 +175,8 @@ export interface ToolHandlerConfig {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Hush Protocol flag vocabulary */
     flagVocabulary?: string[]
+    /** Allowlisted roots for file IO */
+    allowedIoRoots?: string[]
     /**
      * SEC-1.1: Central dispatch function for Code Mode.
      * Routes sandbox tool calls through callTool() so OAuth scope checks,

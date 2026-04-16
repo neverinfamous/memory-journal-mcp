@@ -10,6 +10,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
+import { markUntrustedContent } from '../../utils/security-utils.js'
 
 /** Milliseconds in one day */
 const MS_PER_DAY = 86_400_000
@@ -40,7 +41,10 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Find entries related to: "${query}"\n\nRecent matching entries:\n${entries.map((e) => `- [${String(e.id)}] ${e.content.slice(0, 100)}...`).join('\n')}`,
+                                text: `Find entries related to: "${query}"
+
+Recent matching entries:
+${markUntrustedContent(entries.map((e) => `- [${String(e.id)}] ${e.content.slice(0, 100)}...`).join('\n'))}`,
                             },
                         },
                     ],
@@ -68,7 +72,14 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}Prepare a standup summary based on these recent entries:\n\n${entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content}`).join('\n\n')}\n\nFormat as:\n- Yesterday: <summary>\n- Today: <planned work>\n- Blockers: <any blockers>`,
+                                text: `${digestSignal}Prepare a standup summary based on these recent entries.
+Format as:
+- Yesterday: <summary>
+- Today: <planned work>
+- Blockers: <any blockers>
+
+Sources:
+${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content}`).join('\n\n'))}`,
                             },
                         },
                     ],
@@ -103,15 +114,14 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `${digestSignal}Prepare a retrospective for the last ${String(days)} days based on these entries:\n\n${entries
-                                    .slice(0, 20)
-                                    .map(
-                                        (e) =>
-                                            `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 200)}`
-                                    )
-                                    .join(
-                                        '\n\n'
-                                    )}\n\nFormat as:\n- What went well\n- What could improve\n- Action items`,
+                                text: `${digestSignal}Prepare a retrospective for the last ${String(days)} days based on these entries.
+Format as:
+- What went well
+- What could improve
+- Action items
+
+Sources:
+${markUntrustedContent(entries.slice(0, 20).map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 200)}`).join('\n\n'))}`,
                             },
                         },
                     ],
@@ -136,7 +146,11 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Create a weekly digest from these entries:\n\n${entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 150)}`).join('\n\n')}\n\nFormat as day-by-day summary with highlights.`,
+                                text: `Create a weekly digest from these entries.
+Format as day-by-day summary with highlights.
+
+Sources:
+${markUntrustedContent(entries.map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 150)}`).join('\n\n'))}`,
                             },
                         },
                     ],
@@ -164,15 +178,14 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Analyze the period ${startDate} to ${endDate}:\n\nStatistics: ${JSON.stringify(stats, null, 2)}\n\nEntries (${String(entries.length)} total):\n${entries
-                                    .slice(0, 15)
-                                    .map(
-                                        (e) =>
-                                            `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 100)}`
-                                    )
-                                    .join(
-                                        '\n'
-                                    )}\n\nProvide insights on patterns, productivity, and recommendations.`,
+                                text: `Analyze the period ${startDate} to ${endDate}:
+
+Statistics: ${JSON.stringify(stats, null, 2)}
+
+Provide insights on patterns, productivity, and recommendations.
+
+Sources (${String(entries.length)} total):
+${markUntrustedContent(entries.slice(0, 15).map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 100)}` ).join('\n'))}`,
                             },
                         },
                     ],
@@ -203,7 +216,11 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Track goals and milestones based on significant entries:\n\n${JSON.stringify(mappedEntries, null, 2)}\n\nSummarize progress toward goals and highlight achievements.`,
+                                text: `Track goals and milestones based on significant entries.
+Summarize progress toward goals and highlight achievements.
+
+Sources:
+${markUntrustedContent(JSON.stringify(mappedEntries, null, 2))}`,
                             },
                         },
                     ],
@@ -234,13 +251,13 @@ export function getWorkflowPromptDefinitions(): InternalPromptDef[] {
                                 type: 'text',
                                 text: `Project context bundle:
 
-**Recent Entries (${String(recent.length)}):**
-${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join('\n')}
-
 **Statistics:** ${JSON.stringify(stats)}
 
 **For full GitHub status:** Fetch \`memory://github/status\`
-**For full entry details:** Use \`get_entry_by_id\` with entry ID`,
+**For full entry details:** Use \`get_entry_by_id\` with entry ID
+
+**Recent Entries (${String(recent.length)}):**
+${markUntrustedContent(entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join('\n'))}`,
                             },
                         },
                     ],
@@ -264,7 +281,9 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
                             role: 'user',
                             content: {
                                 type: 'text',
-                                text: `Recent ${String(limit)} entries:\n\n${entries.map((e) => `## ${e.timestamp} (${e.entryType})\n\n${e.content}\n\nTags: ${e.tags.join(', ') || 'none'}`).join('\n\n---\n\n')}`,
+                                text: `Recent ${String(limit)} entries:
+
+${markUntrustedContent(entries.map((e) => `## ${e.timestamp} (${e.entryType})\n\n${e.content}\n\nTags: ${e.tags.join(', ') || 'none'}`).join('\n\n---\n\n'))}`,
                             },
                         },
                     ],
@@ -303,7 +322,7 @@ ${entrySummaries.map((e) => `- #${String(e.id)} (${e.type}) ${e.preview}`).join(
 **Session Context Received:**
 - **Journal**: ${String(totalEntries)} total entries
 - **Latest Entries**:
-${entrySummary}
+${markUntrustedContent(entrySummary)}
 
 **My Behaviors:**
 - Create entries for: implementations, decisions, bug fixes, milestones
@@ -350,14 +369,14 @@ Please confirm this context to the user in a concise, friendly format. Use a tab
                                 type: 'text',
                                 text: `Create a session summary journal entry based on this context:
 
-**Recent Entries:**
-${entrySummary}
-
 **Instructions:**
 1. Summarize what was accomplished in this session (key changes, decisions, files modified)
 2. Note what's unfinished or blocked (pending items, open questions)
 3. Include context for the next session (relevant entry IDs, branch names, PR numbers)
-4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\``,
+4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\`
+
+**Recent Entries:**
+${markUntrustedContent(entrySummary)}`,
                             },
                         },
                     ],
@@ -399,15 +418,15 @@ ${entrySummary}
                                 type: 'text',
                                 text: `Create a team session summary journal entry based on this context:
 
-**Recent Team Entries:**
-${entrySummary}
-
 **Instructions:**
 1. Summarize what the team accomplished in this session (key changes, decisions, files modified)
 2. Note what's unfinished or blocked for the team (pending items, open questions)
 3. Include context for the next team session (relevant entry IDs, branch names, PR numbers)
 4. Use \`entry_type: "retrospective"\` and tag with \`session-summary\`
-5. YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.`,
+5. YOU MUST USE \`team_create_entry\` OR \`mj.team.create\` TO SAVE THIS ENTRY.
+
+**Recent Team Entries:**
+${markUntrustedContent(entrySummary)}`,
                             },
                         },
                     ],

@@ -62,6 +62,8 @@ const ALWAYS_AUDITED_SCOPES = new Set(['write', 'admin', 'team', 'audit'])
  */
 function scopeToCategory(scope: string): AuditCategory {
     if (scope === 'admin') return 'admin'
+    if (scope === 'team') return 'team'
+    if (scope === 'audit') return 'audit'
     if (scope === 'read') return 'read'
     return 'write'
 }

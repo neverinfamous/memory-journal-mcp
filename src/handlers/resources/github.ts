@@ -14,6 +14,7 @@ import {
 import type { GitHubIssue, GitHubPullRequest, GitHubWorkflowRun, GitHubMilestone } from '../../types/index.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from './shared.js'
+import { markUntrustedContentInline } from '../../utils/security-utils.js'
 import { logger } from '../../utils/logger.js'
 
 // ============================================================================
@@ -109,12 +110,12 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
 
                 const openIssues = issues.map((i) => ({
                     number: i.number,
-                    title: `<untrusted_remote_content>${i.title.slice(0, 50)}</untrusted_remote_content>`,
+                    title: markUntrustedContentInline(i.title.slice(0, 50)),
                 }))
 
                 const openPrs = prs.map((pr) => ({
                     number: pr.number,
-                    title: `<untrusted_remote_content>${pr.title.slice(0, 50)}</untrusted_remote_content>`,
+                    title: markUntrustedContentInline(pr.title.slice(0, 50)),
                     state: pr.state,
                 }))
 
@@ -189,7 +190,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                             const pct = milestoneCompletionPct(ms.openIssues, ms.closedIssues)
                             return {
                                 number: ms.number,
-                                title: `<untrusted_remote_content>${ms.title}</untrusted_remote_content>`,
+                                title: markUntrustedContentInline(ms.title),
                                 state: ms.state,
                                 openIssues: ms.openIssues,
                                 closedIssues: ms.closedIssues,
@@ -332,7 +333,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                         ms.openIssues,
                         ms.closedIssues
                     )
-                    return { ...ms, title: `<untrusted_remote_content>${ms.title}</untrusted_remote_content>`, completionPercentage }
+                    return { ...ms, title: markUntrustedContentInline(ms.title), completionPercentage }
                 })
 
                 return {
@@ -393,7 +394,7 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 return {
                     data: {
                         repository: `${owner}/${repo}`,
-                        milestone: { ...milestone, title: `<untrusted_remote_content>${milestone.title}</untrusted_remote_content>`, completionPercentage },
+                        milestone: { ...milestone, title: markUntrustedContentInline(milestone.title), completionPercentage },
                         hint: 'Use get_github_issues tool to list issues associated with this milestone.',
                     },
                     annotations: { lastModified },

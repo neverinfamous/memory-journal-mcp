@@ -82,6 +82,8 @@ export interface ServerOptions {
     auditConfig?: AuditConfig
     // Hush Protocol flag vocabulary
     flagVocabulary?: string[]
+    // Allowlisted roots for file IO
+    allowedIoRoots?: string[]
 }
 
 /**
@@ -230,6 +232,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         defaultProjectNumber,
         projectRegistry: options.projectRegistry,
         flagVocabulary: options.flagVocabulary,
+        allowedIoRoots: options.allowedIoRoots,
         filterConfig,
         runtime,
     }
