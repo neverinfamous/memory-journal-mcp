@@ -20,11 +20,25 @@ export async function setupStateless(app: Express, serverFactory: McpServerFacto
     app.post('/mcp', (req: Request, res: Response): void => {
         const sessionId = req.headers['mcp-session-id'] as string | undefined
         void requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
-            await statelessTransport.handleRequest(
-                req as IncomingMessage,
-                res as ServerResponse,
-                req.body
-            )
+            try {
+                await statelessTransport.handleRequest(
+                    req as IncomingMessage,
+                    res as ServerResponse,
+                    req.body
+                )
+            } catch (error) {
+                logger.error('Unhandled fault in stateless transport handler', {
+                    module: 'HTTP',
+                    error: error instanceof Error ? error.message : String(error),
+                })
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        jsonrpc: '2.0',
+                        error: { code: JSONRPC_SERVER_ERROR, message: 'Internal server error during stateless transport dispatch' },
+                        id: null,
+                    })
+                }
+            }
         })
     })
 

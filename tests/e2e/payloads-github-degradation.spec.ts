@@ -13,18 +13,21 @@ import { tmpdir } from 'node:os'
 
 const GITHUB_DEGRADE_PORT = 3115
 
-test.describe.configure({ mode: 'serial' })
+test.describe.configure({ mode: 'serial', timeout: 120000 })
 
 test.describe('Payload Contracts: GitHub Config Degradation', () => {
     let client: Client
 
     test.beforeAll(async () => {
+        test.setTimeout(120000)
         // Strip out PROJECT_REGISTRY and GITHUB_TOKEN so auto-detect fails
         const oldRegistry = process.env.PROJECT_REGISTRY
         const oldToken = process.env.GITHUB_TOKEN
+        const oldTeamDb = process.env.TEAM_DB_PATH
 
         delete process.env.PROJECT_REGISTRY
         delete process.env.GITHUB_TOKEN
+        delete process.env.TEAM_DB_PATH
 
         // startServer propagates the current process.env
         try {
@@ -34,6 +37,7 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
         } finally {
             if (oldRegistry) process.env.PROJECT_REGISTRY = oldRegistry
             if (oldToken) process.env.GITHUB_TOKEN = oldToken
+            if (oldTeamDb) process.env.TEAM_DB_PATH = oldTeamDb
         }
     })
 

@@ -80,8 +80,12 @@ export function mergeAndDedup(
     })
 
     for (const entry of all) {
-        // Deduplicate by content hash (same entry shared to team)
-        const key = crypto.createHash('sha256').update(entry.content).digest('hex')
+        // Stop deduplicating cross-DB by content alone to prevent dropping identical text entries.
+        // Use source + id, fallback to source + content hash.
+        const entryId = typeof entry['id'] === 'number' || typeof entry['id'] === 'string' ? String(entry['id']) : ''
+        const key = entryId
+            ? `${entry.source}:${entryId}`
+            : crypto.createHash('sha256').update(`${entry.source}:${entry.content}`).digest('hex')
         if (!seen.has(key)) {
             seen.add(key)
             merged.push(entry)

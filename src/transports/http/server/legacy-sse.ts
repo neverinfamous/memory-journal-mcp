@@ -90,8 +90,22 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
 
         // SEC-2.1: Thread request context into the message dispatch so per-request
         // attributes (IP, sessionId) are visible to rate limiters and audit loggers.
-        requestContextStorage.run({ ip: req.ip, sessionId }, () => {
-            void transport.handlePostMessage(req as IncomingMessage, res as ServerResponse, req.body)
+        void requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
+            try {
+                await transport.handlePostMessage(req as IncomingMessage, res as ServerResponse, req.body)
+            } catch (error) {
+                logger.error('Unhandled fault in legacy SSE message handler', {
+                    module: 'HTTP',
+                    error: error instanceof Error ? error.message : String(error),
+                })
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        jsonrpc: '2.0',
+                        error: { code: JSONRPC_SERVER_ERROR, message: 'Internal server error during legacy SSE dispatch' },
+                        id: null,
+                    })
+                }
+            }
         })
     })
 }

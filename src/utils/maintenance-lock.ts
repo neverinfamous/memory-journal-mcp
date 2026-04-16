@@ -10,7 +10,7 @@ import type { GitHubIntegration } from '../github/github-integration/index.js'
 
 export class MaintenanceManager {
     private activeJobs = 0;
-    private maintenanceWaiters: (() => void)[] = [];
+    private maintenanceWaitPromise: { promise: Promise<void>, resolve: () => void } | null = null;
     private inMaintenanceMode = false;
 
     async withActiveJob<T>(fn: () => Promise<T>, bypass = false): Promise<T> {
@@ -23,10 +23,9 @@ export class MaintenanceManager {
             return await fn();
         } finally {
             this.activeJobs--;
-            if (this.activeJobs === 0 && this.maintenanceWaiters.length > 0) {
-                const waiters = [...this.maintenanceWaiters];
-                this.maintenanceWaiters = [];
-                waiters.forEach(w => w());
+            if (this.activeJobs === 0 && this.maintenanceWaitPromise !== null) {
+                this.maintenanceWaitPromise.resolve();
+                this.maintenanceWaitPromise = null;
             }
         }
     }
@@ -38,18 +37,24 @@ export class MaintenanceManager {
         this.inMaintenanceMode = true;
 
         if (this.activeJobs > 1) { // 1 is the restore job itself!
-            await new Promise<void>(resolve => {
-                this.maintenanceWaiters.push(resolve);
-            });
+            if (this.maintenanceWaitPromise === null) {
+                let resolver: (() => void) | undefined;
+                const promise = new Promise<void>(resolve => { resolver = resolve });
+                if (resolver) {
+                    this.maintenanceWaitPromise = { promise, resolve: resolver };
+                }
+            }
+            if (this.maintenanceWaitPromise !== null) {
+                await this.maintenanceWaitPromise.promise;
+            }
         }
     }
 
     releaseMaintenanceLock(): void {
         this.inMaintenanceMode = false;
-        if (this.maintenanceWaiters.length > 0) {
-            const waiters = [...this.maintenanceWaiters];
-            this.maintenanceWaiters = [];
-            waiters.forEach(w => w());
+        if (this.maintenanceWaitPromise !== null) {
+            this.maintenanceWaitPromise.resolve();
+            this.maintenanceWaitPromise = null;
         }
     }
     
@@ -74,15 +79,4 @@ export class ServerRuntime {
     public githubClientPool: Map<string, GitHubIntegration> | null = null;
 }
 
-// ============================================================================
-// Legacy Fallbacks
-// ============================================================================
-
-export function assertNotInMaintenanceMode(): void {
-    // Legacy stub for backward compatibility
-}
-
-export function isMaintenanceModeActive(): boolean {
-    // Legacy stub for backward compatibility
-    return false;
-}
+// Legacy Fallbacks removed. Consumers MUST provide a valid ServerRuntime to use MaintenanceManager logic.

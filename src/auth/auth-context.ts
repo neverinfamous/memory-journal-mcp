@@ -40,14 +40,7 @@ export function getAuthContext(): AuthenticatedContext | undefined {
     return authContextStorage.getStore()
 }
 
-/**
- * Set auth context imperatively using enterWith().
- * Replaces the current store for the remainder of the async context.
- * Prefer runWithAuthContext() for request-scoped usage.
- */
-export function setAuthContext(context: AuthenticatedContext): void {
-    authContextStorage.enterWith(context)
-}
+
 
 /**
  * Run a callback within a specific auth context.

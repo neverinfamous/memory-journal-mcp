@@ -19,7 +19,6 @@ import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import {
     runWithAuthContext,
     getAuthContext,
-    setAuthContext,
     withAuthContext,
     isAuthenticated,
     getAuthenticatedScopes,
@@ -370,7 +369,9 @@ describe('Auth Context', () => {
     it('runWithAuthContext should provide context within callback', () => {
         const mockContext = {
             authenticated: true as const,
-            claims: { sub: 'test-user', scopes: ['read', 'write'] },
+            claims: { sub: 'test-user', scopes: ['read', 'write'], exp: 0, iat: 0 },
+            scopes: ['read', 'write'],
+            token: 'test-token',
         }
 
         const result = runWithAuthContext(mockContext, () => {
@@ -384,29 +385,16 @@ describe('Auth Context', () => {
     it('withAuthContext should be an alias for runWithAuthContext', () => {
         const mockContext = {
             authenticated: true as const,
-            claims: { sub: 'alias-test', scopes: ['read'] },
+            claims: { sub: 'alias-test', scopes: ['read'], exp: 0, iat: 0 },
+            scopes: ['read'],
+            token: 'test-token',
         }
 
         const result = withAuthContext(mockContext, () => getAuthContext())
         expect(result?.claims?.sub).toBe('alias-test')
     })
 
-    it('setAuthContext should set context imperatively', () => {
-        const mockContext = {
-            authenticated: true as const,
-            claims: { sub: 'imperative-test', scopes: ['admin'] },
-        }
 
-        // setAuthContext uses enterWith, so we need to be in an async context
-        runWithAuthContext(mockContext, () => {
-            setAuthContext({
-                authenticated: true,
-                claims: { sub: 'updated-user', scopes: ['admin', 'write'] },
-            })
-            const ctx = getAuthContext()
-            expect(ctx?.claims?.sub).toBe('updated-user')
-        })
-    })
 
     it('isAuthenticated should return false outside context', () => {
         expect(isAuthenticated()).toBe(false)
@@ -414,7 +402,7 @@ describe('Auth Context', () => {
 
     it('isAuthenticated should return true within auth context', () => {
         const result = runWithAuthContext(
-            { authenticated: true, claims: { sub: 'user', scopes: [] } },
+            { authenticated: true, claims: { sub: 'user', scopes: [], exp: 0, iat: 0 }, scopes: [] },
             () => isAuthenticated()
         )
         expect(result).toBe(true)
@@ -426,14 +414,14 @@ describe('Auth Context', () => {
 
     it('getAuthenticatedScopes should return scopes within auth context', () => {
         const result = runWithAuthContext(
-            { authenticated: true, claims: { sub: 'user', scopes: ['read', 'write'] } },
+            { authenticated: true, claims: { sub: 'user', scopes: ['read', 'write'], exp: 0, iat: 0 }, scopes: ['read', 'write'] },
             () => getAuthenticatedScopes()
         )
         expect(result).toEqual(['read', 'write'])
     })
 
     it('getAuthenticatedScopes should return empty for unauthenticated context', () => {
-        const result = runWithAuthContext({ authenticated: false }, () => getAuthenticatedScopes())
+        const result = runWithAuthContext({ authenticated: false, scopes: [] }, () => getAuthenticatedScopes())
         expect(result).toEqual([])
     })
 })

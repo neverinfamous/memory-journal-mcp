@@ -228,7 +228,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     // Share with team if requested
                     let sharedWithTeam = false
                     let author: string | undefined
-                    let teamError: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
                             const ctx = getAuthContext()
@@ -259,13 +258,21 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {
-                            logger.error('Failed to share entry with team DB', {
+                            logger.error('Failed to share entry with team DB, rolling back personal entry', {
                                 module: 'TOOL',
                                 operation: 'create-entry',
                                 error: error instanceof Error ? error.message : String(error),
                             })
-                            // We do not throw here to prevent repeating personal writes (partial commit issue)
-                            teamError = error instanceof Error ? error.message : String(error)
+                            // Rollback the personal entry to prevent partial commit
+                            db.deleteEntry(entry.id, true)
+                            if (vectorManager) {
+                                try {
+                                    vectorManager.removeEntry(entry.id)
+                                } catch {
+                                    /* ignore */
+                                }
+                            }
+                            throw error
                         }
                     }
 
@@ -274,7 +281,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         entry,
                         indexStatus,
                         ...(sharedWithTeam ? { sharedWithTeam: true, author } : {}),
-                        ...(teamError ? { sharedWithTeam: false, teamError } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

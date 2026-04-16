@@ -15,7 +15,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import type { TestInfo } from '@playwright/test'
 import { expect } from '@playwright/test'
-import { type ChildProcess, spawn } from 'node:child_process'
+import { ChildProcess, spawn } from 'node:child_process'
+import { createWriteStream } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 
@@ -169,7 +170,9 @@ export async function startServer(
             '--port',
             String(port),
             '--db',
-            join(process.cwd(), '.test-output', 'e2e', `test-e2e-${suffix}.db`),
+            options?.cwd 
+                ? join(options.cwd, `test-e2e-${suffix}.db`)
+                : join(process.cwd(), '.test-output', 'e2e', `test-e2e-${suffix}.db`),
             ...args,
         ],
         {
@@ -187,9 +190,13 @@ export async function startServer(
         }
     )
 
+    const logStream = createWriteStream(`server-${port}.log`)
+    serverProcess.stdout?.pipe(logStream)
+    serverProcess.stderr?.pipe(logStream)
+
     managedServers.set(port, { process: serverProcess, port })
 
-    const maxAttempts = 30
+    const maxAttempts = 180
     for (let i = 0; i < maxAttempts; i++) {
         try {
             const res = await fetch(`http://localhost:${port}/health`)
@@ -199,6 +206,8 @@ export async function startServer(
         }
         await delay(500)
     }
+    
+    serverProcess.kill()
     throw new Error(`Server on port ${port} did not start within timeout`)
 }
 

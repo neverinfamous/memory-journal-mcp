@@ -21,6 +21,9 @@
 - **GitHub**: Integrated native `AbortController` signaling for all GitHub integration API requests, resolving runaway Octokit network queries during global task timeouts.
 
 ### Fixed
+- **CLI/Execution**: Resolved false-positive path traversal errors preventing server initialization on Windows by removing sandbox boundary restraints incorrectly applied to raw `PROJECT_REGISTRY` environment mappings and explicit root database CLI arguments (`--db`, `--team-db`).
+- **Testing**: Fixed persistent `beforeAll` E2E test suite timeout loops in `payloads-github-degradation.spec.ts` bypassing `sqlite-vec` process crashes caused by mismatched directory creation depths relative to `tmpdir()`.
+- **Testing**: Remediated TypeScript strict-mode adherence inside `tests/auth/auth-context.test.ts` and `targeted-gap-closure-2.test.ts` by ensuring mocked `AuthenticatedContext` interfaces completely implement `scopes`, `exp`, and `iat` JWT claims structure.
 - **Testing/Architecture**: Successfully migrated legacy `getRawDb()` test mocks to explicitly mock `IDatabaseAdapter` vector methods across Vector and Database test suites, achieving 100% pass rate with decoupled interface boundaries.
 - **Integrity**: Revamped the internal SQLite `restore_backup` pipeline to utilize an atomic `.tmp` swap and secondary rename operation to prevent mid-operation failures from leaving the primary DB permanently malformed.
 - **Memory**: Resolved persistent memory leak in `CodeModeSecurityManager` by implementing explicit `dispose()` cleanup for bounded interval timers on cache eviction.

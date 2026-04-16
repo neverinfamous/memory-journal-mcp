@@ -179,14 +179,16 @@ describe('Search Helpers', () => {
         expect(calcPerDbLimit(500, true)).toBe(500)
     })
 
-    it('should merge and deduplicate entries', () => {
+    it('should merge and deduplicate entries by source and id', () => {
         const personal = [
             {
+                id: 1,
                 content: 'Entry A content',
                 timestamp: '2026-03-31T10:00:00Z',
                 source: 'personal' as const,
             },
             {
+                id: 2,
                 content: 'Entry B content',
                 timestamp: '2026-03-31T09:00:00Z',
                 source: 'personal' as const,
@@ -194,18 +196,26 @@ describe('Search Helpers', () => {
         ]
         const team = [
             {
+                id: 1,
                 content: 'Entry A content',
                 timestamp: '2026-03-31T10:00:00Z',
-                source: 'team' as const,
+                source: 'personal' as const, // Duplicate entry, same source and ID
             },
             {
+                id: 1,
+                content: 'Entry A content (Team)',
+                timestamp: '2026-03-31T10:00:00Z',
+                source: 'team' as const, // Different source, should not deduplicate even with same ID
+            },
+            {
+                id: 3,
                 content: 'Entry C content',
                 timestamp: '2026-03-31T11:00:00Z',
                 source: 'team' as const,
             },
         ]
         const merged = mergeAndDedup(personal, team, 10)
-        expect(merged.length).toBe(3)
+        expect(merged.length).toBe(4) // 2 personal, 2 team (1 duplicate was removed)
         // Sorted by timestamp descending
         expect(merged[0]!.content).toBe('Entry C content')
     })

@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { z } from 'zod'
 import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
@@ -7,6 +8,15 @@ import { VERSION } from './version.js'
 import type { ProjectRegistryEntry } from './types/index.js'
 import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from './audit/index.js'
 import type { AuditConfig } from './audit/index.js'
+
+
+function parseConfigIntRequired(value: string, name: string): number {
+    const parsed = parseInt(value, 10)
+    if (Number.isNaN(parsed)) {
+        throw new Error(`Invalid required numeric configuration for ${name}: ${value}`)
+    }
+    return parsed
+}
 
 // Smart Database Resolution: Check root, then test-server, then default to root
 function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
@@ -242,6 +252,7 @@ program
             }
 
             try {
+
                 // Build audit config from CLI options + env
                 const auditLogPath = options.auditLog ?? process.env['AUDIT_LOG_PATH']
                 const auditConfig: AuditConfig | undefined = auditLogPath
@@ -250,25 +261,25 @@ program
                           logPath: auditLogPath,
                           redact: options.auditRedact ?? (process.env['AUDIT_REDACT'] ? process.env['AUDIT_REDACT'] === 'true' : true),
                           auditReads: options.auditReads ?? process.env['AUDIT_READS'] === 'true',
-                          maxSizeBytes: parseInt(
+                          maxSizeBytes: parseConfigIntRequired(
                               process.env['AUDIT_LOG_MAX_SIZE'] ?? options.auditLogMaxSize,
-                              10
+                              'audit-log-max-size'
                           ),
                       }
                     : undefined
 
                 await createServer({
                     transport: options.transport as 'stdio' | 'http',
-                    port: parseInt(options.port, 10),
+                    port: parseConfigIntRequired(options.port, 'port'),
                     host,
                     statelessHttp: options.stateless === true,
                     dbPath: options.db,
                     teamDbPath: options.teamDb,
                     toolFilter: options.toolFilter,
                     defaultProjectNumber: options.defaultProject
-                        ? parseInt(options.defaultProject, 10)
+                        ? parseConfigIntRequired(options.defaultProject, 'default-project')
                         : process.env['DEFAULT_PROJECT_NUMBER']
-                          ? parseInt(process.env['DEFAULT_PROJECT_NUMBER'], 10)
+                          ? parseConfigIntRequired(process.env['DEFAULT_PROJECT_NUMBER'], 'DEFAULT_PROJECT_NUMBER')
                           : undefined,
                     autoRebuildIndex:
                         options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
@@ -278,11 +289,11 @@ program
                     enableHSTS: options.enableHsts ?? process.env['MCP_ENABLE_HSTS'] === 'true',
                     authToken: options.authToken,
                     scheduler: {
-                        backupIntervalMinutes: parseInt(options.backupInterval, 10),
-                        keepBackups: parseInt(options.keepBackups, 10),
-                        vacuumIntervalMinutes: parseInt(options.vacuumInterval, 10),
-                        rebuildIndexIntervalMinutes: parseInt(options.rebuildIndexInterval, 10),
-                        digestIntervalMinutes: parseInt(options.digestInterval, 10),
+                        backupIntervalMinutes: parseConfigIntRequired(options.backupInterval, 'backup-interval'),
+                        keepBackups: parseConfigIntRequired(options.keepBackups, 'keep-backups'),
+                        vacuumIntervalMinutes: parseConfigIntRequired(options.vacuumInterval, 'vacuum-interval'),
+                        rebuildIndexIntervalMinutes: parseConfigIntRequired(options.rebuildIndexInterval, 'rebuild-index-interval'),
+                        digestIntervalMinutes: parseConfigIntRequired(options.digestInterval, 'digest-interval'),
                     },
 
                     // OAuth 2.1
@@ -290,9 +301,9 @@ program
                     oauthIssuer: options.oauthIssuer ?? process.env['OAUTH_ISSUER'],
                     oauthAudience: options.oauthAudience ?? process.env['OAUTH_AUDIENCE'],
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
-                    oauthClockTolerance: parseInt(
+                    oauthClockTolerance: parseConfigIntRequired(
                         process.env['OAUTH_CLOCK_TOLERANCE'] ?? options.oauthClockTolerance,
-                        10
+                        'oauth-clock-tolerance'
                     ),
                     allowPlaintextLoopbackOAuth: options.oauthAllowPlaintextLoopback ?? (process.env['OAUTH_ALLOW_PLAINTEXT_LOOPBACK'] === 'true'),
                     trustProxy: options.trustProxy ?? (process.env['TRUST_PROXY'] === 'true'),
@@ -311,50 +322,57 @@ program
                                 }).loose()
                             )
                             const parsed: unknown = JSON.parse(raw)
-                            return registrySchema.parse(parsed) as Record<string, ProjectRegistryEntry>
+                            const validated = registrySchema.parse(parsed) as Record<string, ProjectRegistryEntry>
+                            for (const key of Object.keys(validated)) {
+                                const entry = validated[key]
+                                if (entry?.path && !path.isAbsolute(entry.path)) {
+                                    throw new Error(`Project registry path must be an absolute path: ${entry.path}`)
+                                }
+                            }
+                            return validated
                         } catch (e: unknown) {
                             const errName = e instanceof Error ? e.message : String(e)
                             throw new Error(
-                                `Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON: ${errName}`,
+                                `Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON and safe paths: ${errName}`,
                                 { cause: e }
                             )
                         }
                     })(),
                     // Briefing configuration
                     briefingConfig: {
-                        entryCount: parseInt(
+                        entryCount: parseConfigIntRequired(
                             process.env['BRIEFING_ENTRY_COUNT'] ?? options.briefingEntries,
-                            10
+                            'briefing-entries'
                         ),
-                        summaryCount: parseInt(
+                        summaryCount: parseConfigIntRequired(
                             process.env['BRIEFING_SUMMARY_COUNT'] ?? options.briefingSummaries,
-                            10
+                            'briefing-summaries'
                         ),
                         includeTeam:
                             options.briefingIncludeTeam ??
                             process.env['BRIEFING_INCLUDE_TEAM'] === 'true',
-                        issueCount: parseInt(
+                        issueCount: parseConfigIntRequired(
                             process.env['BRIEFING_ISSUE_COUNT'] ?? options.briefingIssues,
-                            10
+                            'briefing-issues'
                         ),
-                        prCount: parseInt(
+                        prCount: parseConfigIntRequired(
                             process.env['BRIEFING_PR_COUNT'] ?? options.briefingPrs,
-                            10
+                            'briefing-prs'
                         ),
                         prStatusBreakdown:
                             options.briefingPrStatus ??
                             process.env['BRIEFING_PR_STATUS'] === 'true',
-                        milestoneCount: parseInt(
+                        milestoneCount: parseConfigIntRequired(
                             process.env['BRIEFING_MILESTONE_COUNT'] ?? options.briefingMilestones,
-                            10
+                            'briefing-milestones'
                         ),
                         rulesFilePath:
                             options.rulesFile ?? process.env['RULES_FILE_PATH'] ?? undefined,
                         skillsDirPath:
                             options.skillsDir ?? process.env['SKILLS_DIR_PATH'] ?? undefined,
-                        workflowCount: parseInt(
+                        workflowCount: parseConfigIntRequired(
                             process.env['BRIEFING_WORKFLOW_COUNT'] ?? options.briefingWorkflows,
-                            10
+                            'briefing-workflows'
                         ),
                         workflowStatusBreakdown:
                             options.briefingWorkflowStatus ??
@@ -367,9 +385,9 @@ program
                             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] ??
                             undefined,
                         defaultProjectNumber: options.defaultProject
-                            ? parseInt(options.defaultProject, 10)
+                            ? parseConfigIntRequired(options.defaultProject, 'default-project')
                             : process.env['DEFAULT_PROJECT_NUMBER']
-                              ? parseInt(process.env['DEFAULT_PROJECT_NUMBER'], 10)
+                              ? parseConfigIntRequired(process.env['DEFAULT_PROJECT_NUMBER'], 'DEFAULT_PROJECT_NUMBER')
                               : undefined,
                     },
                     instructionLevel: (options.instructionLevel !== 'standard'

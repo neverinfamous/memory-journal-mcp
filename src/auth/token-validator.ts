@@ -120,6 +120,7 @@ export class TokenValidator {
             this.jwks = jose.createRemoteJWKSet(new URL(this.jwksUri), {
                 cooldownDuration: 30000, // 30 seconds between retries
                 cacheMaxAge: this.jwksCacheTtl * 1000,
+                timeoutDuration: 5000, // Explicit 5s timeout to prevent socket hangs
             })
 
             this.jwksExpiry = Date.now() + this.jwksCacheTtl * 1000

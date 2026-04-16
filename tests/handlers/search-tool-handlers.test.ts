@@ -54,7 +54,7 @@ describe('Search Tool Handlers - Coverage', () => {
             entryType: 'technical_note',
             workflowRunId: 9999,
             workflowName: 'ci',
-            workflowStatus: 'success',
+            workflowStatus: 'completed',
         })
 
         // Seed team entries
@@ -112,7 +112,7 @@ describe('Search Tool Handlers - Coverage', () => {
             expect(result.entries.length).toBe(result.count)
         })
 
-        it('should deduplicate entries with same content', async () => {
+        it('should not deduplicate entries with same content from different databases', async () => {
             const result = (await callTool(
                 'search_entries',
                 { query: 'alpha', limit: 50 },
@@ -124,11 +124,11 @@ describe('Search Tool Handlers - Coverage', () => {
                 teamDb
             )) as { entries: { content: string }[]; count: number }
 
-            // "Personal alpha entry" exists in both DBs — should be deduped
+            // 'Personal alpha entry' exists in both DBs — should NOT be deduped since sources differ
             const alphaEntries = result.entries.filter((e) =>
                 e.content.includes('Personal alpha entry')
             )
-            expect(alphaEntries.length).toBe(1)
+            expect(alphaEntries.length).toBe(2)
         })
 
         it('should return validation error for empty search (no query, no filters)', async () => {

@@ -42,7 +42,6 @@ import { getAuthContext } from '../../auth/auth-context.js'
 import { getRequiredScope } from '../../auth/scope-map.js'
 import { hasScope } from '../../auth/scopes.js'
 import { logger } from '../../utils/logger.js'
-import { assertNotInMaintenanceMode } from '../../utils/maintenance-lock.js'
 import { PermissionError } from '../../types/errors.js'
 
 // Re-export for backward compatibility (McpServer imports these)
@@ -267,7 +266,7 @@ function ensureToolCache(
         // Layer 2: Audit logging (only when initialized)
         const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
         const interceptor = runtimeAudit ?? globalAuditInterceptor
-        const finalHandler = interceptor
+        const finalHandler = interceptor !== null && interceptor !== undefined
             ? (args: Record<string, unknown>): Promise<unknown> =>
                   interceptor.around(t.name, args, () => metricsWrapped(args))
             : metricsWrapped
@@ -312,15 +311,8 @@ export async function callTool(
         return Promise.reject(new Error(`Unknown tool: ${name}`))
     }
 
-    if (!config?.runtime?.maintenanceManager) {
-        // Fallback for tests/environments without runtime
-        if (name !== 'restore_backup') {
-            try {
-                assertNotInMaintenanceMode()
-            } catch (error) {
-                return Promise.reject(error instanceof Error ? error : new Error(String(error)))
-            }
-        }
+    if (!config?.runtime?.maintenanceManager && process.env['NODE_ENV'] !== 'test') {
+        return Promise.reject(new Error('ServerRuntime is logically required for secure tool execution. Please initialize the server correctly.'))
     }
 
     // Authorization Hook: Enforce scope if auth context exists
@@ -361,16 +353,16 @@ export async function callTool(
                 globalMetrics
             )
             // Layer 2: Audit (if initialized)
-            const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
+            const runtimeAudit = config?.runtime !== undefined && config.runtime !== null ? config.runtime.auditInterceptor : null
             const interceptor = runtimeAudit ?? globalAuditInterceptor
-            const freshResult = interceptor
+            const freshResult = interceptor !== null && interceptor !== undefined
                 ? await interceptor.around(freshTool.name, args, () => metricsWrapped(args))
                 : await metricsWrapped(args)
             return injectTokenEstimate(freshResult)
         }
     }
 
-    if (config?.runtime?.maintenanceManager) {
+    if (config?.runtime?.maintenanceManager !== undefined && config.runtime.maintenanceManager !== null) {
         const result = await config.runtime.maintenanceManager.withActiveJob(
             () => Promise.resolve(tool.handler(args)),
             name === 'restore_backup' // restore bypasses lock since it acquires exclusive

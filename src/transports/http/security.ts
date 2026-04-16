@@ -158,12 +158,9 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     if (origin && !isWildcard) {
         const whitelist: Record<string, true> = {}
         for (const allowed of corsOrigins) whitelist[allowed] = true
-        // Allow same-origin requests even if no CORS config is active
         if (!(origin in whitelist)) {
-            // Check if origin exactly matches our own host/port (e.g. self-referential)
-            const hostHeader = typeof req.get === 'function' ? req.get('host') : req.headers?.host
-            const selfUrl = req.protocol + '://' + (hostHeader || `${config.host}:${config.port}`)
-            if (origin !== selfUrl) return false
+            // Self-origin fallback removed to prevent host header injection
+            return false
         }
     }
     return true
