@@ -103,7 +103,8 @@ describe('exportEntriesToMarkdown', () => {
         const result = await exportEntriesToMarkdown(
             entries as any,
             './export',
-            mockDb as any
+            mockDb as any,
+            [process.cwd()]
         )
 
         expect(result.success).toBe(true)
@@ -153,7 +154,8 @@ describe('exportEntriesToMarkdown', () => {
         const result = await exportEntriesToMarkdown(
             entries as any,
             './export',
-            mockDb as any
+            mockDb as any,
+            [process.cwd()]
         )
 
         expect(result.success).toBe(true)
@@ -164,8 +166,8 @@ describe('exportEntriesToMarkdown', () => {
 
     it('should reject exporting into the os temp directory', async () => {
         const tmpExportDir = join(tmpdir(), 'export')
-        await expect(exportEntriesToMarkdown([], tmpExportDir, mockDb as any)).rejects.toThrow(
-            /Path traversal detected|escapes allowed sandbox boundaries/
+        await expect(exportEntriesToMarkdown([], tmpExportDir, mockDb as any, [tmpdir()])).rejects.toThrow(
+            /Path traversal detected|escapes allowed sandbox boundaries|Refusing to export markdown files into the OS temporary directory/
         )
         expect(fs.mkdir).not.toHaveBeenCalled()
         expect(fs.open).not.toHaveBeenCalled()

@@ -23,12 +23,10 @@ import {
  * Falls back to Express's req.ip then req.socket.remoteAddress.
  */
 export function getClientIp(req: Request, trustProxy: boolean): string {
-    if (trustProxy) {
+    if (trustProxy && req.headers['x-forwarded-for'] !== undefined) {
         const forwarded = req.headers['x-forwarded-for']
-        if (typeof forwarded === 'string') {
-            const firstIp = forwarded.split(',')[0]?.trim()
-            if (firstIp) return firstIp
-        }
+        const first = typeof forwarded === 'string' ? forwarded.split(',')[0] : forwarded[0]
+        if (first) return first.trim()
     }
     return req.ip ?? req.socket.remoteAddress ?? 'unknown'
 }

@@ -154,7 +154,8 @@ export const rulesResource: InternalResourceDef = {
             }
         }
         try {
-            assertSafeFilePath(rulesPath)
+            const rulesRoot = path.dirname(path.resolve(rulesPath))
+            assertSafeFilePath(rulesPath, [rulesRoot])
         } catch (err) {
             return {
                 data: {
@@ -326,7 +327,8 @@ export const skillsResource: InternalResourceDef = {
 
         if (userSkillsDir) {
             try {
-                assertSafeDirectoryPath(userSkillsDir)
+                const root = path.resolve(userSkillsDir)
+                assertSafeDirectoryPath(userSkillsDir, [root])
             } catch (err) {
                 return {
                     data: {

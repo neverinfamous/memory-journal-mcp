@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { logger } from '../../utils/logger.js'
 import { assertNoPathTraversal } from '../../utils/security-utils.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
@@ -167,7 +168,7 @@ export class BackupManager {
 
             try {
                 // Stage the backup file directly adjacent to ensure cross-device consistency avoids failure
-                const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${Date.now()}`
+                const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
                 await fs.promises.copyFile(backupPath, tempDbPath)
                 
                 // Perform atomic swap
@@ -191,7 +192,7 @@ export class BackupManager {
                 // Close old DB via manager before rollback
                 this.ctx.closeDbBeforeRestore()
                 // Rollback using the same atomic strategy for recovery
-                const recoveryDbPath = `${this.ctx.getDbPath()}.recover_tmp_${Date.now()}`
+                const recoveryDbPath = `${this.ctx.getDbPath()}.recover_tmp_${randomUUID()}`
                 await fs.promises.copyFile(preRestoreResult.path, recoveryDbPath)
                 await fs.promises.rename(recoveryDbPath, this.ctx.getDbPath())
                 await this.ctx.initialize()

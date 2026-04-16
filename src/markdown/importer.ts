@@ -111,8 +111,8 @@ export async function importMarkdownEntries(
     sourceDir: string,
     db: IDatabaseAdapter,
     options: ImportOptions = {},
-    vectorManager?: VectorSearchManager,
-    allowedRoots?: string[]
+    vectorManager: VectorSearchManager | undefined,
+    allowedRoots: string[]
 ): Promise<ImportResult> {
     const { dry_run = false, limit = 100, author } = options
     

@@ -131,7 +131,7 @@ import path from 'node:path'
  * @param dirPath - The directory path to validate
  * @throws PathTraversalError if the path escapes the sandboxed boundaries
  */
-export function assertSafeDirectoryPath(dirPath: string, providedRoots?: string[]): void {
+export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]): void {
     // 1. Initial basic check for traversal strings
     const normalized = dirPath.replace(/\\/g, '/')
     const segments = normalized.split('/')
@@ -168,7 +168,10 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots?: string[
     const targetPath = remainder ? path.join(existingRealPath, remainder) : existingRealPath
 
     // 3. Define safe boundaries
-    const rawRoots: string[] = providedRoots ?? [process.cwd()]
+    const rawRoots: string[] = providedRoots
+    if (rawRoots.length === 0) {
+        throw new PathTraversalError('No allowed input/output roots configured for sandbox boundary.')
+    }
     const allowedRoots: string[] = []
 
     for (const root of rawRoots) {
@@ -195,7 +198,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots?: string[
  * Validates that a file path is strictly bounded and refuses symlinks to prevent
  * any file-level traversal tricks.
  */
-export function assertSafeFilePath(filePath: string, providedRoots?: string[]): void {
+export function assertSafeFilePath(filePath: string, providedRoots: string[]): void {
     // First ensure the logical path is within boundaries
     assertSafeDirectoryPath(path.dirname(filePath), providedRoots)
 

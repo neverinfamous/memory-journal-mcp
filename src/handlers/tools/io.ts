@@ -255,8 +255,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const input = ExportMarkdownSchema.parse(params)
 
                     // Determine allowed roots
-                    // Security fix: Use explicitly configured roots, fallback to CWD if not specified
-                    const allowedRoots = context.config?.allowedIoRoots ?? [process.cwd()]
+                    // Security fix: Use explicitly configured roots, without CWD fallback
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
 
                     await sendProgress(progress, 0, 3, 'Fetching entries...')
 
@@ -338,8 +338,8 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                     const input = ImportMarkdownSchema.parse(params)
 
                     // Determine allowed roots
-                    // Security fix: Use explicitly configured roots, fallback to CWD if not specified
-                    const allowedRoots = context.config?.allowedIoRoots ?? [process.cwd()]
+                    // Security fix: Use explicitly configured roots, without CWD fallback
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
 
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 

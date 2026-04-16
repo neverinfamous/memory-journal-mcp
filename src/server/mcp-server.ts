@@ -227,12 +227,27 @@ export async function createServer(options: ServerOptions): Promise<void> {
     // ========================================================================
     const resources = getResources()
     const prompts = getPrompts()
-    
+    // Resolve dynamic roots for explicit isolation if not explicitly provided
+    let allowedIoRoots = options.allowedIoRoots
+    if (!allowedIoRoots) {
+        allowedIoRoots = []
+        const { dirname, resolve } = await import('node:path')
+        allowedIoRoots.push(resolve(dirname(dbPath)))
+        if (teamDbPath) {
+            allowedIoRoots.push(resolve(dirname(teamDbPath)))
+        }
+        if (options.projectRegistry) {
+            for (const entry of Object.values(options.projectRegistry)) {
+                if (entry?.path) allowedIoRoots.push(resolve(entry.path))
+            }
+        }
+    }
+
     const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber,
         projectRegistry: options.projectRegistry,
         flagVocabulary: options.flagVocabulary,
-        allowedIoRoots: options.allowedIoRoots,
+        allowedIoRoots,
         filterConfig,
         runtime,
     }

@@ -151,16 +151,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = TeamExportMarkdownSchema.parse(params)
 
-                    // Determine allowed roots from project registry and CWD
-                    const allowedRoots = [process.cwd()]
-                    if (context.config?.projectRegistry) {
-                        for (const entry of Object.values(context.config.projectRegistry)) {
-                            allowedRoots.push(entry.path)
-                        }
-                    }
-
-
-
+                    // Determine allowed roots from configuration
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 3, 'Fetching team entries...')
 
                     const limit = input.limit ?? 100
@@ -232,16 +224,8 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = TeamImportMarkdownSchema.parse(params)
 
-                    // Determine allowed roots from project registry and CWD
-                    const allowedRoots = [process.cwd()]
-                    if (context.config?.projectRegistry) {
-                        for (const entry of Object.values(context.config.projectRegistry)) {
-                            allowedRoots.push(entry.path)
-                        }
-                    }
-
-
-
+                    // Determine allowed roots from configuration
+                    const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 
                     const author = resolveAuthor()

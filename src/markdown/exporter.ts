@@ -92,7 +92,7 @@ export async function exportEntriesToMarkdown(
     entries: ExportableEntry[],
     outputDir: string,
     db: IDatabaseAdapter,
-    allowedRoots?: string[]
+    allowedRoots: string[]
 ): Promise<ExportResult> {
     // Dynamically enforce bounded root
     assertSafeDirectoryPath(outputDir, allowedRoots)

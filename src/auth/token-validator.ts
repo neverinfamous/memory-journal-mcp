@@ -187,7 +187,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: 'Token has expired',
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.TOKEN_EXPIRED,
             }
         }
@@ -200,7 +200,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: `Token claim validation failed: ${error.message}`,
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.TOKEN_INVALID,
             }
         }
@@ -213,7 +213,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: 'Token signature verification failed',
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.SIGNATURE_INVALID,
             }
         }
@@ -226,7 +226,7 @@ export class TokenValidator {
 
             return {
                 valid: false,
-                error: 'No matching key found in JWKS',
+                error: 'Invalid or expired token',
                 errorCode: AUTH_ERROR_CODES.TOKEN_INVALID,
             }
         }
@@ -241,7 +241,7 @@ export class TokenValidator {
 
         return {
             valid: false,
-            error: `Token validation failed: ${message}`,
+            error: 'Invalid or expired token',
             errorCode: AUTH_ERROR_CODES.TOKEN_INVALID,
         }
     }

@@ -17,37 +17,42 @@ export class TagsManager {
 
     linkTagsToEntry(entryId: number, tagNames: string[]): void {
         if (tagNames.length === 0) return
-        const db = this.db
+        
+        const linkOp = this.db.transaction(() => {
+            const db = this.db
 
-        const insertPlaceholders = tagNames.map(() => '(?, 0)').join(', ')
-        db.prepare(
-            `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
-        ).run(...tagNames)
+            const insertPlaceholders = tagNames.map(() => '(?, 0)').join(', ')
+            db.prepare(
+                `INSERT OR IGNORE INTO tags (name, usage_count) VALUES ${insertPlaceholders}`
+            ).run(...tagNames)
 
-        const selectPlaceholders = tagNames.map(() => '?').join(', ')
-        const rows = db
-            .prepare(`SELECT id, name FROM tags WHERE name IN (${selectPlaceholders})`)
-            .all(...tagNames) as { id: number; name: string }[]
+            const selectPlaceholders = tagNames.map(() => '?').join(', ')
+            const rows = db
+                .prepare(`SELECT id, name FROM tags WHERE name IN (${selectPlaceholders})`)
+                .all(...tagNames) as { id: number; name: string }[]
 
-        const tagIds = rows.map((r) => r.id)
-        if (tagIds.length === 0) return
+            const tagIds = rows.map((r) => r.id)
+            if (tagIds.length === 0) return
 
-        const linkPlaceholders = tagIds.map(() => '(?, ?)').join(', ')
-        const linkParams = tagIds.flatMap((tagId) => [entryId, tagId])
-        db.prepare(
-            `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${linkPlaceholders}`
-        ).run(...linkParams)
+            const linkPlaceholders = tagIds.map(() => '(?, ?)').join(', ')
+            const linkParams = tagIds.flatMap((tagId) => [entryId, tagId])
+            db.prepare(
+                `INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES ${linkPlaceholders}`
+            ).run(...linkParams)
 
-        const updatePlaceholders = tagIds.map(() => '?').join(', ')
-        db.prepare(
-            `UPDATE tags
-             SET usage_count = (
-                 SELECT COUNT(*)
-                 FROM entry_tags et
-                 WHERE et.tag_id = tags.id
-             )
-             WHERE id IN (${updatePlaceholders})`
-        ).run(...tagIds)
+            const updatePlaceholders = tagIds.map(() => '?').join(', ')
+            db.prepare(
+                `UPDATE tags
+                 SET usage_count = (
+                     SELECT COUNT(*)
+                     FROM entry_tags et
+                     WHERE et.tag_id = tags.id
+                 )
+                 WHERE id IN (${updatePlaceholders})`
+            ).run(...tagIds)
+        })
+        
+        linkOp()
     }
 
     getTagsForEntry(entryId: number): string[] {

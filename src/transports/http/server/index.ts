@@ -75,6 +75,11 @@ export class HttpTransport {
             enableRateLimit: config.enableRateLimit ?? true,
         }
         this.app = express()
+        
+        if (this.config.trustProxy) {
+            // Enable express trust proxy for rate limiting (Issue #6: explicit proxy boundary)
+            this.app.set('trust proxy', 1) // Default to 1 hop, or set based on config if needed
+        }
     }
 
     /**

@@ -75,3 +75,6 @@
 - **Security (SEC-1.2)**: Fixed a bug in the `codemode-only` preset exception where all remaining `mj.*` tools were incorrectly filtered out. The Code Mode API bridge now correctly retains full internal access when running inside a strict `mj_execute_code` filter constraint.
 - **Linting**: Conformed strict typescript validation rules by employing ES-next optional chaining semantics in `src/handlers/tools/codemode.ts`.
 - **CI/CD**: Promoted the comprehensive Playwright E2E suite to execute synchronously within `.github/workflows/lint-and-test.yml` using the new `npm run test:e2e` execution script target.
+- **Security**: Fixed strict boundary logic for path traversal validations (`assertSafeDirectoryPath`) by correctly enforcing explicit `allowedRoots` parameters across HTTP, export, and import handlers.
+- **Security**: Re-enabled X-Forwarded-For Trust Proxy extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
+- **Testing**: Stabilized markdown export and import E2E and unit test suites to successfully pass against the new strict path boundary isolations.
