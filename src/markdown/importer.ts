@@ -13,7 +13,7 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import type { EntryType, RelationshipType, SignificanceType } from '../types/index.js'
 import { parseFrontmatter } from './frontmatter.js'
-import { assertSafeDirectoryPath } from '../utils/security-utils.js'
+import { assertSafeDirectoryPath, assertSafeFilePath } from '../utils/security-utils.js'
 
 // ============================================================================
 // Types
@@ -139,6 +139,9 @@ export async function importMarkdownEntries(
         let handle;
         try {
             const filepath = join(sourceDir, filename)
+
+            // Explicitly assert the exact filepath has no symlinked components anywhere in its chain
+            assertSafeFilePath(filepath, allowedRoots)
 
             // Open the file with O_NOFOLLOW to atomically prevent symlink traversal
             try {

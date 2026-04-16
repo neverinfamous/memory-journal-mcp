@@ -104,6 +104,14 @@ export class CodeModeSandbox {
                 setTimeout: undefined,
                 setInterval: undefined,
                 setImmediate: undefined,
+                Buffer: undefined,
+                URL: undefined,
+                TextEncoder: undefined,
+                TextDecoder: undefined,
+                fetch: undefined,
+                atob: undefined,
+                btoa: undefined,
+                WebAssembly: undefined,
             }
 
             const context = vm.createContext(sandbox, {

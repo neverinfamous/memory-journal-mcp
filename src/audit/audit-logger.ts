@@ -85,6 +85,11 @@ export class AuditLogger {
 
         this.buffer.push(JSON.stringify(entry))
 
+        // Hard cap to prevent unbounded heap growth if flush loop hangs
+        if (this.buffer.length > 5000) {
+            this.buffer.shift()
+        }
+
         // Eagerly flush when the buffer is full
         if (this.buffer.length >= BUFFER_HIGH_WATER) {
             void this.flush()

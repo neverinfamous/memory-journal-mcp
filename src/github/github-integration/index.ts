@@ -24,13 +24,21 @@ import type {
 
 export type { RepoInfo, IssueDetails, PullRequestDetails }
 
+const clientPool = new Map<string, GitHubIntegration>()
+
 /**
  * Factory method for creating a GitHubIntegration instance.
- * Deliberately creates a fresh instance per call to prevent state bleed and cross-project coupling,
+ * Pools instances by working directory to prevent state bleed and cross-project coupling,
  * as identified in the Copilot Security Audit.
  */
 export function getGitHubIntegration(workingDir = '.'): GitHubIntegration {
-    return new GitHubIntegration(workingDir)
+    const resolvedDir = workingDir === '.' ? process.cwd() : workingDir;
+    let instance = clientPool.get(resolvedDir);
+    if (!instance) {
+        instance = new GitHubIntegration(resolvedDir);
+        clientPool.set(resolvedDir, instance);
+    }
+    return instance;
 }
 
 /**

@@ -180,13 +180,8 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
-                    // Auto-populate issueUrl if issue_number provided without issueUrl
-                    const resolvedIssueUrl = await resolveIssueUrl(
-                        context,
-                        input.project_number,
-                        input.issue_number,
-                        input.issue_url
-                    )
+                    // The user's provided issueUrl (if any)
+                    const initialIssueUrl = input.issue_url
 
                     const entry = db.createEntry({
                         content: input.content,
@@ -197,7 +192,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         projectNumber: input.project_number,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
-                        issueUrl: resolvedIssueUrl,
+                        issueUrl: initialIssueUrl,
                         prNumber: input.pr_number,
                         prUrl: input.pr_url,
                         prStatus: input.pr_status,
@@ -205,6 +200,27 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowName: input.workflow_name,
                         workflowStatus: input.workflow_status,
                     })
+
+                    // Auto-populate issueUrl if issue_number provided without issueUrl via background task
+                    // to prevent blocking the entry creation API response
+                    if (input.issue_number !== undefined && !input.issue_url) {
+                        void resolveIssueUrl(
+                            context,
+                            input.project_number,
+                            input.issue_number,
+                            input.issue_url
+                        )
+                            .then((resolvedUrl) => {
+                                if (resolvedUrl) {
+                                    db.updateEntry(entry.id, { issueUrl: resolvedUrl })
+                                }
+                            })
+                            .catch((err: unknown) => {
+                                logger.error('Failed to resolve issue url in background', {
+                                    error: String(err),
+                                })
+                            })
+                    }
 
                     // Auto-index to vector store for semantic search
                     const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
@@ -231,7 +247,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 projectNumber: input.project_number,
                                 projectOwner: input.project_owner,
                                 issueNumber: input.issue_number,
-                                issueUrl: resolvedIssueUrl,
+                                issueUrl: initialIssueUrl,
                                 prNumber: input.pr_number,
                                 prUrl: input.pr_url,
                                 prStatus: input.pr_status,
