@@ -11,6 +11,7 @@ import type { GitHubIntegration } from '../../github/github-integration/index.js
 import type { Scheduler } from '../../server/scheduler.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { BriefingConfig } from './shared.js'
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
@@ -26,7 +27,6 @@ import { getInsightResourceDefinitions } from './insights.js'
 import type { InternalResourceDef, ResourceResult } from './shared.js'
 import { ResourceNotFoundError } from '../../types/errors.js'
 import { getAuditResourceDef } from '../../audit/index.js'
-import { getGlobalAuditLogger } from '../tools/index.js'
 
 /**
  * Get all resource definitions for MCP list
@@ -94,10 +94,11 @@ export async function readResource(
     github?: GitHubIntegration | null,
     scheduler?: Scheduler | null,
     teamDb?: IDatabaseAdapter,
-    briefingConfig?: BriefingConfig
+    briefingConfig?: BriefingConfig,
+    runtime?: ServerRuntime
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
-    const resources = getAllResourceDefinitions()
-    const context = { db, teamDb, vectorManager, filterConfig, github, scheduler, briefingConfig }
+    const resources = getAllResourceDefinitions(runtime)
+    const context = { db, teamDb, vectorManager, filterConfig, github, scheduler, briefingConfig, runtime }
 
     // Strip query parameters for matching, but pass full URI to handler
     const baseUri = getBaseUri(uri)
@@ -141,7 +142,7 @@ export async function readResource(
 /**
  * Get all resource definitions by composing sub-module definitions
  */
-function getAllResourceDefinitions(): InternalResourceDef[] {
+function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef[] {
     return [
         ...getCoreResourceDefinitions(),
         ...getGraphResourceDefinitions(),
@@ -150,7 +151,7 @@ function getAllResourceDefinitions(): InternalResourceDef[] {
         ...getTeamResourceDefinitions(),
         ...getHelpResourceDefinitions(),
         ...getInsightResourceDefinitions(),
-        // Audit resource — bound to the global audit logger (or null if unconfigured)
-        getAuditResourceDef(getGlobalAuditLogger),
+        // Audit resource — bound to the runtime's instance audit logger
+        getAuditResourceDef(() => runtime?.auditLogger ?? null),
     ]
 }

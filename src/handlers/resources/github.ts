@@ -50,7 +50,8 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const resolved = await resolveGitHubRepo(
                     context.github,
                     context.briefingConfig,
-                    targetRepo
+                    targetRepo,
+                    context.runtime
                 )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, branch, lastModified, github } = resolved
@@ -246,7 +247,8 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const resolved = await resolveGitHubRepo(
                     context.github,
                     context.briefingConfig,
-                    targetRepo
+                    targetRepo,
+                    context.runtime
                 )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
@@ -297,7 +299,8 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const resolved = await resolveGitHubRepo(
                     context.github,
                     context.briefingConfig,
-                    targetRepo
+                    targetRepo,
+                    context.runtime
                 )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, lastModified, github } = resolved
@@ -352,7 +355,8 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const resolved = await resolveGitHubRepo(
                     context.github,
                     context.briefingConfig,
-                    targetRepo
+                    targetRepo,
+                    context.runtime
                 )
                 if (isResourceError(resolved)) return resolved
                 const { owner, repo, github } = resolved

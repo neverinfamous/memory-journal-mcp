@@ -166,6 +166,8 @@ export interface ProjectRegistryEntry {
 /**
  * Tool handler configuration options
  */
+import type { ServerRuntime } from '../utils/maintenance-lock.js'
+
 export interface ToolHandlerConfig {
     /** Default GitHub Project number for auto-assignment */
     defaultProjectNumber?: number
@@ -186,6 +188,10 @@ export interface ToolHandlerConfig {
      * ensuring operators' --tool-filter restrictions are enforced inside the sandbox.
      */
     filterConfig?: ToolFilterConfig | null
+    /**
+     * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
+     */
+    runtime?: ServerRuntime
 }
 
 /**

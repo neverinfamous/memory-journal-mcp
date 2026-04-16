@@ -14,7 +14,7 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
 import { getGlobalAuditLogger } from '../handlers/tools/index.js'
 import { auditOperation } from '../audit/interceptor.js'
-import { assertNotInMaintenanceMode } from '../utils/maintenance-lock.js'
+import { assertNotInMaintenanceMode, type ServerRuntime } from '../utils/maintenance-lock.js'
 
 // ============================================================================
 // Types
@@ -62,7 +62,8 @@ export type ResourceReadHandler = (
 export function registerResources(
     server: McpServer,
     resources: ResourceDefinition[],
-    handleResourceRead: ResourceReadHandler
+    handleResourceRead: ResourceReadHandler,
+    runtime?: ServerRuntime
 ): void {
     for (const resDef of resources) {
         const mimeType = resDef.mimeType ?? 'application/json'
@@ -82,17 +83,27 @@ export function registerResources(
                 template,
                 meta,
                 async (uri: URL, _variables: Variables) => {
-                    return auditOperation(getGlobalAuditLogger(), 'resource', resDef.name, async () => {
-                        assertNotInMaintenanceMode()
-                        return handleResourceRead(uri, mimeType)
+                    const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
+                    return auditOperation(auditLog, 'resource', resDef.name, async () => {
+                        if (runtime) {
+                            return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
+                        } else {
+                            assertNotInMaintenanceMode()
+                            return handleResourceRead(uri, mimeType)
+                        }
                     })
                 }
             )
         } else {
             server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
-                return auditOperation(getGlobalAuditLogger(), 'resource', resDef.name, async () => {
-                    assertNotInMaintenanceMode()
-                    return handleResourceRead(uri, mimeType)
+                const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
+                return auditOperation(auditLog, 'resource', resDef.name, async () => {
+                    if (runtime) {
+                        return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
+                    } else {
+                        assertNotInMaintenanceMode()
+                        return handleResourceRead(uri, mimeType)
+                    }
                 })
             })
         }
@@ -115,7 +126,8 @@ export function registerPrompts(
     server: McpServer,
     prompts: PromptDefinition[],
     db: IDatabaseAdapter,
-    teamDb?: IDatabaseAdapter
+    teamDb?: IDatabaseAdapter,
+    runtime?: ServerRuntime
 ): void {
     for (const promptDef of prompts) {
         let argsSchema: Record<string, z.ZodType> | undefined
@@ -137,16 +149,29 @@ export function registerPrompts(
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
-                return auditOperation(getGlobalAuditLogger(), 'prompt', promptDef.name, () => {
-                    assertNotInMaintenanceMode()
-                    const args = providedArgs as Record<string, string>
-                    const promptResult = getPrompt(promptDef.name, args, db, teamDb)
-                    // Map to MCP SDK expected format
-                    return {
-                        messages: promptResult.messages.map((m) => ({
-                            role: m.role as 'user' | 'assistant',
-                            content: m.content as { type: 'text'; text: string },
-                        })),
+                const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
+                return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
+                    if (runtime) {
+                        return await runtime.maintenanceManager.withActiveJob(() => {
+                            const args = providedArgs as Record<string, string>
+                            const promptResult = getPrompt(promptDef.name, args, db, teamDb)
+                            return Promise.resolve({
+                                messages: promptResult.messages.map((m) => ({
+                                    role: m.role as 'user' | 'assistant',
+                                    content: m.content as { type: 'text'; text: string },
+                                })),
+                            })
+                        })
+                    } else {
+                        assertNotInMaintenanceMode()
+                        const args = providedArgs as Record<string, string>
+                        const promptResult = getPrompt(promptDef.name, args, db, teamDb)
+                        return {
+                            messages: promptResult.messages.map((m) => ({
+                                role: m.role as 'user' | 'assistant',
+                                content: m.content as { type: 'text'; text: string },
+                            })),
+                        }
                     }
                 })
             }

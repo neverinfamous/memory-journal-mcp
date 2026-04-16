@@ -167,9 +167,15 @@ export function getTools(
 
     if (filterConfig) {
         // Filtered lists are not cached — filter sets vary per call
-        return Array.from((toolMapCache ?? EMPTY_TOOL_MAP).values())
+        const mapToUse = config?.runtime?.toolMapCache ?? (toolMapCache ?? EMPTY_TOOL_MAP)
+        return Array.from(mapToUse.values())
             .filter((t) => filterConfig.enabledTools.has(t.name))
             .map(mapTool)
+    }
+
+    if (config?.runtime) {
+        config.runtime.mappedToolsCache ??= Array.from((config.runtime.toolMapCache ?? EMPTY_TOOL_MAP).values()).map(mapTool)
+        return config.runtime.mappedToolsCache
     }
 
     // Return cached mapped output for unfiltered calls
@@ -209,16 +215,39 @@ function ensureToolCache(
     teamDb?: IDatabaseAdapter,
     teamVectorManager?: VectorSearchManager
 ): void {
-    if (
-        toolMapCache &&
-        cachedContextRefs?.db === db &&
-        cachedContextRefs.github === github &&
-        cachedContextRefs.vectorManager === vectorManager &&
-        cachedContextRefs.config === config &&
-        cachedContextRefs.teamDb === teamDb &&
-        cachedContextRefs.teamVectorManager === teamVectorManager
-    ) {
-        return // Cache is valid
+    if (config?.runtime) {
+        const rt = config.runtime;
+        const refs = rt.cachedContextRefs as {
+            db: IDatabaseAdapter
+            github?: GitHubIntegration
+            vectorManager?: VectorSearchManager
+            config?: ToolHandlerConfig
+            teamDb?: IDatabaseAdapter
+            teamVectorManager?: VectorSearchManager
+        } | null;
+        if (
+            rt.toolMapCache &&
+            refs?.db === db &&
+            refs?.github === github &&
+            refs?.vectorManager === vectorManager &&
+            refs?.config === config &&
+            refs?.teamDb === teamDb &&
+            refs?.teamVectorManager === teamVectorManager
+        ) {
+            return;
+        }
+    } else {
+        if (
+            toolMapCache &&
+            cachedContextRefs?.db === db &&
+            cachedContextRefs.github === github &&
+            cachedContextRefs.vectorManager === vectorManager &&
+            cachedContextRefs.config === config &&
+            cachedContextRefs.teamDb === teamDb &&
+            cachedContextRefs.teamVectorManager === teamVectorManager
+        ) {
+            return // Cache is valid
+        }
     }
 
     const context: ToolContext = { db, teamDb, vectorManager, teamVectorManager, github, config }
@@ -236,7 +265,8 @@ function ensureToolCache(
         )
 
         // Layer 2: Audit logging (only when initialized)
-        const interceptor = globalAuditInterceptor
+        const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
+        const interceptor = runtimeAudit ?? globalAuditInterceptor
         const finalHandler = interceptor
             ? (args: Record<string, unknown>): Promise<unknown> =>
                   interceptor.around(t.name, args, () => metricsWrapped(args))
@@ -248,9 +278,15 @@ function ensureToolCache(
         }
     })
 
-    toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
-    mappedToolsCache = null // Invalidate mapped cache when definitions change
-    cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
+    if (config?.runtime) {
+        config.runtime.toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
+        config.runtime.mappedToolsCache = null
+        config.runtime.cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
+    } else {
+        toolMapCache = new Map(instrumentedDefs.map((t) => [t.name, t]))
+        mappedToolsCache = null // Invalidate mapped cache when definitions change
+        cachedContextRefs = { db, github, vectorManager, config, teamDb, teamVectorManager }
+    }
 }
 
 /**
@@ -269,17 +305,21 @@ export async function callTool(
 ): Promise<unknown> {
     ensureToolCache(db, vectorManager, github, config, teamDb, teamVectorManager)
 
-    const tool = (toolMapCache ?? EMPTY_TOOL_MAP).get(name)
+    const mapToUse = config?.runtime?.toolMapCache ?? (toolMapCache ?? EMPTY_TOOL_MAP)
+    const tool = mapToUse.get(name)
 
     if (!tool) {
         return Promise.reject(new Error(`Unknown tool: ${name}`))
     }
 
-    if (name !== 'restore_backup') {
-        try {
-            assertNotInMaintenanceMode()
-        } catch (error) {
-            return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+    if (!config?.runtime?.maintenanceManager) {
+        // Fallback for tests/environments without runtime
+        if (name !== 'restore_backup') {
+            try {
+                assertNotInMaintenanceMode()
+            } catch (error) {
+                return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+            }
         }
     }
 
@@ -321,12 +361,21 @@ export async function callTool(
                 globalMetrics
             )
             // Layer 2: Audit (if initialized)
-            const interceptor = globalAuditInterceptor
+            const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
+            const interceptor = runtimeAudit ?? globalAuditInterceptor
             const freshResult = interceptor
                 ? await interceptor.around(freshTool.name, args, () => metricsWrapped(args))
                 : await metricsWrapped(args)
             return injectTokenEstimate(freshResult)
         }
+    }
+
+    if (config?.runtime?.maintenanceManager) {
+        const result = await config.runtime.maintenanceManager.withActiveJob(
+            () => Promise.resolve(tool.handler(args)),
+            name === 'restore_backup' // restore bypasses lock since it acquires exclusive
+        );
+        return injectTokenEstimate(result)
     }
 
     const result = await Promise.resolve(tool.handler(args))

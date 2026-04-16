@@ -10,7 +10,7 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import type { VectorSearchManager } from '../vector/vector-search-manager.js'
 import { logger } from '../utils/logger.js'
 import type { DigestSnapshot } from '../database/sqlite-adapter/entries/digest.js'
-import { isMaintenanceModeActive } from '../utils/maintenance-lock.js'
+import { isMaintenanceModeActive, type ServerRuntime } from '../utils/maintenance-lock.js'
 
 // ============================================================================
 // Types
@@ -79,15 +79,18 @@ export class Scheduler {
     private readonly vectorManager: VectorSearchManager | null
     private readonly timers: JobTimer[] = []
     private started = false
+    private readonly runtime?: ServerRuntime
 
     constructor(
         options: SchedulerOptions,
         db: IDatabaseAdapter,
-        vectorManager?: VectorSearchManager
+        vectorManager?: VectorSearchManager,
+        runtime?: ServerRuntime
     ) {
         this.options = options
         this.db = db
         this.vectorManager = vectorManager ?? null
+        this.runtime = runtime
     }
 
     /**
@@ -218,8 +221,10 @@ export class Scheduler {
         if (job.isRunning) {
             return
         }
+        
+        const inMaintenance = this.runtime ? this.runtime.maintenanceManager.isMaintenanceModeActive() : isMaintenanceModeActive();
 
-        if (isMaintenanceModeActive()) {
+        if (inMaintenance) {
             logger.info(`Skipping scheduled job '${job.name}' due to active maintenance mode`, {
                 module: 'Scheduler',
                 operation: job.name

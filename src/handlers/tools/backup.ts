@@ -11,7 +11,7 @@ import { sendProgress } from '../../utils/progress-utils.js'
 import { relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
-import { acquireMaintenanceLock, releaseMaintenanceLock } from '../../utils/maintenance-lock.js'
+
 
 // ============================================================================
 // Output Schemas
@@ -80,7 +80,7 @@ const CleanupBackupsOutputSchema = z
 // ============================================================================
 
 export function getBackupTools(context: ToolContext): ToolDefinition[] {
-    const { db, progress } = context
+    const { db, progress, config } = context
     return [
         {
             name: 'backup_journal',
@@ -190,12 +190,16 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     await sendProgress(progress, 1, 3, 'Preparing restore...')
                     await sendProgress(progress, 2, 3, 'Restoring database from backup...')
                     
-                    acquireMaintenanceLock()
+                    if (config?.runtime?.maintenanceManager) {
+                        await config.runtime.maintenanceManager.acquireMaintenanceLock()
+                    }
                     let result
                     try {
                         result = await db.restoreFromFile(input.filename)
                     } finally {
-                        releaseMaintenanceLock()
+                        if (config?.runtime?.maintenanceManager) {
+                            config.runtime.maintenanceManager.releaseMaintenanceLock()
+                        }
                     }
 
                     // Send directly using captured primitives (db.restoreFromFile reinitializes DB)

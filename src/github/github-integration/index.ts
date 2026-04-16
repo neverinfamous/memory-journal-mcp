@@ -24,21 +24,31 @@ import type {
 
 export type { RepoInfo, IssueDetails, PullRequestDetails }
 
-const clientPool = new Map<string, GitHubIntegration>()
+// Removed global cache pool
 
 /**
  * Factory method for creating a GitHubIntegration instance.
- * Pools instances by working directory to prevent state bleed and cross-project coupling,
- * as identified in the Copilot Security Audit.
+ * Pools instances by working directory on the ServerRuntime to prevent state bleed
+ * and cross-project coupling, as identified in the Copilot Security Audit.
  */
-export function getGitHubIntegration(workingDir = '.'): GitHubIntegration {
+import type { ServerRuntime } from '../../utils/maintenance-lock.js'
+
+export function getGitHubIntegration(workingDir = '.', runtime?: ServerRuntime): GitHubIntegration {
     const resolvedDir = workingDir === '.' ? process.cwd() : workingDir;
-    let instance = clientPool.get(resolvedDir);
-    if (!instance) {
-        instance = new GitHubIntegration(resolvedDir);
-        clientPool.set(resolvedDir, instance);
+    
+    // Support instance-scoped runtime pools for multi-tenant isolation
+    if (runtime) {
+        runtime.githubClientPool ??= new Map<string, GitHubIntegration>();
+        let instance = runtime.githubClientPool.get(resolvedDir);
+        if (!instance) {
+            instance = new GitHubIntegration(resolvedDir);
+            runtime.githubClientPool.set(resolvedDir, instance);
+        }
+        return instance;
     }
-    return instance;
+
+    // Fallback to non-pooled transient instances if no runtime is provided
+    return new GitHubIntegration(resolvedDir);
 }
 
 /**

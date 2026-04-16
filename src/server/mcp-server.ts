@@ -24,8 +24,6 @@ import {
 import {
     getTools,
     callTool,
-    initializeAuditLogger,
-    getGlobalAuditLogger,
 } from '../handlers/tools/index.js'
 import { getRequiredScope } from '../auth/scope-map.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
@@ -45,6 +43,8 @@ import {
     type ResourceReadHandler,
 } from './registration.js'
 import { VERSION } from '../version.js'
+import { ServerRuntime } from '../utils/maintenance-lock.js'
+import { AuditLogger, createAuditInterceptor } from '../audit/index.js'
 
 export type McpServerFactory = () => McpServer
 
@@ -96,9 +96,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
     await db.initialize()
     logger.info('Database initialized', { module: 'McpServer', dbPath })
 
+    // Initialize ServerRuntime (handles instance-scoped globals)
+    const runtime = new ServerRuntime()
+
     // Initialize audit logging if configured
     if (options.auditConfig?.enabled) {
-        initializeAuditLogger(options.auditConfig)
+        runtime.auditLogger = new AuditLogger(options.auditConfig)
+        runtime.auditInterceptor = createAuditInterceptor(runtime.auditLogger)
         logger.info('Audit logging enabled', {
             module: 'McpServer',
             path: options.auditConfig.logPath,
@@ -210,7 +214,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 { module: 'Scheduler' }
             )
         } else if (hasAnyJob) {
-            scheduler = new Scheduler(options.scheduler, db, vectorManager)
+            scheduler = new Scheduler(options.scheduler, db, vectorManager, runtime)
         }
     }
 
@@ -227,6 +231,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         projectRegistry: options.projectRegistry,
         flagVocabulary: options.flagVocabulary,
         filterConfig,
+        runtime,
     }
 
     const dispatch = (
@@ -503,7 +508,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
                     github,
                     scheduler,
                     teamDb,
-                    activeBriefingConfig
+                    activeBriefingConfig,
+                    runtime
                 )
                 const dataStr =
                     typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
@@ -523,11 +529,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
             registerResources(
                 server,
                 resources as ResourceDefinition[],
-                handleResourceRead as ResourceReadHandler
+                handleResourceRead as ResourceReadHandler,
+                runtime
             )
         
             // Register prompts (reusing prompts from instruction generation)
-            registerPrompts(server, prompts as PromptDefinition[], db, teamDb)
+            registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
 
         return server
     }
@@ -543,9 +550,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         process.on('SIGINT', () => {
             logger.info('Shutting down...', { module: 'McpServer' })
             // Flush audit log before exit
-            const auditLogger = getGlobalAuditLogger()
-            if (auditLogger) {
-                void auditLogger.close()
+            if (runtime.auditLogger) {
+                void runtime.auditLogger.close()
             }
             db.close()
             teamDb?.close()
@@ -583,9 +589,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             void (async () => {
                 await httpTransport.stop(scheduler)
                 // Flush audit log before exit
-                const auditLogger = getGlobalAuditLogger()
-                if (auditLogger) {
-                    await auditLogger.close()
+                if (runtime.auditLogger) {
+                    await runtime.auditLogger.close()
                 }
                 db.close()
                 teamDb?.close()
