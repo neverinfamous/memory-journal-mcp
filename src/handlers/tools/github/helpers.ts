@@ -15,8 +15,12 @@ export function resolveProjectNumber(
     explicitProjectNumber?: number | null
 ): number | undefined {
     if (explicitProjectNumber != null) return explicitProjectNumber
-    if (repo && context.config?.projectRegistry?.[repo]?.project_number != null) {
-        return context.config.projectRegistry[repo].project_number
+    const registry = context.config?.projectRegistry
+    if (repo && registry && Object.prototype.hasOwnProperty.call(registry, repo)) {
+        const entry = registry[repo]
+        if (entry?.project_number != null) {
+            return entry.project_number
+        }
     }
     return context.config?.defaultProjectNumber ?? undefined
 }
@@ -96,9 +100,10 @@ export async function resolveOwnerRepo(
     | { error: true; response: Record<string, unknown> }
 > {
     let toolGithub: GitHubIntegration | undefined
+    const registry = context.config?.projectRegistry
     const registryEntry =
-        input.repo && context.config?.projectRegistry
-            ? context.config.projectRegistry[input.repo]
+        input.repo && registry && Object.prototype.hasOwnProperty.call(registry, input.repo)
+            ? registry[input.repo]
             : undefined
 
     if (registryEntry) {

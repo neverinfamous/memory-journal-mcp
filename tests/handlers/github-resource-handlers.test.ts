@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import type { GitHubIntegration } from '../../src/github/github-integration.js'
+import type { GitHubIntegration } from '../../src/github/github-integration/index.js'
 
 /**
  * Creates a minimal mock GitHubIntegration with sensible defaults.
@@ -97,9 +97,25 @@ function createMockGitHub(overrides: Partial<Record<string, unknown>> = {}): Git
             clones: { total: 120, uniqueCloners: 30 },
             views: { total: 500, uniqueVisitors: 80 },
         }),
-        ...overrides,
     }
-    return mock as unknown as GitHubIntegration
+    const finalMock = { ...mock, ...overrides } as any
+    if (!overrides.getRepoContext) {
+        finalMock.getRepoContext = vi.fn().mockImplementation(async () => {
+            return {
+                repoName: 'testrepo',
+                branch: 'main',
+                commit: 'abc1234',
+                remoteUrl: 'url',
+                projects: [],
+                issues: await finalMock.getIssues(),
+                pullRequests: await finalMock.getPullRequests(),
+                workflowRuns: await finalMock.getWorkflowRuns(),
+                milestones: await finalMock.getMilestones(),
+            }
+        })
+    }
+
+    return finalMock as unknown as GitHubIntegration
 }
 
 describe('GitHub Resource Handlers', () => {

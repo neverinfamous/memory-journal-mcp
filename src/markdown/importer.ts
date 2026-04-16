@@ -247,8 +247,16 @@ export async function importMarkdownEntries(
 
             // Vector re-indexing
             if (vectorManager) {
-                await vectorManager.addEntry(entryId, body)
-                result.vectorsIndexed++
+                const vectorResult = await vectorManager.addEntry(entryId, body)
+                if (vectorResult.success) {
+                    result.vectorsIndexed++
+                } else {
+                    result.errors.push({
+                        file: filename,
+                        error: `Vector indexing failed: ${vectorResult.error || 'Unknown error'}`,
+                    })
+                    result.success = false
+                }
             }
         } catch (err) {
             result.errors.push({

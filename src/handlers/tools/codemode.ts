@@ -26,6 +26,7 @@ import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
+import { randomUUID } from 'crypto'
 
 // =============================================================================
 // Input / Output Schemas
@@ -207,16 +208,11 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
     ]
 
     // SEC-1.2: Respect active tool filter — Code Mode must not reach tools that the
-    // operator has explicitly excluded (e.g. `--tool-filter=no-github` prevents
-    // Code Mode from calling gh_* tools internally).
+    // operator has explicitly excluded. Strict enforcement.
     const filterConfig = context.config?.filterConfig
 
-    // Exception: If the filter exclusively allows mj_execute_code (codemode-only preset),
-    // then Code Mode retains full internal access to all underlying capabilities.
-    const isCodeModePresetOnly = filterConfig?.enabledTools.size === 1 && filterConfig.enabledTools.has('mj_execute_code')
-
     cachedNonCodeModeTools =
-        filterConfig && !isCodeModePresetOnly
+        filterConfig
             ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
             : allTools
 
@@ -263,6 +259,8 @@ const SAFE_READ_TOOLS = new Set([
     'team_get_user_status',
 ])
 
+const INSTANCE_UUID = randomUUID()
+
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     return [
         {
@@ -293,7 +291,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Context extraction for rate limiting and tenant isolation
                     const reqCtx = getRequestContext()
                     const authCtx = getAuthContext()
-                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'default'
+                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || INSTANCE_UUID
 
                     // Security validation
                     const security = getSecurityManager(clientId)
@@ -315,7 +313,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // Context injection for GitHub / Kanban routing
                     let sessionContext = context
-                    if (repo && context.config?.projectRegistry) {
+                    if (repo && context.config?.projectRegistry && Object.prototype.hasOwnProperty.call(context.config.projectRegistry, repo)) {
                         const registryEntry = context.config.projectRegistry[repo]
                         if (registryEntry) {
                             const injectedGithub = getGitHubIntegration(registryEntry.path)

@@ -62,5 +62,10 @@
 - **Integrity**: Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist, unlocking array-based constraint evaluation.
 - **Integrity**: Eliminated context-bleed vulnerabilities by permanently deprecating the global state cache across GitHub integration pipelines, localizing mutation states exclusively to per-request lifetimes.
 - **Testing**: Aligned mock filesystem boundaries and `importer` expected outputs for structural database failures (e.g. vector re-indexing faults) to strictly execute correct `.success = false` expectations.
+- **Testing**: Resolved E2E OAuth testing regressions in `tests/e2e/oauth-scopes.spec.ts` by adhering mock configurations to strict Server-Side Issuer-to-JWKS origin match validation.
 - **Testing**: Resolved minor TypeScript generic type assertion conflicts and defensive mocking fallbacks for un-mocked `req.get` calls in testing suites.
+- **Testing**: Fixed `TypeError: Cannot read properties of undefined (reading 'slice')` regressions by adding nullish coalescing `?? []` to `ProjectContext` arrays inside the `github.ts` resource handler.
+- **Testing**: Stabilized `markdown/importer.test.ts` failures by upgrading the centralized mock of `vectorManager.addEntry` to correctly return `{ success: true }`.
+- **Testing**: Fixed `template-github-branches.test.ts` branch coverage tests by directly mocking internal array states inside the mocked `getRepoContext`.
+- **Testing**: Repaired broken test file imports referencing incorrect relative `GitHubIntegration` module declarations.
 - **CI/CD**: Promoted the comprehensive Playwright E2E suite to execute synchronously within `.github/workflows/lint-and-test.yml` using the new `npm run test:e2e` execution script target.

@@ -42,6 +42,7 @@ export interface BriefingGitHub {
         changesRequested: number
         totalComments: number
     }
+    degraded?: boolean
 }
 
 /**
@@ -70,14 +71,23 @@ export async function buildGitHubSection(
                 : Promise.resolve(undefined),
         ])
 
-        const ciStatus = ciStatusResult.status === 'fulfilled' ? ciStatusResult.value : { status: 'unknown' as const, workflowSummary: undefined }
-        const issuesAndPrs = issuesAndPrsResult.status === 'fulfilled' ? issuesAndPrsResult.value : { openIssues: 0, openIssueList: undefined, openPRs: 0, openPrList: undefined }
-        const milestones = milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
-        const insights = insightsResult.status === 'fulfilled' ? insightsResult.value : undefined
-        const copilotReviews = copilotReviewsResult.status === 'fulfilled' ? copilotReviewsResult.value : undefined
+        const ciStatus = ciStatusResult.status === 'fulfilled' ? ciStatusResult.value : { status: 'unknown' as const, workflowSummary: undefined, degraded: true }
+        const issuesAndPrs = issuesAndPrsResult.status === 'fulfilled' ? issuesAndPrsResult.value : { openIssues: 0, openIssueList: undefined, openPRs: 0, openPrList: undefined, degraded: true }
+        const milestonesData = milestonesResult.status === 'fulfilled' ? milestonesResult.value : { items: [], degraded: true }
+        const insightsData = insightsResult.status === 'fulfilled' ? insightsResult.value : { degraded: true }
+        const copilotReviewsData = copilotReviewsResult.status === 'fulfilled' ? (copilotReviewsResult.value ?? {}) : { degraded: true }
 
         const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
+        const milestones = milestonesData.items ?? []
+        const insights = insightsData.insights
+        const copilotReviews = copilotReviewsData.reviews
+        const degraded =
+            ciStatus.degraded === true ||
+            issuesAndPrs.degraded === true ||
+            milestonesData.degraded === true ||
+            insightsData.degraded === true ||
+            copilotReviewsData.degraded === true
 
         return {
             repo: `${owner}/${repo}`,
@@ -103,6 +113,7 @@ export async function buildGitHubSection(
                 : {}),
             ...(workflowSummary ? { workflowSummary } : {}),
             ...(copilotReviews ? { copilotReviews } : {}),
+            ...(degraded ? { degraded: true } : {}),
         }
     } catch (error) {
         logger.debug('Failed to build GitHub briefing section', {
@@ -121,6 +132,7 @@ export async function buildGitHubSection(
 interface CiResult {
     status: 'passing' | 'failing' | 'pending' | 'cancelled' | 'unknown'
     workflowSummary?: BriefingGitHub['workflowSummary']
+    degraded?: boolean
 }
 
 async function fetchCiStatus(
@@ -208,7 +220,7 @@ async function fetchCiStatus(
             operation: 'ci-status',
             error: error instanceof Error ? error.message : String(error),
         })
-        return { status: 'unknown' }
+        return { status: 'unknown', degraded: true }
     }
 }
 
@@ -222,6 +234,7 @@ async function fetchIssuesAndPrs(
     openPRs: number
     openIssueList?: { number: number; title: string }[]
     openPrList?: { number: number; title: string; state: string }[]
+    degraded?: boolean
 }> {
     try {
         const issueLimit = Math.max(1, config.issueCount || 1)
@@ -262,7 +275,7 @@ async function fetchIssuesAndPrs(
             operation: 'issues-prs',
             error: error instanceof Error ? error.message : String(error),
         })
-        return { openIssues: 0, openPRs: 0 }
+        return { openIssues: 0, openPRs: 0, degraded: true }
     }
 }
 
@@ -271,26 +284,28 @@ async function fetchMilestones(
     owner: string,
     repo: string,
     limit: number
-): Promise<{ title: string; progress: string; dueOn: string | null }[]> {
-    if (limit <= 0) return []
+): Promise<{ items: { title: string; progress: string; dueOn: string | null }[], degraded?: boolean }> {
+    if (limit <= 0) return { items: [] }
 
     try {
         const msList = await github.getMilestones(owner, repo, 'open', limit)
-        return msList.map((m) => {
-            const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
-            return {
-                title: m.title,
-                progress: `${String(pct)}%`,
-                dueOn: m.dueOn,
-            }
-        })
+        return {
+            items: msList.map((m) => {
+                const pct = milestoneCompletionPct(m.openIssues, m.closedIssues)
+                return {
+                    title: m.title,
+                    progress: `${String(pct)}%`,
+                    dueOn: m.dueOn,
+                }
+            })
+        }
     } catch (error) {
         logger.debug('Failed to fetch milestones', {
             module: 'BRIEFING',
             operation: 'milestones',
             error: error instanceof Error ? error.message : String(error),
         })
-        return []
+        return { items: [], degraded: true }
     }
 }
 
@@ -298,10 +313,10 @@ async function fetchInsights(
     github: GitHubIntegration,
     owner: string,
     repo: string
-): Promise<BriefingGitHub['insights'] | undefined> {
+): Promise<{ insights?: BriefingGitHub['insights'], degraded?: boolean }> {
     try {
         const repoStats = await github.getRepoStats(owner, repo)
-        if (!repoStats) return undefined
+        if (!repoStats) return { degraded: true }
 
         const result: NonNullable<BriefingGitHub['insights']> = {
             stars: repoStats.stars ?? null,
@@ -320,16 +335,17 @@ async function fetchInsights(
                 operation: 'traffic',
                 error: error instanceof Error ? error.message : String(error),
             })
+            return { insights: result, degraded: true }
         }
 
-        return result
+        return { insights: result }
     } catch (error) {
         logger.debug('Failed to fetch repo insights', {
             module: 'BRIEFING',
             operation: 'insights',
             error: error instanceof Error ? error.message : String(error),
         })
-        return undefined
+        return { degraded: true }
     }
 }
 
@@ -337,7 +353,7 @@ async function fetchCopilotReviews(
     github: GitHubIntegration,
     owner: string,
     repo: string
-): Promise<BriefingGitHub['copilotReviews'] | undefined> {
+): Promise<{ reviews?: BriefingGitHub['copilotReviews'], degraded?: boolean } | undefined> {
     try {
         const recentPrs = await github.getPullRequests(owner, repo, 'all', 10)
         let reviewed = 0
@@ -359,13 +375,13 @@ async function fetchCopilotReviews(
             }
         }
 
-        return reviewed > 0 ? { reviewed, approved, changesRequested, totalComments } : undefined
+        return reviewed > 0 ? { reviews: { reviewed, approved, changesRequested, totalComments } } : undefined
     } catch (error) {
         logger.debug('Failed to fetch Copilot reviews', {
             module: 'BRIEFING',
             operation: 'copilot-reviews',
             error,
         })
-        return undefined
+        return { degraded: true }
     }
 }

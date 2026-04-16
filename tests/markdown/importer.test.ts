@@ -36,7 +36,7 @@ describe('importMarkdownEntries', () => {
     }
 
     const mockVectorManager = {
-        addEntry: vi.fn().mockResolvedValue(undefined),
+        addEntry: vi.fn().mockResolvedValue({ success: true }),
     }
 
     beforeEach(() => {

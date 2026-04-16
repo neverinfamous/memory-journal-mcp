@@ -47,8 +47,12 @@ export async function resolveGitHubRepo(
     const lastModified = new Date().toISOString()
 
     let activeGithub = github
-    if (targetRepo && config?.projectRegistry?.[targetRepo]) {
-        activeGithub = getGitHubIntegration(config.projectRegistry[targetRepo].path, runtime)
+    const registry = config?.projectRegistry
+    if (targetRepo && registry && Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
+        const entry = registry[targetRepo]
+        if (entry) {
+            activeGithub = getGitHubIntegration(entry.path, runtime)
+        }
     }
 
     if (!activeGithub) {
