@@ -194,12 +194,24 @@ export function setupStateful(
                         const newServer = serverFactory()
                         await newServer.connect(newTransport)
                         ctx.serverConnected = true
-                        targetTransport = newTransport
-                                            }
+                    }
                     
                     const priorLock: Promise<void> = ctx.connectionLock ?? Promise.resolve()
-                    ctx.connectionLock = priorLock.then(doConnect).catch(doConnect)
-                    await ctx.connectionLock
+                    
+                    // Chain the attempt
+                    const attempt = priorLock.then(doConnect)
+                    
+                    // The global lock chain swallows errors to allow subsequent requests to proceed
+                    ctx.connectionLock = attempt.catch((err: unknown) => {
+                        logger.error('Background connection setup failed, releasing lock', { 
+                            module: 'HTTP', 
+                            error: err instanceof Error ? err.message : String(err) 
+                        })
+                    })
+                    
+                    // Block the current request on the attempt success
+                    await attempt
+                    
                     targetTransport = newTransport
                 }
 

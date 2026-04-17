@@ -148,6 +148,17 @@ export class BackupManager {
             throw new ResourceNotFoundError('Backup', filename)
         }
 
+        const stat = await fs.promises.lstat(backupPath)
+        if (stat.isSymbolicLink()) {
+            throw new ValidationError('Symlinks are not allowed for backup restore.')
+        }
+
+        const realBackupPath = await fs.promises.realpath(backupPath)
+        const realBackupsDir = await fs.promises.realpath(backupsDir)
+        if (!realBackupPath.startsWith(realBackupsDir)) {
+            throw new ValidationError('Resolved backup path escapes the backups directory.')
+        }
+
         try {
             // Dynamically import better-sqlite3 to avoid top-level require errors if mocked
             const Database = (await import('better-sqlite3')).default
@@ -172,22 +183,39 @@ export class BackupManager {
         let lockFd: number
         try {
             lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
-            fs.writeSync(lockFd, String(process.pid))
+            fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now() }))
         } catch (lockError: unknown) {
             if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError as { code: unknown }).code === 'EEXIST') {
                 let isStale = false
                 try {
-                    const stats = fs.statSync(lockPath)
-                    // If lock is older than 5 minutes, consider it stale
-                    if (Date.now() - stats.mtimeMs > 5 * 60 * 1000) {
-                        isStale = true
+                    const lockContent = fs.readFileSync(lockPath, 'utf-8').trim()
+                    if (lockContent) {
+                        let holdingPid: number | undefined
+                        try {
+                            const parsed = JSON.parse(lockContent) as { pid?: number }
+                            holdingPid = parsed.pid
+                        } catch {
+                            // Legacy raw PID string format fallback
+                            holdingPid = parseInt(lockContent, 10)
+                        }
+                        
+                        if (holdingPid !== undefined && !isNaN(holdingPid)) {
+                            try {
+                                process.kill(holdingPid, 0)
+                            } catch (e: unknown) {
+                                // ESRCH means the process does not exist
+                                if (e instanceof Error && (e as NodeJS.ErrnoException).code === 'ESRCH') {
+                                    isStale = true
+                                }
+                            }
+                        }
                     }
                 } catch {
-                    // Ignore stats errors
+                    // Ignore read errors
                 }
 
                 if (isStale) {
-                    logger.warning('Found stale database restore lock, forcibly removing', { path: lockPath, module: 'SqliteAdapter' })
+                    logger.warning('Found stale database restore lock (dead PID), forcibly removing', { path: lockPath, module: 'SqliteAdapter' })
                     try {
                         fs.unlinkSync(lockPath)
                     } catch {
@@ -195,7 +223,7 @@ export class BackupManager {
                     }
                     // Retry acquiring the lock
                     lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
-                    fs.writeSync(lockFd, String(process.pid))
+                    fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now() }))
                 } else {
                     throw new Error(`Another process is currently holding the database lock at ${lockPath}. Backup restore cannot safely proceed.`, { cause: lockError })
                 }

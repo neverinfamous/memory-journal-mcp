@@ -272,7 +272,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
             name: 'mj_execute_code',
             title: 'Execute Code (Code Mode)',
             description:
-                'Execute JavaScript in a sandboxed environment with access to all journal tools via the `mj.*` API. ' +
+                '🛑 TRUSTED ADMIN ONLY: Execute JavaScript in a Privileged sandboxed environment with access to all journal tools via the `mj.*` API. ' +
                 'Enables multi-step workflows in a single call, reducing token usage by 70-90%. ' +
                 'API groups: mj.core.*, mj.search.*, mj.analytics.*, mj.relationships.*, ' +
                 'mj.io.*, mj.admin.*, mj.github.*, mj.backup.*, mj.team.*. ' +

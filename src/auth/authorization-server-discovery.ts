@@ -75,15 +75,23 @@ export class AuthorizationServerDiscovery {
             throw new ConfigurationError(`Authorization server URL must use HTTPS: ${metadataUrl}`)
         }
 
-        // SSRF Protection: Block private and loopback IP spaces
+        // SSRF Protection: Block private and loopback IP spaces via DNS resolution
         const host = parsedUrl.hostname.toLowerCase()
-        const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.startsWith('127.')
-        const isPrivateV4 = host.startsWith('10.') || host.startsWith('192.168.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
-        const isLinkLocal = host.startsWith('169.254.')
-        const isPrivateV6 = host.startsWith('[fc') || host.startsWith('[fd')
-        
-        if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
-            throw new ConfigurationError(`SSRF Protection: Requests to private/loopback network addresses are prohibited: ${host}`)
+        try {
+            const { promises: dns } = await import('node:dns')
+            const { address } = await dns.lookup(host)
+            
+            const isLoopback = address === 'localhost' || address === '127.0.0.1' || address === '::1' || address.startsWith('127.') || address === '0.0.0.0' || address === '::'
+            const isPrivateV4 = address.startsWith('10.') || address.startsWith('192.168.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(address)
+            const isLinkLocal = address.startsWith('169.254.')
+            const isPrivateV6 = address.startsWith('fc') || address.startsWith('fd')
+            
+            if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
+                throw new ConfigurationError(`SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`)
+            }
+        } catch (err) {
+            if (err instanceof ConfigurationError) throw err
+            throw new ConfigurationError(`Failed to resolve authorization server hostname: ${host}`)
         }
 
         logger.info(`Fetching authorization server metadata from: ${metadataUrl}`, {

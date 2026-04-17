@@ -107,3 +107,7 @@
 - **Testing**: Restored complete verification suite integrity by correcting stricter payload typings for MCP `ResourceContents` unions across E2E test assertions.
 - **Testing**: Fixed false-positive omissions inside `resources-briefing-env.spec.ts` by actively populating strict tenancy variables inside testing payloads.
 - **Data**: Upgraded `ImportOptions` and `team_import_markdown` to correctly map `project_number` declarations directly down into SQLite adapter insertions.
+- **Security**: Added explicit `🛑 TRUSTED ADMIN ONLY` warnings to the Code Mode (`mj_execute_code`) descriptor to better signal the sandbox's non-isolated security posture.
+- **Security**: Added explicit multi-tenant `project_number` warnings to team search tools to prevent cross-tenant data traversal without parameters.
+- **Testing**: Fixed TypeScript lint regressions involving ambiguous generic types (`any`, `unknown`) within `backup.ts` and `stateful.ts` catch blocks.
+- **Testing**: Extended Vitest definitions to properly mock `fs.lstat` filesystem boundary methods and `node:dns` resolution paths.

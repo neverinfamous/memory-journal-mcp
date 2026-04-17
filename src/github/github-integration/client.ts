@@ -3,7 +3,7 @@ import { graphql } from '@octokit/graphql'
 import * as simpleGitImport from 'simple-git'
 import { logger } from '../../utils/logger.js'
 
-export const CACHE_TTL_MS = 5 * 60 * 1000
+export const CACHE_TTL_MS = 1 * 60 * 1000
 export const TRAFFIC_CACHE_TTL_MS = 10 * 60 * 1000
 
 export interface CacheEntry<T> {

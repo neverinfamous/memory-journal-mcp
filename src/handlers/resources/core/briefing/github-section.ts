@@ -43,6 +43,7 @@ export interface BriefingGitHub {
         totalComments: number
     }
     degraded?: boolean
+    degradedReasons?: string[]
 }
 
 /**
@@ -71,23 +72,34 @@ export async function buildGitHubSection(
                 : Promise.resolve(undefined),
         ])
 
+        const degradedReasons: string[] = []
+
         const ciStatus = ciStatusResult.status === 'fulfilled' ? ciStatusResult.value : { status: 'unknown' as const, workflowSummary: undefined, degraded: true }
+        if (ciStatusResult.status === 'rejected') degradedReasons.push(`CI Status fetch failed: ${String(ciStatusResult.reason)}`)
+        else if (ciStatus.degraded) degradedReasons.push('CI Status partially degraded')
+
         const issuesAndPrs = issuesAndPrsResult.status === 'fulfilled' ? issuesAndPrsResult.value : { openIssues: 0, openIssueList: undefined, openPRs: 0, openPrList: undefined, degraded: true }
+        if (issuesAndPrsResult.status === 'rejected') degradedReasons.push(`Issues/PRs fetch failed: ${String(issuesAndPrsResult.reason)}`)
+        else if (issuesAndPrs.degraded) degradedReasons.push('Issues/PRs partially degraded')
+
         const milestonesData = milestonesResult.status === 'fulfilled' ? milestonesResult.value : { items: [], degraded: true }
+        if (milestonesResult.status === 'rejected') degradedReasons.push(`Milestones fetch failed: ${String(milestonesResult.reason)}`)
+        else if (milestonesData.degraded) degradedReasons.push('Milestones partially degraded')
+
         const insightsData = insightsResult.status === 'fulfilled' ? insightsResult.value : { degraded: true }
+        if (insightsResult.status === 'rejected') degradedReasons.push(`Insights fetch failed: ${String(insightsResult.reason)}`)
+        else if (insightsData.degraded) degradedReasons.push('Insights partially degraded')
+
         const copilotReviewsData = copilotReviewsResult.status === 'fulfilled' ? (copilotReviewsResult.value ?? {}) : { degraded: true }
+        if (copilotReviewsResult.status === 'rejected') degradedReasons.push(`Copilot Reviews fetch failed: ${String(copilotReviewsResult.reason)}`)
+        else if (copilotReviewsData.degraded) degradedReasons.push('Copilot Reviews partially degraded')
 
         const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
         const milestones = milestonesData.items ?? []
         const insights = insightsData.insights
         const copilotReviews = copilotReviewsData.reviews
-        const degraded =
-            ciStatus.degraded === true ||
-            issuesAndPrs.degraded === true ||
-            milestonesData.degraded === true ||
-            insightsData.degraded === true ||
-            copilotReviewsData.degraded === true
+        const degraded = degradedReasons.length > 0
 
         return {
             repo: `${owner}/${repo}`,
@@ -113,7 +125,7 @@ export async function buildGitHubSection(
                 : {}),
             ...(workflowSummary ? { workflowSummary } : {}),
             ...(copilotReviews ? { copilotReviews } : {}),
-            ...(degraded ? { degraded: true } : {}),
+            ...(degraded ? { degraded: true, degradedReasons } : {}),
         }
     } catch (error) {
         logger.debug('Failed to build GitHub briefing section', {

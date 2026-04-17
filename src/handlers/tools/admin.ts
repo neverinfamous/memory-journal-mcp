@@ -63,6 +63,7 @@ const DeleteEntryOutputSchema = z
         entryId: z.number().optional(),
         permanent: z.boolean().optional(),
         error: z.string().optional(),
+        warning: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
 
@@ -169,15 +170,22 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     // Remove from vector index (non-critical if fails)
+                    let warning: string | undefined
                     if (vectorManager) {
                         try {
                             vectorManager.removeEntry(entry_id)
-                        } catch {
+                        } catch (err) {
                             // Non-critical failure, entry already deleted from DB
+                            warning = `Vector index cleanup failed: ${err instanceof Error ? err.message : String(err)}`
                         }
                     }
 
-                    return { success, entryId: entry_id, permanent }
+                    return { 
+                        success, 
+                        entryId: entry_id, 
+                        permanent,
+                        ...(warning ? { warning } : {})
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

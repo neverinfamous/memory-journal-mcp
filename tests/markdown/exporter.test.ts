@@ -17,6 +17,7 @@ const mockHandle = {
 vi.mock('node:fs/promises', () => ({
     mkdir: vi.fn(),
     open: vi.fn(),
+    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
 }))
 
 describe('markdown exporter utilities', () => {

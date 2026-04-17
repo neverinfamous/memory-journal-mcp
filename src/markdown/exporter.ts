@@ -5,7 +5,7 @@
  * Deterministic filenames allow re-export to overwrite identically.
  */
 
-import { mkdir, open } from 'node:fs/promises'
+import { mkdir, open, lstat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { constants } from 'node:fs'
@@ -165,6 +165,12 @@ export async function exportEntriesToMarkdown(
 
         let handle;
         try {
+            // Re-validate ancestor directory to ensure it hasn't been swapped for a symlink
+            const stat = await lstat(resolvedOutputDir)
+            if (stat.isSymbolicLink()) {
+                throw new Error(`Export directory ${resolvedOutputDir} became a symlink during export.`)
+            }
+
             // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
             handle = await open(filepath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600)
             await handle.writeFile(fileContent, 'utf-8')

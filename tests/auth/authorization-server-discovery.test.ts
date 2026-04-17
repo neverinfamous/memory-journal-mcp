@@ -10,6 +10,12 @@ import {
     createAuthServerDiscovery,
 } from '../../src/auth/authorization-server-discovery.js'
 
+vi.mock('node:dns', () => ({
+    promises: {
+        lookup: vi.fn().mockResolvedValue({ address: '203.0.113.1' })
+    }
+}))
+
 describe('AuthorizationServerDiscovery', () => {
     const authServerUrl = 'https://auth.example.com'
 

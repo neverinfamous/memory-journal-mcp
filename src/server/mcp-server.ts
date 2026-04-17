@@ -158,13 +158,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
             }
         }
 
-        // Fallback: If no explicit default matched, use the first project in the registry
-        if (githubPath === '.') {
-            const firstEntry = Object.values(options.projectRegistry)[0]
-            if (firstEntry?.path) {
-                githubPath = firstEntry.path
-            }
-        }
+        // Removed implicit fallback to the first registry entry.
+        // Mutating operations without an explicit owner/repo will throw or request clarification
+        // rather than guessing the wrong project boundary.
     }
     const github = getGitHubIntegration(githubPath)
     try {
@@ -238,6 +234,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
         if (teamDbPath) {
             allowedIoRoots.push(resolve(dirname(teamDbPath)))
         }
+        logger.warning('ALLOWED_IO_ROOTS not explicitly provided; implicitly deriving trust boundaries from database directories. This behavior is safe but may be broader or narrower than expected.', {
+            module: 'McpServer'
+        })
     }
 
     logger.info('IO sandbox configured', {
