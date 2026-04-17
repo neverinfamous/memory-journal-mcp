@@ -118,6 +118,7 @@ export interface ProjectContext {
     pullRequests: GitHubPullRequest[]
     workflowRuns: GitHubWorkflowRun[]
     milestones: GitHubMilestone[]
+    degraded?: string[]
 }
 
 // ============================================================================

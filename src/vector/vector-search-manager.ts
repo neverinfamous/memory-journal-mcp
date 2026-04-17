@@ -323,9 +323,9 @@ export class VectorSearchManager {
         // Step 1: Get total entry count for progress reporting
         const totalEntries = db.getActiveEntryCount()
 
-        // Step 2: Clear existing embeddings (O(1) operation)
-        this.dbAdapter.clearVectors()
-        logger.info('Cleared vec_embeddings table for rebuild', { module: 'VectorSearch' })
+        // Step 2: Clear existing embeddings (O(1) operation) - REMOVED for Fail-Closed behavior
+        // this.dbAdapter.clearVectors()
+        // logger.info('Cleared vec_embeddings table for rebuild', { module: 'VectorSearch' })
 
         // Step 3: Re-index all entries using paginated fetch
         // Embeddings are generated in parallel batches (CPU-bound, safe),
@@ -418,7 +418,7 @@ export class VectorSearchManager {
         // Final progress
         await sendProgress(progress, indexed, totalEntries, 'Vector index rebuild complete')
 
-        if (failed > 0) {
+        if (failed > 0 || firstError) {
             logger.warning(
                 `Vector index rebuild: ${String(indexed)} indexed, ${String(failed)} failed`,
                 {
@@ -426,6 +426,14 @@ export class VectorSearchManager {
                 }
             )
         } else {
+            // Prune any stale embeddings only if the entire operation succeeded
+            try {
+                this.dbAdapter.cleanupStaleVectors()
+                logger.info('Cleared stale embeddings post-rebuild', { module: 'VectorSearch' })
+            } catch (cleanupError) {
+                logger.warning('Failed to clear stale embeddings', { module: 'VectorSearch', error: String(cleanupError) })
+            }
+
             logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
                 module: 'VectorSearch',
             })

@@ -107,7 +107,7 @@ export async function resolveOwnerRepo(
             : undefined
 
     if (registryEntry) {
-        toolGithub = getGitHubIntegration(registryEntry.path)
+        toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
     } else if (context.github) {
         toolGithub = context.github
     }

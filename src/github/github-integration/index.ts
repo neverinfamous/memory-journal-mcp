@@ -213,6 +213,7 @@ export class GitHubIntegration {
             // Ignore error
         }
 
+        const degraded: string[] = []
         if (repoInfo.owner && repoInfo.repo) {
             const [issuesResult, prsResult, runsResult, milestonesResult] = await Promise.allSettled([
                 this.issuesManager.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10, abortSignal),
@@ -222,9 +223,20 @@ export class GitHubIntegration {
             ])
 
             context.issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
+            if (issuesResult.status === 'rejected') degraded.push('issues')
+
             context.pullRequests = prsResult.status === 'fulfilled' ? prsResult.value : []
+            if (prsResult.status === 'rejected') degraded.push('pullRequests')
+
             context.workflowRuns = runsResult.status === 'fulfilled' ? runsResult.value : []
+            if (runsResult.status === 'rejected') degraded.push('workflowRuns')
+
             context.milestones = milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
+            if (milestonesResult.status === 'rejected') degraded.push('milestones')
+        }
+
+        if (degraded.length > 0) {
+            context.degraded = degraded
         }
 
         this.client.setCache('context:repo', context)

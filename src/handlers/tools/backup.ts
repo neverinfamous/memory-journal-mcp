@@ -11,6 +11,7 @@ import { sendProgress } from '../../utils/progress-utils.js'
 import { relaxedNumber } from './schemas.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
+import * as path from 'node:path'
 
 
 // ============================================================================
@@ -108,7 +109,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         message: `Backup created successfully`,
                         filename: result.filename,
-                        path: result.path,
+                        path: path.basename(result.path),
                         sizeBytes: result.sizeBytes,
                     }
                 } catch (err) {
@@ -127,10 +128,11 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             handler: (_params: unknown) => {
                 try {
                     const backups = db.listBackups()
+                    const maskedBackups = backups.map(b => ({ ...b, path: path.basename(b.path) }))
                     return {
-                        backups,
+                        backups: maskedBackups,
                         total: backups.length,
-                        backupsDirectory: db.getBackupsDir(),
+                        backupsDirectory: path.basename(db.getBackupsDir()),
                         hint:
                             backups.length === 0
                                 ? 'No backups found. Use backup_journal to create one.'

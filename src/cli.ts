@@ -115,6 +115,10 @@ program
         'Briefing depth: essential, standard, full (env: INSTRUCTION_LEVEL)',
         'standard'
     )
+    .option(
+        '--allowed-io-roots <paths>',
+        'Comma-separated absolute paths or JSON array of paths for strict filesystem jailing (env: ALLOWED_IO_ROOTS)'
+    )
     // Briefing configuration
     .option(
         '--briefing-entries <count>',
@@ -223,6 +227,7 @@ program
             workflowSummary?: string
             flagVocabulary?: string
             instructionLevel: string
+            allowedIoRoots?: string
             auditLog?: string
             auditRedact?: boolean
             auditReads?: boolean
@@ -336,6 +341,28 @@ program
                                 `Failed to parse PROJECT_REGISTRY environment variable. Must be valid JSON and safe paths: ${errName}`,
                                 { cause: e }
                             )
+                        }
+                    })(),
+                    // Allowed IO Roots
+                    allowedIoRoots: (() => {
+                        const raw = options.allowedIoRoots ?? process.env['ALLOWED_IO_ROOTS']
+                        if (!raw) return undefined
+                        try {
+                            if (raw.trim().startsWith('[')) {
+                                const parsed = JSON.parse(raw) as unknown
+                                if (Array.isArray(parsed) && parsed.every(p => typeof p === 'string' && path.isAbsolute(p))) {
+                                    return parsed as string[]
+                                }
+                                throw new Error('Must be an array of absolute paths')
+                            }
+                            const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+                            if (parts.some(p => !path.isAbsolute(p))) {
+                                throw new Error('All paths must be absolute')
+                            }
+                            return parts
+                        } catch (e: unknown) {
+                            const errName = e instanceof Error ? e.message : String(e)
+                            throw new Error(`Invalid ALLOWED_IO_ROOTS configuration: ${errName}`, { cause: e })
                         }
                     })(),
                     // Briefing configuration

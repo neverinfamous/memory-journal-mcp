@@ -355,9 +355,23 @@ export async function callTool(
             // Layer 2: Audit (if initialized)
             const runtimeAudit = config?.runtime !== undefined && config.runtime !== null ? config.runtime.auditInterceptor : null
             const interceptor = runtimeAudit ?? globalAuditInterceptor
-            const freshResult = interceptor !== null && interceptor !== undefined
-                ? await interceptor.around(freshTool.name, args, () => metricsWrapped(args))
-                : await metricsWrapped(args)
+            
+            const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
+                if (interceptor !== null && interceptor !== undefined) {
+                    return await interceptor.around(freshTool.name, a, () => metricsWrapped(a))
+                }
+                return await metricsWrapped(a)
+            }
+
+            if (config?.runtime?.maintenanceManager !== undefined && config.runtime.maintenanceManager !== null) {
+                const freshResult = await config.runtime.maintenanceManager.withActiveJob(
+                    () => wrappedHandler(args),
+                    name === 'restore_backup'
+                );
+                return injectTokenEstimate(freshResult)
+            }
+
+            const freshResult = await wrappedHandler(args)
             return injectTokenEstimate(freshResult)
         }
     }

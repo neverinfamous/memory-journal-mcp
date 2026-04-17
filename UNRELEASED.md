@@ -15,6 +15,11 @@
 - **Boundaries**: Quarantined core `.getRawDb()` and execution mechanisms behind `@deprecated` and `@internal` tags strictly restricting them to internal database-adapter implementations, mitigating undocumented system queries.
 - **Stability**: Standardized sequential long-running task locks via `isRunning` boundary states on the `JobTimer` class, terminating concurrency-related SQLite lock exhaustion failures.
 - **Validation**: Introduced `AutoContextSchema` boundary validation using Zod to safely parse JSON context, replacing unsafe `JSON.parse()` methods inside team and briefing resources.
+- **Security**: Re-implemented legacy SSE transport to enforce `process.env.MAX_STATEFUL_SESSIONS` boundaries, aligning with Streamable HTTP limits and mitigating unauthenticated memory bloat.
+- **Security**: Refactored vector rebuilding from a destructive pre-clearing model to a post-rebuild atomic `cleanupStaleVectors` fail-closed model, ensuring availability if indexing fails.
+- **Security**: Decoupled implicit authorization in File Boundary enforcement by strictly demanding explicit `allowedIoRoots` configurations instead of falling back to the `PROJECT_REGISTRY`.
+- **Security**: Fortified tool-level text ingestion boundaries by restricting unconstrained input search schemas with explicit `z.string().max(250)` definitions.
+- **Security**: Obscured absolute host filesystem locations escaping from Database Backup handlers by natively stripping paths using `path.basename`.
 
 ### Performance
 - **Database**: Resolved significant N+1 latency loops inside the `ResourceTools` generation functions by converting sequential relationship boundary queries to batched, in-memory aggregate lookup tables.
@@ -22,6 +27,8 @@
 - **Database**: Refactored importance score evaluation via `buildImportanceSqlExpression` to use a Common Table Expression (CTE) combined with a `LEFT JOIN` in database searches, eliminating correlated O(N^2) nested subqueries.
 - **Initialization**: Optimized startup behavior by hoisting execution-invariant server state (tools, prompts, filter sets) out of `createServerInstance()` to bypass redundant cycles during HTTP/SSE connections.
 - **GitHub**: Integrated native `AbortController` signaling for all GitHub integration API requests, resolving runaway Octokit network queries during global task timeouts.
+- **Stability**: Established native GitHub integration client pooling on the context `ServerRuntime` tightly bound to CWD, eradicating cross-instance state leakages.
+- **Traceability**: Extended the `ProjectContext` shape in GitHub handler arrays to dynamically bundle a `degraded` array property, exposing granular API subset failures without triggering opaque crashes.
 
 ### Fixed
 - **API**: Modernized server execution dispatchers (`callTool`, `registration`) by scrubbing unsafe global fallback references and mapping missing bounds directly into normalized `ConfigurationError` and `ResourceNotFoundError` structure traps.
@@ -83,3 +90,4 @@
 - **Security**: Fixed strict boundary logic for path traversal validations (`assertSafeDirectoryPath`) by correctly enforcing explicit `allowedRoots` parameters across HTTP, export, and import handlers.
 - **Security**: Re-enabled X-Forwarded-For Trust Proxy extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
 - **Testing**: Stabilized markdown export and import E2E and unit test suites to successfully pass against the new strict path boundary isolations.
+- **Testing**: Added explicit testing validation asserting fail-closed vector re-indexing conditions via tracking of `mockDb.cleanupStaleVectors`.

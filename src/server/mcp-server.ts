@@ -236,11 +236,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
         if (teamDbPath) {
             allowedIoRoots.push(resolve(dirname(teamDbPath)))
         }
-        if (options.projectRegistry) {
-            for (const entry of Object.values(options.projectRegistry)) {
-                if (entry?.path) allowedIoRoots.push(resolve(entry.path))
-            }
-        }
     }
 
     const baseConfig: ToolHandlerConfig = {

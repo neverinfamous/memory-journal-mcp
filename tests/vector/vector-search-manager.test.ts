@@ -73,6 +73,10 @@ function createMockDbAdapter() {
             mockRun(BigInt(entryId))
         },
         clearVectors: () => mockPrepare('DELETE FROM vec_embeddings'),
+        cleanupStaleVectors: () => {
+            mockPrepare('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)')
+            mockRun()
+        },
         getVectorCount: () => {
             const res = mockGet()
             return res ? res.count : 0
@@ -406,7 +410,7 @@ describe('VectorSearchManager', () => {
             
         })
 
-        it('should clear existing embeddings before rebuild', async () => {
+        it('should clear stale embeddings after successful rebuild', async () => {
             await initManager(vm)
             mockEmbedderFn.mockResolvedValue({ data: fakeEmbedding(0) })
             mockRun.mockReturnValue(undefined)
@@ -414,13 +418,16 @@ describe('VectorSearchManager', () => {
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(1),
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Active entry' }]),
+                cleanupStaleVectors: () => {
+                    mockPrepare('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)')
+                    mockRun()
+                }
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
             expect(result.indexed).toBe(1)
 
-            // First call should be DELETE FROM vec_embeddings
-            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM vec_embeddings')
+            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)')
         })
 
         it('should return 0 when db not available', async () => {

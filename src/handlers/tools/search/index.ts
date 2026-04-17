@@ -36,7 +36,7 @@ import type { SemanticSearchResult } from '../../../vector/vector-search-manager
 
 /** Strict schema — used inside handler for structured Zod errors */
 const SearchEntriesSchema = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     mode: z
         .enum(['auto', 'fts', 'semantic', 'hybrid'])
         .optional()
@@ -64,7 +64,7 @@ const SearchEntriesSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
 const SearchEntriesSchemaMcp = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     mode: z
         .string()
         .optional()
@@ -130,7 +130,7 @@ const SearchByDateRangeSchemaMcp = z.object({
 
 /** Strict schema — used inside handler for structured Zod errors */
 const SemanticSearchSchema = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     entry_id: z
         .number()
         .optional()
@@ -161,7 +161,7 @@ const SemanticSearchSchema = z.object({
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
 const SemanticSearchSchemaMcp = z.object({
-    query: z.string().optional(),
+    query: z.string().max(250).optional(),
     entry_id: relaxedNumber()
         .optional()
         .describe(

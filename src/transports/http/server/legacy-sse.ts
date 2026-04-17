@@ -11,6 +11,25 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
     app.get('/sse', (req: Request, res: Response): void => {
         logger.info('Legacy SSE connection requested', { module: 'HTTP' })
 
+        // Enforce session limit to prevent unbounded memory growth
+        const envMax = process.env['MAX_STATEFUL_SESSIONS']
+        let maxSessions = 1000
+        if (envMax) {
+            const parsed = parseInt(envMax, 10)
+            if (!Number.isNaN(parsed) && parsed > 0) {
+                maxSessions = parsed
+            }
+        }
+        
+        if (ctx.transports.size + ctx.sseTransports.size >= maxSessions) {
+            res.status(429).json({
+                jsonrpc: '2.0',
+                error: { code: JSONRPC_SERVER_ERROR, message: 'Too Many Requests: Maximum active sessions reached' },
+                id: null,
+            })
+            return
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
         const sseTransport = new SSEServerTransport('/messages', res as ServerResponse)
 

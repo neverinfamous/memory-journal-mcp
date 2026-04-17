@@ -266,4 +266,5 @@ export interface IDatabaseAdapter {
     deleteVector(entryId: number): void
     clearVectors(): void
     getVectorCount(): number
+    cleanupStaleVectors(): void
 }
