@@ -138,6 +138,8 @@ export interface BriefingConfig {
     projectRegistry?: Record<string, ProjectRegistryEntry>
     /** Hush Protocol flag vocabulary passed from CLI/env */
     flagVocabulary?: string[]
+    /** Allowlisted directory roots for strict filesystem jailing of agent read access */
+    allowedIoRoots?: string[]
 }
 
 /** Default briefing configuration — preserves pre-existing behavior */

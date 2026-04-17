@@ -91,3 +91,7 @@
 - **Security**: Re-enabled X-Forwarded-For Trust Proxy extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
 - **Testing**: Stabilized markdown export and import E2E and unit test suites to successfully pass against the new strict path boundary isolations.
 - **Testing**: Added explicit testing validation asserting fail-closed vector re-indexing conditions via tracking of `mockDb.cleanupStaleVectors`.
+- **Security**: Hardened HTTP security utilities (`getClientIp` and `checkRateLimit`) to fully delegate `trustProxy` evaluation to Express Native configuration, explicitly resolving IP provenance and removing decoupled parsing vectors.
+- **Testing**: Fixed Vitest false-positive test cases within resource tests by explicitly mapping strict `allowedIoRoots` bounds to accurately mock path traversal validation execution paths.
+- **Testing**: Aligned assertions within `codemode-tools.test.ts` to strictly evaluate against properly shaped "Result string exceeds" fail-closed boundary exceptions.
+- **Database**: Extended native isolation patterns by verifying `project_number` filter injection directly interfaces with cross-tenant boundaries across team query protocols (`search-tools.ts`).

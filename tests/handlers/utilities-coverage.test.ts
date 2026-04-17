@@ -22,21 +22,23 @@ describe('utilities coverage', () => {
             vi.spyOn(fs.promises, 'stat').mockResolvedValue({ mtimeMs: 1234 } as any)
             const readFileSpy = vi.spyOn(fs.promises, 'readFile').mockResolvedValue('rules content')
 
+            const dummyAllowedContext = { briefingConfig: { allowedIoRoots: [process.cwd()] } } as any
+
             // 1. Initial read
-            const result = await rulesResource.handler('mem', {} as any)
+            const result = (await rulesResource.handler('mem', dummyAllowedContext)) as any
             expect(result.data).toBe('rules content')
 
             // 2. Cache hit (advance time by 1ms)
             time += 1
             readFileSpy.mockResolvedValue('should not happen')
-            const result2 = await rulesResource.handler('mem', {} as any)
+            const result2 = (await rulesResource.handler('mem', dummyAllowedContext)) as any
             expect(result2.data).toBe('rules content')
 
             // 3. Error handling (cache expired)
             time += 10 * 60 * 1000
             readFileSpy.mockRejectedValue('String error read')
-            const errResult = await rulesResource.handler('mem', {} as any)
-            expect((errResult.data as any).error).toContain('String error read')
+            const errResult = (await rulesResource.handler('mem', dummyAllowedContext)) as any
+            expect(errResult.data.error).toContain('String error read')
         } finally {
             if (previousRulesFilePath === undefined) {
                 delete process.env['RULES_FILE_PATH']
@@ -50,12 +52,12 @@ describe('utilities coverage', () => {
         const previousWorkflowSummary = process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
         try {
             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] = 'test workflow summary'
-            const result = workflowsResource.handler('mem', {} as any)
-            expect((result.data as any).summary).toBe('test workflow summary')
+            const result = workflowsResource.handler('mem', {} as any) as any
+            expect(result.data.summary).toBe('test workflow summary')
 
             delete process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']
-            const result2 = workflowsResource.handler('mem', {} as any)
-            expect((result2.data as any).configured).toBe(false)
+            const result2 = workflowsResource.handler('mem', {} as any) as any
+            expect(result2.data.configured).toBe(false)
         } finally {
             if (previousWorkflowSummary === undefined) {
                 delete process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY']

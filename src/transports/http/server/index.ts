@@ -78,7 +78,7 @@ export class HttpTransport {
         
         if (this.config.trustProxy) {
             // Enable express trust proxy for rate limiting (Issue #6: explicit proxy boundary)
-            this.app.set('trust proxy', 1) // Default to 1 hop, or set based on config if needed
+            this.app.set('trust proxy', 'loopback') // Default to loopback for proxy chain safety
         }
     }
 
@@ -165,10 +165,19 @@ export class HttpTransport {
         // Authentication middleware
         if (this.config.oauthEnabled && this.config.oauthIssuer && this.config.oauthAudience) {
             
-            // Hard-pin Token Validator execution bounds: prevent dynamic plaintext loopbacks
             if (this.config.oauthIssuer.startsWith('http://')) {
                 if (!this.config.allowPlaintextLoopbackOAuth) {
                     const errorMsg = `FATAL: OAuth issuer '${this.config.oauthIssuer}' targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
+                    logger.error(errorMsg, { module: 'HTTP' })
+                    throw new Error(errorMsg)
+                }
+                try {
+                    const url = new URL(this.config.oauthIssuer)
+                    if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1' && url.hostname !== '[::1]') {
+                        throw new Error()
+                    }
+                } catch {
+                    const errorMsg = `FATAL: Plaintext OAuth bypass is ONLY permitted for loopback hosts (localhost, 127.0.0.1, [::1]). Issuer '${this.config.oauthIssuer}' is not allowed.`
                     logger.error(errorMsg, { module: 'HTTP' })
                     throw new Error(errorMsg)
                 }

@@ -10,9 +10,9 @@ RUN apk add --no-cache python3 make g++ && \
     apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 && \
     apk upgrade --no-cache
 
-# Upgrade npm globally to get fixed versions of bundled packages
+# Upgrade npm globally to a pinned version to ensure reproducible builds
 # Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
-RUN npm install -g npm@latest --force && npm cache clean --force
+RUN npm install -g npm@10.9.2 --force && npm cache clean --force
 
 # Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff to 8.0.4
 # npm hasn't released a version with diff@8.0.4 yet, so we patch it directly

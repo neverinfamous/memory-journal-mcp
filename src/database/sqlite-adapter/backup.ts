@@ -148,6 +148,26 @@ export class BackupManager {
             throw new ResourceNotFoundError('Backup', filename)
         }
 
+        try {
+            // Dynamically import better-sqlite3 to avoid top-level require errors if mocked
+            const Database = (await import('better-sqlite3')).default
+            const tempDb = new Database(backupPath, { fileMustExist: true, readonly: true })
+            const tempStmt = tempDb.prepare('PRAGMA integrity_check')
+            const result = tempStmt.get() as Record<string, unknown>
+            const integrityResult = Object.values(result ?? {})[0]
+            if (integrityResult !== 'ok') {
+                tempDb.close()
+                throw new Error(`Integrity check failed: ${String(integrityResult)}`)
+            }
+            tempDb.close()
+        } catch (err) {
+            throw new Error(
+                `Incoming backup file is invalid or corrupt. Rejecting restore. Details: ${err instanceof Error ? err.message : String(err)}`,
+                { cause: err }
+            )
+        }
+
+
         const lockPath = `${this.ctx.getDbPath()}.lock`
         let lockFd: number
         try {

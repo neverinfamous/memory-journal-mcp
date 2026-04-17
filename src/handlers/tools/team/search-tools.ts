@@ -28,7 +28,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'team_search',
             title: 'Search Team Entries',
             description:
-                'Search entries in the team database by text and/or tags. Requires TEAM_DB_PATH.',
+                'Search entries in the team database by text and/or tags. Requires TEAM_DB_PATH. (Warning: Team DB is a shared cross-tenant domain; use project_number to isolate boundaries.)',
             group: 'team',
             inputSchema: TeamSearchSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
@@ -39,16 +39,17 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, sort_by } = TeamSearchSchema.parse(params)
+                    const { query, tags, limit, sort_by, project_number } = TeamSearchSchema.parse(params)
 
                     const searchLimit =
                         tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT) : limit
 
                     let entries
-                    if (query) {
-                        entries = teamDb.searchEntries(query, {
+                    if (query || project_number !== undefined) {
+                        entries = teamDb.searchEntries(query || '', {
                             limit: searchLimit,
                             sortBy: sort_by,
+                            projectNumber: project_number,
                         })
                     } else {
                         entries = teamDb.getRecentEntries(searchLimit, undefined, sort_by)
@@ -89,7 +90,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'team_search_by_date_range',
             title: 'Search Team Entries by Date Range',
             description:
-                'Search team entries within a date range with optional filters for entry type and tags. Requires TEAM_DB_PATH.',
+                'Search team entries within a date range with optional filters for entry type and tags. Requires TEAM_DB_PATH. (Warning: Team DB is a shared cross-tenant domain; use project_number to isolate boundaries.)',
             group: 'team',
             inputSchema: TeamSearchByDateRangeSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
@@ -100,7 +101,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { start_date, end_date, entry_type, tags, limit, sort_by } =
+                    const { start_date, end_date, entry_type, tags, limit, sort_by, project_number } =
                         TeamSearchByDateRangeSchema.parse(params)
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
@@ -120,6 +121,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         tags,
                         limit,
                         sortBy: sort_by,
+                        projectNumber: project_number,
                     })
 
                     // Batch-fetch authors

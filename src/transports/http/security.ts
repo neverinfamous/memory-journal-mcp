@@ -22,12 +22,7 @@ import {
  * When trustProxy is enabled, uses the leftmost IP from X-Forwarded-For.
  * Falls back to Express's req.ip then req.socket.remoteAddress.
  */
-export function getClientIp(req: Request, trustProxy: boolean): string {
-    if (trustProxy && req.headers['x-forwarded-for'] !== undefined) {
-        const forwarded = req.headers['x-forwarded-for']
-        const first = typeof forwarded === 'string' ? forwarded.split(',')[0] : forwarded[0]
-        if (first) return first.trim()
-    }
+export function getClientIp(req: Request): string {
     return req.ip ?? req.socket.remoteAddress ?? 'unknown'
 }
 
@@ -50,7 +45,7 @@ export function checkRateLimit(
 
     const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
     const subject = authReq.auth?.sub ?? authReq.auth?.subject
-    const clientIdentity = typeof subject === 'string' && subject ? subject : getClientIp(req, config.trustProxy ?? false)
+    const clientIdentity = typeof subject === 'string' && subject ? subject : getClientIp(req)
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
     let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX'] ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10) : NaN

@@ -154,8 +154,8 @@ export const rulesResource: InternalResourceDef = {
             }
         }
         try {
-            const rulesRoot = path.dirname(path.resolve(rulesPath))
-            assertSafeFilePath(rulesPath, [rulesRoot])
+            const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
+            assertSafeFilePath(rulesPath, allowedRoots)
         } catch (err) {
             return {
                 data: {
@@ -327,8 +327,8 @@ export const skillsResource: InternalResourceDef = {
 
         if (userSkillsDir) {
             try {
-                const root = path.resolve(userSkillsDir)
-                assertSafeDirectoryPath(userSkillsDir, [root])
+                const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
+                assertSafeDirectoryPath(userSkillsDir, allowedRoots)
             } catch (err) {
                 return {
                     data: {

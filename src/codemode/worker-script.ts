@@ -135,6 +135,10 @@ async function executeCode(code: string, methodList: Record<string, string[]>, t
 
         const context = vm.createContext(sandbox, {
             name: 'codemode-worker-sandbox',
+            codeGeneration: {
+                strings: false,
+                wasm: false,
+            },
         })
 
         const wrappedCode = `(async () => { ${transformAutoReturn(code)} })()`

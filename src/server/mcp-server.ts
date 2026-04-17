@@ -512,6 +512,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
                     projectRegistry: options.projectRegistry,
                     flagVocabulary: options.flagVocabulary,
+                    allowedIoRoots: allowedIoRoots,
                 }
                 const result = await readResource(
                     uri.href,

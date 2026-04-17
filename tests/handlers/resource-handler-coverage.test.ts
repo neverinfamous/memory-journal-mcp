@@ -17,6 +17,11 @@ describe('Resource Handler Coverage', () => {
 
     beforeAll(async () => {
         db = new DatabaseAdapter(testDbPath)
+        Object.assign(db, {
+            briefingConfig: {
+                allowedIoRoots: [process.cwd(), __dirname],
+            },
+        })
         await db.initialize()
 
         // Create entries with project/issue/PR links for template tests
@@ -197,7 +202,8 @@ describe('Resource Handler Coverage', () => {
         })
 
         it('should return error when RULES_FILE_PATH points to nonexistent file', async () => {
-            process.env['RULES_FILE_PATH'] = '/nonexistent/path/RULES.md'
+            const originalPath = require('node:path')
+            process.env['RULES_FILE_PATH'] = originalPath.join(process.cwd(), 'nonexistent/path/RULES.md')
 
             const result = await readResource('memory://rules', db)
             const data = result.data as { configured: boolean; error: string }
@@ -256,26 +262,24 @@ describe('Resource Handler Coverage', () => {
             if (originalEnv !== undefined) process.env['SKILLS_DIR_PATH'] = originalEnv
         })
 
-        it('should return shipped skills when SKILLS_DIR_PATH points to nonexistent directory', async () => {
-            process.env['SKILLS_DIR_PATH'] = './nonexistent/skills/dir'
+        it('should return error when SKILLS_DIR_PATH points to nonexistent directory', async () => {
+            const originalPath = require('node:path')
+            process.env['SKILLS_DIR_PATH'] = originalPath.join(process.cwd(), 'nonexistent/skills/dir')
 
             const result = await readResource('memory://skills', db)
             const data = result.data as {
                 configured: boolean
-                skills: { name: string; source: string }[]
-                count: number
+                error?: string
             }
             expect(data.configured).toBe(true)
-            // User dir is invalid but shipped skills still appear
-            expect(data.skills.length).toBeGreaterThanOrEqual(1)
-            expect(data.skills.some((s) => s.source === 'shipped')).toBe(true)
+            expect(data.error).toBeDefined()
 
             delete process.env['SKILLS_DIR_PATH']
         })
 
         it('should scan existing directory and return skill list', async () => {
-            // Point at the test server directory which has markdown files (no SKILL.md, so count=0)
-            process.env['SKILLS_DIR_PATH'] = './tests'
+            const originalPath = require('node:path')
+            process.env['SKILLS_DIR_PATH'] = originalPath.join(process.cwd(), 'tests')
 
             const result = await readResource('memory://skills', db)
             const data = result.data as {

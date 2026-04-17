@@ -120,7 +120,7 @@ describe('Code Mode Tool Handlers', () => {
         )) as any
 
         expect(result.success).toBe(false)
-        expect(result.error).toContain('Result exceeds')
+        expect(result.error).toContain('Result string exceeds')
     })
 
     it('should swallow git errors on repo context injection', async () => {

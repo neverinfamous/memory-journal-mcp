@@ -101,15 +101,19 @@ export function searchEntries(
             )
             
             if (!isSyntaxError) {
-                const { sql, params } = buildSearchQuery(queryStr, options, false)
-                const stmt = db.prepare(sql)
-                const rows = stmt.all(params)
-                const entries = rowsToEntries(tagsMgr, rows)
-                if (queryStr.length > 0) {
-                    Object.defineProperty(entries, 'degraded', { value: true, enumerable: false })
-                }
-                return entries
+                // Infrastructural error - rethrow
+                throw error
             }
+            
+            // Syntax error - fall back to LIKE with degraded flag
+            const { sql, params } = buildSearchQuery(queryStr, options, false)
+            const stmt = db.prepare(sql)
+            const rows = stmt.all(params)
+            const entries = rowsToEntries(tagsMgr, rows)
+            if (queryStr.length > 0) {
+                Object.defineProperty(entries, 'degraded', { value: true, enumerable: false })
+            }
+            return entries
         }
     }
 
