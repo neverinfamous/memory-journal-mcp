@@ -256,7 +256,8 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team vector tools without teamDb', () => {
         it('team_semantic_search should return error', async () => {
-            const result = (await callTool('team_semantic_search', { query: 'test' }, db)) as {
+            const result = (await callTool('team_semantic_search', {
+                project_number: 1, query: 'test' }, db)) as {
                 error: string
             }
 
@@ -281,7 +282,8 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('team_add_to_vector_index should return error', async () => {
-            const result = (await callTool('team_add_to_vector_index', { entry_id: 1 }, db)) as {
+            const result = (await callTool('team_add_to_vector_index', {
+                project_number: 1, entry_id: 1 }, db)) as {
                 error: string
             }
 
@@ -295,13 +297,15 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team backup tools without teamDb', () => {
         it('team_backup should return error', async () => {
-            const result = (await callTool('team_backup', {}, db)) as { error: string }
+            const result = (await callTool('team_backup', {
+                project_number: 1,}, db)) as { error: string }
 
             expect(result.error).toContain('Team database not configured')
         })
 
         it('team_list_backups should return error', async () => {
-            const result = (await callTool('team_list_backups', {}, db)) as { error: string }
+            const result = (await callTool('team_list_backups', {
+                project_number: 1,}, db)) as { error: string }
 
             expect(result.error).toContain('Team database not configured')
         })
@@ -313,7 +317,8 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team export tools without teamDb', () => {
         it('team_export_entries should return error', async () => {
-            const result = (await callTool('team_export_entries', { format: 'json' }, db)) as {
+            const result = (await callTool('team_export_entries', {
+                project_number: 1, format: 'json' }, db)) as {
                 error: string
             }
 
@@ -329,7 +334,8 @@ describe('Targeted Gap Closure — Batch 2', () => {
         it('team_update_entry should return error', async () => {
             const result = (await callTool(
                 'team_update_entry',
-                { entry_id: 1, content: 'test' },
+                {
+                project_number: 1, entry_id: 1, content: 'test' },
                 db
             )) as { error: string }
 
@@ -337,7 +343,8 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('team_delete_entry should return error', async () => {
-            const result = (await callTool('team_delete_entry', { entry_id: 1 }, db)) as {
+            const result = (await callTool('team_delete_entry', {
+                project_number: 1, entry_id: 1 }, db)) as {
                 error: string
             }
 

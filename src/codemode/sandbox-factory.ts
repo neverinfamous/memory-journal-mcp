@@ -41,7 +41,7 @@ export interface ISandboxPool {
 export interface SandboxModeInfo {
     mode: SandboxMode
     description: string
-    securityLevel: 'basic' | 'production'
+    securityLevel: 'basic' | 'trusted_admin'
     isolation: string
 }
 
@@ -122,8 +122,8 @@ export function getSandboxModeInfo(mode?: SandboxMode): SandboxModeInfo {
         case 'worker':
             return {
                 mode: 'worker',
-                description: 'Worker-thread sandbox using node:worker_threads (true V8 isolate)',
-                securityLevel: 'production',
+                description: 'Worker-thread sandbox using node:worker_threads. Trusted admin configuration (NOT secure multi-tenant isolation).',
+                securityLevel: 'trusted_admin',
                 isolation: 'Process-level V8 isolate with resource limits and MessagePort RPC',
             }
         default:

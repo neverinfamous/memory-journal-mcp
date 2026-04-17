@@ -45,7 +45,8 @@ describe('Team Admin Tool Handlers', () => {
         it('should update an existing team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { content: 'Original content', entry_type: 'technical_note', tags: ['old-tag'] },
+                {
+                project_number: 1, content: 'Original content', entry_type: 'technical_note', tags: ['old-tag'] },
                 personalDb,
                 undefined,
                 undefined,
@@ -61,6 +62,7 @@ describe('Team Admin Tool Handlers', () => {
             const updateResult = (await callTool(
                 'team_update_entry',
                 {
+                project_number: 1,
                     entry_id: entryId,
                     content: 'Updated content',
                     entry_type: 'bug_fix',
@@ -83,7 +85,8 @@ describe('Team Admin Tool Handlers', () => {
         it('should return error if team DB is not configured', async () => {
             const result = (await callTool(
                 'team_update_entry',
-                { entry_id: 999, content: 'test' },
+                {
+                project_number: 1, entry_id: 999, content: 'test' },
                 personalDb
             )) as any
 
@@ -94,7 +97,8 @@ describe('Team Admin Tool Handlers', () => {
         it('should return error if entry is not found', async () => {
             const result = (await callTool(
                 'team_update_entry',
-                { entry_id: 9999, content: 'test' },
+                {
+                project_number: 1, entry_id: 9999, content: 'test' },
                 personalDb,
                 undefined,
                 undefined,
@@ -113,7 +117,8 @@ describe('Team Admin Tool Handlers', () => {
         it('should soft-delete an existing team entry', async () => {
             const createResult = (await callTool(
                 'team_create_entry',
-                { content: 'To be deleted' },
+                {
+                project_number: 1, content: 'To be deleted' },
                 personalDb,
                 undefined,
                 undefined,
@@ -126,7 +131,8 @@ describe('Team Admin Tool Handlers', () => {
 
             const deleteResult = (await callTool(
                 'team_delete_entry',
-                { entry_id: entryId },
+                {
+                project_number: 1, entry_id: entryId },
                 personalDb,
                 undefined,
                 undefined,
@@ -141,7 +147,8 @@ describe('Team Admin Tool Handlers', () => {
             // Verify it cannot be updated
             const updateResult = (await callTool(
                 'team_update_entry',
-                { entry_id: entryId, content: 'Cannot update deleted' },
+                {
+                project_number: 1, entry_id: entryId, content: 'Cannot update deleted' },
                 personalDb,
                 undefined,
                 undefined,
@@ -157,7 +164,8 @@ describe('Team Admin Tool Handlers', () => {
         it('should return error if team DB is not configured', async () => {
             const result = (await callTool(
                 'team_delete_entry',
-                { entry_id: 999 },
+                {
+                project_number: 1, entry_id: 999 },
                 personalDb
             )) as any
 
@@ -168,7 +176,8 @@ describe('Team Admin Tool Handlers', () => {
         it('should return error if entry is not found', async () => {
             const result = (await callTool(
                 'team_delete_entry',
-                { entry_id: 9999 },
+                {
+                project_number: 1, entry_id: 9999 },
                 personalDb,
                 undefined,
                 undefined,
@@ -187,7 +196,8 @@ describe('Team Admin Tool Handlers', () => {
             // Create entries with source tag
             await callTool(
                 'team_create_entry',
-                { content: '1', tags: ['merge-source-tag'] },
+                {
+                project_number: 1, content: '1', tags: ['merge-source-tag'] },
                 personalDb,
                 undefined,
                 undefined,
@@ -197,7 +207,8 @@ describe('Team Admin Tool Handlers', () => {
             )
             await callTool(
                 'team_create_entry',
-                { content: '2', tags: ['merge-source-tag', 'other-tag'] },
+                {
+                project_number: 1, content: '2', tags: ['merge-source-tag', 'other-tag'] },
                 personalDb,
                 undefined,
                 undefined,
@@ -207,7 +218,8 @@ describe('Team Admin Tool Handlers', () => {
             )
             await callTool(
                 'team_create_entry',
-                { content: '3', tags: ['merge-target-tag'] },
+                {
+                project_number: 1, content: '3', tags: ['merge-target-tag'] },
                 personalDb,
                 undefined,
                 undefined,
@@ -234,7 +246,8 @@ describe('Team Admin Tool Handlers', () => {
             // Verify search by source tag returns empty
             const searchSource = (await callTool(
                 'team_search',
-                { tags: ['merge-source-tag'] },
+                {
+                project_number: 1, tags: ['merge-source-tag'] },
                 personalDb,
                 undefined,
                 undefined,
@@ -248,7 +261,8 @@ describe('Team Admin Tool Handlers', () => {
             // Verify search by target tag returns at least 3
             const searchTarget = (await callTool(
                 'team_search',
-                { tags: ['merge-target-tag'] },
+                {
+                project_number: 1, tags: ['merge-target-tag'] },
                 personalDb,
                 undefined,
                 undefined,

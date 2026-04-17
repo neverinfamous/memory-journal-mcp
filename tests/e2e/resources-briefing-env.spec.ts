@@ -84,15 +84,18 @@ test.describe('Resources: Briefing Environment Configurations', () => {
         // Also create a team entry to test inclusion
         const t_resp = await client.callTool({
             name: 'team_create_entry',
-            arguments: { content: 'Team insight', entry_type: 'test_entry' },
+            arguments: { content: 'Team insight', entry_type: 'test_entry', project_number: 1 },
         })
         expect(t_resp.isError).toBeUndefined()
 
         const response = await client.readResource({ uri: 'memory://briefing' })
 
         expect(response.contents).toBeDefined()
-        const contentText = response.contents[0]!.text as string
-
+        const firstResource = response.contents[0]
+        if (!firstResource || !('text' in firstResource)) {
+            throw new Error('Expected text resource')
+        }
+        const contentText = firstResource.text
         // The briefing resource yields JSON format
         const briefingObj = JSON.parse(contentText)
 

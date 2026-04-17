@@ -14,31 +14,6 @@ RUN apk add --no-cache python3 make g++ && \
 # Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
 RUN npm install -g npm@10.9.2 --force && npm cache clean --force
 
-# Fix GHSA-73rr-hh4g-fpgx: Manually update npm's bundled diff to 8.0.4
-# npm hasn't released a version with diff@8.0.4 yet, so we patch it directly
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack diff@9.0.0 && \
-    rm -rf node_modules/diff && \
-    tar -xzf diff-9.0.0.tgz && \
-    mv package node_modules/diff && \
-    rm diff-9.0.0.tgz
-
-# Fix CVE-2026-23950, CVE-2026-24842, CVE-2026-26960, GHSA-qffp-2rhf-9h96: Manually update npm's bundled tar to 7.5.13
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack tar@7.5.13 && \
-    rm -rf node_modules/tar && \
-    tar -xzf tar-7.5.13.tgz && \
-    mv package node_modules/tar && \
-    rm tar-7.5.13.tgz
-
-# Fix CVE-2026-27903, CVE-2026-27904: Manually update npm's bundled minimatch to 10.2.5
-RUN cd /usr/local/lib/node_modules/npm && \
-    npm pack minimatch@10.2.5 && \
-    rm -rf node_modules/minimatch && \
-    tar -xzf minimatch-10.2.5.tgz && \
-    mv package node_modules/minimatch && \
-    rm minimatch-10.2.5.tgz
-
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./
 

@@ -222,11 +222,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             })
                     }
 
-                    // Auto-index to vector store for semantic search asynchronously
-                    // to avoid blocking the fast-path DB commit response.
-                    void autoIndexEntry(vectorManager, entry.id, entry.content).catch()
-                    const indexStatus = 'queued'
-
                     // Share with team if requested
                     let sharedWithTeam = false
                     let author: string | undefined
@@ -267,16 +262,15 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             })
                             // Rollback the personal entry to prevent partial commit
                             db.deleteEntry(entry.id, true)
-                            if (vectorManager) {
-                                try {
-                                    vectorManager.removeEntry(entry.id)
-                                } catch {
-                                    /* ignore */
-                                }
-                            }
                             throw error
                         }
                     }
+
+                    // Auto-index to vector store for semantic search asynchronously
+                    // to avoid blocking the fast-path DB commit response.
+                    // This is done after team DB share to prevent async embeddings from surviving a rollback.
+                    void autoIndexEntry(vectorManager, entry.id, entry.content).catch()
+                    const indexStatus = 'queued'
 
                     return {
                         success: true,

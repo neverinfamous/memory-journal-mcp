@@ -35,6 +35,7 @@ const TeamExportMarkdownSchema = z.object({
     start_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE).optional(),
     tags: z.array(z.string()).optional(),
+    project_number: z.number(),
     limit: z.number().max(500).optional().default(100),
 })
 
@@ -43,6 +44,7 @@ const TeamExportMarkdownSchemaMcp = z.object({
     start_date: z.string().optional().describe('Start date filter (YYYY-MM-DD)'),
     end_date: z.string().optional().describe('End date filter (YYYY-MM-DD)'),
     tags: z.array(z.string()).optional().describe('Filter by tags'),
+    project_number: relaxedNumber(),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -62,6 +64,7 @@ const TeamExportMarkdownOutputSchema = z
 const TeamImportMarkdownSchema = z.object({
     source_dir: z.string().min(1),
     dry_run: z.boolean().optional().default(false),
+    project_number: z.number(),
     limit: z.number().max(500).optional().default(100),
 })
 
@@ -72,6 +75,7 @@ const TeamImportMarkdownSchemaMcp = z.object({
         .optional()
         .default(false)
         .describe('Parse and validate without writing to database'),
+    project_number: relaxedNumber(),
     limit: relaxedNumber()
         .optional()
         .default(100)
@@ -163,9 +167,13 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                         entries = teamDb.searchByDateRange(startDate, endDate, {
                             tags: input.tags,
                             limit,
+                            projectNumber: input.project_number,
                         })
                     } else {
-                        entries = teamDb.getRecentEntries(limit)
+                        entries = teamDb.searchEntries('', {
+                            limit,
+                            projectNumber: input.project_number
+                        })
                     }
 
                     await sendProgress(
@@ -236,6 +244,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                             dry_run: input.dry_run,
                             limit: input.limit,
                             author,
+                            project_number: input.project_number,
                         },
                         context.teamVectorManager,
                         allowedRoots

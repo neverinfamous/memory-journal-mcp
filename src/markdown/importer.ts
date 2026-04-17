@@ -27,6 +27,8 @@ export interface ImportOptions {
     limit?: number
     /** Author name for new entries (team journal) */
     author?: string
+    /** Associate imported entries with a specific GitHub project number */
+    project_number?: number
 }
 
 /** Result of an import operation */
@@ -114,7 +116,7 @@ export async function importMarkdownEntries(
     vectorManager: VectorSearchManager | undefined,
     allowedRoots: string[]
 ): Promise<ImportResult> {
-    const { dry_run = false, limit = 100, author } = options
+    const { dry_run = false, limit = 100, author, project_number } = options
     
     // Dynamically enforce bounded root
     assertSafeDirectoryPath(sourceDir, allowedRoots)
@@ -211,6 +213,7 @@ export async function importMarkdownEntries(
                         }),
                         // SEC-2.4: Preserve author attribution from team import options
                         ...(author !== undefined && { author }),
+                        ...(project_number !== undefined && { projectNumber: project_number }),
                     })
                     entryId = newEntry.id
                     result.created++
@@ -226,6 +229,7 @@ export async function importMarkdownEntries(
                     }),
                     // SEC-2.4: Preserve author attribution from team import options
                     ...(author !== undefined && { author }),
+                    ...(project_number !== undefined && { projectNumber: project_number }),
                 })
                 entryId = newEntry.id
                 result.created++

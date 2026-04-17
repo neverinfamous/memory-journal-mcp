@@ -44,16 +44,11 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const searchLimit =
                         tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT) : limit
 
-                    let entries
-                    if (query || project_number !== undefined) {
-                        entries = teamDb.searchEntries(query || '', {
-                            limit: searchLimit,
-                            sortBy: sort_by,
-                            projectNumber: project_number,
-                        })
-                    } else {
-                        entries = teamDb.getRecentEntries(searchLimit, undefined, sort_by)
-                    }
+                    let entries = teamDb.searchEntries(query ?? '', {
+                        limit: searchLimit,
+                        sortBy: sort_by,
+                        projectNumber: project_number,
+                    })
 
                     // Filter by tags if provided (batch query instead of N+1)
                     if (tags && tags.length > 0) {

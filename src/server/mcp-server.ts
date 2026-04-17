@@ -240,6 +240,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
         }
     }
 
+    logger.info('IO sandbox configured', {
+        module: 'McpServer',
+        allowedRoots: allowedIoRoots,
+    })
+
     const baseConfig: ToolHandlerConfig = {
         defaultProjectNumber,
         projectRegistry: options.projectRegistry,

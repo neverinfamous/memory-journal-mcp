@@ -33,7 +33,8 @@ describe('Team Relationship Tool Handlers', () => {
         // Seed entries for linking
         const res1 = (await callTool(
             'team_create_entry',
-            { content: 'Node A', tags: ['node-tag'] },
+            {
+                project_number: 1, content: 'Node A', tags: ['node-tag'] },
             personalDb,
             undefined,
             undefined,
@@ -43,7 +44,8 @@ describe('Team Relationship Tool Handlers', () => {
         )) as any
         const res2 = (await callTool(
             'team_create_entry',
-            { content: 'Node B', tags: ['node-tag'] },
+            {
+                project_number: 1, content: 'Node B', tags: ['node-tag'] },
             personalDb,
             undefined,
             undefined,
@@ -53,7 +55,8 @@ describe('Team Relationship Tool Handlers', () => {
         )) as any
         const res3 = (await callTool(
             'team_create_entry',
-            { content: 'Node C' },
+            {
+                project_number: 1, content: 'Node C' },
             personalDb,
             undefined,
             undefined,
@@ -188,7 +191,8 @@ describe('Team Relationship Tool Handlers', () => {
         it('should visualize relationships from entry ID with depth', async () => {
             const result = (await callTool(
                 'team_visualize_relationships',
-                { entry_id: e1, depth: 2 },
+                {
+                project_number: 1, entry_id: e1, depth: 2 },
                 personalDb,
                 undefined,
                 undefined,
@@ -208,7 +212,8 @@ describe('Team Relationship Tool Handlers', () => {
         it('should visualize relationships by tag', async () => {
             const result = (await callTool(
                 'team_visualize_relationships',
-                { tag: 'node-tag' },
+                {
+                project_number: 1, tag: 'node-tag' },
                 personalDb,
                 undefined,
                 undefined,
@@ -229,7 +234,8 @@ describe('Team Relationship Tool Handlers', () => {
         it('should visualize recent relationships (default)', async () => {
             const result = (await callTool(
                 'team_visualize_relationships',
-                {},
+                {
+                project_number: 1,},
                 personalDb,
                 undefined,
                 undefined,
@@ -246,7 +252,8 @@ describe('Team Relationship Tool Handlers', () => {
         it('should return empty graph if no entries match', async () => {
             const result = (await callTool(
                 'team_visualize_relationships',
-                { tag: 'nonexistent-tag' },
+                {
+                project_number: 1, tag: 'nonexistent-tag' },
                 personalDb,
                 undefined,
                 undefined,
@@ -262,7 +269,8 @@ describe('Team Relationship Tool Handlers', () => {
         })
 
         it('should return error if team DB is not configured', async () => {
-            const result = (await callTool('team_visualize_relationships', {}, personalDb)) as any
+            const result = (await callTool('team_visualize_relationships', {
+                project_number: 1,}, personalDb)) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')

@@ -44,7 +44,8 @@ describe('Team Tool Handlers', () => {
         it('should create team entry with auto-detected author', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                { content: 'Team entry alpha' },
+                {
+                project_number: 1, content: 'Team entry alpha' },
                 personalDb,
                 undefined,
                 undefined,
@@ -62,7 +63,8 @@ describe('Team Tool Handlers', () => {
         it('should use explicit author when provided', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                { content: 'Entry by Alice', author: 'Alice' },
+                {
+                project_number: 1, content: 'Entry by Alice', author: 'Alice' },
                 personalDb,
                 undefined,
                 undefined,
@@ -79,6 +81,7 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_create_entry',
                 {
+                project_number: 1,
                     content: 'Tagged team entry',
                     entry_type: 'project_decision',
                     tags: ['team-tag-1', 'team-tag-2'],
@@ -99,7 +102,8 @@ describe('Team Tool Handlers', () => {
         it('should return error when team DB not configured', async () => {
             const result = (await callTool(
                 'team_create_entry',
-                { content: 'Should fail' },
+                {
+                project_number: 1, content: 'Should fail' },
                 personalDb
                 // No teamDb passed
             )) as { success: boolean; error: string }
@@ -117,7 +121,8 @@ describe('Team Tool Handlers', () => {
         it('should return recent team entries with author', async () => {
             const result = (await callTool(
                 'team_get_recent',
-                { limit: 5 },
+                {
+                project_number: 1, limit: 5 },
                 personalDb,
                 undefined,
                 undefined,
@@ -136,7 +141,8 @@ describe('Team Tool Handlers', () => {
         it('should respect limit', async () => {
             const result = (await callTool(
                 'team_get_recent',
-                { limit: 1 },
+                {
+                project_number: 1, limit: 1 },
                 personalDb,
                 undefined,
                 undefined,
@@ -149,7 +155,8 @@ describe('Team Tool Handlers', () => {
         })
 
         it('should return error when team DB not configured', async () => {
-            const result = (await callTool('team_get_recent', {}, personalDb)) as {
+            const result = (await callTool('team_get_recent', {
+                project_number: 1,}, personalDb)) as {
                 success: boolean
                 error: string
             }
@@ -167,7 +174,8 @@ describe('Team Tool Handlers', () => {
         it('should search team entries by query', async () => {
             await callTool(
                 'team_create_entry',
-                { content: 'Searchable team xyz987' },
+                {
+                project_number: 1, content: 'Searchable team xyz987' },
                 personalDb,
                 undefined,
                 undefined,
@@ -178,7 +186,8 @@ describe('Team Tool Handlers', () => {
 
             const result = (await callTool(
                 'team_search',
-                { query: 'xyz987' },
+                {
+                project_number: 1, query: 'xyz987' },
                 personalDb,
                 undefined,
                 undefined,
@@ -193,7 +202,8 @@ describe('Team Tool Handlers', () => {
         it('should search by tags', async () => {
             await callTool(
                 'team_create_entry',
-                { content: 'Tag-searchable entry', tags: ['unique-search-tag'] },
+                {
+                project_number: 1, content: 'Tag-searchable entry', tags: ['unique-search-tag'] },
                 personalDb,
                 undefined,
                 undefined,
@@ -204,7 +214,8 @@ describe('Team Tool Handlers', () => {
 
             const result = (await callTool(
                 'team_search',
-                { tags: ['unique-search-tag'] },
+                {
+                project_number: 1, tags: ['unique-search-tag'] },
                 personalDb,
                 undefined,
                 undefined,
@@ -217,7 +228,8 @@ describe('Team Tool Handlers', () => {
         })
 
         it('should return error when team DB not configured', async () => {
-            const result = (await callTool('team_search', { query: 'test' }, personalDb)) as {
+            const result = (await callTool('team_search', {
+                project_number: 1, query: 'test' }, personalDb)) as {
                 success: boolean
                 error: string
             }
@@ -235,7 +247,7 @@ describe('Team Tool Handlers', () => {
         it('should share entry to team DB when share_with_team is true', async () => {
             const result = (await callTool(
                 'create_entry',
-                { content: 'Shared to team abc123', share_with_team: true },
+                { content: 'Shared to team abc123', share_with_team: true, project_number: 1 },
                 personalDb,
                 undefined,
                 undefined,
@@ -256,7 +268,8 @@ describe('Team Tool Handlers', () => {
             // Verify the entry exists in team DB
             const teamResults = (await callTool(
                 'team_search',
-                { query: 'abc123' },
+                {
+                project_number: 1, query: 'abc123' },
                 personalDb,
                 undefined,
                 undefined,

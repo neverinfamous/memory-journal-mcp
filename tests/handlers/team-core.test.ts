@@ -26,7 +26,8 @@ describe('Team Core Tool Handlers', () => {
 
         const r1 = (await callTool(
             'team_create_entry',
-            { content: 'Core test 1', tags: ['core-1', 'shared'] },
+            {
+                project_number: 1, content: 'Core test 1', tags: ['core-1', 'shared'] },
             personalDb,
             undefined,
             undefined,
@@ -37,7 +38,8 @@ describe('Team Core Tool Handlers', () => {
         entry1Id = r1.entry.id
         await callTool(
             'team_create_entry',
-            { content: 'Core test 2', tags: ['shared'] },
+            {
+                project_number: 1, content: 'Core test 2', tags: ['shared'] },
             personalDb,
             undefined,
             undefined,
@@ -60,7 +62,8 @@ describe('Team Core Tool Handlers', () => {
         it('should get a team entry by id', async () => {
             const result = (await callTool(
                 'team_get_entry_by_id',
-                { entry_id: entry1Id },
+                {
+                project_number: 1, entry_id: entry1Id },
                 personalDb,
                 undefined,
                 undefined,
@@ -76,7 +79,8 @@ describe('Team Core Tool Handlers', () => {
         it('should return error if not found', async () => {
             const result = (await callTool(
                 'team_get_entry_by_id',
-                { entry_id: 9999 },
+                {
+                project_number: 1, entry_id: 9999 },
                 personalDb,
                 undefined,
                 undefined,
@@ -91,7 +95,8 @@ describe('Team Core Tool Handlers', () => {
         it('should return error if no team db', async () => {
             const result = (await callTool(
                 'team_get_entry_by_id',
-                { entry_id: entry1Id },
+                {
+                project_number: 1, entry_id: entry1Id },
                 personalDb
             )) as any
             expect(result.success).toBe(false)
@@ -103,7 +108,8 @@ describe('Team Core Tool Handlers', () => {
         it('should get recent entries', async () => {
             const result = (await callTool(
                 'team_get_recent',
-                { limit: 10 },
+                {
+                project_number: 1, limit: 10 },
                 personalDb,
                 undefined,
                 undefined,
@@ -117,7 +123,8 @@ describe('Team Core Tool Handlers', () => {
         })
 
         it('should return error if no team db', async () => {
-            const result = (await callTool('team_get_recent', { limit: 10 }, personalDb)) as any
+            const result = (await callTool('team_get_recent', {
+                project_number: 1, limit: 10 }, personalDb)) as any
             expect(result.success).toBe(false)
         })
     })
@@ -126,7 +133,8 @@ describe('Team Core Tool Handlers', () => {
         it('should list tags', async () => {
             const result = (await callTool(
                 'team_list_tags',
-                {},
+                {
+                project_number: 1,},
                 personalDb,
                 undefined,
                 undefined,
@@ -141,7 +149,8 @@ describe('Team Core Tool Handlers', () => {
         })
 
         it('should return error if no team db', async () => {
-            const result = (await callTool('team_list_tags', {}, personalDb)) as any
+            const result = (await callTool('team_list_tags', {
+                project_number: 1,}, personalDb)) as any
             expect(result.success).toBe(false)
         })
     })

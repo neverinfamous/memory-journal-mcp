@@ -25,7 +25,8 @@ describe('Team Search Tool Handlers', () => {
 
         const r1 = (await callTool(
             'team_create_entry',
-            { content: 'Strategic Search test 1', tags: ['strategy', 'shared'] },
+            {
+                project_number: 1, content: 'Strategic Search test 1', tags: ['strategy', 'shared'] },
             personalDb,
             undefined,
             undefined,
@@ -35,7 +36,8 @@ describe('Team Search Tool Handlers', () => {
         )) as any
         const r2 = (await callTool(
             'team_create_entry',
-            { content: 'Tactical Search test 2', tags: ['tactics'] },
+            {
+                project_number: 1, content: 'Tactical Search test 2', tags: ['tactics'] },
             personalDb,
             undefined,
             undefined,
@@ -61,7 +63,8 @@ describe('Team Search Tool Handlers', () => {
         it('should search team entries', async () => {
             const result = (await callTool(
                 'team_search',
-                { query: 'Strategic' },
+                {
+                project_number: 1, query: 'Strategic' },
                 personalDb,
                 undefined,
                 undefined,
@@ -75,7 +78,8 @@ describe('Team Search Tool Handlers', () => {
         })
 
         it('should return error if no team db', async () => {
-            const result = (await callTool('team_search', { query: 'test' }, personalDb)) as any
+            const result = (await callTool('team_search', {
+                project_number: 1, query: 'test' }, personalDb)) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('not configured')
         })
@@ -86,6 +90,7 @@ describe('Team Search Tool Handlers', () => {
             const result = (await callTool(
                 'team_search_by_date_range',
                 {
+                project_number: 1,
                     start_date: '2020-01-01',
                     end_date: '2030-01-01',
                     tags: ['shared'],
@@ -107,6 +112,7 @@ describe('Team Search Tool Handlers', () => {
             const result = (await callTool(
                 'team_search_by_date_range',
                 {
+                project_number: 1,
                     start_date: '2030-01-01',
                     end_date: '2020-01-01',
                 },
@@ -125,7 +131,8 @@ describe('Team Search Tool Handlers', () => {
         it('should return error if no team db', async () => {
             const result = (await callTool(
                 'team_search_by_date_range',
-                { start_date: '2020-01-01' },
+                {
+                project_number: 1, start_date: '2020-01-01' },
                 personalDb
             )) as any
             expect(result.success).toBe(false)

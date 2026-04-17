@@ -294,6 +294,7 @@ test.describe('Errors: Team', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'team_get_entry_by_id', {
+                project_number: 1,
                 entry_id: 999999999,
             })
             expectHandlerError(p)
@@ -306,6 +307,7 @@ test.describe('Errors: Team', () => {
         const client = await createClient()
         try {
             const p = await callToolAndParse(client, 'team_search_by_date_range', {
+                project_number: 1,
                 start_date: '2030-12-31',
                 end_date: '2020-01-01',
             })
@@ -321,6 +323,7 @@ test.describe('Errors: Team', () => {
             // Create a team entry so the self-loop test hits the domain check,
             // not a "not found" error
             const create = await callToolAndParse(client, 'team_create_entry', {
+                project_number: 1,
                 content: 'Team self-loop test entry',
                 entry_type: 'test_entry',
             })

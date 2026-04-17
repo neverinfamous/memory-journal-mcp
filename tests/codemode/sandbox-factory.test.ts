@@ -105,7 +105,7 @@ describe('Sandbox Factory', () => {
         it('should return Worker info', () => {
             const info = getSandboxModeInfo('worker')
             expect(info.mode).toBe('worker')
-            expect(info.securityLevel).toBe('production')
+            expect(info.securityLevel).toBe('trusted_admin')
             expect(info.description).toContain('Worker-thread')
             expect(info.isolation).toContain('V8 isolate')
         })

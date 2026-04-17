@@ -104,3 +104,6 @@
 - **Testing**: Fixed Vitest false-positive test cases within resource tests by explicitly mapping strict `allowedIoRoots` bounds to accurately mock path traversal validation execution paths.
 - **Testing**: Aligned assertions within `codemode-tools.test.ts` to strictly evaluate against properly shaped "Result string exceeds" fail-closed boundary exceptions.
 - **Database**: Extended native isolation patterns by verifying `project_number` filter injection directly interfaces with cross-tenant boundaries across team query protocols (`search-tools.ts`).
+- **Testing**: Restored complete verification suite integrity by correcting stricter payload typings for MCP `ResourceContents` unions across E2E test assertions.
+- **Testing**: Fixed false-positive omissions inside `resources-briefing-env.spec.ts` by actively populating strict tenancy variables inside testing payloads.
+- **Data**: Upgraded `ImportOptions` and `team_import_markdown` to correctly map `project_number` declarations directly down into SQLite adapter insertions.

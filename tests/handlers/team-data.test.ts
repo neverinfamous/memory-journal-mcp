@@ -31,7 +31,8 @@ describe('Team Backup and Export Tool Handlers', () => {
         // Seed entries for export/backup
         const r1 = (await callTool(
             'team_create_entry',
-            { content: 'Export test 1', tags: ['export-1'], entry_type: 'technical_note' },
+            {
+                project_number: 1, content: 'Export test 1', tags: ['export-1'], entry_type: 'technical_note' },
             personalDb,
             undefined,
             undefined,
@@ -41,7 +42,8 @@ describe('Team Backup and Export Tool Handlers', () => {
         )) as any
         const r2 = (await callTool(
             'team_create_entry',
-            { content: 'Export test 2', entry_type: 'project_decision' },
+            {
+                project_number: 1, content: 'Export test 2', entry_type: 'project_decision' },
             personalDb,
             undefined,
             undefined,
@@ -79,7 +81,8 @@ describe('Team Backup and Export Tool Handlers', () => {
         it('should export team entries in JSON format', async () => {
             const result = (await callTool(
                 'team_export_entries',
-                { format: 'json' },
+                {
+                project_number: 1, format: 'json' },
                 personalDb,
                 undefined,
                 undefined,
@@ -99,7 +102,8 @@ describe('Team Backup and Export Tool Handlers', () => {
         it('should export team entries in Markdown format', async () => {
             const result = (await callTool(
                 'team_export_entries',
-                { format: 'markdown' },
+                {
+                project_number: 1, format: 'markdown' },
                 personalDb,
                 undefined,
                 undefined,
@@ -117,7 +121,8 @@ describe('Team Backup and Export Tool Handlers', () => {
         it('should filter export by tags and entry_type', async () => {
             const result = (await callTool(
                 'team_export_entries',
-                { format: 'json', tags: ['export-1'], entry_type: 'technical_note' },
+                {
+                project_number: 1, format: 'json', tags: ['export-1'], entry_type: 'technical_note' },
                 personalDb,
                 undefined,
                 undefined,
@@ -136,7 +141,8 @@ describe('Team Backup and Export Tool Handlers', () => {
         it('should return error if team DB is not configured', async () => {
             const result = (await callTool(
                 'team_export_entries',
-                { format: 'json' },
+                {
+                project_number: 1, format: 'json' },
                 personalDb
             )) as any
 
@@ -147,14 +153,16 @@ describe('Team Backup and Export Tool Handlers', () => {
 
     describe('team_backup and team_list_backups', () => {
         it('should return error if team DB is not configured for backup', async () => {
-            const result = (await callTool('team_backup', {}, personalDb)) as any
+            const result = (await callTool('team_backup', {
+                project_number: 1,}, personalDb)) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
 
         it('should return error if team DB is not configured for list', async () => {
-            const result = (await callTool('team_list_backups', {}, personalDb)) as any
+            const result = (await callTool('team_list_backups', {
+                project_number: 1,}, personalDb)) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
@@ -163,7 +171,8 @@ describe('Team Backup and Export Tool Handlers', () => {
         it('should create and list team backups', async () => {
             const backupResult = (await callTool(
                 'team_backup',
-                { name: 'test-team-backup' },
+                {
+                project_number: 1, name: 'test-team-backup' },
                 personalDb,
                 undefined,
                 undefined,
@@ -178,7 +187,8 @@ describe('Team Backup and Export Tool Handlers', () => {
 
             const listResult = (await callTool(
                 'team_list_backups',
-                {},
+                {
+                project_number: 1,},
                 personalDb,
                 undefined,
                 undefined,

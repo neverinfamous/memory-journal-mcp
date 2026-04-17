@@ -52,7 +52,8 @@ describe('Team Flag Tool Handlers', () => {
             const result = (await callTeamTool('team_pass_flag', {
                 flag_type: 'needs_review',
                 message: 'Please review',
-                target_user: 'alice'
+                target_user: 'alice',
+                project_number: 1
             })) as Record<string, any>
 
             expect(result.success).toBe(true)
@@ -78,14 +79,16 @@ describe('Team Flag Tool Handlers', () => {
         it('should resolve an active flag', async () => {
             const createResult = (await callTeamTool('team_pass_flag', {
                 flag_type: 'blocker',
-                message: 'blocked on database migration'
+                message: 'blocked on database migration',
+                project_number: 1
             })) as Record<string, any>
             
             const flagId = createResult.entry.id
 
             const resolveResult = (await callTeamTool('team_resolve_flag', {
                 flag_id: flagId,
-                resolution: 'migration complete'
+                resolution: 'migration complete',
+                project_number: 1
             })) as Record<string, any>
 
             expect(resolveResult.success).toBe(true)

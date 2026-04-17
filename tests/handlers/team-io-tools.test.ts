@@ -44,6 +44,7 @@ describe('getTeamIoTools', () => {
         return {
             teamDb: {
                 getRecentEntries: vi.fn().mockReturnValue([]),
+                searchEntries: vi.fn().mockReturnValue([]),
             },
             progress: null,
         }
@@ -69,7 +70,7 @@ describe('getTeamIoTools', () => {
             const handler = getTeamIoTools(context).find(
                 (t) => t.name === 'team_export_markdown'
             )!.handler
-            const result = (await handler({ output_dir: '/tmp/team-out' })) as any
+            const result = (await handler({ output_dir: '/tmp/team-out', project_number: 1 })) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team collaboration is not configured')
         })
@@ -84,20 +85,21 @@ describe('getTeamIoTools', () => {
             await handler({
                 output_dir: '/tmp/team-out',
                 start_date: '2025-01-01',
+                project_number: 1,
             })
             expect((context.teamDb as any).searchByDateRange).toHaveBeenCalled()
         })
 
         it('should handle errors during export', async () => {
             const context = createMockContext()
-            context.teamDb.getRecentEntries = vi.fn().mockImplementation(() => {
+            context.teamDb.searchEntries = vi.fn().mockImplementation(() => {
                 throw new Error('Export error')
             })
             const handler = getTeamIoTools(context as never).find(
                 (t) => t.name === 'team_export_markdown'
             )!.handler
 
-            const result = (await handler({ output_dir: '/tmp/team-out' })) as any
+            const result = (await handler({ output_dir: '/tmp/team-out', project_number: 1 })) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Export error')
         })
@@ -108,7 +110,7 @@ describe('getTeamIoTools', () => {
                 (t) => t.name === 'team_export_markdown'
             )!.handler
 
-            const result = (await handler({ output_dir: '/tmp/team-out' })) as Record<
+            const result = (await handler({ output_dir: '/tmp/team-out', project_number: 1 })) as Record<
                 string,
                 unknown
             >
@@ -124,7 +126,7 @@ describe('getTeamIoTools', () => {
             const handler = getTeamIoTools(context).find(
                 (t) => t.name === 'team_import_markdown'
             )!.handler
-            const result = (await handler({ source_dir: '/tmp/team-in' })) as any
+            const result = (await handler({ source_dir: '/tmp/team-in', project_number: 1 })) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team collaboration is not configured')
         })
@@ -134,7 +136,7 @@ describe('getTeamIoTools', () => {
             const handler = getTeamIoTools(context as never).find(
                 (t) => t.name === 'team_import_markdown'
             )!.handler
-            const result = (await handler({ source_dir: '/tmp/team-in', limit: 1000 })) as any
+            const result = (await handler({ source_dir: '/tmp/team-in', limit: 1000, project_number: 1 })) as any
             expect(result.success).toBe(false)
         })
 
@@ -144,7 +146,7 @@ describe('getTeamIoTools', () => {
                 (t) => t.name === 'team_import_markdown'
             )!.handler
 
-            const result = (await handler({ source_dir: '/tmp/team-in' })) as Record<
+            const result = (await handler({ source_dir: '/tmp/team-in', project_number: 1 })) as Record<
                 string,
                 unknown
             >
