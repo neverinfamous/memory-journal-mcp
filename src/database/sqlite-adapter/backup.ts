@@ -138,7 +138,11 @@ export class BackupManager {
         assertNoPathTraversal(filename)
 
         const backupsDir = this.ctx.getBackupsDir()
-        const backupPath = path.join(backupsDir, filename)
+        const backupPath = path.resolve(backupsDir, filename)
+        
+        if (!backupPath.startsWith(path.resolve(backupsDir))) {
+            throw new ValidationError(`Path traversal detected during restore resolution.`)
+        }
 
         if (!fs.existsSync(backupPath)) {
             throw new ResourceNotFoundError('Backup', filename)

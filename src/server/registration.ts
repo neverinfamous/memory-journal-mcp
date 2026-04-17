@@ -18,6 +18,7 @@ import type { ServerRuntime } from '../utils/maintenance-lock.js'
 import { getAuthContext } from '../auth/auth-context.js'
 import { hasScope, SCOPES } from '../auth/scopes.js'
 import { InsufficientScopeError } from '../auth/index.js'
+import { ConfigurationError } from '../types/errors.js'
 
 // ============================================================================
 // Types
@@ -107,7 +108,7 @@ export function registerResources(
                     const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
                     return auditOperation(auditLog, 'resource', resDef.name, async () => {
                         if (!runtime && process.env['NODE_ENV'] !== 'test') {
-                            throw new Error('ServerRuntime is logically required for secure resource execution.')
+                            throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
                         }
                         return runtime ? runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType)) : handleResourceRead(uri, mimeType)
                     })
@@ -136,7 +137,7 @@ export function registerResources(
                 const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
                 return auditOperation(auditLog, 'resource', resDef.name, async () => {
                     if (!runtime && process.env['NODE_ENV'] !== 'test') {
-                        throw new Error('ServerRuntime is logically required for secure resource execution.')
+                        throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
                     }
                     return runtime ? runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType)) : handleResourceRead(uri, mimeType)
                 })
@@ -200,7 +201,7 @@ export function registerPrompts(
                 const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
                 return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
                     if (!runtime && process.env['NODE_ENV'] !== 'test') {
-                        throw new Error('ServerRuntime is logically required for secure prompt execution.')
+                        throw new ConfigurationError('ServerRuntime is logically required for secure prompt execution.')
                     }
                     
                     const executePrompt = (): Promise<{ messages: { role: 'user' | 'assistant'; content: { type: 'text'; text: string } }[] }> => {

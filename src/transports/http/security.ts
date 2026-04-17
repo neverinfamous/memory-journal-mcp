@@ -53,11 +53,11 @@ export function checkRateLimit(
     const clientIdentity = typeof subject === 'string' && subject ? subject : getClientIp(req, config.trustProxy ?? false)
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
-    const maxRequests =
-        config.rateLimitMaxRequests ??
-        (process.env['MCP_RATE_LIMIT_MAX']
-            ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10)
-            : DEFAULT_RATE_LIMIT_MAX_REQUESTS)
+    let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX'] ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10) : NaN
+    if (Number.isNaN(envMaxRequests) || envMaxRequests <= 0) {
+        envMaxRequests = DEFAULT_RATE_LIMIT_MAX_REQUESTS
+    }
+    const maxRequests = config.rateLimitMaxRequests ?? envMaxRequests
 
     const entry = rateLimitMap.get(clientIdentity)
 

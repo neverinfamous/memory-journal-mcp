@@ -446,7 +446,7 @@ describe('Tool Handlers', () => {
 
     describe('callTool - error handling', () => {
         it('should throw for unknown tool', async () => {
-            await expect(callTool('nonexistent_tool', {}, db)).rejects.toThrow('Unknown tool')
+            await expect(callTool('nonexistent_tool', {}, db)).rejects.toThrow('Tool not found: nonexistent_tool')
         })
     })
 

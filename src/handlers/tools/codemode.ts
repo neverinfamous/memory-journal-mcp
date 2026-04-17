@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { relaxedNumber } from './schemas.js'
+import { ConfigurationError } from '../../types/errors.js'
 import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
@@ -355,6 +356,9 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // when available. This ensures scope checks, maintenance-mode guards,
                     // and audit interception apply to all inner tool calls.
                     const dispatcher = sessionContext.config?.dispatch
+                    if (!dispatcher && process.env['NODE_ENV'] !== 'test') {
+                        throw new ConfigurationError('Code Mode requires a secure dispatcher to ensure scope checks and audit interception.')
+                    }
                     const api = createJournalApi(tools, dispatcher)
                     const bindings = api.createSandboxBindings()
 

@@ -42,7 +42,7 @@ import { getAuthContext } from '../../auth/auth-context.js'
 import { getRequiredScope } from '../../auth/scope-map.js'
 import { hasScope } from '../../auth/scopes.js'
 import { logger } from '../../utils/logger.js'
-import { PermissionError } from '../../types/errors.js'
+import { PermissionError, ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -308,11 +308,11 @@ export async function callTool(
     const tool = mapToUse.get(name)
 
     if (!tool) {
-        return Promise.reject(new Error(`Unknown tool: ${name}`))
+        throw new ResourceNotFoundError('Tool', name)
     }
 
     if (!config?.runtime?.maintenanceManager && process.env['NODE_ENV'] !== 'test') {
-        return Promise.reject(new Error('ServerRuntime is logically required for secure tool execution. Please initialize the server correctly.'))
+        throw new ConfigurationError('ServerRuntime is logically required for secure tool execution. Please initialize the server correctly.')
     }
 
     // Authorization Hook: Enforce scope if auth context exists

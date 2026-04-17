@@ -214,6 +214,7 @@ describe('Handler Error Branches', () => {
             const mockProgress = {
                 progressToken: 'test-token',
                 sendProgress: vi.fn(),
+                server: {} as any,
             }
 
             // test_simple is a trivial tool that always works
@@ -238,7 +239,7 @@ describe('Handler Error Branches', () => {
     describe('callTool — unknown tool', () => {
         it('should reject with Error for unknown tool name', async () => {
             await expect(callTool('nonexistent_tool_xyz', {}, db)).rejects.toThrow(
-                'Unknown tool: nonexistent_tool_xyz'
+                'Tool not found: nonexistent_tool_xyz'
             )
         })
     })

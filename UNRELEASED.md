@@ -3,6 +3,9 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
 ### Security
+- **Config**: Hardened configuration parsing logic for HTTP `MCP_RATE_LIMIT_MAX` variables by trapping `NaN` parameters and explicitly enforcing safe threshold clamping.
+- **Boundaries**: Hardened SQLite backup restoration flows with strict symmetric boundary validations (`path.resolve`) to neutralize zero-day symlink path-traversal hazards.
+- **Codemode**: Fortified API instance generation by introducing a hard fail-closed constraint requiring strict dispatcher verification bounds.
 - **Auth**: Enforced strict tool-to-scope verification during MCP server initialization, forcing the server to hard-fault if any tool group is discovered without a mapped scope boundary.
 - **Auth**: Modified TokenValidator configuration to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured or inaccessible.
 - **Codemode**: Removed the legacy filter bypass for Code Mode tools; executing `mj_execute_code` now cleanly respects the active session's `--tool-filter` context, including when exclusively scoped to Code Mode.
@@ -21,6 +24,8 @@
 - **GitHub**: Integrated native `AbortController` signaling for all GitHub integration API requests, resolving runaway Octokit network queries during global task timeouts.
 
 ### Fixed
+- **API**: Modernized server execution dispatchers (`callTool`, `registration`) by scrubbing unsafe global fallback references and mapping missing bounds directly into normalized `ConfigurationError` and `ResourceNotFoundError` structure traps.
+- **CLI**: Corrected false-positive `--cors-origin` tooltip configurations back to its `none` permissive-reality baseline.
 - **CLI/Execution**: Resolved false-positive path traversal errors preventing server initialization on Windows by removing sandbox boundary restraints incorrectly applied to raw `PROJECT_REGISTRY` environment mappings and explicit root database CLI arguments (`--db`, `--team-db`).
 - **Testing**: Fixed persistent `beforeAll` E2E test suite timeout loops in `payloads-github-degradation.spec.ts` bypassing `sqlite-vec` process crashes caused by mismatched directory creation depths relative to `tmpdir()`.
 - **Testing**: Remediated TypeScript strict-mode adherence inside `tests/auth/auth-context.test.ts` and `targeted-gap-closure-2.test.ts` by ensuring mocked `AuthenticatedContext` interfaces completely implement `scopes`, `exp`, and `iat` JWT claims structure.
