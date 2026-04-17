@@ -176,7 +176,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: async (params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
@@ -222,8 +222,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             })
                     }
 
-                    // Auto-index to vector store for semantic search
-                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
+                    // Auto-index to vector store for semantic search asynchronously
+                    // to avoid blocking the fast-path DB commit response.
+                    void autoIndexEntry(vectorManager, entry.id, entry.content).catch()
+                    const indexStatus = 'queued'
 
                     // Share with team if requested
                     let sharedWithTeam = false
@@ -352,13 +354,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: async (params: unknown) => {
+            handler: (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
                     const entry = db.createEntry({ content })
 
-                    // Auto-index to vector store for semantic search
-                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
+                    // Auto-index to vector store for semantic search asynchronously
+                    void autoIndexEntry(vectorManager, entry.id, entry.content).catch()
+                    const indexStatus = 'queued'
 
                     return { success: true, entry, indexStatus }
                 } catch (err) {

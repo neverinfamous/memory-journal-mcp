@@ -57,6 +57,14 @@ export function checkRateLimit(
     const entry = rateLimitMap.get(clientIdentity)
 
     if (!entry || now > entry.resetTime) {
+        // Enforce hard cap to prevent Map OOM from unbounded IP spoofing
+        if (rateLimitMap.size >= 10000 && !rateLimitMap.has(clientIdentity)) {
+            // Evict an arbitrary old entry (Map iteration preserves insertion order)
+            const firstKey = rateLimitMap.keys().next().value
+            if (firstKey !== undefined) {
+                rateLimitMap.delete(firstKey)
+            }
+        }
         rateLimitMap.set(clientIdentity, { count: 1, resetTime: now + windowMs })
         return { allowed: true }
     }

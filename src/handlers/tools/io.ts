@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { sendProgress } from '../../utils/progress-utils.js'
+import { logger } from '../../utils/logger.js'
 
 import { exportEntriesToMarkdown } from '../../markdown/index.js'
 import { importMarkdownEntries } from '../../markdown/index.js'
@@ -65,6 +66,7 @@ const ExportEntriesOutputSchema = z
         entries: z.array(EntryOutputSchema).optional(),
         count: z.number().optional(),
         content: z.string().optional(),
+        truncated: z.boolean().optional().describe('True if the results were truncated to fit within payload limits'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })
@@ -204,6 +206,29 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             .slice(0, limit)
                     }
 
+                    // Enforce < 5MB payload ceiling (approximate based on content + overhead)
+                    const MAX_PAYLOAD_BYTES = 5 * 1024 * 1024
+                    let currentBytes = 0
+                    const boundedEntries: typeof entries = []
+                    let truncated = false
+
+                    for (const entry of entries) {
+                        const entrySize = Buffer.byteLength(entry.content, 'utf8') + 500
+                        if (currentBytes + entrySize > MAX_PAYLOAD_BYTES) {
+                            truncated = true
+                            logger.warning('Export payload exceeded 5MB cap, truncating results', {
+                                module: 'IO',
+                                limit,
+                                actualCount: boundedEntries.length
+                            })
+                            break
+                        }
+                        currentBytes += entrySize
+                        boundedEntries.push(entry)
+                    }
+                    
+                    entries = boundedEntries
+
                     await sendProgress(
                         progress,
                         1,
@@ -220,11 +245,11 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             .join('\n\n')
 
                         await sendProgress(progress, 2, 2, 'Export complete')
-                        return { format: 'markdown', content: md }
+                        return { format: 'markdown', content: md, count: entries.length, truncated }
                     }
 
                     await sendProgress(progress, 2, 2, 'Export complete')
-                    return { format: 'json', entries, count: entries.length }
+                    return { format: 'json', entries, count: entries.length, truncated }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

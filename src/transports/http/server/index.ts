@@ -183,6 +183,12 @@ export class HttpTransport {
                     throw new Error(errorMsg)
                 }
             }
+
+            if (!isLocalhost && !this.config.publicOrigin) {
+                const errorMsg = `FATAL: OAuth is enabled on a non-loopback interface ('${host}'), but no 'publicOrigin' was provided. You MUST specify an explicit public origin (e.g. 'https://api.example.com') for secure OAuth token audience binding.`
+                logger.error(errorMsg, { module: 'HTTP' })
+                throw new Error(errorMsg)
+            }
             
             // OAuth 2.1 authentication
             const jwksUri =

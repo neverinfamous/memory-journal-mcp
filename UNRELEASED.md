@@ -3,6 +3,12 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
 ### Security
+- **Architecture**: Decoupled `createServerInstance` from synchronous database connection querying (`db.getRecentEntries(1)`) to enforce deterministic, constant-time connection boundaries, moving the context dependency exclusively to the required `memory://briefing` capability.
+- **Vectors**: Hardened base persistent database durability by moving ML vector semantic indexing off the synchronous write path, deferring them to an asynchronous `indexStatus: 'queued'` execution model preventing upstream ML latency faults.
+- **Codemode**: Synchronized dynamic execution limits by securely piping the `CODE_MODE_MAX_RESULT_SIZE` limit into the `worker_threads` sandbox execution payload, eliminating the unsafe hard-coded 100KB limits.
+- **Auth**: Upgraded network topological trust boundaries by throwing explicit initialization failures if OAuth properties are configured for a non-loopback host without an explicit `publicOrigin` declaration.
+- **DoS**: Shielded HTTP proxy and telemetry identity maps against memory-exhaustion (OOM) by capping the IP `rateLimitMap` and `userCounts` map to 10,000 keys with controlled fallback degradation to `"other"` buckets or graceful cache eviction.
+- **Payloads**: Prevented Multi-Megabyte JSON export crashes across `export_entries` by integrating algorithmic byte-estimators, truncating large request records cresting ~5MB overhead and returning a `truncated: true` system flag.
 - **Config**: Hardened configuration parsing logic for HTTP `MCP_RATE_LIMIT_MAX` variables by trapping `NaN` parameters and explicitly enforcing safe threshold clamping.
 - **Boundaries**: Hardened SQLite backup restoration flows with strict symmetric boundary validations (`path.resolve`) to neutralize zero-day symlink path-traversal hazards.
 - **Codemode**: Fortified API instance generation by introducing a hard fail-closed constraint requiring strict dispatcher verification bounds.

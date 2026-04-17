@@ -298,25 +298,16 @@ export async function createServer(options: ServerOptions): Promise<void> {
         : allTools
 
     const createServerInstance = (): McpServer => {
-        // Fetch latest entry for initial briefing context
-        const recentEntries = db.getRecentEntries(1)
-        const latestEntry = recentEntries[0]
-            ? {
-                  id: recentEntries[0].id,
-                  timestamp: recentEntries[0].timestamp,
-                  entryType: recentEntries[0].entryType,
-                  content: recentEntries[0].content,
-              }
-            : undefined
-        
-        // Generate dynamic instructions based on enabled tools, prompts, and latest entry
+        // Generate dynamic instructions based on enabled tools and prompts
+        // (Latest DB entry is omitted here to decouple session setup from DB latency; 
+        // agents get this context from the mandatory memory://briefing read instead).
         const instructions = generateInstructions(
             enabledToolSet,
             prompts.map((p) => {
                 const prompt = p as { name: string; description?: string }
                 return { name: prompt.name, description: prompt.description }
             }),
-            latestEntry,
+            undefined,
             options.instructionLevel ?? 'standard',
             enabledGroups
         )

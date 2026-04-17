@@ -201,12 +201,17 @@ export class WorkerSandbox {
                 void handleRpcRequest(msg, apiBindings, hostPort)
             })
 
+            const maxResultSize = process.env['CODE_MODE_MAX_RESULT_SIZE'] 
+                ? parseInt(process.env['CODE_MODE_MAX_RESULT_SIZE'], 10) 
+                : 100 * 1024
+
             this.worker?.postMessage({
                 type: 'EXECUTE',
                 id: this.executionId,
                 code,
                 methodList,
                 timeoutMs: effectiveTimeout,
+                maxResultSize: Number.isNaN(maxResultSize) ? 100 * 1024 : maxResultSize,
                 rpcPort: workerPort
             }, [workerPort])
         })

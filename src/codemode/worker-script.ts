@@ -192,9 +192,10 @@ parentPort?.on('message', (msg: unknown) => {
                 code: string
                 methodList: Record<string, string[]>
                 timeoutMs?: number
+                maxResultSize?: number
                 rpcPort: MessagePort
             }
-            const { id, code, methodList, timeoutMs, rpcPort: newRpcPort } = executeMsg
+            const { id, code, methodList, timeoutMs, maxResultSize, rpcPort: newRpcPort } = executeMsg
 
             rpcPort = newRpcPort
             rpcIdCounter = 0
@@ -216,14 +217,15 @@ parentPort?.on('message', (msg: unknown) => {
 
             if (result.success) {
                 try {
-                    // Enforce the 100KB egress limit strictly within the worker
+                    // Enforce egress boundary dynamically
                     const resultJson = JSON.stringify(result.result)
                     
                     if (resultJson) {
                         const byteLength = Buffer.byteLength(resultJson, 'utf8')
-                        if (byteLength > 100 * 1024) {
+                        const egressLimit = maxResultSize ?? 100 * 1024
+                        if (byteLength > egressLimit) {
                             result.success = false
-                            result.error = `Output limit exceeded: Result serialized to ${Math.round(byteLength / 1024)}KB, which exceeds the 100KB boundary. Please aggregate or filter your results to reduce the payload size.`
+                            result.error = `Output limit exceeded: Result serialized to ${Math.round(byteLength / 1024)}KB, which exceeds the ${Math.round(egressLimit / 1024)}KB boundary. Please aggregate or filter your results to reduce the payload size.`
                             result.result = undefined
                         }
                     }
