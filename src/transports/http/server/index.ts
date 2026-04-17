@@ -60,6 +60,7 @@ export class HttpTransport {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat for MCP 2024-11-05 clients
     public readonly sseTransports = new Map<string, SSEServerTransport>()
     public readonly sessionLastActivity = new Map<string, number>()
+    public readonly sessionSubjects = new Map<string, string>()
     /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     public serverConnected = false
     private httpServer: ReturnType<Express['listen']> | null = null
@@ -376,6 +377,7 @@ export class HttpTransport {
         this.sseTransports.clear()
 
         this.sessionLastActivity.clear()
+        this.sessionSubjects.clear()
         if (this.sessionSweepTimer !== null) {
             clearInterval(this.sessionSweepTimer)
         }

@@ -440,7 +440,7 @@ export function generateInstructions(
     // Add latest entry snapshot for immediate context (compact format)
     if (latestEntry) {
         const preview = latestEntry.content.slice(0, 120)
-        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n<untrusted_remote_content>${preview}${latestEntry.content.length > 120 ? '...' : ''}</untrusted_remote_content>\n`
+        instructions += `\n**Latest**: #${String(latestEntry.id)} (${latestEntry.timestamp}) ${latestEntry.entryType}\n> ${preview}${latestEntry.content.length > 120 ? '...' : ''}\n`
     }
 
     // Standard and full levels include GitHub patterns + help pointers

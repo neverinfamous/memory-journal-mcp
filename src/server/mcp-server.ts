@@ -124,12 +124,14 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize vector search manager (lazy loading - model loads on first use)
     const vectorManager = new VectorSearchManager(db)
+    vectorManager.warmup()
     logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
 
     // Initialize team vector search manager if team DB is configured
     let teamVectorManager: VectorSearchManager | undefined
     if (teamDb) {
         teamVectorManager = new VectorSearchManager(teamDb)
+        teamVectorManager.warmup()
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 

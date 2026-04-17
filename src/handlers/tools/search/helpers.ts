@@ -38,6 +38,7 @@ export interface ISearchFilters {
     entryType?: string
     startDate?: string
     endDate?: string
+    includeTeam?: boolean
 }
 
 // ============================================================================

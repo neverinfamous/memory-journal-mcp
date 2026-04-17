@@ -40,6 +40,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
                 sessionId: sseTransport.sessionId,
             })
             ctx.sseTransports.delete(sseTransport.sessionId)
+            ctx.sessionSubjects.delete(sseTransport.sessionId)
         }
 
         // SEC-2.1: Run legacy SSE connection within request context so rate limiting
@@ -50,7 +51,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
                     const newServer = serverFactory()
                     await newServer.connect(sseTransport as Parameters<typeof newServer.connect>[0])
                     ctx.serverConnected = true
-                                    }
+                }
 
                 const priorLock: Promise<void> = ctx.connectionLock ?? Promise.resolve()
                 ctx.connectionLock = priorLock.then(doConnect).catch(doConnect)
@@ -58,6 +59,11 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
 
                 ctx.sseTransports.set(sseTransport.sessionId, sseTransport)
                 ctx.touchSession(sseTransport.sessionId)
+                
+                if (req.auth) {
+                    ctx.sessionSubjects.set(sseTransport.sessionId, req.auth.sub)
+                }
+
                 logger.info('Legacy SSE connection established', {
                     module: 'HTTP',
                     sessionId: sseTransport.sessionId,
@@ -76,11 +82,12 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
         // Clean up when client disconnects
         req.on('close', () => {
             ctx.sseTransports.delete(sseTransport.sessionId)
+            ctx.sessionSubjects.delete(sseTransport.sessionId)
             ctx.sessionLastActivity.delete(sseTransport.sessionId)
         })
     })
 
-    // POST /messages?sessionId=<id> — Route messages to Legacy SSE transport
+    // POST /messages — Route messages to Legacy SSE transport
     app.post('/messages', (req: Request, res: Response): void => {
         const sessionId =
             typeof req.query['sessionId'] === 'string' ? req.query['sessionId'] : undefined
@@ -99,6 +106,16 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
             res.status(404).json({
                 jsonrpc: '2.0',
                 error: { code: JSONRPC_SERVER_ERROR, message: 'Session not found' },
+                id: null,
+            })
+            return
+        }
+
+        const expectedSub = ctx.sessionSubjects.get(sessionId)
+        if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+            res.status(403).json({
+                jsonrpc: '2.0',
+                error: { code: JSONRPC_SERVER_ERROR, message: 'Forbidden: Session belongs to a different subject' },
                 id: null,
             })
             return

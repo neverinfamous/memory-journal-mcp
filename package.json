@@ -25,6 +25,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage && npx tsx scripts/update-badges.ts",
         "bench": "vitest bench --run",
+        "pretest:e2e": "node -e \"fs.rmSync('.test-output/e2e', { recursive: true, force: true })\"",
         "test:e2e": "playwright test",
         "generate:instructions": "node scripts/generate-server-instructions.ts"
     },

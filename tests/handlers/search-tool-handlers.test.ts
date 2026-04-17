@@ -98,7 +98,7 @@ describe('Search Tool Handlers - Coverage', () => {
         it('should merge personal and team results', async () => {
             const result = (await callTool(
                 'search_entries',
-                { query: 'entry', limit: 10 },
+                { query: 'entry', limit: 10, include_team: true },
                 db,
                 undefined,
                 undefined,
@@ -115,7 +115,7 @@ describe('Search Tool Handlers - Coverage', () => {
         it('should not deduplicate entries with same content from different databases', async () => {
             const result = (await callTool(
                 'search_entries',
-                { query: 'alpha', limit: 50 },
+                { query: 'alpha', limit: 50, include_team: true },
                 db,
                 undefined,
                 undefined,
@@ -195,7 +195,7 @@ describe('Search Tool Handlers - Coverage', () => {
         it('should handle combined filters with teamDb', async () => {
             const result = (await callTool(
                 'search_entries',
-                { project_number: 42, limit: 10 },
+                { project_number: 42, limit: 10, include_team: true },
                 db,
                 undefined,
                 undefined,
@@ -245,7 +245,7 @@ describe('Search Tool Handlers - Coverage', () => {
             const today = new Date().toISOString().split('T')[0]!
             const result = (await callTool(
                 'search_by_date_range',
-                { start_date: today, end_date: today },
+                { start_date: today, end_date: today, include_team: true },
                 db,
                 undefined,
                 undefined,

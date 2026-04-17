@@ -214,6 +214,26 @@ parentPort?.on('message', (msg: unknown) => {
 
             const result = await executeCode(code, methodList, timeoutMs ?? 30000)
 
+            if (result.success) {
+                try {
+                    // Enforce the 100KB egress limit strictly within the worker
+                    const resultJson = JSON.stringify(result.result)
+                    
+                    if (resultJson) {
+                        const byteLength = Buffer.byteLength(resultJson, 'utf8')
+                        if (byteLength > 100 * 1024) {
+                            result.success = false
+                            result.error = `Output limit exceeded: Result serialized to ${Math.round(byteLength / 1024)}KB, which exceeds the 100KB boundary. Please aggregate or filter your results to reduce the payload size.`
+                            result.result = undefined
+                        }
+                    }
+                } catch (err) {
+                    result.success = false
+                    result.error = `Result could not be serialized or exceeded memory limits: ${err instanceof Error ? err.message : String(err)}`
+                    result.result = undefined
+                }
+            }
+
             rpcPort?.close()
             rpcPort = null
 

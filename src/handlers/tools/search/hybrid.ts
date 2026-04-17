@@ -112,6 +112,14 @@ export async function hybridSearch(
     // Batch fetch entries
     const entriesMap = db.getEntriesByIds(sortedIds)
 
+    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+    if (options.tags && options.tags.length > 0) {
+        const tagsMap = db.getTagsForEntries(sortedIds)
+        for (const entry of entriesMap.values()) {
+            entry.tags = tagsMap.get(entry.id) ?? []
+        }
+    }
+
     // Build output in fusion-score order
     const entries: EntryWithSource[] = []
     for (const id of sortedIds) {

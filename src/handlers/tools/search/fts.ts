@@ -29,6 +29,7 @@ export function ftsSearch(
         startDate?: string
         endDate?: string
         sortBy?: 'timestamp' | 'importance'
+        includeTeam?: boolean
     }
 ): { entries: EntryWithSource[]; count: number; degraded?: boolean } {
     const hasFilters =
@@ -67,9 +68,9 @@ export function ftsSearch(
         })
     }
 
-    // Cross-database merge when team DB is available
+    // Cross-database merge when team DB is available and includeTeam is explicitly true
     // Skip team DB when is_personal is explicitly true (team entries are never personal)
-    if (teamDb && options.isPersonal !== true) {
+    if (teamDb && options.includeTeam === true && options.isPersonal !== true) {
         let teamEntries
         if (!query && !hasFilters) {
             teamEntries = teamDb.getRecentEntries(perDbLimit, undefined, options.sortBy)

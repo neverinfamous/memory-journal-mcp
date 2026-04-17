@@ -190,7 +190,7 @@ export async function startServer(
         }
     )
 
-    const logStream = createWriteStream(`server-${port}.log`)
+    const logStream = createWriteStream(join(process.cwd(), '.test-output', 'e2e', `server-${port}.log`))
     serverProcess.stdout?.pipe(logStream)
     serverProcess.stderr?.pipe(logStream)
 

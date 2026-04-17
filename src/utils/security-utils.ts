@@ -1,9 +1,6 @@
-import { execFileSync } from 'node:child_process'
+import { getAuthContext } from '../auth/auth-context.js'
 import { MemoryJournalMcpError } from '../types/errors.js'
 import { ErrorCategory } from '../types/error-types.js'
-
-/** Timeout for shelling out to git commands (ms) */
-const GIT_COMMAND_TIMEOUT_MS = 3000
 
 // ============================================================================
 // Typed Security Errors
@@ -308,39 +305,21 @@ export function sanitizeAuthor(raw: string): string {
 // Author Resolution
 // ============================================================================
 
-let cachedAuthor: string | null = null
-
 /**
  * Resolve the author name for team-shared entries.
- * Priority: TEAM_AUTHOR env → git config user.name → 'unknown'.
- * Caches the result after the first lookup.
- *
+ * Priority: TEAM_AUTHOR env → req.auth.sub → 'unknown'.
  * Uses sanitizeAuthor() to strip control characters and cap length.
  */
 export function resolveAuthor(): string {
-    if (cachedAuthor !== null) return cachedAuthor
-
     const envAuthor = process.env['TEAM_AUTHOR']?.trim().replace(/"/g, '')
     if (envAuthor) {
-        cachedAuthor = sanitizeAuthor(envAuthor)
-        return cachedAuthor
+        return sanitizeAuthor(envAuthor)
     }
 
-    try {
-        const gitUser = execFileSync('git', ['config', 'user.name'], {
-            encoding: 'utf-8',
-            timeout: GIT_COMMAND_TIMEOUT_MS,
-        })
-            .trim()
-            .replace(/"/g, '')
-        if (gitUser) {
-            cachedAuthor = sanitizeAuthor(gitUser)
-            return cachedAuthor
-        }
-    } catch {
-        // Git not available
+    const authCtx = getAuthContext()
+    if (authCtx?.claims?.sub) {
+        return sanitizeAuthor(authCtx.claims.sub)
     }
 
-    cachedAuthor = 'unknown'
-    return cachedAuthor
+    return 'unknown'
 }

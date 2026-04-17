@@ -19,6 +19,7 @@ export interface StatefulContext {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- backward compat
     sseTransports: Map<string, SSEServerTransport>
     sessionLastActivity: Map<string, number>
+    sessionSubjects: Map<string, string>
     touchSession: (sid: string) => void
     /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     serverConnected: boolean
@@ -49,6 +50,7 @@ export function setupStateful(
                     void t.close()
                 }
                 ctx.transports.delete(sid)
+                ctx.sessionSubjects.delete(sid)
                 ctx.sessionLastActivity.delete(sid)
             }
 
@@ -64,6 +66,7 @@ export function setupStateful(
                     void t.close()
                 }
                 ctx.sseTransports.delete(sid)
+                ctx.sessionSubjects.delete(sid)
                 ctx.sessionLastActivity.delete(sid)
             }
         }
@@ -102,6 +105,17 @@ export function setupStateful(
                         })
                         return
                     }
+
+                    const expectedSub = ctx.sessionSubjects.get(sessionId)
+                    if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+                        res.status(403).json({
+                            jsonrpc: '2.0',
+                            error: { code: JSONRPC_SERVER_ERROR, message: 'Forbidden: Session belongs to a different subject' },
+                            id: null,
+                        })
+                        return
+                    }
+
                     ctx.touchSession(sessionId)
                 } else if (!isInitializeRequest(req.body)) {
                     res.status(400).json({
@@ -156,6 +170,10 @@ export function setupStateful(
                             ctx.transports.set(sid, newTransport)
                             ctx.touchSession(sid)
 
+                            if (req.auth) {
+                                ctx.sessionSubjects.set(sid, req.auth.sub)
+                            }
+
                             // Attach close handler specifically for this session ID, preserving any existing handlers
                             // (e.g., from server.connect wrapper).
                             const existingOnClose = newTransport.onclose
@@ -165,6 +183,7 @@ export function setupStateful(
                                     sessionId: sid,
                                 })
                                 ctx.transports.delete(sid)
+                                ctx.sessionSubjects.delete(sid)
                                 if (existingOnClose) existingOnClose()
                             }
                         },
@@ -216,6 +235,12 @@ export function setupStateful(
             return
         }
 
+        const expectedSub = ctx.sessionSubjects.get(sessionId)
+        if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+            res.status(403).send('Forbidden: Session belongs to a different subject')
+            return
+        }
+
         // Refresh session activity on SSE reconnect
         ctx.touchSession(sessionId)
 
@@ -240,6 +265,12 @@ export function setupStateful(
 
         if (sessionId === undefined || !ctx.transports.has(sessionId)) {
             res.status(400).send('Invalid or missing session ID')
+            return
+        }
+
+        const expectedSub = ctx.sessionSubjects.get(sessionId)
+        if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+            res.status(403).send('Forbidden: Session belongs to a different subject')
             return
         }
 

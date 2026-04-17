@@ -43,8 +43,8 @@ vi.mock('../../../src/utils/logger.js', () => ({
     },
 }))
 
-import { setupLegacySSE } from '../../../src/transports/http/server/legacy-sse.js'
-import type { StatefulContext } from '../../../src/transports/http/server/stateful.js'
+import { setupLegacySSE } from '../../src/transports/http/server/legacy-sse.js'
+import type { StatefulContext } from '../../src/transports/http/server/stateful.js'
 
 // ============================================================================
 // Helpers
@@ -55,6 +55,7 @@ function createMockCtx(): StatefulContext {
         transports: new Map(),
         sseTransports: new Map(),
         sessionLastActivity: new Map(),
+        sessionSubjects: new Map(),
         touchSession: vi.fn(),
         serverConnected: false,
     }

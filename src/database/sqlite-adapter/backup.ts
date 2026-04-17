@@ -172,11 +172,36 @@ export class BackupManager {
         let lockFd: number
         try {
             lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
+            fs.writeSync(lockFd, String(process.pid))
         } catch (lockError: unknown) {
             if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError as { code: unknown }).code === 'EEXIST') {
-                throw new Error(`Another process is currently holding the database lock at ${lockPath}. Backup restore cannot safely proceed.`, { cause: lockError })
+                let isStale = false
+                try {
+                    const stats = fs.statSync(lockPath)
+                    // If lock is older than 5 minutes, consider it stale
+                    if (Date.now() - stats.mtimeMs > 5 * 60 * 1000) {
+                        isStale = true
+                    }
+                } catch {
+                    // Ignore stats errors
+                }
+
+                if (isStale) {
+                    logger.warning('Found stale database restore lock, forcibly removing', { path: lockPath, module: 'SqliteAdapter' })
+                    try {
+                        fs.unlinkSync(lockPath)
+                    } catch {
+                        // Ignore unlink errors
+                    }
+                    // Retry acquiring the lock
+                    lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
+                    fs.writeSync(lockFd, String(process.pid))
+                } else {
+                    throw new Error(`Another process is currently holding the database lock at ${lockPath}. Backup restore cannot safely proceed.`, { cause: lockError })
+                }
+            } else {
+                throw lockError
             }
-            throw lockError
         }
         
         try {

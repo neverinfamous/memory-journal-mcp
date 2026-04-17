@@ -58,6 +58,19 @@ export class VectorSearchManager {
     }
 
     /**
+     * Explicit trigger to pre-load the ML model to avoid runtime cold starts.
+     * Starts initialization in the background without blocking.
+     */
+    warmup(): void {
+        this.initialize().catch((err: unknown) => {
+            logger.error('Background vector model warmup failed', {
+                module: 'VectorSearch',
+                error: err instanceof Error ? err.message : String(err),
+            })
+        })
+    }
+
+    /**
      * Check if vector search is initialized
      */
     isInitialized(): boolean {
@@ -444,9 +457,9 @@ export class VectorSearchManager {
     /**
      * Get index statistics
      */
-    getStats(): { itemCount: number; modelName: string; dimensions: number } {
+    getStats(): { itemCount: number; modelName: string; dimensions: number; isReady: boolean } {
         if (!this.db) {
-            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS }
+            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS, isReady: this.initialized }
         }
 
         try {
@@ -455,13 +468,14 @@ export class VectorSearchManager {
                 itemCount: count,
                 modelName: this.modelName,
                 dimensions: EMBEDDING_DIMENSIONS,
+                isReady: this.initialized,
             }
         } catch (error) {
             logger.debug('Failed to get vector index stats', {
                 module: 'VectorSearch',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS }
+            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS, isReady: this.initialized }
         }
     }
 }

@@ -56,6 +56,9 @@
 - **Performance**: Eliminated critical N+1 database queries during Markdown Exports and Semantic Search (BM25 fallback) by introducing the batched methods `getEntriesByIdsWithImportance` and `getRelationshipsForEntries`.
 - **Security**: Hardened Execution Environment by entirely purging the legacy `vm` sandbox mode, enforcing production-grade `worker` isolation across all `mj_execute_code` executions.
 - **Security**: Strengthened Database Access Primitives by renaming all legacy `executeRawQuery` calls to `_executeRawQueryUnsafe`, ensuring explicit developer intent for raw queries.
+- **Testing**: Fixed legacy SSE transport testing regressions by reinstating standard MCP 2024-11-05 protocol compliance (passing `sessionId` in the URL query string for `/messages`), recovering 100% E2E test passes.
+- **Testing**: Restored complete verification suite integrity by correcting HTTP mock context initialization (`ctx.sessionSubjects`), resolving false-positive `undefined` method accesses during HTTP session teardown.
+- **Testing**: Corrected Code Mode egress limits check in E2E tests by ensuring the payload bounding exception message correctly references the required "aggregate" keyword guidance.
 - **Security**: Enforced LLM Content Provenance rules by meticulously applying `<untrusted_remote_content>` wrappers during briefing context generation bridging external entities.
 - **Testing**: Remediated exhaustive testing suite failures by explicitly mocking `_executeRawQueryUnsafe`, `getAuthorStatistics`, and `getAuthorsForEntries` inside Vitest stubs, ensuring flawless test validation.
 - **Core**: Resolved TypeScript regressions in `src/auth/scopes.ts` by explicitly mapping `team` and `audit` to intermediate hierarchy indices.

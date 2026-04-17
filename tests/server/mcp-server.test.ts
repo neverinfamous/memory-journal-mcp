@@ -170,6 +170,7 @@ vi.mock('../../src/vector/vector-search-manager.js', () => ({
     VectorSearchManager: function () {
         return {
             initialize: mockVectorInitialize,
+            warmup: vi.fn(),
             isInitialized: vi.fn().mockReturnValue(false),
             search: vi.fn().mockResolvedValue([]),
             addEntry: vi.fn().mockResolvedValue(true),

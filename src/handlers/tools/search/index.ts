@@ -60,6 +60,7 @@ const SearchEntriesSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -88,6 +89,7 @@ const SearchEntriesSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -107,6 +109,7 @@ const SearchByDateRangeSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -126,6 +129,7 @@ const SearchByDateRangeSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
+    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -157,6 +161,7 @@ const SemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
@@ -179,6 +184,7 @@ const SemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
 })
 
 // ============================================================================
@@ -281,6 +287,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         startDate: input.start_date,
                         endDate: input.end_date,
                         sortBy: input.sort_by,
+                        includeTeam: input.include_team,
                     }
 
                     // Route to the appropriate search strategy
@@ -302,6 +309,15 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             )
                             const entryIds = semanticResults.map((r) => r.entryId)
                             const entriesMap = db.getEntriesByIds(entryIds)
+
+                            // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+                            if (input.tags && input.tags.length > 0) {
+                                const tagsMap = db.getTagsForEntries(entryIds)
+                                for (const entry of entriesMap.values()) {
+                                    entry.tags = tagsMap.get(entry.id) ?? []
+                                }
+                            }
+
                             let entries = semanticResults
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
@@ -437,7 +453,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
 
                     // Cross-database merge when team DB is available
                     // Skip team DB when is_personal is explicitly true (team entries are never personal)
-                    if (teamDb && input.is_personal !== true) {
+                    if (teamDb && input.include_team && input.is_personal !== true) {
                         const teamEntries = teamDb.searchByDateRange(
                             input.start_date,
                             input.end_date,
@@ -546,18 +562,28 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                     const entryIds = results.map((r) => r.entryId)
                     const entriesMap = db.getEntriesByIds(entryIds)
 
+                    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+                    const filterOptions = {
+                        isPersonal: input.is_personal,
+                        tags: input.tags,
+                        entryType: input.entry_type,
+                        startDate: input.start_date,
+                        endDate: input.end_date,
+                        includeTeam: input.include_team,
+                    }
+                    
+                    if (input.tags && input.tags.length > 0) {
+                        const tagsMap = db.getTagsForEntries(entryIds)
+                        for (const entry of entriesMap.values()) {
+                            entry.tags = tagsMap.get(entry.id) ?? []
+                        }
+                    }
+
                     const entries = results
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
 
-                            const filterOptions = {
-                                isPersonal: input.is_personal,
-                                tags: input.tags,
-                                entryType: input.entry_type,
-                                startDate: input.start_date,
-                                endDate: input.end_date,
-                            }
                             if (!passMetadataFilters(entry, filterOptions as ISearchFilters, db))
                                 return null
 
