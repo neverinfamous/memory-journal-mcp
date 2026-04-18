@@ -35,12 +35,13 @@ export class BackupManager {
         try {
             this.ctx.pragma('wal_checkpoint(TRUNCATE)')
         } catch (checkpointErr) {
-            logger.debug('WAL checkpoint skipped', {
+            const err = checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr)
+            logger.error('WAL checkpoint failed, aborting backup', {
                 module: 'SqliteAdapter',
                 operation: 'exportToFile',
-                error:
-                    checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr),
+                error: err,
             })
+            throw new Error(`WAL checkpoint failed, backup aborted to prevent stale data: ${err}`, { cause: checkpointErr })
         }
         await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
 

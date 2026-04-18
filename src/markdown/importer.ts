@@ -136,6 +136,19 @@ export async function importMarkdownEntries(
         dry_run,
     }
 
+    // Phase 1: Read files and parse asynchronously
+    interface ParsedFile {
+        filename: string
+        body: string
+        metadata: {
+            mj_id?: number
+            entry_type?: string
+            tags?: string[]
+            significance?: string
+            relationships?: { type: string; target_id: number }[]
+        }
+    }
+    const parsedFiles: ParsedFile[] = []
 
     for (const filename of mdFiles) {
         let handle;
@@ -172,6 +185,32 @@ export async function importMarkdownEntries(
                 result.skipped++
                 continue
             }
+
+            parsedFiles.push({ 
+                filename, 
+                body, 
+                metadata: metadata as ParsedFile['metadata']
+            })
+        } catch (err) {
+            result.errors.push({
+                file: filename,
+                error: err instanceof Error ? err.message : String(err),
+            })
+            result.success = false
+        } finally {
+            if (handle) {
+                await handle.close()
+            }
+        }
+    }
+
+    // Phase 2: Perform DB operations in a transaction
+    const vectorQueue: { entryId: number, body: string, filename: string }[] = []
+
+    db.executeInTransaction(() => {
+        for (const file of parsedFiles) {
+            const { filename, body, metadata } = file
+
 
             if (dry_run) {
                 // In dry-run mode, just classify what would happen
@@ -249,8 +288,16 @@ export async function importMarkdownEntries(
                 }
             }
 
-            // Vector re-indexing
-            if (vectorManager) {
+            if (!dry_run) {
+                vectorQueue.push({ entryId, body, filename })
+            }
+        }
+    })
+
+    // Phase 3: Perform vector indexing asynchronously (outside transaction)
+    if (!dry_run && vectorManager) {
+        for (const { entryId, body, filename } of vectorQueue) {
+            try {
                 const vectorResult = await vectorManager.addEntry(entryId, body)
                 if (vectorResult.success) {
                     result.vectorsIndexed++
@@ -261,16 +308,12 @@ export async function importMarkdownEntries(
                     })
                     result.success = false
                 }
-            }
-        } catch (err) {
-            result.errors.push({
-                file: filename,
-                error: err instanceof Error ? err.message : String(err),
-            })
-            result.success = false
-        } finally {
-            if (handle) {
-                await handle.close()
+            } catch (err) {
+                result.errors.push({
+                    file: filename,
+                    error: err instanceof Error ? err.message : String(err),
+                })
+                result.success = false
             }
         }
     }

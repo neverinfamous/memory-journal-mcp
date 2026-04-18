@@ -33,6 +33,7 @@ describe('importMarkdownEntries', () => {
         updateEntry: vi.fn(),
         getOrCreateTag: vi.fn(),
         linkEntries: vi.fn(),
+        executeInTransaction: vi.fn((cb) => cb()),
     }
 
     const mockVectorManager = {

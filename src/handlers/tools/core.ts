@@ -202,30 +202,11 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: input.workflow_status,
                     })
 
-                    // Auto-populate issueUrl if issue_number provided without issueUrl via background task
-                    // to prevent blocking the entry creation API response
-                    if (input.issue_number !== undefined && !input.issue_url) {
-                        void resolveIssueUrl(
-                            context,
-                            input.project_number,
-                            input.issue_number,
-                            input.issue_url
-                        )
-                            .then((resolvedUrl) => {
-                                if (resolvedUrl) {
-                                    db.updateEntry(entry.id, { issueUrl: resolvedUrl })
-                                }
-                            })
-                            .catch((err: unknown) => {
-                                logger.error('Failed to resolve issue url in background', {
-                                    error: String(err),
-                                })
-                            })
-                    }
 
                     // Share with team if requested
                     let sharedWithTeam = false
                     let author: string | undefined
+                    let teamEntryId: number | undefined
                     if (input.share_with_team && teamDb) {
                         try {
                             const ctx = getAuthContext()
@@ -234,7 +215,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
                             const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
                             author = email ?? prefName ?? claims?.sub ?? subject ?? resolveAuthor()
-                            teamDb.createEntry({
+                            const teamEntry = teamDb.createEntry({
                                 content: input.content,
                                 entryType: input.entry_type,
                                 tags: input.tags,
@@ -253,6 +234,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 workflowStatus: input.workflow_status,
                                 author,
                             })
+                            teamEntryId = teamEntry.id
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {
@@ -265,6 +247,30 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             db.deleteEntry(entry.id, true)
                             throw error
                         }
+                    }
+
+                    // Auto-populate issueUrl if issue_number provided without issueUrl via background task
+                    // to prevent blocking the entry creation API response. Runs after teamDb sync to update both.
+                    if (input.issue_number !== undefined && !input.issue_url) {
+                        void resolveIssueUrl(
+                            context,
+                            input.project_number,
+                            input.issue_number,
+                            input.issue_url
+                        )
+                            .then((resolvedUrl) => {
+                                if (resolvedUrl) {
+                                    db.updateEntry(entry.id, { issueUrl: resolvedUrl })
+                                    if (teamDb && teamEntryId !== undefined) {
+                                        teamDb.updateEntry(teamEntryId, { issueUrl: resolvedUrl })
+                                    }
+                                }
+                            })
+                            .catch((err: unknown) => {
+                                logger.error('Failed to resolve issue url in background', {
+                                    error: String(err),
+                                })
+                            })
                     }
 
                     // Auto-index to vector store for semantic search synchronously

@@ -71,6 +71,8 @@ export class AuthorizationServerDiscovery {
         }
 
         // SSRF Protection: Enforce HTTPS
+        // This acts as the primary mitigation against DNS rebinding (TOCTOU) attacks,
+        // as the target server would need a valid TLS certificate for the requested hostname.
         if (parsedUrl.protocol !== 'https:') {
             throw new ConfigurationError(`Authorization server URL must use HTTPS: ${metadataUrl}`)
         }

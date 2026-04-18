@@ -18,7 +18,10 @@
 - Added explicit HTTP service-level `curl` container health-checks to `docker-compose.yml`.
 - Added true O(1) LRU eviction (using `Map.prototype.keys().next()`) to rate-limiting and user tracking maps to deterministically cap memory under high throughput.
 - Enforced atomic transaction boundaries (`executeInTransaction`) during massive vector index rebuilds to ensure memory bounds and structural integrity during OOM or interruption events.
-
+- Decoupled `create_entry` workflow to safely update both personal and team databases synchronously.
+- Batched database operations within a single transaction in the markdown importer to significantly improve throughput.
+- Updated `mj_execute_code` documentation to explicitly state it is a "trusted-admin execution environment".
+- Replaced hardcoded `github.com` URLs with a dynamic `GITHUB_HOST` environment variable fallback.
 ### Fixed
 - Fixed an N+1 query performance bottleneck during Markdown exports and Semantic Search.
 - Re-implemented legacy SSE transport to enforce `MAX_STATEFUL_SESSIONS` boundaries, aligning with Streamable HTTP limits.
@@ -39,7 +42,9 @@
 - Re-enabled `X-Forwarded-For` extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
 - Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist.
 - Consolidated and resolved testing suite regressions and TypeScript strict-mode issues.
-
+- Fixed vector indexing silently failing but reporting success by properly checking the underlying `success` boolean.
+- Fixed team semantic search omitting valid cross-project vectors by enforcing `project_number` filtering prior to `limit` truncations.
+- Enforced hard exceptions on SQLite WAL checkpoint truncation failures to prevent silently incomplete backups.
 ### Security
 - Replaced insecure `JSON.parse()` methods with Zod `AutoContextSchema` boundary validations inside team and briefing resources.
 - Enforced strict tool-to-scope verification during MCP server initialization, forcing a hard-fault if any tool group lacks a mapped scope boundary.
@@ -71,3 +76,5 @@
 - Hardened HTTP `MCP_RATE_LIMIT_MAX` config parsing logic by trapping `NaN` parameters and explicitly enforcing safe threshold clamping.
 - Restored HTTP Transport OAuth scope enforcement middleware, properly checking tool-level permissions against `auth.scopes` and throwing `403 Forbidden` for missing grants.
 - Enforced LLM Content Provenance rules by applying `<untrusted_remote_content>` wrappers during briefing context generation bridging external entities.
+- Hardened `markUntrustedContent` to aggressively strip any existing tags prior to wrapping, preventing nested breakout attacks.
+- Documented TLS certificate validation as the primary mitigation for Time-of-Check to Time-of-Use (TOCTOU) SSRF vulnerabilities during OAuth discovery.

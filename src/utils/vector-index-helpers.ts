@@ -19,7 +19,14 @@ export async function autoIndexEntry(
 ): Promise<'success' | 'failed' | 'disabled'> {
     if (vectorManager === undefined) return 'disabled'
     try {
-        await vectorManager.addEntry(entryId, content)
+        const result = await vectorManager.addEntry(entryId, content)
+        if (!result.success) {
+            logger.error(`Failed to auto-index entry #${String(entryId)}`, {
+                module: 'VectorIndex',
+                error: result.error || 'Unknown error',
+            })
+            return 'failed'
+        }
         return 'success'
     } catch (error) {
         logger.error(`Failed to auto-index entry #${String(entryId)}`, {

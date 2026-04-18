@@ -29,18 +29,20 @@ export async function resolveIssueUrl(
             const { getGitHubIntegration } = await import('../github/github-integration/index.js')
             const targetGithub = getGitHubIntegration(entry[1].path)
             const repoInfo = await targetGithub.getRepoInfo()
+            const host = process.env['GITHUB_HOST'] ?? 'github.com'
             if (repoInfo.owner && repoInfo.repo) {
-                return `https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
+                return `https://${host}/${repoInfo.owner}/${repoInfo.repo}/issues/${String(issueNumber)}`
             }
         }
     }
 
     // 2. Fallback to globally repo info if available
     if (context.github) {
+        const host = process.env['GITHUB_HOST'] ?? 'github.com'
         const cachedRepo =
             context.github.getCachedRepoInfo() ?? (await context.github.getRepoInfo())
         if (cachedRepo?.owner && cachedRepo?.repo) {
-            return `https://github.com/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(issueNumber)}`
+            return `https://${host}/${cachedRepo.owner}/${cachedRepo.repo}/issues/${String(issueNumber)}`
         }
     }
 

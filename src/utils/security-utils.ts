@@ -260,13 +260,11 @@ export function sanitizeErrorForLogging(message: string): string {
  */
 export function markUntrustedContent(content: string | undefined | null): string {
     if (!content) return ''
-    const trimmed = content.trim()
+    let trimmed = content.trim()
     if (!trimmed) return ''
     
-    // Prevent double-wrapping if already marked
-    if (trimmed.startsWith('<untrusted_remote_content>') && trimmed.endsWith('</untrusted_remote_content>')) {
-        return trimmed
-    }
+    // Strip any existing tags to prevent breakout/nesting
+    trimmed = trimmed.replace(/<\/?untrusted_remote_content>/g, '')
     
     return `<untrusted_remote_content>\n${trimmed}\n</untrusted_remote_content>`
 }

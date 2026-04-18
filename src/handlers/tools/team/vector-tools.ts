@@ -87,7 +87,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         input.tags !== undefined ||
                         input.entry_type !== undefined ||
                         input.start_date !== undefined ||
-                        input.end_date !== undefined
+                        input.end_date !== undefined ||
+                        input.project_number !== undefined
 
                     const internalLimit = hasFilters
                         ? Math.min(Math.max(input.limit * 10, 100), 1000)
