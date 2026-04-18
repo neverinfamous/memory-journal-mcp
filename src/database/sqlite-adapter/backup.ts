@@ -181,9 +181,10 @@ export class BackupManager {
 
         const lockPath = `${this.ctx.getDbPath()}.lock`
         let lockFd: number
+        const nonce = randomUUID()
         try {
             lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
-            fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now() }))
+            fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
         } catch (lockError: unknown) {
             if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError as { code: unknown }).code === 'EEXIST') {
                 let isStale = false
@@ -191,21 +192,29 @@ export class BackupManager {
                     const lockContent = fs.readFileSync(lockPath, 'utf-8').trim()
                     if (lockContent) {
                         let holdingPid: number | undefined
+                        let lockTimestamp: number | undefined
                         try {
-                            const parsed = JSON.parse(lockContent) as { pid?: number }
-                            holdingPid = parsed.pid
+                            const parsed = JSON.parse(lockContent) as { pid?: number, timestamp?: number }
+                            holdingPid = typeof parsed.pid === 'number' ? parsed.pid : undefined
+                            lockTimestamp = typeof parsed.timestamp === 'number' ? parsed.timestamp : undefined
                         } catch {
                             // Legacy raw PID string format fallback
                             holdingPid = parseInt(lockContent, 10)
                         }
                         
                         if (holdingPid !== undefined && !isNaN(holdingPid)) {
-                            try {
-                                process.kill(holdingPid, 0)
-                            } catch (e: unknown) {
-                                // ESRCH means the process does not exist
-                                if (e instanceof Error && (e as NodeJS.ErrnoException).code === 'ESRCH') {
-                                    isStale = true
+                            // Check timestamp first: if older than 5 minutes, consider it stale due to crash
+                            if (lockTimestamp !== undefined && (Date.now() - lockTimestamp > 5 * 60 * 1000)) {
+                                isStale = true
+                                logger.warning('Found stale database restore lock (expired timestamp)', { path: lockPath, holdingPid, ageMs: Date.now() - lockTimestamp, module: 'SqliteAdapter' })
+                            } else {
+                                try {
+                                    process.kill(holdingPid, 0)
+                                } catch (e: unknown) {
+                                    // ESRCH means the process does not exist
+                                    if (e instanceof Error && (e as NodeJS.ErrnoException).code === 'ESRCH') {
+                                        isStale = true
+                                    }
                                 }
                             }
                         }
@@ -223,7 +232,7 @@ export class BackupManager {
                     }
                     // Retry acquiring the lock
                     lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
-                    fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now() }))
+                    fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
                 } else {
                     throw new Error(`Another process is currently holding the database lock at ${lockPath}. Backup restore cannot safely proceed.`, { cause: lockError })
                 }

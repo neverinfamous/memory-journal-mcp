@@ -233,11 +233,22 @@ describe('CodeModeSecurityManager', () => {
             expect(result.errors[0]).toContain('maximum size')
         })
 
-        it('should reject non-serializable results', () => {
-            // Function makes v8.serialize throw, circular ref makes JSON.stringify throw
+        it('should gracefully handle cyclic and uncloneable references', () => {
+            // Function makes v8.serialize throw, circular ref used to make JSON.stringify throw
+            // but now our replacer safely converts it to '[Circular]'
             const circular: Record<string, unknown> = { fn: () => {} }
             circular['self'] = circular
             const result = security.validateResultSize(circular)
+            expect(result.valid).toBe(true)
+            expect(result.errors).toHaveLength(0)
+        })
+
+        it('should reject truly non-serializable results', () => {
+            // An object with a getter that throws will fail both v8.serialize and JSON.stringify
+            const obj = {
+                get val() { throw new Error('Serialization blocked') }
+            }
+            const result = security.validateResultSize(obj)
             expect(result.valid).toBe(false)
             expect(result.errors[0]).toContain('serialized')
         })

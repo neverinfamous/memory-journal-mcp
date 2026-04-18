@@ -352,6 +352,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         'partial' in schema &&
                         typeof (schema as { partial: unknown }).partial === 'function'
                     ) {
+                        // DOCUMENTATION (P3 #8): Two-Schema Pattern
+                        // We use a strict `inputSchema` for tool definitions so LLMs see exactly what is required.
+                        // However, the MCP SDK strictly validates incoming JSON against this schema before reaching our handlers.
+                        // By using `.partial().passthrough()` here, we relax the schema for the SDK, allowing our
+                        // own handler logic to perform the strict validation, sanitize data, and return structured error
+                        // messages instead of the SDK crashing or returning opaque generic errors.
+                        // 
                         // .partial() makes all fields optional so the SDK accepts `{}`.
                         // .passthrough() preserves unrecognized keys so handler can normalize.
                         // Wrapped in try/catch: if partial() returns something without passthrough()

@@ -17,7 +17,7 @@ const mockHandle = {
 vi.mock('node:fs/promises', () => ({
     mkdir: vi.fn(),
     open: vi.fn(),
-    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
+    lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false, ino: 1 }),
 }))
 
 describe('markdown exporter utilities', () => {
@@ -172,5 +172,16 @@ describe('exportEntriesToMarkdown', () => {
         )
         expect(fs.mkdir).not.toHaveBeenCalled()
         expect(fs.open).not.toHaveBeenCalled()
+    })
+
+    it('should abort if directory is swapped for a symlink during export (TOCTOU)', async () => {
+        vi.mocked(fs.lstat)
+            .mockResolvedValueOnce({ isSymbolicLink: () => false, ino: 1 } as any) // preStat
+            .mockResolvedValueOnce({ isSymbolicLink: () => true, ino: 2 } as any) // postStat
+            
+        const entries = [{ id: 1, content: 'Test content', timestamp: '2026-04-08T12:00:00Z', entryType: 'note' }]
+        await expect(exportEntriesToMarkdown(entries as any, './export', mockDb as any, [process.cwd()])).rejects.toThrow(
+            /Directory swapped during export operation/
+        )
     })
 })

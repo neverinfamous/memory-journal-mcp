@@ -149,8 +149,15 @@ export class CodeModeSecurityManager {
             try {
                 actualBytes = v8.serialize(result).length
             } catch {
-                // Fallback to fast JSON serialization if v8 encounters uncloneable data
-                actualBytes = Buffer.byteLength(JSON.stringify(result) || '', 'utf-8')
+                // Fallback to safe JSON serialization if v8 encounters uncloneable data or cyclic references
+                const cache = new Set()
+                actualBytes = Buffer.byteLength(JSON.stringify(result, (_key: string, value: unknown): unknown => {
+                    if (typeof value === 'object' && value !== null) {
+                        if (cache.has(value)) return '[Circular]'
+                        cache.add(value)
+                    }
+                    return value
+                }) || '', 'utf-8')
             }
 
             if (actualBytes > this.config.maxResultSize) {

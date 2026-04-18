@@ -166,16 +166,27 @@ export async function exportEntriesToMarkdown(
         let handle;
         try {
             // Re-validate ancestor directory to ensure it hasn't been swapped for a symlink
-            const stat = await lstat(resolvedOutputDir)
-            if (stat.isSymbolicLink()) {
+            const preStat = await lstat(resolvedOutputDir)
+            if (preStat.isSymbolicLink()) {
                 throw new Error(`Export directory ${resolvedOutputDir} became a symlink during export.`)
             }
 
             // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
             handle = await open(filepath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600)
+            
+            // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
+            const postStat = await lstat(resolvedOutputDir)
+            if (postStat.isSymbolicLink() || postStat.ino !== preStat.ino) {
+                throw new Error(`Directory swapped during export operation! Aborting to prevent path traversal.`)
+            }
+            
             await handle.writeFile(fileContent, 'utf-8')
             files.push(filename)
         } catch (err: unknown) {
+            if (err instanceof Error && (err.message.includes('became a symlink') || err.message.includes('Directory swapped'))) {
+                throw err
+            }
+            
             const code = err instanceof Error && 'code' in err ? (err as {code?: string}).code : undefined;
             if (code === 'ELOOP' || code === 'EEXIST') {
                 logger.warning('Refusing to overwrite symlink during export', {

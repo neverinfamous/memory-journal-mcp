@@ -115,3 +115,7 @@
 - **Testing**: Stabilized E2E Playwright suite by correctly assigning mandatory `project_number` schema boundaries to all `team_link_entries` executions.
 - **Testing**: Aligned E2E and Unit test expectations against strict `<untrusted_remote_content>` tagging logic and generic internal payload error handlers.
 - **Linting**: Cleaned up remaining `@typescript-eslint/prefer-optional-chain` assertions and typecasting within `admin-tools.ts`, `core-tools.ts`, and `relationship-tools.ts`.
+- **Security**: Mitigated backup-restore race conditions and stale process deadlocks by introducing cryptographic nonces and 5-minute TTL timestamps in SQLite lock files.
+- **Security**: Mitigated directory Time-of-Check to Time-of-Use (TOCTOU) symlink attacks in markdown exports by implementing post-open inode validation.
+- **Security**: Prevented Code Mode sandbox crashes by implementing a `[Circular]`-aware JSON serialization fallback when `v8.serialize` encounters uncloneable data.
+- **Testing**: Added `tests/e2e/io-boundaries.spec.ts` to rigorously test filesystem mutation paths against `allowedIoRoots` escaping.
