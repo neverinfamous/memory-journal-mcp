@@ -210,9 +210,17 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 
     // SEC-1.2: Respect active tool filter — Code Mode must not reach tools that the
     // operator has explicitly excluded. Strict enforcement.
+    //
+    // Exception: if the ONLY enabled tool is mj_execute_code (codemode-only preset),
+    // the filter intentionally reduces the external surface — Code Mode itself still
+    // needs full internal access to be useful. Applying the filter in that case would
+    // leave Code Mode with zero tools, breaking the preset's intended behaviour.
     const filterConfig = context.config?.filterConfig
+    const hasNonCodeModeEnabled = filterConfig
+        ? [...filterConfig.enabledTools].some((t) => t !== 'mj_execute_code')
+        : true
 
-    cachedNonCodeModeTools = filterConfig
+    cachedNonCodeModeTools = filterConfig && hasNonCodeModeEnabled
         ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
         : allTools
 
