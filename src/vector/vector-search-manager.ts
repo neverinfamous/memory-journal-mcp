@@ -376,28 +376,30 @@ export class VectorSearchManager {
                     })
                 )
 
-                // Insert embeddings into SQLite
-                for (const { entry, embedding, error: embError } of embeddings) {
-                    if (embedding !== null) {
-                        try {
-                            const vec = new Float32Array(embedding)
-                            this.dbAdapter.upsertVector(entry.id, vec)
-                            indexed++
-                        } catch (error) {
+                // Insert embeddings into SQLite inside a transaction for safety
+                this.dbAdapter.executeInTransaction(() => {
+                    for (const { entry, embedding, error: embError } of embeddings) {
+                        if (embedding !== null) {
+                            try {
+                                const vec = new Float32Array(embedding)
+                                this.dbAdapter.upsertVector(entry.id, vec)
+                                indexed++
+                            } catch (error) {
+                                failed++
+                                const errorMsg = error instanceof Error ? error.message : String(error)
+                                firstError ??= errorMsg
+                                logger.error('Failed to insert entry into vector index', {
+                                    module: 'VectorSearch',
+                                    entityId: entry.id,
+                                    error: errorMsg,
+                                })
+                            }
+                        } else {
                             failed++
-                            const errorMsg = error instanceof Error ? error.message : String(error)
-                            firstError ??= errorMsg
-                            logger.error('Failed to insert entry into vector index', {
-                                module: 'VectorSearch',
-                                entityId: entry.id,
-                                error: errorMsg,
-                            })
+                            if (embError !== null) firstError ??= embError
                         }
-                    } else {
-                        failed++
-                        if (embError !== null) firstError ??= embError
                     }
-                }
+                })
 
                 // Yield to event loop to prevent blocking live requests
                 await new Promise((resolve) => setTimeout(resolve, 10))

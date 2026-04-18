@@ -99,6 +99,12 @@ export class HttpTransport {
             throw new Error(errorMsg)
         }
 
+        if (authToken === 'change_this_to_a_secure_token_for_production') {
+            const errorMsg = `FATAL: Default auth token detected. You MUST change MCP_AUTH_TOKEN to a secure, cryptographically random value for production.`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
+
         if (!isLocalhost && !hasAuth) {
             const errorMsg = `FATAL: Refusing to bind public HTTP on '${host}' without explicit authentication. You MUST specify --auth-token (or OAuth).`
             logger.error(errorMsg, { module: 'HTTP' })

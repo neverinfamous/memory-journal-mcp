@@ -267,4 +267,6 @@ export interface IDatabaseAdapter {
     clearVectors(): void
     getVectorCount(): number
     cleanupStaleVectors(): void
+
+    executeInTransaction<T>(cb: () => T): T
 }

@@ -353,6 +353,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)').run()
     }
 
+    executeInTransaction<T>(cb: () => T): T {
+        return this.connection.getNativeDb().transaction(cb)()
+    }
+
     getWorkflowActionEntries(limit: number): JournalEntry[] {
         const rows = this.connection.exec(`
             SELECT * FROM memory_journal

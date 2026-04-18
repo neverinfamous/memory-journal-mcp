@@ -40,7 +40,7 @@ services:
       - MCP_HOST=0.0.0.0
       - AUDIT_LOG_PATH=stderr
       # Required for HTTP: Bearer token authentication
-      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-change_this_to_a_secure_token_for_production}
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN is required for HTTP transport in production}
       # Optional: GitHub integration
       # - GITHUB_TOKEN=<your-github-token>
       # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}

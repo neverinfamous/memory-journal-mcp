@@ -52,6 +52,7 @@ export const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000
 export interface RateLimitEntry {
     count: number
     resetTime: number
+    lastSeen: number
 }
 
 // =============================================================================

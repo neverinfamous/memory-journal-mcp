@@ -16,6 +16,8 @@
 - Extended the `ProjectContext` shape in GitHub handler arrays to dynamically bundle a `degraded` array property, exposing granular API subset failures without triggering crashes.
 - Renamed legacy `executeRawQuery` calls to `_executeRawQueryUnsafe` to enforce explicit developer intent for raw queries.
 - Added explicit HTTP service-level `curl` container health-checks to `docker-compose.yml`.
+- Added true O(1) LRU eviction (using `Map.prototype.keys().next()`) to rate-limiting and user tracking maps to deterministically cap memory under high throughput.
+- Enforced atomic transaction boundaries (`executeInTransaction`) during massive vector index rebuilds to ensure memory bounds and structural integrity during OOM or interruption events.
 
 ### Fixed
 - Fixed an N+1 query performance bottleneck during Markdown exports and Semantic Search.
@@ -49,6 +51,8 @@
 - Forced initialization failure if OAuth properties are configured for a non-loopback host without an explicit `publicOrigin` declaration.
 - Modified `TokenValidator` to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured.
 - Required `SCOPES.TEAM` instead of `SCOPES.WRITE` for team tool group operations, preventing unintended team journal mutations (SEC-1.3).
+- Added strict verification to reject default insecure placeholder tokens (`change_this_to_a_secure_token_for_production`) during container/server startup.
+- Updated `team_create_entry` to gracefully fallback to `unknown (claimed: [author])` in environments without authenticated principals.
 - Routed all internal `mj.*` tool calls within Code Mode through the central `callTool()` dispatcher, enforcing OAuth scope checks and audit interception (SEC-1.1).
 - Applied active `--tool-filter` context to Code Mode's internal tool universe, except when the `codemode-only` preset is active (SEC-1.2).
 - Ensured legacy SSE transport runs inside `requestContextStorage.run()`, making per-request context available to rate limiters and loggers (SEC-2.1).

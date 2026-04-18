@@ -231,13 +231,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
             logger.error(errorMsg, { module: 'HTTP' })
             throw new Error(errorMsg)
         }
-        allowedIoRoots = []
-        const { dirname, resolve } = await import('node:path')
-        allowedIoRoots.push(resolve(dirname(dbPath)))
-        if (teamDbPath) {
-            allowedIoRoots.push(resolve(dirname(teamDbPath)))
-        }
-        logger.warning('⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Implicitly deriving trust boundaries from database directories. For production deployments, you MUST strictly define ALLOWED_IO_ROOTS to prevent unauthorized access via path traversal.', {
+        allowedIoRoots = [] // Empty array means NO filesystem access
+        logger.warning('⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.', {
             module: 'McpServer'
         })
     }

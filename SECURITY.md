@@ -42,8 +42,10 @@ are safely handled by the database layer and do not pose injection risks.
 - ✅ **FTS5 / LIKE pattern sanitization** (escapes `%`, `_`, `\` wildcards and handles FTS5 syntax errors gracefully)
 - ✅ **Date format whitelisting** (prevents strftime injection)
 
-### **Path Traversal Protection**
+### **Path Traversal & Filesystem Boundaries**
 
+- ✅ **Explicit Filesystem Boundaries** — Filesystem access MUST be explicitly granted via `ALLOWED_IO_ROOTS`. The server operates in a **fail-closed** mode (`ALLOWED_IO_ROOTS=[]`) by default if not explicitly configured, preventing all filesystem interaction.
+- ✅ **Implicit Authority Disabled** — The server no longer derives ambient filesystem authority from the location of database files.
 - ✅ **Backup filenames validated** - rejects `/`, `\`, `..` in paths
 - ✅ **Typed security errors** with consistent error codes
 
@@ -105,6 +107,12 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Environment Variables**
 
 ```bash
+# Required for Authentication (Must not be the placeholder token)
+MCP_AUTH_TOKEN="your-secure-token-here"
+
+# Required for Filesystem Tools (Export, Backup)
+ALLOWED_IO_ROOTS="/path/to/allow1,/path/to/allow2"
+
 # Required for GitHub features
 GITHUB_TOKEN=ghp_...            # GitHub personal access token
 
@@ -194,6 +202,8 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 - [x] Parameterized SQL queries
 - [x] SQL injection detection heuristics (defense-in-depth)
 - [x] Path traversal protection (`assertNoPathTraversal`)
+- [x] Explicit Filesystem Boundaries (`ALLOWED_IO_ROOTS` enforcement)
+- [x] Strict Authentication Tokens (Placeholder rejection)
 - [x] FTS5 / LIKE pattern sanitization (`sanitizeSearchQuery`)
 - [x] Date format whitelisting (`validateDateFormatPattern`)
 - [x] HTTP body size limit (1MB)

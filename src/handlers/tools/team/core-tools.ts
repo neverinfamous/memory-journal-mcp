@@ -52,19 +52,29 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
                     // Hard-reject if caller supplies a mismatched author — prevents impersonation.
                     const authCtx = getAuthContext()
-                    if (authCtx?.authenticated && authCtx.claims?.sub && input.author !== undefined) {
-                        if (input.author !== authCtx.claims.sub) {
+                    let author: string
+                    if (authCtx?.authenticated) {
+                        const claims = authCtx.claims
+                        const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
+                        const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
+                        const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
+                        const authId = email ?? prefName ?? claims?.sub ?? subject ?? resolveAuthor()
+
+                        if (input.author !== undefined && input.author !== authId) {
                             return {
                                 success: false,
-                                error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authCtx.claims.sub}". Omit the author field to use your identity automatically.`,
+                                error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authId}". Omit the author field to use your identity automatically.`,
                                 code: 'PERMISSION_DENIED',
                                 category: 'auth',
                                 suggestion: 'Omit the author field to use your authenticated identity automatically.',
                                 recoverable: false,
                             }
                         }
+                        author = authId
+                    } else {
+                        const systemAuthor = resolveAuthor()
+                        author = input.author ? `${systemAuthor} (claimed: ${input.author})` : systemAuthor
                     }
-                    const author = authCtx?.claims?.sub ?? input.author ?? resolveAuthor()
 
                     const resolvedIssueUrl = await resolveIssueUrl(
                         context,

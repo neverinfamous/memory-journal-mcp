@@ -77,6 +77,7 @@ describe('VectorSearchManager - error coverage', () => {
                 { id: 1, content: 'fail db' },
                 { id: 2, content: 'fail embed' },
             ]),
+            executeInTransaction: vi.fn().mockImplementation((cb) => cb()),
         } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         vi.spyOn(manager, 'initialize').mockResolvedValue()

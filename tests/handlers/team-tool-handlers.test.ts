@@ -74,7 +74,7 @@ describe('Team Tool Handlers', () => {
             )) as { success: boolean; author: string }
 
             expect(result.success).toBe(true)
-            expect(result.author).toBe('Alice')
+            expect(result.author).toBe('unknown (claimed: Alice)')
         })
 
         it('should support tags and entry_type', async () => {

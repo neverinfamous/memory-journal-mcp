@@ -177,7 +177,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntrySchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const input = CreateEntrySchema.parse(params)
 
@@ -267,11 +267,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Auto-index to vector store for semantic search asynchronously
-                    // to avoid blocking the fast-path DB commit response.
+                    // Auto-index to vector store for semantic search synchronously
+                    // to ensure index status is accurately reported to the client.
                     // This is done after team DB share to prevent async embeddings from surviving a rollback.
-                    void autoIndexEntry(vectorManager, entry.id, entry.content).catch()
-                    const indexStatus = 'queued'
+                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     return {
                         success: true,
@@ -350,14 +349,13 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
             inputSchema: CreateEntryMinimalSchemaMcp,
             outputSchema: CreateEntryOutputSchema,
             annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
-            handler: (params: unknown) => {
+            handler: async (params: unknown) => {
                 try {
                     const { content } = CreateEntryMinimalSchema.parse(params)
                     const entry = db.createEntry({ content })
 
-                    // Auto-index to vector store for semantic search asynchronously
-                    void autoIndexEntry(vectorManager, entry.id, entry.content).catch()
-                    const indexStatus = 'queued'
+                    // Auto-index to vector store for semantic search synchronously
+                    const indexStatus = await autoIndexEntry(vectorManager, entry.id, entry.content)
 
                     return { success: true, entry, indexStatus }
                 } catch (err) {

@@ -80,7 +80,8 @@ function createMockDbAdapter() {
         getVectorCount: () => {
             const res = mockGet()
             return res ? res.count : 0
-        }
+        },
+        executeInTransaction: (cb: any) => cb()
     } as unknown as IDatabaseAdapter
 
     return { adapter, mockDb }
@@ -400,6 +401,7 @@ describe('VectorSearchManager', () => {
                     { id: 1, content: 'Entry one' },
                     { id: 2, content: 'Entry two' },
                 ]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
@@ -421,7 +423,8 @@ describe('VectorSearchManager', () => {
                 cleanupStaleVectors: () => {
                     mockPrepare('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)')
                     mockRun()
-                }
+                },
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
@@ -434,6 +437,7 @@ describe('VectorSearchManager', () => {
             const mockDb = {
                 getActiveEntryCount: vi.fn().mockReturnValue(0),
                 getEntriesPage: vi.fn().mockReturnValue([]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
@@ -455,6 +459,7 @@ describe('VectorSearchManager', () => {
                     { id: 1, content: 'Good entry' },
                     { id: 2, content: 'Will fail embedding' },
                 ]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
@@ -493,6 +498,7 @@ describe('VectorSearchManager', () => {
                     { id: 1, content: 'Good entry' },
                     { id: 2, content: 'Will fail insert' },
                 ]),
+                executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
