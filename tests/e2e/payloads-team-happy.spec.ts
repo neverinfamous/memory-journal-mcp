@@ -81,9 +81,8 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     // --- Core ---
     test('team_create_entry returns { success, entry }', async () => {
         const payload = await callToolAndParse(client, 'team_create_entry', {
-                project_number: 1,
+            project_number: 1,
             content: 'Team happy path test entry 1',
-            author: 'e2e-test',
             entry_type: 'test_entry',
             tags: ['team-test', 'happy-path'],
         })
@@ -95,9 +94,8 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
 
     test('team_create_entry (second entry)', async () => {
         const payload = await callToolAndParse(client, 'team_create_entry', {
-                project_number: 1,
+            project_number: 1,
             content: 'Team happy path test entry 2',
-            author: 'e2e-test',
             entry_type: 'project_decision',
             tags: ['team-test', 'merge-source'],
         })

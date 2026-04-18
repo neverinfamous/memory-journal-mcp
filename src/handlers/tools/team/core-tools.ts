@@ -72,8 +72,18 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         }
                         author = authId
                     } else {
+                        if (input.author !== undefined) {
+                            return {
+                                success: false,
+                                error: `Claiming authorship ("${input.author}") is disabled in non-OAuth environments. Omit the author field to use the system default identity.`,
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'Omit the author field to proceed using the system default identity.',
+                                recoverable: false,
+                            }
+                        }
                         const systemAuthor = resolveAuthor()
-                        author = input.author ? `${systemAuthor} (claimed: ${input.author})` : systemAuthor
+                        author = systemAuthor
                     }
 
                     const resolvedIssueUrl = await resolveIssueUrl(

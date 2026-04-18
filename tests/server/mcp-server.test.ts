@@ -426,7 +426,7 @@ describe('McpServer', function () {
                 dbPath: './test-server.db',
             })
 
-            expect(mockVectorInitialize).not.toHaveBeenCalled()
+            expect(mockVectorInitialize).toHaveBeenCalled()
             expect(mockVectorRebuildIndex).not.toHaveBeenCalled()
         })
     })

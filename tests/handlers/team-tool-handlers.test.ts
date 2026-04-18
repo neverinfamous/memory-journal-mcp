@@ -71,10 +71,10 @@ describe('Team Tool Handlers', () => {
                 undefined,
                 undefined,
                 teamDb
-            )) as { success: boolean; author: string }
+            )) as { success: boolean; author: string; error?: string }
 
-            expect(result.success).toBe(true)
-            expect(result.author).toBe('unknown (claimed: Alice)')
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('disabled in non-OAuth environments')
         })
 
         it('should support tags and entry_type', async () => {

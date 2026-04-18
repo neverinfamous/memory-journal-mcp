@@ -84,6 +84,31 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     const resolved = await resolveOwnerRepo(context, input)
                     if ('error' in resolved) return resolved.response
 
+                    const projectNumber = resolveProjectNumber(
+                        context,
+                        resolved.repo,
+                        input.project_number
+                    )
+
+                    // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
+                    const entryContent = input.entry_content ?? 
+                        `[PENDING] Creating GitHub issue: ${input.title}\n` +
+                        (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
+                        (input.body
+                            ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
+                            : '')
+
+                    const entry = db.createEntry({
+                        content: entryContent,
+                        entryType: 'planning' as EntryType,
+                        tags: input.tags ?? ['github', 'issue-created', 'pending'],
+                        isPersonal: false,
+                        significanceType: null,
+                        projectNumber: projectNumber,
+                        projectOwner: resolved.owner,
+                    })
+
+                    // 2. Perform external mutation
                     const issue = await resolved.github.createIssue(
                         resolved.owner,
                         resolved.repo,
@@ -95,6 +120,8 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     if (!issue) {
+                        // Rollback pending entry if GitHub mutation failed
+                        db.deleteEntry(entry.id, true)
                         return {
                             success: false,
                             error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
@@ -105,12 +132,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const projectNumber = resolveProjectNumber(
-                        context,
-                        resolved.repo,
-                        input.project_number
-                    )
-
+                    // 3. Optional Kanban mutation
                     let projectResult = undefined
                     if (projectNumber !== undefined && issue.nodeId) {
                         try {
@@ -195,7 +217,8 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entryContent =
+                    // 4. Update journal entry with finalized state
+                    const finalContent =
                         input.entry_content ??
                         `Created GitHub issue #${String(issue.number)}: ${issue.title}\n\n` +
                             `URL: ${issue.url}\n` +
@@ -204,15 +227,11 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                                 ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
                                 : '')
 
-                    const entry = db.createEntry({
-                        content: entryContent,
-                        entryType: 'planning' as EntryType,
-                        tags: input.tags ?? ['github', 'issue-created'],
-                        isPersonal: false,
-                        significanceType: null,
+                    db.updateEntry(entry.id, {
+                        content: finalContent,
                         issueNumber: issue.number,
                         issueUrl: issue.url,
-                        projectNumber: projectNumber,
+                        tags: input.tags ?? ['github', 'issue-created']
                     })
 
                     return {
@@ -227,6 +246,8 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             id: entry.id,
                             linkedToIssue: issue.number,
                         },
+                        resolved_owner: resolved.owner,
+                        resolved_repo: resolved.repo,
                         message:
                             `Created issue #${String(issue.number)}` +
                             (projectResult?.added ? ` (added to Project #${projectNumber})` : '') +
@@ -321,6 +342,22 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
+                    const entryContent =
+                        `[PENDING] Closing GitHub issue #${String(input.issue_number)}: ${issueDetails.title}\n` +
+                        (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
+
+                    const entry = db.createEntry({
+                        content: entryContent,
+                        entryType: 'bug_fix' as EntryType,
+                        tags: input.tags ?? ['github', 'issue-closed', 'resolution', 'pending'],
+                        isPersonal: false,
+                        significanceType: 'blocker_resolved' as SignificanceType,
+                        issueNumber: input.issue_number,
+                        projectOwner: resolved.owner,
+                    })
+
+                    // 2. Perform external mutation
                     const result = await resolved.github.closeIssue(
                         resolved.owner,
                         resolved.repo,
@@ -329,6 +366,8 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     if (!result) {
+                        // Rollback pending entry if GitHub mutation failed
+                        db.deleteEntry(entry.id, true)
                         return {
                             success: false,
                             error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.',
@@ -339,7 +378,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    // Move Kanban item to "Done" if requested
+                    // 3. Optional Kanban mutation
                     let kanbanResult:
                         | { moved: boolean; error?: string; projectNumber?: number }
                         | undefined
@@ -424,19 +463,16 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const entryContent =
+                    // 4. Update journal entry with finalized state
+                    const finalContent =
                         `Closed GitHub issue #${String(input.issue_number)}: ${issueDetails.title}\n\n` +
                         `URL: ${issueDetails.url}\n` +
                         (input.resolution_notes ? `\nResolution: ${input.resolution_notes}` : '')
 
-                    const entry = db.createEntry({
-                        content: entryContent,
-                        entryType: 'bug_fix' as EntryType,
-                        tags: input.tags ?? ['github', 'issue-closed', 'resolution'],
-                        isPersonal: false,
-                        significanceType: 'blocker_resolved' as SignificanceType,
-                        issueNumber: input.issue_number,
+                    db.updateEntry(entry.id, {
+                        content: finalContent,
                         issueUrl: issueDetails.url,
+                        tags: input.tags ?? ['github', 'issue-closed', 'resolution']
                     })
 
                     return {
@@ -454,6 +490,8 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             significanceType: 'blocker_resolved',
                         },
                         kanban: kanbanResult,
+                        resolved_owner: resolved.owner,
+                        resolved_repo: resolved.repo,
                         message:
                             `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}` +
                             (kanbanResult?.moved ? ' and moved to Done' : ''),

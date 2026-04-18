@@ -228,7 +228,7 @@ export class AuditLogger {
 
             try {
                 // stat after open — file is guaranteed to exist since we hold the FD
-                const info = await stat(this.config.logPath)
+                const info = await fh.stat()
                 const fileSize = info.size
                 if (fileSize === 0) return []
 

@@ -95,8 +95,11 @@ export function extractBearerToken(authHeader: string | undefined): string | nul
  * - Well-known paths are always public
  */
 function isPublicPath(path: string, publicPaths: string[]): boolean {
-    // Well-known paths are always public (RFC requirement)
-    if (path.startsWith('/.well-known/')) {
+    // Exact OAuth endpoints are public
+    if (
+        path === '/.well-known/oauth-authorization-server' ||
+        path === '/.well-known/jwks.json'
+    ) {
         return true
     }
 

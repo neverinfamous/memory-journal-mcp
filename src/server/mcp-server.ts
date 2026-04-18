@@ -124,8 +124,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize vector search manager (lazy loading - model loads on first use)
     const vectorManager = new VectorSearchManager(db)
-    logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
-
+    
     // Initialize team vector search manager if team DB is configured
     let teamVectorManager: VectorSearchManager | undefined
     if (teamDb) {
@@ -133,7 +132,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
-    // Auto-rebuild vector index if enabled
+    // Auto-rebuild vector index if enabled (blocking)
     if (options.autoRebuildIndex) {
         logger.info('Auto-rebuilding vector index on startup...', { module: 'McpServer' })
         await vectorManager.initialize()
@@ -142,6 +141,19 @@ export async function createServer(options: ServerOptions): Promise<void> {
             module: 'McpServer',
             entriesIndexed: count,
         })
+    } else {
+        // Otherwise, eager-load the model in the background so the first request isn't blocked
+        vectorManager.initialize().catch((err: unknown) => {
+            logger.error('Background vector init failed', { module: 'McpServer', error: err })
+        })
+        logger.info('Vector search manager eager initialization started in background', { module: 'McpServer' })
+        
+        if (teamVectorManager) {
+            teamVectorManager.initialize().catch((err: unknown) => {
+                logger.error('Background team vector init failed', { module: 'McpServer', error: err })
+            })
+            logger.info('Team vector search manager eager initialization started in background', { module: 'McpServer' })
+        }
     }
 
     // Initialize GitHub integration

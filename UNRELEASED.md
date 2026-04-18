@@ -45,6 +45,9 @@
 - Fixed vector indexing silently failing but reporting success by properly checking the underlying `success` boolean.
 - Fixed team semantic search omitting valid cross-project vectors by enforcing `project_number` filtering prior to `limit` truncations.
 - Enforced hard exceptions on SQLite WAL checkpoint truncation failures to prevent silently incomplete backups.
+- Handled post-commit lookup failures gracefully in `createEntry` by logging a warning and returning a synthesized `JournalEntry` instead of throwing an error.
+- Fixed an E2E test suite regression by aligning `team_create_entry` happy path expectations with the hardened non-OAuth authorization boundary.
+- Resolved TypeScript ESLint typing errors (`use-unknown-in-catch-callback-variable`) on background initialization routines.
 ### Security
 - Replaced insecure `JSON.parse()` methods with Zod `AutoContextSchema` boundary validations inside team and briefing resources.
 - Enforced strict tool-to-scope verification during MCP server initialization, forcing a hard-fault if any tool group lacks a mapped scope boundary.
@@ -57,7 +60,7 @@
 - Modified `TokenValidator` to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured.
 - Required `SCOPES.TEAM` instead of `SCOPES.WRITE` for team tool group operations, preventing unintended team journal mutations (SEC-1.3).
 - Added strict verification to reject default insecure placeholder tokens (`change_this_to_a_secure_token_for_production`) during container/server startup.
-- Updated `team_create_entry` to gracefully fallback to `unknown (claimed: [author])` in environments without authenticated principals.
+- Rejected claimed authorship (author injection) in team tools when executing outside of an authenticated OAuth scope, enforcing a hard `PERMISSION_DENIED` error.
 - Routed all internal `mj.*` tool calls within Code Mode through the central `callTool()` dispatcher, enforcing OAuth scope checks and audit interception (SEC-1.1).
 - Applied active `--tool-filter` context to Code Mode's internal tool universe, except when the `codemode-only` preset is active (SEC-1.2).
 - Ensured legacy SSE transport runs inside `requestContextStorage.run()`, making per-request context available to rate limiters and loggers (SEC-2.1).
@@ -78,3 +81,8 @@
 - Enforced LLM Content Provenance rules by applying `<untrusted_remote_content>` wrappers during briefing context generation bridging external entities.
 - Hardened `markUntrustedContent` to aggressively strip any existing tags prior to wrapping, preventing nested breakout attacks.
 - Documented TLS certificate validation as the primary mitigation for Time-of-Check to Time-of-Use (TOCTOU) SSRF vulnerabilities during OAuth discovery.
+- Implemented an atomic Outbox Pattern for dual-write GitHub operations (issues/milestones) to prevent local database drift if external API calls fail.
+- Exposed explicit `resolved_owner` and `resolved_repo` schema properties on all GitHub mutations to eliminate ambient context ambiguity.
+- Parameterized the `strftime` format string in `statistics.ts` timeline queries to completely eliminate SQL interpolation risks.
+- Narrowed `isPublicPath` scope from broad `/.well-known/*` wildcards to strict, explicit OAuth-specific endpoints.
+- Closed a Time-of-Check to Time-of-Use (TOCTOU) race condition in `audit-logger.ts` recent log queries by querying file size from the opened file handle `fh.stat()`.

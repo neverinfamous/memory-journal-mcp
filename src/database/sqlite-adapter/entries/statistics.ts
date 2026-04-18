@@ -63,7 +63,7 @@ export function getStatistics(
     const periodRows = db
         .prepare(
             `SELECT
-        strftime('${dateFormat}', timestamp) as period,
+        strftime(?, timestamp) as period,
         COUNT(*) as total_count,
         SUM(CASE WHEN significance_type IS NOT NULL THEN 1 ELSE 0 END) as significant_count
     FROM memory_journal
@@ -72,7 +72,7 @@ export function getStatistics(
     ORDER BY period DESC
     LIMIT ${String(MAX_PERIOD_ROWS)}`
         )
-        .all(...dateParams) as { period: string; total_count: number; significant_count: number }[]
+        .all(dateFormat, ...dateParams) as { period: string; total_count: number; significant_count: number }[]
 
     const entriesByPeriod = periodRows.map((r) => ({
         period: r.period,
