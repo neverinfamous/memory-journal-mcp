@@ -74,5 +74,6 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         category: ErrorCategory.INTERNAL,
         recoverable: false,
         ...(matched?.suggestion ? { suggestion: matched.suggestion } : {}),
+        details: { internal_message: message },
     }
 }

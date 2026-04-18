@@ -8,10 +8,9 @@
 import { z } from 'zod'
 import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
-import { resolveAuthor } from '../../utils/security-utils.js'
+import { resolveAuthenticatedAuthor } from '../../utils/security-utils.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { resolveIssueUrl } from '../../utils/github-helpers.js'
-import { getAuthContext } from '../../auth/auth-context.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
 import {
@@ -210,12 +209,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let teamError: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
-                            const ctx = getAuthContext()
-                            const claims = ctx?.claims
-                            const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                            const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
-                            const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                            author = email ?? prefName ?? claims?.sub ?? subject ?? resolveAuthor()
+                            author = resolveAuthenticatedAuthor()
                             const teamEntry = teamDb.createEntry({
                                 content: input.content,
                                 entryType: input.entry_type,
@@ -343,7 +337,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const { limit, is_personal, sort_by } = GetRecentEntriesSchema.parse(params)
                     const entries = db.getRecentEntries(limit, is_personal, sort_by)
-                    return { success: true, entries, count: entries.length }
+                    return { success: true, entries, count: entries.length, degraded: false }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

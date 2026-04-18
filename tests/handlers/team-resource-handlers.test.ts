@@ -15,6 +15,7 @@ describe('Team Resource Handlers', () => {
     const teamDbPath = './test-team-resources-team.db'
 
     beforeAll(async () => {
+        process.env.TEAM_AUTHOR = 'Alice'
         personalDb = new DatabaseAdapter(personalDbPath)
         await personalDb.initialize()
 
@@ -52,6 +53,7 @@ describe('Team Resource Handlers', () => {
     })
 
     afterAll(() => {
+        delete process.env.TEAM_AUTHOR
         personalDb.close()
         teamDb.close()
         try {

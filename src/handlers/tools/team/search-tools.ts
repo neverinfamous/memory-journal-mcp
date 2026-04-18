@@ -75,7 +75,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { success: true, entries: enriched, count: enriched.length }
+                    return { success: true, entries: enriched, count: enriched.length, degraded: false }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -129,7 +129,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { success: true, entries: enriched, count: enriched.length }
+                    return { success: true, entries: enriched, count: enriched.length, degraded: false }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

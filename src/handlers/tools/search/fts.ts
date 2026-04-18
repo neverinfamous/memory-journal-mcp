@@ -97,7 +97,7 @@ export function ftsSearch(
         )
         const isTeamDegraded = (teamEntries as unknown as { degraded?: boolean }).degraded === true
         const isPersonalDegraded = (personalEntries as unknown as { degraded?: boolean }).degraded === true
-        return { entries: merged, count: merged.length, degraded: isPersonalDegraded || isTeamDegraded || undefined }
+        return { entries: merged, count: merged.length, degraded: isPersonalDegraded || isTeamDegraded }
     }
 
     const isPersonalDegraded = (personalEntries as unknown as { degraded?: boolean }).degraded === true
@@ -105,6 +105,6 @@ export function ftsSearch(
     return {
         entries: personalEntries.map((e) => ({ ...e, source: 'personal' as const })),
         count: personalEntries.length,
-        degraded: isPersonalDegraded || undefined
+        degraded: isPersonalDegraded
     }
 }

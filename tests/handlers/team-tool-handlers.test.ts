@@ -20,6 +20,7 @@ describe('Team Tool Handlers', () => {
     const teamDbPath = './test-team-tools-team.db'
 
     beforeAll(async () => {
+        process.env.TEAM_AUTHOR = 'Alice'
         personalDb = new DatabaseAdapter(personalDbPath)
         await personalDb.initialize()
 
@@ -29,6 +30,7 @@ describe('Team Tool Handlers', () => {
     })
 
     afterAll(() => {
+        delete process.env.TEAM_AUTHOR
         personalDb.close()
         teamDb.close()
         try {
@@ -265,6 +267,7 @@ describe('Team Tool Handlers', () => {
                 author?: string
             }
 
+            console.log("DEBUG RESULT:", result)
             expect(result.success).toBe(true)
             expect(result.sharedWithTeam).toBe(true)
             expect(result.author).toBeDefined()

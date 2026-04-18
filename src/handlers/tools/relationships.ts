@@ -267,7 +267,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
 
                     // Generate Mermaid diagram
                     const MERMAID_CONTENT_PREVIEW_LENGTH = 40
-                    let mermaid = '```mermaid\ngraph TD\n'
+                    const mermaidLines: string[] = ['```mermaid', 'graph TD']
 
                     for (const node of results.nodes) {
                         const content = (node.metadata?.['content'] as string) || ''
@@ -281,10 +281,10 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                             .replace(/\[/g, '(')
                             .replace(/\]/g, ')')
                         const entryTypeShort = node.group.slice(0, 20)
-                        mermaid += `    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]\\n`
+                        mermaidLines.push(`    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]`)
                     }
 
-                    mermaid += '\\n'
+                    mermaidLines.push('')
 
                     const relSymbols: Record<string, string> = {
                         references: '-->',
@@ -299,19 +299,20 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
 
                     for (const edge of results.edges) {
                         const arrow = relSymbols[edge.type] ?? '-->'
-                        mermaid += `    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}\\n`
+                        mermaidLines.push(`    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}`)
                     }
 
-                    mermaid += '\\n'
+                    mermaidLines.push('')
                     for (const node of results.nodes) {
                         const isPersonal = Boolean(node.metadata?.['is_personal'])
                         if (isPersonal) {
-                            mermaid += `    style E${node.id} fill:#E3F2FD\\n`
+                            mermaidLines.push(`    style E${node.id} fill:#E3F2FD`)
                         } else {
-                            mermaid += `    style E${node.id} fill:#FFF3E0\\n`
+                            mermaidLines.push(`    style E${node.id} fill:#FFF3E0`)
                         }
                     }
-                    mermaid += '```'
+                    mermaidLines.push('```')
+                    const mermaid = mermaidLines.join('\n')
 
                     return {
                         entry_count: results.nodes.length,

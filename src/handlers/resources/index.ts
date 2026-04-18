@@ -109,9 +109,26 @@ export async function readResource(
 
     // Authorization Hook: Enforce scope if auth context exists
     const auth = getAuthContext()
+
+    const isTeamResource = baseUri.startsWith('memory://team/') || baseUri.startsWith('memory://flags')
+
+    // Strict fail-closed boundary for team domains
+    if (isTeamResource) {
+        const envAuthor = process.env['TEAM_AUTHOR']?.trim()
+        const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
+        if (envAuthor === undefined && !hasAuthClaim) {
+            logger.warning(`Access to team resource denied: unauthenticated`, {
+                module: 'AUTH',
+                operation: 'fail-closed',
+                entityId: baseUri,
+            })
+            throw new PermissionError(`Access to team resource '${baseUri}' denied: missing TEAM_AUTHOR or active OAuth session.`)
+        }
+    }
+
     if (auth) {
         let requiredScope: string = SCOPES.READ
-        if (baseUri.startsWith('memory://team/') || baseUri.startsWith('memory://flags')) {
+        if (isTeamResource) {
             requiredScope = SCOPES.TEAM
         } else if (baseUri === 'memory://audit') {
             requiredScope = SCOPES.ADMIN

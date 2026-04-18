@@ -304,6 +304,28 @@ export function sanitizeAuthor(raw: string): string {
 // ============================================================================
 
 /**
+ * Resolve the author name strictly from the authenticated context.
+ * Prioritizes authenticated claims over TEAM_AUTHOR environment variables.
+ * Uses sanitizeAuthor() to strip control characters and cap length.
+ */
+export function resolveAuthenticatedAuthor(): string {
+    const authCtx = getAuthContext()
+    if (authCtx?.authenticated && authCtx.claims) {
+        const claims = authCtx.claims
+        const email = typeof claims['email'] === 'string' ? claims['email'] : undefined
+        const prefName = typeof claims['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
+        const subject = typeof claims['subject'] === 'string' ? claims['subject'] : undefined
+        
+        const claimAuthor = email ?? prefName ?? claims.sub ?? subject
+        if (claimAuthor) {
+            return sanitizeAuthor(claimAuthor)
+        }
+    }
+
+    return resolveAuthor()
+}
+
+/**
  * Resolve the author name for team-shared entries.
  * Priority: TEAM_AUTHOR env → req.auth.sub → 'unknown'.
  * Uses sanitizeAuthor() to strip control characters and cap length.

@@ -6,8 +6,7 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
-import { getAuthContext } from '../../../auth/auth-context.js'
-import { resolveAuthor } from '../../../utils/security-utils.js'
+import { resolveAuthenticatedAuthor } from '../../../utils/security-utils.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
 import {
     TeamUpdateEntrySchema,
@@ -61,15 +60,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
 
                     const author = fetchAuthor(teamDb, entry_id)
 
-                    const authCtx = getAuthContext()
-                    let currentUser = resolveAuthor()
-                    if (authCtx?.authenticated) {
-                        const claims = authCtx.claims
-                        const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                        const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
-                        const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                        currentUser = email ?? prefName ?? claims?.sub ?? subject ?? currentUser
-                    }
+                    const currentUser = resolveAuthenticatedAuthor()
 
                     if (author && author !== currentUser) {
                         return {
@@ -134,15 +125,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
 
                     const author = fetchAuthor(teamDb, entry_id)
 
-                    const authCtx = getAuthContext()
-                    let currentUser = resolveAuthor()
-                    if (authCtx?.authenticated) {
-                        const claims = authCtx.claims
-                        const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                        const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
-                        const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                        currentUser = email ?? prefName ?? claims?.sub ?? subject ?? currentUser
-                    }
+                    const currentUser = resolveAuthenticatedAuthor()
 
                     if (author && author !== currentUser) {
                         return {

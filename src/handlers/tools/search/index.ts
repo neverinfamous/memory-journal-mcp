@@ -266,6 +266,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             ),
                             entries: [],
                             count: 0,
+                            degraded: false,
                         }
                     }
 
@@ -355,6 +356,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'semantic (auto)' : 'semantic',
+                                degraded: false,
                             }
                         }
                         case 'hybrid': {
@@ -387,7 +389,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     entries: scored,
                                     count: scored.length,
                                     searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
-                                    ...(degraded ? { degraded } : {}),
+                                    degraded: degraded === true,
                                 }
                             }
 
@@ -396,7 +398,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 entries,
                                 count: entries.length,
                                 searchMode: isAuto ? 'hybrid (auto)' : 'hybrid',
-                                ...(degraded ? { degraded } : {}),
+                                degraded: degraded === true,
                             }
                         }
                         case 'fts':
@@ -406,6 +408,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 ...result,
                                 success: true,
                                 searchMode: isAuto ? 'fts (auto)' : 'fts',
+                                degraded: result.degraded ?? false,
                             }
                         }
                     }
@@ -474,13 +477,14 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             input.limit,
                             input.sort_by
                         )
-                        return { success: true, entries: merged, count: merged.length }
+                        return { success: true, entries: merged, count: merged.length, degraded: false }
                     }
 
                     return {
                         success: true,
                         entries: personalEntries,
                         count: personalEntries.length,
+                        degraded: false,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

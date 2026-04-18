@@ -57,6 +57,10 @@
 - Handled post-commit lookup failures gracefully in `createEntry` by logging a warning and returning a synthesized `JournalEntry` instead of throwing an error.
 - Fixed an E2E test suite regression by aligning `team_create_entry` happy path expectations with the hardened non-OAuth authorization boundary.
 - Resolved TypeScript ESLint typing errors (`use-unknown-in-catch-callback-variable`) on background initialization routines.
+- Fixed E2E test regressions (`numeric-coercion`, `zod-sweep`, `payloads-error-contracts`) by making `degraded` optional in `EntriesListOutputSchema`, eliminating raw `-32602` SDK protocol errors during structured validation failures.
+- Fixed an E2E test regression in `resources-complete.spec.ts` (`memory://team/recent`) by explicitly providing `TEAM_AUTHOR` in `playwright.config.ts` to satisfy hardened team-domain boundaries.
+- Resolved a strict TypeScript boolean evaluation error in `src/handlers/resources/index.ts` by explicitly comparing authentication claims rather than relying on truthiness.
+- Fixed an unhandled reference exception masking as a schema resolution failure during team entry creation by restoring the `resolveAuthenticatedAuthor` import in `src/handlers/tools/core.ts`.
 ### Security
 - Replaced insecure `JSON.parse()` methods with Zod `AutoContextSchema` boundary validations inside team and briefing resources.
 - Enforced strict tool-to-scope verification during MCP server initialization, forcing a hard-fault if any tool group lacks a mapped scope boundary.

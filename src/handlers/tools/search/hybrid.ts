@@ -132,5 +132,5 @@ export async function hybridSearch(
 
     const isDegraded = (ftsResults as unknown as { degraded?: boolean }).degraded === true
 
-    return { entries, fusionScores, degraded: isDegraded || undefined }
+    return { entries, fusionScores, degraded: isDegraded }
 }
