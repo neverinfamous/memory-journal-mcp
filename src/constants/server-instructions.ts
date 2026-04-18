@@ -354,7 +354,7 @@ export const GOTCHAS_CONTENT = `# memory-journal-mcp — Field Notes & Gotchas
 
 ## ⚠️ Critical Patterns
 
-- **\`autoContext\`**: Reserved for future automatic context capture. Currently always \`null\`.
+- **\`autoContext\`**: Deprecated in v7.5.1. The feature was originally planned for background filesystem monitoring but has been abandoned to reduce telemetry overhead. Existing data with \`autoContext: null\` is safely ignored.
 - **\`memory://tags\` vs \`list_tags\`**: Resource includes \`id\`, \`name\`, \`count\`; tool returns only \`name\`, \`count\`. Neither returns orphan tags with zero usage.
 - **Tag naming**: Use lowercase with dashes (e.g., \`bug-fix\`, \`phase-2\`). Use \`merge_tags\` to consolidate duplicates (e.g., merge \`phase2\` into \`phase-2\`).
 - **\`merge_tags\` behavior**: Only updates non-deleted entries. Deleted entries retain their original tags.

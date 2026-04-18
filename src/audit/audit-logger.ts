@@ -57,7 +57,7 @@ export class AuditLogger {
 
     private buffer: string[] = []
     private flushTimer: ReturnType<typeof setInterval> | null = null
-    private activeFlush: Promise<void> | null = null
+    private flushQueue: Promise<void> = Promise.resolve()
     private closed = false
     private dirEnsured = false
     private readonly stderrMode: boolean
@@ -134,19 +134,14 @@ export class AuditLogger {
 
     /**
      * Flush the buffer to disk.
-     * Safe to call concurrently — serialises via `this.activeFlush` Promise.
+     * Safe to call concurrently — serialises via `this.flushQueue` Promise chain.
      */
     async flush(): Promise<void> {
-        // If a flush is currently running, wait for it to finish
-        if (this.activeFlush) {
-            await this.activeFlush
-            // If the buffer is empty after waiting, return
-            if (this.buffer.length === 0) return
-        }
-
         if (this.buffer.length === 0) return
 
-        const doFlush = async (): Promise<void> => {
+        this.flushQueue = this.flushQueue.then(async () => {
+            if (this.buffer.length === 0) return
+
             // Rotate before writing if the log exceeds the configured size
             await this.rotateIfNeeded()
 
@@ -177,14 +172,9 @@ export class AuditLogger {
                     this._droppedCount += toDrop
                 }
             }
-        }
+        }).catch(() => { /* ignore */ })
 
-        this.activeFlush = doFlush()
-        try {
-            await this.activeFlush
-        } finally {
-            this.activeFlush = null
-        }
+        await this.flushQueue
     }
 
     /**

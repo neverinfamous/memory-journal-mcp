@@ -312,7 +312,8 @@ export class TokenValidator {
         try {
             const response = await fetch(this.jwksUri, { 
                 method: 'GET',
-                signal: AbortSignal.timeout(10000)
+                signal: AbortSignal.timeout(10000),
+                redirect: 'error'
             })
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`)

@@ -99,7 +99,6 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: false,
                         significanceType: input.significance_type ?? null,
-                        autoContext: JSON.stringify({ author }),
                         projectNumber: input.project_number,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
@@ -114,7 +113,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: true,
-                        entry: { ...entry, author },
+                        entry: { ...entry, autoContext: undefined, author },
                         author,
                     }
                 } catch (err) {
@@ -152,7 +151,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const author = fetchAuthor(teamDb, entry_id)
-                    const enrichedEntry = { ...entry, author }
+                    const enrichedEntry = { ...entry, autoContext: undefined, author }
 
                     const result: Record<string, unknown> = {
                         success: true,
@@ -200,6 +199,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     )
                     const enriched = entries.map((e) => ({
                         ...e,
+                        autoContext: undefined,
                         author: authorMap.get(e.id) ?? null,
                     }))
 

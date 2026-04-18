@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import * as fs from 'node:fs'
+
 import * as path from 'node:path'
 import { z } from 'zod'
 import { createServer } from './server/mcp-server.js'
@@ -20,20 +20,15 @@ function parseConfigIntRequired(value: string, name: string): number {
 
 
 
-// Smart Database Resolution: Check root, then test-server, then default to root
-function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
+// Database Resolution: Enforce explicit boundaries
+function resolveDbPath(envPath: string | undefined, defaultName: string): string {
     if (envPath) return envPath
-    const rootPath = `./${defaultName}`
-    const testPath = `./test-server/${testName}`
-    if (fs.existsSync(rootPath)) return rootPath
-    if (fs.existsSync(testPath)) return testPath
-    return rootPath // fallback to creating root if neither exist
+    return `./${defaultName}`
 }
 
 const defaultDbPath = resolveDbPath(
     process.env['DB_PATH'],
-    'memory_journal.db',
-    'test-memory-journal.db'
+    'memory_journal.db'
 )
 const defaultTeamDbPath = process.env['TEAM_DB_PATH'] ? process.env['TEAM_DB_PATH'] : undefined
 
@@ -328,6 +323,10 @@ program
                     projectRegistry: (() => {
                         const raw = process.env['PROJECT_REGISTRY']
                         if (!raw) return undefined
+                        // Size limit to prevent DoS via large JSON payload parsing
+                        if (raw.length > 51200) {
+                            throw new Error('PROJECT_REGISTRY environment variable exceeds size limit (50KB)')
+                        }
                         try {
                             // Zod validation for structural integrity
                             const registrySchema = z.record(
@@ -358,6 +357,10 @@ program
                     allowedIoRoots: (() => {
                         const raw = options.allowedIoRoots ?? process.env['ALLOWED_IO_ROOTS']
                         if (!raw) return undefined
+                        // Size limit to prevent DoS via large JSON payload parsing
+                        if (raw.length > 51200) {
+                            throw new Error('ALLOWED_IO_ROOTS configuration exceeds size limit (50KB)')
+                        }
                         try {
                             if (raw.trim().startsWith('[')) {
                                 const parsed = JSON.parse(raw) as unknown

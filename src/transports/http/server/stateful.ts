@@ -106,8 +106,10 @@ export function setupStateful(
                         return
                     }
 
+                    const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+                    const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
                     const expectedSub = ctx.sessionSubjects.get(sessionId)
-                    if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+                    if (expectedSub !== undefined && reqSubject !== expectedSub) {
                         res.status(403).json({
                             jsonrpc: '2.0',
                             error: { code: JSONRPC_SERVER_ERROR, message: 'Forbidden: Session belongs to a different subject' },
@@ -170,8 +172,10 @@ export function setupStateful(
                             ctx.transports.set(sid, newTransport)
                             ctx.touchSession(sid)
 
-                            if (req.auth) {
-                                ctx.sessionSubjects.set(sid, req.auth.sub)
+                            const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+                            const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
+                            if (reqSubject) {
+                                ctx.sessionSubjects.set(sid, reqSubject)
                             }
 
                             // Attach close handler specifically for this session ID, preserving any existing handlers
@@ -235,7 +239,12 @@ export function setupStateful(
                     })
                 }
             }
-        })()
+        })().catch((error: unknown) => {
+            logger.error('Unhandled async error in POST /mcp IIFE', {
+                module: 'HTTP',
+                error: error instanceof Error ? error.message : String(error),
+            })
+        })
     })
 
     // GET /mcp — SSE stream for server-to-client notifications
@@ -247,8 +256,10 @@ export function setupStateful(
             return
         }
 
+        const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+        const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
         const expectedSub = ctx.sessionSubjects.get(sessionId)
-        if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+        if (expectedSub !== undefined && reqSubject !== expectedSub) {
             res.status(403).send('Forbidden: Session belongs to a different subject')
             return
         }
@@ -280,8 +291,10 @@ export function setupStateful(
             return
         }
 
+        const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+        const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
         const expectedSub = ctx.sessionSubjects.get(sessionId)
-        if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
+        if (expectedSub !== undefined && reqSubject !== expectedSub) {
             res.status(403).send('Forbidden: Session belongs to a different subject')
             return
         }

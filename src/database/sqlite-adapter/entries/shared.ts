@@ -32,15 +32,13 @@ export interface EntriesSharedContext {
 }
 
 /**
- * Convert a generic database row to a JournalEntry by attaching its tags
+ * Convert a generic database row to a JournalEntry by attaching its tags.
+ * Delegates to rowsToEntries to utilize batch tag fetching.
  */
 export function rowToEntry(tagsMgr: TagsManager, row: unknown): JournalEntry {
-    const r = row as Partial<JournalEntry>
-    return {
-        ...r,
-        isPersonal: Boolean(r.isPersonal), // SQLite uses 0/1
-        tags: tagsMgr.getTagsForEntry(Number(r.id)),
-    } as JournalEntry
+    const entry = rowsToEntries(tagsMgr, [row])[0]
+    if (!entry) throw new Error('Expected entry to be defined')
+    return entry
 }
 
 /**

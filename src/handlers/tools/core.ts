@@ -207,6 +207,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let sharedWithTeam = false
                     let author: string | undefined
                     let teamEntryId: number | undefined
+                    let teamError: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
                             const ctx = getAuthContext()
@@ -238,39 +239,39 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {
-                            logger.error('Failed to share entry with team DB, rolling back personal entry', {
+                            logger.error('Failed to share entry with team DB, retaining personal entry', {
                                 module: 'TOOL',
                                 operation: 'create-entry',
                                 error: error instanceof Error ? error.message : String(error),
                             })
-                            // Rollback the personal entry to prevent partial commit
-                            db.deleteEntry(entry.id, true)
-                            throw error
+                            teamError = error instanceof Error ? error.message : String(error)
                         }
                     }
 
-                    // Auto-populate issueUrl if issue_number provided without issueUrl via background task
-                    // to prevent blocking the entry creation API response. Runs after teamDb sync to update both.
+                    // Auto-populate issueUrl if issue_number provided without issueUrl
+                    let enrichmentStatus = 'complete'
                     if (input.issue_number !== undefined && !input.issue_url) {
-                        void resolveIssueUrl(
-                            context,
-                            input.project_number,
-                            input.issue_number,
-                            input.issue_url
-                        )
-                            .then((resolvedUrl) => {
-                                if (resolvedUrl) {
-                                    db.updateEntry(entry.id, { issueUrl: resolvedUrl })
-                                    if (teamDb && teamEntryId !== undefined) {
-                                        teamDb.updateEntry(teamEntryId, { issueUrl: resolvedUrl })
-                                    }
+                        try {
+                            const resolvedUrl = await resolveIssueUrl(
+                                context,
+                                input.project_number,
+                                input.issue_number,
+                                input.issue_url
+                            )
+                            if (resolvedUrl) {
+                                db.updateEntry(entry.id, { issueUrl: resolvedUrl })
+                                if (teamDb && teamEntryId !== undefined) {
+                                    teamDb.updateEntry(teamEntryId, { issueUrl: resolvedUrl })
                                 }
+                            } else {
+                                enrichmentStatus = 'failed'
+                            }
+                        } catch (err: unknown) {
+                            logger.error('Failed to resolve issue url synchronously', {
+                                error: String(err),
                             })
-                            .catch((err: unknown) => {
-                                logger.error('Failed to resolve issue url in background', {
-                                    error: String(err),
-                                })
-                            })
+                            enrichmentStatus = 'failed'
+                        }
                     }
 
                     // Auto-index to vector store for semantic search synchronously
@@ -282,8 +283,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         entry,
                         indexStatus,
-                        enrichmentStatus: input.issue_number !== undefined && !input.issue_url ? 'pending' : 'complete',
+                        enrichmentStatus,
                         ...(sharedWithTeam ? { sharedWithTeam: true, author } : {}),
+                        ...(teamError ? { teamError } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)

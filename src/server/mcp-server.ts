@@ -141,12 +141,6 @@ export async function createServer(options: ServerOptions): Promise<void> {
             module: 'McpServer',
             entriesIndexed: count,
         })
-    } else {
-        // Otherwise, eager-load the model in the background so the first request isn't blocked
-        vectorManager.initialize().catch((err: unknown) => {
-            logger.error('Background vector init failed', { module: 'McpServer', error: err })
-        })
-        logger.info('Vector search manager eager initialization started in background', { module: 'McpServer' })
         
         if (teamVectorManager) {
             teamVectorManager.initialize().catch((err: unknown) => {
@@ -154,6 +148,20 @@ export async function createServer(options: ServerOptions): Promise<void> {
             })
             logger.info('Team vector search manager eager initialization started in background', { module: 'McpServer' })
         }
+    } else {
+        // Otherwise, eager-load the model in the background so the first request isn't blocked
+        logger.info('Vector search manager eager initialization started in background', { module: 'McpServer' })
+        vectorManager.initialize()
+            .then(async () => {
+                // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
+                if (teamVectorManager) {
+                    logger.info('Team vector search manager eager initialization started in background', { module: 'McpServer' })
+                    await teamVectorManager.initialize()
+                }
+            })
+            .catch((err: unknown) => {
+                logger.error('Background vector init failed', { module: 'McpServer', error: err })
+            })
     }
 
     // Initialize GitHub integration

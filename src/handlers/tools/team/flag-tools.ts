@@ -132,7 +132,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: true,
-                        entry: { ...entry, author },
+                        entry: { ...entry, autoContext: undefined, author, flagMetadata: flagContext as Record<string, unknown> },
                         flag_type: input.flag_type,
                         target_user: targetUser,
                         resolved: false,
@@ -205,7 +205,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         const author = fetchAuthor(teamDb, input.flag_id)
                         return {
                             success: true,
-                            entry: { ...entry, author },
+                            entry: { ...entry, autoContext: undefined, author, flagMetadata: flagCtx as Record<string, unknown> },
                             flag_type: flagCtx.flag_type,
                             resolved: true,
                             resolution: flagCtx.resolution,
@@ -238,7 +238,7 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: true,
-                        entry: updatedEntry ? { ...updatedEntry, author } : undefined,
+                        entry: updatedEntry ? { ...updatedEntry, autoContext: undefined, author, flagMetadata: updatedContext as Record<string, unknown> } : undefined,
                         flag_type: flagCtx.flag_type,
                         resolved: true,
                         resolution: input.resolution ?? null,

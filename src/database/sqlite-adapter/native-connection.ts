@@ -202,13 +202,18 @@ export class NativeConnectionManager implements IDatabaseConnection {
     exec(sql: string, params?: unknown[]): QueryResult[] {
         const db = this.ensureDb()
 
+        // Strip string literals to safely check for multiple statements
+        // SQLite uses single quotes for strings and double quotes for identifiers
+        const strippedSql = sql.replace(/'[^']*'/g, '').replace(/"[^"]*"/g, '')
+        const statements = strippedSql.split(';').map(s => s.trim()).filter(s => s.length > 0)
+        
+        // Reject multiple statements separated by semicolon to prevent unparameterized footguns
+        if (statements.length > 1) {
+            throw new Error('Multi-statement queries via exec() are strictly forbidden. Use properly parameterized adapter methods instead.')
+        }
+
         // Use pre-compiled regex to detect true mutations that should return an empty set
         const isMutation = IS_MUTATION_RE.test(sql)
-
-        // Reject multiple statements separated by semicolon to prevent unparameterized footguns
-        if (isMutation && sql.includes(';')) {
-            throw new Error('Multi-statement mutations via exec() are strictly forbidden. Use properly parameterized adapter methods instead.')
-        }
 
         const stmt = db.prepare(sql)
 

@@ -22,6 +22,8 @@
 - Batched database operations within a single transaction in the markdown importer to significantly improve throughput.
 - Updated `mj_execute_code` documentation to explicitly state it is a "trusted-admin execution environment".
 - Replaced hardcoded `github.com` URLs with a dynamic `GITHUB_HOST` environment variable fallback.
+### Deprecated
+- Officially deprecated the `autoContext` field across the memory journal ecosystem. The feature was originally intended for background filesystem monitoring but has been abandoned to reduce telemetry overhead. Existing records are safely ignored.
 ### Fixed
 - Fixed an N+1 query performance bottleneck during Markdown exports and Semantic Search.
 - Re-implemented legacy SSE transport to enforce `MAX_STATEFUL_SESSIONS` boundaries, aligning with Streamable HTTP limits.
@@ -42,6 +44,11 @@
 - Re-enabled `X-Forwarded-For` extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
 - Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist.
 - Consolidated and resolved testing suite regressions and TypeScript strict-mode issues.
+- Fixed E2E test failures caused by `autoContext` deprecation by migrating database assertions back to JSON parsing of the raw SQLite schema columns.
+- Resolved rate limiting test regressions by updating identity mock hashes to correctly drop User-Agent (`|unknown`) entropy, matching the newly implemented cache-busting DoS protection.
+- Fixed `generate:instructions` tool failures caused by unescaped backticks in template literal strings (`server-instructions-gotchas.ts`).
+- Resolved conflicting ESLint `no-non-null-assertion` and `non-nullable-type-assertion-style` rules in Database adapters by applying explicit runtime type guard checks.
+- Addressed Zod 4 schema compilation errors by explicitly typing `flagMetadata` records with `z.string()` keys.
 - Fixed `tests/handlers/codemode-tools.test.ts` rate limit test timeout to 30000ms.
 - Fixed `restore_backup` tool handler test regression by injecting missing `maintenanceManager` lock methods into test mocks.
 - Fixed vector indexing silently failing but reporting success by properly checking the underlying `success` boolean.

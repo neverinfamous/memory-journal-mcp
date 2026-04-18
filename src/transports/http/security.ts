@@ -47,8 +47,8 @@ export function checkRateLimit(
     const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
     const subject = authReq.auth?.sub ?? authReq.auth?.subject
     const ip = getClientIp(req)
-    const userAgent = req.headers['user-agent'] ?? 'unknown'
-    const rawIdentity = typeof subject === 'string' && subject ? subject : `${ip}|${userAgent}`
+    // Ignore user-agent to prevent DoS via UA randomization
+    const rawIdentity = typeof subject === 'string' && subject ? subject : ip
     const clientIdentity = createHash('sha256').update(rawIdentity).digest('hex')
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
@@ -63,10 +63,15 @@ export function checkRateLimit(
     if (!entry || now > entry.resetTime) {
         // Enforce hard cap to prevent Map OOM from unbounded IP spoofing
         if (rateLimitMap.size >= 10000 && !rateLimitMap.has(clientIdentity)) {
-            // Evict the least recently used entry (first item in insertion order)
-            const firstKey = rateLimitMap.keys().next().value
-            if (firstKey !== undefined) {
-                rateLimitMap.delete(firstKey)
+            // Cleanup expired entries first
+            for (const [key, val] of rateLimitMap.entries()) {
+                if (now > val.resetTime) {
+                    rateLimitMap.delete(key)
+                }
+            }
+            // If still at capacity, fail closed to prevent DoS
+            if (rateLimitMap.size >= 10000) {
+                return { allowed: false, retryAfterSeconds: Math.ceil(windowMs / 1000) }
             }
         }
         rateLimitMap.set(clientIdentity, { count: 1, resetTime: now + windowMs, lastSeen: now })

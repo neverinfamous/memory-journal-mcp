@@ -62,7 +62,7 @@ describe('Team Flag Tool Handlers', () => {
 
             expect(result.success).toBe(true)
             expect(result.entry.entryType).toBe('flag')
-            const context = JSON.parse(result.entry.autoContext)
+            const context = result.entry.flagMetadata
             expect(context.flag_type).toBe('needs_review')
             expect(context.target_user).toBe('alice')
         })
