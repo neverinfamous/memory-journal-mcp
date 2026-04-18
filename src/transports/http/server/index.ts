@@ -128,20 +128,17 @@ export class HttpTransport {
         }
 
         // DNS rebinding protection (CVE-2025-66414)
-        // Applied when no auth is configured — defense-in-depth for local HTTP servers.
-        // When OAuth or bearer auth is active, auth already prevents unauthorized access.
-        if (!this.config.oauthEnabled && !authToken) {
-            const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-            this.app.use(
-                isLocalhost
-                    ? localhostHostValidation()
-                    : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
-            )
-            logger.info('DNS rebinding protection enabled (host header validation)', {
-                module: 'HTTP',
-                allowedHosts: isLocalhost ? ['localhost', '127.0.0.1', '[::1]'] : [host],
-            })
-        }
+        // Always applied as defense-in-depth, even when auth is active.
+        const isLocalHostHeader = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+        this.app.use(
+            isLocalHostHeader
+                ? localhostHostValidation()
+                : hostHeaderValidation([host, 'localhost', '127.0.0.1', '[::1]'])
+        )
+        logger.info('DNS rebinding protection enabled (host header validation)', {
+            module: 'HTTP',
+            allowedHosts: isLocalHostHeader ? ['localhost', '127.0.0.1', '[::1]'] : [host],
+        })
 
         // Security headers middleware
         this.app.use((req: Request, res: Response, next: () => void) => {

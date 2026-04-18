@@ -311,7 +311,7 @@ export async function callTool(
         throw new ResourceNotFoundError('Tool', name)
     }
 
-    if (!config?.runtime?.maintenanceManager && process.env['NODE_ENV'] !== 'test') {
+    if (!config?.runtime?.maintenanceManager) {
         throw new ConfigurationError('ServerRuntime is logically required for secure tool execution. Please initialize the server correctly.')
     }
 

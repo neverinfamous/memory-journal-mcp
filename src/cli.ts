@@ -238,6 +238,15 @@ program
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
 
+            // Validate against default placeholder secrets
+            const sensitiveEnvVars = ['GITHUB_TOKEN', 'MCP_AUTH_TOKEN', 'OAUTH_ISSUER', 'OAUTH_JWKS_URI']
+            for (const envVar of sensitiveEnvVars) {
+                if (process.env[envVar]?.startsWith('CHANGEME_')) {
+                    logger.error(`FATAL: Insecure configuration detected. ${envVar} contains default placeholder value. Please update your environment variables.`, { module: 'CLI' })
+                    process.exit(1)
+                }
+            }
+
             // Resolve host: CLI flag > env var > default (localhost)
             const host =
                 options.serverHost ?? process.env['MCP_HOST'] ?? process.env['HOST'] ?? undefined

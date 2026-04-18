@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-89.26%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-89.06%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -402,15 +402,20 @@ Restart your MCP client and start journaling!
 
 ### Option 3: HTTP/SSE Transport (Remote Access)
 
+> 🔒 **Security Posture: Stdio vs HTTP**
+> - **Stdio (Default):** Runs implicitly within the secure boundaries of your local IDE or command-line environment. No explicit authentication is required because the execution context is already trusted.
+> - **HTTP/SSE:** Exposes the server over a network socket. By default, HTTP binds ONLY to `localhost` and blocks wildcard CORS to prevent unauthorized access and CSRF attacks. **Public network binding (`--server-host 0.0.0.0`) requires explicit authentication** (`--auth-token` or `--oauth-enabled`). The server will throw a fatal error if you attempt to expose it publicly without securing it.
+
 For remote access or web-based clients, run the server in HTTP mode:
 
 ```bash
 memory-journal-mcp --transport http --port 3000
 ```
 
-To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest):
+To bind to all interfaces (required for containers) and enable the automated proactive analytics scheduler (e.g. daily digest), you MUST provide an authentication token:
 
 ```bash
+export MCP_AUTH_TOKEN="your_secure_random_token"
 memory-journal-mcp --transport http --port 3000 --server-host 0.0.0.0 --digest-interval 1440
 ```
 

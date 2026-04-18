@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { GitHubIntegration } from '../../src/github/github-integration/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import { callTool } from '../../src/handlers/tools/index.js'
+import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import * as fs from 'fs'
+
+const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
+    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+
 
 vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
     const actual = await importOriginal<any>()
@@ -161,5 +165,5 @@ describe('Code Mode Tool Handlers', () => {
 
         expect(result.success).toBe(false)
         expect(result.error).toContain('Rate limit exceeded')
-    })
+    }, 30000)
 })

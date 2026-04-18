@@ -90,8 +90,10 @@ describe('checkRateLimit', () => {
 
         const result = checkRateLimit(req as never, config, rateLimitMap)
 
+        const expectedHash = require('node:crypto').createHash('sha256').update('10.0.0.1|unknown').digest('hex')
+
         expect(result.allowed).toBe(true)
-        expect(rateLimitMap.has('10.0.0.1')).toBe(true)
+        expect(rateLimitMap.has(expectedHash)).toBe(true)
     })
 
     it('should deny when rate limit exceeded', () => {
@@ -121,12 +123,13 @@ describe('checkRateLimit', () => {
         } as HttpTransportConfig
         const rateLimitMap = new Map<string, RateLimitEntry>()
         const req = mockReq({ ip: '10.0.0.1' })
+        const expectedHash = require('node:crypto').createHash('sha256').update('10.0.0.1|unknown').digest('hex')
 
         // Use up the limit
         checkRateLimit(req as never, config, rateLimitMap)
 
         // Simulate window expiry by modifying entry
-        const entry = rateLimitMap.get('10.0.0.1')!
+        const entry = rateLimitMap.get(expectedHash)!
         entry.resetTime = Date.now() - 1
 
         // Should be allowed again

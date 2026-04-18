@@ -44,11 +44,21 @@ export class TokenValidator {
         this.clockTolerance = config.clockTolerance ?? 60
         this.jwksCacheTtl = config.jwksCacheTtl ?? 3600
 
-        const issuerOrigin = new URL(this.issuer).origin
-        const jwksOrigin = new URL(this.jwksUri).origin
+        const issuerUrl = new URL(this.issuer)
+        const jwksUrl = new URL(this.jwksUri)
 
-        if (issuerOrigin !== jwksOrigin) {
-            throw new Error(`Security Violation: JWKS URI origin (${jwksOrigin}) does not match Issuer origin (${issuerOrigin})`)
+        const isLoopback = (host: string): boolean => host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+
+        if (issuerUrl.protocol !== 'https:' && !isLoopback(issuerUrl.hostname)) {
+            throw new Error(`Security Violation: Issuer must use HTTPS protocol (got ${this.issuer})`)
+        }
+
+        if (jwksUrl.protocol !== 'https:' && !isLoopback(jwksUrl.hostname)) {
+            throw new Error(`Security Violation: JWKS URI must use HTTPS protocol (got ${this.jwksUri})`)
+        }
+
+        if (issuerUrl.origin !== jwksUrl.origin) {
+            throw new Error(`Security Violation: JWKS URI origin (${jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`)
         }
 
         const issuerHost = new URL(this.issuer).hostname

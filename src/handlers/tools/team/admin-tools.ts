@@ -6,6 +6,8 @@
 
 import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
+import { getAuthContext } from '../../../auth/auth-context.js'
+import { resolveAuthor } from '../../../utils/security-utils.js'
 import { TEAM_DB_ERROR_RESPONSE, fetchAuthor } from './helpers.js'
 import {
     TeamUpdateEntrySchema,
@@ -57,13 +59,34 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
+                    const author = fetchAuthor(teamDb, entry_id)
+
+                    const authCtx = getAuthContext()
+                    let currentUser = resolveAuthor()
+                    if (authCtx?.authenticated) {
+                        const claims = authCtx.claims
+                        const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
+                        const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
+                        const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
+                        currentUser = email ?? prefName ?? claims?.sub ?? subject ?? currentUser
+                    }
+
+                    if (author && author !== currentUser) {
+                        return {
+                            success: false,
+                            error: `Permission Denied: Only the original author ("${author}") can modify this team entry.`,
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'You can only update entries that you authored.',
+                            recoverable: false,
+                        }
+                    }
+
                     const updated = teamDb.updateEntry(entry_id, {
                         content,
                         entryType: entry_type,
                         tags,
                     })
-
-                    const author = fetchAuthor(teamDb, entry_id)
 
                     return {
                         success: true,
@@ -106,6 +129,29 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                             category: 'resource',
                             suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
+                        }
+                    }
+
+                    const author = fetchAuthor(teamDb, entry_id)
+
+                    const authCtx = getAuthContext()
+                    let currentUser = resolveAuthor()
+                    if (authCtx?.authenticated) {
+                        const claims = authCtx.claims
+                        const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
+                        const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
+                        const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
+                        currentUser = email ?? prefName ?? claims?.sub ?? subject ?? currentUser
+                    }
+
+                    if (author && author !== currentUser) {
+                        return {
+                            success: false,
+                            error: `Permission Denied: Only the original author ("${author}") can delete this team entry.`,
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'You can only delete entries that you authored.',
+                            recoverable: false,
                         }
                     }
 

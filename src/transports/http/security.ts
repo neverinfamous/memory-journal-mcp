@@ -5,6 +5,7 @@
  */
 
 import type { Request, Response } from 'express'
+import { createHash } from 'node:crypto'
 import type { HttpTransportConfig, RateLimitEntry } from './types.js'
 import {
     DEFAULT_RATE_LIMIT_WINDOW_MS,
@@ -45,7 +46,10 @@ export function checkRateLimit(
 
     const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
     const subject = authReq.auth?.sub ?? authReq.auth?.subject
-    const clientIdentity = typeof subject === 'string' && subject ? subject : getClientIp(req)
+    const ip = getClientIp(req)
+    const userAgent = req.headers['user-agent'] ?? 'unknown'
+    const rawIdentity = typeof subject === 'string' && subject ? subject : `${ip}|${userAgent}`
+    const clientIdentity = createHash('sha256').update(rawIdentity).digest('hex')
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
     let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX'] ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10) : NaN

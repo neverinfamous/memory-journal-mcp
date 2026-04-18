@@ -5,9 +5,13 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { callTool } from '../../src/handlers/tools/index.js'
+import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
+
+const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
+    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+
 
 describe('Team Vector Tool Handlers', () => {
     let personalDb: DatabaseAdapter

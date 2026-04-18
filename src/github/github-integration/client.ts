@@ -18,12 +18,11 @@ export class GitHubClient {
     public octokit: Octokit | null = null
     public graphqlWithAuth: typeof graphql | null = null
     public git: simpleGitImport.SimpleGit
-    private readonly token: string | undefined
 
     public readonly apiCache = new Map<string, CacheEntry<unknown>>()
 
     constructor(workingDir = '.') {
-        this.token = process.env['GITHUB_TOKEN']
+        const token = process.env['GITHUB_TOKEN']
 
         const effectiveDir = workingDir
 
@@ -38,10 +37,10 @@ export class GitHubClient {
 
         this.git = simpleGit(effectiveDir)
 
-        if (this.token) {
-            this.octokit = new Octokit({ auth: this.token })
+        if (token) {
+            this.octokit = new Octokit({ auth: token })
             this.graphqlWithAuth = graphql.defaults({
-                headers: { authorization: `token ${this.token}` },
+                headers: { authorization: `token ${token}` },
             })
             logger.info('GitHub integration initialized with token', { module: 'GitHub' })
         } else {

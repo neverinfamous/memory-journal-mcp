@@ -42,6 +42,8 @@
 - Re-enabled `X-Forwarded-For` extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
 - Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist.
 - Consolidated and resolved testing suite regressions and TypeScript strict-mode issues.
+- Fixed `tests/handlers/codemode-tools.test.ts` rate limit test timeout to 30000ms.
+- Fixed `restore_backup` tool handler test regression by injecting missing `maintenanceManager` lock methods into test mocks.
 - Fixed vector indexing silently failing but reporting success by properly checking the underlying `success` boolean.
 - Fixed team semantic search omitting valid cross-project vectors by enforcing `project_number` filtering prior to `limit` truncations.
 - Enforced hard exceptions on SQLite WAL checkpoint truncation failures to prevent silently incomplete backups.
