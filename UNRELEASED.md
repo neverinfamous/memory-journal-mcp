@@ -2,120 +2,68 @@
 
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
-### Security
-- **Architecture**: Decoupled `createServerInstance` from synchronous database connection querying (`db.getRecentEntries(1)`) to enforce deterministic, constant-time connection boundaries, moving the context dependency exclusively to the required `memory://briefing` capability.
-- **Vectors**: Hardened base persistent database durability by moving ML vector semantic indexing off the synchronous write path, deferring them to an asynchronous `indexStatus: 'queued'` execution model preventing upstream ML latency faults.
-- **Codemode**: Synchronized dynamic execution limits by securely piping the `CODE_MODE_MAX_RESULT_SIZE` limit into the `worker_threads` sandbox execution payload, eliminating the unsafe hard-coded 100KB limits.
-- **Auth**: Upgraded network topological trust boundaries by throwing explicit initialization failures if OAuth properties are configured for a non-loopback host without an explicit `publicOrigin` declaration.
-- **DoS**: Shielded HTTP proxy and telemetry identity maps against memory-exhaustion (OOM) by capping the IP `rateLimitMap` and `userCounts` map to 10,000 keys with controlled fallback degradation to `"other"` buckets or graceful cache eviction.
-- **Payloads**: Prevented Multi-Megabyte JSON export crashes across `export_entries` by integrating algorithmic byte-estimators, truncating large request records cresting ~5MB overhead and returning a `truncated: true` system flag.
-- **Config**: Hardened configuration parsing logic for HTTP `MCP_RATE_LIMIT_MAX` variables by trapping `NaN` parameters and explicitly enforcing safe threshold clamping.
-- **Boundaries**: Hardened SQLite backup restoration flows with strict symmetric boundary validations (`path.resolve`) to neutralize zero-day symlink path-traversal hazards.
-- **Integrity**: Enforced post-restore schema validation during backup restoration, validating integrity with `PRAGMA integrity_check` before applying backups and safely rolling back upon corruption.
-- **Codemode**: Fortified API instance generation by introducing a hard fail-closed constraint requiring strict dispatcher verification bounds.
-- **Auth**: Enforced strict tool-to-scope verification during MCP server initialization, forcing the server to hard-fault if any tool group is discovered without a mapped scope boundary.
-- **Auth**: Modified TokenValidator configuration to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured or inaccessible.
-- **Codemode**: Removed the legacy filter bypass for Code Mode tools; executing `mj_execute_code` now cleanly respects the active session's `--tool-filter` context, including when exclusively scoped to Code Mode.
-- **Sanitization**: Standardized SQL `LIKE` wildcard escaping logic across database adapters (specifically SQLite) to mitigate native expanding boundaries and excessive table scan exposure.
-- **Audit**: Expanded `ALWAYS_AUDITED_SCOPES` to guarantee `'team'` and `'audit'` operations are securely monitored.
-- **Authorship**: Fortified HTTP-authenticated authorship tracing by extracting trusted origin properties (`email` or `preferred_username`) dynamically from `getAuthContext()` rather than defaulting to system `resolveAuthor()` during team sync operations.
-- **Boundaries**: Quarantined core `.getRawDb()` and execution mechanisms behind `@deprecated` and `@internal` tags strictly restricting them to internal database-adapter implementations, mitigating undocumented system queries.
-- **Stability**: Standardized sequential long-running task locks via `isRunning` boundary states on the `JobTimer` class, terminating concurrency-related SQLite lock exhaustion failures.
-- **Validation**: Introduced `AutoContextSchema` boundary validation using Zod to safely parse JSON context, replacing unsafe `JSON.parse()` methods inside team and briefing resources.
-- **Security**: Re-implemented legacy SSE transport to enforce `process.env.MAX_STATEFUL_SESSIONS` boundaries, aligning with Streamable HTTP limits and mitigating unauthenticated memory bloat.
-- **Security**: Refactored vector rebuilding from a destructive pre-clearing model to a post-rebuild atomic `cleanupStaleVectors` fail-closed model, ensuring availability if indexing fails.
-- **Security**: Decoupled implicit authorization in File Boundary enforcement by strictly demanding explicit `allowedIoRoots` configurations instead of falling back to the `PROJECT_REGISTRY`.
-- **Security**: Fortified tool-level text ingestion boundaries by restricting unconstrained input search schemas with explicit `z.string().max(250)` definitions.
-- **Security**: Obscured absolute host filesystem locations escaping from Database Backup handlers by natively stripping paths using `path.basename`.
-
-### Performance
-- **Database**: Resolved significant N+1 latency loops inside the `ResourceTools` generation functions by converting sequential relationship boundary queries to batched, in-memory aggregate lookup tables.
-- **GitHub**: Integrated an active `Map` caching layer tightly coupled to fully-qualified local repository working paths (CWD) to radially constrain redundant OctoKit and Git instantiation cycles.
-- **Database**: Refactored importance score evaluation via `buildImportanceSqlExpression` to use a Common Table Expression (CTE) combined with a `LEFT JOIN` in database searches, eliminating correlated O(N^2) nested subqueries.
-- **Initialization**: Optimized startup behavior by hoisting execution-invariant server state (tools, prompts, filter sets) out of `createServerInstance()` to bypass redundant cycles during HTTP/SSE connections.
-- **GitHub**: Integrated native `AbortController` signaling for all GitHub integration API requests, resolving runaway Octokit network queries during global task timeouts.
-- **Stability**: Established native GitHub integration client pooling on the context `ServerRuntime` tightly bound to CWD, eradicating cross-instance state leakages.
-- **Traceability**: Extended the `ProjectContext` shape in GitHub handler arrays to dynamically bundle a `degraded` array property, exposing granular API subset failures without triggering opaque crashes.
+### Changed
+- Moved ML vector semantic indexing to an asynchronous background task to prevent write latency.
+- Decoupled server initialization from database queries to ensure constant-time startup.
+- Hoisted execution-invariant server state (tools, prompts, filter sets) out of `createServerInstance()` to bypass redundant cycles during HTTP/SSE connections.
+- Optimized database searches by replacing correlated subqueries with batched, in-memory aggregate lookup tables and CTEs for relationship boundaries and importance scores.
+- Restructured internal vector rebuilding to use an atomic post-rebuild cleanup, ensuring availability during indexing failures.
+- Added a `Map` caching layer tied to the local workspace path to minimize redundant OctoKit and Git instantiations.
+- Updated `execute_code` sandbox payload limit to dynamically use `CODE_MODE_MAX_RESULT_SIZE` instead of a hard-coded 100KB limit.
+- Replaced the legacy `vm` sandbox mode with production-grade `worker_threads` isolation for all `mj_execute_code` executions.
+- Standardized execution dispatchers (`callTool`, `registration`) to map missing bounds directly into normalized `ConfigurationError` and `ResourceNotFoundError` structures.
+- Marked core `.getRawDb()` and execution mechanisms as `@deprecated` and `@internal` to restrict usage strictly to database adapters.
+- Extended the `ProjectContext` shape in GitHub handler arrays to dynamically bundle a `degraded` array property, exposing granular API subset failures without triggering crashes.
+- Renamed legacy `executeRawQuery` calls to `_executeRawQueryUnsafe` to enforce explicit developer intent for raw queries.
+- Added explicit HTTP service-level `curl` container health-checks to `docker-compose.yml`.
 
 ### Fixed
-- **API**: Modernized server execution dispatchers (`callTool`, `registration`) by scrubbing unsafe global fallback references and mapping missing bounds directly into normalized `ConfigurationError` and `ResourceNotFoundError` structure traps.
-- **CLI**: Corrected false-positive `--cors-origin` tooltip configurations back to its `none` permissive-reality baseline.
-- **CLI/Execution**: Resolved false-positive path traversal errors preventing server initialization on Windows by removing sandbox boundary restraints incorrectly applied to raw `PROJECT_REGISTRY` environment mappings and explicit root database CLI arguments (`--db`, `--team-db`).
-- **Testing**: Fixed persistent `beforeAll` E2E test suite timeout loops in `payloads-github-degradation.spec.ts` bypassing `sqlite-vec` process crashes caused by mismatched directory creation depths relative to `tmpdir()`.
-- **Testing**: Remediated TypeScript strict-mode adherence inside `tests/auth/auth-context.test.ts` and `targeted-gap-closure-2.test.ts` by ensuring mocked `AuthenticatedContext` interfaces completely implement `scopes`, `exp`, and `iat` JWT claims structure.
-- **Testing/Architecture**: Successfully migrated legacy `getRawDb()` test mocks to explicitly mock `IDatabaseAdapter` vector methods across Vector and Database test suites, achieving 100% pass rate with decoupled interface boundaries.
-- **Integrity**: Revamped the internal SQLite `restore_backup` pipeline to utilize an atomic `.tmp` swap and secondary rename operation to prevent mid-operation failures from leaving the primary DB permanently malformed.
-- **Memory**: Resolved persistent memory leak in `CodeModeSecurityManager` by implementing explicit `dispose()` cleanup for bounded interval timers on cache eviction.
-- **Logging**: Eliminated silent `catch` block error suppression inside `mcp-server.ts`, `backup.ts`, and `team.ts`, ensuring warnings appropriately propagate to stderr.
-- **Integrity**: Fixed numeric limit validation logic for session thresholds, ensuring robustness against invalid `parseInt` boundaries during HTTP socket instantiations.
-- **Testing**: Fixed legacy graceful-empty array fallback assertions in `github-integration` specs to strictly enforce thrown rejected promises reflecting the modernized fail-fast API structures. Updated all template URI expectations in E2E playwright suites.
-- **Testing**: Fixed failing analytics test assertions (`analytics-branches.test.ts`) by properly passing tag and distribution data from the `getCrossProjectInsights` query migration.
-- **Testing**: Aligned `visualize_relationships` to throw a `ResourceNotFoundError` for missing root nodes, solving assertion divergence in `targeted-gap-closure-2.test.ts` and `tool-handler-coverage.test.ts`.
-- **Testing**: Remedied file boundary traversal test failures in `tests/handlers/io-tools.test.ts` and `tests/handlers/team-io-tools.test.ts` by correctly mocking new path boundary bounds via `security-utils`.
-- **Testing**: Aligned `tests/transports/http-stateful.test.ts` with the new single-transport global architecture, dropping disconnected multiplex mock assertions and preventing race failures.
-- **Testing**: Resolved `[Structured output attached]` assertion failures in `mcp-server.test.ts` by evaluating the modernized `structuredContent` natively mapped from outputSchemas.
-- **Testing**: Resolved `teamDb` share tests failing in `tool-handler-coverage.test.ts` by correctly seeding the `author` and structure primitives to the mock memory store.
-- **Testing**: Removed deterministic failure in `security-utils.test.ts` regarding `..foo` string processing bounded to `path.relative` instead of CWD startsWith checks. 
-- **Linting**: General cleanup in `search.ts`, `core.ts` handling errors dynamically and removing `unnecessary-escape` conditions across the repository.
-- **Protocol**: Fixed RFC 9728 Content-Type emission in OAuth metadata endpoint to correctly use `application/oauth-protected-resource-metadata+json`.
-- **Security**: Enforced filesystem boundary safety in I/O operations (`io`, `team/io-tools`) by correctly passing explicit `allowedRoots` instead of relying on environment variable fallbacks.
-- **Security**: Restored HTTP Transport OAuth scope enforcement middleware, properly checking tool-level permissions against `auth.scopes` and throwing 403 Forbiden for missing grants.
-- **Performance**: Eliminated critical N+1 database queries during Markdown Exports and Semantic Search (BM25 fallback) by introducing the batched methods `getEntriesByIdsWithImportance` and `getRelationshipsForEntries`.
-- **Security**: Hardened Execution Environment by entirely purging the legacy `vm` sandbox mode, enforcing production-grade `worker` isolation across all `mj_execute_code` executions.
-- **Security**: Strengthened Database Access Primitives by renaming all legacy `executeRawQuery` calls to `_executeRawQueryUnsafe`, ensuring explicit developer intent for raw queries.
-- **Testing**: Fixed legacy SSE transport testing regressions by reinstating standard MCP 2024-11-05 protocol compliance (passing `sessionId` in the URL query string for `/messages`), recovering 100% E2E test passes.
-- **Testing**: Restored complete verification suite integrity by correcting HTTP mock context initialization (`ctx.sessionSubjects`), resolving false-positive `undefined` method accesses during HTTP session teardown.
-- **Testing**: Corrected Code Mode egress limits check in E2E tests by ensuring the payload bounding exception message correctly references the required "aggregate" keyword guidance.
-- **Security**: Enforced LLM Content Provenance rules by meticulously applying `<untrusted_remote_content>` wrappers during briefing context generation bridging external entities.
-- **Testing**: Remediated exhaustive testing suite failures by explicitly mocking `_executeRawQueryUnsafe`, `getAuthorStatistics`, and `getAuthorsForEntries` inside Vitest stubs, ensuring flawless test validation.
-- **Core**: Resolved TypeScript regressions in `src/auth/scopes.ts` by explicitly mapping `team` and `audit` to intermediate hierarchy indices.
-- **Security (SEC-1.3)**: Tightened team tool group scope boundary — `team` group now requires `SCOPES.TEAM` instead of `SCOPES.WRITE`, closing an escalation path where any write-scoped token could invoke team journal mutations. Updated `TOOL_GROUP_SCOPES`, `scope-map.ts` override for `team_import_markdown`, and corresponding unit tests.
-- **Security (SEC-1.1)**: Code Mode (`mj_execute_code`) now routes all inner `mj.*` tool calls through the central `callTool()` dispatcher rather than invoking raw tool handlers directly. This ensures OAuth scope checks, maintenance-mode guards, and audit interception apply to every sandbox call.
-- **Security (SEC-1.2)**: Code Mode honours the active `--tool-filter` configuration. When a server-level tool filter is active, Code Mode's internal tool universe is restricted to the same enabled set. Exception: when only `mj_execute_code` is enabled (`codemode-only` preset), Code Mode retains full internal access as intended by the preset's design.
-- **Security (SEC-2.1)**: Legacy SSE transport (`GET /sse` + `POST /messages`) now runs inside `requestContextStorage.run()`, ensuring per-request context (IP, session ID) is available to rate limiters and audit loggers — the same guarantee already provided by the Streamable HTTP transport.
-- **Security (SEC-2.3)**: Team tools (`team_create_entry`, `team_pass_flag`) now hard-reject calls where `input.author` doesn't match the authenticated principal's `sub` claim when OAuth is active, preventing author impersonation. In stdio mode (no auth context), the existing fallback to `resolveAuthor()` is preserved.
-- **Fixed (SEC-2.4)**: `team_import_markdown` no longer silently drops `options.author`. Both `createEntry()` call paths in the markdown importer now receive the `author` field from import options, preventing silent attribution loss during bulk team imports.
-- **Fixed (SEC-2.8)**: Prompt handler failures are now surfaced as proper MCP protocol errors instead of being caught and returned as synthetic `{success: false}` user messages, which masked failures from clients.
-- **Fixed (SEC-3.5)**: Corrected JSDoc comment on `HttpTransportOptions.corsOrigins`: the default is `[]` (strict, no origins allowed), not `["*"]` (all origins). This was documentation drift from a security-hardening change in an earlier release.
-- **Testing/Security**: Fully migrated all remaining legacy `_executeRawQueryUnsafe` and `execQuery` calls within Prompt and Resource handlers to strictly typed and parameterized `IDatabaseAdapter` methods.
-- **Testing**: Resolved E2E OAuth testing regressions in `tests/e2e/oauth-scopes.spec.ts` by adhering mock configurations to strict Server-Side Issuer-to-JWKS origin match validation.
-- **Infrastructure**: Standardized Docker orchestration by adding HTTP service-level `curl` container health-checks to `docker-compose.yml`.
-- **Security**: Hardened HTTP transport by refusing wildcard CORS (`'*'`) without explicit authentication, and reordering middleware to execute rate-limiting against authenticated identities (`req.auth.subject`).
-- **Security**: Enforced filesystem boundary safety in markdown importer/exporter by explicitly preventing path traversal and symlink boundary escapes via `fs.realpath`/`fs.lstat` protections.
-- **Security**: Mitigated metadata-structure injection vectors in frontmatter serialization by implementing rigorous `quoteYamlString` escape barriers.
-- **Integrity**: Addressed `EPERM` rollback failures on Windows in `BackupManager` by ensuring database connections are explicitly closed before initiating atomic file swaps. 
-- **Integrity**: Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist, unlocking array-based constraint evaluation.
-- **Integrity**: Eliminated context-bleed vulnerabilities by permanently deprecating the global state cache across GitHub integration pipelines, localizing mutation states exclusively to per-request lifetimes.
-- **Testing**: Aligned mock filesystem boundaries and `importer` expected outputs for structural database failures (e.g. vector re-indexing faults) to strictly execute correct `.success = false` expectations.
-- **Testing**: Resolved E2E OAuth testing regressions in `tests/e2e/oauth-scopes.spec.ts` by adhering mock configurations to strict Server-Side Issuer-to-JWKS origin match validation.
-- **Testing**: Resolved minor TypeScript generic type assertion conflicts and defensive mocking fallbacks for un-mocked `req.get` calls in testing suites.
-- **Testing**: Fixed `TypeError: Cannot read properties of undefined (reading 'slice')` regressions by adding nullish coalescing `?? []` to `ProjectContext` arrays inside the `github.ts` resource handler.
-- **Testing**: Stabilized `markdown/importer.test.ts` failures by upgrading the centralized mock of `vectorManager.addEntry` to correctly return `{ success: true }`.
-- **Testing**: Fixed `template-github-branches.test.ts` branch coverage tests by directly mocking internal array states inside the mocked `getRepoContext`.
-- **Testing**: Repaired broken test file imports referencing incorrect relative `GitHubIntegration` module declarations.
-- **Testing**: Updated the `oauth-scopes.spec.ts` E2E test to properly handle extraction of JSON payloads from Server-Sent Events (SSE) data streams during HTTP execution-point scope authorization validations.
-- **Security (SEC-1.2)**: Fixed a bug in the `codemode-only` preset exception where all remaining `mj.*` tools were incorrectly filtered out. The Code Mode API bridge now correctly retains full internal access when running inside a strict `mj_execute_code` filter constraint.
-- **Linting**: Conformed strict typescript validation rules by employing ES-next optional chaining semantics in `src/handlers/tools/codemode.ts`.
-- **CI/CD**: Promoted the comprehensive Playwright E2E suite to execute synchronously within `.github/workflows/lint-and-test.yml` using the new `npm run test:e2e` execution script target.
-- **Security**: Fixed strict boundary logic for path traversal validations (`assertSafeDirectoryPath`) by correctly enforcing explicit `allowedRoots` parameters across HTTP, export, and import handlers.
-- **Security**: Re-enabled X-Forwarded-For Trust Proxy extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
-- **Testing**: Stabilized markdown export and import E2E and unit test suites to successfully pass against the new strict path boundary isolations.
-- **Testing**: Added explicit testing validation asserting fail-closed vector re-indexing conditions via tracking of `mockDb.cleanupStaleVectors`.
-- **Security**: Hardened HTTP security utilities (`getClientIp` and `checkRateLimit`) to fully delegate `trustProxy` evaluation to Express Native configuration, explicitly resolving IP provenance and removing decoupled parsing vectors.
-- **Testing**: Fixed Vitest false-positive test cases within resource tests by explicitly mapping strict `allowedIoRoots` bounds to accurately mock path traversal validation execution paths.
-- **Testing**: Aligned assertions within `codemode-tools.test.ts` to strictly evaluate against properly shaped "Result string exceeds" fail-closed boundary exceptions.
-- **Database**: Extended native isolation patterns by verifying `project_number` filter injection directly interfaces with cross-tenant boundaries across team query protocols (`search-tools.ts`).
-- **Testing**: Restored complete verification suite integrity by correcting stricter payload typings for MCP `ResourceContents` unions across E2E test assertions.
-- **Testing**: Fixed false-positive omissions inside `resources-briefing-env.spec.ts` by actively populating strict tenancy variables inside testing payloads.
-- **Data**: Upgraded `ImportOptions` and `team_import_markdown` to correctly map `project_number` declarations directly down into SQLite adapter insertions.
-- **Security**: Added explicit `🛑 TRUSTED ADMIN ONLY` warnings to the Code Mode (`mj_execute_code`) descriptor to better signal the sandbox's non-isolated security posture.
-- **Security**: Added explicit multi-tenant `project_number` warnings to team search tools to prevent cross-tenant data traversal without parameters.
-- **Testing**: Fixed TypeScript lint regressions involving ambiguous generic types (`any`, `unknown`) within `backup.ts` and `stateful.ts` catch blocks.
-- **Testing**: Extended Vitest definitions to properly mock `fs.lstat` filesystem boundary methods and `node:dns` resolution paths.
-- **Testing**: Stabilized E2E Playwright suite by correctly assigning mandatory `project_number` schema boundaries to all `team_link_entries` executions.
-- **Testing**: Aligned E2E and Unit test expectations against strict `<untrusted_remote_content>` tagging logic and generic internal payload error handlers.
-- **Linting**: Cleaned up remaining `@typescript-eslint/prefer-optional-chain` assertions and typecasting within `admin-tools.ts`, `core-tools.ts`, and `relationship-tools.ts`.
-- **Security**: Mitigated backup-restore race conditions and stale process deadlocks by introducing cryptographic nonces and 5-minute TTL timestamps in SQLite lock files.
-- **Security**: Mitigated directory Time-of-Check to Time-of-Use (TOCTOU) symlink attacks in markdown exports by implementing post-open inode validation.
-- **Security**: Prevented Code Mode sandbox crashes by implementing a `[Circular]`-aware JSON serialization fallback when `v8.serialize` encounters uncloneable data.
-- **Testing**: Added `tests/e2e/io-boundaries.spec.ts` to rigorously test filesystem mutation paths against `allowedIoRoots` escaping.
+- Fixed an N+1 query performance bottleneck during Markdown exports and Semantic Search.
+- Re-implemented legacy SSE transport to enforce `MAX_STATEFUL_SESSIONS` boundaries, aligning with Streamable HTTP limits.
+- Resolved false-positive path traversal errors preventing server initialization on Windows by removing incorrect sandbox boundary restraints on raw `PROJECT_REGISTRY` mappings and explicit root database CLI arguments.
+- Fixed concurrency-related SQLite lock exhaustion failures by standardizing sequential long-running task locks via `isRunning` boundary states on the `JobTimer` class.
+- Solved a persistent memory leak in `CodeModeSecurityManager` by implementing explicit `dispose()` cleanup for bounded interval timers on cache eviction.
+- Corrected backup restore race conditions and stale process deadlocks by using cryptographic nonces and 5-minute TTL timestamps in SQLite lock files.
+- Ensured SQLite database connections are explicitly closed before initiating atomic file swaps, fixing `EPERM` rollback failures on Windows.
+- Removed silent `catch` block error suppression in `mcp-server.ts`, `backup.ts`, and `team.ts`, ensuring warnings appropriately propagate to `stderr`.
+- Fixed false-positive `--cors-origin` tooltip configurations back to its `none` permissive baseline.
+- Prevented Code Mode sandbox crashes by implementing a fallback for `[Circular]` references when `v8.serialize` encounters uncloneable data.
+- Fixed the RFC 9728 `Content-Type` header emission in the OAuth metadata endpoint to correctly use `application/oauth-protected-resource-metadata+json`.
+- Corrected numeric validation logic for session thresholds, ensuring robustness against invalid `parseInt` boundaries during HTTP socket instantiations.
+- Restored standard MCP protocol compliance for legacy SSE transport by supporting `sessionId` in the URL query string for `/messages`.
+- Fixed prompt handler failures to surface as proper MCP protocol errors instead of synthetic `{success: false}` user messages (SEC-2.8).
+- Fixed `team_import_markdown` to correctly pass the `author` field from import options down to `createEntry()`, preventing silent attribution loss (SEC-2.4).
+- Updated `ImportOptions` and `team_import_markdown` to correctly map `project_number` declarations directly down into SQLite adapter insertions.
+- Re-enabled `X-Forwarded-For` extraction natively in `getClientIp` for the `http-security` transport properly using the `trustProxy` setting.
+- Fixed `PRAGMA integrity_check` tracking within the `NativeConnectionManager` by updating the mutation Regex whitelist.
+- Consolidated and resolved testing suite regressions and TypeScript strict-mode issues.
+
+### Security
+- Replaced insecure `JSON.parse()` methods with Zod `AutoContextSchema` boundary validations inside team and briefing resources.
+- Enforced strict tool-to-scope verification during MCP server initialization, forcing a hard-fault if any tool group lacks a mapped scope boundary.
+- Required explicit `allowedIoRoots` configurations for file boundary enforcement in I/O operations instead of falling back to the `PROJECT_REGISTRY`.
+- Protected HTTP proxy and telemetry identity maps against memory-exhaustion (OOM) by capping the IP `rateLimitMap` and `userCounts` map to 10,000 keys.
+- Prevented JSON export memory exhaustion crashes by truncating large records and returning a `truncated: true` system flag.
+- Shielded SQLite backup restoration flows with strict symmetric boundary validations (`path.resolve`) to neutralize zero-day symlink path-traversal hazards.
+- Enforced post-restore schema validation using `PRAGMA integrity_check` before applying backups, rolling back upon corruption.
+- Forced initialization failure if OAuth properties are configured for a non-loopback host without an explicit `publicOrigin` declaration.
+- Modified `TokenValidator` to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured.
+- Required `SCOPES.TEAM` instead of `SCOPES.WRITE` for team tool group operations, preventing unintended team journal mutations (SEC-1.3).
+- Routed all internal `mj.*` tool calls within Code Mode through the central `callTool()` dispatcher, enforcing OAuth scope checks and audit interception (SEC-1.1).
+- Applied active `--tool-filter` context to Code Mode's internal tool universe, except when the `codemode-only` preset is active (SEC-1.2).
+- Ensured legacy SSE transport runs inside `requestContextStorage.run()`, making per-request context available to rate limiters and loggers (SEC-2.1).
+- Rejected team tools operations where `input.author` does not match the authenticated principal's `sub` claim when OAuth is active, preventing author impersonation (SEC-2.3).
+- Extracted trusted origin properties (`email` or `preferred_username`) dynamically from `getAuthContext()` for authenticated authorship tracing, instead of relying on `resolveAuthor()`.
+- Added strict `🛑 TRUSTED ADMIN ONLY` warnings to the `mj_execute_code` descriptor to better signal its non-isolated security posture.
+- Added explicit multi-tenant `project_number` warnings to team search tools to prevent cross-tenant data traversal without explicit parameters.
+- Standardized SQL `LIKE` wildcard escaping logic across database adapters to mitigate excessive table scan exposure.
+- Expanded `ALWAYS_AUDITED_SCOPES` to guarantee `'team'` and `'audit'` operations are securely monitored.
+- Refused wildcard CORS (`'*'`) without explicit authentication and ensured rate-limiting is applied against authenticated identities.
+- Prevented path traversal and symlink escapes in the markdown importer and exporter via `fs.realpath` and `fs.lstat` protections.
+- Prevented metadata-structure injection vectors in frontmatter serialization by implementing rigorous `quoteYamlString` escaping.
+- Mitigated directory Time-of-Check to Time-of-Use (TOCTOU) symlink attacks in markdown exports by implementing post-open inode validation.
+- Obscured absolute host filesystem locations from Database Backup logs by natively stripping paths using `path.basename`.
+- Restrained unconstrained input search schemas with explicit `z.string().max(250)` definitions.
+- Hardened HTTP `MCP_RATE_LIMIT_MAX` config parsing logic by trapping `NaN` parameters and explicitly enforcing safe threshold clamping.
+- Restored HTTP Transport OAuth scope enforcement middleware, properly checking tool-level permissions against `auth.scopes` and throwing `403 Forbidden` for missing grants.
+- Enforced LLM Content Provenance rules by applying `<untrusted_remote_content>` wrappers during briefing context generation bridging external entities.
