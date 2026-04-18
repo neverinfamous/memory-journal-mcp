@@ -115,12 +115,14 @@ export const TeamSearchSchemaMcp = z.object({
 export const TeamGetEntryByIdSchema = z.object({
     entry_id: z.number(),
     include_relationships: z.boolean().optional().default(true),
+    project_number: z.number(),
 })
 
 /** team_get_entry_by_id — relaxed */
 export const TeamGetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     include_relationships: z.boolean().optional().default(true),
+    project_number: relaxedNumber(),
 })
 
 // ============================================================================
@@ -167,6 +169,7 @@ export const TeamUpdateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH).optional(),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
+    project_number: z.number(),
 })
 
 /** team_update_entry — relaxed */
@@ -175,16 +178,19 @@ export const TeamUpdateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    project_number: relaxedNumber(),
 })
 
 /** team_delete_entry — strict */
 export const TeamDeleteEntrySchema = z.object({
     entry_id: z.number(),
+    project_number: z.number(),
 })
 
 /** team_delete_entry — relaxed */
 export const TeamDeleteEntrySchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
 })
 
 /** team_merge_tags — strict */
@@ -235,6 +241,7 @@ export const TeamLinkEntriesSchema = z.object({
         .optional()
         .default('references'),
     description: z.string().optional(),
+    project_number: z.number(),
 })
 
 /** team_link_entries — relaxed */
@@ -243,6 +250,7 @@ export const TeamLinkEntriesSchemaMcp = z.object({
     to_entry_id: relaxedNumber().optional(),
     relationship_type: z.string().optional().default('references'),
     description: z.string().optional(),
+    project_number: relaxedNumber(),
 })
 
 /** team_visualize_relationships — strict */
@@ -463,6 +471,7 @@ export const TeamSemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    project_number: z.number(),
 })
 
 /** team_semantic_search — relaxed */
@@ -480,16 +489,19 @@ export const TeamSemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
+    project_number: relaxedNumber(),
 })
 
 /** team_add_to_vector_index — strict */
 export const TeamAddToVectorIndexSchema = z.object({
     entry_id: z.number(),
+    project_number: z.number(),
 })
 
 /** team_add_to_vector_index — relaxed */
 export const TeamAddToVectorIndexSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
+    project_number: relaxedNumber(),
 })
 
 // ============================================================================
@@ -526,6 +538,7 @@ export const TeamVectorStatsOutputSchema = z
 export const TeamRebuildVectorIndexOutputSchema = z
     .object({
         success: z.boolean().optional(),
+        partial: z.boolean().optional(),
         entriesIndexed: z.number().optional(),
         failedEntries: z.number().optional(),
         error: z.string().optional(),

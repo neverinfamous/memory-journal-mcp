@@ -124,14 +124,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize vector search manager (lazy loading - model loads on first use)
     const vectorManager = new VectorSearchManager(db)
-    vectorManager.warmup()
     logger.info('Vector search manager created (lazy initialization)', { module: 'McpServer' })
 
     // Initialize team vector search manager if team DB is configured
     let teamVectorManager: VectorSearchManager | undefined
     if (teamDb) {
         teamVectorManager = new VectorSearchManager(teamDb)
-        teamVectorManager.warmup()
         logger.info('Team vector search manager created', { module: 'McpServer' })
     }
 
@@ -234,7 +232,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         if (teamDbPath) {
             allowedIoRoots.push(resolve(dirname(teamDbPath)))
         }
-        logger.warning('ALLOWED_IO_ROOTS not explicitly provided; implicitly deriving trust boundaries from database directories. This behavior is safe but may be broader or narrower than expected.', {
+        logger.warning('⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Implicitly deriving trust boundaries from database directories. For production deployments, you MUST strictly define ALLOWED_IO_ROOTS to prevent unauthorized access via path traversal.', {
             module: 'McpServer'
         })
     }

@@ -254,7 +254,7 @@ describe('IssuesManager — branch coverage', () => {
             expect(result).not.toBeNull()
             expect(result!.labels).toEqual(['bug', 'string-label'])
             expect(result!.assignees).toEqual(['alice'])
-            expect(result!.body).toBe('Issue body')
+            expect(result!.body).toBe('<untrusted_remote_content>\nIssue body\n</untrusted_remote_content>')
         })
 
         it('should handle API error', async () => {
@@ -412,13 +412,13 @@ describe('Error helpers — branch coverage', () => {
         it('should handle plain Error', () => {
             const result = formatHandlerError(new Error('oops'))
             expect(result.success).toBe(false)
-            expect(result.error).toBe('oops')
+            expect(result.error).toBe('An internal error occurred during tool execution. Please check the server logs for more details.')
             expect(result.code).toBe('INTERNAL_ERROR')
         })
 
         it('should handle non-Error throw (string)', () => {
             const result = formatHandlerError('string error')
-            expect(result.error).toBe('string error')
+            expect(result.error).toBe('An internal error occurred during tool execution. Please check the server logs for more details.')
             expect(result.code).toBe('INTERNAL_ERROR')
         })
     })

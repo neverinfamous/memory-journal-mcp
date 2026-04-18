@@ -180,6 +180,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
     // --- Relationships ---
     test('team_link_entries creates relationship', async () => {
         const payload = await callToolAndParse(client, 'team_link_entries', {
+            project_number: 1,
             from_entry_id: entryId1,
             to_entry_id: entryId2,
             relationship_type: 'references',

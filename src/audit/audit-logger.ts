@@ -107,6 +107,32 @@ export class AuditLogger {
     }
 
     /**
+     * Log a denied access attempt.
+     */
+    logDenial(toolName: string, reason: string, context?: {
+        user?: string | null
+        scopes?: string[]
+        category?: AuditEntry['category']
+        scope?: string
+        requestId?: string
+        sessionId?: string
+    }): void {
+        this.log({
+            timestamp: new Date().toISOString(),
+            requestId: context?.requestId ?? `denied-${Date.now().toString()}`,
+            sessionId: context?.sessionId ?? undefined,
+            tool: toolName,
+            category: context?.category ?? 'read',
+            scope: context?.scope ?? '',
+            user: context?.user ?? null,
+            scopes: context?.scopes ?? [],
+            durationMs: 0,
+            success: false,
+            error: `Access Denied: ${reason}`
+        })
+    }
+
+    /**
      * Flush the buffer to disk.
      * Safe to call concurrently — serialises via `this.activeFlush` Promise.
      */

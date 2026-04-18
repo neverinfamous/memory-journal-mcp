@@ -82,6 +82,7 @@ const MergeTagsOutputSchema = z
 const RebuildVectorIndexOutputSchema = z
     .object({
         success: z.boolean().optional(),
+        partial: z.boolean().optional(),
         entriesIndexed: z.number().optional(),
         failedEntries: z.number().optional(),
         error: z.string().optional(),
@@ -294,13 +295,14 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const { indexed, failed, firstError } = await vectorManager.rebuildIndex(
+                    const { indexed, failed, firstError, partial } = await vectorManager.rebuildIndex(
                         db,
                         progress
                     )
                     const success = indexed > 0 || failed === 0
                     return {
                         success,
+                        partial,
                         entriesIndexed: indexed,
                         ...(failed > 0 ? { failedEntries: failed } : {}),
                         ...(!success

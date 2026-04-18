@@ -331,6 +331,7 @@ test.describe('Errors: Team', () => {
             const entryId = (create.entry as Record<string, unknown>).id as number
 
             const p = await callToolAndParse(client, 'team_link_entries', {
+                project_number: 1,
                 from_entry_id: entryId,
                 to_entry_id: entryId,
                 relationship_type: 'references',

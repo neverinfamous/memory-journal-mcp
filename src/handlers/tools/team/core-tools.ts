@@ -117,16 +117,16 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, include_relationships } = TeamGetEntryByIdSchema.parse(params)
+                    const { entry_id, include_relationships, project_number } = TeamGetEntryByIdSchema.parse(params)
                     const entry = teamDb.getEntryById(entry_id)
 
-                    if (!entry) {
+                    if (entry?.projectNumber !== project_number) {
                         return {
                             success: false,
-                            error: `Team entry ${String(entry_id)} not found`,
+                            error: `Team entry ${String(entry_id)} not found or does not belong to project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and try again',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }

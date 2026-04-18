@@ -92,6 +92,7 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_link_entries',
                 {
+                    project_number: 1,
                     from_entry_id: e1,
                     to_entry_id: e2,
                     relationship_type: 'blocked_by',
@@ -116,7 +117,7 @@ describe('Team Relationship Tool Handlers', () => {
         it('should detect duplicate relationships', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { from_entry_id: e1, to_entry_id: e2, relationship_type: 'blocked_by' },
+                { project_number: 1, from_entry_id: e1, to_entry_id: e2, relationship_type: 'blocked_by' },
                 personalDb,
                 undefined,
                 undefined,
@@ -133,7 +134,7 @@ describe('Team Relationship Tool Handlers', () => {
         it('should return error if from_entry_id is not found', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { from_entry_id: 999, to_entry_id: e2, relationship_type: 'references' },
+                { project_number: 1, from_entry_id: 999, to_entry_id: e2, relationship_type: 'references' },
                 personalDb,
                 undefined,
                 undefined,
@@ -149,7 +150,7 @@ describe('Team Relationship Tool Handlers', () => {
         it('should return error if to_entry_id is not found', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { from_entry_id: e1, to_entry_id: 999, relationship_type: 'references' },
+                { project_number: 1, from_entry_id: e1, to_entry_id: 999, relationship_type: 'references' },
                 personalDb,
                 undefined,
                 undefined,
@@ -165,7 +166,7 @@ describe('Team Relationship Tool Handlers', () => {
         it('should return error if team DB is not configured', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { from_entry_id: e1, to_entry_id: e2, relationship_type: 'references' },
+                { project_number: 1, from_entry_id: e1, to_entry_id: e2, relationship_type: 'references' },
                 personalDb
             )) as any
 
@@ -178,7 +179,7 @@ describe('Team Relationship Tool Handlers', () => {
         beforeAll(async () => {
             await callTool(
                 'team_link_entries',
-                { from_entry_id: e2, to_entry_id: e3, relationship_type: 'caused' },
+                { project_number: 1, from_entry_id: e2, to_entry_id: e3, relationship_type: 'caused' },
                 personalDb,
                 undefined,
                 undefined,

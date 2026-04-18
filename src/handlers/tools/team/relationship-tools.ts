@@ -38,7 +38,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { from_entry_id, to_entry_id, relationship_type, description } =
+                    const { from_entry_id, to_entry_id, relationship_type, description, project_number } =
                         TeamLinkEntriesSchema.parse(params)
 
                     // Guard: self-referential links are not meaningful
@@ -54,26 +54,26 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         }
                     }
 
-                    // Verify both entries exist
+                    // Verify both entries exist and belong to the project
                     const fromEntry = teamDb.getEntryById(from_entry_id)
-                    if (!fromEntry) {
+                    if (fromEntry?.projectNumber !== project_number) {
                         return {
                             success: false,
-                            error: `Team entry ${String(from_entry_id)} not found`,
+                            error: `Team entry ${String(from_entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and try again',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
                     const toEntry = teamDb.getEntryById(to_entry_id)
-                    if (!toEntry) {
+                    if (toEntry?.projectNumber !== project_number) {
                         return {
                             success: false,
-                            error: `Team entry ${String(to_entry_id)} not found`,
+                            error: `Team entry ${String(to_entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and try again',
+                            suggestion: 'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }

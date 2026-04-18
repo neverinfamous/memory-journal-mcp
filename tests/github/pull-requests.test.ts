@@ -177,7 +177,7 @@ describe('PullRequestsManager', () => {
             const result = await mgr.getPullRequest('owner', 'repo', 1)
 
             expect(result).toBeDefined()
-            expect(result!.title).toBe('Feature A')
+            expect(result!.title).toBe('<untrusted_remote_content>Feature A</untrusted_remote_content>')
             expect(result!.headBranch).toBe('feature-branch')
             expect(result!.baseBranch).toBe('main')
             expect(result!.additions).toBe(100)

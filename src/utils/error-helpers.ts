@@ -69,7 +69,7 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     const matched = matchSuggestion(message)
     return {
         success: false,
-        error: message,
+        error: 'An internal error occurred during tool execution. Please check the server logs for more details.',
         code: matched?.code ?? 'INTERNAL_ERROR',
         category: ErrorCategory.INTERNAL,
         recoverable: false,

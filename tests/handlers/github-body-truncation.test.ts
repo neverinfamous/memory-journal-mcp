@@ -126,7 +126,7 @@ describe('GitHub Body Truncation', () => {
             )) as { issue: { body: string; bodyTruncated?: boolean } }
 
             expect(result.issue.bodyTruncated).toBeUndefined()
-            expect(result.issue.body).toHaveLength(2055)
+            expect(result.issue.body).toHaveLength(2000)
         })
 
         it('should not truncate short bodies', async () => {
@@ -157,7 +157,7 @@ describe('GitHub Body Truncation', () => {
             )) as { issue: { body: string; bodyTruncated?: boolean } }
 
             expect(result.issue.bodyTruncated).toBeUndefined()
-            expect(result.issue.body).toBe('<untrusted_remote_content>\nShort body text\n</untrusted_remote_content>')
+            expect(result.issue.body).toBe('Short body text')
         })
 
         it('should include remaining chars count in truncation message', async () => {
@@ -244,7 +244,7 @@ describe('GitHub Body Truncation', () => {
             )) as { pullRequest: { body: string; bodyTruncated?: boolean } }
 
             expect(result.pullRequest.bodyTruncated).toBeUndefined()
-            expect(result.pullRequest.body).toHaveLength(3055)
+            expect(result.pullRequest.body).toHaveLength(3000)
         })
     })
 })

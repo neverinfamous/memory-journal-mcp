@@ -18,7 +18,7 @@ import {
 } from './schemas.js'
 import { resolveOwnerRepo } from './helpers.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
-import { markUntrustedContent, markUntrustedContentInline } from '../../../utils/security-utils.js'
+
 
 // ============================================================================
 // Tool Definitions
@@ -74,10 +74,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input.state,
                         input.limit
                     )
-                    const safeIssues = issues.map(i => ({
-                        ...i,
-                        title: markUntrustedContentInline(i.title)
-                    }))
+                    const safeIssues = issues
                     return {
                         owner: resolved.owner,
                         repo: resolved.repo,
@@ -139,10 +136,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         input.state,
                         input.limit
                     )
-                    const safePrs = pullRequests.map(pr => ({
-                        ...pr,
-                        title: markUntrustedContentInline(pr.title)
-                    }))
+                    const safePrs = pullRequests
                     return {
                         owner: resolved.owner,
                         repo: resolved.repo,
@@ -228,10 +222,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         bodyTruncated = true
                     }
                     
-                    safeIssue.title = markUntrustedContentInline(safeIssue.title)
-                    if (safeIssue.body) {
-                        safeIssue.body = markUntrustedContent(safeIssue.body)
-                    }
+
 
                     // Fetch comments if requested
                     let comments: { author: string; body: string; createdAt: string }[] | undefined
@@ -241,10 +232,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                             resolved.repo,
                             input.issue_number
                         )
-                        comments = rawComments.map(c => ({
-                            ...c,
-                            body: markUntrustedContent(c.body)
-                        }))
+                        comments = rawComments
                     }
 
                     return {
@@ -333,10 +321,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         bodyTruncated = true
                     }
                     
-                    safePr.title = markUntrustedContentInline(safePr.title)
-                    if (safePr.body) {
-                        safePr.body = markUntrustedContent(safePr.body)
-                    }
+
 
                     return {
                         pullRequest: {

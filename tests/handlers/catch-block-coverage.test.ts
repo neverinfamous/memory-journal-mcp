@@ -144,8 +144,8 @@ describe('Team tools with teamDb but no vectorManager', () => {
         await teamDb.initialize()
 
         // Create some entries for team tools to operate on
-        teamDb.createEntry({ content: 'Team entry for catch block test', tags: ['catch-test'] })
-        teamDb.createEntry({ content: 'Another team entry', tags: ['catch-test', 'extra'] })
+        teamDb.createEntry({ content: 'Team entry for catch block test', tags: ['catch-test'], projectNumber: 1 })
+        teamDb.createEntry({ content: 'Another team entry', tags: ['catch-test', 'extra'], projectNumber: 1 })
     })
 
     afterAll(() => {
@@ -453,7 +453,7 @@ describe('Team tools with teamDb but no vectorManager', () => {
     // team/admin-tools.ts — update code path coverage
     it('team_update_entry: exercises update path', async () => {
         // Insert directly via adapter (same as beforeAll) to guarantee entry exists
-        const newId = teamDb.createEntry({ content: 'Entry for update test' })
+        const newId = teamDb.createEntry({ content: 'Entry for update test', projectNumber: 1 })
 
         const result = (await callTool(
             'team_update_entry',

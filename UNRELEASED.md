@@ -111,3 +111,6 @@
 - **Security**: Added explicit multi-tenant `project_number` warnings to team search tools to prevent cross-tenant data traversal without parameters.
 - **Testing**: Fixed TypeScript lint regressions involving ambiguous generic types (`any`, `unknown`) within `backup.ts` and `stateful.ts` catch blocks.
 - **Testing**: Extended Vitest definitions to properly mock `fs.lstat` filesystem boundary methods and `node:dns` resolution paths.
+- **Testing**: Stabilized E2E Playwright suite by correctly assigning mandatory `project_number` schema boundaries to all `team_link_entries` executions.
+- **Testing**: Aligned E2E and Unit test expectations against strict `<untrusted_remote_content>` tagging logic and generic internal payload error handlers.
+- **Linting**: Cleaned up remaining `@typescript-eslint/prefer-optional-chain` assertions and typecasting within `admin-tools.ts`, `core-tools.ts`, and `relationship-tools.ts`.

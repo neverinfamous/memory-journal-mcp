@@ -325,6 +325,16 @@ export async function callTool(
                 operation: 'scope-check',
                 entityId: name,
             })
+            const auditLogger = config?.runtime?.auditLogger ?? getGlobalAuditLogger()
+            if (auditLogger) {
+                const category = tool.group === 'core' || tool.group === 'search' || tool.group === 'io' || tool.group === 'relationships' || tool.group === 'analytics' || tool.group === 'github' ? 'read' : tool.group === 'admin' || tool.group === 'backup' ? 'admin' : tool.group === 'team' ? 'team' : 'read'
+                auditLogger.logDenial(name, 'Insufficient scope', {
+                    user: auth.claims?.sub,
+                    scopes: auth.claims?.scopes ?? [],
+                    category,
+                    scope: requiredScope,
+                })
+            }
             return Promise.reject(new PermissionError(`Access to tool '${name}' denied: insufficient scope.`))
         }
     }

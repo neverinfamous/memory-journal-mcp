@@ -123,7 +123,7 @@ describe('IssuesManager - getIssues (Coverage)', () => {
         expect(listForRepo).toHaveBeenCalled()
         expect(mockClient.setCache).toHaveBeenCalled()
         expect(result.length).toBe(1)
-        expect(result[0].title).toBe('issue1')
+        expect(result[0].title).toBe('<untrusted_remote_content>issue1</untrusted_remote_content>')
     })
 
     it('handles errors during fetch', async () => {
@@ -188,7 +188,7 @@ describe('IssuesManager - getIssue (Coverage)', () => {
         const result = await manager.getIssue('owner', 'repo', 1)
         expect(get).toHaveBeenCalled()
         expect(mockClient.setCache).toHaveBeenCalled()
-        expect(result?.title).toBe('issue1')
+        expect(result?.title).toBe('<untrusted_remote_content>issue1</untrusted_remote_content>')
     })
 
     it('returns null if issue is a pull request', async () => {

@@ -57,18 +57,7 @@ export class VectorSearchManager {
         this.modelName = modelName
     }
 
-    /**
-     * Explicit trigger to pre-load the ML model to avoid runtime cold starts.
-     * Starts initialization in the background without blocking.
-     */
-    warmup(): void {
-        this.initialize().catch((err: unknown) => {
-            logger.error('Background vector model warmup failed', {
-                module: 'VectorSearch',
-                error: err instanceof Error ? err.message : String(err),
-            })
-        })
-    }
+
 
     /**
      * Check if vector search is initialized
@@ -313,7 +302,7 @@ export class VectorSearchManager {
         db: IDatabaseAdapter,
         progress?: ProgressContext,
         options?: { budget?: number; isCancelled?: () => boolean }
-    ): Promise<{ indexed: number; failed: number; firstError: string | null }> {
+    ): Promise<{ indexed: number; failed: number; firstError: string | null; partial: boolean }> {
         if (!this.initialized) {
             try {
                 await this.initialize()
@@ -323,12 +312,13 @@ export class VectorSearchManager {
                     indexed: 0,
                     failed: 0,
                     firstError: `Vector search initialization failed: ${msg}`,
+                    partial: false,
                 }
             }
         }
 
         if (!this.db) {
-            return { indexed: 0, failed: 0, firstError: null }
+            return { indexed: 0, failed: 0, firstError: null, partial: false }
         }
 
         logger.info('Rebuilding vector index from database...', { module: 'VectorSearch' })
@@ -352,8 +342,12 @@ export class VectorSearchManager {
         let processed = 0
         const budget = options?.budget ?? 10000
         let firstError: string | null = null
+        let partial = false
         for (let offset = 0; offset < totalEntries; offset += REBUILD_PAGE_SIZE) {
-            if (options?.isCancelled?.() || processed >= budget) break
+            if (options?.isCancelled?.() || processed >= budget) {
+                partial = true
+                break
+            }
             const page = db.getEntriesPage(offset, REBUILD_PAGE_SIZE)
 
             // Generate embeddings in parallel batches
@@ -419,10 +413,12 @@ export class VectorSearchManager {
                 
                 if (options?.isCancelled?.()) {
                     firstError ??= 'Operation cancelled'
+                    partial = true
                     break
                 }
                 if (processed >= budget) {
                     firstError ??= `Rebuild index budget of ${String(budget)} items reached`
+                    partial = true
                     break
                 }
             }
@@ -451,7 +447,7 @@ export class VectorSearchManager {
                 module: 'VectorSearch',
             })
         }
-        return { indexed, failed, firstError }
+        return { indexed, failed, firstError, partial }
     }
 
     /**
