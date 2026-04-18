@@ -226,6 +226,11 @@ export async function createServer(options: ServerOptions): Promise<void> {
     // Resolve dynamic roots for explicit isolation if not explicitly provided
     let allowedIoRoots = options.allowedIoRoots
     if (!allowedIoRoots) {
+        if (transport === 'http') {
+            const errorMsg = `FATAL: Refusing to bind HTTP transport without explicit ALLOWED_IO_ROOTS. You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to prevent ambient filesystem authority.`
+            logger.error(errorMsg, { module: 'HTTP' })
+            throw new Error(errorMsg)
+        }
         allowedIoRoots = []
         const { dirname, resolve } = await import('node:path')
         allowedIoRoots.push(resolve(dirname(dbPath)))

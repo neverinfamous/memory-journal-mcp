@@ -37,6 +37,8 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
             'node',
             [
                 'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
                 '--transport',
                 'http',
                 '--port',
@@ -48,7 +50,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env,
+                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     TEAM_DB_PATH: './.test-output/e2e/test-e2e-team-happy-team.db',
                 },

@@ -747,20 +747,30 @@ describe('HttpTransport', () => {
 
     describe('oauth mode setups', () => {
         it('should setup OAuth 2.1 authentication when enabled', async () => {
-            const config: HttpTransportConfig = {
-                port: 3000,
-                host: '127.0.0.1',
-                corsOrigins: ['http://localhost'],
-                stateless: true,
-                oauthEnabled: true,
-                oauthIssuer: 'https://auth.example.com',
-                oauthAudience: 'test-audience',
-            }
-            const transport = new HttpTransport(config)
-            await transport.start((() => mockServer) as never, null)
+            const originalFetch = global.fetch
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({ keys: [] })
+            }) as unknown as typeof fetch
 
-            // Should register the well-known route
-            expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
+            try {
+                const config: HttpTransportConfig = {
+                    port: 3000,
+                    host: '127.0.0.1',
+                    corsOrigins: ['http://localhost'],
+                    stateless: true,
+                    oauthEnabled: true,
+                    oauthIssuer: 'https://auth.example.com',
+                    oauthAudience: 'test-audience',
+                }
+                const transport = new HttpTransport(config)
+                await transport.start((() => mockServer) as never, null)
+
+                // Should register the well-known route
+                expect(mockRoutes['get']!['/.well-known/oauth-protected-resource']).toBeDefined()
+            } finally {
+                global.fetch = originalFetch
+            }
         })
 
     })

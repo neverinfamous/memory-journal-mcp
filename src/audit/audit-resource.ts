@@ -115,6 +115,7 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
                 `  total_tokens: ${String(totalTokens)}\n` +
                 `  total_duration_ms: ${String(totalDuration)}\n` +
                 `  error_count: ${String(errorCount)}\n` +
+                `  dropped_count: ${String(auditLogger.droppedCount)}\n` +
                 `  redact_mode: ${String(auditLogger.config.redact)}\n\n` +
                 formattedEntries
 

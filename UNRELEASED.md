@@ -11,6 +11,7 @@
 - **Payloads**: Prevented Multi-Megabyte JSON export crashes across `export_entries` by integrating algorithmic byte-estimators, truncating large request records cresting ~5MB overhead and returning a `truncated: true` system flag.
 - **Config**: Hardened configuration parsing logic for HTTP `MCP_RATE_LIMIT_MAX` variables by trapping `NaN` parameters and explicitly enforcing safe threshold clamping.
 - **Boundaries**: Hardened SQLite backup restoration flows with strict symmetric boundary validations (`path.resolve`) to neutralize zero-day symlink path-traversal hazards.
+- **Integrity**: Enforced post-restore schema validation during backup restoration, validating integrity with `PRAGMA integrity_check` before applying backups and safely rolling back upon corruption.
 - **Codemode**: Fortified API instance generation by introducing a hard fail-closed constraint requiring strict dispatcher verification bounds.
 - **Auth**: Enforced strict tool-to-scope verification during MCP server initialization, forcing the server to hard-fault if any tool group is discovered without a mapped scope boundary.
 - **Auth**: Modified TokenValidator configuration to fail-closed during constructor instantiation if any JWKS origin or Issuer metadata is misconfigured or inaccessible.

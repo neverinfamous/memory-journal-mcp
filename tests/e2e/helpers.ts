@@ -165,6 +165,8 @@ export async function startServer(
         'node',
         [
             join(process.cwd(), 'dist/cli.js'),
+            '--allowed-io-roots',
+            process.cwd(),
             '--transport',
             'http',
             '--port',
@@ -180,7 +182,7 @@ export async function startServer(
             stdio: 'pipe',
             env: Object.fromEntries(
                 Object.entries({
-                    ...process.env,
+                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
                         ? undefined
                         : '10000',

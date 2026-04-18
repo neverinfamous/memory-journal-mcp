@@ -18,6 +18,8 @@ function parseConfigIntRequired(value: string, name: string): number {
     return parsed
 }
 
+
+
 // Smart Database Resolution: Check root, then test-server, then default to root
 function resolveDbPath(envPath: string | undefined, defaultName: string, testName: string): string {
     if (envPath) return envPath
@@ -394,9 +396,9 @@ program
                             'briefing-milestones'
                         ),
                         rulesFilePath:
-                            options.rulesFile ?? process.env['RULES_FILE_PATH'] ?? undefined,
+                            options.rulesFile ? path.resolve(process.cwd(), options.rulesFile) : (process.env['RULES_FILE_PATH'] ? path.resolve(process.cwd(), process.env['RULES_FILE_PATH']) : undefined),
                         skillsDirPath:
-                            options.skillsDir ?? process.env['SKILLS_DIR_PATH'] ?? undefined,
+                            options.skillsDir ? path.resolve(process.cwd(), options.skillsDir) : (process.env['SKILLS_DIR_PATH'] ? path.resolve(process.cwd(), process.env['SKILLS_DIR_PATH']) : undefined),
                         workflowCount: parseConfigIntRequired(
                             process.env['BRIEFING_WORKFLOW_COUNT'] ?? options.briefingWorkflows,
                             'briefing-workflows'

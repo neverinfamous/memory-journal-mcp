@@ -51,6 +51,7 @@ function updateBadges() {
                 console.log(`Updated coverage badge in ${file} to ${linesPct}%`)
             } else {
                 console.log(`No coverage badge found in ${file} to update.`)
+                process.exit(1)
             }
         }
     }

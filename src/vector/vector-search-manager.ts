@@ -399,6 +399,9 @@ export class VectorSearchManager {
                     }
                 }
 
+                // Yield to event loop to prevent blocking live requests
+                await new Promise((resolve) => setTimeout(resolve, 10))
+
                 // Report progress every 10 entries to avoid flooding
                 if (indexed % 10 === 0 || indexed === totalEntries) {
                     await sendProgress(

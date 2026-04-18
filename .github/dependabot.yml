@@ -18,9 +18,14 @@ updates:
       - 'dependencies'
       - 'npm'
     groups:
-      mcp-core:
+      mcp-sdk:
         patterns:
           - '@modelcontextprotocol/*'
+        update-types:
+          - 'minor'
+          - 'patch'
+      validation:
+        patterns:
           - 'zod*'
         update-types:
           - 'minor'

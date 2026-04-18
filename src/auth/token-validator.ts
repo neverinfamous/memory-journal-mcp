@@ -281,6 +281,42 @@ export class TokenValidator {
 
         return new InvalidTokenError(result.error)
     }
+
+    /**
+     * Preload JWKS to validate availability at startup
+     */
+    async preload(): Promise<void> {
+        const jwksHost = (() => {
+            try {
+                return new URL(this.jwksUri).hostname
+            } catch {
+                return '[configured]'
+            }
+        })()
+        
+        logger.info(`Pre-fetching JWKS from: ${jwksHost}`, {
+            module: 'AUTH',
+            operation: 'jwks-preload',
+        })
+
+        try {
+            const response = await fetch(this.jwksUri, { 
+                method: 'GET',
+                signal: AbortSignal.timeout(10000)
+            })
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`)
+            }
+        } catch (error) {
+            const cause = error instanceof Error ? error : new Error(String(error))
+            logger.error('Failed to pre-fetch JWKS at startup', {
+                module: 'AUTH',
+                operation: 'jwks-preload',
+                error: cause.message,
+            })
+            throw new JwksFetchError(this.jwksUri, cause)
+        }
+    }
 }
 
 // =============================================================================

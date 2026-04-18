@@ -7,10 +7,11 @@ services:
       - ./data:/app/data:rw,noexec,nosuid,nodev
     environment:
       - DB_PATH=/app/data/memory_journal.db
+      - AUDIT_LOG_PATH=stderr
       # Optional: GitHub integration
       # - GITHUB_TOKEN=<your-github-token>
       # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: *)
+      # Optional: CORS origin (default: none)
       # - MCP_CORS_ORIGIN=http://localhost:3000
     read_only: true
     tmpfs:
@@ -37,12 +38,13 @@ services:
       - NODE_ENV=production
       - DB_PATH=/app/data/memory_journal.db
       - MCP_HOST=0.0.0.0
-      # Optional: Bearer token authentication (recommended for production)
-      # - MCP_AUTH_TOKEN=your_secret_token_here
+      - AUDIT_LOG_PATH=stderr
+      # Required for HTTP: Bearer token authentication
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-change_this_to_a_secure_token_for_production}
       # Optional: GitHub integration
       # - GITHUB_TOKEN=<your-github-token>
       # - PROJECT_REGISTRY={"my-repo":{"path":"/app/repo","project_number":1}}
-      # Optional: CORS origin (default: *)
+      # Optional: CORS origin (default: none)
       # - MCP_CORS_ORIGIN=http://localhost:3000
     read_only: true
     tmpfs:

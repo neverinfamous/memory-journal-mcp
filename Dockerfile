@@ -7,7 +7,7 @@ WORKDIR /app
 # Install build dependencies and upgrade packages for security
 # Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, etc.)
 RUN apk add --no-cache python3 make g++ && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 && \
+    apk add --no-cache curl zlib libcrypto3 libssl3 && \
     apk upgrade --no-cache
 
 # Upgrade npm globally to a pinned version to ensure reproducible builds
@@ -58,7 +58,7 @@ WORKDIR /app
 # Explicit libexpat upgrade for CVE-2026-24515 (CRITICAL) and CVE-2026-25210 (MEDIUM)
 # Explicit zlib upgrade for CVE-2026-27171 (MEDIUM)
 RUN apk add --no-cache git ca-certificates && \
-    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl libexpat zlib libcrypto3 libssl3 && \
+    apk add --no-cache curl libexpat zlib libcrypto3 libssl3 && \
     apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
@@ -91,7 +91,7 @@ USER appuser
 #     timeout: 10s
 #     retries: 3
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "process.exit(0)" || exit 1
+    CMD sh -c 'if ps | grep "[n]ode.*http" > /dev/null; then curl -f http://localhost:3000/health || exit 1; else node -e "process.exit(0)" || exit 1; fi'
 
 # Run the MCP server
 ENTRYPOINT ["node", "dist/cli.js"]

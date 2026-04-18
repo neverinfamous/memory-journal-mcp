@@ -130,6 +130,7 @@ const CreateEntryOutputSchema = z
         author: z.string().optional(),
         teamError: z.string().optional(),
         indexStatus: z.string().optional(),
+        enrichmentStatus: z.string().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
@@ -276,6 +277,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         success: true,
                         entry,
                         indexStatus,
+                        enrichmentStatus: input.issue_number !== undefined && !input.issue_url ? 'pending' : 'complete',
                         ...(sharedWithTeam ? { sharedWithTeam: true, author } : {}),
                     }
                 } catch (err) {

@@ -27,6 +27,7 @@ export default defineConfig({
             MCP_RATE_LIMIT_MAX: '1000',
             // Enable team DB so team tools get functional E2E coverage
             TEAM_DB_PATH: './.test-output/e2e/test-e2e-team.db',
+            ALLOWED_IO_ROOTS: process.cwd(),
         },
         url: 'http://localhost:3100/health',
         reuseExistingServer: !process.env.CI,

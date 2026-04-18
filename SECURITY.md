@@ -69,7 +69,7 @@ export MCP_CORS_ORIGIN="http://localhost:3000,https://my-app.com"
 ### **Security Headers & Protections**
 
 - ✅ **DNS Rebinding Protection** — `hostHeaderValidation` middleware prevents CVE-2025-66414
-- ✅ **Strict-Transport-Security (HSTS)** — max-age=31536000; includeSubDomains (opt-in via `--enable-hsts`)
+- ✅ **Strict-Transport-Security (HSTS)** — max-age=31536000; includeSubDomains (opt-in via `--enable-hsts`). Note: Only effective when deployed behind a reverse proxy handling HTTPS.
 - ✅ **X-Content-Type-Options: nosniff** — prevents MIME sniffing
 - ✅ **X-Frame-Options: DENY** — prevents clickjacking
 - ✅ **Content-Security-Policy: default-src 'none'; frame-ancestors 'none'** — prevents XSS and framing

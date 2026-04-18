@@ -13,7 +13,6 @@ export default defineConfig({
             exclude: [
                 'src/cli.ts',
                 'src/index.ts',
-                'src/transports/http.ts',
                 'src/types/**',
                 'src/codemode/worker-script.ts',
             ],

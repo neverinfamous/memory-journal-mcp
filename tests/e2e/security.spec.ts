@@ -93,7 +93,7 @@ test.describe('HTTP Transport Security & Limits', () => {
     })
 
     test('should include HSTS header when --enable-hsts is configured', async () => {
-        const HSTS_PORT = 3106
+        const HSTS_PORT = 3124
 
         await startServer(HSTS_PORT, ['--enable-hsts'], 'hsts')
 

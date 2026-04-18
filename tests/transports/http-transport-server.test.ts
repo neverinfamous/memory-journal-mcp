@@ -164,6 +164,8 @@ describe('HttpTransport', () => {
         const transport = new HttpTransport({
             port: 3000,
             host: 'localhost',
+            stateless: true,
+            corsOrigins: ['*'],
         } as never)
 
         const mockServer = { connect: vi.fn() }

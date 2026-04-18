@@ -12,7 +12,7 @@
 import { test, expect } from '@playwright/test'
 import { startServer, stopServer } from './helpers.js'
 
-const STREAM_PORT = 3107
+const STREAM_PORT = 3123
 const STREAM_BASE = `http://localhost:${STREAM_PORT}`
 
 test.describe('HTTP/SSE Streaming', () => {

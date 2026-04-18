@@ -28,6 +28,8 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             'node',
             [
                 'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
                 '--transport',
                 'http',
                 '--port',
@@ -39,7 +41,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env,
+                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     BRIEFING_ENTRY_COUNT: '2', // Only 2 entries max
                     BRIEFING_INCLUDE_TEAM: 'true', // Force inclusion

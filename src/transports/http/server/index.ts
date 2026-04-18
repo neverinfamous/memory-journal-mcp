@@ -90,7 +90,7 @@ export class HttpTransport {
         const { port, host, authToken, corsOrigins } = this.config
 
         const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1'
-        const hasCorsOpen = !corsOrigins || corsOrigins.includes('*')
+        const hasCorsOpen = corsOrigins?.includes('*') ?? false
         const hasAuth = Boolean(authToken) || this.config.oauthEnabled === true
 
         if (!hasAuth && hasCorsOpen) {
@@ -200,6 +200,9 @@ export class HttpTransport {
                 audience: this.config.oauthAudience,
                 clockTolerance: this.config.oauthClockTolerance ?? 60,
             })
+            
+            // Validate OAuth at startup
+            await tokenValidator.preload()
 
             const resourceServer = createOAuthResourceServer({
                 resource: this.config.publicOrigin ?? `http://${host}:${String(port)}`,

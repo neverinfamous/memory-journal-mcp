@@ -83,6 +83,8 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             'node',
             [
                 'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
                 '--transport',
                 'http',
                 '--port',
@@ -101,7 +103,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             {
                 cwd: process.cwd(),
                 stdio: 'pipe',
-                env: { ...process.env, MCP_RATE_LIMIT_MAX: '10000' },
+                env: { ...process.env, ALLOWED_IO_ROOTS: process.cwd(), MCP_RATE_LIMIT_MAX: '10000' },
             }
         )
 

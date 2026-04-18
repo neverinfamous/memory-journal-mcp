@@ -495,6 +495,7 @@ describe('McpServer', function () {
         it('should set up express app for stateless HTTP', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
                 port: 4000,
@@ -514,6 +515,7 @@ describe('McpServer', function () {
         it('should set up express app for stateful HTTP with session management', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
                 port: 5000,
@@ -530,6 +532,7 @@ describe('McpServer', function () {
         it('should configure CORS origin from options', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 corsOrigins: ['https://example.com'],
                 statelessHttp: false,
@@ -834,6 +837,7 @@ describe('McpServer', function () {
         it('should close audit logger and db on SIGINT (http stateful)', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
                 port: 5123,
@@ -863,6 +867,7 @@ describe('McpServer', function () {
         it('should handle POST /mcp in stateless mode', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -883,6 +888,7 @@ describe('McpServer', function () {
         it('should handle GET /mcp and DELETE /mcp in stateless mode', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -905,6 +911,7 @@ describe('McpServer', function () {
         it('should handle stateful mode POST /mcp validation failures', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -942,6 +949,7 @@ describe('McpServer', function () {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
             })
 
@@ -989,6 +997,7 @@ describe('McpServer', function () {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -1032,6 +1041,7 @@ describe('McpServer', function () {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
                 corsOrigins: ['https://test.example.com'],
@@ -1116,6 +1126,7 @@ describe('McpServer', function () {
         it('should handle stateful GET /mcp without session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1140,6 +1151,7 @@ describe('McpServer', function () {
         it('should handle stateful DELETE /mcp without session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1160,6 +1172,7 @@ describe('McpServer', function () {
         it('should handle stateful GET /mcp with invalid session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1178,6 +1191,7 @@ describe('McpServer', function () {
         it('should handle stateful DELETE /mcp with invalid session', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1201,6 +1215,7 @@ describe('McpServer', function () {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1247,6 +1262,7 @@ describe('McpServer', function () {
 
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })
@@ -1302,6 +1318,7 @@ describe('McpServer', function () {
         it('should start scheduler on HTTP transport', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
                 scheduler: {
@@ -1319,6 +1336,7 @@ describe('McpServer', function () {
         it('should not create scheduler when all intervals are 0', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 scheduler: {
                     backupIntervalMinutes: 0,
@@ -1491,6 +1509,7 @@ describe('McpServer', function () {
         it('should register SIGINT handler for stateless HTTP', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: true,
             })
@@ -1511,6 +1530,7 @@ describe('McpServer', function () {
         it('should register SIGINT handler for stateful HTTP', async function () {
             await createServer({
                 transport: 'http',
+                allowedIoRoots: ['C:/dummy/root'],
                 dbPath: './test-server.db',
                 statelessHttp: false,
             })

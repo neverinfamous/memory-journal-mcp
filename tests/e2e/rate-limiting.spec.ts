@@ -23,6 +23,59 @@ test.describe('Rate Limiting', () => {
         stopServer(RATE_PORT)
     })
 
+    test('should allow high throughput with default rate limit', async () => {
+        const { spawn } = await import('node:child_process')
+        const { setTimeout: delay } = await import('node:timers/promises')
+
+        // Start with default rate limit (no override)
+        const serverProcess = spawn(
+            'node',
+            [
+                'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
+                '--transport',
+                'http',
+                '--port',
+                String(RATE_PORT + 1), // Use a different port to avoid conflicts
+                '--db',
+                './.test-output/e2e/test-e2e-rate-default.db',
+            ],
+            { cwd: process.cwd(), stdio: 'pipe', env: { ...process.env, ALLOWED_IO_ROOTS: process.cwd() } }
+        )
+
+        for (let i = 0; i < 30; i++) {
+            try {
+                const res = await fetch(`http://localhost:${RATE_PORT + 1}/health`)
+                if (res.ok) break
+            } catch { /* Not ready */ }
+            await delay(500)
+        }
+
+        try {
+            const burstCount = 50
+            const promises = []
+            for (let i = 0; i < burstCount; i++) {
+                promises.push(
+                    fetch(`http://localhost:${RATE_PORT + 1}/mcp`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+                        body: JSON.stringify({
+                            jsonrpc: '2.0', id: i + 1, method: 'initialize',
+                            params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'default-test', version: '1.0' } }
+                        })
+                    })
+                )
+            }
+            const results = await Promise.all(promises)
+            for (const res of results) {
+                expect(res.status).not.toBe(429)
+            }
+        } finally {
+            serverProcess.kill('SIGTERM')
+        }
+    })
+
     test('should return 429 after exceeding rate limit', async () => {
         // The server on this port uses the default env MCP_RATE_LIMIT_MAX=10000.
         // We need to override it. Since startServer doesn't pass MCP_RATE_LIMIT_MAX
@@ -40,6 +93,8 @@ test.describe('Rate Limiting', () => {
             'node',
             [
                 'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
                 '--transport',
                 'http',
                 '--port',
@@ -51,7 +106,7 @@ test.describe('Rate Limiting', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env,
+                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '5',
                 },
             }
@@ -125,6 +180,8 @@ test.describe('Rate Limiting', () => {
             'node',
             [
                 'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
                 '--transport',
                 'http',
                 '--port',
@@ -136,7 +193,7 @@ test.describe('Rate Limiting', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env,
+                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '3',
                 },
             }
@@ -210,6 +267,8 @@ test.describe('Rate Limiting', () => {
             'node',
             [
                 'dist/cli.js',
+                '--allowed-io-roots',
+                process.cwd(),
                 '--transport',
                 'http',
                 '--port',
@@ -221,7 +280,7 @@ test.describe('Rate Limiting', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env,
+                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '2',
                 },
             }
