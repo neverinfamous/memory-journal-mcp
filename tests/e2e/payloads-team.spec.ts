@@ -20,10 +20,10 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
 
     test.beforeAll(async () => {
         // Start a dedicated server WITHOUT TEAM_DB_PATH to test config error path
-        await startServer(NO_TEAM_PORT, [], 'payloads-team', {
+        await startServer(NO_TEAM_PORT, ['--auth-token', 'test-token'], 'payloads-team', {
             env: { TEAM_DB_PATH: undefined, TEAM_AUTHOR: 'Alice' },
         })
-        client = await createClient(NO_TEAM_PORT)
+        client = await createClient(NO_TEAM_PORT, 'test-token')
     })
 
     test.afterAll(async () => {
@@ -192,5 +192,30 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
             entry_id: 1,
         })
         expectConfigError(payload)
+    })
+
+    // --- Team resources (no TEAM_DB_PATH in test env) ---
+    test('should read memory://team/recent', async () => {
+        const response = await client.readResource({ uri: 'memory://team/recent' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = (response.contents[0] as { text: string }).text
+        const parsed = JSON.parse(text)
+        // Without team DB, should return a not-configured indicator
+        expect(typeof parsed).toBe('object')
+    })
+
+    test('should read memory://team/statistics', async () => {
+        const response = await client.readResource({ uri: 'memory://team/statistics' })
+
+        expect(response.contents).toBeDefined()
+        expect(response.contents.length).toBeGreaterThan(0)
+
+        const text = (response.contents[0] as { text: string }).text
+        const parsed = JSON.parse(text)
+        // Without team DB, should return a not-configured indicator
+        expect(typeof parsed).toBe('object')
     })
 })

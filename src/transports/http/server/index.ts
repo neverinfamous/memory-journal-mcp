@@ -166,6 +166,47 @@ export class HttpTransport {
 
 
 
+        // Built-in rate limiting (Moved before Auth for DoS prevention)
+        if (this.config.enableRateLimit !== false) {
+            this.app.use((req: Request, res: Response, next: () => void) => {
+                // Health check bypasses rate limiting
+                if (req.path === '/health') {
+                    next()
+                    return
+                }
+
+                const result = checkRateLimit(req, this.config, this.rateLimitMap)
+                if (!result.allowed) {
+                    if (result.retryAfterSeconds !== undefined) {
+                        res.setHeader('Retry-After', String(result.retryAfterSeconds))
+                    }
+                    res.status(429).json({
+                        error: 'Too Many Requests',
+                        retryAfter: result.retryAfterSeconds,
+                    })
+                    return
+                }
+
+                next()
+            })
+
+            // Periodic cleanup of expired entries
+            this.rateLimitCleanupTimer = setInterval(() => {
+                const now = Date.now()
+                for (const [key, entry] of this.rateLimitMap) {
+                    if (now > entry.resetTime) {
+                        this.rateLimitMap.delete(key)
+                    }
+                }
+            }, 60_000)
+            // Don't block process exit
+            this.rateLimitCleanupTimer.unref()
+
+            logger.info('Rate limiting enabled (using IP)', {
+                module: 'HTTP',
+            })
+        }
+
         // Authentication middleware
         if (this.config.oauthEnabled && this.config.oauthIssuer && this.config.oauthAudience) {
             
@@ -247,46 +288,7 @@ export class HttpTransport {
             }
         })
 
-        // Built-in rate limiting
-        if (this.config.enableRateLimit !== false) {
-            this.app.use((req: Request, res: Response, next: () => void) => {
-                // Health check bypasses rate limiting
-                if (req.path === '/health') {
-                    next()
-                    return
-                }
 
-                const result = checkRateLimit(req, this.config, this.rateLimitMap)
-                if (!result.allowed) {
-                    if (result.retryAfterSeconds !== undefined) {
-                        res.setHeader('Retry-After', String(result.retryAfterSeconds))
-                    }
-                    res.status(429).json({
-                        error: 'Too Many Requests',
-                        retryAfter: result.retryAfterSeconds,
-                    })
-                    return
-                }
-
-                next()
-            })
-
-            // Periodic cleanup of expired entries
-            this.rateLimitCleanupTimer = setInterval(() => {
-                const now = Date.now()
-                for (const [key, entry] of this.rateLimitMap) {
-                    if (now > entry.resetTime) {
-                        this.rateLimitMap.delete(key)
-                    }
-                }
-            }, 60_000)
-            // Don't block process exit
-            this.rateLimitCleanupTimer.unref()
-
-            logger.info('Rate limiting enabled (using identity or IP)', {
-                module: 'HTTP',
-            })
-        }
 
         // Scope enforcement middleware
         // REMOVED: Scope validation is now handled comprehensively at the dispatch layer

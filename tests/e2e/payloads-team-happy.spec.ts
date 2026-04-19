@@ -45,6 +45,8 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                 String(TEAM_PORT),
                 '--db',
                 './.test-output/e2e/test-e2e-team-happy.db',
+                '--auth-token',
+                'test-token'
             ],
             {
                 cwd: process.cwd(),
@@ -53,7 +55,6 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                     ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     TEAM_DB_PATH: './.test-output/e2e/test-e2e-team-happy-team.db',
-                    TEAM_AUTHOR: 'Alice',
                 },
             }
         )
@@ -69,7 +70,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
             await delay(500)
         }
 
-        const transport = new StreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`))
+        const transport = new StreamableHTTPClientTransport(new URL(`${TEAM_BASE}/mcp`), { requestInit: { headers: { Authorization: 'Bearer test-token' } } })
         client = new McpClient({ name: 'team-happy-test', version: '1.0.0' }, { capabilities: {} })
         await client.connect(transport)
     })

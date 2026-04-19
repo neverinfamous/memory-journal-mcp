@@ -16,7 +16,7 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ claims: { sub: 'test-user', scopes: ['team', 'write'] } })
+        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
     }
 })
 
@@ -87,7 +87,7 @@ describe('Team Tool Handlers', () => {
             )) as { success: boolean; author: string; error?: string }
 
             expect(result.success).toBe(false)
-            expect(result.error).toContain('disabled in non-OAuth environments')
+            expect(result.error).toContain('does not match authenticated principal')
         })
 
         it('should support tags and entry_type', async () => {

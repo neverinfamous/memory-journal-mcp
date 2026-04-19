@@ -247,8 +247,8 @@ export class AuditLogger {
             } finally {
                 await fh.close()
             }
-        } catch {
-            return []
+        } catch (err) {
+            throw new Error(`Failed to read audit log: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
         }
     }
 
@@ -288,9 +288,13 @@ export class AuditLogger {
                 await rename(oldFile, newFile).catch(() => null)
             }
 
-            // Rename current to .1
+            // Rename current to .tmp first to move it out of the active path immediately,
+            // then atomically rename it to .1
+            const tmpPath = `${this.config.logPath}.tmp`
+            await rename(this.config.logPath, tmpPath)
+            
             const rotatedPath = `${this.config.logPath}.1`
-            await rename(this.config.logPath, rotatedPath)
+            await rename(tmpPath, rotatedPath)
         } catch (err) {
             // Rotation failure must not block logging
             const message = err instanceof Error ? err.message : String(err)

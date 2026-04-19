@@ -358,6 +358,9 @@ export class VectorSearchManager {
                 const embeddings = await Promise.all(
                     batch.map(async (entry: JournalEntry) => {
                         try {
+                            // Yield to the event loop before the heavy WASM execution
+                            // to prevent starving Node.js during the batch
+                            await new Promise((resolve) => setImmediate(resolve))
                             return {
                                 entry,
                                 embedding: await this.generateEmbedding(entry.content),

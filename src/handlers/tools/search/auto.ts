@@ -12,7 +12,7 @@ export type SearchMode = 'auto' | 'fts' | 'semantic' | 'hybrid'
 
 /** Pattern: question-like queries that indicate semantic intent */
 const QUESTION_PATTERNS = [
-    /^(how|what|why|when|where|who|which|can|does|is|are|was|were|did|should|could|would)\b/i,
+    /^(how|what|why|when|where|who|which|can|does|is|are|was|were|did|should|could|would|explain|show|find|describe)\b/i,
     /\?$/,
 ]
 

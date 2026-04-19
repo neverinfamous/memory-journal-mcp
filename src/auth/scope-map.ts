@@ -7,7 +7,7 @@
  */
 
 import { TOOL_GROUPS } from '../filtering/tool-filter.js'
-import { TOOL_GROUP_SCOPES, SCOPES } from './scopes.js'
+import { TOOL_GROUP_SCOPES, TOOL_SCOPE_OVERRIDES } from './scopes.js'
 import type { StandardScope } from './scopes.js'
 import type { ToolGroup } from '../types/index.js'
 
@@ -28,17 +28,10 @@ for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
     }
 }
 
-// Per-tool scope overrides — import tools mutate the journal and require write
-toolScopeMap.set('import_markdown', SCOPES.WRITE)
-// SEC-1.3: team_import_markdown requires team scope (aligned with group-level mapping)
-toolScopeMap.set('team_import_markdown', SCOPES.TEAM)
-toolScopeMap.set('mj_execute_code', SCOPES.ADMIN)
-
-// SEC-1.4: Reclassify mutators currently defaulting to READ scope because of their group
-toolScopeMap.set('create_entry', SCOPES.WRITE)
-toolScopeMap.set('create_entry_minimal', SCOPES.WRITE)
-toolScopeMap.set('link_entries', SCOPES.WRITE)
-toolScopeMap.set('export_markdown', SCOPES.WRITE)
+// Per-tool scope overrides
+for (const [toolName, scope] of Object.entries(TOOL_SCOPE_OVERRIDES)) {
+    toolScopeMap.set(toolName, scope)
+}
 
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)

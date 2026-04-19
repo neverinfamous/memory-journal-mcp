@@ -230,7 +230,7 @@ Content`
             [process.cwd()]
         )
 
-        expect(result.success).toBe(true)
+        expect(result.success).toBe(false)
         expect(mockVectorManager.addEntry).toHaveBeenCalled()
         // No hard errors thrown, but it should be recorded
         expect(result.errors.length).toBe(1)

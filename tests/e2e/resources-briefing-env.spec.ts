@@ -36,6 +36,8 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                 String(BRIEFING_PORT),
                 '--db',
                 './.test-output/e2e/test-briefing.db',
+                '--auth-token',
+                'test-token'
             ],
             {
                 cwd: process.cwd(),
@@ -60,7 +62,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             await delay(500)
         }
 
-        const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`))
+        const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), { requestInit: { headers: { Authorization: 'Bearer test-token' } } })
         client = new McpClient({ name: 'briefing-test', version: '1.0' }, { capabilities: {} })
         await client.connect(transport)
     })

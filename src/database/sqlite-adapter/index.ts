@@ -319,7 +319,11 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         const db = this.connection.getNativeDb()
         return db
             .prepare(
-                `SELECT entry_id, distance FROM vec_embeddings WHERE embedding MATCH ? ORDER BY distance LIMIT ?`
+                `SELECT v.entry_id, v.distance 
+                 FROM vec_embeddings v
+                 JOIN memory_journal mj ON v.entry_id = mj.id
+                 WHERE v.embedding MATCH ? AND mj.deleted_at IS NULL 
+                 ORDER BY v.distance LIMIT ?`
             )
             .all(embedding, limit) as { entry_id: number; distance: number }[]
     }

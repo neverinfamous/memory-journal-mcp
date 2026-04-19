@@ -13,7 +13,7 @@ import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
 import type { FrontmatterData } from './frontmatter.js'
 import { logger } from '../utils/logger.js'
-import type { Relationship } from '../types/index.js'
+
 import { assertSafeDirectoryPath } from '../utils/security-utils.js'
 
 // ============================================================================
@@ -114,15 +114,10 @@ export async function exportEntriesToMarkdown(
     skipped += entries.length - validEntries.length
     
     // Batch fetch relationships
-    let relationshipsMap = new Map<number, Relationship[]>()
-    try {
-        relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
-    } catch (err) {
-        logger.warning('Failed to lookup relationships during export (batch)', {
-            module: 'Exporter',
-            error: err instanceof Error ? err.message : String(err)
-        })
-    }
+    // We do not catch and swallow errors here. If relationship fetch fails, we must
+    // explicitly fail the export to prevent generating corrupt files that lack their
+    // associated relationship data, preserving interchange fidelity.
+    const relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
 
 
     for (const entry of validEntries) {

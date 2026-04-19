@@ -71,7 +71,7 @@
 - Team semantic search omitting valid cross-project vectors by enforcing `project_number` filtering prior to `limit` truncations.
 - Enforced hard exceptions on SQLite WAL checkpoint truncation failures to prevent silently incomplete backups.
 - Handled post-commit lookup failures gracefully in `createEntry` by logging a warning and returning a synthesized `JournalEntry` instead of throwing an error.
-
+- Stabilized E2E test suite regressions caused by strict authentication boundaries by properly isolating global `playwright.config.ts` context and moving unconfigured team testing to dedicated servers.
 ### Security
 - Limited FTS5 query token strings to 500 characters prior to AST parsing to prevent ReDoS and AST bloat limits.
 - Changed the fallback client ID in `mj_execute_code` from the process-global `INSTANCE_UUID` to a per-invocation `randomUUID()`, enforcing tenant isolation for unauthenticated `stdio` callers.

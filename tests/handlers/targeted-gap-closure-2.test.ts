@@ -13,11 +13,26 @@
  * - utils/resource-annotations.ts: withPriority, withAutoRead, withSessionInit
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
+import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+import * as fs from 'node:fs'
+
 const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
     _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
-import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
+
+(globalThis as any).__MOCK_AUTH__ = true;
+vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
+    const actual = await importOriginal()
+    return {
+        ...actual,
+        getAuthContext: () => {
+            if ((globalThis as any).__MOCK_AUTH__) return { authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } }
+            return actual.getAuthContext()
+        }
+    }
+})
+
 import {
     runWithAuthContext,
     getAuthContext,
@@ -370,6 +385,13 @@ describe('Targeted Gap Closure — Batch 2', () => {
 // ============================================================================
 
 describe('Auth Context', () => {
+    beforeAll(() => {
+        (globalThis as any).__MOCK_AUTH__ = false;
+    })
+    afterAll(() => {
+        (globalThis as any).__MOCK_AUTH__ = true;
+    })
+
     it('getAuthContext should return undefined outside of auth context', () => {
         const ctx = getAuthContext()
         expect(ctx).toBeUndefined()

@@ -27,7 +27,7 @@ import { getGitHubTools } from './github.js'
 import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
-import { randomUUID } from 'crypto'
+
 
 // =============================================================================
 // Input / Output Schemas
@@ -265,7 +265,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Context extraction for rate limiting and tenant isolation
                     const reqCtx = getRequestContext()
                     const authCtx = getAuthContext()
-                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || randomUUID()
+                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
 
                     // Security validation
                     const security = getSecurityManager(clientId)

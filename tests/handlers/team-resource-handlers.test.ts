@@ -4,10 +4,17 @@
  * Tests memory://team/recent and memory://team/statistics resources.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { readResource } from '../../src/handlers/resources/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
+vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
+    const actual = await importOriginal()
+    return {
+        ...actual,
+        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+    }
+})
 describe('Team Resource Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter

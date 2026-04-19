@@ -4,14 +4,20 @@
  * Tests the team analytics tool group: team_get_statistics, team_get_cross_project_insights
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
 const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
     _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
 
-
+vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
+    const actual = await importOriginal()
+    return {
+        ...actual,
+        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+    }
+})
 describe('Team Analytics Tool Handlers', () => {
     let personalDb: DatabaseAdapter
     let teamDb: DatabaseAdapter
@@ -36,7 +42,6 @@ describe('Team Analytics Tool Handlers', () => {
         const seed1 = await callTool(
             'team_create_entry',
             {
-                project_number: 1,
                 content: 'Project Alpha init',
                 entry_type: 'technical_note',
                 project_number: 101,
@@ -53,7 +58,6 @@ describe('Team Analytics Tool Handlers', () => {
         const seed2 = await callTool(
             'team_create_entry',
             {
-                project_number: 1,
                 content: 'Project Alpha task 1',
                 entry_type: 'feature_implementation',
                 project_number: 101,
@@ -70,7 +74,6 @@ describe('Team Analytics Tool Handlers', () => {
         const seed3 = await callTool(
             'team_create_entry',
             {
-                project_number: 1,
                 content: 'Project Alpha task 2',
                 entry_type: 'feature_implementation',
                 project_number: 101,
@@ -87,7 +90,6 @@ describe('Team Analytics Tool Handlers', () => {
         const seed4 = await callTool(
             'team_create_entry',
             {
-                project_number: 1,
                 content: 'Project Beta init',
                 entry_type: 'technical_note',
                 project_number: 202,

@@ -152,7 +152,7 @@ export function setupStateful(
                         }
                     }
                     
-                    if (ctx.transports.size >= maxSessions) {
+                    if (ctx.transports.size + ctx.sseTransports.size >= maxSessions) {
                         res.status(429).json({
                             jsonrpc: '2.0',
                             error: { code: JSONRPC_SERVER_ERROR, message: 'Too Many Requests: Maximum active sessions reached' },

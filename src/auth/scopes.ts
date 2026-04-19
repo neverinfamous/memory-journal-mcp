@@ -71,6 +71,19 @@ export const TOOL_GROUP_SCOPES: Record<ToolGroup, StandardScope> = {
 }
 
 /**
+ * Per-tool scope overrides. These tools require different scopes than their group default.
+ */
+export const TOOL_SCOPE_OVERRIDES: Record<string, StandardScope> = {
+    import_markdown: SCOPES.WRITE,
+    team_import_markdown: SCOPES.TEAM,
+    mj_execute_code: SCOPES.ADMIN,
+    create_entry: SCOPES.WRITE,
+    create_entry_minimal: SCOPES.WRITE,
+    link_entries: SCOPES.WRITE,
+    export_markdown: SCOPES.WRITE,
+}
+
+/**
  * Get the required scope for a tool group.
  */
 export function getScopeForToolGroup(group: ToolGroup): StandardScope {

@@ -38,8 +38,9 @@ export function getBaseURL(testInfo: TestInfo): string {
  * Create and connect a Streamable HTTP MCP client.
  * Caller is responsible for calling client.close() in afterAll.
  */
-export async function createClient(port = 3100): Promise<Client> {
-    const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${port}/mcp`))
+export async function createClient(port = 3100, authToken?: string): Promise<Client> {
+    const transportOptions = authToken ? { requestInit: { headers: { Authorization: `Bearer ${authToken}` } } } : undefined;
+    const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${port}/mcp`), transportOptions);
     const client = new Client(
         { name: 'payload-contract-test', version: '1.0.0' },
         { capabilities: {} }

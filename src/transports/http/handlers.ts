@@ -73,6 +73,14 @@ export function createAuthMiddleware(
             res.status(401).json({ error: 'Unauthorized' })
             return
         }
+
+        // Bind an explicit identity for shared bearer mode so that stateful sessions
+        // can enforce tenant isolation even without OAuth.
+        ;(req as unknown as { auth?: { sub?: string; subject?: string; scopes?: string[] } }).auth = {
+            sub: 'bearer-client',
+            subject: 'bearer-client',
+            scopes: ['read', 'write', 'admin', 'team', 'audit']
+        }
         next()
     }
 }

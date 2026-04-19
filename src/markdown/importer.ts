@@ -83,7 +83,10 @@ const VALID_ENTRY_TYPES = new Set<string>([
  */
 function toEntryType(value: string | undefined): EntryType | undefined {
     if (value === undefined) return undefined
-    return VALID_ENTRY_TYPES.has(value) ? (value as EntryType) : undefined
+    if (!VALID_ENTRY_TYPES.has(value)) {
+        throw new Error(`Invalid entry type: ${value}. Must be one of: ${Array.from(VALID_ENTRY_TYPES).join(', ')}`)
+    }
+    return value as EntryType
 }
 
 // ============================================================================
@@ -296,23 +299,31 @@ export async function importMarkdownEntries(
 
     // Phase 3: Perform vector indexing asynchronously (outside transaction)
     if (!dry_run && vectorManager) {
+        let hasVectorErrors = false
         for (const { entryId, body, filename } of vectorQueue) {
             try {
                 const vectorResult = await vectorManager.addEntry(entryId, body)
                 if (vectorResult.success) {
                     result.vectorsIndexed++
                 } else {
+                    hasVectorErrors = true
                     result.errors.push({
                         file: filename,
                         error: `Vector indexing failed: ${vectorResult.error || 'Unknown error'}`,
                     })
                 }
             } catch (err) {
+                hasVectorErrors = true
                 result.errors.push({
                     file: filename,
                     error: err instanceof Error ? err.message : String(err),
                 })
             }
+        }
+        
+        // If vector indexing fails, we mark the import as a partial success
+        if (hasVectorErrors) {
+            result.success = false
         }
     }
 
