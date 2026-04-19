@@ -29,7 +29,7 @@ vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
                     return { success: true, result: 'undefined' }
                 }
                 if (code.includes('huge')) {
-                    return { success: true, result: 'a'.repeat(11 * 1024 * 1024) }
+                    return { success: false, error: 'Result string exceeds allowed limit' }
                 }
                 return { success: true, result: 2 }
             },

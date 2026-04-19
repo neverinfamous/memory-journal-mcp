@@ -34,7 +34,7 @@ import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getCodeModeTools } from './codemode.js'
 
-import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
+import { wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
 
 import { enforceAccessBoundary } from '../../auth/validation.js'
 import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
@@ -244,12 +244,13 @@ function ensureToolCache(
     // When audit logging is enabled, also wraps with the audit interceptor.
     // This is O(n) once per cache miss — production cost is negligible.
     const instrumentedDefs: ToolDefinition[] = rawDefs.map((t) => {
-        // Layer 1: Metrics collection (always active)
-        const metricsWrapped = wrapWithMetrics(
+        // Layer 1: Metrics collection (always active if runtime is provided)
+        const metricsInstance = config?.runtime?.metrics;
+        const metricsWrapped = metricsInstance !== undefined ? wrapWithMetrics(
             t.name,
             (args: Record<string, unknown>) => Promise.resolve(t.handler(args)),
-            globalMetrics
-        )
+            metricsInstance
+        ) : (args: Record<string, unknown>) => Promise.resolve(t.handler(args))
 
         // Layer 2: Audit logging (only when initialized)
         const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
@@ -329,11 +330,12 @@ export async function callTool(
         const freshTool = freshTools.find((t) => t.name === name)
         if (freshTool) {
             // Layer 1: Metrics
-            const metricsWrapped = wrapWithMetrics(
+            const metricsInstance = config?.runtime?.metrics;
+            const metricsWrapped = metricsInstance !== undefined ? wrapWithMetrics(
                 freshTool.name,
                 (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a)),
-                globalMetrics
-            )
+                metricsInstance
+            ) : (a: Record<string, unknown>) => Promise.resolve(freshTool.handler(a))
             // Layer 2: Audit (if initialized)
             const runtimeAudit = config?.runtime !== undefined && config.runtime !== null ? config.runtime.auditInterceptor : null
             const interceptor = runtimeAudit

@@ -7,6 +7,7 @@
 import type { AuditLogger, AuditInterceptor } from '../audit/index.js'
 import type { ToolRegistration, ToolDefinition } from '../types/index.js'
 import type { GitHubIntegration } from '../github/github-integration/index.js'
+import { MetricsAccumulator } from '../observability/metrics.js'
 
 export class MaintenanceManager {
     private activeJobs = 0;
@@ -71,6 +72,7 @@ export class MaintenanceManager {
 
 export class ServerRuntime {
     public readonly maintenanceManager = new MaintenanceManager();
+    public readonly metrics = new MetricsAccumulator();
     public auditLogger: AuditLogger | null = null;
     public auditInterceptor: AuditInterceptor | null = null;
     public toolMapCache: Map<string, ToolDefinition> | null = null;

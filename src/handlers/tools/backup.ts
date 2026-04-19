@@ -147,7 +147,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             name: 'restore_backup',
             title: 'Restore Journal from Backup',
             description:
-                'Restore the journal database from a backup file. WARNING: This replaces all current data. An automatic backup is created before restore.',
+                'Restore the journal database from a backup file. WARNING: This replaces all current data. Enforce single-writer / single-instance only for restore-capable deployments. An automatic backup is created before restore.',
             group: 'backup',
             inputSchema: z.object({
                 filename: z

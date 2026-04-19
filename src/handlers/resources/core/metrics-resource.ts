@@ -12,7 +12,7 @@
  *   memory://metrics/users    — LOW_PRIORITY    — per-user call count breakdown
  */
 
-import { globalMetrics } from '../../../observability/index.js'
+// Removed globalMetrics import
 import {
     HIGH_PRIORITY,
     MEDIUM_PRIORITY,
@@ -44,9 +44,13 @@ export const metricsSummaryResource: InternalResourceDef = {
         ...HIGH_PRIORITY,
         audience: ['assistant'],
     },
-    handler: (_uri: string, _ctx: ResourceContext): ResourceResult => {
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
-        const s = globalMetrics.getSummary()
+        const s = ctx.runtime?.metrics.getSummary()
+        
+        if (!s) {
+            return { data: 'metrics_summary:\n  error: Metrics not available\n', annotations: { lastModified } }
+        }
 
         const errorRate =
             s.totalCalls > 0 ? ((s.totalErrors / s.totalCalls) * 100).toFixed(1) : '0.0'
@@ -85,9 +89,9 @@ export const metricsTokensResource: InternalResourceDef = {
         ...MEDIUM_PRIORITY,
         audience: ['assistant'],
     },
-    handler: (_uri: string, _ctx: ResourceContext): ResourceResult => {
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
-        const breakdown = globalMetrics.getTokenBreakdown()
+        const breakdown = ctx.runtime?.metrics.getTokenBreakdown() ?? []
 
         if (breakdown.length === 0) {
             return {
@@ -128,9 +132,13 @@ export const metricsSystemResource: InternalResourceDef = {
         ...MEDIUM_PRIORITY,
         audience: ['assistant'],
     },
-    handler: (_uri: string, _ctx: ResourceContext): ResourceResult => {
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
-        const sys = globalMetrics.getSystemMetrics()
+        const sys = ctx.runtime?.metrics.getSystemMetrics()
+        
+        if (!sys) {
+            return { data: 'system_metrics:\n  error: Metrics not available\n', annotations: { lastModified } }
+        }
 
         const text =
             `system_metrics:\n` +
@@ -161,9 +169,9 @@ export const metricsUsersResource: InternalResourceDef = {
         ...LOW_PRIORITY,
         audience: ['assistant'],
     },
-    handler: (_uri: string, _ctx: ResourceContext): ResourceResult => {
+    handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
-        const userBreakdown = globalMetrics.getUserBreakdown()
+        const userBreakdown = ctx.runtime?.metrics.getUserBreakdown() ?? {}
         const users = Object.entries(userBreakdown)
 
         if (users.length === 0) {

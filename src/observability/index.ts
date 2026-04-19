@@ -9,7 +9,7 @@
 
 export { estimateTokens, estimatePayloadTokens, injectTokenEstimate } from './token-estimator.js'
 
-export { MetricsAccumulator, globalMetrics } from './metrics.js'
+export { MetricsAccumulator } from './metrics.js'
 
 export type { ToolMetrics, MetricsSummary, SystemMetrics } from './metrics.js'
 

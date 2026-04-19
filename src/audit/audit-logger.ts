@@ -1,7 +1,7 @@
 /**
- * memory-journal-mcp — Audit Logger
+ * memory-journal-mcp — Operational Telemetry Logger
  *
- * Async-buffered JSONL writer for the audit trail. Appends one
+ * Async-buffered JSONL writer for operational telemetry. Appends one
  * JSON object per line to a configurable file path, or writes to
  * stderr for containerised deployments (`--audit-log stderr`).
  *
@@ -13,7 +13,7 @@
  *   - Streaming tail-read: recent() reads only last 64KB for O(1) memory
  *   - stderr mode: `--audit-log stderr` routes to process.stderr
  *
- * Non-throwing by design: audit failures log to stderr but never
+ * Non-throwing by design: telemetry failures log to stderr but never
  * propagate to tool callers.
  */
 
@@ -102,7 +102,7 @@ export class AuditLogger {
         if (this.buffer.length > 5000) {
             this.buffer.shift()
             if (this._droppedCount === 0) {
-                logger.warning('Audit logger buffer overflow. Dropping oldest entries. Note: Audit log is a lossy telemetry mechanism.', { module: 'Audit' })
+                logger.warning('Telemetry buffer overflow. Dropping oldest entries. Note: This log is a lossy operational telemetry mechanism.', { module: 'Audit' })
             }
             this._droppedCount++
         }
@@ -166,7 +166,7 @@ export class AuditLogger {
                     await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
                 }
             } catch (err) {
-                // Never throw — audit must not break tool execution
+                // Never throw — telemetry must not break tool execution
                 const message = err instanceof Error ? err.message : String(err)
                 logger.error(`Write failed: ${message}`, { module: 'Audit' })
                 // Re-queue the failed lines so they aren't lost
@@ -255,7 +255,7 @@ export class AuditLogger {
                 await fh.close()
             }
         } catch (err) {
-            throw new Error(`Failed to read audit log: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
+            throw new Error(`Failed to read telemetry log: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
         }
     }
 

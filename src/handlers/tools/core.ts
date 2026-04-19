@@ -36,7 +36,7 @@ import {
 const CreateEntrySchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT_LENGTH),
     entry_type: z.enum(ENTRY_TYPES).optional().default('personal_reflection'),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(z.string().max(100)).max(50).optional().default([]),
     is_personal: z.boolean().optional().default(true),
     significance_type: z.enum(SIGNIFICANCE_TYPES).optional(),
     auto_context: z.boolean().optional().default(true),
@@ -57,7 +57,7 @@ const CreateEntrySchema = z.object({
 const CreateEntrySchemaMcp = z.object({
     content: z.string().optional(),
     entry_type: z.string().optional().default('personal_reflection'),
-    tags: z.array(z.string()).optional().default([]),
+    tags: z.array(z.string().max(100)).max(50).optional().default([]),
     is_personal: z.boolean().optional().default(true),
     significance_type: z.string().optional(),
     auto_context: z.boolean().optional().default(true),

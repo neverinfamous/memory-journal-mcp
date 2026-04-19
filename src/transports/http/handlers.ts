@@ -8,6 +8,7 @@ import { timingSafeEqual, createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
+import { isValidScope } from '../../auth/scopes.js'
 
 // =============================================================================
 // Health Check
@@ -75,7 +76,12 @@ export function createAuthMiddleware(
         }
 
         const envScopes = process.env['MCP_AUTH_SCOPES']
-        const defaultScopes = envScopes ? envScopes.split(',').map(s => s.trim()) : ['read', 'write']
+        let defaultScopes = envScopes ? envScopes.split(',').map(s => s.trim()) : ['read', 'write']
+        const invalidScopes = defaultScopes.filter(s => !isValidScope(s))
+        if (invalidScopes.length > 0) {
+            logger.warning(`Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`, { module: 'HTTP' })
+            defaultScopes = ['read']
+        }
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.

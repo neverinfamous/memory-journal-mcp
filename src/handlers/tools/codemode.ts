@@ -341,17 +341,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records
                     const result = await pool.execute(code, bindings, timeout)
-                    // Validate result size
-                    if (result.success && result.result !== undefined) {
-                        const sizeCheck = security.validateResultSize(result.result)
-                        if (!sizeCheck.valid) {
-                            return {
-                                success: false,
-                                error: sizeCheck.errors.join('; '),
-                                metrics: result.metrics,
-                            }
-                        }
-                    }
+                    // Result size is validated internally by the worker pool
                     return result
                 } catch (err) {
                     return formatHandlerError(err)

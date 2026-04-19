@@ -42,6 +42,10 @@
 - Reduced `OVERFETCH_MULTIPLIER` in `src/handlers/tools/search/hybrid.ts` from `3` to `2` to improve hybrid search performance and reduce memory pressure.
 - Updated the FTS5 sanitization regex in `src/database/sqlite-adapter/entries/search.ts` to preserve phrase quotes (`"`) and wildcards (`*`), enabling advanced queries.
 - Refactored `VectorSearchManager` vector insertions to utilize a batched `upsertVectors` SQLite interface, eliminating N+1 query bottlenecks during index rebuilding.
+- Replaced the global `globalMetrics` singleton pattern with a strictly instance-scoped `context.runtime.metrics` property across all resources and testing modules to ensure tenant boundary integrity.
+- Removed the redundant string serialization size check in the `mj_execute_code` HTTP layer, properly deferring size bounds enforcement to the isolated Code Mode worker sandbox.
+- Exposed explicit `isReady` semantic index status on the `memory://health` resource, allowing orchestrators to reliably pause operations during index rebuilding.
+- Created an explicit repository-local `.npmrc` enforcing `save-exact=true` and `engine-strict=true` for supply-chain determinism.
 
 ### Deprecated
 - Officially deprecated the `autoContext` field across the memory journal ecosystem. Existing records are safely ignored.
@@ -161,3 +165,7 @@
 - Passed `allowedIoRoots` to strict `assertSafeFilePath` bounds in `buildRulesFileInfo` and `buildSkillsDirInfo` for briefing metadata generators.
 - Applied `markUntrustedContentInline` to skill excerpt outputs in `utilities.ts` to mitigate prompt injection.
 - Exposed internal `vectorManager` failures through the `degraded: true` flag in `hybrid.ts` rather than silently omitting semantic results.
+- Added strict boundary length protections (`.max(50)`, `.max(100)`) against arrays on Tags and Relationships within Markdown imports and tool resources to mitigate Denial of Service (DoS) memory exhaustion.
+- Rebranded the "Audit Logger" as the "Operational Telemetry Log" to explicitly reflect its lossy, best-effort tracking characteristics rather than implying an immutable ledger.
+- Implemented fail-fast validation to verify `MCP_AUTH_SCOPES` integrity at server initialization instead of runtime.
+- Prevented potential debug leakage by strictly stripping absolute local host paths from `DEBUG=true` console trace outputs.

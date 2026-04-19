@@ -1,18 +1,18 @@
 /**
  * Audit Resource Handler
  *
- * Serves the memory://audit resource — the last 50 audit entries
+ * Serves the memory://audit resource — the last 50 telemetry entries
  * as a structured, YAML-style text payload with a session summary
  * including token totals and error counts.
  *
  * Per mcp-builder §2.3: annotated as ASSISTANT_FOCUSED (agent-only).
  *
- * When audit logging is not configured, returns a brief informational
+ * When telemetry logging is not configured, returns a brief informational
  * message with a setup hint.
  *
  * Uses the AuditLogger.recent() streaming tail-read (64KB window)
  * instead of loading the entire file — O(1) memory regardless of
- * audit log size.
+ * telemetry log size.
  */
 
 import type {
@@ -39,9 +39,9 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
     return {
         uri: 'memory://audit',
         name: 'Audit Log',
-        title: 'Audit Trail (last 50 entries)',
+        title: 'Operational Telemetry Log (last 50 entries)',
         description:
-            'Last 50 write/admin tool call audit entries from the JSONL audit log. ' +
+            'Last 50 write/admin tool call telemetry entries from the JSONL log. ' +
             'Each entry includes tool name, scope, duration, token estimates, and error status. ' +
             'Includes a session summary with total token consumption and error count.',
         mimeType: 'text/plain',

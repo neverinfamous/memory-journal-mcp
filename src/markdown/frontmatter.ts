@@ -42,7 +42,7 @@ const FrontmatterSchema = z.object({
     mj_id: z.number().int().positive().optional(),
     entry_type: z.string().optional(),
     author: z.string().optional(),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string().max(100)).max(50).optional(),
     timestamp: z.string().optional(),
     significance: z.string().optional(),
     relationships: z
@@ -52,6 +52,7 @@ const FrontmatterSchema = z.object({
                 target_id: z.number().int().positive(),
             })
         )
+        .max(100)
         .optional(),
     source: z.string().optional(),
 })

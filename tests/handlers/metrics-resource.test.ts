@@ -6,15 +6,17 @@ import {
     metricsUsersResource,
     getMetricsResourceDefinitions,
 } from '../../src/handlers/resources/core/metrics-resource.js'
-import { globalMetrics } from '../../src/observability/index.js'
+import { MetricsAccumulator } from '../../src/observability/metrics.js'
 
 describe('Metrics Resources', () => {
+    let metrics: MetricsAccumulator
+
     beforeEach(() => {
-        globalMetrics.reset()
+        metrics = new MetricsAccumulator()
     })
 
     afterEach(() => {
-        globalMetrics.reset()
+        // Nothing to reset, instance is recreated
     })
 
     it('getMetricsResourceDefinitions returns all four definitions', () => {
@@ -32,7 +34,7 @@ describe('Metrics Resources', () => {
         it('returns zero summary when no calls recorded', async () => {
             const res = (await metricsSummaryResource.handler(
                 'memory://metrics/summary',
-                {} as any
+                { runtime: { metrics } } as any
             )) as any
             expect(res.data).toContain('total_calls: 0')
             expect(res.data).toContain('error_rate_pct: 0.0')
@@ -40,14 +42,14 @@ describe('Metrics Resources', () => {
         })
 
         it('returns calculated summary when calls exist', async () => {
-            globalMetrics.record({
+            metrics.record({
                 toolName: 'test_tool',
                 isError: false,
                 durationMs: 100,
                 inputTokens: 10,
                 outputTokens: 20,
             })
-            globalMetrics.record({
+            metrics.record({
                 toolName: 'test_tool',
                 isError: true,
                 durationMs: 150,
@@ -57,7 +59,7 @@ describe('Metrics Resources', () => {
 
             const res = (await metricsSummaryResource.handler(
                 'memory://metrics/summary',
-                {} as any
+                { runtime: { metrics } } as any
             )) as any
 
             expect(res.data).toContain('total_calls: 2')
@@ -75,20 +77,20 @@ describe('Metrics Resources', () => {
         it('returns warning when no tool calls recorded', async () => {
             const res = (await metricsTokensResource.handler(
                 'memory://metrics/tokens',
-                {} as any
+                { runtime: { metrics } } as any
             )) as any
             expect(res.data).toContain('No tool calls recorded yet')
         })
 
         it('returns token breakdown list sorted by usage', async () => {
-            globalMetrics.record({
+            metrics.record({
                 toolName: 'tool_a',
                 isError: false,
                 durationMs: 100,
                 inputTokens: 10,
                 outputTokens: 50,
             })
-            globalMetrics.record({
+            metrics.record({
                 toolName: 'tool_b',
                 isError: false,
                 durationMs: 100,
@@ -98,7 +100,7 @@ describe('Metrics Resources', () => {
 
             const res = (await metricsTokensResource.handler(
                 'memory://metrics/tokens',
-                {} as any
+                { runtime: { metrics } } as any
             )) as any
 
             expect(res.data).toContain('tool: tool_b')
@@ -111,7 +113,7 @@ describe('Metrics Resources', () => {
         it('returns process and environment system metrics', async () => {
             const res = (await metricsSystemResource.handler(
                 'memory://metrics/system',
-                {} as any
+                { runtime: { metrics } } as any
             )) as any
             expect(res.data).toContain('process_memory_mb:')
             expect(res.data).toContain('node_version:')
@@ -123,40 +125,40 @@ describe('Metrics Resources', () => {
         it('returns hint when no users recorded', async () => {
             const res = (await metricsUsersResource.handler(
                 'memory://metrics/users',
-                {} as any
+                { runtime: { metrics } } as any
             )) as any
             expect(res.data).toContain('No user tracking data available')
         })
 
         it('returns user breakdown when users recorded', async () => {
-            globalMetrics.record({
+            metrics.record({
                 toolName: 'tool_a',
                 isError: false,
                 durationMs: 100,
                 inputTokens: 10,
                 outputTokens: 10,
             })
-            globalMetrics.recordUser('alice')
-            globalMetrics.record({
+            metrics.recordUser('alice')
+            metrics.record({
                 toolName: 'tool_a',
                 isError: false,
                 durationMs: 100,
                 inputTokens: 10,
                 outputTokens: 10,
             })
-            globalMetrics.recordUser('alice')
-            globalMetrics.record({
+            metrics.recordUser('alice')
+            metrics.record({
                 toolName: 'tool_b',
                 isError: false,
                 durationMs: 100,
                 inputTokens: 10,
                 outputTokens: 10,
             })
-            globalMetrics.recordUser('bob')
+            metrics.recordUser('bob')
 
             const res = (await metricsUsersResource.handler(
                 'memory://metrics/users',
-                {} as any
+                { runtime: { metrics } } as any
             )) as any
 
             expect(res.data).toContain('user: alice')

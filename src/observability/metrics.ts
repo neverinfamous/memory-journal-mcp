@@ -181,5 +181,4 @@ export class MetricsAccumulator {
 // Singleton
 // ============================================================================
 
-/** Global metrics accumulator — shared between interceptor and resource handlers */
-export const globalMetrics = new MetricsAccumulator()
+// REMOVED: globalMetrics singleton. Use ServerRuntime.metrics instead.
