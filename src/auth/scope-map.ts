@@ -34,6 +34,12 @@ toolScopeMap.set('import_markdown', SCOPES.WRITE)
 toolScopeMap.set('team_import_markdown', SCOPES.TEAM)
 toolScopeMap.set('mj_execute_code', SCOPES.ADMIN)
 
+// SEC-1.4: Reclassify mutators currently defaulting to READ scope because of their group
+toolScopeMap.set('create_entry', SCOPES.WRITE)
+toolScopeMap.set('create_entry_minimal', SCOPES.WRITE)
+toolScopeMap.set('link_entries', SCOPES.WRITE)
+toolScopeMap.set('export_markdown', SCOPES.WRITE)
+
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)
     if (!scope) {

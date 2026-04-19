@@ -119,3 +119,7 @@
 - Resolved a concurrency TOCTOU race condition in `maintenance-lock.ts` by coordinating `activeJobs` validation correctly during maintenance lock acquisition.
 - Fixed a PID-reuse vulnerability during database restore lock acquisition by delegating process validation to the `ServerRuntime` in-memory maintenance lock.
 - Replaced brittle `lstat` double-checks in the markdown exporter with `fs.realpathSync.native()` to provide definitive protection against Time-of-Check to Time-of-Use (TOCTOU) symlink swaps.
+- Reclassified `create_entry`, `create_entry_minimal`, `link_entries`, and `export_markdown` to require `WRITE` scope to fix capability injection risks.
+- Enforced explicit `TEAM` scope validation using `hasScope` for the `share_with_team` feature in `create_entry`.
+- Updated `import_markdown` to properly expose vector-indexing failures in the `errors` payload while preserving transaction success instead of masking partial successes as failures.
+- Changed the fallback client ID in `mj_execute_code` from the process-global `INSTANCE_UUID` to a per-invocation `randomUUID()`, enforcing tenant isolation for unauthenticated `stdio` callers in Code Mode.

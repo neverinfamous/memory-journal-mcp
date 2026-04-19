@@ -306,14 +306,12 @@ export async function importMarkdownEntries(
                         file: filename,
                         error: `Vector indexing failed: ${vectorResult.error || 'Unknown error'}`,
                     })
-                    result.success = false
                 }
             } catch (err) {
                 result.errors.push({
                     file: filename,
                     error: err instanceof Error ? err.message : String(err),
                 })
-                result.success = false
             }
         }
     }

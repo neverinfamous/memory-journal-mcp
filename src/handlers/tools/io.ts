@@ -140,6 +140,8 @@ const ImportMarkdownOutputSchema = z
         created: z.number().optional(),
         updated: z.number().optional(),
         skipped: z.number().optional(),
+        relationshipsLinked: z.number().optional(),
+        vectorsIndexed: z.number().optional(),
         errors: z
             .array(
                 z.object({

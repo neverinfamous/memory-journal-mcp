@@ -8,6 +8,14 @@ const callTool = (name: any, params: any, db: any, vectorManager?: any, github?:
     _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
 
 
+vi.mock('../../src/utils/request-context.js', async (importOriginal) => {
+    const actual = await importOriginal<any>()
+    return {
+        ...actual,
+        getRequestContext: () => ({ sessionId: 'test-session-id' })
+    }
+})
+
 vi.mock('../../src/codemode/sandbox-factory.js', async (importOriginal) => {
     const actual = await importOriginal<any>()
     return {

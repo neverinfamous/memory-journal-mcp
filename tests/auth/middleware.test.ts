@@ -179,8 +179,8 @@ describe('requireAnyScope', () => {
 
 describe('requireToolScope', () => {
     it('should call next when sufficient scope for tool', () => {
-        // create_entry is a core tool → requires read scope
-        const middleware = requireToolScope('create_entry')
+        // get_recent_entries is a core tool → requires read scope
+        const middleware = requireToolScope('get_recent_entries')
 
         const req = { auth: { scopes: ['read'] } } as never
         const res = { status: vi.fn().mockReturnThis(), json: vi.fn(), setHeader: vi.fn() } as never
@@ -191,7 +191,7 @@ describe('requireToolScope', () => {
     })
 
     it('should return 401 when no auth context', () => {
-        const middleware = requireToolScope('create_entry')
+        const middleware = requireToolScope('get_recent_entries')
 
         const req = {} as never
         const statusMock = vi.fn().mockReturnThis()

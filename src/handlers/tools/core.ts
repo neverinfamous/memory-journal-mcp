@@ -11,6 +11,8 @@ import { formatHandlerError } from '../../utils/error-helpers.js'
 import { resolveAuthenticatedAuthor } from '../../utils/security-utils.js'
 import { autoIndexEntry } from '../../utils/vector-index-helpers.js'
 import { resolveIssueUrl } from '../../utils/github-helpers.js'
+import { getAuthContext } from '../../auth/auth-context.js'
+import { hasScope, SCOPES } from '../../auth/scopes.js'
 import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
 import {
@@ -209,6 +211,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     let teamError: string | undefined
                     if (input.share_with_team && teamDb) {
                         try {
+                            const authCtx = getAuthContext()
+                            if (!hasScope(authCtx?.claims?.scopes ?? [], SCOPES.TEAM)) {
+                                throw new Error('Insufficient scope: team scope is required to share entries with the team')
+                            }
                             author = resolveAuthenticatedAuthor()
                             const teamEntry = teamDb.createEntry({
                                 content: input.content,

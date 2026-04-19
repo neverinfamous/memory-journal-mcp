@@ -234,7 +234,6 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 
 
 
-const INSTANCE_UUID = randomUUID()
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     return [
@@ -266,7 +265,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Context extraction for rate limiting and tenant isolation
                     const reqCtx = getRequestContext()
                     const authCtx = getAuthContext()
-                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || INSTANCE_UUID
+                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || randomUUID()
 
                     // Security validation
                     const security = getSecurityManager(clientId)
