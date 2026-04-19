@@ -73,6 +73,8 @@ export async function hybridSearch(
 ): Promise<{ entries: EntryWithSource[]; fusionScores: Map<number, number>; degraded?: boolean }> {
     const overfetchLimit = Math.min(options.limit * OVERFETCH_MULTIPLIER, 500)
 
+    let semanticDegraded = false
+
     // Run FTS5 and semantic search in parallel
     const [ftsResults, semanticResults] = await Promise.all([
         // FTS5 search
@@ -95,6 +97,7 @@ export async function hybridSearch(
         vectorManager
             ? vectorManager.search(query, overfetchLimit, 0.15).catch((err: unknown) => {
                   logger.warning(`Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`, { module: 'HybridSearch' })
+                  semanticDegraded = true
                   return []
               }) // Lower threshold for broader recall
             : Promise.resolve([]),
@@ -134,7 +137,7 @@ export async function hybridSearch(
         entries.push({ ...entry, source: 'personal' as const })
     }
 
-    const isDegraded = (ftsResults as unknown as { degraded?: boolean }).degraded === true
+    const isDegraded = (ftsResults as unknown as { degraded?: boolean }).degraded === true || semanticDegraded
 
     return { entries, fusionScores, degraded: isDegraded }
 }

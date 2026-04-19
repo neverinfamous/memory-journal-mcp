@@ -255,7 +255,13 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const authCtx = getAuthContext()
                     const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
 
-                    if (authCtx?.authenticated) {
+                    if (context.config?.authToken || context.config?.oauthEnabled) {
+                        if (!authCtx?.authenticated) {
+                            return {
+                                success: false,
+                                error: 'Permission Denied: Code Mode requires authentication.',
+                            }
+                        }
                         const scopes = getAuthenticatedScopes()
                         if (!scopes.includes('admin')) {
                             return {

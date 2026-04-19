@@ -157,3 +157,7 @@
 - Restored `TEAM_AUTHOR` identity fallback explicitly for `enforceAccessBoundary` in `src/auth/validation.ts` to allow safe non-OAuth operation of team tools during E2E testing.
 - Modified `project_number` to be formally optional inside `TeamSearchSchema` and `TeamSearchByDateRangeSchema` to ensure strict payload schemas allow graceful fallback to structural `PERMISSION_DENIED` authorization failures.
 - Resolved ESLint violations `no-unsafe-return` in `src/cli.ts` JSON reviver logic and `no-useless-escape` in `security-utils.ts` token regex captures.
+- Excluded state files (`.memory-journal-team.db*`, `backups/`, `mcp-audit.jsonl`) from source control via `.gitignore` to prevent operational data pollution.
+- Passed `allowedIoRoots` to strict `assertSafeFilePath` bounds in `buildRulesFileInfo` and `buildSkillsDirInfo` for briefing metadata generators.
+- Applied `markUntrustedContentInline` to skill excerpt outputs in `utilities.ts` to mitigate prompt injection.
+- Exposed internal `vectorManager` failures through the `degraded: true` flag in `hybrid.ts` rather than silently omitting semantic results.

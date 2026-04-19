@@ -284,7 +284,7 @@ describe('buildRulesFileInfo', () => {
             mtimeMs: twoHoursAgo,
         } as never)
 
-        const result = buildRulesFileInfo('/path/to/.rules')
+        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
 
         expect(result).toBeDefined()
         expect(result!.name).toBe('.rules')
@@ -302,7 +302,7 @@ describe('buildRulesFileInfo', () => {
             mtimeMs: threeDaysAgo,
         } as never)
 
-        const result = buildRulesFileInfo('/path/to/.rules')
+        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
 
         expect(result!.lastModified).toBe('3d ago')
     })
@@ -315,7 +315,7 @@ describe('buildRulesFileInfo', () => {
             mtimeMs: Date.now() - 1000, // 1 second ago
         } as never)
 
-        const result = buildRulesFileInfo('/path/to/.rules')
+        const result = buildRulesFileInfo('/path/to/.rules', ['/path/to'])
 
         expect(result!.lastModified).toBe('just now')
     })
@@ -327,7 +327,7 @@ describe('buildRulesFileInfo', () => {
             throw new Error('ENOENT: no such file')
         })
 
-        const result = buildRulesFileInfo('/nonexistent/.rules')
+        const result = buildRulesFileInfo('/nonexistent/.rules', ['/nonexistent'])
         expect(result).toBeUndefined()
     })
 })
@@ -354,7 +354,7 @@ describe('buildSkillsDirInfo', () => {
             { name: 'readme.md', isDirectory: () => false, isFile: () => true },
         ] as never)
 
-        const result = buildSkillsDirInfo('/path/to/skills')
+        const result = buildSkillsDirInfo('/path/to/skills', ['/path/to'])
 
         expect(result).toBeDefined()
         expect(result!.count).toBe(2)
@@ -369,7 +369,7 @@ describe('buildSkillsDirInfo', () => {
             { name: 'readme.md', isDirectory: () => false, isFile: () => true },
         ] as never)
 
-        const result = buildSkillsDirInfo('/path/to/skills')
+        const result = buildSkillsDirInfo('/path/to/skills', ['/path/to'])
 
         expect(result).toBeDefined()
         expect(result!.count).toBe(0)
@@ -383,7 +383,7 @@ describe('buildSkillsDirInfo', () => {
             throw new Error('ENOENT: no such directory')
         })
 
-        const result = buildSkillsDirInfo('/nonexistent/skills')
+        const result = buildSkillsDirInfo('/nonexistent/skills', ['/nonexistent'])
         expect(result).toBeUndefined()
     })
 })

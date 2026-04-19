@@ -19,7 +19,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { assertSafeFilePath, assertSafeDirectoryPath } from '../../../utils/security-utils.js'
+import { assertSafeFilePath, assertSafeDirectoryPath, markUntrustedContentInline } from '../../../utils/security-utils.js'
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -304,7 +304,7 @@ async function scanSkillsDir(
         const excerptLine = lines.find(
             (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
         )
-        const excerpt = excerptLine ? excerptLine.trim().slice(0, 160) : ''
+        const excerpt = excerptLine ? markUntrustedContentInline(excerptLine.trim().slice(0, 160)) : ''
 
         skills.push({ name: entry.name, path: skillMdPath, excerpt, source })
     }

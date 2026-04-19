@@ -132,6 +132,10 @@ Thumbs.db
 # Memory Journal specific
 memory_journal.db
 memory_journal.db-*
+.memory-journal-team.db
+.memory-journal-team.db-*
+backups/
+mcp-audit.jsonl
 
 
 

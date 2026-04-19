@@ -80,8 +80,8 @@ async function buildBriefingData(
     const journal = buildJournalContext(context, config, activeProjectNumber)
     const github = await buildGitHubSection(activeGithub, config)
     const team = buildTeamContext(context, config, activeProjectNumber)
-    const rulesFile = buildRulesFileInfo(config.rulesFilePath)
-    const skillsDir = buildSkillsDirInfo(config.skillsDirPath)
+    const rulesFile = buildRulesFileInfo(config.rulesFilePath, config.allowedIoRoots)
+    const skillsDir = buildSkillsDirInfo(config.skillsDirPath, config.allowedIoRoots)
     const insights = buildInsightsSection(context)
     const flags = buildFlagsContext(context)
 

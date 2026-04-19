@@ -10,7 +10,7 @@ import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 import { parseFlagContext } from '../../../../types/auto-context.js'
-import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
+import { markUntrustedContentInline, assertSafeFilePath, assertSafeDirectoryPath } from '../../../../utils/security-utils.js'
 
 // ============================================================================
 // Journal Context
@@ -191,10 +191,11 @@ export interface SkillsDir {
 const MS_PER_HOUR = 3_600_000
 const MS_PER_DAY = 86_400_000
 
-export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile | undefined {
+export function buildRulesFileInfo(rulesFilePath: string | undefined, allowedIoRoots: string[] = []): RulesFile | undefined {
     if (!rulesFilePath) return undefined
 
     try {
+        assertSafeFilePath(rulesFilePath, allowedIoRoots)
         const stat = fs.statSync(rulesFilePath)
         const ageMs = Date.now() - stat.mtimeMs
         const ageHours = Math.floor(ageMs / MS_PER_HOUR)
@@ -222,10 +223,11 @@ export function buildRulesFileInfo(rulesFilePath: string | undefined): RulesFile
     }
 }
 
-export function buildSkillsDirInfo(skillsDirPath: string | undefined): SkillsDir | undefined {
+export function buildSkillsDirInfo(skillsDirPath: string | undefined, allowedIoRoots: string[] = []): SkillsDir | undefined {
     if (!skillsDirPath) return undefined
 
     try {
+        assertSafeDirectoryPath(skillsDirPath, allowedIoRoots)
         const entries = fs.readdirSync(skillsDirPath, { withFileTypes: true })
         const skillDirs = entries.filter((e) => e.isDirectory())
         return {

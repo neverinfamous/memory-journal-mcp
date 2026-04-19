@@ -273,6 +273,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         flagVocabulary: options.flagVocabulary,
         allowedIoRoots,
         filterConfig,
+        authToken: options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined,
+        oauthEnabled: options.oauthEnabled,
         runtime,
     }
 

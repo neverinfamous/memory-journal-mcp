@@ -193,6 +193,12 @@ export interface ToolHandlerConfig {
     /**
      * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
      */
+    /** Server auth configuration passed down for strict security gates */
+    authToken?: string
+    oauthEnabled?: boolean
+    /**
+     * Server runtime context for tracking instance-bound globals (Audit logger, Maintenance Lock).
+     */
     runtime?: ServerRuntime
 }
 
