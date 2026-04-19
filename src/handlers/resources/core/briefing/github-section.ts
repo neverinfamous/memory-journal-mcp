@@ -61,16 +61,23 @@ export async function buildGitHubSection(
         if (isResourceError(resolved)) return null
         const { owner, repo } = resolved
 
-        // Parallel fetch — all calls are independent and each has its own error handling
-        const [ciStatusResult, issuesAndPrsResult, milestonesResult, insightsResult, copilotReviewsResult] = await Promise.allSettled([
+        // Parallel fetch — bounded to prevent API exhaustion (Batch 1: core status)
+        const batch1 = await Promise.allSettled([
             fetchCiStatus(github, owner, repo, config),
             fetchIssuesAndPrs(github, owner, repo, config),
             fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
+        ]);
+
+        // Batch 2: insights and copilot reviews
+        const batch2 = await Promise.allSettled([
             fetchInsights(github, owner, repo),
             config.copilotReviews
                 ? fetchCopilotReviews(github, owner, repo)
                 : Promise.resolve(undefined),
-        ])
+        ]);
+
+        const [ciStatusResult, issuesAndPrsResult, milestonesResult] = batch1;
+        const [insightsResult, copilotReviewsResult] = batch2;
 
         const degradedReasons: string[] = []
 
@@ -373,11 +380,10 @@ async function fetchCopilotReviews(
         let changesRequested = 0
         let totalComments = 0
 
-        const summaries = await Promise.all(
-            recentPrs
-                .slice(0, 5)
-                .map((pr) => github.getCopilotReviewSummary(owner, repo, pr.number))
-        )
+        const summaries = [];
+        for (const pr of recentPrs.slice(0, 5)) {
+            summaries.push(await github.getCopilotReviewSummary(owner, repo, pr.number));
+        }
         for (const summary of summaries) {
             if (summary.state !== 'none') {
                 reviewed++

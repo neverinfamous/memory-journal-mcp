@@ -152,3 +152,5 @@
 - Addressed test suite regressions in `tests/handlers/codemode-tools.test.ts` by injecting a mock `dispatch` function to satisfy strict sandbox security bounds.
 - Added missing `sessionLocks` map to the Stateful HTTP Transport tests context mocks to resolve runtime crash regressions.
 - Relaxed the strict `ConfigurationError` throwing when `auditLogger` is unconfigured to gracefully support deployments without auditing.
+- Deferred monolithic FTS5 rebuilding queries in `NativeConnectionManager` to background processes to unblock server startup handshakes.
+- Bounded uncontrolled GitHub API Promise fan-out within `BriefingGitHub` fetches by introducing explicit sequential iteration and request chunking.

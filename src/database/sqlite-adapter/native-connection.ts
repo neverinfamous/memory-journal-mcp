@@ -147,14 +147,34 @@ export class NativeConnectionManager implements IDatabaseConnection {
             const entryCount = (
                 db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
             ).c
+            let needsRebuild = false;
+            let rebuildReason = '';
+
             if (ftsCount === 0 && entryCount > 0) {
-                db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
-                added.push('fts5:populated')
+                needsRebuild = true;
+                rebuildReason = 'fts5:populated';
             } else if (ftsCount > entryCount) {
                 // Ghost entries: FTS has more rows than the journal (hard deletes before the
                 // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
-                db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
-                added.push('fts5:rebuilt-ghost-cleanup')
+                needsRebuild = true;
+                rebuildReason = 'fts5:rebuilt-ghost-cleanup';
+            }
+
+            if (needsRebuild) {
+                added.push(rebuildReason);
+                // Defer rebuilding FTS5 index to prevent blocking server startup
+                const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000;
+                setTimeout(() => {
+                    try {
+                        // Note: better-sqlite3 is synchronous and will block the event loop while this runs,
+                        // but doing it in a timeout ensures the MCP initialization handshake can finish first.
+                        const nativeDb = this.getNativeDb();
+                        nativeDb.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
+                        logger.info(`Deferred FTS5 rebuild completed (${rebuildReason})`, { module: 'NativeConnectionManager', dbPath: this.dbPath });
+                    } catch (err) {
+                        logger.error('Failed to rebuild FTS5 index in background', { module: 'NativeConnectionManager', error: String(err) });
+                    }
+                }, deferMs);
             }
         })()
 
