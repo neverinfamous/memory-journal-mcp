@@ -379,30 +379,31 @@ export class VectorSearchManager {
                     })
                 )
 
-                // Insert embeddings into SQLite inside a transaction for safety
-                this.dbAdapter.executeInTransaction(() => {
-                    for (const { entry, embedding, error: embError } of embeddings) {
-                        if (embedding !== null) {
-                            try {
-                                const vec = new Float32Array(embedding)
-                                this.dbAdapter.upsertVector(entry.id, vec)
-                                indexed++
-                            } catch (error) {
-                                failed++
-                                const errorMsg = error instanceof Error ? error.message : String(error)
-                                firstError ??= errorMsg
-                                logger.error('Failed to insert entry into vector index', {
-                                    module: 'VectorSearch',
-                                    entityId: entry.id,
-                                    error: errorMsg,
-                                })
-                            }
-                        } else {
-                            failed++
-                            if (embError !== null) firstError ??= embError
-                        }
+                // Insert embeddings into SQLite using bulk upsert for performance
+                const validVectors: { entryId: number; embedding: Float32Array }[] = []
+                for (const { entry, embedding, error: embError } of embeddings) {
+                    if (embedding !== null) {
+                        validVectors.push({ entryId: entry.id, embedding: new Float32Array(embedding) })
+                    } else {
+                        failed++
+                        if (embError !== null) firstError ??= embError
                     }
-                })
+                }
+                
+                if (validVectors.length > 0) {
+                    try {
+                        this.dbAdapter.upsertVectors(validVectors)
+                        indexed += validVectors.length
+                    } catch (error) {
+                        failed += validVectors.length
+                        const errorMsg = error instanceof Error ? error.message : String(error)
+                        firstError ??= errorMsg
+                        logger.error('Failed to batch insert entries into vector index', {
+                            module: 'VectorSearch',
+                            error: errorMsg,
+                        })
+                    }
+                }
 
                 // Yield to event loop to prevent blocking live requests
                 await new Promise((resolve) => setTimeout(resolve, 10))

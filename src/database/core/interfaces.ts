@@ -261,6 +261,7 @@ export interface IDatabaseAdapter {
 
     // Vector Search Primitives
     upsertVector(entryId: number, embedding: Float32Array): void
+    upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void
     searchVectors(embedding: Float32Array, limit: number): { entry_id: number; distance: number }[]
     getVector(entryId: number): Float32Array | null
     deleteVector(entryId: number): void

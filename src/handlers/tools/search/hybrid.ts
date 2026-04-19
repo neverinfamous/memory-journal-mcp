@@ -17,7 +17,7 @@ import { passMetadataFilters, type ISearchFilters, type EntryWithSource } from '
 const RRF_K = 60
 
 /** Over-fetch multiplier for each source before fusion */
-const OVERFETCH_MULTIPLIER = 3
+const OVERFETCH_MULTIPLIER = 2
 
 // ============================================================================
 // Types

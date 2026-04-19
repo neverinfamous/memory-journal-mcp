@@ -68,6 +68,14 @@ function createMockDbAdapter() {
             mockPrepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
             mockRun(BigInt(entryId), vector)
         },
+        upsertVectors: (vectors: { entryId: number; embedding: Float32Array }[]) => {
+            mockPrepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+            mockPrepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
+            for (const vec of vectors) {
+                mockRun(BigInt(vec.entryId))
+                mockRun(BigInt(vec.entryId), vec.embedding)
+            }
+        },
         deleteVector: (entryId: number) => {
             mockPrepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
             mockRun(BigInt(entryId))
@@ -502,8 +510,9 @@ describe('VectorSearchManager', () => {
             }
 
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
-            expect(result.indexed).toBe(1)
-            expect(result.failed).toBe(1)
+            // The entire batch is rolled back if any insert fails
+            expect(result.indexed).toBe(0)
+            expect(result.failed).toBe(2)
             expect(result.firstError).toBe('Insert failed!!')
         })
     })

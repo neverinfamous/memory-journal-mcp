@@ -105,6 +105,9 @@ export class Scheduler {
             return
         }
         this.started = true
+        
+        // Prevent timer leaks on graceful shutdown
+        process.on('SIGTERM', () => this.stop())
 
         const { backupIntervalMinutes, vacuumIntervalMinutes, rebuildIndexIntervalMinutes } =
             this.options

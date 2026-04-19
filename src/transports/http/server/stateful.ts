@@ -25,6 +25,7 @@ export interface StatefulContext {
     serverConnected: boolean
     /** Serialize concurrent transport connections to the singleton server */
     connectionLock?: Promise<void>
+    sessionCreatedAt?: Map<string, number>
 }
 
 export function setupStateful(
@@ -52,6 +53,7 @@ export function setupStateful(
                 ctx.transports.delete(sid)
                 ctx.sessionSubjects.delete(sid)
                 ctx.sessionLastActivity.delete(sid)
+                if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
             }
 
             // Expire idle Legacy SSE sessions
@@ -68,6 +70,7 @@ export function setupStateful(
                 ctx.sseTransports.delete(sid)
                 ctx.sessionSubjects.delete(sid)
                 ctx.sessionLastActivity.delete(sid)
+                if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
             }
         }
     }, SESSION_SWEEP_INTERVAL_MS)
@@ -109,13 +112,26 @@ export function setupStateful(
                     const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
                     const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
                     const expectedSub = ctx.sessionSubjects.get(sessionId)
-                    if (expectedSub !== undefined && reqSubject !== expectedSub) {
+                    if (reqSubject !== expectedSub) {
                         res.status(403).json({
                             jsonrpc: '2.0',
                             error: { code: JSONRPC_SERVER_ERROR, message: 'Forbidden: Session belongs to a different subject' },
                             id: null,
                         })
                         return
+                    }
+                    
+                    if (ctx.sessionCreatedAt) {
+                        const createdAt = ctx.sessionCreatedAt.get(sessionId) ?? Date.now()
+                        // 24 hour absolute TTL
+                        if (Date.now() - createdAt > 86400000) {
+                            res.status(401).json({
+                                jsonrpc: '2.0',
+                                error: { code: JSONRPC_SERVER_ERROR, message: 'Unauthorized: Session absolute TTL expired' },
+                                id: null,
+                            })
+                            return
+                        }
                     }
 
                     ctx.touchSession(sessionId)
@@ -177,6 +193,9 @@ export function setupStateful(
                             if (reqSubject) {
                                 ctx.sessionSubjects.set(sid, reqSubject)
                             }
+                            if (ctx.sessionCreatedAt) {
+                                ctx.sessionCreatedAt.set(sid, Date.now())
+                            }
 
                             // Attach close handler specifically for this session ID, preserving any existing handlers
                             // (e.g., from server.connect wrapper).
@@ -188,6 +207,7 @@ export function setupStateful(
                                 })
                                 ctx.transports.delete(sid)
                                 ctx.sessionSubjects.delete(sid)
+                                if (ctx.sessionCreatedAt) ctx.sessionCreatedAt.delete(sid)
                                 if (existingOnClose) existingOnClose()
                             }
                         },
@@ -259,9 +279,18 @@ export function setupStateful(
         const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
         const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
         const expectedSub = ctx.sessionSubjects.get(sessionId)
-        if (expectedSub !== undefined && reqSubject !== expectedSub) {
+        if (reqSubject !== expectedSub) {
             res.status(403).send('Forbidden: Session belongs to a different subject')
             return
+        }
+        
+        if (ctx.sessionCreatedAt) {
+            const createdAt = ctx.sessionCreatedAt.get(sessionId) ?? Date.now()
+            // 24 hour absolute TTL
+            if (Date.now() - createdAt > 86400000) {
+                res.status(401).send('Unauthorized: Session absolute TTL expired')
+                return
+            }
         }
 
         // Refresh session activity on SSE reconnect
@@ -294,7 +323,7 @@ export function setupStateful(
         const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
         const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
         const expectedSub = ctx.sessionSubjects.get(sessionId)
-        if (expectedSub !== undefined && reqSubject !== expectedSub) {
+        if (reqSubject !== expectedSub) {
             res.status(403).send('Forbidden: Session belongs to a different subject')
             return
         }

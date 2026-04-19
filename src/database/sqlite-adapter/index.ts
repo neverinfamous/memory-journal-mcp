@@ -312,6 +312,20 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         )
     }
 
+    upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void {
+        const db = this.connection.getNativeDb()
+        const deleteStmt = db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+        const insertStmt = db.prepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
+        
+        db.transaction(() => {
+            for (const vec of vectors) {
+                const bigId = BigInt(vec.entryId)
+                deleteStmt.run(bigId)
+                insertStmt.run(bigId, vec.embedding)
+            }
+        })()
+    }
+
     searchVectors(
         embedding: Float32Array,
         limit: number

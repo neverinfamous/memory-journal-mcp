@@ -401,8 +401,8 @@ function sanitizeFtsQuery(query: string): string {
     const safeTokens: string[] = [];
 
     for (const token of tokens) {
-        // Strip out non-alphanumeric characters, except hyphen and underscore
-        const sanitizedToken = token.replace(/[^a-zA-Z0-9_-]/g, '');
+        // Strip out non-alphanumeric characters, except hyphen, underscore, asterisk, and double quote
+        const sanitizedToken = token.replace(/[^a-zA-Z0-9_\-"*]/g, '');
         if (!sanitizedToken) continue;
 
         // Drop FTS5 keywords to prevent syntax errors and ReDoS

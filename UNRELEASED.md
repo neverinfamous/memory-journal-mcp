@@ -34,6 +34,14 @@
 - Updated `mj_execute_code` documentation to explicitly state it is a "trusted-admin execution environment".
 - Replaced hardcoded `github.com` URLs with a dynamic `GITHUB_HOST` environment variable fallback.
 - Transitioned Markdown importer frontmatter parsing from flexible YAML to strict JSON to align with modernized security validation requirements.
+- Replaced lazy subject validation with strict equality checks in `src/transports/http/server/stateful.ts` to prevent potential session hijacking.
+- Added a 24-hour absolute TTL limit to streamable HTTP sessions in `src/transports/http/server/stateful.ts` to prevent stale persistence.
+- Replaced loose JSON parsing for `PROJECT_REGISTRY` in `src/cli.ts` with strict Zod schema validation to enforce structural integrity.
+- Implemented filesystem existence verification for `ALLOWED_IO_ROOTS` in `src/cli.ts` to log early warnings for missing root paths.
+- Registered a `SIGTERM` hook in `src/server/scheduler.ts` to explicitly clear background intervals and prevent timer leakage on shutdown.
+- Reduced `OVERFETCH_MULTIPLIER` in `src/handlers/tools/search/hybrid.ts` from `3` to `2` to improve hybrid search performance and reduce memory pressure.
+- Updated the FTS5 sanitization regex in `src/database/sqlite-adapter/entries/search.ts` to preserve phrase quotes (`"`) and wildcards (`*`), enabling advanced queries.
+- Refactored `VectorSearchManager` vector insertions to utilize a batched `upsertVectors` SQLite interface, eliminating N+1 query bottlenecks during index rebuilding.
 
 ### Deprecated
 - Officially deprecated the `autoContext` field across the memory journal ecosystem. Existing records are safely ignored.
@@ -126,3 +134,4 @@
 - E2E test failures caused by `team_` resource scoping strictness by properly injecting `MCP_AUTH_SCOPES: 'read,write,team'` into testing contexts.
 - Re-added the junction table `JOIN` to `entry_tags` in SQLite database queries to correctly resolve tag constraints during team search tools.
 - Unused import warnings and dead-code assignments in `registration.ts` and `frontmatter.ts` to ensure clean linting compliance.
+- Vitest regressions in `vector-search-manager.test.ts` and `vector-manager-coverage.test.ts` caused by atomic transaction rollbacks during batched `upsertVectors` index rebuilds.

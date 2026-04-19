@@ -344,7 +344,7 @@ program
                                 z.object({
                                     path: z.string().min(1),
                                     project_number: z.number().nullable().optional(),
-                                }).loose()
+                                }).strict()
                             )
                             const parsed: unknown = JSON.parse(raw)
                             const validated = registrySchema.parse(parsed) as Record<string, ProjectRegistryEntry>
@@ -389,7 +389,17 @@ program
                             if (raw.trim().startsWith('[')) {
                                 const parsed = JSON.parse(raw) as unknown
                                 if (Array.isArray(parsed) && parsed.every(p => typeof p === 'string' && path.isAbsolute(p))) {
-                                    return parsed as string[]
+                                    const result = parsed as string[]
+                                    for (const p of result) {
+                                        try {
+                                            if (!fs.existsSync(p)) {
+                                                console.warn(`\n[WARN] ALLOWED_IO_ROOTS path does not exist: ${p}\n`)
+                                            }
+                                        } catch {
+                                            // ignore permission issues for exists check
+                                        }
+                                    }
+                                    return result
                                 }
                                 throw new Error('Must be an array of absolute paths')
                             }
@@ -397,6 +407,17 @@ program
                             if (parts.some(p => !path.isAbsolute(p))) {
                                 throw new Error('All paths must be absolute')
                             }
+                            
+                            for (const p of parts) {
+                                try {
+                                    if (!fs.existsSync(p)) {
+                                        console.warn(`\n[WARN] ALLOWED_IO_ROOTS path does not exist: ${p}\n`)
+                                    }
+                                } catch {
+                                    // ignore permission issues for exists check
+                                }
+                            }
+                            
                             return parts
                         } catch (e: unknown) {
                             const errName = e instanceof Error ? e.message : String(e)

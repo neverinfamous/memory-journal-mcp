@@ -69,7 +69,7 @@ describe('VectorSearchManager - error coverage', () => {
         let calls = 0
         const mockDb = {
             clearVectors: vi.fn(),
-            upsertVector: vi.fn().mockImplementation(() => {
+            upsertVectors: vi.fn().mockImplementation(() => {
                 if (calls++ === 0) throw new Error('insert err first')
             }),
             getActiveEntryCount: vi.fn().mockReturnValue(2),
@@ -89,7 +89,7 @@ describe('VectorSearchManager - error coverage', () => {
 
         const res = await manager.rebuildIndex(mockDb)
         expect(res.failed).toBe(2) // 1 failed insert, 1 failed embed
-        expect(res.firstError).toContain('insert err first') // whichever came first
+        expect(res.firstError).toContain('embed err') // embed errors are processed in the first loop
     })
 
     it('covers error path in getStats', async () => {
