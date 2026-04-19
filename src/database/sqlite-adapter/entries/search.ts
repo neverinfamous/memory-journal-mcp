@@ -395,7 +395,9 @@ export function searchByDateRange(
 function sanitizeFtsQuery(query: string): string {
     if (!query) return '';
 
-    const tokens = query.split(/\s+/);
+    // Truncate to prevent ReDoS or FTS AST parser limit crashes
+    const truncatedQuery = query.slice(0, 500);
+    const tokens = truncatedQuery.split(/\s+/);
     const safeTokens: string[] = [];
 
     for (const token of tokens) {

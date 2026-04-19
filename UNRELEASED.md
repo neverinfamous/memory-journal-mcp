@@ -3,6 +3,12 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
 ### Changed
+- Enforced semantic integer boundaries in CLI parsing (ports, timers, clock tolerance) using `parseConfigIntRequired`.
+- Refactored `createEntry` to throw a `Storage Inconsistency Anomaly` error if read-after-write fails, exposing anomalies instead of masking them.
+- Limited FTS5 query token strings to 500 characters prior to AST parsing to prevent ReDoS and AST bloat limits.
+- Derived the audit logger category dynamically from `getRequiredScope(name)` instead of manual synchronization.
+- Filtered `readonlyMode` Code Mode tools dynamically using `t.annotations?.readOnlyHint === true` instead of a hardcoded safe list.
+- Injected `runtime` into `getGitHubIntegration` during Code Mode executions to preserve multi-tenant connection pooling bounds.
 - Increased GitHub API cache TTL to 5 minutes and size limit to 1000 items to significantly stabilize operations during high-activity sessions.
 - Moved ML vector semantic indexing to an asynchronous background task to prevent write latency.
 - Decoupled server initialization from database queries to ensure constant-time startup.
@@ -67,6 +73,7 @@
 - Resolved a strict TypeScript boolean evaluation error in `src/handlers/resources/index.ts` by explicitly comparing authentication claims rather than relying on truthiness.
 - Fixed an unhandled reference exception masking as a schema resolution failure during team entry creation by restoring the `resolveAuthenticatedAuthor` import in `src/handlers/tools/core.ts`.
 ### Security
+- Fixed `TEAM_AUTHOR` boundary checks to explicitly reject empty strings, securing the team-domain boundaries for unauthenticated environments.
 - Replaced insecure `JSON.parse()` methods with Zod `AutoContextSchema` boundary validations inside team and briefing resources.
 - Enforced strict tool-to-scope verification during MCP server initialization, forcing a hard-fault if any tool group lacks a mapped scope boundary.
 - Required explicit `allowedIoRoots` configurations for file boundary enforcement in I/O operations instead of falling back to the `PROJECT_REGISTRY`.

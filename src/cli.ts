@@ -10,10 +10,16 @@ import { DEFAULT_AUDIT_LOG_MAX_SIZE_BYTES } from './audit/index.js'
 import type { AuditConfig } from './audit/index.js'
 
 
-function parseConfigIntRequired(value: string, name: string): number {
+function parseConfigIntRequired(value: string, name: string, min?: number, max?: number): number {
     const parsed = parseInt(value, 10)
     if (Number.isNaN(parsed)) {
         throw new Error(`Invalid required numeric configuration for ${name}: ${value}`)
+    }
+    if (min !== undefined && parsed < min) {
+        throw new Error(`Configuration ${name} must be at least ${min}`)
+    }
+    if (max !== undefined && parsed > max) {
+        throw new Error(`Configuration ${name} must be at most ${max}`)
     }
     return parsed
 }
@@ -274,23 +280,24 @@ program
                           auditReads: options.auditReads ?? process.env['AUDIT_READS'] === 'true',
                           maxSizeBytes: parseConfigIntRequired(
                               process.env['AUDIT_LOG_MAX_SIZE'] ?? options.auditLogMaxSize,
-                              'audit-log-max-size'
+                              'audit-log-max-size',
+                              1024
                           ),
                       }
                     : undefined
 
                 await createServer({
                     transport: options.transport as 'stdio' | 'http',
-                    port: parseConfigIntRequired(options.port, 'port'),
+                    port: parseConfigIntRequired(options.port, 'port', 1, 65535),
                     host,
                     statelessHttp: options.stateless === true,
                     dbPath: options.db,
                     teamDbPath: options.teamDb,
                     toolFilter: options.toolFilter,
                     defaultProjectNumber: options.defaultProject
-                        ? parseConfigIntRequired(options.defaultProject, 'default-project')
+                        ? parseConfigIntRequired(options.defaultProject, 'default-project', 1)
                         : process.env['DEFAULT_PROJECT_NUMBER']
-                          ? parseConfigIntRequired(process.env['DEFAULT_PROJECT_NUMBER'], 'DEFAULT_PROJECT_NUMBER')
+                          ? parseConfigIntRequired(process.env['DEFAULT_PROJECT_NUMBER'], 'DEFAULT_PROJECT_NUMBER', 1)
                           : undefined,
                     autoRebuildIndex:
                         options.autoRebuildIndex ?? process.env['AUTO_REBUILD_INDEX'] === 'true',
@@ -300,11 +307,11 @@ program
                     enableHSTS: options.enableHsts ?? process.env['MCP_ENABLE_HSTS'] === 'true',
                     authToken: options.authToken,
                     scheduler: {
-                        backupIntervalMinutes: parseConfigIntRequired(options.backupInterval, 'backup-interval'),
-                        keepBackups: parseConfigIntRequired(options.keepBackups, 'keep-backups'),
-                        vacuumIntervalMinutes: parseConfigIntRequired(options.vacuumInterval, 'vacuum-interval'),
-                        rebuildIndexIntervalMinutes: parseConfigIntRequired(options.rebuildIndexInterval, 'rebuild-index-interval'),
-                        digestIntervalMinutes: parseConfigIntRequired(options.digestInterval, 'digest-interval'),
+                        backupIntervalMinutes: parseConfigIntRequired(options.backupInterval, 'backup-interval', 0),
+                        keepBackups: parseConfigIntRequired(options.keepBackups, 'keep-backups', 1, 100),
+                        vacuumIntervalMinutes: parseConfigIntRequired(options.vacuumInterval, 'vacuum-interval', 0),
+                        rebuildIndexIntervalMinutes: parseConfigIntRequired(options.rebuildIndexInterval, 'rebuild-index-interval', 0),
+                        digestIntervalMinutes: parseConfigIntRequired(options.digestInterval, 'digest-interval', 0),
                     },
 
                     // OAuth 2.1
@@ -314,7 +321,9 @@ program
                     oauthJwksUri: options.oauthJwksUri ?? process.env['OAUTH_JWKS_URI'],
                     oauthClockTolerance: parseConfigIntRequired(
                         process.env['OAUTH_CLOCK_TOLERANCE'] ?? options.oauthClockTolerance,
-                        'oauth-clock-tolerance'
+                        'oauth-clock-tolerance',
+                        0,
+                        3600
                     ),
                     allowPlaintextLoopbackOAuth: options.oauthAllowPlaintextLoopback ?? (process.env['OAUTH_ALLOW_PLAINTEXT_LOOPBACK'] === 'true'),
                     trustProxy: options.trustProxy ?? (process.env['TRUST_PROXY'] === 'true'),
@@ -426,9 +435,9 @@ program
                             process.env['MEMORY_JOURNAL_WORKFLOW_SUMMARY'] ??
                             undefined,
                         defaultProjectNumber: options.defaultProject
-                            ? parseConfigIntRequired(options.defaultProject, 'default-project')
+                            ? parseConfigIntRequired(options.defaultProject, 'default-project', 1)
                             : process.env['DEFAULT_PROJECT_NUMBER']
-                              ? parseConfigIntRequired(process.env['DEFAULT_PROJECT_NUMBER'], 'DEFAULT_PROJECT_NUMBER')
+                              ? parseConfigIntRequired(process.env['DEFAULT_PROJECT_NUMBER'], 'DEFAULT_PROJECT_NUMBER', 1)
                               : undefined,
                     },
                     instructionLevel: (options.instructionLevel !== 'standard'

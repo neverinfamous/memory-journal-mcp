@@ -67,33 +67,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
     const entry = getEntryById(context, insertId)
     if (!entry) {
-        // Fallback: the write committed successfully, but the readback failed.
-        // Return a constructed entry so the caller knows the write succeeded instead
-        // of throwing an error and masking the successful write.
-        console.warn(`[crud.ts] Write succeeded but getEntryById returned null for ID ${insertId}. Returning partial entry to avoid false-failure signal.`)
-        return {
-            id: insertId,
-            content: input.content,
-            entryType: input.entryType ?? 'personal_reflection',
-            tags: input.tags ?? [],
-            isPersonal: input.isPersonal ?? true,
-            significanceType: input.significanceType ?? null,
-            autoContext: input.autoContext ?? null,
-            projectNumber: input.projectNumber ?? null,
-            projectOwner: input.projectOwner ?? null,
-            issueNumber: input.issueNumber ?? null,
-            issueUrl: input.issueUrl ?? null,
-            prNumber: input.prNumber ?? null,
-            prUrl: input.prUrl ?? null,
-            prStatus: input.prStatus ?? null,
-            workflowRunId: input.workflowRunId ?? null,
-            workflowName: input.workflowName ?? null,
-            workflowStatus: input.workflowStatus ?? null,
-            timestamp: timestamp,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-            deletedAt: null
-        } as JournalEntry
+        throw new Error(`Storage Inconsistency Anomaly: Entry with ID ${insertId} successfully written but could not be read back.`)
     }
     return entry
 }

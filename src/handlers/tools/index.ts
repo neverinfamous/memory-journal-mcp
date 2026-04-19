@@ -327,7 +327,10 @@ export async function callTool(
             })
             const auditLogger = config?.runtime?.auditLogger ?? getGlobalAuditLogger()
             if (auditLogger) {
-                const category = tool.group === 'core' || tool.group === 'search' || tool.group === 'io' || tool.group === 'relationships' || tool.group === 'analytics' || tool.group === 'github' ? 'read' : tool.group === 'admin' || tool.group === 'backup' ? 'admin' : tool.group === 'team' ? 'team' : 'read'
+                let category: 'admin' | 'team' | 'read' = 'read'
+                if (requiredScope === 'admin' || requiredScope === 'full') category = 'admin'
+                else if (requiredScope === 'team') category = 'team'
+                
                 auditLogger.logDenial(name, 'Insufficient scope', {
                     user: auth.claims?.sub,
                     scopes: auth.claims?.scopes ?? [],

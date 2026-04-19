@@ -116,7 +116,7 @@ export async function readResource(
     if (isTeamResource) {
         const envAuthor = process.env['TEAM_AUTHOR']?.trim()
         const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
-        if (envAuthor === undefined && !hasAuthClaim) {
+        if (!envAuthor && !hasAuthClaim) {
             logger.warning(`Access to team resource denied: unauthenticated`, {
                 module: 'AUTH',
                 operation: 'fail-closed',
