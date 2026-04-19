@@ -69,9 +69,13 @@ export function checkRateLimit(
                     rateLimitMap.delete(key)
                 }
             }
-            // If still at capacity, fail closed to prevent DoS
+            // If still at capacity, evict the oldest entry (LRU) to prevent fail-closed DoS.
+            // Since JS Map preserves insertion order and we re-insert on access, the first item is the LRU.
             if (rateLimitMap.size >= 10000) {
-                return { allowed: false, retryAfterSeconds: Math.ceil(windowMs / 1000) }
+                const firstKey = rateLimitMap.keys().next().value
+                if (firstKey !== undefined) {
+                    rateLimitMap.delete(firstKey)
+                }
             }
         }
         rateLimitMap.set(clientIdentity, { count: 1, resetTime: now + windowMs, lastSeen: now })
@@ -149,7 +153,7 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
         res.setHeader('Access-Control-Allow-Origin', '*')
     } else if (origin) {
         // Build whitelist record — CodeQL recognizes `origin in whitelist` as a sanitizer
-        const whitelist: Record<string, true> = {}
+        const whitelist = Object.create(null) as Record<string, true>
         for (const allowed of corsOrigins) {
             whitelist[allowed] = true
         }
@@ -172,7 +176,7 @@ export function setCorsHeaders(req: Request, res: Response, config: HttpTranspor
     res.setHeader('Access-Control-Max-Age', String(CORS_PREFLIGHT_MAX_AGE_SECONDS))
 
     if (origin && !isWildcard) {
-        const whitelist: Record<string, true> = {}
+        const whitelist = Object.create(null) as Record<string, true>
         for (const allowed of corsOrigins) whitelist[allowed] = true
         if (!(origin in whitelist)) {
             // Self-origin fallback removed to prevent host header injection

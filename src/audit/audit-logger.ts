@@ -295,13 +295,9 @@ export class AuditLogger {
                 await rename(oldFile, newFile).catch(() => null)
             }
 
-            // Rename current to .tmp first to move it out of the active path immediately,
-            // then atomically rename it to .1
-            const tmpPath = `${this.config.logPath}.tmp`
-            await rename(this.config.logPath, tmpPath)
-            
+            // Rename current directly to .1 to avoid a crash window where data is left in a .tmp file
             const rotatedPath = `${this.config.logPath}.1`
-            await rename(tmpPath, rotatedPath)
+            await rename(this.config.logPath, rotatedPath)
         } catch (err) {
             // Rotation failure must not block logging
             const message = err instanceof Error ? err.message : String(err)

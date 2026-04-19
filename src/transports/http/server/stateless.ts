@@ -19,6 +19,20 @@ export async function setupStateless(app: Express, serverFactory: McpServerFacto
     // POST /mcp — all requests go to the same transport
     app.post('/mcp', (req: Request, res: Response): void => {
         const sessionId = req.headers['mcp-session-id'] as string | undefined
+        
+        // Failsafe: Ensure unauthenticated requests cannot enumerate tools or execute payloads
+        // if authentication is globally configured but middleware was somehow bypassed.
+        const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+        const isAuthExpected = Boolean(process.env['MCP_AUTH_TOKEN']) || process.env['OAUTH_ENABLED'] === 'true'
+        if (isAuthExpected && !authReq.auth) {
+            res.status(401).json({
+                jsonrpc: '2.0',
+                error: { code: JSONRPC_SERVER_ERROR, message: 'Unauthorized: missing authentication context' },
+                id: null,
+            })
+            return
+        }
+
         void requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
             try {
                 await statelessTransport.handleRequest(

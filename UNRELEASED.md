@@ -169,3 +169,5 @@
 - Rebranded the "Audit Logger" as the "Operational Telemetry Log" to explicitly reflect its lossy, best-effort tracking characteristics rather than implying an immutable ledger.
 - Implemented fail-fast validation to verify `MCP_AUTH_SCOPES` integrity at server initialization instead of runtime.
 - Prevented potential debug leakage by strictly stripping absolute local host paths from `DEBUG=true` console trace outputs.
+- Restored HTTP identity determinism by removing connection-specific random nonces and `sessionId` factors from the IP+token hash, fixing `403 Forbidden: Session belongs to a different subject` regressions for standard MCP SDK clients during stateful requests.
+- Resolved an unused variable ESLint violation by removing the obsolete `randomBytes` crypto import in the HTTP handlers module.

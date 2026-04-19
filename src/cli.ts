@@ -363,7 +363,10 @@ program
                                 
                                 const resolvedPath = path.resolve(entry.path)
                                 try {
-                                    const stat = fs.statSync(resolvedPath)
+                                    const stat = fs.lstatSync(resolvedPath)
+                                    if (stat.isSymbolicLink()) {
+                                        throw new Error(`Project registry path cannot be a symlink (symlink traversal protection): ${resolvedPath}`)
+                                    }
                                     if (!stat.isDirectory()) {
                                         throw new Error(`Project registry path is not a directory: ${resolvedPath}`)
                                     }

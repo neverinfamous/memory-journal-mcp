@@ -9,6 +9,7 @@ import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
 import { isValidScope } from '../../auth/scopes.js'
+import { getClientIp } from './security.js'
 
 // =============================================================================
 // Health Check
@@ -85,9 +86,17 @@ export function createAuthMiddleware(
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.
-        // Derived from IP and token to prevent multi-tenancy collapse.
-        const ipHash = createHash('sha256').update((req.ip ?? 'unknown') + authToken).digest('hex').substring(0, 12)
-        const identity = `bearer-${ipHash}`
+        // Derived from strict client IP to prevent multi-tenancy collapse behind proxies.
+        const ip = getClientIp(req)
+        
+        // Derive identity from strict client IP and token.
+        // We cannot use a random nonce or mcp-session-id here because standard MCP SDK clients
+        // do not send mcp-session-id during initialization, which would cause the identity hash
+        // to change between initialization and subsequent requests, breaking stateful sessions.
+        const hashInput = `${ip}_${authToken}`
+        
+        const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
+        const identity = `bearer-${identityHash}`
         
         ;(req as unknown as { auth?: { sub?: string; subject?: string; scopes?: string[] } }).auth = {
             sub: identity,

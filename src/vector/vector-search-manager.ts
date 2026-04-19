@@ -122,6 +122,11 @@ export class VectorSearchManager {
 
         // Convert to number array
         const embedding = Array.from(output.data)
+        
+        if (embedding.length !== EMBEDDING_DIMENSIONS) {
+            throw new Error(`Embedding dimension mismatch: expected ${String(EMBEDDING_DIMENSIONS)}, got ${String(embedding.length)}`)
+        }
+        
         return embedding
     }
 

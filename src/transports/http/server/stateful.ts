@@ -261,6 +261,9 @@ export function setupStateful(
                             } else {
                                 ctx.sessionLocks.delete(activeSessionId)
                             }
+                            // Touch session AFTER request completes to prevent immediate expiration
+                            // if the request took longer than the session sweep interval.
+                            ctx.touchSession(activeSessionId)
                         }
                     }
                 })
@@ -337,6 +340,7 @@ export function setupStateful(
                     } else {
                         ctx.sessionLocks.delete(sessionId)
                     }
+                    ctx.touchSession(sessionId)
                 }
             })()
         }
@@ -378,6 +382,7 @@ export function setupStateful(
                     } else {
                         ctx.sessionLocks.delete(sessionId)
                     }
+                    ctx.touchSession(sessionId)
                 }
             })()
         }

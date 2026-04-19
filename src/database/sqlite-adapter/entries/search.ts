@@ -400,13 +400,25 @@ export function searchByDateRange(
 function sanitizeFtsQuery(query: string): string {
     if (!query) return '';
 
-    const tokens = query.split(/\s+/);
+    // Strip quotes entirely to prevent unterminated string syntax errors
+    const noQuotes = query.replace(/"/g, ' ');
+    const tokens = noQuotes.split(/\s+/);
     const safeTokens: string[] = [];
 
     for (const token of tokens) {
-        // Strip out non-alphanumeric characters, except hyphen, underscore, asterisk, and double quote
-        const sanitizedToken = token.replace(/[^a-zA-Z0-9_\-"*]/g, '');
+        // Strip out non-alphanumeric characters, except hyphen, underscore, and asterisk
+        let sanitizedToken = token.replace(/[^a-zA-Z0-9_\-*]/g, '');
         if (!sanitizedToken) continue;
+
+        // Ensure asterisk is only at the end of the token for prefix matching,
+        // preventing standalone asterisks or inner asterisks which cause syntax errors.
+        const hasAsterisk = token.endsWith('*');
+        sanitizedToken = sanitizedToken.replace(/\*/g, '');
+        if (hasAsterisk && sanitizedToken.length > 0) {
+            sanitizedToken += '*';
+        }
+        
+        if (!sanitizedToken || sanitizedToken === '*') continue;
 
         // Drop FTS5 keywords to prevent syntax errors and ReDoS
         if (/^(AND|OR|NOT|NEAR)$/i.test(sanitizedToken)) continue;

@@ -145,11 +145,15 @@ export class BackupManager {
             throw new ValidationError(`Path traversal detected during restore resolution.`)
         }
 
-        if (!fs.existsSync(backupPath)) {
-            throw new ResourceNotFoundError('Backup', filename)
+        let stat
+        try {
+            stat = await fs.promises.lstat(backupPath)
+        } catch (e: unknown) {
+            if (e instanceof Error && 'code' in e && e.code === 'ENOENT') {
+                throw new ResourceNotFoundError('Backup', filename)
+            }
+            throw e
         }
-
-        const stat = await fs.promises.lstat(backupPath)
         if (stat.isSymbolicLink()) {
             throw new ValidationError('Symlinks are not allowed for backup restore.')
         }
