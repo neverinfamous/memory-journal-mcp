@@ -81,6 +81,10 @@
 - Enforced hard exceptions on SQLite WAL checkpoint truncation failures to prevent silently incomplete backups.
 - Handled post-commit lookup failures gracefully in `createEntry` by logging a warning and returning a synthesized `JournalEntry` instead of throwing an error.
 - Stabilized E2E test suite regressions caused by strict authentication boundaries by properly isolating global `playwright.config.ts` context and moving unconfigured team testing to dedicated servers.
+- Data inconsistencies during `team_delete_entry` soft-deletes by enforcing synchronous vector state cleanup.
+- Startup schema migrations in `NativeConnectionManager` by wrapping column injections in atomic transactions.
+- Deprecated `.npmrc` legacy peer-dependencies configurations and unsafe `--force` global installations in Docker pipelines.
+- Corrected `SECURITY.md` to accurately reflect TruffleHog capabilities by removing outdated Gitleaks documentation.
 ### Security
 - Limited FTS5 query token strings to 500 characters prior to AST parsing to prevent ReDoS and AST bloat limits.
 - Changed the fallback client ID in `mj_execute_code` from the process-global `INSTANCE_UUID` to a per-invocation `randomUUID()`, enforcing tenant isolation for unauthenticated `stdio` callers.
@@ -138,3 +142,8 @@
 - Corrected locking error diagnostics in SQLite backup restoration by preserving the underlying renameError cause.
 - Fixed TypeScript unused variable warnings and strict-boolean-expression errors in authorization discovery and backup adapters.
 - Resolved Vitest ESM unconfigurable module namespace errors when spying on node:https during authorization discovery tests.
+- Applied output sanitization (`markUntrustedContent`) and author sanitization to team resources to mitigate prompt injection.
+- Explicitly gated the Code Mode (`mj_execute_code`) sandbox execution behind an `admin` OAuth scope requirement.
+- Removed the `/health` endpoint rate limiting bypass to protect against probing Distributed Denial of Service (DDoS) vectors.
+- Restrained Playwright E2E testing filesystem boundaries by strictly enforcing `ALLOWED_IO_ROOTS` to local `.test-output/e2e` isolation.
+- Secured CI/CD gating by removing manual `workflow_dispatch` triggers from the NPM publishing pipeline and eliminating top-level write scopes from the Gatekeeper workflow.

@@ -173,7 +173,7 @@ docker run --memory=1g --cpus=1 memory-journal-mcp
 
 - ✅ **CodeQL analysis** - automated static analysis on push/PR
 - ✅ **Trivy container scanning** - Docker image vulnerability detection
-- ✅ **TruffleHog + Gitleaks** - secret scanning on push/PR
+- ✅ **TruffleHog** - secret scanning on push/PR
 - ✅ **npm audit** - dependency vulnerability checking
 - ✅ **Dependabot** - automated dependency update PRs
 

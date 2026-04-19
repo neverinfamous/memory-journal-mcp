@@ -8,12 +8,6 @@ on:
     secrets:
       NPM_TOKEN:
         required: true
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (must match package.json)'
-        required: false
-        default: ''
 
 permissions:
   contents: read

@@ -169,11 +169,7 @@ export class HttpTransport {
         // Built-in rate limiting (Moved before Auth for DoS prevention)
         if (this.config.enableRateLimit !== false) {
             this.app.use((req: Request, res: Response, next: () => void) => {
-                // Health check bypasses rate limiting
-                if (req.path === '/health') {
-                    next()
-                    return
-                }
+                // Health endpoint is rate-limited the same as other endpoints
 
                 const result = checkRateLimit(req, this.config, this.rateLimitMap)
                 if (!result.allowed) {

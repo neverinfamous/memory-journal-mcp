@@ -641,7 +641,7 @@ describe('HttpTransport', () => {
     // ========================================================================
 
     describe('rate limiter middleware', () => {
-        it('should enforce rate limits and bypass health check', async () => {
+        it('should enforce rate limits and apply to health check', async () => {
             const config: HttpTransportConfig = {
                 port: 3000,
                 host: '127.0.0.1',
@@ -671,14 +671,14 @@ describe('HttpTransport', () => {
             }
             expect(rateLimiterMw).toBeDefined()
 
-            // Verify a health check bypasses it even if rate limited
+            // Verify a health check does NOT bypass it when rate limited
             const healthRes = mockRes()
             let nextCalled = false
             rateLimiterMw!(mockReq({ path: '/health', ip: '10.0.0.5' }), healthRes, () => {
                 nextCalled = true
             })
-            expect(nextCalled).toBe(true)
-            expect(healthRes['status'] as any).not.toHaveBeenCalledWith(429)
+            expect(nextCalled).toBe(false)
+            expect(healthRes['status'] as any).toHaveBeenCalledWith(429)
 
             // Cleanup any intervals started by HttpTransport for rate limiting
             await transport.stop(null)

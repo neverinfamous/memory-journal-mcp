@@ -1,15 +1,7 @@
 name: CI/CD Pipeline
 
 permissions:
-  actions: read
-  contents: write
-  packages: write
-  security-events: write
-  issues: write
-  pull-requests: write
-  id-token: write
-  attestations: write
-  deployments: write
+  contents: read
 
 on:
   push:
@@ -19,15 +11,27 @@ on:
 jobs:
   lint:
     uses: ./.github/workflows/lint-and-test.yml
+    permissions:
+      contents: read
 
   codeql:
     uses: ./.github/workflows/codeql.yml
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
 
   secrets:
     uses: ./.github/workflows/secrets-scanning.yml
+    permissions:
+      contents: read
 
   trivy:
     uses: ./.github/workflows/security-update.yml
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
 
   publish:
     needs: [lint, codeql, secrets, trivy]
@@ -41,6 +45,15 @@ jobs:
       needs.secrets.result == 'success' &&
       needs.trivy.result == 'success'
     uses: ./.github/workflows/docker-publish.yml
+    permissions:
+      contents: write
+      packages: write
+      security-events: write
+      issues: write
+      pull-requests: write
+      id-token: write
+      attestations: write
+      deployments: write
     secrets:
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}

@@ -12,7 +12,7 @@ RUN apk add --no-cache python3 make g++ && \
 
 # Upgrade npm globally to a pinned version to ensure reproducible builds
 # Fixes CVE-2025-64756 (glob), CVE-2025-64118 (tar)
-RUN npm install -g npm@10.9.2 --force && npm cache clean --force
+RUN npm install -g npm@10.9.2 && npm cache clean --force
 
 # Copy package files first for better layer caching
 COPY package*.json .npmrc ./

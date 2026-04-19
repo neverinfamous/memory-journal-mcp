@@ -120,40 +120,43 @@ export class NativeConnectionManager implements IDatabaseConnection {
         const columns = new Set(tableInfo.map((row) => row.name))
 
         const added: string[] = []
-        for (const col of SHARED_MIGRATION_COLUMNS) {
-            if (!columns.has(col.name)) {
-                db.exec(col.sql)
-                added.push(col.name)
+        
+        db.transaction(() => {
+            for (const col of SHARED_MIGRATION_COLUMNS) {
+                if (!columns.has(col.name)) {
+                    db.exec(col.sql)
+                    added.push(col.name)
+                }
             }
-        }
 
-        db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
+            db.prepare('UPDATE tags SET usage_count = 0 WHERE usage_count IS NULL').run()
 
-        // Populate FTS5 index for existing databases that were created before FTS5 was added.
-        // Uses FTS5's built-in 'rebuild' command for content-sync tables.
-        // We query the fts_content_docsize shadow table to get the true number of indexed documents
-        // because querying fts_content directly merely delegates to the content table (memory_journal).
-        let ftsCount = 0
-        try {
-            ftsCount = (
-                db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
+            // Populate FTS5 index for existing databases that were created before FTS5 was added.
+            // Uses FTS5's built-in 'rebuild' command for content-sync tables.
+            // We query the fts_content_docsize shadow table to get the true number of indexed documents
+            // because querying fts_content directly merely delegates to the content table (memory_journal).
+            let ftsCount = 0
+            try {
+                ftsCount = (
+                    db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
+                ).c
+            } catch {
+                // Shadow table doesn't exist yet or FTS5 disabled
+            }
+
+            const entryCount = (
+                db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
             ).c
-        } catch {
-            // Shadow table doesn't exist yet or FTS5 disabled
-        }
-
-        const entryCount = (
-            db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
-        ).c
-        if (ftsCount === 0 && entryCount > 0) {
-            db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
-            added.push('fts5:populated')
-        } else if (ftsCount > entryCount) {
-            // Ghost entries: FTS has more rows than the journal (hard deletes before the
-            // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
-            db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
-            added.push('fts5:rebuilt-ghost-cleanup')
-        }
+            if (ftsCount === 0 && entryCount > 0) {
+                db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
+                added.push('fts5:populated')
+            } else if (ftsCount > entryCount) {
+                // Ghost entries: FTS has more rows than the journal (hard deletes before the
+                // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
+                db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')")
+                added.push('fts5:rebuilt-ghost-cleanup')
+            }
+        })()
 
         if (added.length > 0) {
             logger.info('Schema migrated', {
@@ -178,12 +181,15 @@ export class NativeConnectionManager implements IDatabaseConnection {
         ]
 
         const added: string[] = []
-        for (const col of teamColumns) {
-            if (!columns.has(col.name)) {
-                db.exec(col.sql)
-                added.push(col.name)
+        
+        db.transaction(() => {
+            for (const col of teamColumns) {
+                if (!columns.has(col.name)) {
+                    db.exec(col.sql)
+                    added.push(col.name)
+                }
             }
-        }
+        })()
 
         if (added.length > 0) {
             logger.info('Team schema migrated', {

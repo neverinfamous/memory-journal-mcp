@@ -16,7 +16,7 @@ import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
 import { getRequestContext } from '../../utils/request-context.js'
-import { getAuthContext } from '../../auth/auth-context.js'
+import { getAuthContext, getAuthenticatedScopes } from '../../auth/auth-context.js'
 import { getCoreTools } from './core.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
@@ -266,6 +266,16 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const reqCtx = getRequestContext()
                     const authCtx = getAuthContext()
                     const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
+
+                    if (authCtx?.authenticated) {
+                        const scopes = getAuthenticatedScopes()
+                        if (!scopes.includes('admin')) {
+                            return {
+                                success: false,
+                                error: 'Permission Denied: Code Mode is a privileged admin-only capability. Your token lacks the required "admin" scope.',
+                            }
+                        }
+                    }
 
                     // Security validation
                     const security = getSecurityManager(clientId)

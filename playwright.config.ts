@@ -28,7 +28,7 @@ export default defineConfig({
             // Enable team DB so team tools get functional E2E coverage
             TEAM_DB_PATH: './.test-output/e2e/test-e2e-team.db',
             TEAM_AUTHOR: 'Alice',
-            ALLOWED_IO_ROOTS: process.cwd(),
+            ALLOWED_IO_ROOTS: process.cwd() + '/.test-output/e2e',
         },
         url: 'http://localhost:3100/health',
         reuseExistingServer: !process.env.CI,

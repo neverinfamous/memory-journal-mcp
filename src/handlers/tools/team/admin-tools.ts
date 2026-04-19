@@ -139,6 +139,7 @@ export function getTeamAdminTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     teamDb.deleteEntry(entry_id)
+                    teamDb.deleteVector(entry_id)
 
                     return {
                         success: true,

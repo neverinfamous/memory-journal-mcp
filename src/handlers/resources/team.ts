@@ -8,6 +8,7 @@ import type { InternalResourceDef, ResourceContext, ResourceResult, BriefingConf
 import { DEFAULT_FLAG_VOCABULARY } from '../tools/team/schemas.js'
 import { parseFlagContext } from '../../types/auto-context.js'
 import { logger } from '../../utils/logger.js'
+import { markUntrustedContent, sanitizeAuthor } from '../../utils/security-utils.js'
 
 // ============================================================================
 // Helpers
@@ -67,7 +68,11 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        entries: enriched,
+                        entries: enriched.map(e => ({
+                            ...e,
+                            content: markUntrustedContent(e.content),
+                            author: e.author ? sanitizeAuthor(e.author) : null
+                        })),
                         count: enriched.length,
                         source: 'team',
                     },
@@ -156,11 +161,12 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                             flag_type: flagCtx.flag_type,
                             target_user: flagCtx.target_user,
                             link: flagCtx.link,
-                            author: entry.author,
+                            author: entry.author ? sanitizeAuthor(entry.author) : null,
                             timestamp: entry.timestamp,
-                            preview:
+                            preview: markUntrustedContent(
                                 entry.content.slice(0, 120) +
-                                (entry.content.length > 120 ? '...' : ''),
+                                (entry.content.length > 120 ? '...' : '')
+                            ),
                             tags: entry.tags,
                             projectNumber: entry.projectNumber ?? null,
                         }
