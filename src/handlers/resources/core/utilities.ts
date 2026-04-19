@@ -65,8 +65,9 @@ export const significantResource: InternalResourceDef = {
             const relCount = relationships.length
             const causalCount = relationships.filter(r => ['blocked_by', 'resolved', 'caused'].includes(r.relationshipType)).length
             
+            const timestampMs = new Date(entry.timestamp).getTime()
             const daysSince = Math.floor(
-                (now - new Date(entry.timestamp).getTime()) / MS_PER_DAY
+                (now - timestampMs) / MS_PER_DAY
             )
             const recency = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
@@ -79,16 +80,14 @@ export const significantResource: InternalResourceDef = {
                         100
                 ) / 100
 
-            return { ...entry, importance } as { timestamp: string; importance: number }
+            return { ...entry, importance, timestampMs } as { timestamp: string; importance: number; timestampMs: number }
         })
 
         entriesWithImportance.sort((a, b) => {
             if (b.importance !== a.importance) {
                 return b.importance - a.importance
             }
-            const aTime = new Date(a.timestamp).getTime()
-            const bTime = new Date(b.timestamp).getTime()
-            return bTime - aTime
+            return b.timestampMs - a.timestampMs
         })
         const top20 = entriesWithImportance.slice(0, 20)
         return { entries: top20, count: top20.length }

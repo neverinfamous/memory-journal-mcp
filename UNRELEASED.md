@@ -3,6 +3,7 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
 ### Changed
+- Increased GitHub API cache TTL to 5 minutes and size limit to 1000 items to significantly stabilize operations during high-activity sessions.
 - Moved ML vector semantic indexing to an asynchronous background task to prevent write latency.
 - Decoupled server initialization from database queries to ensure constant-time startup.
 - Hoisted execution-invariant server state (tools, prompts, filter sets) out of `createServerInstance()` to bypass redundant cycles during HTTP/SSE connections.
@@ -25,6 +26,10 @@
 ### Deprecated
 - Officially deprecated the `autoContext` field across the memory journal ecosystem. The feature was originally intended for background filesystem monitoring but has been abandoned to reduce telemetry overhead. Existing records are safely ignored.
 ### Fixed
+- Fixed an N+1 query performance bottleneck during team semantic search by batch-fetching tags before memory-level filtering.
+- Optimized `significantResource` compute overhead by precomputing entry timestamps outside of iterative map and sort functions.
+- Added explicit and actionable fail-closed error messages for missing `ALLOWED_IO_ROOTS` configurations.
+- Updated tool descriptions to reflect that `project_number` is strictly enforced for tenancy isolation.
 - Fixed an N+1 query performance bottleneck during Markdown exports and Semantic Search.
 - Re-implemented legacy SSE transport to enforce `MAX_STATEFUL_SESSIONS` boundaries, aligning with Streamable HTTP limits.
 - Resolved false-positive path traversal errors preventing server initialization on Windows by removing incorrect sandbox boundary restraints on raw `PROJECT_REGISTRY` mappings and explicit root database CLI arguments.

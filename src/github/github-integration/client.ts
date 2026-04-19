@@ -3,7 +3,7 @@ import { graphql } from '@octokit/graphql'
 import * as simpleGitImport from 'simple-git'
 import { logger } from '../../utils/logger.js'
 
-export const CACHE_TTL_MS = 1 * 60 * 1000
+export const CACHE_TTL_MS = 5 * 60 * 1000
 export const TRAFFIC_CACHE_TTL_MS = 10 * 60 * 1000
 
 export interface CacheEntry<T> {
@@ -86,8 +86,8 @@ export class GitHubClient {
         this.apiCache.delete(key) // Ensure it is inserted at the end of iteration order
         this.apiCache.set(key, { data, timestamp: Date.now() })
 
-        // Prevent unbounded memory growth (Max 100 items)
-        if (this.apiCache.size > 100) {
+        // Prevent unbounded memory growth (Max 1000 items)
+        if (this.apiCache.size > 1000) {
             const oldestKey = this.apiCache.keys().next().value
             if (oldestKey !== undefined) {
                 this.apiCache.delete(oldestKey)

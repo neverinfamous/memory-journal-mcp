@@ -116,6 +116,12 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                     // Batch-fetch authors
                     const authorMap = batchFetchAuthors(teamDb, entryIds)
 
+                    // Pre-hydrate tags to avoid N+1 queries during metadata filtering
+                    const tagsMap = teamDb.getTagsForEntries(entryIds)
+                    for (const entry of entriesMap.values()) {
+                        entry.tags = tagsMap.get(entry.id) ?? []
+                    }
+
                     const entries = results
                         .map((r) => {
                             const entry = entriesMap.get(r.entryId)

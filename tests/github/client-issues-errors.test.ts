@@ -86,14 +86,14 @@ describe('GitHubClient — branch coverage', () => {
     })
 
     describe('setCache — LRU eviction', () => {
-        it('should evict oldest entry when cache exceeds 100 items', () => {
-            for (let i = 0; i < 101; i++) {
+        it('should evict oldest entry when cache exceeds 1000 items', () => {
+            for (let i = 0; i < 1001; i++) {
                 client.setCache(`key-${String(i)}`, i)
             }
             // key-0 should be evicted
             expect(client.apiCache.has('key-0')).toBe(false)
-            expect(client.apiCache.has('key-100')).toBe(true)
-            expect(client.apiCache.size).toBe(100)
+            expect(client.apiCache.has('key-1000')).toBe(true)
+            expect(client.apiCache.size).toBe(1000)
         })
     })
 

@@ -167,7 +167,7 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     // 3. Define safe boundaries
     const rawRoots: string[] = providedRoots
     if (rawRoots.length === 0) {
-        throw new PathTraversalError('No allowed input/output roots configured for sandbox boundary.')
+        throw new PathTraversalError('No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.')
     }
     const allowedRoots: string[] = []
 

@@ -28,7 +28,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'team_search',
             title: 'Search Team Entries',
             description:
-                'Search entries in the team database by text and/or tags. Requires TEAM_DB_PATH. 🛑 WARNING: Team DB is a shared multi-tenant domain. ALWAYS specify project_number unless you explicitly intend to search across ALL teams globally.',
+                'Search entries in the team database by text and/or tags. Requires TEAM_DB_PATH. 🛑 WARNING: Team DB is a shared multi-tenant domain. You MUST specify project_number to isolate results to the target project.',
             group: 'team',
             inputSchema: TeamSearchSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
@@ -85,7 +85,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
             name: 'team_search_by_date_range',
             title: 'Search Team Entries by Date Range',
             description:
-                'Search team entries within a date range with optional filters for entry type and tags. Requires TEAM_DB_PATH. 🛑 WARNING: Team DB is a shared multi-tenant domain. ALWAYS specify project_number unless you explicitly intend to search across ALL teams globally.',
+                'Search team entries within a date range with optional filters for entry type and tags. Requires TEAM_DB_PATH. 🛑 WARNING: Team DB is a shared multi-tenant domain. You MUST specify project_number to isolate results to the target project.',
             group: 'team',
             inputSchema: TeamSearchByDateRangeSchemaMcp,
             outputSchema: TeamEntriesListOutputSchema,
