@@ -72,7 +72,7 @@ async function buildBriefingData(
 
     if (targetRepo && config.projectRegistry?.[targetRepo]) {
         const repoPath = config.projectRegistry[targetRepo].path
-        activeGithub = getGitHubIntegration(repoPath)
+        activeGithub = getGitHubIntegration(repoPath, context.runtime)
         activeProjectNumber = config.projectRegistry[targetRepo].project_number ?? undefined
     }
 

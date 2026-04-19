@@ -14,10 +14,8 @@ export default defineConfig({
             reportsDirectory: '.test-output/coverage',
             include: ['src/**/*.ts'],
             exclude: [
-                'src/cli.ts',
                 'src/index.ts',
-                'src/types/**',
-                'src/codemode/worker-script.ts',
+                'src/types/**'
             ],
         },
         hookTimeout: 30_000,

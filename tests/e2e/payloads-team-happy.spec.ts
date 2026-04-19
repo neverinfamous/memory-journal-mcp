@@ -55,6 +55,7 @@ test.describe('Payload Contracts: Team Tools (Happy Path)', () => {
                     ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     TEAM_DB_PATH: './.test-output/e2e/test-e2e-team-happy-team.db',
+                    MCP_AUTH_SCOPES: 'read,write,team',
                 },
             }
         )

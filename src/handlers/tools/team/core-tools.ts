@@ -58,7 +58,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
                         const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
                         const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                        const authId = email ?? prefName ?? claims?.sub ?? subject ?? resolveAuthor()
+                        const authId = claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
 
                         if (input.author !== undefined && input.author !== authId) {
                             return {

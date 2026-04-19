@@ -180,7 +180,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         // Mutating operations without an explicit owner/repo will throw or request clarification
         // rather than guessing the wrong project boundary.
     }
-    const github = getGitHubIntegration(githubPath)
+    const github = getGitHubIntegration(githubPath, runtime)
     try {
         // Pre-populate repository cache so synchronous tools (e.g. create_entry) can resolve GitHub URLs
         await github.getRepoInfo()

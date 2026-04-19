@@ -15,7 +15,7 @@ import type { AuditLogger } from '../audit/index.js'
  */
 export function enforceAccessBoundary(
     targetName: string,
-    targetType: 'resource' | 'tool',
+    targetType: 'resource' | 'tool' | 'prompt',
     auditLogger?: AuditLogger | null
 ): void {
     const auth = getAuthContext()

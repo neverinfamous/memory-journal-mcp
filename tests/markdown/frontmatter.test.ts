@@ -4,20 +4,28 @@ import { parseFrontmatter, serializeFrontmatter } from '../../src/markdown/front
 describe('parseFrontmatter', () => {
     it('should correctly parse well-formed frontmatter', () => {
         const markdown = `---
-mj_id: 123
-entry_type: decision
-author: Alice
-tags:
-  - architecture
-  - backend
-timestamp: 2026-04-08T12:00:00Z
-significance: high
-relationships:
-  - type: blocked_by
-    target_id: 456
-  - type: references
-    target_id: 789
-source: team
+{
+  "mj_id": 123,
+  "entry_type": "decision",
+  "author": "Alice",
+  "tags": [
+    "architecture",
+    "backend"
+  ],
+  "timestamp": "2026-04-08T12:00:00Z",
+  "significance": "high",
+  "relationships": [
+    {
+      "type": "blocked_by",
+      "target_id": 456
+    },
+    {
+      "type": "references",
+      "target_id": 789
+    }
+  ],
+  "source": "team"
+}
 ---
 This is the content.`
 
@@ -48,9 +56,12 @@ This is the content.`
 
     it('should extract partial frontmatter', () => {
         const markdown = `---
-mj_id: 42
-tags:
-  - simple
+{
+  "mj_id": 42,
+  "tags": [
+    "simple"
+  ]
+}
 ---
 Content`
         const { metadata, body } = parseFrontmatter(markdown)
@@ -61,17 +72,7 @@ Content`
         expect(body).toBe('Content')
     })
 
-    it('should ignore invalid YAML structures gracefully due to our custom parser limitations, but not crash', () => {
-        const markdown = `---
-invalid_key:
-  foo: bar
-mj_id: 99
----
-Content`
-        const { metadata, body } = parseFrontmatter(markdown)
-        expect(metadata.mj_id).toBe(99)
-        expect(body).toBe('Content')
-    })
+
 
     it('should require the first delimiter to be on line 1 to be treated as frontmatter', () => {
         const markdown = `
@@ -94,39 +95,15 @@ Body without closing delimiter`
 
     it('should throw an error if frontmatter fails schema validation', () => {
         const markdown = `---
-mj_id: "not-a-number"
----
-Body`
-        expect(() => parseFrontmatter(markdown)).toThrow(/Invalid frontmatter: mj_id/i)
-    })
-
-    it('should strip single quotes from string values', () => {
-        const markdown = `---
-author: 'Alice'
----
-Body`
-        const { metadata } = parseFrontmatter(markdown)
-        expect(metadata.author).toBe('Alice')
-    })
-    it('should correctly parse JSON frontmatter', () => {
-        const markdown = `---
 {
-  "mj_id": 123,
-  "entry_type": "decision",
-  "author": "Alice"
+  "mj_id": "not-a-number"
 }
 ---
-This is the content.`
-
-        const { metadata, body } = parseFrontmatter(markdown)
-
-        expect(metadata).toEqual({
-            mj_id: 123,
-            entry_type: 'decision',
-            author: 'Alice',
-        })
-        expect(body).toBe('This is the content.')
+Body`
+        expect(() => parseFrontmatter(markdown)).toThrow(/Invalid frontmatter.*mj_id/i)
     })
+
+
 })
 
 describe('serializeFrontmatter', () => {

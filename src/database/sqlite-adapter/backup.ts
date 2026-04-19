@@ -204,8 +204,8 @@ export class BackupManager {
                         }
                         
                         if (holdingPid !== undefined && !isNaN(holdingPid)) {
-                            // Check timestamp first: if older than 5 minutes, consider it stale due to crash
-                            if (lockTimestamp !== undefined && (Date.now() - lockTimestamp > 5 * 60 * 1000)) {
+                            // Check timestamp first: if older than 30 seconds, consider it stale due to crash
+                            if (lockTimestamp !== undefined && (Date.now() - lockTimestamp > 30 * 1000)) {
                                 isStale = true
                                 logger.warning('Found stale database restore lock (expired timestamp)', { path: lockPath, holdingPid, ageMs: Date.now() - lockTimestamp, module: 'SqliteAdapter' })
                             } else if (runtime !== undefined && runtime !== null && typeof runtime === 'object' && 'maintenanceManager' in runtime) {

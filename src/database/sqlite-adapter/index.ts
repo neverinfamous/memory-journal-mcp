@@ -372,14 +372,35 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         if (!rows[0] || rows[0].values.length === 0) return []
         
         const cols = rows[0].columns
+        const entryIds = rows[0].values.map(row => row[cols.indexOf('id')] as number)
+        const tagsMap = new Map<number, string[]>()
+        
+        if (entryIds.length > 0) {
+            const placeholders = entryIds.map(() => '?').join(',')
+            const tagRows = this.connection.exec(`SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`, entryIds)
+            if (tagRows[0] && tagRows[0].values.length > 0) {
+                const tagCols = tagRows[0].columns
+                const entryIdIdx = tagCols.indexOf('entry_id')
+                const tagIdx = tagCols.indexOf('tag')
+                for (const row of tagRows[0].values) {
+                    const eId = row[entryIdIdx] as number
+                    const tag = row[tagIdx] as string
+                    const list = tagsMap.get(eId) ?? []
+                    list.push(tag)
+                    tagsMap.set(eId, list)
+                }
+            }
+        }
+
         return rows[0].values.map((row: unknown[]): JournalEntry => {
             const getVal = (idx: number): unknown => row[idx]
+            const id = getVal(cols.indexOf('id')) as number
             return {
-                id: getVal(cols.indexOf('id')) as number,
+                id,
                 entryType: getVal(cols.indexOf('entry_type')) as EntryType,
                 content: getVal(cols.indexOf('content')) as string,
                 timestamp: getVal(cols.indexOf('timestamp')) as string,
-                tags: this.getTagsForEntry(getVal(cols.indexOf('id')) as number),
+                tags: tagsMap.get(id) ?? [],
                 isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
                 projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
                 issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,
@@ -412,14 +433,35 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         if (!rows[0] || rows[0].values.length === 0) return []
         
         const cols = rows[0].columns
+        const entryIds = rows[0].values.map(row => row[cols.indexOf('id')] as number)
+        const tagsMap = new Map<number, string[]>()
+        
+        if (entryIds.length > 0) {
+            const placeholders = entryIds.map(() => '?').join(',')
+            const tagRows = this.connection.exec(`SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`, entryIds)
+            if (tagRows[0] && tagRows[0].values.length > 0) {
+                const tagCols = tagRows[0].columns
+                const entryIdIdx = tagCols.indexOf('entry_id')
+                const tagIdx = tagCols.indexOf('tag')
+                for (const row of tagRows[0].values) {
+                    const eId = row[entryIdIdx] as number
+                    const tag = row[tagIdx] as string
+                    const list = tagsMap.get(eId) ?? []
+                    list.push(tag)
+                    tagsMap.set(eId, list)
+                }
+            }
+        }
+
         return rows[0].values.map((row: unknown[]): JournalEntry => {
             const getVal = (idx: number): unknown => row[idx]
+            const id = getVal(cols.indexOf('id')) as number
             return {
-                id: getVal(cols.indexOf('id')) as number,
+                id,
                 entryType: getVal(cols.indexOf('entry_type')) as EntryType,
                 content: getVal(cols.indexOf('content')) as string,
                 timestamp: getVal(cols.indexOf('timestamp')) as string,
-                tags: this.getTagsForEntry(getVal(cols.indexOf('id')) as number),
+                tags: tagsMap.get(id) ?? [],
                 isPersonal: Boolean(getVal(cols.indexOf('is_personal'))),
                 projectNumber: getVal(cols.indexOf('project_number')) as number | undefined,
                 issueNumber: getVal(cols.indexOf('issue_number')) as number | undefined,

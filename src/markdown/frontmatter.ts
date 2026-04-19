@@ -120,7 +120,7 @@ export function parseFrontmatter(content: string): ParseResult {
 
     // Try robust JSON parsing first
     const fmText = lines.slice(1, closingIndex).join('\n').trim()
-    let raw: Record<string, unknown> = {}
+    let raw: Record<string, unknown>
 
     if (fmText.startsWith('{') && fmText.endsWith('}')) {
         try {
@@ -132,91 +132,7 @@ export function parseFrontmatter(content: string): ParseResult {
             throw err
         }
     } else {
-        // Fallback to legacy YAML parsing
-        const fmLines = lines.slice(1, closingIndex)
-        let currentKey: string | null = null
-        let currentArray: unknown[] | null = null
-        let isRelationshipArray = false
-        let currentRelObj: Record<string, unknown> | null = null
-
-        for (const line of fmLines) {
-            // Skip empty lines within frontmatter
-            if (line.trim() === '') continue
-
-            // Array item: `  - value` or `  - key: value`
-            if (/^\s{2,}- /.test(line)) {
-                const itemContent = line.replace(/^\s{2,}- /, '')
-
-                if (isRelationshipArray && currentKey === 'relationships') {
-                    // Relationship object start: `  - type: value`
-                    const colonIdx = itemContent.indexOf(':')
-                    if (colonIdx !== -1) {
-                        // Flush previous relationship object
-                        if (currentRelObj !== null) {
-                            currentArray?.push(currentRelObj)
-                        }
-                        currentRelObj = {}
-                        const key = itemContent.slice(0, colonIdx).trim()
-                        if (key === 'type' || key === 'target_id') {
-                            const value = itemContent.slice(colonIdx + 1).trim()
-                            currentRelObj[key] = parseScalar(value)
-                        }
-                    }
-                } else if (currentArray !== null) {
-                    currentArray.push(itemContent.trim())
-                }
-                continue
-            }
-
-            // Continuation of relationship object: `    key: value`
-            if (/^\s{4,}\w/.test(line) && currentRelObj !== null) {
-                const colonIdx = line.indexOf(':')
-                if (colonIdx !== -1) {
-                    const key = line.slice(0, colonIdx).trim()
-                    if (key === 'type' || key === 'target_id') {
-                        const value = line.slice(colonIdx + 1).trim()
-                        currentRelObj[key] = parseScalar(value)
-                    }
-                }
-                continue
-            }
-
-            // Flush previous array/relationship
-            if (currentKey !== null && currentArray !== null) {
-                if (isRelationshipArray && currentRelObj !== null) {
-                    currentArray.push(currentRelObj)
-                    currentRelObj = null
-                }
-                raw[currentKey] = currentArray
-                currentArray = null
-                currentKey = null
-                isRelationshipArray = false
-            }
-
-            // Top-level key: value
-            const colonIdx = line.indexOf(':')
-            if (colonIdx !== -1) {
-                const key = line.slice(0, colonIdx).trim()
-                const value = line.slice(colonIdx + 1).trim()
-
-                if (value === '') {
-                    // Array or object start
-                    currentKey = key
-                    currentArray = []
-                    isRelationshipArray = key === 'relationships'
-                } else {
-                    raw[key] = parseScalar(value)
-                }
-            }
-        }
-
-        // Flush final array
-        if (currentKey !== null && currentArray !== null) {
-            if (isRelationshipArray && currentRelObj !== null) {
-                currentArray.push(currentRelObj)
-            }
-            raw[currentKey] = currentArray
-        }
+        throw new Error('Invalid frontmatter: Frontmatter must be strict JSON enclosed in { } braces.')
     }
 
     // Validate against schema
@@ -233,29 +149,4 @@ export function parseFrontmatter(content: string): ParseResult {
         .replace(/^\n/, '')
 
     return { metadata: parseResult.data, body }
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Parse a scalar value string into the appropriate JS primitive */
-function parseScalar(value: string): string | number | boolean {
-    // Number
-    if (/^-?\d+$/.test(value)) return parseInt(value, 10)
-    if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value)
-
-    // Boolean
-    if (value === 'true') return true
-    if (value === 'false') return false
-
-    // String (strip surrounding quotes if present)
-    if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-    ) {
-        return value.slice(1, -1)
-    }
-
-    return value
 }

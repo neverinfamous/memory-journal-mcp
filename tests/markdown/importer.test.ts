@@ -49,8 +49,11 @@ describe('importMarkdownEntries', () => {
 
     it('should process .md files and create new entry when no mj_id is present', async () => {
         const fileContent = `---
-tags:
-  - test
+{
+  "tags": [
+    "test"
+  ]
+}
 ---
 New content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -77,8 +80,10 @@ New content`
 
     it('should update existing entry when mj_id is present and found in db', async () => {
         const fileContent = `---
-mj_id: 42
-entry_type: project_decision
+{
+  "mj_id": 42,
+  "entry_type": "project_decision"
+}
 ---
 Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -103,7 +108,9 @@ Updated decision content`
 
     it('should create new entry matching mj_id when mj_id is present but NOT found in db', async () => {
         const fileContent = `---
-mj_id: 100
+{
+  "mj_id": 100
+}
 ---
 Restored entry`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -128,7 +135,9 @@ Restored entry`
 
     it('should respect dry_run mode entirely', async () => {
         const fileContent = `---
-mj_id: 42
+{
+  "mj_id": 42
+}
 ---
 Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -150,9 +159,14 @@ Updated decision content`
 
     it('should gracefully handle relationships linking missing targets without crashing', async () => {
         const fileContent = `---
-relationships:
-  - type: references
-    target_id: 999
+{
+  "relationships": [
+    {
+      "type": "references",
+      "target_id": 999
+    }
+  ]
+}
 ---
 Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -170,8 +184,11 @@ Content`
 
     it('should skip entries with empty body', async () => {
         const fileContent = `---
-tags:
-  - test
+{
+  "tags": [
+    "test"
+  ]
+}
 ---
   \n  `
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
@@ -186,7 +203,7 @@ tags:
         vi.mocked(fs.readdir).mockResolvedValue(['1-test.md', '2-test.md'] as any)
         vi.mocked(fs.readFile).mockImplementation(async (path: any) => {
             if (path.toString().includes('1-test.md')) {
-                return `---\nmj_id: 100\n---\nContent1`
+                return `---\n{\n  "mj_id": 100\n}\n---\nContent1`
             }
             return `Content2`
         })
@@ -200,9 +217,14 @@ tags:
 
     it('should link valid relationships successfully', async () => {
         const fileContent = `---
-relationships:
-  - type: references
-    target_id: 999
+{
+  "relationships": [
+    {
+      "type": "references",
+      "target_id": 999
+    }
+  ]
+}
 ---
 Content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)

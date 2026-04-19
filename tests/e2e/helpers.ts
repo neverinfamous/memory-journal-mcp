@@ -60,6 +60,9 @@ export async function callToolAndParse(
 ): Promise<Record<string, unknown>> {
     const response = await client.callTool({ name: toolName, arguments: args })
 
+    if (response.isError) {
+        console.error('Tool call returned isError: true. Response:', JSON.stringify(response, null, 2))
+    }
     expect(response.isError).toBeUndefined()
     expect(Array.isArray(response.content)).toBe(true)
 

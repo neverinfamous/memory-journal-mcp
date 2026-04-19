@@ -222,8 +222,8 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
  * Used to scrub error output before logging.
  */
 const TOKEN_PATTERNS = [
-    // GitHub personal access tokens (classic and fine-grained)
-    /ghp_[A-Za-z0-9_]{36,}/g,
+    // GitHub personal access tokens (classic and fine-grained) and other token types
+    /gh[pousr]_[A-Za-z0-9_]{36,}/g,
     /github_pat_[A-Za-z0-9_]{82,}/g,
     // Authorization headers in error dumps
     /Authorization:\s*(?:token|Bearer)\s+\S+/gi,

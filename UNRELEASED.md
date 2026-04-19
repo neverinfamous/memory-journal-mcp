@@ -33,6 +33,7 @@
 - Batched database operations within a single transaction in the markdown importer to significantly improve throughput.
 - Updated `mj_execute_code` documentation to explicitly state it is a "trusted-admin execution environment".
 - Replaced hardcoded `github.com` URLs with a dynamic `GITHUB_HOST` environment variable fallback.
+- Transitioned Markdown importer frontmatter parsing from flexible YAML to strict JSON to align with modernized security validation requirements.
 
 ### Deprecated
 - Officially deprecated the `autoContext` field across the memory journal ecosystem. Existing records are safely ignored.
@@ -122,3 +123,6 @@
 - Reclassified `create_entry`, `create_entry_minimal`, `link_entries`, and `export_markdown` to require `WRITE` scope to fix capability injection risks.
 - Enforced explicit `TEAM` scope validation using `hasScope` for the `share_with_team` feature in `create_entry`.
 - Updated `import_markdown` to properly expose vector-indexing failures in the `errors` payload while preserving transaction success instead of masking partial successes as failures.
+- E2E test failures caused by `team_` resource scoping strictness by properly injecting `MCP_AUTH_SCOPES: 'read,write,team'` into testing contexts.
+- Re-added the junction table `JOIN` to `entry_tags` in SQLite database queries to correctly resolve tag constraints during team search tools.
+- Unused import warnings and dead-code assignments in `registration.ts` and `frontmatter.ts` to ensure clean linting compliance.

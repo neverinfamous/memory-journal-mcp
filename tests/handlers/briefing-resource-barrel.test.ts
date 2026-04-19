@@ -35,6 +35,7 @@ describe('Briefing Resources', () => {
 
     it('dynamicBriefingResource handles URI extraction', async () => {
         const result = await dynamicBriefingResource.handler('memory://briefing/test-repo', {
+            runtime: { type: 'stdio' },
             briefingConfig: {
                 projectRegistry: {
                     'test-repo': { path: '/tmp/test', project_number: 5 },
@@ -44,7 +45,7 @@ describe('Briefing Resources', () => {
 
         expect((result as any).data).toBeDefined()
         expect(getGitHubIntegration).toHaveBeenCalledTimes(1)
-        expect(getGitHubIntegration).toHaveBeenCalledWith('/tmp/test')
+        expect(getGitHubIntegration).toHaveBeenCalledWith('/tmp/test', { type: 'stdio' })
     })
 
     it('dynamicBriefingResource handles URI extraction with missing repo in registry', async () => {

@@ -21,7 +21,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     test.beforeAll(async () => {
         // Start a dedicated server WITHOUT TEAM_DB_PATH to test config error path
         await startServer(NO_TEAM_PORT, ['--auth-token', 'test-token'], 'payloads-team', {
-            env: { TEAM_DB_PATH: undefined, TEAM_AUTHOR: 'Alice' },
+            env: { TEAM_DB_PATH: undefined, TEAM_AUTHOR: 'Alice', MCP_AUTH_SCOPES: 'read,write,team' },
         })
         client = await createClient(NO_TEAM_PORT, 'test-token')
     })

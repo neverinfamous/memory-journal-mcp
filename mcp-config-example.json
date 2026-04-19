@@ -65,7 +65,8 @@
                 "AUDIT_READS": "false",
                 "AUDIT_LOG_MAX_SIZE": "10485760",
                 "MCP_METRICS_ENABLED": "true",
-                "AUTO_REBUILD_INDEX": "false"
+                "AUTO_REBUILD_INDEX": "false",
+                "ALLOWED_IO_ROOTS": "/app/data"
             }
         }
     }

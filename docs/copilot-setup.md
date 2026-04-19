@@ -30,7 +30,8 @@ Add to your workspace `.vscode/mcp.json`:
       "env": {
         "DB_PATH": "./memory-journal.db",
         "GITHUB_TOKEN": "${env:GITHUB_TOKEN}",
-        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\".\",\"project_number\":1}}"
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\".\",\"project_number\":1}}",
+        "ALLOWED_IO_ROOTS": "."
       }
     }
   }

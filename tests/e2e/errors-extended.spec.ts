@@ -297,7 +297,7 @@ test.describe('Errors: Team', () => {
 
     test.beforeAll(async () => {
         await startServer(TEAM_EXT_PORT, ['--auth-token', 'test-token'], 'errors-extended-team', {
-            env: { ...process.env, TEAM_DB_PATH: './.test-output/e2e/test-e2e-errors-extended-team.db' }
+            env: { ...process.env, TEAM_DB_PATH: './.test-output/e2e/test-e2e-errors-extended-team.db', MCP_AUTH_SCOPES: 'read,write,team' }
         });
         client = await createClient(TEAM_EXT_PORT, 'test-token');
     });
