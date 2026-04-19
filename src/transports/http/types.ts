@@ -42,8 +42,8 @@ export const JSONRPC_INTERNAL_ERROR = -32603
 /** Session timeout for stateful HTTP mode (30 minutes) */
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000
 
-/** Session timeout sweep interval (5 minutes) */
-export const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000
+/** Session timeout sweep interval (1 minute) */
+export const SESSION_SWEEP_INTERVAL_MS = 1 * 60 * 1000
 
 // =============================================================================
 // Rate Limiting

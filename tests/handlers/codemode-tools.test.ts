@@ -5,7 +5,7 @@ import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import * as fs from 'fs'
 
 const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] }, dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }) } as any, progress, teamDb, teamVector);
 
 
 vi.mock('../../src/utils/request-context.js', async (importOriginal) => {

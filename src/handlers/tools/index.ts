@@ -35,8 +35,6 @@ import { getTeamTools } from './team/index.js'
 import { getCodeModeTools } from './codemode.js'
 
 import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../observability/index.js'
-import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
-import type { AuditConfig, AuditInterceptor } from '../../audit/index.js'
 
 import { enforceAccessBoundary } from '../../auth/validation.js'
 import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
@@ -44,29 +42,8 @@ import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
 
-// ============================================================================
-// Global Audit Logger Singleton
-// ============================================================================
-
-let globalAuditLogger: AuditLogger | null = null
-let globalAuditInterceptor: AuditInterceptor | null = null
-
-/**
- * Initialize the global audit logger from CLI/env config.
- * Called once during server startup. Must be called before any tool calls.
- */
-export function initializeAuditLogger(config: AuditConfig): AuditLogger {
-    globalAuditLogger = new AuditLogger(config)
-    globalAuditInterceptor = createAuditInterceptor(globalAuditLogger)
-    return globalAuditLogger
-}
-
-/**
- * Get the global audit logger instance (for shutdown/resource access).
- */
-export function getGlobalAuditLogger(): AuditLogger | null {
-    return globalAuditLogger
-}
+// Global audit singletons removed per CRIT-1
+// Callers must provide ServerRuntime.
 
 // ============================================================================
 // Icon Mapping
@@ -199,6 +176,20 @@ let cachedContextRefs: {
     teamVectorManager?: VectorSearchManager
 } | null = null
 
+function safeIsAvailable(gh: GitHubIntegration | undefined | null): boolean | undefined {
+    if (!gh) return undefined;
+    const ghObj = gh as unknown as Record<string, unknown>;
+    const isAvail = ghObj['isAvailable'];
+    return typeof isAvail === 'function' ? Boolean(isAvail.call(gh)) : undefined;
+}
+
+function safeIsInitialized(vm: VectorSearchManager | undefined | null): boolean | undefined {
+    if (!vm) return undefined;
+    const vmObj = vm as unknown as Record<string, unknown>;
+    const isInit = vmObj['isInitialized'];
+    return typeof isInit === 'function' ? Boolean(isInit.call(vm)) : undefined;
+}
+
 /**
  * Ensure the tool definition cache is populated and valid for the given context.
  * Shared by getTools() and callTool() to avoid redundant getAllToolDefinitions() calls.
@@ -224,11 +215,11 @@ function ensureToolCache(
         if (
             rt.toolMapCache &&
             refs?.db === db &&
-            refs?.github === github &&
-            refs?.vectorManager === vectorManager &&
+            (refs?.github === github || safeIsAvailable(refs?.github) === safeIsAvailable(github)) &&
+            (refs?.vectorManager === vectorManager || safeIsInitialized(refs?.vectorManager) === safeIsInitialized(vectorManager)) &&
             refs?.config === config &&
             refs?.teamDb === teamDb &&
-            refs?.teamVectorManager === teamVectorManager
+            (refs?.teamVectorManager === teamVectorManager || safeIsInitialized(refs?.teamVectorManager) === safeIsInitialized(teamVectorManager))
         ) {
             return;
         }
@@ -236,11 +227,11 @@ function ensureToolCache(
         if (
             toolMapCache &&
             cachedContextRefs?.db === db &&
-            cachedContextRefs.github === github &&
-            cachedContextRefs.vectorManager === vectorManager &&
+            (cachedContextRefs.github === github || safeIsAvailable(cachedContextRefs.github) === safeIsAvailable(github)) &&
+            (cachedContextRefs.vectorManager === vectorManager || safeIsInitialized(cachedContextRefs.vectorManager) === safeIsInitialized(vectorManager)) &&
             cachedContextRefs.config === config &&
             cachedContextRefs.teamDb === teamDb &&
-            cachedContextRefs.teamVectorManager === teamVectorManager
+            (cachedContextRefs.teamVectorManager === teamVectorManager || safeIsInitialized(cachedContextRefs.teamVectorManager) === safeIsInitialized(teamVectorManager))
         ) {
             return // Cache is valid
         }
@@ -262,7 +253,7 @@ function ensureToolCache(
 
         // Layer 2: Audit logging (only when initialized)
         const runtimeAudit = config?.runtime ? config.runtime.auditInterceptor : null
-        const interceptor = runtimeAudit ?? globalAuditInterceptor
+        const interceptor = runtimeAudit
         const finalHandler = interceptor !== null && interceptor !== undefined
             ? (args: Record<string, unknown>): Promise<unknown> =>
                   interceptor.around(t.name, args, () => metricsWrapped(args))
@@ -314,7 +305,7 @@ export async function callTool(
 
     // Authorization Hook: Enforce scope if auth context exists
     try {
-        const auditLogger = config?.runtime?.auditLogger ?? getGlobalAuditLogger()
+        const auditLogger = config?.runtime?.auditLogger;
         enforceAccessBoundary(name, 'tool', auditLogger)
     } catch (error) {
         return Promise.reject(error instanceof Error ? error : new Error(String(error)))
@@ -345,7 +336,7 @@ export async function callTool(
             )
             // Layer 2: Audit (if initialized)
             const runtimeAudit = config?.runtime !== undefined && config.runtime !== null ? config.runtime.auditInterceptor : null
-            const interceptor = runtimeAudit ?? globalAuditInterceptor
+            const interceptor = runtimeAudit
             
             const wrappedHandler = async (a: Record<string, unknown>): Promise<unknown> => {
                 if (interceptor !== null && interceptor !== undefined) {

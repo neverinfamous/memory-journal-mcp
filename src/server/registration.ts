@@ -12,7 +12,6 @@ import { z } from 'zod'
 
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { getPrompt } from '../handlers/prompts/index.js'
-import { getGlobalAuditLogger } from '../handlers/tools/index.js'
 import { auditOperation } from '../audit/interceptor.js'
 import type { ServerRuntime } from '../utils/maintenance-lock.js'
 
@@ -86,25 +85,25 @@ export function registerResources(
                 template,
                 meta,
                 async (uri: URL, _variables: Variables) => {
-                    const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
+                    if (!runtime) {
+                        throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
+                    }
+                    const auditLog = runtime.auditLogger
                     enforceAccessBoundary(uri.href, 'resource', auditLog)
                     return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                        if (!runtime && process.env['NODE_ENV'] !== 'test') {
-                            throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
-                        }
-                        return runtime ? runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType)) : handleResourceRead(uri, mimeType)
+                        return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
                     })
                 }
             )
         } else {
             server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
-                const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
+                if (!runtime) {
+                    throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
+                }
+                const auditLog = runtime.auditLogger
                 enforceAccessBoundary(uri.href, 'resource', auditLog)
                 return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                    if (!runtime && process.env['NODE_ENV'] !== 'test') {
-                        throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
-                    }
-                    return runtime ? runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType)) : handleResourceRead(uri, mimeType)
+                    return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
                 })
             })
         }
@@ -150,13 +149,12 @@ export function registerPrompts(
                 ...(promptDef.icons ? { icons: promptDef.icons } : {}),
             },
             (providedArgs) => {
-                const auditLog = runtime ? runtime.auditLogger : getGlobalAuditLogger()
+                if (!runtime) {
+                    throw new ConfigurationError('ServerRuntime is logically required for secure prompt execution.')
+                }
+                const auditLog = runtime.auditLogger
                 enforceAccessBoundary(promptDef.name, 'prompt', auditLog)
                 return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
-                    if (!runtime && process.env['NODE_ENV'] !== 'test') {
-                        throw new ConfigurationError('ServerRuntime is logically required for secure prompt execution.')
-                    }
-                    
                     const executePrompt = (): Promise<{ messages: { role: 'user' | 'assistant'; content: { type: 'text'; text: string } }[] }> => {
                         const args = providedArgs as Record<string, string>
                         const promptResult = getPrompt(promptDef.name, args, db, teamDb)
@@ -168,7 +166,7 @@ export function registerPrompts(
                         })
                     }
                     
-                    return runtime ? await runtime.maintenanceManager.withActiveJob(executePrompt) : await executePrompt()
+                    return await runtime.maintenanceManager.withActiveJob(executePrompt)
                 })
             }
         )

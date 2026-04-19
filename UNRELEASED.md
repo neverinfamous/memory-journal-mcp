@@ -147,3 +147,8 @@
 - Removed the `/health` endpoint rate limiting bypass to protect against probing Distributed Denial of Service (DDoS) vectors.
 - Restrained Playwright E2E testing filesystem boundaries by strictly enforcing `ALLOWED_IO_ROOTS` to local `.test-output/e2e` isolation.
 - Secured CI/CD gating by removing manual `workflow_dispatch` triggers from the NPM publishing pipeline and eliminating top-level write scopes from the Gatekeeper workflow.
+- Replaced unsafe type casting with proper safe structure checks when checking for `isAvailable` and `isInitialized` methods on test mocks to resolve `@typescript-eslint/no-unsafe-call` issues.
+- Addressed block-scoping `prefer-const` issue in `src/transports/http/server/stateful.ts`.
+- Addressed test suite regressions in `tests/handlers/codemode-tools.test.ts` by injecting a mock `dispatch` function to satisfy strict sandbox security bounds.
+- Added missing `sessionLocks` map to the Stateful HTTP Transport tests context mocks to resolve runtime crash regressions.
+- Relaxed the strict `ConfigurationError` throwing when `auditLogger` is unconfigured to gracefully support deployments without auditing.

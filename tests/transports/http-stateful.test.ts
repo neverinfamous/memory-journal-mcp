@@ -70,6 +70,7 @@ function createMockCtx(): StatefulContext {
         sseTransports: new Map(),
         sessionLastActivity: new Map(),
         sessionSubjects: new Map(),
+        sessionLocks: new Map(),
         touchSession: vi.fn(),
         serverConnected: false,
     }

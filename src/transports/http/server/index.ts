@@ -61,6 +61,7 @@ export class HttpTransport {
     public readonly sseTransports = new Map<string, SSEServerTransport>()
     public readonly sessionLastActivity = new Map<string, number>()
     public readonly sessionSubjects = new Map<string, string>()
+    public readonly sessionLocks = new Map<string, number>()
     /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     public serverConnected = false
     private httpServer: ReturnType<Express['listen']> | null = null
@@ -388,6 +389,7 @@ export class HttpTransport {
 
         this.sessionLastActivity.clear()
         this.sessionSubjects.clear()
+        this.sessionLocks.clear()
         if (this.sessionSweepTimer !== null) {
             clearInterval(this.sessionSweepTimer)
         }

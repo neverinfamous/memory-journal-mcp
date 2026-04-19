@@ -72,12 +72,12 @@ interface CacheEntry<T> {
 const securityManagerMap = new Map<string, CacheEntry<CodeModeSecurityManager>>()
 const sandboxPoolMap = new Map<string, CacheEntry<ISandboxPool>>()
 
-const TTL_MS = 60 * 60 * 1000 // 1 hour eviction
+const TTL_MS = 10 * 60 * 1000 // 10 minute eviction
 let lastSweepTime = Date.now()
 
 function sweepCaches(): void {
     const now = Date.now()
-    if (now - lastSweepTime < 5 * 60 * 1000) return // Sweep at most every 5 mins
+    if (now - lastSweepTime < 1 * 60 * 1000) return // Sweep at most every 1 min
     lastSweepTime = now
 
     for (const [id, entry] of securityManagerMap.entries()) {
@@ -335,7 +335,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // when available. This ensures scope checks, maintenance-mode guards,
                     // and audit interception apply to all inner tool calls.
                     const dispatcher = sessionContext.config?.dispatch
-                    if (!dispatcher && process.env['NODE_ENV'] !== 'test') {
+                    if (!dispatcher) {
                         throw new ConfigurationError('Code Mode requires a secure dispatcher to ensure scope checks and audit interception.')
                     }
                     const api = createJournalApi(tools, dispatcher)

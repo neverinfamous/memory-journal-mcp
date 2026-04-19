@@ -20,6 +20,7 @@ export interface StatefulContext {
     sseTransports: Map<string, SSEServerTransport>
     sessionLastActivity: Map<string, number>
     sessionSubjects: Map<string, string>
+    sessionLocks: Map<string, number>
     touchSession: (sid: string) => void
     /** Tracks whether server.connect() has been called (close-before-reconnect pattern) */
     serverConnected: boolean
@@ -38,6 +39,7 @@ export function setupStateful(
         for (const [sid, lastActivity] of ctx.sessionLastActivity) {
             const idleMs = now - lastActivity
             if (idleMs <= SESSION_TIMEOUT_MS) continue
+            if ((ctx.sessionLocks.get(sid) ?? 0) > 0) continue // Skip if locked (race condition prevention)
 
             // Expire idle Streamable HTTP sessions
             if (ctx.transports.has(sid)) {
@@ -240,11 +242,27 @@ export function setupStateful(
                 }
 
                 await requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
-                    await targetTransport.handleRequest(
-                        req as IncomingMessage,
-                        res as ServerResponse,
-                        req.body
-                    )
+                    const activeSessionId = sessionId
+                    try {
+                        if (activeSessionId) {
+                            const count = ctx.sessionLocks.get(activeSessionId) ?? 0
+                            ctx.sessionLocks.set(activeSessionId, count + 1)
+                        }
+                        await targetTransport.handleRequest(
+                            req as IncomingMessage,
+                            res as ServerResponse,
+                            req.body
+                        )
+                    } finally {
+                        if (activeSessionId) {
+                            const count = ctx.sessionLocks.get(activeSessionId) ?? 0
+                            if (count > 1) {
+                                ctx.sessionLocks.set(activeSessionId, count - 1)
+                            } else {
+                                ctx.sessionLocks.delete(activeSessionId)
+                            }
+                        }
+                    }
                 })
             } catch (error) {
                 logger.error('Error handling MCP request', {
@@ -307,7 +325,20 @@ export function setupStateful(
 
         const httpTransport = ctx.transports.get(sessionId)
         if (httpTransport !== undefined) {
-            void httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+            void (async () => {
+                try {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    ctx.sessionLocks.set(sessionId, count + 1)
+                    await httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+                } finally {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    if (count > 1) {
+                        ctx.sessionLocks.set(sessionId, count - 1)
+                    } else {
+                        ctx.sessionLocks.delete(sessionId)
+                    }
+                }
+            })()
         }
     })
 
@@ -335,7 +366,20 @@ export function setupStateful(
 
         const httpTransport = ctx.transports.get(sessionId)
         if (httpTransport !== undefined) {
-            void httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+            void (async () => {
+                try {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    ctx.sessionLocks.set(sessionId, count + 1)
+                    await httpTransport.handleRequest(req as IncomingMessage, res as ServerResponse)
+                } finally {
+                    const count = ctx.sessionLocks.get(sessionId) ?? 0
+                    if (count > 1) {
+                        ctx.sessionLocks.set(sessionId, count - 1)
+                    } else {
+                        ctx.sessionLocks.delete(sessionId)
+                    }
+                }
+            })()
         }
     })
     return sessionSweepTimer
