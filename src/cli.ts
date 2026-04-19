@@ -346,7 +346,12 @@ program
                                     project_number: z.number().nullable().optional(),
                                 }).strict()
                             )
-                            const parsed: unknown = JSON.parse(raw)
+                            const parsed: unknown = JSON.parse(raw, (key: string, value: unknown) => {
+                                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+                                    return undefined
+                                }
+                                return value
+                            })
                             const validated = registrySchema.parse(parsed) as Record<string, ProjectRegistryEntry>
                             for (const key of Object.keys(validated)) {
                                 const entry = validated[key]

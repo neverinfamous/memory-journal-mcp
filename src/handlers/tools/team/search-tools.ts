@@ -41,6 +41,20 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const { query, tags, limit, sort_by, project_number } = TeamSearchSchema.parse(params)
 
+                    if (project_number == null) {
+                        return {
+                            success: false,
+                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'Provide a valid project_number in the tool parameters.',
+                            recoverable: false,
+                            entries: [],
+                            count: 0,
+                            degraded: false
+                        }
+                    }
+
                     const searchLimit =
                         tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT) : limit
 
@@ -98,6 +112,20 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
 
                     const { start_date, end_date, entry_type, tags, limit, sort_by, project_number } =
                         TeamSearchByDateRangeSchema.parse(params)
+
+                    if (project_number == null) {
+                        return {
+                            success: false,
+                            error: 'Cross-tenant search is disabled. You MUST specify a project_number to isolate results.',
+                            code: 'PERMISSION_DENIED',
+                            category: 'auth',
+                            suggestion: 'Provide a valid project_number in the tool parameters.',
+                            recoverable: false,
+                            entries: [],
+                            count: 0,
+                            degraded: false
+                        }
+                    }
 
                     // Validate date range order (YYYY-MM-DD sorts lexicographically)
                     if (start_date > end_date) {

@@ -26,14 +26,15 @@ export function enforceAccessBoundary(
 
     // Strict fail-closed boundary for team domains
     if (isTeam) {
+        const envAuthor = process.env['TEAM_AUTHOR']?.trim()
         const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
-        if (!hasAuthClaim) {
+        if (!envAuthor && !hasAuthClaim) {
             logger.warning(`Access to team ${targetType} denied: unauthenticated`, {
                 module: 'AUTH',
                 operation: 'fail-closed',
                 entityId: targetName,
             })
-            throw new PermissionError(`Access to team ${targetType} '${targetName}' denied: missing active OAuth or Bearer session.`)
+            throw new PermissionError(`Access to team ${targetType} '${targetName}' denied: missing TEAM_AUTHOR or active OAuth session.`)
         }
     }
 

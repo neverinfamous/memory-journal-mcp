@@ -222,13 +222,20 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
  * Used to scrub error output before logging.
  */
 const TOKEN_PATTERNS = [
-    // GitHub personal access tokens (classic and fine-grained) and other token types
+    // GitHub personal access tokens (classic and fine-grained)
     /gh[pousr]_[A-Za-z0-9_]{36,}/g,
     /github_pat_[A-Za-z0-9_]{82,}/g,
-    // Authorization headers in error dumps
-    /Authorization:\s*(?:token|Bearer)\s+\S+/gi,
-    // Generic Bearer tokens
-    /Bearer\s+[A-Za-z0-9._\-~+/]+=*/gi,
+    // JWT Tokens
+    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+    // Slack tokens
+    /xox[baprs]-[A-Za-z0-9-]+/g,
+    // AWS API Keys
+    /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
+    // Authorization headers in error dumps (catch-all for token, Bearer, Basic)
+    /Authorization:\s*(?:token|Bearer|Basic)?\s*["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
+    // Generic token patterns standalone
+    /Bearer\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
+    /Basic\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
 ] as const
 
 /**

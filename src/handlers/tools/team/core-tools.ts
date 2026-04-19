@@ -83,6 +83,16 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             }
                         }
                         const systemAuthor = resolveAuthor()
+                        if (systemAuthor === 'unknown') {
+                            return {
+                                success: false,
+                                error: 'Identity cannot be resolved securely. In non-OAuth environments, you must set the TEAM_AUTHOR environment variable to claim an identity.',
+                                code: 'PERMISSION_DENIED',
+                                category: 'auth',
+                                suggestion: 'Set the TEAM_AUTHOR environment variable or enable OAuth.',
+                                recoverable: false,
+                            }
+                        }
                         author = systemAuthor
                     }
 

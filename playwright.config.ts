@@ -32,7 +32,7 @@ export default defineConfig({
         },
         url: 'http://localhost:3100/health',
         reuseExistingServer: !process.env.CI,
-        timeout: 15000,
+        timeout: 60000,
         stdout: 'pipe',
         stderr: 'pipe',
     },

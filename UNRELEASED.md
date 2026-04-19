@@ -154,3 +154,6 @@
 - Relaxed the strict `ConfigurationError` throwing when `auditLogger` is unconfigured to gracefully support deployments without auditing.
 - Deferred monolithic FTS5 rebuilding queries in `NativeConnectionManager` to background processes to unblock server startup handshakes.
 - Bounded uncontrolled GitHub API Promise fan-out within `BriefingGitHub` fetches by introducing explicit sequential iteration and request chunking.
+- Restored `TEAM_AUTHOR` identity fallback explicitly for `enforceAccessBoundary` in `src/auth/validation.ts` to allow safe non-OAuth operation of team tools during E2E testing.
+- Modified `project_number` to be formally optional inside `TeamSearchSchema` and `TeamSearchByDateRangeSchema` to ensure strict payload schemas allow graceful fallback to structural `PERMISSION_DENIED` authorization failures.
+- Resolved ESLint violations `no-unsafe-return` in `src/cli.ts` JSON reviver logic and `no-useless-escape` in `security-utils.ts` token regex captures.

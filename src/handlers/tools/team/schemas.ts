@@ -89,7 +89,7 @@ export const TeamGetRecentSchemaMcp = z.object({
 export const TeamSearchSchema = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number(),
+    project_number: z.number().optional(),
     limit: z.number().max(500).optional().default(10),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -102,7 +102,7 @@ export const TeamSearchSchema = z.object({
 export const TeamSearchSchemaMcp = z.object({
     query: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(10),
     sort_by: z
         .string()
@@ -115,14 +115,14 @@ export const TeamSearchSchemaMcp = z.object({
 export const TeamGetEntryByIdSchema = z.object({
     entry_id: z.number(),
     include_relationships: z.boolean().optional().default(true),
-    project_number: z.number(),
+    project_number: z.number().optional(),
 })
 
 /** team_get_entry_by_id — relaxed */
 export const TeamGetEntryByIdSchemaMcp = z.object({
     entry_id: relaxedNumber().optional(),
     include_relationships: z.boolean().optional().default(true),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
 })
 
 // ============================================================================
@@ -135,7 +135,7 @@ export const TeamSearchByDateRangeSchema = z.object({
     end_date: z.string().regex(DATE_FORMAT_REGEX, DATE_FORMAT_MESSAGE),
     entry_type: z.enum(ENTRY_TYPES).optional(),
     tags: z.array(z.string()).optional(),
-    project_number: z.number(),
+    project_number: z.number().optional(),
     limit: z.number().max(500).optional().default(50),
     sort_by: z
         .enum(['timestamp', 'importance'])
@@ -150,7 +150,7 @@ export const TeamSearchByDateRangeSchemaMcp = z.object({
     end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
     entry_type: z.string().optional(),
     tags: z.array(z.string()).optional(),
-    project_number: relaxedNumber(),
+    project_number: relaxedNumber().optional(),
     limit: relaxedNumber().optional().default(50),
     sort_by: z
         .string()

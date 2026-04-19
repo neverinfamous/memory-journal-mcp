@@ -97,35 +97,19 @@ function sweepCaches(): void {
 const MAX_SANDBOX_POOLS = 50
 
 function evictExcessCaches(): void {
-    if (sandboxPoolMap.size < MAX_SANDBOX_POOLS && securityManagerMap.size < MAX_SANDBOX_POOLS) return
-
-    if (sandboxPoolMap.size >= MAX_SANDBOX_POOLS) {
-        let oldestId: string | null = null
-        let oldestTime = Infinity
-        for (const [id, entry] of sandboxPoolMap.entries()) {
-            if (entry.lastAccessed < oldestTime) {
-                oldestTime = entry.lastAccessed
-                oldestId = id
-            }
-        }
-        if (oldestId) {
+    while (sandboxPoolMap.size >= MAX_SANDBOX_POOLS) {
+        const oldestId = sandboxPoolMap.keys().next().value
+        if (oldestId !== undefined) {
             sandboxPoolMap.get(oldestId)?.instance.dispose()
             sandboxPoolMap.delete(oldestId)
         }
     }
 
-    if (securityManagerMap.size >= MAX_SANDBOX_POOLS) {
-        let oldestSecId: string | null = null
-        let oldestSecTime = Infinity
-        for (const [id, entry] of securityManagerMap.entries()) {
-            if (entry.lastAccessed < oldestSecTime) {
-                oldestSecTime = entry.lastAccessed
-                oldestSecId = id
-            }
-        }
-        if (oldestSecId) {
-            securityManagerMap.get(oldestSecId)?.instance.dispose()
-            securityManagerMap.delete(oldestSecId)
+    while (securityManagerMap.size >= MAX_SANDBOX_POOLS) {
+        const oldestId = securityManagerMap.keys().next().value
+        if (oldestId !== undefined) {
+            securityManagerMap.get(oldestId)?.instance.dispose()
+            securityManagerMap.delete(oldestId)
         }
     }
 }
@@ -153,6 +137,8 @@ function getSecurityManager(clientId: string): CodeModeSecurityManager {
         securityManagerMap.set(clientId, entry)
     } else {
         entry.lastAccessed = Date.now()
+        securityManagerMap.delete(clientId)
+        securityManagerMap.set(clientId, entry)
     }
     return entry.instance
 }
@@ -169,6 +155,8 @@ function getSandboxPool(clientId: string): ISandboxPool {
         sandboxPoolMap.set(clientId, entry)
     } else {
         entry.lastAccessed = Date.now()
+        sandboxPoolMap.delete(clientId)
+        sandboxPoolMap.set(clientId, entry)
     }
     return entry.instance
 }
