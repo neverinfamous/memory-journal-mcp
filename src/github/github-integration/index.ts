@@ -31,24 +31,26 @@ export type { RepoInfo, IssueDetails, PullRequestDetails }
  * Pools instances by working directory on the ServerRuntime to prevent state bleed
  * and cross-project coupling, as identified in the Copilot Security Audit.
  */
+import { createHash } from 'node:crypto'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 
-export function getGitHubIntegration(workingDir = '.', runtime?: ServerRuntime): GitHubIntegration {
+export function getGitHubIntegration(workingDir = '.', runtime?: ServerRuntime, token?: string): GitHubIntegration {
     const resolvedDir = workingDir === '.' ? process.cwd() : workingDir;
     
     // Support instance-scoped runtime pools for multi-tenant isolation
     if (runtime) {
         runtime.githubClientPool ??= new Map<string, GitHubIntegration>();
-        let instance = runtime.githubClientPool.get(resolvedDir);
+        const cacheKey = token ? `${resolvedDir}:${createHash('sha256').update(token).digest('hex').substring(0, 12)}` : resolvedDir;
+        let instance = runtime.githubClientPool.get(cacheKey);
         if (!instance) {
-            instance = new GitHubIntegration(resolvedDir);
-            runtime.githubClientPool.set(resolvedDir, instance);
+            instance = new GitHubIntegration(resolvedDir, token);
+            runtime.githubClientPool.set(cacheKey, instance);
         }
         return instance;
     }
 
     // Fallback to non-pooled transient instances if no runtime is provided
-    return new GitHubIntegration(resolvedDir);
+    return new GitHubIntegration(resolvedDir, token);
 }
 
 /**
@@ -64,8 +66,8 @@ export class GitHubIntegration {
     private insightsManager: InsightsManager
     private repositoryManager: RepositoryManager
 
-    constructor(workingDir = '.') {
-        this.client = new GitHubClient(workingDir)
+    constructor(workingDir = '.', token?: string) {
+        this.client = new GitHubClient(workingDir, token)
         this.issuesManager = new IssuesManager(this.client)
         this.pullRequestsManager = new PullRequestsManager(this.client)
         this.projectsManager = new ProjectsManager(this.client)

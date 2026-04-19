@@ -21,12 +21,21 @@ export const FlagContextSchema = z.object({
 export type FlagContext = z.infer<typeof FlagContextSchema>
 
 /**
+ * Versioned Envelope Schema for explicit typing
+ */
+export const VersionedEnvelopeSchema = z.object({
+    version: z.string(),
+    data: z.unknown(),
+})
+
+export type VersionedEnvelope = z.infer<typeof VersionedEnvelopeSchema>
+
+/**
  * Union schema for all valid AutoContext payloads
  */
 export const AutoContextSchema = z.union([
     FlagContextSchema,
-    // Fallback allowing standard JSON record
-    z.record(z.string(), z.unknown())
+    VersionedEnvelopeSchema
 ])
 
 /**

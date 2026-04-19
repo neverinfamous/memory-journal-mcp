@@ -214,6 +214,8 @@ export interface ToolContext {
     config?: ToolHandlerConfig
     /** Progress reporting context */
     progress?: ProgressContext
+    /** Authentication context injected by transport */
+    auth?: { sub?: string; subject?: string; scopes?: string[] }
 }
 
 /**

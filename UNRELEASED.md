@@ -116,7 +116,7 @@
 - Restored HTTP Transport OAuth scope enforcement middleware, properly checking tool-level permissions against `auth.scopes` and throwing `403 Forbidden` for missing grants.
 - Enforced LLM Content Provenance rules by applying `<untrusted_remote_content>` wrappers during briefing context generation bridging external entities.
 - Hardened `markUntrustedContent` to aggressively strip any existing tags prior to wrapping, preventing nested breakout attacks.
-- Documented TLS certificate validation as the primary mitigation for Time-of-Check to Time-of-Use (TOCTOU) SSRF vulnerabilities during OAuth discovery.
+- Mitigated SSRF DNS rebinding TOCTOU in OAuth Authorization Server metadata discovery by replacing fetch with a pinned node:https request.
 - Parameterized the `strftime` format string in `statistics.ts` timeline queries to completely eliminate SQL interpolation risks.
 - Narrowed `isPublicPath` scope from broad `/.well-known/*` wildcards to strict, explicit OAuth-specific endpoints.
 - Closed a Time-of-Check to Time-of-Use (TOCTOU) race condition in `audit-logger.ts` recent log queries by querying file size from the opened file handle `fh.stat()`.
@@ -135,3 +135,6 @@
 - Re-added the junction table `JOIN` to `entry_tags` in SQLite database queries to correctly resolve tag constraints during team search tools.
 - Unused import warnings and dead-code assignments in `registration.ts` and `frontmatter.ts` to ensure clean linting compliance.
 - Vitest regressions in `vector-search-manager.test.ts` and `vector-manager-coverage.test.ts` caused by atomic transaction rollbacks during batched `upsertVectors` index rebuilds.
+- Corrected locking error diagnostics in SQLite backup restoration by preserving the underlying renameError cause.
+- Fixed TypeScript unused variable warnings and strict-boolean-expression errors in authorization discovery and backup adapters.
+- Resolved Vitest ESM unconfigurable module namespace errors when spying on node:https during authorization discovery tests.

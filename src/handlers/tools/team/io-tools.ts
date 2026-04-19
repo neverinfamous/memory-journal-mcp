@@ -217,7 +217,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
             title: 'Team Import from Markdown',
             description:
                 'Import frontmattered Markdown files (.md) into the team journal. ' +
-                'Author is set from TEAM_AUTHOR env or git config. ' +
+                'Author is set from authenticated user identity, falling back to TEAM_AUTHOR env or git config. ' +
                 'Use dry_run: true to preview without writing.',
             group: 'team',
             inputSchema: TeamImportMarkdownSchemaMcp,
@@ -236,7 +236,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     const allowedRoots = context.config?.allowedIoRoots ?? []
                     await sendProgress(progress, 0, 2, 'Reading markdown files...')
 
-                    const author = resolveAuthor()
+                    const author = context.auth?.subject ?? context.auth?.sub ?? resolveAuthor()
                     const result = await importMarkdownEntries(
                         input.source_dir,
                         teamDb,

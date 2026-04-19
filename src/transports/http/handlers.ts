@@ -4,7 +4,7 @@
  * Standalone handler functions for utility endpoints and auth middleware.
  */
 
-import { timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual, createHash } from 'node:crypto'
 import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
@@ -79,9 +79,13 @@ export function createAuthMiddleware(
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.
+        // Derived from IP and token to prevent multi-tenancy collapse.
+        const ipHash = createHash('sha256').update((req.ip ?? 'unknown') + authToken).digest('hex').substring(0, 12)
+        const identity = `bearer-${ipHash}`
+        
         ;(req as unknown as { auth?: { sub?: string; subject?: string; scopes?: string[] } }).auth = {
-            sub: 'bearer-client',
-            subject: 'bearer-client',
+            sub: identity,
+            subject: identity,
             scopes: defaultScopes
         }
         next()

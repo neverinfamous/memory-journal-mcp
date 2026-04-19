@@ -21,8 +21,8 @@ export class GitHubClient {
 
     public readonly apiCache = new Map<string, CacheEntry<unknown>>()
 
-    constructor(workingDir = '.') {
-        const token = process.env['GITHUB_TOKEN']
+    constructor(workingDir = '.', token?: string) {
+        const resolvedToken = token ?? process.env['GITHUB_TOKEN']
 
         const effectiveDir = workingDir
 
@@ -37,10 +37,10 @@ export class GitHubClient {
 
         this.git = simpleGit(effectiveDir)
 
-        if (token) {
-            this.octokit = new Octokit({ auth: token })
+        if (resolvedToken) {
+            this.octokit = new Octokit({ auth: resolvedToken })
             this.graphqlWithAuth = graphql.defaults({
-                headers: { authorization: `token ${token}` },
+                headers: { authorization: `token ${resolvedToken}` },
             })
             logger.info('GitHub integration initialized with token', { module: 'GitHub' })
         } else {

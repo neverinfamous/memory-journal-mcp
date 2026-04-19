@@ -180,17 +180,17 @@ export class BackupManager {
         }
 
 
-        const lockPath = `${this.ctx.getDbPath()}.lock`
-        let lockFd: number
+        const lockDir = `${this.ctx.getDbPath()}.lock.d`
+        const lockFile = path.join(lockDir, 'lock.json')
         const nonce = randomUUID()
         try {
-            lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
-            fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
+            fs.mkdirSync(lockDir)
+            fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
         } catch (lockError: unknown) {
             if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError as { code: unknown }).code === 'EEXIST') {
                 let isStale = false
                 try {
-                    const lockContent = fs.readFileSync(lockPath, 'utf-8').trim()
+                    const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
                     if (lockContent) {
                         let holdingPid: number | undefined
                         let lockTimestamp: number | undefined
@@ -207,13 +207,13 @@ export class BackupManager {
                             // Check timestamp first: if older than 30 seconds, consider it stale due to crash
                             if (lockTimestamp !== undefined && (Date.now() - lockTimestamp > 30 * 1000)) {
                                 isStale = true
-                                logger.warning('Found stale database restore lock (expired timestamp)', { path: lockPath, holdingPid, ageMs: Date.now() - lockTimestamp, module: 'SqliteAdapter' })
+                                logger.warning('Found stale database restore lock (expired timestamp)', { path: lockDir, holdingPid, ageMs: Date.now() - lockTimestamp, module: 'SqliteAdapter' })
                             } else if (runtime !== undefined && runtime !== null && typeof runtime === 'object' && 'maintenanceManager' in runtime) {
                                 // Delegate to ServerRuntime MaintenanceManager logic
                                 const mm = (runtime as { maintenanceManager?: { isMaintenanceModeActive(): boolean } }).maintenanceManager
                                 if (mm !== undefined && !mm.isMaintenanceModeActive()) {
                                     isStale = true
-                                    logger.warning('Found stale database restore lock (maintenance mode inactive)', { path: lockPath, module: 'SqliteAdapter' })
+                                    logger.warning('Found stale database restore lock (maintenance mode inactive)', { path: lockDir, module: 'SqliteAdapter' })
                                 }
                             } else {
                                 try {
@@ -232,17 +232,18 @@ export class BackupManager {
                 }
 
                 if (isStale) {
-                    logger.warning('Found stale database restore lock (dead PID), forcibly removing', { path: lockPath, module: 'SqliteAdapter' })
+                    logger.warning('Found stale database restore lock (dead PID), atomically renaming', { path: lockDir, module: 'SqliteAdapter' })
                     try {
-                        fs.unlinkSync(lockPath)
-                    } catch {
-                        // Ignore unlink errors
+                        fs.renameSync(lockDir, `${lockDir}.${randomUUID()}.stale`)
+                    } catch (renameErr) {
+                        // If rename fails, another process likely beat us to it.
+                        throw new Error(`Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`, { cause: renameErr })
                     }
                     // Retry acquiring the lock
-                    lockFd = fs.openSync(lockPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_RDWR)
-                    fs.writeSync(lockFd, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
+                    fs.mkdirSync(lockDir)
+                    fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
                 } else {
-                    throw new Error(`Another process is currently holding the database lock at ${lockPath}. Backup restore cannot safely proceed.`, { cause: lockError })
+                    throw new Error(`Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`, { cause: lockError })
                 }
             } else {
                 throw lockError
@@ -255,17 +256,18 @@ export class BackupManager {
             )
             const previousEntryCount = (currentCountResult[0]?.values[0]?.[0] as number) ?? 0
 
-            const preRestoreResult = await this.exportToFile(`pre_restore_${new Date().toISOString().replace(/[:.]/g, '-')}`)
-
             // Close old DB via manager
             this.ctx.closeDbBeforeRestore()
 
+            const oldDbBackupPath = `${this.ctx.getDbPath()}.old_tmp_${randomUUID()}`
+            const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
+            await fs.promises.copyFile(backupPath, tempDbPath)
+
             try {
-                // Stage the backup file directly adjacent to ensure cross-device consistency avoids failure
-                const tempDbPath = `${this.ctx.getDbPath()}.restore_tmp_${randomUUID()}`
-                await fs.promises.copyFile(backupPath, tempDbPath)
+                // Atomic backup of current DB by renaming it out of the way
+                await fs.promises.rename(this.ctx.getDbPath(), oldDbBackupPath)
                 
-                // Perform atomic swap
+                // Perform atomic swap of new DB into place
                 await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
 
                 // Re-initialize using the connection's standard initialize method
@@ -277,18 +279,21 @@ export class BackupManager {
                 if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
                     throw new Error(`Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`)
                 }
+                
+                // Success: clean up old DB backup
+                try {
+                    await fs.promises.unlink(oldDbBackupPath)
+                } catch { /* ignore cleanup errors */ }
             } catch (error) {
-                logger.error('Restore failed, rolling back to pre-restore backup', {
+                logger.error('Restore failed, rolling back to pre-restore backup using atomic rename', {
                     module: 'SqliteAdapter',
                     operation: 'restoreFromFile',
                     error: error instanceof Error ? error.message : String(error)
                 })
-                // Close old DB via manager before rollback
+                // Close DB to ensure handles are released before rollback
                 this.ctx.closeDbBeforeRestore()
-                // Rollback using the same atomic strategy for recovery
-                const recoveryDbPath = `${this.ctx.getDbPath()}.recover_tmp_${randomUUID()}`
-                await fs.promises.copyFile(preRestoreResult.path, recoveryDbPath)
-                await fs.promises.rename(recoveryDbPath, this.ctx.getDbPath())
+                // Rollback using fast atomic rename
+                await fs.promises.rename(oldDbBackupPath, this.ctx.getDbPath())
                 await this.ctx.initialize()
                 throw error
             }
@@ -307,11 +312,11 @@ export class BackupManager {
             return { restoredFrom: filename, previousEntryCount, newEntryCount }
         } finally {
             try {
-                fs.closeSync(lockFd)
-                fs.unlinkSync(lockPath)
+                fs.unlinkSync(lockFile)
+                fs.rmdirSync(lockDir)
             } catch (err: unknown) {
-                logger.warning('Failed to release OS lock file during restore', { 
-                    path: lockPath, 
+                logger.warning('Failed to release OS lock directory during restore', { 
+                    path: lockDir, 
                     error: err instanceof Error ? err.message : String(err) 
                 })
             }

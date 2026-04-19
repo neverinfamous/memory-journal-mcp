@@ -88,6 +88,10 @@ export class AuditLogger {
      * Append an audit entry to the buffer.
      * Non-blocking — the entry is serialised and queued; the
      * actual file write happens on the next flush cycle.
+     * 
+     * NOTE: This is a lossy operational telemetry mechanism, not a guaranteed immutable ledger.
+     * Under extreme backpressure or persistent I/O failure, oldest entries will be dropped
+     * to preserve memory and system stability.
      */
     log(entry: AuditEntry): void {
         if (this.closed || !this.config.enabled) return
@@ -97,6 +101,9 @@ export class AuditLogger {
         // Hard cap to prevent unbounded heap growth if flush loop hangs
         if (this.buffer.length > 5000) {
             this.buffer.shift()
+            if (this._droppedCount === 0) {
+                logger.warning('Audit logger buffer overflow. Dropping oldest entries. Note: Audit log is a lossy telemetry mechanism.', { module: 'Audit' })
+            }
             this._droppedCount++
         }
 

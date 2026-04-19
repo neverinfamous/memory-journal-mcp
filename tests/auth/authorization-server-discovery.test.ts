@@ -5,10 +5,46 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import * as https from 'node:https'
+import { EventEmitter } from 'node:events'
 import {
     AuthorizationServerDiscovery,
     createAuthServerDiscovery,
 } from '../../src/auth/authorization-server-discovery.js'
+
+const { mockHttpsRequestFn } = vi.hoisted(() => ({
+    mockHttpsRequestFn: vi.fn()
+}))
+
+vi.mock('node:https', () => ({
+    default: { request: mockHttpsRequestFn },
+    request: mockHttpsRequestFn
+}))
+
+function mockHttpsRequest(metadata: any, statusCode = 200) {
+    const mockReq = new EventEmitter() as any
+    mockReq.end = vi.fn()
+    mockReq.destroy = vi.fn()
+
+    const mockRes = new EventEmitter() as any
+    mockRes.statusCode = statusCode
+    mockRes.statusMessage = statusCode === 200 ? 'OK' : 'Error'
+
+    mockHttpsRequestFn.mockImplementationOnce((url: any, options: any, callback: any) => {
+        if (typeof callback === 'function') {
+            process.nextTick(() => {
+                callback(mockRes)
+                if (metadata) {
+                    mockRes.emit('data', Buffer.from(JSON.stringify(metadata)))
+                }
+                mockRes.emit('end')
+            })
+        }
+        return mockReq as any
+    })
+    
+    return mockHttpsRequestFn
+}
 
 vi.mock('node:dns', () => ({
     promises: {
@@ -67,10 +103,7 @@ describe('AuthorizationServerDiscovery', () => {
                 scopes_supported: ['read', 'write', 'admin'],
             }
 
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             const metadata = await discovery.discover()
@@ -85,25 +118,18 @@ describe('AuthorizationServerDiscovery', () => {
                 token_endpoint: `${authServerUrl}/oauth/token`,
             }
 
-            const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            const requestSpy = mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()
             await discovery.discover()
 
             // Should only be called once due to caching
-            expect(fetchSpy).toHaveBeenCalledTimes(1)
+            expect(requestSpy).toHaveBeenCalledTimes(1)
         })
 
         it('should throw on HTTP error', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: false,
-                status: 404,
-                statusText: 'Not Found',
-            } as Response)
+            mockHttpsRequest(null, 404)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
 
@@ -111,12 +137,9 @@ describe('AuthorizationServerDiscovery', () => {
         })
 
         it('should throw on missing issuer field', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({
-                    token_endpoint: `${authServerUrl}/oauth/token`,
-                }),
-            } as Response)
+            mockHttpsRequest({
+                token_endpoint: `${authServerUrl}/oauth/token`,
+            })
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
 
@@ -124,12 +147,9 @@ describe('AuthorizationServerDiscovery', () => {
         })
 
         it('should throw on missing token_endpoint', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({
-                    issuer: authServerUrl,
-                }),
-            } as Response)
+            mockHttpsRequest({
+                issuer: authServerUrl,
+            })
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
 
@@ -152,10 +172,7 @@ describe('AuthorizationServerDiscovery', () => {
                 jwks_uri: `${authServerUrl}/.well-known/jwks.json`,
             }
 
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()
@@ -169,10 +186,7 @@ describe('AuthorizationServerDiscovery', () => {
                 token_endpoint: `${authServerUrl}/oauth/token`,
             }
 
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()
@@ -193,13 +207,10 @@ describe('AuthorizationServerDiscovery', () => {
         })
 
         it('should report valid cache after discover', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({
-                    issuer: authServerUrl,
-                    token_endpoint: `${authServerUrl}/oauth/token`,
-                }),
-            } as Response)
+            mockHttpsRequest({
+                issuer: authServerUrl,
+                token_endpoint: `${authServerUrl}/oauth/token`,
+            })
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()
@@ -218,10 +229,7 @@ describe('AuthorizationServerDiscovery', () => {
         }
 
         it('should return token endpoint', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()
@@ -230,10 +238,7 @@ describe('AuthorizationServerDiscovery', () => {
         })
 
         it('should return issuer', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()
@@ -242,10 +247,7 @@ describe('AuthorizationServerDiscovery', () => {
         })
 
         it('should return registration endpoint', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()
@@ -255,10 +257,7 @@ describe('AuthorizationServerDiscovery', () => {
         })
 
         it('should return supported scopes', async () => {
-            vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-                ok: true,
-                json: async () => mockMetadata,
-            } as Response)
+            mockHttpsRequest(mockMetadata)
 
             const discovery = new AuthorizationServerDiscovery({ authServerUrl })
             await discovery.discover()

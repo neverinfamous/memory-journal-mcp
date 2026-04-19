@@ -1,4 +1,5 @@
 import type { JournalEntry, EntryType } from '../../../types/index.js'
+import { ValidationError } from '../../../types/errors.js'
 import {
     ENTRY_COLUMNS,
     ALIASED_ENTRY_COLUMNS,
@@ -82,6 +83,10 @@ export function searchEntries(
     }
 ): JournalEntry[] {
     const { db, tagsMgr } = context
+
+    if (queryStr.length > 500) {
+        throw new ValidationError('Search query exceeds maximum length of 500 characters. Please refine your search.')
+    }
 
     // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
     if (queryStr.length > 0) {
@@ -395,9 +400,7 @@ export function searchByDateRange(
 function sanitizeFtsQuery(query: string): string {
     if (!query) return '';
 
-    // Truncate to prevent ReDoS or FTS AST parser limit crashes
-    const truncatedQuery = query.slice(0, 500);
-    const tokens = truncatedQuery.split(/\s+/);
+    const tokens = query.split(/\s+/);
     const safeTokens: string[] = [];
 
     for (const token of tokens) {
