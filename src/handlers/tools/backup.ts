@@ -197,7 +197,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
                     }
                     let result
                     try {
-                        result = await db.restoreFromFile(input.filename)
+                        result = await db.restoreFromFile(input.filename, config?.runtime)
                     } finally {
                         if (config?.runtime?.maintenanceManager) {
                             config.runtime.maintenanceManager.releaseMaintenanceLock()

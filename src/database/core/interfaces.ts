@@ -188,7 +188,7 @@ export interface IDatabaseAdapter {
     ): Promise<{ filename: string; path: string; sizeBytes: number }>
     listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[]
     deleteOldBackups(keepCount: number): { deleted: string[]; kept: number }
-    restoreFromFile(filename: string): Promise<{
+    restoreFromFile(filename: string, runtime?: unknown): Promise<{
         restoredFrom: string
         previousEntryCount: number
         newEntryCount: number

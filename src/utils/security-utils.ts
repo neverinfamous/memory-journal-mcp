@@ -264,7 +264,9 @@ export function markUntrustedContent(content: string | undefined | null): string
     if (!trimmed) return ''
     
     // Strip any existing tags to prevent breakout/nesting
-    trimmed = trimmed.replace(/<\/?untrusted_remote_content>/g, '')
+    trimmed = trimmed.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
+    // Escape HTML entities to prevent prompt injection
+    trimmed = trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;')
     
     return `<untrusted_remote_content>\n${trimmed}\n</untrusted_remote_content>`
 }
@@ -277,7 +279,9 @@ export function markUntrustedContentInline(content: string | undefined | null): 
     let cleaned = content
     
     // Strip existing wrappers to normalize for inline layout
-    cleaned = cleaned.replace(/<\/?untrusted_remote_content>/g, '')
+    cleaned = cleaned.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
+    // Escape HTML entities to prevent prompt injection
+    cleaned = cleaned.replace(/</g, '&lt;').replace(/>/g, '&gt;')
     
     return `<untrusted_remote_content>${cleaned}</untrusted_remote_content>`
 }

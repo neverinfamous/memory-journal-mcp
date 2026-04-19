@@ -23,7 +23,7 @@ export class MaintenanceManager {
             return await fn();
         } finally {
             this.activeJobs--;
-            if (this.activeJobs === 0 && this.maintenanceWaitPromise !== null) {
+            if (this.maintenanceWaitPromise !== null && this.activeJobs <= (this.inMaintenanceMode ? 1 : 0)) {
                 this.maintenanceWaitPromise.resolve();
                 this.maintenanceWaitPromise = null;
             }

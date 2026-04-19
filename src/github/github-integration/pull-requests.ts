@@ -39,7 +39,7 @@ export class PullRequestsManager {
                 owner,
                 repo,
                 state,
-                per_page: limit,
+                per_page: Math.min(limit, 100),
                 sort: 'updated',
                 direction: 'desc',
                 request: { signal: abortSignal },

@@ -440,18 +440,20 @@ export class VectorSearchManager {
                 }
             )
         } else {
-            // Prune any stale embeddings only if the entire operation succeeded
-            try {
-                this.dbAdapter.cleanupStaleVectors()
-                logger.info('Cleared stale embeddings post-rebuild', { module: 'VectorSearch' })
-            } catch (cleanupError) {
-                logger.warning('Failed to clear stale embeddings', { module: 'VectorSearch', error: String(cleanupError) })
-            }
-
             logger.info(`Rebuilt vector index with ${String(indexed)} entries`, {
                 module: 'VectorSearch',
             })
         }
+
+        // Fail-Closed: Prune any stale embeddings even if the operation partially failed
+        // This ensures deleted entries don't leak ghost vectors in semantic search
+        try {
+            this.dbAdapter.cleanupStaleVectors()
+            logger.info('Cleared stale embeddings post-rebuild', { module: 'VectorSearch' })
+        } catch (cleanupError) {
+            logger.warning('Failed to clear stale embeddings', { module: 'VectorSearch', error: String(cleanupError) })
+        }
+
         return { indexed, failed, firstError, partial }
     }
 

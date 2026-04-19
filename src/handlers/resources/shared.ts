@@ -47,11 +47,24 @@ export async function resolveGitHubRepo(
     const lastModified = new Date().toISOString()
 
     let activeGithub = github
-    const registry = config?.projectRegistry
-    if (targetRepo && registry && Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
-        const entry = registry[targetRepo]
-        if (entry) {
-            activeGithub = getGitHubIntegration(entry.path, runtime)
+    if (targetRepo) {
+        if (!/^[a-zA-Z0-9_.-]+$/.test(targetRepo)) {
+            return {
+                data: { error: 'Invalid repository name format' },
+                annotations: { lastModified }
+            }
+        }
+        const registry = config?.projectRegistry
+        if (registry && Object.prototype.hasOwnProperty.call(registry, targetRepo)) {
+            const entry = registry[targetRepo]
+            if (entry) {
+                activeGithub = getGitHubIntegration(entry.path, runtime)
+            }
+        } else {
+            return {
+                data: { error: `Repository not found in registry: ${targetRepo}` },
+                annotations: { lastModified }
+            }
         }
     }
 

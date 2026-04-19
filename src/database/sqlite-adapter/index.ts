@@ -233,12 +233,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.backupMgr.deleteOldBackups(keepCount)
     }
 
-    async restoreFromFile(filename: string): Promise<{
+    async restoreFromFile(filename: string, runtime?: unknown): Promise<{
         restoredFrom: string
         previousEntryCount: number
         newEntryCount: number
     }> {
-        return this.backupMgr.restoreFromFile(filename)
+        return this.backupMgr.restoreFromFile(filename, runtime)
     }
 
     getHealthStatus(): ReturnType<IDatabaseAdapter['getHealthStatus']> {

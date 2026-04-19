@@ -99,3 +99,11 @@
 - Parameterized the `strftime` format string in `statistics.ts` timeline queries to completely eliminate SQL interpolation risks.
 - Narrowed `isPublicPath` scope from broad `/.well-known/*` wildcards to strict, explicit OAuth-specific endpoints.
 - Closed a Time-of-Check to Time-of-Use (TOCTOU) race condition in `audit-logger.ts` recent log queries by querying file size from the opened file handle `fh.stat()`.
+- Refactored full-text search tokenization to an explicit allowlist, completely neutralizing RegEx Denial of Service (ReDoS) vectors on `FTS5` structural keywords.
+- Enforced a fail-closed cleanup strategy for stale vector index data, guaranteeing index integrity even during partial rebuild failures.
+- Mitigated prompt injection attacks from remote content by escaping HTML entity angle brackets in `markUntrustedContent`.
+- Eliminated an unbounded GraphQL query fanout in GitHub Kanban tools (`getProjectKanban`) and Pull Request tools by enforcing explicit API fetch limits.
+- Prevented a potential path traversal vulnerability during GitHub integration initialization by enforcing strict regular expression validation on target repositories against the `PROJECT_REGISTRY`.
+- Resolved a concurrency TOCTOU race condition in `maintenance-lock.ts` by coordinating `activeJobs` validation correctly during maintenance lock acquisition.
+- Fixed a PID-reuse vulnerability during database restore lock acquisition by delegating process validation to the `ServerRuntime` in-memory maintenance lock.
+- Replaced brittle `lstat` double-checks in the markdown exporter with `fs.realpathSync.native()` to provide definitive protection against Time-of-Check to Time-of-Use (TOCTOU) symlink swaps.

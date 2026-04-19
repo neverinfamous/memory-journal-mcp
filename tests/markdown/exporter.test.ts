@@ -20,6 +20,16 @@ vi.mock('node:fs/promises', () => ({
     lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false, ino: 1 }),
 }))
 
+vi.mock('node:fs', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs')>()
+    return {
+        ...actual,
+        realpathSync: {
+            native: vi.fn().mockImplementation((p) => p),
+        },
+    }
+})
+
 describe('markdown exporter utilities', () => {
     describe('generateSlug', () => {
         it('should truncate to 50 characters', () => {
@@ -175,9 +185,10 @@ describe('exportEntriesToMarkdown', () => {
     })
 
     it('should abort if directory is swapped for a symlink during export (TOCTOU)', async () => {
-        vi.mocked(fs.lstat)
-            .mockResolvedValueOnce({ isSymbolicLink: () => false, ino: 1 } as any) // preStat
-            .mockResolvedValueOnce({ isSymbolicLink: () => true, ino: 2 } as any) // postStat
+        const { realpathSync } = await import('node:fs')
+        vi.mocked(realpathSync.native)
+            .mockReturnValueOnce('/mock/safe/path') // preRealpath
+            .mockReturnValueOnce('/mock/unsafe/swapped/path') // postRealpath
             
         const entries = [{ id: 1, content: 'Test content', timestamp: '2026-04-08T12:00:00Z', entryType: 'note' }]
         await expect(exportEntriesToMarkdown(entries as any, './export', mockDb as any, [process.cwd()])).rejects.toThrow(

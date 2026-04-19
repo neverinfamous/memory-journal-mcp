@@ -5,10 +5,10 @@
  * Deterministic filenames allow re-export to overwrite identically.
  */
 
-import { mkdir, open, lstat } from 'node:fs/promises'
+import { mkdir, open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
-import { constants } from 'node:fs'
+import { constants, realpathSync } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
 import { serializeFrontmatter } from './frontmatter.js'
 import type { FrontmatterData } from './frontmatter.js'
@@ -165,20 +165,21 @@ export async function exportEntriesToMarkdown(
 
         let handle;
         try {
-            // Re-validate ancestor directory to ensure it hasn't been swapped for a symlink
-            const preStat = await lstat(resolvedOutputDir)
-            if (preStat.isSymbolicLink()) {
-                throw new Error(`Export directory ${resolvedOutputDir} became a symlink during export.`)
-            }
+            // Mitigate TOCTOU by verifying the actual resolved path immediately before open
+            // using native realpath to bypass Node.js cache
+            const preRealpath = realpathSync.native(resolvedOutputDir)
 
             // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
             handle = await open(filepath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600)
             
             // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
-            const postStat = await lstat(resolvedOutputDir)
-            if (postStat.isSymbolicLink() || postStat.ino !== preStat.ino) {
+            const postRealpath = realpathSync.native(resolvedOutputDir)
+            if (preRealpath !== postRealpath) {
                 throw new Error(`Directory swapped during export operation! Aborting to prevent path traversal.`)
             }
+            
+            // Verify the final real path is still within allowed roots
+            assertSafeDirectoryPath(postRealpath, allowedRoots)
             
             await handle.writeFile(fileContent, 'utf-8')
             files.push(filename)

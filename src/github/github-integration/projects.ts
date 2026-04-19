@@ -38,7 +38,7 @@ export class ProjectsManager {
                         }
                     }
                 }
-                items(first: 100) {
+                items(first: $itemLimit) {
                     pageInfo {
                         hasNextPage
                     }
@@ -93,7 +93,7 @@ export class ProjectsManager {
 
         const userQuery = `
             ${projectFragment}
-            query($owner: String!, $number: Int!) {
+            query($owner: String!, $number: Int!, $itemLimit: Int!) {
                 user(login: $owner) {
                     projectV2(number: $number) {
                         ...ProjectData
@@ -104,7 +104,7 @@ export class ProjectsManager {
 
         const repoQuery = `
             ${projectFragment}
-            query($owner: String!, $repo: String!, $number: Int!) {
+            query($owner: String!, $repo: String!, $number: Int!, $itemLimit: Int!) {
                 repository(owner: $owner, name: $repo) {
                     projectV2(number: $number) {
                         ...ProjectData
@@ -115,7 +115,7 @@ export class ProjectsManager {
 
         const orgQuery = `
             ${projectFragment}
-            query($owner: String!, $number: Int!) {
+            query($owner: String!, $number: Int!, $itemLimit: Int!) {
                 organization(login: $owner) {
                     projectV2(number: $number) {
                         ...ProjectData
@@ -179,6 +179,7 @@ export class ProjectsManager {
             const response = await this.client.graphqlWithAuth<UserResponse>(userQuery, {
                 owner,
                 number: projectNumber,
+                itemLimit: 100,
                 request: { signal: abortSignal },
             })
             if (response.user?.projectV2) {
@@ -195,6 +196,7 @@ export class ProjectsManager {
                     owner,
                     repo,
                     number: projectNumber,
+                    itemLimit: 100,
                     request: { signal: abortSignal },
                 })
                 if (response.repository?.projectV2) {
@@ -213,6 +215,7 @@ export class ProjectsManager {
                 const response = await this.client.graphqlWithAuth<OrgResponse>(orgQuery, {
                     owner,
                     number: projectNumber,
+                    itemLimit: 100,
                     request: { signal: abortSignal },
                 })
                 if (response.organization?.projectV2) {
@@ -348,6 +351,10 @@ export class ProjectsManager {
                 }
             `
 
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
+
             await this.client.graphqlWithAuth(mutation, {
                 projectId,
                 itemId,
@@ -396,6 +403,10 @@ export class ProjectsManager {
                 }
             `
 
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
+
             const response = await this.client.graphqlWithAuth<{
                 addProjectV2ItemById: { item: { id: string } }
             }>(mutation, {
@@ -442,6 +453,10 @@ export class ProjectsManager {
                     }
                 }
             `
+
+            if (typeof this.client.invalidateCache === 'function') {
+                this.client.invalidateCache('kanban:')
+            }
 
             await this.client.graphqlWithAuth(mutation, {
                 projectId,

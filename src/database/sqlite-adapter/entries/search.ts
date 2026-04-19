@@ -395,14 +395,19 @@ export function searchByDateRange(
 function sanitizeFtsQuery(query: string): string {
     if (!query) return '';
 
-    // 1. Strip FTS5 structural control characters entirely
-    let safe = query.replace(/["'()^:{}[\]]/g, ' ');
+    const tokens = query.split(/\s+/);
+    const safeTokens: string[] = [];
 
-    // 2. Clear known FTS operator keywords (case-insensitive) to prevent invalid operand crashes
-    safe = safe.replace(/\b(AND|OR|NOT|NEAR(?:[/]\d+)?)\b/ig, ' ');
+    for (const token of tokens) {
+        // Strip out non-alphanumeric characters, except hyphen and underscore
+        const sanitizedToken = token.replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!sanitizedToken) continue;
 
-    // 3. Compact whitespace and trim
-    safe = safe.replace(/\s+/g, ' ').trim();
+        // Drop FTS5 keywords to prevent syntax errors and ReDoS
+        if (/^(AND|OR|NOT|NEAR)$/i.test(sanitizedToken)) continue;
 
-    return safe;
+        safeTokens.push(sanitizedToken);
+    }
+
+    return safeTokens.join(' ');
 }

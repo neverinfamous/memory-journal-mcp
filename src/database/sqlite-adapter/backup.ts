@@ -131,7 +131,7 @@ export class BackupManager {
         return { deleted, failed, kept: toKeep.length }
     }
 
-    async restoreFromFile(filename: string): Promise<{
+    async restoreFromFile(filename: string, runtime?: unknown): Promise<{
         restoredFrom: string
         previousEntryCount: number
         newEntryCount: number
@@ -208,6 +208,13 @@ export class BackupManager {
                             if (lockTimestamp !== undefined && (Date.now() - lockTimestamp > 5 * 60 * 1000)) {
                                 isStale = true
                                 logger.warning('Found stale database restore lock (expired timestamp)', { path: lockPath, holdingPid, ageMs: Date.now() - lockTimestamp, module: 'SqliteAdapter' })
+                            } else if (runtime !== undefined && runtime !== null && typeof runtime === 'object' && 'maintenanceManager' in runtime) {
+                                // Delegate to ServerRuntime MaintenanceManager logic
+                                const mm = (runtime as { maintenanceManager?: { isMaintenanceModeActive(): boolean } }).maintenanceManager
+                                if (mm !== undefined && !mm.isMaintenanceModeActive()) {
+                                    isStale = true
+                                    logger.warning('Found stale database restore lock (maintenance mode inactive)', { path: lockPath, module: 'SqliteAdapter' })
+                                }
                             } else {
                                 try {
                                     process.kill(holdingPid, 0)
