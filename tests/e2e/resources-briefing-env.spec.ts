@@ -47,6 +47,7 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                     BRIEFING_INCLUDE_TEAM: 'true', // Force inclusion
                     BRIEFING_COPILOT_REVIEWS: 'true', // Adds copilot block
                     TEAM_DB_PATH: './.test-output/e2e/test-briefing-team.db',
+                    TEAM_AUTHOR: 'Alice',
                 },
             }
         )

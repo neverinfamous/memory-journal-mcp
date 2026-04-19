@@ -209,6 +209,15 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
                     }
                 }
 
+                // Strip 'body' from all items to mitigate massive payload size
+                for (const column of board.columns) {
+                    for (const item of column.items) {
+                        if ('body' in item) {
+                            delete (item as { body?: string }).body
+                        }
+                    }
+                }
+
                 return board
             },
         },

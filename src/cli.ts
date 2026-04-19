@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 
 import * as path from 'node:path'
+import * as fs from 'node:fs'
 import { z } from 'zod'
 import { createServer } from './server/mcp-server.js'
 import { logger } from './utils/logger.js'
@@ -349,9 +350,23 @@ program
                             const validated = registrySchema.parse(parsed) as Record<string, ProjectRegistryEntry>
                             for (const key of Object.keys(validated)) {
                                 const entry = validated[key]
-                                if (entry?.path && !path.isAbsolute(entry.path)) {
+                                if (!entry?.path) continue
+                                
+                                if (!path.isAbsolute(entry.path)) {
                                     throw new Error(`Project registry path must be an absolute path: ${entry.path}`)
                                 }
+                                
+                                const resolvedPath = path.resolve(entry.path)
+                                try {
+                                    const stat = fs.statSync(resolvedPath)
+                                    if (!stat.isDirectory()) {
+                                        throw new Error(`Project registry path is not a directory: ${resolvedPath}`)
+                                    }
+                                } catch (e) {
+                                    const errMsg = e instanceof Error ? e.message : String(e)
+                                    throw new Error(`Project registry path does not exist or cannot be accessed: ${resolvedPath} (${errMsg})`, { cause: e })
+                                }
+                                entry.path = resolvedPath
                             }
                             return validated
                         } catch (e: unknown) {

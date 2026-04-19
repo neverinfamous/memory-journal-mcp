@@ -9,6 +9,9 @@
 - Explicit `resolved_owner` and `resolved_repo` schema properties on all GitHub mutations to eliminate ambient context ambiguity.
 
 ### Changed
+- Centralized `enforceAccessBoundary` in `src/auth/validation.ts` to enforce fail-closed checks for team-resource access and standardize scope checks across all resources and tools.
+- Enforced absolute path canonicalization and directory existence validation using `fs.statSync()` for `PROJECT_REGISTRY` configuration in `src/cli.ts`.
+- Implemented an asynchronous decoupled outbox pattern for GitHub mutations (e.g., `issue-tools.ts`), appending `[FAILED]` status to journal entries instead of performing immediate rollback deletions upon API errors.
 - Enforced semantic integer boundaries in CLI parsing (ports, timers, clock tolerance) using `parseConfigIntRequired`.
 - Refactored `createEntry` to throw a `Storage Inconsistency Anomaly` error if read-after-write fails, exposing anomalies instead of masking them.
 - Derived the audit logger category dynamically from `getRequiredScope(name)` instead of manual synchronization.
@@ -36,6 +39,8 @@
 - Marked core `.getRawDb()` and execution mechanisms as `@deprecated` and `@internal` to restrict usage strictly to database adapters.
 
 ### Fixed
+- Test suite regressions in Vitest and Playwright E2E suites by properly injecting `TEAM_AUTHOR` and environment variables to satisfy newly centralized fail-closed security boundary checks.
+- Unhandled `no-unsafe-return` and `no-explicit-any` ESLint regressions during Code Mode worker serialization.
 - N+1 query performance bottlenecks during team semantic search and Markdown exports by batch-fetching tags.
 - `significantResource` compute overhead by precomputing entry timestamps outside of iterative map and sort functions.
 - Missing `ALLOWED_IO_ROOTS` configurations now surface explicit and actionable fail-closed error messages.

@@ -38,11 +38,8 @@ import { globalMetrics, wrapWithMetrics, injectTokenEstimate } from '../../obser
 import { AuditLogger, createAuditInterceptor } from '../../audit/index.js'
 import type { AuditConfig, AuditInterceptor } from '../../audit/index.js'
 
-import { getAuthContext } from '../../auth/auth-context.js'
-import { getRequiredScope } from '../../auth/scope-map.js'
-import { hasScope } from '../../auth/scopes.js'
-import { logger } from '../../utils/logger.js'
-import { PermissionError, ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
+import { enforceAccessBoundary } from '../../auth/validation.js'
+import { ResourceNotFoundError, ConfigurationError } from '../../types/errors.js'
 
 // Re-export for backward compatibility (McpServer imports these)
 export type { ToolHandlerConfig }
@@ -316,30 +313,11 @@ export async function callTool(
     }
 
     // Authorization Hook: Enforce scope if auth context exists
-    const auth = getAuthContext()
-    if (auth) {
-        const requiredScope = getRequiredScope(name)
-        if (!hasScope(auth.claims?.scopes ?? [], requiredScope)) {
-            logger.warning(`Insufficient scope for tool: ${name}`, {
-                module: 'AUTH',
-                operation: 'scope-check',
-                entityId: name,
-            })
-            const auditLogger = config?.runtime?.auditLogger ?? getGlobalAuditLogger()
-            if (auditLogger) {
-                let category: 'admin' | 'team' | 'read' = 'read'
-                if (requiredScope === 'admin' || requiredScope === 'full') category = 'admin'
-                else if (requiredScope === 'team') category = 'team'
-                
-                auditLogger.logDenial(name, 'Insufficient scope', {
-                    user: auth.claims?.sub,
-                    scopes: auth.claims?.scopes ?? [],
-                    category,
-                    scope: requiredScope,
-                })
-            }
-            return Promise.reject(new PermissionError(`Access to tool '${name}' denied: insufficient scope.`))
-        }
+    try {
+        const auditLogger = config?.runtime?.auditLogger ?? getGlobalAuditLogger()
+        enforceAccessBoundary(name, 'tool', auditLogger)
+    } catch (error) {
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
 
     // When progress context is provided, rebuild the handler with it.

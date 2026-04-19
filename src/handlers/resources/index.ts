@@ -12,10 +12,7 @@ import type { Scheduler } from '../../server/scheduler.js'
 import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import type { BriefingConfig } from './shared.js'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
-import { getAuthContext } from '../../auth/auth-context.js'
-import { hasScope, SCOPES } from '../../auth/scopes.js'
-import { PermissionError } from '../../types/errors.js'
-import { logger } from '../../utils/logger.js'
+import { enforceAccessBoundary } from '../../auth/validation.js'
 
 // Re-export shared types
 export type { ResourceContext, ResourceResult, InternalResourceDef } from './shared.js'
@@ -108,51 +105,7 @@ export async function readResource(
     const baseUri = getBaseUri(uri)
 
     // Authorization Hook: Enforce scope if auth context exists
-    const auth = getAuthContext()
-
-    const isTeamResource = baseUri.startsWith('memory://team/') || baseUri.startsWith('memory://flags')
-
-    // Strict fail-closed boundary for team domains
-    if (isTeamResource) {
-        const envAuthor = process.env['TEAM_AUTHOR']?.trim()
-        const hasAuthClaim = auth?.authenticated === true && auth?.claims !== undefined
-        if (!envAuthor && !hasAuthClaim) {
-            logger.warning(`Access to team resource denied: unauthenticated`, {
-                module: 'AUTH',
-                operation: 'fail-closed',
-                entityId: baseUri,
-            })
-            throw new PermissionError(`Access to team resource '${baseUri}' denied: missing TEAM_AUTHOR or active OAuth session.`)
-        }
-    }
-
-    if (auth) {
-        let requiredScope: string = SCOPES.READ
-        if (isTeamResource) {
-            requiredScope = SCOPES.TEAM
-        } else if (baseUri === 'memory://audit') {
-            requiredScope = SCOPES.ADMIN
-        }
-
-        if (!hasScope(auth.claims?.scopes ?? [], requiredScope)) {
-            logger.warning(`Insufficient scope for resource: ${baseUri}`, {
-                module: 'AUTH',
-                operation: 'scope-check',
-                entityId: baseUri,
-            })
-            const auditLogger = runtime?.auditLogger
-            if (auditLogger) {
-                const category = requiredScope === SCOPES.TEAM ? 'team' : requiredScope === SCOPES.ADMIN ? 'admin' : 'read'
-                auditLogger.logDenial(baseUri, 'Insufficient scope', {
-                    user: auth.claims?.sub,
-                    scopes: auth.claims?.scopes ?? [],
-                    category,
-                    scope: requiredScope,
-                })
-            }
-            throw new PermissionError(`Access to resource '${baseUri}' denied: insufficient scope.`)
-        }
-    }
+    enforceAccessBoundary(baseUri, 'resource', runtime?.auditLogger)
 
     // Check for exact match first (using base URI without query params)
     const exactMatch = resources.find((r) => r.uri === baseUri)

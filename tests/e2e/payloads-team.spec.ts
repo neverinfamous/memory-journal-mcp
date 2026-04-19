@@ -21,7 +21,7 @@ test.describe('Payload Contracts: Team Tools (no TEAM_DB_PATH)', () => {
     test.beforeAll(async () => {
         // Start a dedicated server WITHOUT TEAM_DB_PATH to test config error path
         await startServer(NO_TEAM_PORT, [], 'payloads-team', {
-            env: { TEAM_DB_PATH: undefined },
+            env: { TEAM_DB_PATH: undefined, TEAM_AUTHOR: 'Alice' },
         })
         client = await createClient(NO_TEAM_PORT)
     })

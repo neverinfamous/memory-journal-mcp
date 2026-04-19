@@ -4,6 +4,9 @@ export default defineConfig({
     test: {
         globals: true,
         environment: 'node',
+        env: {
+            TEAM_AUTHOR: 'test-author',
+        },
         include: ['tests/**/*.test.ts'],
         coverage: {
             provider: 'v8',

@@ -120,8 +120,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     if (!issue) {
-                        // Rollback pending entry if GitHub mutation failed
-                        db.deleteEntry(entry.id, true)
+                        // Decouple journaling: mark entry as failed instead of rollback
+                        db.updateEntry(entry.id, {
+                            content: entryContent + '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.'
+                        })
                         return {
                             success: false,
                             error: 'Failed to create GitHub issue. Check GITHUB_TOKEN permissions.',
@@ -366,8 +368,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     if (!result) {
-                        // Rollback pending entry if GitHub mutation failed
-                        db.deleteEntry(entry.id, true)
+                        // Decouple journaling: mark entry as failed instead of rollback
+                        db.updateEntry(entry.id, {
+                            content: entryContent + '\n\n[FAILED] GitHub mutation failed: Could not close issue. Check GITHUB_TOKEN permissions.'
+                        })
                         return {
                             success: false,
                             error: 'Failed to close GitHub issue. Check GITHUB_TOKEN permissions.',

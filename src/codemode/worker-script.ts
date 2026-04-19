@@ -106,7 +106,11 @@ function buildApiProxy(methods: Record<string, string[]>): Record<string, unknow
 // Execution
 // =============================================================================
 
-async function executeCode(code: string, methodList: Record<string, string[]>, timeoutMs: number): Promise<SandboxResult> {
+async function executeCode(
+    code: string,
+    methodList: Record<string, string[]>,
+    timeoutMs: number
+): Promise<SandboxResult> {
     const startCpu = process.cpuUsage()
     const startTime = performance.now()
 
@@ -186,7 +190,13 @@ async function executeCode(code: string, methodList: Record<string, string[]>, t
 
 parentPort?.on('message', (msg: unknown) => {
     void (async () => {
-        if (msg !== null && msg !== undefined && typeof msg === 'object' && 'type' in msg && (msg as { type: string }).type === 'EXECUTE') {
+        if (
+            msg !== null &&
+            msg !== undefined &&
+            typeof msg === 'object' &&
+            'type' in msg &&
+            (msg as { type: string }).type === 'EXECUTE'
+        ) {
             const executeMsg = msg as unknown as {
                 id: number
                 code: string
@@ -195,7 +205,14 @@ parentPort?.on('message', (msg: unknown) => {
                 maxResultSize?: number
                 rpcPort: MessagePort
             }
-            const { id, code, methodList, timeoutMs, maxResultSize, rpcPort: newRpcPort } = executeMsg
+            const {
+                id,
+                code,
+                methodList,
+                timeoutMs,
+                maxResultSize,
+                rpcPort: newRpcPort,
+            } = executeMsg
 
             rpcPort = newRpcPort
             rpcIdCounter = 0
@@ -217,21 +234,44 @@ parentPort?.on('message', (msg: unknown) => {
 
             if (result.success) {
                 try {
-                    // Enforce egress boundary dynamically
-                    const resultJson = JSON.stringify(result.result)
-                    
+                    // Enforce egress boundary dynamically during serialization to prevent OOM
+                    const egressLimit = maxResultSize ?? 100 * 1024
+                    let bytes = 0
+                    const cache = new Set()
+
+                    const resultJson = JSON.stringify(
+                        result.result,
+                        (_key: string, value: unknown) => {
+                            if (typeof value === 'object' && value !== null) {
+                                if (cache.has(value)) return '[Circular]'
+                                cache.add(value)
+                            }
+                            if (typeof value === 'string') {
+                                const strBytes = Buffer.byteLength(value, 'utf8')
+                                bytes += strBytes
+                                if (bytes > egressLimit) throw new Error('EgressLimitExceeded')
+                                return value
+                            }
+                            bytes += 5 // rough approx for keys/brackets
+                            if (bytes > egressLimit) throw new Error('EgressLimitExceeded')
+                            return value
+                        }
+                    )
+
                     if (resultJson) {
                         const byteLength = Buffer.byteLength(resultJson, 'utf8')
-                        const egressLimit = maxResultSize ?? 100 * 1024
                         if (byteLength > egressLimit) {
-                            result.success = false
-                            result.error = `Output limit exceeded: Result serialized to ${Math.round(byteLength / 1024)}KB, which exceeds the ${Math.round(egressLimit / 1024)}KB boundary. Please aggregate or filter your results to reduce the payload size.`
-                            result.result = undefined
+                            throw new Error('EgressLimitExceeded')
                         }
                     }
                 } catch (err) {
                     result.success = false
-                    result.error = `Result could not be serialized or exceeded memory limits: ${err instanceof Error ? err.message : String(err)}`
+                    const egressLimit = maxResultSize ?? 100 * 1024
+                    if (err instanceof Error && err.message === 'EgressLimitExceeded') {
+                        result.error = `Output limit exceeded: Result serialization exceeded the ${Math.round(egressLimit / 1024)}KB boundary. Please aggregate or filter your results to reduce the payload size.`
+                    } else {
+                        result.error = `Result could not be serialized or exceeded memory limits: ${err instanceof Error ? err.message : String(err)}`
+                    }
                     result.result = undefined
                 }
             }
