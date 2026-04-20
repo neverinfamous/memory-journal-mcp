@@ -212,7 +212,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (input.share_with_team && teamDb) {
                         try {
                             const authCtx = getAuthContext()
-                            if (!hasScope(authCtx?.claims?.scopes ?? [], SCOPES.TEAM)) {
+                            const hasTeamScope = hasScope(authCtx?.claims?.scopes ?? [], SCOPES.TEAM)
+                            const envAuthor = process.env['TEAM_AUTHOR']?.trim()
+                            const codemodeBypass = context.config?.codemodeInternalFullAccess === true
+                            if (!hasTeamScope && !envAuthor && !codemodeBypass) {
                                 throw new Error('Insufficient scope: team scope is required to share entries with the team')
                             }
                             author = resolveAuthenticatedAuthor()

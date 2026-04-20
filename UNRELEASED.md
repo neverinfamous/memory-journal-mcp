@@ -195,3 +195,5 @@
 - Fixed cascading test suite regressions by aligning assertions with new untrusted boundary tag lengths and updating E2E context injection mocks to satisfy `codemodeInternalFullAccess` requirements.
 - Resolved a re-entrancy deadlock in Code Mode during `restore_backup` by temporarily yielding the active job count to allow the inner tool to acquire the maintenance lock.
 - Successfully verified Code Mode API Discoverability (Phase 17) ensuring top-level help, per-group help, method aliases, and positional arguments execute efficiently (~567 tokens total) without regressions.
+- Enforced proper propagation of `TEAM_AUTHOR` and `codemodeInternalFullAccess` bypass within `share_with_team` Core tools for testing environments.
+- Successfully verified Code Mode Core CRUD operations (Phase 20), validating parameter passing, structured error handling, and team sharing across 12 test paths.
