@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Validate Skill
-        uses: hashgraph-online/skill-publish@5ea6109cf9c3f8c3d9dad028f963790a56497257 # v1.0.13
+        uses: hashgraph-online/skill-publish@f9a1962fcbd8116e1e82bed3c97d9223a6206ac4 # v1.2
         with:
           mode: validate
           skill-dir: skills/github-commander
