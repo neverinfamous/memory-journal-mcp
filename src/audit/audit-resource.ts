@@ -48,6 +48,9 @@ export function getAuditResourceDef(getLogger: () => AuditLogger | null): Intern
         annotations: {
             ...ASSISTANT_FOCUSED,
         },
+        capabilities: {
+            requiresAdminScope: true,
+        },
         handler: async (_uri: string, _context: ResourceContext): Promise<ResourceResult> => {
             const lastModified = new Date().toISOString()
             const auditLogger = getLogger()

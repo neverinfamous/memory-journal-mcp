@@ -41,7 +41,7 @@ function enrichWithAuthor<T extends { id: number }>(
  * Get team resource definitions
  */
 export function getTeamResourceDefinitions(): InternalResourceDef[] {
-    return [
+    const resources: InternalResourceDef[] = [
         {
             uri: 'memory://team/recent',
             name: 'Recent Team Entries',
@@ -211,4 +211,12 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
             },
         },
     ]
+
+    return resources.map(resource => ({
+        ...resource,
+        capabilities: {
+            ...resource.capabilities,
+            requiresTeamScope: true
+        }
+    }))
 }

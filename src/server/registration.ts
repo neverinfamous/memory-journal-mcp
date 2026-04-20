@@ -29,6 +29,10 @@ export interface ResourceDefinition {
     description?: string
     mimeType?: string
     icons?: { src: string; mimeType?: string; sizes?: string[] }[]
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+    }
 }
 
 /** Raw prompt definition from getPrompts() */
@@ -37,6 +41,10 @@ export interface PromptDefinition {
     description?: string
     arguments?: { name: string; description: string; required?: boolean }[]
     icons?: { src: string; mimeType?: string; sizes?: string[] }[]
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+    }
 }
 
 /** Callback that reads a resource by URI and returns structured content. */
@@ -89,7 +97,7 @@ export function registerResources(
                         throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
                     }
                     const auditLog = runtime.auditLogger
-                    enforceAccessBoundary(uri.href, 'resource', auditLog)
+                    enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
                     return auditOperation(auditLog, 'resource', resDef.name, async () => {
                         return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
                     })
@@ -101,7 +109,7 @@ export function registerResources(
                     throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
                 }
                 const auditLog = runtime.auditLogger
-                enforceAccessBoundary(uri.href, 'resource', auditLog)
+                enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
                 return auditOperation(auditLog, 'resource', resDef.name, async () => {
                     return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
                 })
@@ -153,7 +161,7 @@ export function registerPrompts(
                     throw new ConfigurationError('ServerRuntime is logically required for secure prompt execution.')
                 }
                 const auditLog = runtime.auditLogger
-                enforceAccessBoundary(promptDef.name, 'prompt', auditLog)
+                enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
                 return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
                     const executePrompt = (): Promise<{ messages: { role: 'user' | 'assistant'; content: { type: 'text'; text: string } }[] }> => {
                         const args = providedArgs as Record<string, string>

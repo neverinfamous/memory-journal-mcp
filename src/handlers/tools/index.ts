@@ -307,7 +307,7 @@ export async function callTool(
     // Authorization Hook: Enforce scope if auth context exists
     try {
         const auditLogger = config?.runtime?.auditLogger;
-        enforceAccessBoundary(name, 'tool', auditLogger)
+        enforceAccessBoundary(name, 'tool', tool.capabilities, auditLogger)
     } catch (error) {
         return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }

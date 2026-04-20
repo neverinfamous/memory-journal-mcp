@@ -139,6 +139,13 @@ export interface ToolDefinition {
     /** Behavioral hints for AI clients */
     annotations: ToolAnnotations
 
+    /** Security capabilities required to execute this tool */
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+        mutatesState?: boolean
+    }
+
     /** Tool handler function */
     handler: (params: unknown) => unknown
 }
@@ -246,6 +253,12 @@ export interface ResourceDefinition {
 
     /** Resource metadata annotations */
     annotations?: ResourceAnnotations
+
+    /** Security capabilities required to read this resource */
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+    }
 
     /** Resource handler - NOTE: db is passed at runtime, not in the definition */
     handler: (uri: string) => Promise<unknown>

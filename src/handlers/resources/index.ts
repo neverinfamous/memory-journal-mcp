@@ -104,12 +104,12 @@ export async function readResource(
     // Strip query parameters for matching, but pass full URI to handler
     const baseUri = getBaseUri(uri)
 
-    // Authorization Hook: Enforce scope if auth context exists
-    enforceAccessBoundary(baseUri, 'resource', runtime?.auditLogger)
-
     // Check for exact match first (using base URI without query params)
     const exactMatch = resources.find((r) => r.uri === baseUri)
     if (exactMatch) {
+        // Authorization Hook: Enforce scope if auth context exists
+        enforceAccessBoundary(baseUri, 'resource', exactMatch.capabilities, runtime?.auditLogger)
+
         // Pass full URI (with query params) to handler so it can parse them
         const result = await Promise.resolve(exactMatch.handler(uri, context))
         if (isResourceResult(result)) {
@@ -131,6 +131,9 @@ export async function readResource(
             )
             const regex = new RegExp(`^${pattern}$`)
             if (regex.test(baseUri)) {
+                // Authorization Hook: Enforce scope if auth context exists
+                enforceAccessBoundary(baseUri, 'resource', resource.capabilities, runtime?.auditLogger)
+
                 const result = await Promise.resolve(resource.handler(uri, context))
                 if (isResourceResult(result)) {
                     return { data: result.data, annotations: result.annotations }

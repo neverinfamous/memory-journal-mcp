@@ -210,6 +210,10 @@ export interface InternalResourceDef {
         autoRead?: boolean
         sessionInit?: boolean
     }
+    capabilities?: {
+        requiresTeamScope?: boolean
+        requiresAdminScope?: boolean
+    }
     handler: (uri: string, context: ResourceContext) => unknown
 }
 

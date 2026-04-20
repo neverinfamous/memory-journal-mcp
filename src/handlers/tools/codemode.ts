@@ -16,7 +16,7 @@ import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
 import { getRequestContext, requestContextStorage } from '../../utils/request-context.js'
-import { getAuthContext, getAuthenticatedScopes, runWithAuthContext } from '../../auth/auth-context.js'
+import { getAuthContext, runWithAuthContext } from '../../auth/auth-context.js'
 import { getCoreTools } from './core.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
@@ -222,22 +222,6 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const reqCtx = getRequestContext()
                     const authCtx = getAuthContext()
                     const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
-
-                    if (context.config?.authEnabled === true || context.config?.oauthEnabled === true) {
-                        if (!authCtx?.authenticated) {
-                            return {
-                                success: false,
-                                error: 'Permission Denied: Code Mode requires authentication.',
-                            }
-                        }
-                        const scopes = getAuthenticatedScopes()
-                        if (!scopes.includes('admin')) {
-                            return {
-                                success: false,
-                                error: 'Permission Denied: Code Mode is a privileged admin-only capability. Your token lacks the required "admin" scope.',
-                            }
-                        }
-                    }
 
                     // Security validation
                     const security = getSecurityManager(clientId)

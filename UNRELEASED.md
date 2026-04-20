@@ -9,6 +9,7 @@
 - Explicit `resolved_owner` and `resolved_repo` schema properties on all GitHub mutations to eliminate ambient context ambiguity.
 
 ### Changed
+- Replaced brittle string-prefix authorization and `readOnlyHint` gating with explicit capability metadata (`requiresTeamScope`, `requiresAdminScope`, `mutatesState`) to enforce strict security boundaries.
 - Centralized `enforceAccessBoundary` in `src/auth/validation.ts` to enforce fail-closed checks for team-resource access and standardize scope checks across all resources and tools.
 - Enforced absolute path canonicalization and directory existence validation using `fs.statSync()` for `PROJECT_REGISTRY` configuration in `src/cli.ts`.
 - Implemented an asynchronous decoupled outbox pattern for GitHub mutations (e.g., `issue-tools.ts`), appending `[FAILED]` status to journal entries instead of performing immediate rollback deletions upon API errors.

@@ -16,13 +16,20 @@ import type { AuditLogger } from '../audit/index.js'
 export function enforceAccessBoundary(
     targetName: string,
     targetType: 'resource' | 'tool' | 'prompt',
+    capabilities?: { requiresTeamScope?: boolean; requiresAdminScope?: boolean },
     auditLogger?: AuditLogger | null
 ): void {
     const auth = getAuthContext()
     
-    const isTeam = targetType === 'resource' 
-        ? (targetName.startsWith('memory://team/') || targetName.startsWith('memory://flags'))
-        : targetName.startsWith('team_')
+    const isTeam = capabilities?.requiresTeamScope ?? (
+        targetType === 'resource' 
+            ? (targetName.startsWith('memory://team/') || targetName.startsWith('memory://flags'))
+            : targetName.startsWith('team_')
+    )
+    
+    const isAdmin = capabilities?.requiresAdminScope ?? (
+        targetType === 'resource' ? targetName === 'memory://audit' : false
+    )
 
     // Strict fail-closed boundary for team domains
     if (isTeam) {
@@ -46,7 +53,7 @@ export function enforceAccessBoundary(
             requiredScope = SCOPES.READ
             if (isTeam) {
                 requiredScope = SCOPES.TEAM
-            } else if (targetName === 'memory://audit') {
+            } else if (isAdmin) {
                 requiredScope = SCOPES.ADMIN
             }
         }
