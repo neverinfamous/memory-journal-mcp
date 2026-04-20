@@ -253,7 +253,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         if (context.config?.projectRegistry && Object.prototype.hasOwnProperty.call(context.config.projectRegistry, repo)) {
                             const registryEntry = context.config.projectRegistry[repo]
                             if (registryEntry) {
-                                const injectedGithub = getGitHubIntegration(registryEntry.path, sessionContext.config?.runtime)
+                                const injectedGithub = getGitHubIntegration(
+                                    registryEntry.path, 
+                                    undefined,
+                                    process.env['GITHUB_TOKEN']
+                                )
                                 try {
                                     // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
                                     await injectedGithub.getRepoInfo()

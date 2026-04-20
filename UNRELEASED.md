@@ -198,3 +198,4 @@
 - Enforced proper propagation of `TEAM_AUTHOR` and `codemodeInternalFullAccess` bypass within `share_with_team` Core tools for testing environments.
 - Successfully verified Code Mode Core CRUD operations (Phase 20), validating parameter passing, structured error handling, and team sharing across 12 test paths.
 - Fixed a bug in `create_entry` where it returned a stale entry object lacking the auto-populated `issueUrl` by capturing and assigning the result of `updateEntry`.
+- Fixed a bug in `codemode.ts` where the Code Mode sandbox retrieved a globally pooled `GitHubIntegration` instance with a mismatched working directory, causing `issueUrl` auto-population to fail; the sandbox now initializes an isolated connection to guarantee correct context.
