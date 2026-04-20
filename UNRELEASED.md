@@ -9,6 +9,7 @@
 - Explicit `resolved_owner` and `resolved_repo` schema properties on all GitHub mutations to eliminate ambient context ambiguity.
 
 ### Changed
+- Enforced atomic FTS5 and vector index synchronization during soft deletes by injecting a `fts_content_soft_delete` trigger and modifying the core `deleteEntry` database adapter wrapper.
 - Replaced brittle string-prefix authorization and `readOnlyHint` gating with explicit capability metadata (`requiresTeamScope`, `requiresAdminScope`, `mutatesState`) to enforce strict security boundaries.
 - Centralized `enforceAccessBoundary` in `src/auth/validation.ts` to enforce fail-closed checks for team-resource access and standardize scope checks across all resources and tools.
 - Enforced absolute path canonicalization and directory existence validation using `fs.statSync()` for `PROJECT_REGISTRY` configuration in `src/cli.ts`.

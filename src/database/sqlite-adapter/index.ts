@@ -124,7 +124,13 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     deleteEntry(id: number, permanent = false): boolean {
-        return this.entriesMgr.deleteEntry(id, permanent)
+        return this.executeInTransaction(() => {
+            const success = this.entriesMgr.deleteEntry(id, permanent)
+            if (success) {
+                this.deleteVector(id)
+            }
+            return success
+        })
     }
 
     searchEntries(
