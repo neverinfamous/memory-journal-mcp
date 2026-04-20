@@ -9,6 +9,7 @@ import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
 import { isValidScope } from '../../auth/scopes.js'
+import { getClientIp } from './security.js'
 
 // =============================================================================
 // Health Check
@@ -90,8 +91,9 @@ export function createAuthMiddleware(
         // We cannot use a random nonce or mcp-session-id here because standard MCP SDK clients
         // do not send mcp-session-id during initialization, which would cause the identity hash
         // to change between initialization and subsequent requests, breaking stateful sessions.
-        // IP is removed from hash to prevent identity collapse behind NATs/proxies.
-        const hashInput = authToken
+        // We bind the client IP to the hash to provide strict session isolation for shared tokens.
+        const clientIp = getClientIp(req)
+        const hashInput = `${authToken}:${clientIp}`
         
         const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
         const identity = `bearer-${identityHash}`

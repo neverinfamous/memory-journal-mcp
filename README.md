@@ -10,7 +10,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-Published-green)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.neverinfamous/memory-journal-mcp)
 [![Security](https://img.shields.io/badge/Security-Enhanced-green.svg)](SECURITY.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue.svg)](https://github.com/neverinfamous/memory-journal-mcp)
-![Coverage](https://img.shields.io/badge/Coverage-86.93%25-green.svg)
+![Coverage](https://img.shields.io/badge/Coverage-86.94%25-green.svg)
 ![Tests](https://img.shields.io/badge/Tests-1782_passed-brightgreen.svg)
 ![E2E Tests](https://img.shields.io/badge/E2E_Tests-391_passed-brightgreen.svg)
 [![CI](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml/badge.svg)](https://github.com/neverinfamous/memory-journal-mcp/actions/workflows/gatekeeper.yml)
@@ -237,7 +237,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `memory://metrics/tokens` - Per-tool token usage breakdown sorted by output token cost — MEDIUM priority
 - `memory://metrics/system` - Process-level metrics: memory (MB), uptime (s), Node.js version, platform — MEDIUM priority
 - `memory://metrics/users` - Per-user call counts (populated when OAuth user identifiers are present) — LOW priority
-- `memory://audit` - Last 50 write/admin tool call entries from the JSONL audit log (requires `AUDIT_LOG_PATH`)
+- `memory://audit` - Last 50 write/admin tool call entries from the JSONL operational telemetry log (requires `AUDIT_LOG_PATH`)
 - `memory://flags` - Active (unresolved) team flags dashboard (requires `TEAM_DB_PATH`)
 - `memory://flags/vocabulary` - Configured flag vocabulary terms
 
@@ -548,10 +548,10 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `COMMANDER_HITL_FILE_THRESHOLD`   | Human-in-the-loop checkpoint if changes touch > N files (default: `10`)                                                     |
 | `COMMANDER_SECURITY_TOOLS`        | Override security tool auto-detection (comma-separated; default: auto-detect)                                               |
 | `COMMANDER_BRANCH_PREFIX`         | Branch naming prefix for PRs (default: `fix`)                                                                               |
-| `AUDIT_LOG_PATH`                  | Path for the JSONL audit log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable audit logging. |
-| `AUDIT_REDACT`                    | Set to `false` to include tool arguments in audit log entries (default: `true`)                             |
+| `AUDIT_LOG_PATH`                  | Path for the JSONL operational telemetry log of write/admin tool calls. Rotates at 10 MB (keeps 5 archives). Omit to disable telemetry logging. |
+| `AUDIT_REDACT`                    | Set to `false` to include tool arguments in telemetry log entries (default: `true`)                             |
 | `AUDIT_READS`                     | Log read-scoped tool calls in addition to write/admin (CLI: `--audit-reads`; default: `false`)                              |
-| `AUDIT_LOG_MAX_SIZE`              | Maximum audit log file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)                     |
+| `AUDIT_LOG_MAX_SIZE`              | Maximum operational telemetry file size in bytes before rotation (CLI: `--audit-log-max-size`; default: `10485760`)                     |
 | `MCP_METRICS_ENABLED`             | Set to `false` to disable in-memory tool call metrics accumulation (default: `true`)                                        |
 | `FLAG_VOCABULARY`                 | Comma-separated flag types for Hush Protocol (CLI: `--flag-vocabulary`; default: `blocker,needs_review,help_requested,fyi`) |
 
