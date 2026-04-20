@@ -309,7 +309,13 @@ export async function callTool(
         const auditLogger = config?.runtime?.auditLogger;
         enforceAccessBoundary(name, 'tool', tool.capabilities, auditLogger)
     } catch (error) {
-        return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+        return Promise.resolve({
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+            code: 'PERMISSION_DENIED',
+            category: 'auth',
+            recoverable: false
+        })
     }
 
     // When progress context is provided, rebuild the handler with it.
