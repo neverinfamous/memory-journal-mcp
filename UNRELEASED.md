@@ -194,3 +194,4 @@
 - Resolved ESLint optional chaining violations in Code Mode's `worker-sandbox.ts` method validation.
 - Fixed cascading test suite regressions by aligning assertions with new untrusted boundary tag lengths and updating E2E context injection mocks to satisfy `codemodeInternalFullAccess` requirements.
 - Resolved a re-entrancy deadlock in Code Mode during `restore_backup` by temporarily yielding the active job count to allow the inner tool to acquire the maintenance lock.
+- Successfully verified Code Mode API Discoverability (Phase 17) ensuring top-level help, per-group help, method aliases, and positional arguments execute efficiently (~567 tokens total) without regressions.
