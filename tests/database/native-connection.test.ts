@@ -5,7 +5,7 @@
  * and close-during-initialization branches.
  */
 
-import { describe, it, expect, afterAll, vi } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import type { Database } from 'better-sqlite3'
 import fs from 'node:fs'
 import { NativeConnectionManager } from '../../src/database/sqlite-adapter/native-connection.js'
@@ -165,12 +165,14 @@ describe('NativeConnectionManager', () => {
             // Re-init should populate FTS (entryCount=1, ftsCount=0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH_2)
             await mgr2.initialize()
-            await new Promise((r) => setTimeout(r, 20))
-
+            // Poll for the background process to finish
             const db2 = mgr2.getNativeDb() as Database
-            const ftsCount = (
-                db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
-            ).c
+            let ftsCount = 0
+            for (let i = 0; i < 50; i++) {
+                ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+                if (ftsCount === 1) break
+                await new Promise((r) => setTimeout(r, 100))
+            }
             if (ftsCount !== 1) {
                 console.log('MEMORY_JOURNAL ROWS:', db2.prepare('SELECT id, content FROM memory_journal').all())
                 console.log('FTS_CONTENT ROWS:', db2.prepare('SELECT rowid, * FROM fts_content').all())
@@ -197,12 +199,14 @@ describe('NativeConnectionManager', () => {
             // Re-init should trigger ghost cleanup because ftsCount (3) > entryCount (0)
             const mgr2 = new NativeConnectionManager(TEST_DB_PATH)
             await mgr2.initialize()
-            await new Promise((r) => setTimeout(r, 20))
-
+            // Poll for background cleanup to finish
             const db2 = mgr2.getNativeDb() as Database
-            const ftsCount = (
-                db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
-            ).c
+            let ftsCount = 3
+            for (let i = 0; i < 50; i++) {
+                ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+                if (ftsCount === 0) break
+                await new Promise((r) => setTimeout(r, 100))
+            }
             expect(ftsCount).toBe(0) // should be cleaned up!
             mgr2.close()
         })

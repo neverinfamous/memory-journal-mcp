@@ -15,8 +15,8 @@ import { ConfigurationError } from '../../types/errors.js'
 import { createJournalApi } from '../../codemode/api.js'
 import { CodeModeSecurityManager } from '../../codemode/security.js'
 import { createSandboxPool, type ISandboxPool } from '../../codemode/sandbox-factory.js'
-import { getRequestContext } from '../../utils/request-context.js'
-import { getAuthContext, getAuthenticatedScopes } from '../../auth/auth-context.js'
+import { getRequestContext, requestContextStorage } from '../../utils/request-context.js'
+import { getAuthContext, getAuthenticatedScopes, runWithAuthContext } from '../../auth/auth-context.js'
 import { getCoreTools } from './core.js'
 import { getSearchTools } from './search/index.js'
 import { getAnalyticsTools } from './analytics.js'
@@ -70,7 +70,13 @@ interface CacheEntry<T> {
 }
 
 const securityManagerMap = new Map<string, CacheEntry<CodeModeSecurityManager>>()
-const sandboxPoolMap = new Map<string, CacheEntry<ISandboxPool>>()
+
+let globalSandboxPool: ISandboxPool | null = null
+
+function getSandboxPool(): ISandboxPool {
+    globalSandboxPool ??= createSandboxPool()
+    return globalSandboxPool
+}
 
 const TTL_MS = 10 * 60 * 1000 // 10 minute eviction
 let lastSweepTime = Date.now()
@@ -86,24 +92,11 @@ function sweepCaches(): void {
             securityManagerMap.delete(id)
         }
     }
-    for (const [id, entry] of sandboxPoolMap.entries()) {
-        if (now - entry.lastAccessed > TTL_MS) {
-            entry.instance.dispose()
-            sandboxPoolMap.delete(id)
-        }
-    }
 }
 
 const MAX_SANDBOX_POOLS = 50
 
 function evictExcessCaches(): void {
-    while (sandboxPoolMap.size >= MAX_SANDBOX_POOLS) {
-        const oldestId = sandboxPoolMap.keys().next().value
-        if (oldestId !== undefined) {
-            sandboxPoolMap.get(oldestId)?.instance.dispose()
-            sandboxPoolMap.delete(oldestId)
-        }
-    }
 
     while (securityManagerMap.size >= MAX_SANDBOX_POOLS) {
         const oldestId = securityManagerMap.keys().next().value
@@ -139,24 +132,6 @@ function getSecurityManager(clientId: string): CodeModeSecurityManager {
         entry.lastAccessed = Date.now()
         securityManagerMap.delete(clientId)
         securityManagerMap.set(clientId, entry)
-    }
-    return entry.instance
-}
-
-function getSandboxPool(clientId: string): ISandboxPool {
-    sweepCaches()
-    let entry = sandboxPoolMap.get(clientId)
-    if (!entry) {
-        evictExcessCaches()
-        entry = {
-            instance: createSandboxPool(),
-            lastAccessed: Date.now()
-        }
-        sandboxPoolMap.set(clientId, entry)
-    } else {
-        entry.lastAccessed = Date.now()
-        sandboxPoolMap.delete(clientId)
-        sandboxPoolMap.set(clientId, entry)
     }
     return entry.instance
 }
@@ -198,17 +173,10 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 
     // SEC-1.2: Respect active tool filter — Code Mode must not reach tools that the
     // operator has explicitly excluded. Strict enforcement.
-    //
-    // Exception: if the ONLY enabled tool is mj_execute_code (codemode-only preset),
-    // the filter intentionally reduces the external surface — Code Mode itself still
-    // needs full internal access to be useful. Applying the filter in that case would
-    // leave Code Mode with zero tools, breaking the preset's intended behaviour.
     const filterConfig = context.config?.filterConfig
-    const hasNonCodeModeEnabled = filterConfig
-        ? [...filterConfig.enabledTools].some((t) => t !== 'mj_execute_code')
-        : true
+    const bypassFilter = context.config?.codemodeInternalFullAccess === true
 
-    cachedNonCodeModeTools = filterConfig && hasNonCodeModeEnabled
+    cachedNonCodeModeTools = filterConfig && !bypassFilter
         ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
         : allTools
 
@@ -255,7 +223,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const authCtx = getAuthContext()
                     const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
 
-                    if (context.config?.authToken || context.config?.oauthEnabled) {
+                    if (context.config?.authEnabled === true || context.config?.oauthEnabled === true) {
                         if (!authCtx?.authenticated) {
                             return {
                                 success: false,
@@ -332,11 +300,28 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     if (!dispatcher) {
                         throw new ConfigurationError('Code Mode requires a secure dispatcher to ensure scope checks and audit interception.')
                     }
-                    const api = createJournalApi(tools, dispatcher)
+                    
+                    const capturedReqCtx = reqCtx
+                    const capturedAuthCtx = authCtx
+                    
+                    const secureDispatcher = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+                        const executeAuth = (): Promise<unknown> => {
+                            if (capturedAuthCtx) {
+                                return runWithAuthContext(capturedAuthCtx, () => dispatcher(name, args))
+                            }
+                            return dispatcher(name, args)
+                        }
+                        if (capturedReqCtx) {
+                            return requestContextStorage.run(capturedReqCtx, executeAuth)
+                        }
+                        return executeAuth()
+                    }
+
+                    const api = createJournalApi(tools, secureDispatcher)
                     const bindings = api.createSandboxBindings()
 
                     // Execute in sandbox (override timeout if specified)
-                    const pool = getSandboxPool(clientId)
+                    const pool = getSandboxPool()
 
                     // For VM sandbox, the bindings are passed directly
                     // For Worker sandbox, the bindings need to be the group API records

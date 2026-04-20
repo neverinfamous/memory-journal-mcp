@@ -123,6 +123,10 @@ program
         '--allowed-io-roots <paths>',
         'Comma-separated absolute paths or JSON array of paths for strict filesystem jailing (env: ALLOWED_IO_ROOTS)'
     )
+    .option(
+        '--codemode-internal-full-access',
+        'Bypass tool filter constraints within the Code Mode sandbox (env: CODEMODE_INTERNAL_FULL_ACCESS)'
+    )
     // Briefing configuration
     .option(
         '--briefing-entries <count>',
@@ -236,6 +240,7 @@ program
             auditRedact?: boolean
             auditReads?: boolean
             auditLogMaxSize: string
+            codemodeInternalFullAccess?: boolean
         }) => {
             // Set log level
             logger.setLevel(options.logLevel as 'debug' | 'info' | 'warning' | 'error')
@@ -329,6 +334,7 @@ program
                     allowPlaintextLoopbackOAuth: options.oauthAllowPlaintextLoopback ?? (process.env['OAUTH_ALLOW_PLAINTEXT_LOOPBACK'] === 'true'),
                     trustProxy: options.trustProxy ?? (process.env['TRUST_PROXY'] === 'true'),
                     publicOrigin: options.publicOrigin ?? process.env['PUBLIC_ORIGIN'],
+                    codemodeInternalFullAccess: options.codemodeInternalFullAccess ?? (process.env['CODEMODE_INTERNAL_FULL_ACCESS'] === 'true'),
                     // Project Registry
                     projectRegistry: (() => {
                         const raw = process.env['PROJECT_REGISTRY']
@@ -346,13 +352,19 @@ program
                                     project_number: z.number().nullable().optional(),
                                 }).strict()
                             )
-                            const parsed: unknown = JSON.parse(raw, (key: string, value: unknown) => {
-                                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-                                    return undefined
+                            const parsed: unknown = JSON.parse(raw)
+                            const deepClean = (obj: unknown): unknown => {
+                                if (obj === null || typeof obj !== 'object') return obj
+                                if (Array.isArray(obj)) return obj.map(deepClean)
+                                const out: Record<string, unknown> = {}
+                                for (const key of Object.keys(obj)) {
+                                    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+                                    out[key] = deepClean((obj as Record<string, unknown>)[key])
                                 }
-                                return value
-                            })
-                            const validated = registrySchema.parse(parsed) as Record<string, ProjectRegistryEntry>
+                                return out
+                            }
+                            const safeParsed = deepClean(parsed)
+                            const validated = registrySchema.parse(safeParsed) as Record<string, ProjectRegistryEntry>
                             for (const key of Object.keys(validated)) {
                                 const entry = validated[key]
                                 if (!entry?.path) continue

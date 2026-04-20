@@ -299,7 +299,7 @@ export class HttpTransport {
 
         // Set up MCP endpoints based on mode
         if (this.config.stateless) {
-            await setupStateless(this.app, serverFactory)
+            await setupStateless(this.app, serverFactory, hasAuth)
         } else {
             this.sessionSweepTimer = setupStateful(this, this.app, serverFactory)
             setupLegacySSE(this, this.app, serverFactory)

@@ -84,6 +84,8 @@ export interface ServerOptions {
     flagVocabulary?: string[]
     // Allowlisted roots for file IO
     allowedIoRoots?: string[]
+    // Admin override for Code Mode
+    codemodeInternalFullAccess?: boolean
 }
 
 /**
@@ -273,8 +275,9 @@ export async function createServer(options: ServerOptions): Promise<void> {
         flagVocabulary: options.flagVocabulary,
         allowedIoRoots,
         filterConfig,
-        authToken: options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined,
+        authEnabled: Boolean(options.authToken ?? process.env['MCP_AUTH_TOKEN']),
         oauthEnabled: options.oauthEnabled,
+        codemodeInternalFullAccess: options.codemodeInternalFullAccess,
         runtime,
     }
 

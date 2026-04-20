@@ -171,3 +171,6 @@
 - Prevented potential debug leakage by strictly stripping absolute local host paths from `DEBUG=true` console trace outputs.
 - Restored HTTP identity determinism by removing connection-specific random nonces and `sessionId` factors from the IP+token hash, fixing `403 Forbidden: Session belongs to a different subject` regressions for standard MCP SDK clients during stateful requests.
 - Resolved an unused variable ESLint violation by removing the obsolete `randomBytes` crypto import in the HTTP handlers module.
+- Resolved a syntax error in `src/handlers/tools/codemode.ts` that caused the `/help` resource to omit tool groups (backup, codemode, github) by silently catching module initialization failures.
+- Addressed multiple TypeScript strict-mode and ESLint violations in `codemode.ts` and `mcp-server.ts` regarding `unsafe-assignment`, missing return types, and `requestContextStorage` references.
+- Fixed a race condition test flake in `native-connection.test.ts` by replacing arbitrary FTS5 background-rebuild timeouts with a robust state-polling loop.

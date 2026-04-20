@@ -9,7 +9,6 @@ import type { Request, Response } from 'express'
 import { logger } from '../../utils/logger.js'
 import { VERSION } from '../../version.js'
 import { isValidScope } from '../../auth/scopes.js'
-import { getClientIp } from './security.js'
 
 // =============================================================================
 // Health Check
@@ -77,7 +76,7 @@ export function createAuthMiddleware(
         }
 
         const envScopes = process.env['MCP_AUTH_SCOPES']
-        let defaultScopes = envScopes ? envScopes.split(',').map(s => s.trim()) : ['read', 'write']
+        let defaultScopes = envScopes ? envScopes.split(',').map(s => s.trim()) : ['read']
         const invalidScopes = defaultScopes.filter(s => !isValidScope(s))
         if (invalidScopes.length > 0) {
             logger.warning(`Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`, { module: 'HTTP' })
@@ -86,14 +85,13 @@ export function createAuthMiddleware(
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.
-        // Derived from strict client IP to prevent multi-tenancy collapse behind proxies.
-        const ip = getClientIp(req)
         
-        // Derive identity from strict client IP and token.
+        // Derive identity from token securely.
         // We cannot use a random nonce or mcp-session-id here because standard MCP SDK clients
         // do not send mcp-session-id during initialization, which would cause the identity hash
         // to change between initialization and subsequent requests, breaking stateful sessions.
-        const hashInput = `${ip}_${authToken}`
+        // IP is removed from hash to prevent identity collapse behind NATs/proxies.
+        const hashInput = authToken
         
         const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
         const identity = `bearer-${identityHash}`

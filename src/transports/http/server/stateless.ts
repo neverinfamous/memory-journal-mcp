@@ -6,7 +6,7 @@ import { logger } from '../../../utils/logger.js'
 import { JSONRPC_SERVER_ERROR } from '../types.js'
 import { requestContextStorage } from '../../../utils/request-context.js'
 
-export async function setupStateless(app: Express, serverFactory: McpServerFactory): Promise<void> {
+export async function setupStateless(app: Express, serverFactory: McpServerFactory, isAuthExpected: boolean): Promise<void> {
     const statelessTransport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
@@ -23,7 +23,6 @@ export async function setupStateless(app: Express, serverFactory: McpServerFacto
         // Failsafe: Ensure unauthenticated requests cannot enumerate tools or execute payloads
         // if authentication is globally configured but middleware was somehow bypassed.
         const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
-        const isAuthExpected = Boolean(process.env['MCP_AUTH_TOKEN']) || process.env['OAUTH_ENABLED'] === 'true'
         if (isAuthExpected && !authReq.auth) {
             res.status(401).json({
                 jsonrpc: '2.0',
