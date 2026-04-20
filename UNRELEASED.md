@@ -9,6 +9,11 @@
 - Explicit `resolved_owner` and `resolved_repo` schema properties on all GitHub mutations to eliminate ambient context ambiguity.
 
 ### Changed
+**Dependency Updates**
+- Bumped `@huggingface/transformers` to `4.1.0`.
+- Bumped `eslint` to `10.2.1`.
+- Bumped `typescript` to `6.0.3`.
+
 - Replaced eager memory-bound `readdir` with asynchronous `opendir` streaming in the markdown importer to prevent process OOM on huge directories.
 - Replicated strict 5MB payload truncation limits to `team_export_entries` in `src/handlers/tools/team/export-tools.ts`, aligning memory bounds with the personal journal export tool.
 - Enforced strict IP-binding session isolation for Bearer-Token Auth Mode (`mcp_config.json` static tokens) to prevent identity collapse and state corruption when shared tokens are used across distinct CI pipelines.
@@ -96,6 +101,7 @@
 - Deprecated `.npmrc` legacy peer-dependencies configurations and unsafe `--force` global installations in Docker pipelines.
 - Corrected `SECURITY.md` to accurately reflect TruffleHog capabilities by removing outdated Gitleaks documentation.
 ### Security
+- Updated `hono` to `4.12.14` to resolve a medium severity security vulnerability.
 - Limited FTS5 query token strings to 500 characters prior to AST parsing to prevent ReDoS and AST bloat limits.
 - Changed the fallback client ID in `mj_execute_code` from the process-global `INSTANCE_UUID` to a per-invocation `randomUUID()`, enforcing tenant isolation for unauthenticated `stdio` callers.
 - Implemented an atomic Outbox Pattern for dual-write GitHub operations (issues/milestones) to prevent local database drift if external API calls fail.
