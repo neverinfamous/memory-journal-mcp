@@ -310,6 +310,11 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             args['project_number'] = sessionContext.config.defaultProjectNumber
                         }
 
+                        // Inject repo into args to propagate GitHub context across the dispatcher boundary
+                        if (repo && !('repo' in args)) {
+                            args['repo'] = repo
+                        }
+
                         const executeAuth = (): Promise<unknown> => {
                             if (capturedAuthCtx) {
                                 return runWithAuthContext(capturedAuthCtx, () => dispatcher(name, args))
