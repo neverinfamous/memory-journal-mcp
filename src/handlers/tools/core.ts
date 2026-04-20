@@ -191,7 +191,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         isPersonal: input.is_personal,
                         significanceType: input.significance_type ?? null,
-                        projectNumber: input.project_number,
+                        projectNumber: input.project_number ?? context.config?.defaultProjectNumber,
                         projectOwner: input.project_owner,
                         issueNumber: input.issue_number,
                         issueUrl: initialIssueUrl,
@@ -257,7 +257,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         try {
                             const resolvedUrl = await resolveIssueUrl(
                                 context,
-                                input.project_number,
+                                input.project_number ?? context.config?.defaultProjectNumber,
                                 input.issue_number,
                                 input.issue_url
                             )

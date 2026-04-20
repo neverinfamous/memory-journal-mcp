@@ -301,6 +301,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     const capturedAuthCtx = authCtx
 
                     const secureDispatcher = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+                        // Inject defaultProjectNumber into args to propagate repo context across the dispatcher boundary
+                        if (
+                            sessionContext.config?.defaultProjectNumber !== undefined &&
+                            !('project_number' in args) &&
+                            (name === 'create_entry' || name === 'update_entry' || name === 'delete_entry')
+                        ) {
+                            args['project_number'] = sessionContext.config.defaultProjectNumber
+                        }
+
                         const executeAuth = (): Promise<unknown> => {
                             if (capturedAuthCtx) {
                                 return runWithAuthContext(capturedAuthCtx, () => dispatcher(name, args))

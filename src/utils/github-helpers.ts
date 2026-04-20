@@ -27,7 +27,11 @@ export async function resolveIssueUrl(
             // Dynamically import and instantiate GitHubIntegration for the resolved path
             // to extract the correct owner/repo directly from the target filesystem
             const { getGitHubIntegration } = await import('../github/github-integration/index.js')
-            const targetGithub = getGitHubIntegration(entry[1].path)
+            const targetGithub = getGitHubIntegration(
+                entry[1].path,
+                undefined,
+                process.env['GITHUB_TOKEN']
+            )
             const repoInfo = await targetGithub.getRepoInfo()
             const host = process.env['GITHUB_HOST'] ?? 'github.com'
             if (repoInfo.owner && repoInfo.repo) {
