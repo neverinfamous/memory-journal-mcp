@@ -94,7 +94,7 @@ export class PullRequestsManager {
                 title: markUntrustedContentInline(pr.title),
                 url: pr.html_url,
                 state: pr.merged_at ? 'MERGED' : pr.state === 'open' ? 'OPEN' : 'CLOSED',
-                body: markUntrustedContent(pr.body),
+                body: pr.body || '',
                 draft: pr.draft ?? false,
                 headBranch: pr.head.ref,
                 baseBranch: pr.base.ref,

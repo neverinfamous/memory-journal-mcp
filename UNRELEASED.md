@@ -180,3 +180,10 @@
 - Resolved a syntax error in `src/handlers/tools/codemode.ts` that caused the `/help` resource to omit tool groups (backup, codemode, github) by silently catching module initialization failures.
 - Addressed multiple TypeScript strict-mode and ESLint violations in `codemode.ts` and `mcp-server.ts` regarding `unsafe-assignment`, missing return types, and `requestContextStorage` references.
 - Fixed a race condition test flake in `native-connection.test.ts` by replacing arbitrary FTS5 background-rebuild timeouts with a robust state-polling loop.
+- Decoupled `markUntrustedContent` trust-wrapping from GitHub API raw data fetching, deferring application until after payload truncation to guarantee boundary tag integrity.
+- Implemented strict 50MB global and 10MB per-item cache memory limits with LRU byte-accounting for the GitHub API client to prevent uncontrolled heap exhaustion.
+- Refactored prompt handlers to sanitize and wrap remote content fields before JSON serialization, completely mitigating prompt injection risks during stringification.
+- Escaped static URI patterns in the dynamic resource router template generation to neutralize ReDoS and parametric regex injection vulnerabilities.
+- Migrated inconsistent manual untrusted tags to `markUntrustedContentInline` within GitHub briefing resource generation.
+- Resolved ESLint optional chaining violations in Code Mode's `worker-sandbox.ts` method validation.
+- Fixed cascading test suite regressions by aligning assertions with new untrusted boundary tag lengths and updating E2E context injection mocks to satisfy `codemodeInternalFullAccess` requirements.

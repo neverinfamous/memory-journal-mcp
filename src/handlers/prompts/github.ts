@@ -9,7 +9,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import type { JournalEntry } from '../../types/index.js'
-import { markUntrustedContent } from '../../utils/security-utils.js'
+import { markUntrustedContentInline } from '../../utils/security-utils.js'
 
 function formatPromptEntries(
     entries: JournalEntry[],
@@ -19,7 +19,7 @@ function formatPromptEntries(
         id: e.id,
         type: e.entryType,
         timestamp: e.timestamp,
-        content: e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content,
+        content: markUntrustedContentInline(e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content),
     }))
 }
 
@@ -49,7 +49,7 @@ export function getGitHubPromptDefinitions(): InternalPromptDef[] {
 Provide: overview, recent activity, blockers, next steps.
 
 Sources:
-${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
+${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                             },
                         },
                     ],
@@ -75,7 +75,7 @@ ${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
 Provide: summary of changes, decisions made, testing done.
 
 Sources:
-${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
+${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                             },
                         },
                     ],
@@ -101,7 +101,7 @@ ${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
 Provide: review checklist, areas of concern, testing recommendations.
 
 Sources:
-${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
+${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                             },
                         },
                     ],
@@ -127,7 +127,7 @@ ${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
 Provide: what went well, challenges, lessons learned.
 
 Sources:
-${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
+${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                             },
                         },
                     ],
@@ -152,7 +152,7 @@ ${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
 Provide: failure patterns, root causes, remediation steps.
 
 Sources:
-${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
+${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                             },
                         },
                     ],
@@ -180,7 +180,7 @@ ${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
 Provide: progress summary, upcoming milestones, timeline.
 
 Sources:
-${markUntrustedContent(JSON.stringify(formatPromptEntries(entries), null, 2))}`,
+${JSON.stringify(formatPromptEntries(entries), null, 2)}`,
                             },
                         },
                     ],

@@ -18,6 +18,7 @@ import {
 } from './schemas.js'
 import { resolveOwnerRepo } from './helpers.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
+import { markUntrustedContent } from '../../../utils/security-utils.js'
 
 
 // ============================================================================
@@ -222,6 +223,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         bodyTruncated = true
                     }
                     
+                    safeIssue.body = markUntrustedContent(safeIssue.body)
 
 
                     // Fetch comments if requested
@@ -321,6 +323,7 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                         bodyTruncated = true
                     }
                     
+                    safePr.body = markUntrustedContent(safePr.body)
 
 
                     return {

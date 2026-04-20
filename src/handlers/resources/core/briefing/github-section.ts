@@ -9,6 +9,7 @@ import type { GitHubIntegration } from '../../../../github/github-integration/in
 import type { BriefingConfig } from '../../shared.js'
 import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
+import { markUntrustedContentInline } from '../../../../utils/security-utils.js'
 
 /**
  * Shape of the assembled GitHub context for the briefing.
@@ -263,7 +264,7 @@ async function fetchIssuesAndPrs(
             config.issueCount > 0 && issues.length > 0
                 ? issues
                       .slice(0, config.issueCount)
-                      .map((i) => ({ number: i.number, title: `<untrusted_remote_content>${i.title}</untrusted_remote_content>` }))
+                      .map((i) => ({ number: i.number, title: markUntrustedContentInline(i.title) }))
                 : undefined
 
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
@@ -282,7 +283,7 @@ async function fetchIssuesAndPrs(
             config.prCount > 0 && prs.length > 0
                 ? prs.slice(0, config.prCount).map((p) => ({
                       number: p.number,
-                      title: `<untrusted_remote_content>${p.title}</untrusted_remote_content>`,
+                      title: markUntrustedContentInline(p.title),
                       state: p.state,
                   }))
                 : undefined

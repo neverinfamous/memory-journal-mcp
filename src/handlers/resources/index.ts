@@ -121,11 +121,12 @@ export async function readResource(
     // Check for template matches (also use base URI)
     for (const resource of resources) {
         if (resource.uri.includes('{')) {
+            const escapedUri = resource.uri.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
             // Use (.+) for {+repo} to allow slashes (e.g., owner/repo), otherwise use ([^/]+)
-            const pattern = resource.uri.replace(
-                /\{([^}]+)\}/g,
+            const pattern = escapedUri.replace(
+                /\\{([^}]+)\\}/g,
                 (_match: string, paramName: string) => {
-                    const cleanParam = paramName.startsWith('+') ? paramName.slice(1) : paramName
+                    const cleanParam = paramName.replace(/^\\?\+/, '')
                     return cleanParam === 'repo' ? '(.+)' : '([^/]+)'
                 }
             )

@@ -243,28 +243,36 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                     // Context injection for GitHub / Kanban routing
                     let sessionContext = context
-                    if (repo && context.config?.projectRegistry && Object.prototype.hasOwnProperty.call(context.config.projectRegistry, repo)) {
-                        const registryEntry = context.config.projectRegistry[repo]
-                        if (registryEntry) {
-                            const injectedGithub = getGitHubIntegration(registryEntry.path, sessionContext.config?.runtime)
-                            try {
-                                // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
-                                await injectedGithub.getRepoInfo()
-                            } catch (error) {
-                                return {
-                                    success: false,
-                                    error: `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`,
-                                }
+                    if (repo) {
+                        if (!context.config?.codemodeInternalFullAccess) {
+                            return {
+                                success: false,
+                                error: 'Repo switching is restricted to internal administrative access.',
                             }
-                            sessionContext = {
-                                ...context,
-                                github: injectedGithub,
-                                config: {
-                                    ...context.config,
-                                    defaultProjectNumber:
-                                        registryEntry.project_number ??
-                                        context.config.defaultProjectNumber,
-                                },
+                        }
+                        if (context.config?.projectRegistry && Object.prototype.hasOwnProperty.call(context.config.projectRegistry, repo)) {
+                            const registryEntry = context.config.projectRegistry[repo]
+                            if (registryEntry) {
+                                const injectedGithub = getGitHubIntegration(registryEntry.path, sessionContext.config?.runtime)
+                                try {
+                                    // Pre-populate cache so synchronous tools (like create_entry) can resolve Issue URLs
+                                    await injectedGithub.getRepoInfo()
+                                } catch (error) {
+                                    return {
+                                        success: false,
+                                        error: `Failed to initialize injected repository '${repo}': ${error instanceof Error ? error.message : String(error)}`,
+                                    }
+                                }
+                                sessionContext = {
+                                    ...context,
+                                    github: injectedGithub,
+                                    config: {
+                                        ...context.config,
+                                        defaultProjectNumber:
+                                            registryEntry.project_number ??
+                                            context.config.defaultProjectNumber,
+                                    },
+                                }
                             }
                         }
                     }
@@ -282,7 +290,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // and audit interception apply to all inner tool calls.
                     const dispatcher = sessionContext.config?.dispatch
                     if (!dispatcher) {
-                        throw new ConfigurationError('Code Mode requires a secure dispatcher to ensure scope checks and audit interception.')
+                        throw new ConfigurationError('Code Mode is unavailable in the current configuration.')
                     }
                     
                     const capturedReqCtx = reqCtx

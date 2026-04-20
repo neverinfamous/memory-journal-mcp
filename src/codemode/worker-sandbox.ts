@@ -198,7 +198,7 @@ export class WorkerSandbox {
             }
 
             hostPort.on('message', (msg: RpcRequest) => {
-                void handleRpcRequest(msg, apiBindings, hostPort)
+                void handleRpcRequest(msg, apiBindings, hostPort, methodList)
             })
 
             let maxResultSize = process.env['CODE_MODE_MAX_RESULT_SIZE'] 
@@ -231,11 +231,19 @@ export class WorkerSandbox {
 async function handleRpcRequest(
     req: RpcRequest,
     apiBindings: Record<string, unknown>,
-    hostPort: MessagePort
+    hostPort: MessagePort,
+    methodList: Record<string, string[]>
 ): Promise<void> {
     const response: RpcResponse = { id: req.id }
 
     try {
+        const allowedMethods = methodList[req.group]
+        if (!allowedMethods?.includes(req.method)) {
+            response.error = `Unauthorized method invocation: ${req.group}.${req.method}`
+            hostPort.postMessage(response)
+            return
+        }
+
         let target: unknown
         if (req.group === '_topLevel') {
             target = apiBindings[req.method]

@@ -9,6 +9,7 @@ export const TRAFFIC_CACHE_TTL_MS = 10 * 60 * 1000
 export interface CacheEntry<T> {
     data: T
     timestamp: number
+    sizeBytes: number
 }
 
 type SimpleGitType = typeof simpleGitImport.simpleGit
@@ -20,6 +21,9 @@ export class GitHubClient {
     public git: simpleGitImport.SimpleGit
 
     public readonly apiCache = new Map<string, CacheEntry<unknown>>()
+    private totalCacheBytes = 0
+    private readonly MAX_CACHE_BYTES = 50 * 1024 * 1024 // 50MB global limit
+    private readonly MAX_ENTRY_BYTES = 10 * 1024 * 1024 // 10MB per-item limit
 
     constructor(workingDir = '.', token?: string) {
         const resolvedToken = token ?? process.env['GITHUB_TOKEN']
@@ -63,6 +67,7 @@ export class GitHubClient {
             return entry.data
         }
         if (entry) {
+            this.totalCacheBytes -= entry.sizeBytes
             this.apiCache.delete(key)
         }
         return undefined
@@ -77,27 +82,52 @@ export class GitHubClient {
             return entry.data
         }
         if (entry) {
+            this.totalCacheBytes -= entry.sizeBytes
             this.apiCache.delete(key)
         }
         return undefined
     }
 
     setCache(key: string, data: unknown): void {
-        this.apiCache.delete(key) // Ensure it is inserted at the end of iteration order
-        this.apiCache.set(key, { data, timestamp: Date.now() })
+        let sizeBytes: number
+        try {
+            sizeBytes = Buffer.byteLength(JSON.stringify(data) || '', 'utf8')
+        } catch {
+            sizeBytes = 1024 // Fallback rough estimate if circular
+        }
 
-        // Prevent unbounded memory growth (Max 1000 items)
-        if (this.apiCache.size > 1000) {
+        if (sizeBytes > this.MAX_ENTRY_BYTES) {
+            return // Skip caching items that are too large
+        }
+
+        const existing = this.apiCache.get(key)
+        if (existing) {
+            this.totalCacheBytes -= existing.sizeBytes
+        }
+
+        this.apiCache.delete(key) // Ensure it is inserted at the end of iteration order
+        this.apiCache.set(key, { data, timestamp: Date.now(), sizeBytes })
+        this.totalCacheBytes += sizeBytes
+
+        // Prevent unbounded memory growth (Max 1000 items OR Max 50MB)
+        while (this.apiCache.size > 1000 || this.totalCacheBytes > this.MAX_CACHE_BYTES) {
             const oldestKey = this.apiCache.keys().next().value
             if (oldestKey !== undefined) {
+                const oldestEntry = this.apiCache.get(oldestKey)
+                if (oldestEntry) {
+                    this.totalCacheBytes -= oldestEntry.sizeBytes
+                }
                 this.apiCache.delete(oldestKey)
+            } else {
+                break
             }
         }
     }
 
     invalidateCache(prefix: string): void {
-        for (const key of this.apiCache.keys()) {
+        for (const [key, entry] of this.apiCache.entries()) {
             if (key.startsWith(prefix)) {
+                this.totalCacheBytes -= entry.sizeBytes
                 this.apiCache.delete(key)
             }
         }
@@ -105,5 +135,6 @@ export class GitHubClient {
 
     clearCache(): void {
         this.apiCache.clear()
+        this.totalCacheBytes = 0
     }
 }

@@ -247,12 +247,13 @@ parentPort?.on('message', (msg: unknown) => {
                                 cache.add(value)
                             }
                             if (typeof value === 'string') {
-                                const strBytes = Buffer.byteLength(value, 'utf8')
-                                bytes += strBytes
-                                if (bytes > egressLimit) throw new Error('EgressLimitExceeded')
-                                return value
+                                bytes += Buffer.byteLength(value, 'utf8') + 2 // include quotes
+                            } else if (typeof value === 'number' || typeof value === 'boolean') {
+                                bytes += Buffer.byteLength(String(value), 'utf8')
+                            } else {
+                                bytes += 5 // brackets/keys/null overhead
                             }
-                            bytes += 5 // rough approx for keys/brackets
+                            
                             if (bytes > egressLimit) throw new Error('EgressLimitExceeded')
                             return value
                         }

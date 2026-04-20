@@ -10,7 +10,7 @@ import type { IDatabaseAdapter } from '../../database/core/interfaces.js'
 import { ICON_PROMPT } from '../../constants/icons.js'
 import type { InternalPromptDef } from './index.js'
 import { ConfigurationError } from '../../types/errors.js'
-import { markUntrustedContent } from '../../utils/security-utils.js'
+import { markUntrustedContent, markUntrustedContentInline } from '../../utils/security-utils.js'
 
 /** Milliseconds in one day */
 const MS_PER_DAY = 86_400_000
@@ -204,10 +204,11 @@ ${markUntrustedContent(entries.slice(0, 15).map((e) => `[${e.timestamp}] ${e.ent
                     id: e.id,
                     type: e.entryType,
                     timestamp: e.timestamp,
-                    content:
+                    content: markUntrustedContentInline(
                         e.content.length > 250
                             ? e.content.slice(0, 250) + '...'
-                            : e.content,
+                            : e.content
+                    ),
                 }))
 
                 return {
@@ -220,7 +221,7 @@ ${markUntrustedContent(entries.slice(0, 15).map((e) => `[${e.timestamp}] ${e.ent
 Summarize progress toward goals and highlight achievements.
 
 Sources:
-${markUntrustedContent(JSON.stringify(mappedEntries, null, 2))}`,
+${JSON.stringify(mappedEntries, null, 2)}`,
                             },
                         },
                     ],

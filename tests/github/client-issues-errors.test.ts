@@ -62,7 +62,7 @@ describe('GitHubClient — branch coverage', () => {
         })
 
         it('should delete expired entries and return undefined', () => {
-            client.apiCache.set('expired', { data: 'old', timestamp: Date.now() - 10 * 60 * 1000 })
+            client.apiCache.set('expired', { data: 'old', timestamp: Date.now() - 10 * 60 * 1000, sizeBytes: 9 })
             expect(client.getCached('expired')).toBeUndefined()
             expect(client.apiCache.has('expired')).toBe(false)
         })
@@ -75,7 +75,7 @@ describe('GitHubClient — branch coverage', () => {
         })
 
         it('should return undefined for expired entry with custom TTL', () => {
-            client.apiCache.set('old-ttl', { data: 'stale', timestamp: Date.now() - 120_000 })
+            client.apiCache.set('old-ttl', { data: 'stale', timestamp: Date.now() - 120_000, sizeBytes: 10 })
             expect(client.getCachedWithTtl('old-ttl', 60_000)).toBeUndefined()
             expect(client.apiCache.has('old-ttl')).toBe(false)
         })
@@ -254,7 +254,7 @@ describe('IssuesManager — branch coverage', () => {
             expect(result).not.toBeNull()
             expect(result!.labels).toEqual(['bug', 'string-label'])
             expect(result!.assignees).toEqual(['alice'])
-            expect(result!.body).toBe('<untrusted_remote_content>\nIssue body\n</untrusted_remote_content>')
+            expect(result!.body).toBe('Issue body')
         })
 
         it('should handle API error', async () => {

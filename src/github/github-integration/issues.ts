@@ -88,7 +88,7 @@ export class IssuesManager {
                 url: issue.html_url,
                 state: issue.state === 'open' ? 'OPEN' : 'CLOSED',
                 nodeId: issue.node_id,
-                body: markUntrustedContent(issue.body),
+                body: issue.body || '',
                 labels: issue.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))),
                 assignees: issue.assignees?.map((a) => a.login) ?? [],
                 createdAt: issue.created_at,
