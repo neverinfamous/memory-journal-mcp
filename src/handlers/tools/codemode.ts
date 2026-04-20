@@ -295,7 +295,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     
                     const capturedReqCtx = reqCtx
                     const capturedAuthCtx = authCtx
-                    
+
                     const secureDispatcher = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
                         const executeAuth = (): Promise<unknown> => {
                             if (capturedAuthCtx) {
@@ -303,10 +303,17 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                             }
                             return dispatcher(name, args)
                         }
-                        if (capturedReqCtx) {
-                            return requestContextStorage.run(capturedReqCtx, executeAuth)
+                        
+                        const mm = sessionContext.config?.runtime?.maintenanceManager;
+                        if (mm) mm.yieldJob();
+                        try {
+                            if (capturedReqCtx) {
+                                return await requestContextStorage.run(capturedReqCtx, executeAuth)
+                            }
+                            return await executeAuth()
+                        } finally {
+                            if (mm) mm.resumeJob();
                         }
-                        return executeAuth()
                     }
 
                     const api = createJournalApi(tools, secureDispatcher)

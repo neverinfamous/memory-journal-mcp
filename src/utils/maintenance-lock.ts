@@ -31,6 +31,18 @@ export class MaintenanceManager {
         }
     }
 
+    yieldJob(): void {
+        this.activeJobs--;
+        if (this.maintenanceWaitPromise !== null && this.activeJobs <= (this.inMaintenanceMode ? 1 : 0)) {
+            this.maintenanceWaitPromise.resolve();
+            this.maintenanceWaitPromise = null;
+        }
+    }
+
+    resumeJob(): void {
+        this.activeJobs++;
+    }
+
     async acquireMaintenanceLock(): Promise<void> {
         if (this.inMaintenanceMode) {
             throw new Error('Maintenance lock is already acquired.');
