@@ -206,7 +206,6 @@
 - Resolved ESLint optional chaining violations in Code Mode's `worker-sandbox.ts` method validation.
 - Fixed cascading test suite regressions by aligning assertions with new untrusted boundary tag lengths and updating E2E context injection mocks to satisfy `codemodeInternalFullAccess` requirements.
 - Resolved a re-entrancy deadlock in Code Mode during `restore_backup` by temporarily yielding the active job count to allow the inner tool to acquire the maintenance lock.
-- Successfully verified Code Mode API Discoverability (Phase 17) ensuring top-level help, per-group help, method aliases, and positional arguments execute efficiently (~567 tokens total) without regressions.
 - Enforced proper propagation of `TEAM_AUTHOR` and `codemodeInternalFullAccess` bypass within `share_with_team` Core tools for testing environments.
 - Successfully verified Code Mode Core CRUD operations (Phase 20), validating parameter passing, structured error handling, and team sharing across 12 test paths.
 - Fixed a bug in `create_entry` where it returned a stale entry object lacking the auto-populated `issueUrl` by capturing and assigning the result of `updateEntry`.
@@ -219,4 +218,4 @@
 - Fixed a severe performance oversight in `GitHubIntegration.getRepoInfo()` where it bypassed its own cache and spawned redundant `git branch` subprocesses on every invocation, causing high latency and intermittent resolution failures in worker sandboxes.
 - Fixed a bug in `GitHubIntegration` where `getIssue`, `getPullRequest`, and `getMilestone` threw raw 404 exceptions instead of returning `null`, causing the error boundary to intercept them as generic internal errors instead of the expected structured `RESOURCE_NOT_FOUND` responses.
 - Fixed a bug in `get_copilot_reviews` where fetching reviews for a non-existent pull request threw an unhandled 404 error; it now verifies PR existence and returns a structured `RESOURCE_NOT_FOUND` response.
-- Successfully verified Code Mode GitHub Tools (Phase 25), validating read-only lookups, structured error responses, Kanban operations, issue/milestone CRUD lifecycle, and repository insights across 16 test paths without regressions.
+- Successfully verified Code Mode IO operations (Phase 26), ensuring `mj.io.exportMarkdown` and `mj.io.importMarkdown` correctly enforce `ALLOWED_IO_ROOTS` sandbox boundaries and block path traversal attempts.
