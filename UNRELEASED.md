@@ -219,4 +219,4 @@
 - Fixed a severe performance oversight in `GitHubIntegration.getRepoInfo()` where it bypassed its own cache and spawned redundant `git branch` subprocesses on every invocation, causing high latency and intermittent resolution failures in worker sandboxes.
 - Fixed a bug in `GitHubIntegration` where `getIssue`, `getPullRequest`, and `getMilestone` threw raw 404 exceptions instead of returning `null`, causing the error boundary to intercept them as generic internal errors instead of the expected structured `RESOURCE_NOT_FOUND` responses.
 - Fixed a bug in `get_copilot_reviews` where fetching reviews for a non-existent pull request threw an unhandled 404 error; it now verifies PR existence and returns a structured `RESOURCE_NOT_FOUND` response.
-
+- Successfully verified Code Mode GitHub Tools (Phase 25), validating read-only lookups, structured error responses, Kanban operations, issue/milestone CRUD lifecycle, and repository insights across 16 test paths without regressions.
