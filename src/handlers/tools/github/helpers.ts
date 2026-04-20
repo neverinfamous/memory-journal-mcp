@@ -31,6 +31,7 @@ export function resolveProjectNumber(
 export async function resolveOwner(
     context: ToolContext,
     inputOwner?: string,
+    inputRepo?: string,
     entityLabel?: string
 ): Promise<
     | {
@@ -41,7 +42,20 @@ export async function resolveOwner(
       }
     | { error: true; response: Record<string, unknown> }
 > {
-    if (!context.github?.isApiAvailable()) {
+    let toolGithub: GitHubIntegration | undefined
+    const registry = context.config?.projectRegistry
+    const registryEntry =
+        inputRepo && registry && Object.prototype.hasOwnProperty.call(registry, inputRepo)
+            ? registry[inputRepo]
+            : undefined
+
+    if (registryEntry) {
+        toolGithub = getGitHubIntegration(registryEntry.path, context.config?.runtime)
+    } else if (context.github) {
+        toolGithub = context.github
+    }
+
+    if (!toolGithub?.isApiAvailable()) {
         return {
             error: true,
             response: {
@@ -56,7 +70,7 @@ export async function resolveOwner(
         }
     }
 
-    const repoInfo = await context.github.getRepoInfo()
+    const repoInfo = await toolGithub.getRepoInfo()
     const detectedOwner = repoInfo.owner
     const owner = inputOwner ?? detectedOwner ?? undefined
     const repo = repoInfo.repo ?? undefined
@@ -79,7 +93,7 @@ export async function resolveOwner(
         }
     }
 
-    return { owner, detectedOwner, repo, github: context.github }
+    return { owner, detectedOwner, repo, github: toolGithub }
 }
 
 /**

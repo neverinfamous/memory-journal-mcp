@@ -7,6 +7,9 @@ export class RepositoryManager {
     constructor(private client: GitHubClient) {}
 
     async getRepoInfo(): Promise<RepoInfo> {
+        const cached = this.getCachedRepoInfo()
+        if (cached) return cached
+
         try {
             const branchResult = await this.client.git.branch()
             const branch = branchResult.current || null
