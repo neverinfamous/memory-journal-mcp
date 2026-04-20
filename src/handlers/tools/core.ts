@@ -185,7 +185,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     // The user's provided issueUrl (if any)
                     const initialIssueUrl = input.issue_url
 
-                    const entry = db.createEntry({
+                    let entry = db.createEntry({
                         content: input.content,
                         entryType: input.entry_type,
                         tags: input.tags,
@@ -262,7 +262,10 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 input.issue_url
                             )
                             if (resolvedUrl) {
-                                db.updateEntry(entry.id, { issueUrl: resolvedUrl })
+                                const updatedEntry = db.updateEntry(entry.id, { issueUrl: resolvedUrl })
+                                if (updatedEntry) {
+                                    entry = updatedEntry
+                                }
                                 if (teamDb && teamEntryId !== undefined) {
                                     teamDb.updateEntry(teamEntryId, { issueUrl: resolvedUrl })
                                 }
