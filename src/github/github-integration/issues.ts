@@ -103,6 +103,9 @@ export class IssuesManager {
             this.client.setCache(cacheKey, details)
             return details
         } catch (error) {
+            if (error instanceof Error && 'status' in error && error.status === 404) {
+                return null
+            }
             logger.error('Failed to get issue details', {
                 module: 'GitHub',
                 entityId: issueNumber,

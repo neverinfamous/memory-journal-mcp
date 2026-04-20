@@ -217,3 +217,5 @@
 - Fixed a critical boundary exception leak in Code Mode where `enforceAccessBoundary` authorization failures threw raw MCP exceptions, crashing the sandbox; they now correctly return a structured `{success: false}` error response.
 - Fixed a context resolution bug in `resolveOwner` and Kanban tools where they failed to utilize the project registry fallback, causing "Could not auto-detect repository owner" errors when executing inside the Code Mode sandbox.
 - Fixed a severe performance oversight in `GitHubIntegration.getRepoInfo()` where it bypassed its own cache and spawned redundant `git branch` subprocesses on every invocation, causing high latency and intermittent resolution failures in worker sandboxes.
+- Fixed a bug in `GitHubIntegration` where `getIssue`, `getPullRequest`, and `getMilestone` threw raw 404 exceptions instead of returning `null`, causing the error boundary to intercept them as generic internal errors instead of the expected structured `RESOURCE_NOT_FOUND` responses.
+

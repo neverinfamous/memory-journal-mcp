@@ -94,6 +94,9 @@ export class MilestonesManager {
             this.client.setCache(cacheKey, milestone)
             return milestone
         } catch (error) {
+            if (error instanceof Error && 'status' in error && error.status === 404) {
+                return null
+            }
             logger.error('Failed to get milestone', {
                 module: 'GitHub',
                 entityId: milestoneNumber,
