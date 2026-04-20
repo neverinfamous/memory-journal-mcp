@@ -1,3 +1,4 @@
+import { getGitHubIntegration } from '../github/github-integration/index.js'
 import type { ToolContext } from '../types/index.js'
 
 /**
@@ -24,9 +25,8 @@ export async function resolveIssueUrl(
             ([_, v]) => v.project_number === projectNumber
         )
         if (entry) {
-            // Dynamically import and instantiate GitHubIntegration for the resolved path
+            // Instantiate GitHubIntegration for the resolved path
             // to extract the correct owner/repo directly from the target filesystem
-            const { getGitHubIntegration } = await import('../github/github-integration/index.js')
             const targetGithub = getGitHubIntegration(
                 entry[1].path,
                 undefined,

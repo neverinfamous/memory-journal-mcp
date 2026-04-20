@@ -250,8 +250,15 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                                 error: 'Repo switching is restricted to internal administrative access.',
                             }
                         }
-                        if (context.config?.projectRegistry && Object.prototype.hasOwnProperty.call(context.config.projectRegistry, repo)) {
-                            const registryEntry = context.config.projectRegistry[repo]
+                        if (context.config?.projectRegistry) {
+                            let registryEntry = context.config.projectRegistry[repo]
+                            if (!registryEntry && repo.includes('/')) {
+                                const repoName = repo.split('/').pop()
+                                if (repoName) {
+                                    registryEntry = context.config.projectRegistry[repoName]
+                                }
+                            }
+
                             if (registryEntry) {
                                 const injectedGithub = getGitHubIntegration(
                                     registryEntry.path, 

@@ -276,7 +276,7 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             logger.error('Failed to resolve issue url synchronously', {
                                 error: String(err),
                             })
-                            enrichmentStatus = 'failed'
+                            enrichmentStatus = 'failed: ' + String(err)
                         }
                     }
 
