@@ -3,13 +3,16 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
 ### Added
+
 - Explicit HTTP service-level `curl` container health-checks to `docker-compose.yml`.
 - True O(1) LRU eviction (using `Map.prototype.keys().next()`) to rate-limiting and user tracking maps to deterministically cap memory under high throughput.
 - A `Map` caching layer tied to the local workspace path to minimize redundant OctoKit and Git instantiations.
 - Explicit `resolved_owner` and `resolved_repo` schema properties on all GitHub mutations to eliminate ambient context ambiguity.
 
 ### Changed
+
 **Dependency Updates**
+
 - Bumped `@huggingface/transformers` to `4.1.0`.
 - Bumped `eslint` to `10.2.1`.
 - Bumped `typescript` to `6.0.3`.
@@ -64,10 +67,12 @@
 - Created an explicit repository-local `.npmrc` enforcing `save-exact=true` and `engine-strict=true` for supply-chain determinism.
 
 ### Deprecated
+
 - Officially deprecated the `autoContext` field across the memory journal ecosystem. Existing records are safely ignored.
 - Marked core `.getRawDb()` and execution mechanisms as `@deprecated` and `@internal` to restrict usage strictly to database adapters.
 
 ### Fixed
+
 - Test suite regressions in Vitest and Playwright E2E suites by properly injecting `TEAM_AUTHOR` and environment variables to satisfy newly centralized fail-closed security boundary checks.
 - Unhandled `no-unsafe-return` and `no-explicit-any` ESLint regressions during Code Mode worker serialization.
 - N+1 query performance bottlenecks during team semantic search and Markdown exports by batch-fetching tags.
@@ -105,7 +110,9 @@
 - Startup schema migrations in `NativeConnectionManager` by wrapping column injections in atomic transactions.
 - Deprecated `.npmrc` legacy peer-dependencies configurations and unsafe `--force` global installations in Docker pipelines.
 - Corrected `SECURITY.md` to accurately reflect TruffleHog capabilities by removing outdated Gitleaks documentation.
+
 ### Security
+
 - Updated `hono` to `4.12.14` to resolve a medium severity security vulnerability.
 - Limited FTS5 query token strings to 500 characters prior to AST parsing to prevent ReDoS and AST bloat limits.
 - Changed the fallback client ID in `mj_execute_code` from the process-global `INSTANCE_UUID` to a per-invocation `randomUUID()`, enforcing tenant isolation for unauthenticated `stdio` callers.

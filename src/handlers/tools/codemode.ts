@@ -332,10 +332,19 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         const mm = sessionContext.config?.runtime?.maintenanceManager;
                         if (mm) mm.yieldJob();
                         try {
+                            let result: unknown;
                             if (capturedReqCtx) {
-                                return await requestContextStorage.run(capturedReqCtx, executeAuth)
+                                result = await requestContextStorage.run(capturedReqCtx, executeAuth)
+                            } else {
+                                result = await executeAuth()
                             }
-                            return await executeAuth()
+                            return result;
+                        } catch (error) {
+                            return {
+                                success: false,
+                                error: error instanceof Error ? error.message : String(error),
+                                code: 'DISPATCH_ERROR'
+                            }
                         } finally {
                             if (mm) mm.resumeJob();
                         }
