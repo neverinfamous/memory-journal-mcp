@@ -13,6 +13,11 @@
 - Bumped `@huggingface/transformers` to `4.1.0`.
 - Bumped `eslint` to `10.2.1`.
 - Bumped `typescript` to `6.0.3`.
+- Bumped GitHub Action `hashgraph-online/skill-publish` to `v1.2`.
+- Bumped GitHub Action `dependabot/fetch-metadata` to `v3.1.0`.
+- Bumped GitHub Action `docker/build-push-action` to `v7.1.0`.
+- Bumped GitHub Action `actions/github-script` to `v9.0.0`.
+- Bumped GitHub Action `actions/setup-node` to `v6.4.0`.
 
 - Replaced eager memory-bound `readdir` with asynchronous `opendir` streaming in the markdown importer to prevent process OOM on huge directories.
 - Replicated strict 5MB payload truncation limits to `team_export_entries` in `src/handlers/tools/team/export-tools.ts`, aligning memory bounds with the personal journal export tool.

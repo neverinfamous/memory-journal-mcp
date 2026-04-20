@@ -4,7 +4,7 @@
 | :-------------------------------- | :---------------------- |
 | `test-cm-admin-backup.md`         | ~141                    |
 | `test-cm-api-discovery.md`        | ~228                    |
-| `test-cm-crud.md`                 | ~811                    |
+| `test-cm-crud.md`                 | ~671                    |
 | `test-cm-error-matrix.md`         | ~592                    |
 | `test-cm-github.md`               | ~757                    |
 | `test-cm-io.md`                   | ~98                     |
