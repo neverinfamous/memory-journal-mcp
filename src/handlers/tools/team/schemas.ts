@@ -417,6 +417,7 @@ export const TeamExportOutputSchema = z
         format: z.string().optional(),
         data: z.string().optional(),
         count: z.number().optional(),
+        truncated: z.boolean().optional(),
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)

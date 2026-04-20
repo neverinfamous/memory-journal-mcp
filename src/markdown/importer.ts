@@ -6,7 +6,7 @@
  * relationship linking, and dry-run mode.
  */
 
-import { readdir, open } from 'node:fs/promises'
+import { opendir, open } from 'node:fs/promises'
 import { join } from 'node:path'
 import { constants } from 'node:fs'
 import type { IDatabaseAdapter } from '../database/core/interfaces.js'
@@ -124,9 +124,15 @@ export async function importMarkdownEntries(
     // Dynamically enforce bounded root
     assertSafeDirectoryPath(sourceDir, allowedRoots)
 
-    // Read directory for .md files
-    const allFiles = await readdir(sourceDir)
-    const mdFiles = allFiles.filter((f) => f.endsWith('.md')).slice(0, limit)
+    // Stream directory for .md files to avoid memory exhaustion on huge directories
+    const mdFiles: string[] = []
+    const dir = await opendir(sourceDir)
+    for await (const dirent of dir) {
+        if (dirent.isFile() && dirent.name.endsWith('.md')) {
+            mdFiles.push(dirent.name)
+            if (mdFiles.length >= limit) break
+        }
+    }
 
     const result: ImportResult = {
         success: true,

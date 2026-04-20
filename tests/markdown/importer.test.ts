@@ -4,6 +4,7 @@ import * as fs from 'node:fs/promises'
 
 vi.mock('node:fs/promises', () => ({
     readdir: vi.fn(),
+    opendir: vi.fn(),
     readFile: vi.fn(),
     stat: vi.fn().mockResolvedValue({ isDirectory: () => true, size: 100 }),
     lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
@@ -42,7 +43,11 @@ describe('importMarkdownEntries', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        vi.mocked(fs.readdir).mockResolvedValue(['1-test.md', 'ignore-dir', 'ignore.txt'] as any)
+        vi.mocked(fs.opendir).mockResolvedValue([
+            { isFile: () => true, name: '1-test.md' },
+            { isFile: () => false, name: 'ignore-dir' },
+            { isFile: () => true, name: 'ignore.txt' }
+        ] as any)
 
         mockDb.createEntry.mockReturnValue({ id: 99 })
     })
@@ -200,7 +205,10 @@ Content`
 
     it('should handle dry_run where mj_id is present but not found, and no mj_id', async () => {
         // We'll return 2 files, one with mj_id (not found), one without mj_id
-        vi.mocked(fs.readdir).mockResolvedValue(['1-test.md', '2-test.md'] as any)
+        vi.mocked(fs.opendir).mockResolvedValue([
+            { isFile: () => true, name: '1-test.md' },
+            { isFile: () => true, name: '2-test.md' }
+        ] as any)
         vi.mocked(fs.readFile).mockImplementation(async (path: any) => {
             if (path.toString().includes('1-test.md')) {
                 return `---\n{\n  "mj_id": 100\n}\n---\nContent1`
