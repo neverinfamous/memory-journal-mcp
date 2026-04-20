@@ -36,6 +36,7 @@
                 "OAUTH_AUDIENCE": "memory-journal-mcp",
                 "OAUTH_JWKS_URI": "",
                 "CODE_MODE_MAX_RESULT_SIZE": "102400",
+                "CODEMODE_INTERNAL_FULL_ACCESS": "false",
                 "BRIEFING_ENTRY_COUNT": "3",
                 "BRIEFING_SUMMARY_COUNT": "1",
                 "BRIEFING_INCLUDE_TEAM": "false",

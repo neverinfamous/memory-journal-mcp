@@ -367,6 +367,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
         "AUTO_REBUILD_INDEX": "true",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
         "BRIEFING_INCLUDE_TEAM": "true",
@@ -522,6 +523,7 @@ The GitHub tools (`get_github_issues`, `get_github_prs`, etc.) auto-detect the r
 | `OAUTH_JWKS_URI`                  | JWKS endpoint for token signature verification                                                                              |
 | `OAUTH_CLOCK_TOLERANCE`           | Allowed clock skew tolerance in seconds for JWT verification (default: `5`)                                                 |
 | `CODE_MODE_MAX_RESULT_SIZE`       | Maximum size in bytes for mj_execute_code result payload (CLI: `--codemode-max-result-size`; default: `102400`)             |
+| `CODEMODE_INTERNAL_FULL_ACCESS`   | Bypass tool filter constraints within the Code Mode sandbox (CLI: `--codemode-internal-full-access`; default: `false`)      |
 | `BRIEFING_ENTRY_COUNT`            | Journal entries in briefing (CLI: `--briefing-entries`; default: `3`)                                                       |
 | `BRIEFING_SUMMARY_COUNT`          | Session summaries to list in briefing (CLI: `--briefing-summaries`; default: `1`)                                           |
 | `BRIEFING_INCLUDE_TEAM`           | Include team DB entries in briefing (`true`/`false`; default: `false`)                                                      |

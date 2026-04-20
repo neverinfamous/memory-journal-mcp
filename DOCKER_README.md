@@ -248,6 +248,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/app/projects/repo1\",\"project_number\":1},\"other-repo\":{\"path\":\"/app/projects/repo2\",\"project_number\":5}}",
         "AUTO_REBUILD_INDEX": "true",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
+        "CODEMODE_INTERNAL_FULL_ACCESS": "true",
         "BRIEFING_ENTRY_COUNT": "3",
         "BRIEFING_SUMMARY_COUNT": "1",
         "BRIEFING_INCLUDE_TEAM": "true",
