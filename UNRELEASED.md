@@ -45,7 +45,7 @@
 
 ### Fixed
 
-- Verified Phase 25 Code Mode GitHub Tools stability across 16 operations without regressions.
+- Verified memory-journal-mcp Code Mode IO & Markdown Orchestration (Phase 26) achieving zero exceptions on directory traversal.
 - Restored project test coverage above 90% by adding targeted unit tests for `MaintenanceManager`, `TokenValidator`, HTTP stateful transports, server registration, and Code Mode handlers.
 - Excluded unmeasurable runtime scripts and empty barrel files from Vitest metrics to accurately reflect 90%+ line coverage.
 - Multi-project repository fallback failures for naked resource URIs and global GitHub resources by iterating `PROJECT_REGISTRY`.
