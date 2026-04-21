@@ -84,13 +84,13 @@
 - Context resolution and project metadata propagation bugs inside Code Mode sandboxes.
 - `owner/repo` matching failures for project registry keys containing only the `repo` name in Code Mode.
 - Boundary exception leaks in Code Mode where authorization failures threw raw exceptions instead of structured errors.
+- Verified Code Mode API bridge readonly execution boundaries to ensure strict tool filtering against write operations.
 - Performance oversight in `GitHubIntegration.getRepoInfo()` causing redundant `git branch` subprocesses.
 - `GitHubIntegration` throwing raw 404 exceptions instead of returning `null` for non-existent issues, PRs, and milestones.
 - `get_copilot_reviews` throwing unhandled 404 errors for non-existent PRs.
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
-- Validated Code Mode cross-group orchestration pipelines (Phase 23) ensuring deterministic multi-step integration across analytics, search, github, and core API groups without regressions.
 
 ### Security
 
