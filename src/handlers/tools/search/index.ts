@@ -60,7 +60,7 @@ const SearchEntriesSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
+    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -89,7 +89,7 @@ const SearchEntriesSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
+    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -109,7 +109,7 @@ const SearchByDateRangeSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
+    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -129,7 +129,7 @@ const SearchByDateRangeSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
+    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -161,7 +161,7 @@ const SemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
+    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
@@ -184,7 +184,7 @@ const SemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    include_team: z.boolean().optional().default(false).describe('Include team entries in the search results'),
+    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
 })
 
 // ============================================================================
