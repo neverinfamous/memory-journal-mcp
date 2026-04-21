@@ -1,6 +1,6 @@
 # Tool Reference
 
-Complete reference of all **68 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
+Complete reference of all **70 tools** organized by 10 tool groups + codemode. Each group automatically includes Code Mode (`mj_execute_code`) for token-efficient operations.
 
 > **3 tool shortcuts** (`starter`, `essential`, `readonly`) provide curated subsets for common use cases.
 >
@@ -134,7 +134,7 @@ Database backup, restore, and retention management.
 
 ---
 
-## team (23 tools + Code Mode)
+## team (25 tools + Code Mode)
 
 Team collaboration with a separate shared database. Requires `TEAM_DB_PATH`.
 
@@ -209,12 +209,12 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 
 | Filter               | Tools | Use Case                 |
 | -------------------- | ----- | ------------------------ |
-| `full`               | 68    | All tools (default)      |
+| `full`               | 70    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 18    | Disable all mutations    |
-| `-github`            | 50    | Exclude a group          |
-| `-github,-analytics` | 48    | Exclude multiple groups  |
+| `-github`            | 52    | Exclude a group          |
+| `-github,-analytics` | 50    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
