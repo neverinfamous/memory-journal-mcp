@@ -224,3 +224,4 @@
 - Fixed a bug in search tools where `include_team` defaulted to `false` instead of `true`, which prevented Code Mode cross-database operations from resolving team entries by default.
 - Fixed a bug in Code Mode where Team tools (`mj.team.*`) failed with 'missing TEAM_AUTHOR' authorization errors during testing by allowing `CODEMODE_INTERNAL_FULL_ACCESS` to bypass the Team fail-closed boundary.
 - Fixed a schema validation bug in Code Mode where Team tools (`mj.team.*`) failed due to a missing `project_number` argument by dynamically injecting the context's `defaultProjectNumber` across the dispatcher boundary.
+- Verified Hush Protocol Team Flag tools (`pass_team_flag`, `resolve_team_flag`) via Code Mode to ensure strict vocabulary validation, `flagMetadata` structure preservation, and idempotent resolution lifecycle.
