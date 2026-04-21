@@ -45,7 +45,6 @@
 
 ### Fixed
 
-- Verified memory-journal-mcp Code Mode IO & Markdown Orchestration (Phase 26) achieving zero exceptions on directory traversal.
 - Restored project test coverage above 90% by adding targeted unit tests for `MaintenanceManager`, `TokenValidator`, HTTP stateful transports, server registration, and Code Mode handlers.
 - Excluded unmeasurable runtime scripts and empty barrel files from Vitest metrics to accurately reflect 90%+ line coverage.
 - Multi-project repository fallback failures for naked resource URIs and global GitHub resources by iterating `PROJECT_REGISTRY`.
@@ -91,6 +90,7 @@
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
+- Validated Code Mode cross-group orchestration pipelines (Phase 23) ensuring deterministic multi-step integration across analytics, search, github, and core API groups without regressions.
 
 ### Security
 
