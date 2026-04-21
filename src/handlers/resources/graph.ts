@@ -8,7 +8,7 @@ import { ICON_GRAPH, ICON_GITHUB } from '../../constants/icons.js'
 // removed ENTRY_COLUMNS
 import { MEDIUM_PRIORITY, ASSISTANT_FOCUSED } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
-// removed transformEntryRow
+import { resolveGitHubRepo, isResourceError } from './shared.js'
 
 /**
  * Get graph resource definitions
@@ -88,19 +88,35 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'text/plain',
             icons: [ICON_GITHUB],
             annotations: MEDIUM_PRIORITY,
-            handler: async (_uri: string, context: ResourceContext) => {
-                if (!context.github) {
-                    return 'graph LR\n  NoGitHub["GitHub integration not available — set GITHUB_TOKEN"]'
-                }
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/graph\/actions\/?(.*)?/.exec(uri)
+                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo,
+                    context.runtime
+                )
 
-                const repoInfo = await context.github.getRepoInfo()
-                if (!repoInfo.owner || !repoInfo.repo) {
-                    return 'graph LR\n  NoRepo["Repository not detected — run in valid git repo or configure PROJECT_REGISTRY"]'
+                if (isResourceError(resolved)) {
+                    if (
+                        resolved.data !== null &&
+                        typeof resolved.data === 'object' &&
+                        'error' in resolved.data &&
+                        typeof (resolved.data as Record<string, unknown>)['error'] === 'string'
+                    ) {
+                        const errorMsg = (resolved.data as Record<string, unknown>)['error'] as string
+                        if (errorMsg.includes('GitHub integration not available')) {
+                            return 'graph LR\n  NoGitHub["GitHub integration not available — set GITHUB_TOKEN"]'
+                        }
+                    }
+                    return 'graph LR\n  NoRepo["Repository not detected — run in valid git repo or use memory://graph/actions/{repo}"]'
                 }
+                const { owner, repo, github } = resolved
 
-                const workflowRuns = await context.github.getWorkflowRuns(
-                    repoInfo.owner,
-                    repoInfo.repo,
+                const workflowRuns = await github.getWorkflowRuns(
+                    owner,
+                    repo,
                     10
                 )
 
@@ -150,34 +166,38 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             icons: [ICON_GITHUB],
             annotations: ASSISTANT_FOCUSED,
-            handler: async (_uri: string, context: ResourceContext) => {
-                if (context.github) {
-                    try {
-                        const repoInfo = await context.github.getRepoInfo()
-                        if (repoInfo.owner && repoInfo.repo) {
-                            const runs = await context.github.getWorkflowRuns(
-                                repoInfo.owner,
-                                repoInfo.repo,
-                                10
-                            )
+            handler: async (uri: string, context: ResourceContext) => {
+                const match = /memory:\/\/actions\/recent\/?(.*)?/.exec(uri)
+                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                
+                try {
+                    const resolved = await resolveGitHubRepo(
+                        context.github,
+                        context.briefingConfig,
+                        targetRepo,
+                        context.runtime
+                    )
+                    
+                    if (!isResourceError(resolved)) {
+                        const { owner, repo, github } = resolved
+                        const runs = await github.getWorkflowRuns(owner, repo, 10)
 
-                            const entries = runs.map((run) => ({
-                                id: -1 * run.id,
-                                entryType: 'tool_output',
-                                content: `Workflow: ${run.name}\nStatus: ${run.status}\nConclusion: ${run.conclusion || 'pending'}\nBranch: ${run.headBranch}\nURL: ${run.url}`,
-                                timestamp: run.createdAt,
-                                isPersonal: false,
-                                significanceType: null,
-                                workflowRunId: run.id,
-                                workflowName: run.name,
-                                workflowStatus: run.conclusion || run.status,
-                            }))
+                        const entries = runs.map((run) => ({
+                            id: -1 * run.id,
+                            entryType: 'tool_output',
+                            content: `Workflow: ${run.name}\nStatus: ${run.status}\nConclusion: ${run.conclusion || 'pending'}\nBranch: ${run.headBranch}\nURL: ${run.url}`,
+                            timestamp: run.createdAt,
+                            isPersonal: false,
+                            significanceType: null,
+                            workflowRunId: run.id,
+                            workflowName: run.name,
+                            workflowStatus: run.conclusion || run.status,
+                        }))
 
-                            return { entries, count: entries.length, source: 'github_api' }
-                        }
-                    } catch {
-                        // Fallback to DB if GitHub fails
+                        return { entries, count: entries.length, source: 'github_api' }
                     }
+                } catch {
+                    // Fallback to DB if GitHub fails
                 }
 
                 const entries = context.db.getWorkflowActionEntries(10)
@@ -185,4 +205,24 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             },
         },
     ]
+}
+
+export function getDynamicGraphResourceDefinitions(): InternalResourceDef[] {
+    const definitions = getGraphResourceDefinitions()
+    const dynamicDefinitions: InternalResourceDef[] = []
+
+    for (const def of definitions) {
+        if (def.uri === 'memory://graph/actions' || def.uri === 'memory://actions/recent') {
+            dynamicDefinitions.push({
+                ...def,
+                uri: def.uri + '/{+repo}',
+                name: def.name + ' (Dynamic)',
+                description:
+                    def.description +
+                    ' (Supports explicit multi-project repository targeting via {repo})',
+            })
+        }
+    }
+
+    return [...definitions, ...dynamicDefinitions]
 }

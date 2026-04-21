@@ -11,6 +11,10 @@
 
 ### Changed
 
+- Formally certified the v7.5.0 release baseline through comprehensive static and template resource integrity verification (30 endpoints), payload optimization validation, and cross-project resolution testing.
+- Verified and finalized Code Mode (worker_threads) sandboxing patterns, database adapter boundaries, and explicit structured error generation across all 70 core and team tools.
+- Formally verified that all 69 outputSchema tools correctly return `structuredContent` in alignment with the MCP protocol specification, ensuring stable UI rendering for modern clients while maintaining `mj_execute_code`'s explicit exclusion.
+
 **Dependency Updates**
 
 - Bumped `@huggingface/transformers` to `4.1.0`.
@@ -73,6 +77,7 @@
 
 ### Fixed
 
+- Multi-project repository fallback failures for naked resource URIs (e.g., `memory://kanban/5`) by iterating through the entire `PROJECT_REGISTRY` to find a valid Git remote instead of short-circuiting on the first invalid directory.
 - `team_create_entry` regression where explicit `author` claims were strictly blocked in non-OAuth environments, breaking local API test suites and custom workflows.
 - Test suite regressions in Vitest and Playwright E2E suites by properly injecting `TEAM_AUTHOR` and environment variables to satisfy newly centralized fail-closed security boundary checks.
 - Code Mode test suite regressions where `team_get_entry_by_id` omitted the structured `flagMetadata` property for Hush Protocol flags by ensuring `autoContext` is parsed during response mapping.
@@ -228,3 +233,5 @@
 - Fixed an issue where the Code Mode sandbox result size limitation error omitted the actual serialized payload size in KB, complicating agent remediation.
 - Fixed path traversal boundary errors in the `memory://rules` and `memory://skills` resource handlers by dynamically expanding `allowedIoRoots` to include explicit `RULES_FILE_PATH` and `SKILLS_DIR_PATH` targets during file reads, and enforcing explicit directory existence checks.
 - Updated test assertions in `template-github-branches.test.ts` and `github-resource-handlers.test.ts` to align with the new, structured multi-project error strings returned by `resolveGitHubRepo`.
+- Fixed a bug where `memory://graph/actions` and `memory://actions/recent` resources lacked `{repo}` dynamic URI support and failed to return the correct structured error format when GitHub integration was unavailable.
+- Fixed a bug in `resolveGitHubRepo` where global GitHub resources (like `memory://github/status`) failed with a generic "Could not detect repository" error outside a git directory, rather than correctly falling back to the first available project in `PROJECT_REGISTRY`.

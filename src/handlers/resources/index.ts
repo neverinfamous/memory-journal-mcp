@@ -19,7 +19,7 @@ export type { ResourceContext, ResourceResult, InternalResourceDef } from './sha
 
 // Import sub-module definitions
 import { getCoreResourceDefinitions } from './core/index.js'
-import { getGraphResourceDefinitions } from './graph.js'
+import { getDynamicGraphResourceDefinitions } from './graph.js'
 import { getGitHubResourceDefinitions } from './github.js'
 import { getTemplateResourceDefinitions } from './templates.js'
 import { getTeamResourceDefinitions } from './team.js'
@@ -153,7 +153,7 @@ export async function readResource(
 function getAllResourceDefinitions(runtime?: ServerRuntime): InternalResourceDef[] {
     return [
         ...getCoreResourceDefinitions(),
-        ...getGraphResourceDefinitions(),
+        ...getDynamicGraphResourceDefinitions(),
         ...getGitHubResourceDefinitions(),
         ...getTemplateResourceDefinitions(),
         ...getTeamResourceDefinitions(),

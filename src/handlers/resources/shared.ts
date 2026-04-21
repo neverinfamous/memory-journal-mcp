@@ -88,8 +88,29 @@ export async function resolveGitHubRepo(
     const repo = repoInfo.repo
 
     if (!owner || !repo) {
-        const hasRegistry =
-            config?.projectRegistry && Object.keys(config.projectRegistry).length > 0
+        const registry = config?.projectRegistry
+        const hasRegistry = registry && Object.keys(registry).length > 0
+
+        // Fallback to the first VALID registered project if no targetRepo was specified
+        if (!targetRepo && hasRegistry) {
+            for (const key of Object.keys(registry)) {
+                const project = registry[key]
+                if (project) {
+                    const fallbackGithub = getGitHubIntegration(project.path, runtime)
+                    const fallbackRepoInfo = await fallbackGithub.getRepoInfo()
+                    if (fallbackRepoInfo.owner && fallbackRepoInfo.repo) {
+                        return {
+                            owner: fallbackRepoInfo.owner,
+                            repo: fallbackRepoInfo.repo,
+                            branch: fallbackRepoInfo.branch ?? null,
+                            lastModified,
+                            github: fallbackGithub,
+                        }
+                    }
+                }
+            }
+        }
+
         return {
             data: {
                 error: 'Could not detect repository',
