@@ -64,6 +64,7 @@
 - Removed the redundant string serialization size check in the `mj_execute_code` HTTP layer, properly deferring size bounds enforcement to the isolated Code Mode worker sandbox.
 - Exposed explicit `isReady` semantic index status on the `memory://health` resource, allowing orchestrators to reliably pause operations during index rebuilding.
 - Created an explicit repository-local `.npmrc` enforcing `save-exact=true` and `engine-strict=true` for supply-chain determinism.
+- Certified the Team Collaboration tool suite for v7.5.0 production stability; successfully validated 100% boundary enforcement and Zod validation across cross-project insights, team semantic search, and Hush Protocol flag lifecycles via Code Mode.
 
 ### Deprecated
 
@@ -231,4 +232,3 @@
 - Fixed a bug where `memory://graph/actions` and `memory://actions/recent` resources lacked `{repo}` dynamic URI support and failed to return the correct structured error format when GitHub integration was unavailable.
 - Fixed a bug in `resolveGitHubRepo` where global GitHub resources (like `memory://github/status`) failed with a generic "Could not detect repository" error outside a git directory, rather than correctly falling back to the first available project in `PROJECT_REGISTRY`.
 - Fixed an OutputSchema compliance bug in `create_github_issue_with_entry` and `close_github_issue_with_entry` where success-path responses returned `resolved_owner` and `resolved_repo` fields that were absent from their declared output schemas (`CreateGitHubIssueWithEntryOutputSchema`, `CloseGitHubIssueWithEntryOutputSchema`), causing `-32602` OutputSchema validation failures in strict MCP clients.
-- Verified the `search_entries`, `search_by_date_range`, and `semantic_search` tools against the strict error handling matrix, confirming that the `issue_number` filter strictly enforces equality boundaries and validating the v7.5.0 Search Tool Group baseline (Total Verification Token Usage: 1,807,017).
