@@ -73,6 +73,7 @@ function createMockCtx(): StatefulContext {
         sessionLocks: new Map(),
         touchSession: vi.fn(),
         serverConnected: false,
+        sessionCreatedAt: new Map()
     }
 }
 
@@ -310,6 +311,98 @@ describe('setupStateful', () => {
         clearInterval(timer)
     })
 
+    it('should return 403 if request subject does not match session subject on POST /mcp', async () => {
+        const ctx = createMockCtx()
+        ctx.transports.set('auth-session', {} as never)
+        ctx.sessionSubjects.set('auth-session', 'user-1')
+
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
+        const handler = app.routes['post']!['/mcp']!
+
+        const req = mockReq({ headers: { 'mcp-session-id': 'auth-session' }, auth: { sub: 'user-2' } })
+        const res = mockRes()
+        handler(req, res)
+
+        await vi.advanceTimersByTimeAsync(10)
+
+        expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(403)
+        expect(res['json'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.objectContaining({
+                    message: expect.stringContaining('Forbidden: Session belongs to a different subject'),
+                }),
+            })
+        )
+
+        clearInterval(timer)
+    })
+
+    it('should return 401 if session has exceeded 24-hour absolute TTL on POST /mcp', async () => {
+        const ctx = createMockCtx()
+        ctx.transports.set('ttl-session', {} as never)
+        ctx.sessionCreatedAt!.set('ttl-session', Date.now() - 86400001) // 24 hours + 1ms
+
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
+        const handler = app.routes['post']!['/mcp']!
+
+        const req = mockReq({ headers: { 'mcp-session-id': 'ttl-session' } })
+        const res = mockRes()
+        handler(req, res)
+
+        await vi.advanceTimersByTimeAsync(10)
+
+        expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(401)
+        expect(res['json'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.objectContaining({
+                    message: expect.stringContaining('Unauthorized: Session absolute TTL expired'),
+                }),
+            })
+        )
+
+        clearInterval(timer)
+    })
+
+    it('should enforce MAX_STATEFUL_SESSIONS limit on POST /mcp init', async () => {
+        vi.mocked(isInitializeRequest).mockReturnValue(true)
+        const originalEnv = process.env['MAX_STATEFUL_SESSIONS']
+        process.env['MAX_STATEFUL_SESSIONS'] = '2'
+
+        const ctx = createMockCtx()
+        ctx.transports.set('s1', {} as never)
+        ctx.transports.set('s2', {} as never)
+
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
+        const handler = app.routes['post']!['/mcp']!
+
+        const req = mockReq({ headers: {}, body: { method: 'initialize' } })
+        const res = mockRes()
+        handler(req, res)
+
+        await vi.advanceTimersByTimeAsync(10)
+
+        expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(429)
+        expect(res['json'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+            expect.objectContaining({
+                error: expect.objectContaining({
+                    message: expect.stringContaining('Maximum active sessions reached'),
+                }),
+            })
+        )
+
+        process.env['MAX_STATEFUL_SESSIONS'] = originalEnv
+        clearInterval(timer)
+    })
+
     it('should create new transport for initialization request', async () => {
         vi.mocked(isInitializeRequest).mockReturnValue(true)
 
@@ -395,6 +488,48 @@ describe('setupStateful', () => {
         clearInterval(timer)
     })
 
+    it('should return 403 if request subject does not match on GET /mcp', () => {
+        const ctx = createMockCtx()
+        ctx.transports.set('auth-session', {} as never)
+        ctx.sessionSubjects.set('auth-session', 'user-1')
+
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
+        const handler = app.routes['get']!['/mcp']!
+
+        const req = mockReq({ headers: { 'mcp-session-id': 'auth-session' }, auth: { sub: 'user-2' } })
+        const res = mockRes()
+        handler(req, res)
+
+        expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(403)
+        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(expect.stringContaining('Forbidden'))
+
+        clearInterval(timer)
+    })
+
+    it('should return 401 if absolute TTL exceeded on GET /mcp', () => {
+        const ctx = createMockCtx()
+        ctx.transports.set('ttl-session', {} as never)
+        ctx.sessionCreatedAt!.set('ttl-session', Date.now() - 86400001)
+
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
+        const handler = app.routes['get']!['/mcp']!
+
+        const req = mockReq({ headers: { 'mcp-session-id': 'ttl-session' } })
+        const res = mockRes()
+        handler(req, res)
+
+        expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(401)
+        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(expect.stringContaining('Unauthorized: Session absolute TTL expired'))
+
+        clearInterval(timer)
+    })
+
     it('should handle valid GET /mcp with existing session', () => {
         const ctx = createMockCtx()
         const mockTransport = { handleRequest: vi.fn().mockResolvedValue(undefined) }
@@ -458,6 +593,27 @@ describe('setupStateful', () => {
         handler(req, res)
 
         expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(400)
+
+        clearInterval(timer)
+    })
+
+    it('should return 403 if request subject does not match on DELETE /mcp', () => {
+        const ctx = createMockCtx()
+        ctx.transports.set('auth-session', {} as never)
+        ctx.sessionSubjects.set('auth-session', 'user-1')
+
+        const app = createMockApp()
+        const server = createMockServer()
+
+        const timer = setupStateful(ctx, app as never, (() => server) as never)
+        const handler = app.routes['delete']!['/mcp']!
+
+        const req = mockReq({ headers: { 'mcp-session-id': 'auth-session' }, auth: { sub: 'user-2' } })
+        const res = mockRes()
+        handler(req, res)
+
+        expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(403)
+        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(expect.stringContaining('Forbidden'))
 
         clearInterval(timer)
     })

@@ -41,6 +41,8 @@
 - Core `.getRawDb()` and execution mechanisms (now marked `@internal`).
 
 ### Fixed
+- Restored project test coverage above 90% by adding targeted unit tests for `MaintenanceManager`, `TokenValidator`, HTTP stateful transports, server registration, and Code Mode handlers.
+- Excluded unmeasurable runtime scripts and empty barrel files from Vitest metrics to accurately reflect 90%+ line coverage.
 - Multi-project repository fallback failures for naked resource URIs and global GitHub resources by iterating `PROJECT_REGISTRY`.
 - `team_create_entry` regression blocking explicit `author` claims in non-OAuth environments.
 - OutputSchema compliance bugs in `create_github_issue_with_entry`, `close_github_issue_with_entry`, `team_pass_flag`, and `team_resolve_flag`.
