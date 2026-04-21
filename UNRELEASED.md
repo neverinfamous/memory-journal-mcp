@@ -90,6 +90,7 @@
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
+- Certified Phase 28 Team Admin & Collaboration Code Mode stability, validating path traversal boundaries and deterministic execution.
 
 ### Security
 
@@ -134,4 +135,3 @@
 - Prevented memory exhaustion (DoS) by adding strict boundary length protections to tags and relationships.
 - Implemented strict 50MB global and 10MB per-item cache memory limits for the GitHub API client.
 - Escaped static URI patterns in the dynamic resource router template generation to neutralize ReDoS.
-- Verified Code Mode Phase 19 Security sandbox constraints, confirming structured error encapsulation and nulled globals across 16 test cases.
