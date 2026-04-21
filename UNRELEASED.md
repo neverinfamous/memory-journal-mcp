@@ -3,11 +3,14 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.5.0...HEAD)
 
 ### Added
+
 - Explicit HTTP service-level `curl` container health-checks to `docker-compose.yml`.
 - True O(1) LRU eviction (using `Map.prototype.keys().next()`) to rate-limiting and user tracking maps to deterministically cap memory under high throughput.
 - A `Map` caching layer tied to the local workspace path to minimize redundant OctoKit and Git instantiations.
 
 ### Changed
+
+- Verified Phase 17 Code Mode API Discoverability: confirmed all 10 namespaces, method aliases, and positional arguments function correctly.
 - **Dependencies:** Bumped `node` (Docker) to `24.15.0-alpine`, `@huggingface/transformers` to `4.1.0`, `eslint` to `10.2.1`, `typescript` to `6.0.3`, `@types/node` to `25.6.0`, `@vitest/coverage-v8` to `4.1.5`, `typescript-eslint` to `8.59.0`, `vitest` to `4.1.5`. Updated GitHub Actions (`hashgraph-online/skill-publish`, `dependabot/fetch-metadata`, `docker/build-push-action`, `actions/github-script`, `actions/setup-node`).
 - Replaced eager memory-bound directory reads with asynchronous `opendir` streaming in the markdown importer to prevent process OOM.
 - Replicated strict 5MB payload truncation limits to `team_export_entries` for consistent memory bounds.
@@ -37,10 +40,12 @@
 - Created an explicit repository-local `.npmrc` enforcing `save-exact=true` and `engine-strict=true`.
 
 ### Deprecated
+
 - `autoContext` field across the memory journal ecosystem.
 - Core `.getRawDb()` and execution mechanisms (now marked `@internal`).
 
 ### Fixed
+
 - Restored project test coverage above 90% by adding targeted unit tests for `MaintenanceManager`, `TokenValidator`, HTTP stateful transports, server registration, and Code Mode handlers.
 - Excluded unmeasurable runtime scripts and empty barrel files from Vitest metrics to accurately reflect 90%+ line coverage.
 - Multi-project repository fallback failures for naked resource URIs and global GitHub resources by iterating `PROJECT_REGISTRY`.
@@ -86,9 +91,9 @@
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
-- Verified Code Mode Admin, Backup, and Export operations via sandboxed `mj_execute_code` test matrix.
 
 ### Security
+
 - Updated `hono` to `4.12.14` to resolve a medium severity vulnerability.
 - Limited FTS5 query tokens to 500 characters to prevent ReDoS and AST bloat.
 - Enforced per-invocation `randomUUID()` for `mj_execute_code` client IDs to isolate unauthenticated `stdio` callers.
