@@ -101,7 +101,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `essential`          | ~7    | Minimal footprint        |
 | `readonly`           | 17    | Disable all mutations    |
 | `-github`            | 52    | Exclude a group          |
-| `-github,-analytics` | 48    | Exclude multiple groups  |
+| `-github,-analytics` | 50    | Exclude multiple groups  |
 
 **Filter Syntax:** `shortcut` or `group` or `tool_name` (whitelist mode) · `-group` (disable group) · `-tool` (disable tool) · `+tool` (re-enable after group disable)
 
@@ -142,7 +142,7 @@ Standups, retrospectives, PR summaries, weekly digests, period analysis, milesto
 
 Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
-Code executes in a **sandboxed VM context** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
+Code executes in a **worker_threads sandbox** with multiple layers of security. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
 - **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
 - **Rate limiting** — 60 executions per minute per client

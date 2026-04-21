@@ -240,6 +240,7 @@ export class AuditLogger {
             try {
                 // stat after open — file is guaranteed to exist since we hold the FD
                 const info = await fh.stat()
+                if (info.isDirectory()) return []
                 const fileSize = info.size
                 if (fileSize === 0) return []
 

@@ -7,17 +7,17 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
     let timestamp = input.timestamp ?? new Date().toISOString()
 
-    // Strict validation to prevent malformed dates (e.g. string manipulation crashes downstream)
-    const isoRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/
-    if (!isoRegex.test(timestamp)) {
-        throw new Error(
-            `Invalid timestamp format: ${timestamp}. Expected ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss.sssZ).`
-        )
-    }
-
-    // SQLite expects standard ISO format
+    // Accept broad ISO-8601 input shapes, then normalize to canonical UTC ISO format for storage.
     if (!timestamp.includes('T')) {
-        timestamp += 'T00:00:00.000Z'
+        timestamp = `${timestamp}T00:00:00.000Z`
+    } else {
+        const parsedTimestamp = new Date(timestamp)
+        if (Number.isNaN(parsedTimestamp.getTime())) {
+            throw new Error(
+                `Invalid timestamp format: ${timestamp}. Expected an ISO 8601 date or timestamp.`
+            )
+        }
+        timestamp = parsedTimestamp.toISOString()
     }
 
     let insertId!: number

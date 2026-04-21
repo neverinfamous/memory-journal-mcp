@@ -244,17 +244,22 @@ src/
 skills/                             # Bundled agent skills (shipped with npm)
 ├── autonomous-dev/                 # Autonomous software development agent harness
 ├── bun/                            # Bun all-in-one toolkit guidelines
+├── docker/                         # Production-grade Docker and container best practices
+├── github-actions/                 # GitHub Actions CI/CD workflows
 ├── github-commander/               # GitHub workflow skills (triage, review, audits)
+├── github-copilot-cli/             # GitHub Copilot CLI integration
 ├── gitlab/                         # GitLab repository and CI/CD assistant
 ├── golang/                         # Go development best practices
 ├── mysql/                          # Production-grade MySQL rules
 ├── playwright-standard/            # End-to-end testing with Playwright
 ├── postgres/                       # Enterprise PostgreSQL development
+├── python/                         # Modern Python development guidelines
 ├── react-best-practices/           # React and Next.js performance guidelines
 ├── rust/                           # Rust systems programming guidelines
 ├── shadcn-ui/                      # UI component development with shadcn
 ├── skill-builder/                  # Creation and evaluation of agent skills
 ├── sqlite/                         # SQLite meta-cognitive rules
+├── tailwind-css/                   # Tailwind CSS v4 guidelines
 ├── typescript/                     # Enterprise-grade TypeScript patterns
 └── vitest-standard/                # Unit testing with Vitest and TDD
 

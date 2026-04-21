@@ -27,7 +27,6 @@ jobs:
       - name: Validate Skill
         uses: hashgraph-online/skill-publish@f9a1962fcbd8116e1e82bed3c97d9223a6206ac4 # v1.2
         with:
-          mode: validate
+          api-key: ${{ secrets.RB_API_KEY }}
           skill-dir: skills/github-commander
           annotate: 'false'
-          preview-upload: 'false'

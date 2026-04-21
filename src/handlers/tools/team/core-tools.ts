@@ -24,6 +24,15 @@ import {
     TeamTagsListOutputSchema,
 } from './schemas.js'
 
+function parseFlagContext(autoContext: string | null | undefined): Record<string, unknown> | undefined {
+    if (!autoContext) return undefined;
+    try {
+        return JSON.parse(autoContext) as Record<string, unknown>;
+    } catch {
+        return undefined;
+    }
+}
+
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -124,8 +133,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     teamDb.flushSave()
 
                     const parsedFlagMetadata =
-                        entry.entryType === 'flag' && entry.autoContext
-                            ? (JSON.parse(entry.autoContext) as Record<string, unknown>)
+                        entry.entryType === 'flag'
+                            ? parseFlagContext(entry.autoContext)
                             : undefined
 
                     return {
@@ -171,8 +180,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const author = fetchAuthor(teamDb, entry_id)
                     const parsedFlagMetadata =
-                        entry.entryType === 'flag' && entry.autoContext
-                            ? (JSON.parse(entry.autoContext) as Record<string, unknown>)
+                        entry.entryType === 'flag'
+                            ? parseFlagContext(entry.autoContext)
                             : undefined
                     const enrichedEntry = { ...entry, author, flagMetadata: parsedFlagMetadata }
 
@@ -224,8 +233,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         ...e,
                         author: authorMap.get(e.id) ?? null,
                         flagMetadata:
-                            e.entryType === 'flag' && e.autoContext
-                                ? (JSON.parse(e.autoContext) as Record<string, unknown>)
+                            e.entryType === 'flag'
+                                ? parseFlagContext(e.autoContext)
                                 : undefined,
                     }))
 

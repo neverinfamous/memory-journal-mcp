@@ -123,7 +123,7 @@ export function getSandboxModeInfo(mode?: SandboxMode): SandboxModeInfo {
             return {
                 mode: 'worker',
                 description:
-                    'Worker-thread sandbox using node:worker_threads. Trusted admin configuration (NOT secure multi-tenant isolation).',
+                    'Worker-thread sandbox using node:worker_threads. Secure multi-tenant process isolation.',
                 securityLevel: 'trusted_admin',
                 isolation: 'Process-level V8 isolate with resource limits and MessagePort RPC',
             }

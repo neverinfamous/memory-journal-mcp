@@ -20,8 +20,10 @@ import {
 
 /**
  * Extract the client IP address from the request.
- * When trustProxy is enabled, uses the leftmost IP from X-Forwarded-For.
- * Falls back to Express's req.ip then req.socket.remoteAddress.
+ * Note: req.ip correctly respects proxy boundaries because
+ * `this.app.set('trust proxy', 'loopback')` is configured globally in the HTTP server
+ * when `trustProxy` is enabled. This prevents client IP spoofing while supporting reverse proxies.
+ * Falls back to req.socket.remoteAddress if req.ip is not available.
  */
 export function getClientIp(req: Request): string {
     return req.ip ?? req.socket.remoteAddress ?? 'unknown'

@@ -303,9 +303,7 @@ export async function importMarkdownEntries(
                 }
             }
 
-            if (!dry_run) {
-                vectorQueue.push({ entryId, body, filename })
-            }
+            vectorQueue.push({ entryId, body, filename })
         }
     })
 

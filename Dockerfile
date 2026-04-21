@@ -7,7 +7,7 @@ WORKDIR /app
 # Install build dependencies and upgrade packages for security
 # Use Alpine edge for latest security patches (curl CVE-2025-14524, zlib CVE-2026-27171, etc.)
 RUN apk add --no-cache python3 make g++ && \
-    apk add --no-cache curl zlib libcrypto3 libssl3 && \
+    apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main curl zlib libcrypto3 libssl3 && \
     apk upgrade --no-cache
 
 # Upgrade npm globally to a pinned version to ensure reproducible builds

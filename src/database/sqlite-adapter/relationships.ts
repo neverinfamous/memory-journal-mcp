@@ -76,40 +76,48 @@ export class RelationshipsManager {
             result.set(id, [])
         }
 
-        const marks = entryIds.map(() => '?').join(', ')
-        const rows = this.db
-            .prepare(
-                `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
-                        relationship_type as relationshipType, description, created_at as createdAt
-                 FROM relationships
-                 WHERE from_entry_id IN (${marks}) OR to_entry_id IN (${marks})`
-            )
-            .all(...entryIds, ...entryIds) as {
-            id: number
-            fromEntryId: number
-            toEntryId: number
-            relationshipType: RelationshipType
-            description: string | null
-            createdAt: string
-        }[]
+        const seenRelIds = new Set<number>()
+        const chunkSize = 100
+        for (let i = 0; i < entryIds.length; i += chunkSize) {
+            const chunk = entryIds.slice(i, i + chunkSize)
+            const marks = chunk.map(() => '?').join(', ')
+            const rows = this.db
+                .prepare(
+                    `SELECT id, from_entry_id as fromEntryId, to_entry_id as toEntryId,
+                            relationship_type as relationshipType, description, created_at as createdAt
+                     FROM relationships
+                     WHERE from_entry_id IN (${marks}) OR to_entry_id IN (${marks})`
+                )
+                .all(...chunk, ...chunk) as {
+                id: number
+                fromEntryId: number
+                toEntryId: number
+                relationshipType: RelationshipType
+                description: string | null
+                createdAt: string
+            }[]
 
-        for (const row of rows) {
-            const rel = {
-                id: row.id,
-                fromEntryId: row.fromEntryId,
-                toEntryId: row.toEntryId,
-                relationshipType: row.relationshipType,
-                description: row.description,
-                createdAt: row.createdAt,
-            }
-            const fromList = result.get(row.fromEntryId)
-            if (fromList) {
-                fromList.push(rel)
-            }
-            if (row.fromEntryId !== row.toEntryId) {
-                const toList = result.get(row.toEntryId)
-                if (toList) {
-                    toList.push(rel)
+            for (const row of rows) {
+                if (seenRelIds.has(row.id)) continue
+                seenRelIds.add(row.id)
+
+                const rel = {
+                    id: row.id,
+                    fromEntryId: row.fromEntryId,
+                    toEntryId: row.toEntryId,
+                    relationshipType: row.relationshipType,
+                    description: row.description,
+                    createdAt: row.createdAt,
+                }
+                const fromList = result.get(row.fromEntryId)
+                if (fromList) {
+                    fromList.push(rel)
+                }
+                if (row.fromEntryId !== row.toEntryId) {
+                    const toList = result.get(row.toEntryId)
+                    if (toList) {
+                        toList.push(rel)
+                    }
                 }
             }
         }

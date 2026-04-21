@@ -153,7 +153,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 | `full`               | 70    | All tools (default)      |
 | `starter`            | ~11   | Core + search + codemode |
 | `essential`          | ~7    | Minimal footprint        |
-| `readonly`           | 18    | Disable all mutations    |
+| `readonly`           | 17    | Disable all mutations    |
 | `-github`            | 52    | Exclude a group          |
 | `-github,-analytics` | 50    | Exclude multiple groups  |
 
@@ -205,7 +205,7 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `confirm-briefing` - Acknowledge session context to user
 - `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
 - `team-session-summary` - Create a retrospective team session summary entry securely isolated to the team database
-- `load-project-kanban` - Dynamic project board injection
+
 
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
@@ -261,7 +261,7 @@ _Note: The `memory://github/status`, `memory://github/insights`, `memory://githu
 
 Code Mode (`mj_execute_code`) is a revolutionary approach that **dramatically reduces token usage by up to 90%** and is included by default in all presets. Instead of spending thousands of tokens on sequential tool calls, AI agents use a single sandboxed execution to reason faster.
 
-Code executes in a **sandboxed VM context** designed as a trusted-admin execution environment (not secure multi-tenant isolation). All `mj.*` API calls execute against the journal within the sandbox, providing:
+Code executes in a **worker_threads sandbox** designed as a secure multi-tenant process isolation environment. All `mj.*` API calls execute against the journal within the sandbox, providing:
 
 - **Static code validation** — blocked patterns include `require()`, `process`, `eval()`, and filesystem access
 - **Rate limiting** — 60 executions per minute per client
