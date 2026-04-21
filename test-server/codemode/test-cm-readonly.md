@@ -53,7 +53,7 @@ Test the readonly mode enforcement: read operations succeed, write operations ar
 
 ## Success Criteria
 
-- [x] `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
-- [x] `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
-- [x] `readonly: false` (default) allows both read and write operations
-- [x] `mj.help()` still works in readonly mode
+- [ ] `readonly: true` allows read operations (getRecentEntries, searchEntries, getStatistics)
+- [ ] `readonly: true` blocks or errors on write operations (createEntry, updateEntry, deleteEntry)
+- [ ] `readonly: false` (default) allows both read and write operations
+- [ ] `mj.help()` still works in readonly mode

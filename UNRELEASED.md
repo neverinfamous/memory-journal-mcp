@@ -90,7 +90,7 @@
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
-- Code Mode relationship linking, duplicate detection, and Mermaid visualization paths now formally verified.
+- Verified the Search & Semantics Phase 21 test matrix via Code Mode, confirming stable FTS5, filters, vector index management, analytics, and importance sorting.
 
 ### Security
 
