@@ -198,7 +198,7 @@ export async function importMarkdownEntries(
             parsedFiles.push({ 
                 filename, 
                 body, 
-                metadata: metadata as ParsedFile['metadata']
+                metadata: metadata
             })
         } catch (err) {
             result.errors.push({

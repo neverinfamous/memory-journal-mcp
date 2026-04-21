@@ -336,7 +336,7 @@ async function getAllToolDefinitionsAsync(context: ResourceContext): Promise<Min
             group: inferGroupFromName(t.name),
             inputSchema: t.inputSchema,
             outputSchema: t.outputSchema,
-            annotations: t.annotations as MinimalToolDef['annotations'],
+            annotations: t.annotations,
         }))
     } catch (e: unknown) {
         logger.error('HELP_LOAD_TOOLS_FAILED', {

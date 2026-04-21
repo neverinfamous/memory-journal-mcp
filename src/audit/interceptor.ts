@@ -160,7 +160,7 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
                         timestamp: new Date().toISOString(),
                         requestId,
                         tool: toolName,
-                        category: 'read' as AuditCategory,
+                        category: 'read',
                         scope,
                         user,
                         scopes,

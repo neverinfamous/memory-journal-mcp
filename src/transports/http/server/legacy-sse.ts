@@ -49,7 +49,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
             try {
                 const doConnect = async (): Promise<void> => {
                     const newServer = serverFactory()
-                    await newServer.connect(sseTransport as Parameters<typeof newServer.connect>[0])
+                    await newServer.connect(sseTransport)
                     ctx.serverConnected = true
                 }
 

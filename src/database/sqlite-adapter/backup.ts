@@ -191,7 +191,7 @@ export class BackupManager {
             fs.mkdirSync(lockDir)
             fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
         } catch (lockError: unknown) {
-            if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError as { code: unknown }).code === 'EEXIST') {
+            if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError).code === 'EEXIST') {
                 let isStale = false
                 try {
                     const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()

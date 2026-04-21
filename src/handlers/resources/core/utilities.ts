@@ -80,7 +80,7 @@ export const significantResource: InternalResourceDef = {
                         100
                 ) / 100
 
-            return { ...entry, importance, timestampMs } as { timestamp: string; importance: number; timestampMs: number }
+            return { ...entry, importance, timestampMs }
         })
 
         entriesWithImportance.sort((a, b) => {
