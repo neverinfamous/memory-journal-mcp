@@ -218,4 +218,3 @@
 - Fixed a bug in `GitHubIntegration` where `getIssue`, `getPullRequest`, and `getMilestone` threw raw 404 exceptions instead of returning `null`, causing the error boundary to intercept them as generic internal errors instead of the expected structured `RESOURCE_NOT_FOUND` responses.
 - Fixed a bug in `get_copilot_reviews` where fetching reviews for a non-existent pull request threw an unhandled 404 error; it now verifies PR existence and returns a structured `RESOURCE_NOT_FOUND` response.
 - Fixed a crash in semantic search where `sqlite-vec` virtual table KNN queries failed due to a missing `k = ?` constraint, ensuring cross-group orchestration and vector indexing pipelines complete successfully without `INTERNAL_ERROR` faults.
-- Validated relationships and visualization tools (`link_entries`, `visualize_relationships`) via Code Mode sandbox, ensuring correct Mermaid graph generation, strict duplication detection, and structured error compliance.
