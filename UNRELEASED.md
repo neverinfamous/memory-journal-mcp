@@ -90,8 +90,7 @@
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
-- Certified Code Mode CRUD endpoints for Phase 20, confirming full 100% test matrix coverage for `mj_execute_code` schema and error propagation paths.
-
+- Certified structured error handling and schema boundary enforcement across all 10 `mj.*` API groups in Code Mode, ensuring no raw MCP exceptions leak during validation failures.
 ### Security
 
 - Updated `hono` to `4.12.14` to resolve a medium severity vulnerability.
