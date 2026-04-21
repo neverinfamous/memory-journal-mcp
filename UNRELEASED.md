@@ -73,6 +73,7 @@
 
 ### Fixed
 
+- `team_create_entry` regression where explicit `author` claims were strictly blocked in non-OAuth environments, breaking local API test suites and custom workflows.
 - Test suite regressions in Vitest and Playwright E2E suites by properly injecting `TEAM_AUTHOR` and environment variables to satisfy newly centralized fail-closed security boundary checks.
 - Unhandled `no-unsafe-return` and `no-explicit-any` ESLint regressions during Code Mode worker serialization.
 - N+1 query performance bottlenecks during team semantic search and Markdown exports by batch-fetching tags.
