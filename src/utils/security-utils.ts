@@ -232,13 +232,13 @@ const TOKEN_PATTERNS = [
     /gh[pousr]_[A-Za-z0-9_]{36,}/g,
     /github_pat_[A-Za-z0-9_]{82,}/g,
     // JWT Tokens
-    /eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,
+    /eyJ[a-zA-Z0-9_-]{2,}\.eyJ[a-zA-Z0-9_-]{2,}\.[a-zA-Z0-9_-]{2,}/g,
     // Slack tokens
     /xox[baprs]-[A-Za-z0-9-]+/g,
     // AWS API Keys
     /(?:AKIA|ABIA|ACCA|ASIA)[0-9A-Z]{16}/g,
     // Authorization headers in error dumps (catch-all for token, Bearer, Basic)
-    /Authorization:\s*(?:token|Bearer|Basic)?\s*["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
+    /Authorization:(?:\s+(?:token|Bearer|Basic))?\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
     // Generic token patterns standalone
     /Bearer\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,
     /Basic\s+["']?[A-Za-z0-9._~+/#=-]+["']?/gi,

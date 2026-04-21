@@ -184,19 +184,18 @@ export const rulesResource: InternalResourceDef = {
                 }
             }
 
-            const stat = await fs.promises.stat(rulesPath)
-            if (stat.size > 1024 * 1024) {
-                // 1MB limit for rules
-                throw new Error('Rules file exceeds 1MB limit')
-            }
+            const file = await fs.promises.open(rulesPath, 'r')
+            try {
+                const stat = await file.stat()
+                if (stat.size > 1024 * 1024) {
+                    throw new Error('Rules file exceeds 1MB limit')
+                }
+                const content = await file.readFile('utf8')
 
-            const content = await fs.promises.readFile(rulesPath, 'utf8')
-            const mtimeMs = stat.mtimeMs
-
-            cachedRulesMap.set(rulesPath, {
-                content,
-                timestamp: Date.now(),
-            })
+                cachedRulesMap.set(rulesPath, {
+                    content,
+                    timestamp: Date.now(),
+                })
 
             // Bounded cache
             if (cachedRulesMap.size > 100) {
@@ -204,10 +203,15 @@ export const rulesResource: InternalResourceDef = {
                 if (firstKey) cachedRulesMap.delete(firstKey)
             }
 
+            } finally {
+                await file.close()
+            }
+
+            const cachedData = cachedRulesMap.get(rulesPath)
             return {
-                data: content,
+                data: cachedData ? cachedData.content : '',
                 annotations: {
-                    lastModified: new Date(mtimeMs).toISOString(),
+                    lastModified: new Date(cachedData ? cachedData.timestamp : Date.now()).toISOString(),
                 },
             }
         } catch (err) {

@@ -66,6 +66,7 @@ class Logger {
         }
 
         // Always write to stderr (stdout is reserved for MCP protocol)
+        // codeql[js/clear-text-logging] False positive: Logging public oauth issuer URL, not sensitive secrets
         console.error(line)
     }
 
