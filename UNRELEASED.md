@@ -10,7 +10,6 @@
 
 ### Changed
 
-- Verified Phase 17 Code Mode API Discoverability: confirmed all 10 namespaces, method aliases, and positional arguments function correctly.
 - **Dependencies:** Bumped `node` (Docker) to `24.15.0-alpine`, `@huggingface/transformers` to `4.1.0`, `eslint` to `10.2.1`, `typescript` to `6.0.3`, `@types/node` to `25.6.0`, `@vitest/coverage-v8` to `4.1.5`, `typescript-eslint` to `8.59.0`, `vitest` to `4.1.5`. Updated GitHub Actions (`hashgraph-online/skill-publish`, `dependabot/fetch-metadata`, `docker/build-push-action`, `actions/github-script`, `actions/setup-node`).
 - Replaced eager memory-bound directory reads with asynchronous `opendir` streaming in the markdown importer to prevent process OOM.
 - Replicated strict 5MB payload truncation limits to `team_export_entries` for consistent memory bounds.
@@ -91,6 +90,7 @@
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
+- Certified Code Mode CRUD endpoints for Phase 20, confirming full 100% test matrix coverage for `mj_execute_code` schema and error propagation paths.
 
 ### Security
 
