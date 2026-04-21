@@ -220,4 +220,4 @@
 - Fixed a bug in `get_copilot_reviews` where fetching reviews for a non-existent pull request threw an unhandled 404 error; it now verifies PR existence and returns a structured `RESOURCE_NOT_FOUND` response.
 - Successfully verified Code Mode IO operations (Phase 26), ensuring `mj.io.exportMarkdown` and `mj.io.importMarkdown` correctly enforce `ALLOWED_IO_ROOTS` sandbox boundaries and block path traversal attempts.
 - Fixed a crash in semantic search where `sqlite-vec` virtual table KNN queries failed due to a missing `k = ?` constraint, ensuring cross-group orchestration and vector indexing pipelines complete successfully without `INTERNAL_ERROR` faults.
-- Successfully verified Code Mode payload optimizations (Phase 30), validating Kanban throttling, body truncation, max query limits, and sandbox result size caps.
+- Successfully verified Code Mode Readonly Mode (Phase 18), confirming read operations succeed and write operations are strictly blocked from the API bridge when `readonly: true` is configured.
