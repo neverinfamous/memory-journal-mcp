@@ -312,7 +312,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                         if (
                             sessionContext.config?.defaultProjectNumber !== undefined &&
                             !('project_number' in args) &&
-                            (name === 'create_entry' || name === 'update_entry' || name === 'delete_entry')
+                            (name === 'create_entry' || name === 'update_entry' || name === 'delete_entry' || name.startsWith('team_') || name === 'pass_flag')
                         ) {
                             args['project_number'] = sessionContext.config.defaultProjectNumber
                         }

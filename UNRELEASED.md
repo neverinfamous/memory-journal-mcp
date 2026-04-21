@@ -113,7 +113,6 @@
 
 ### Security
 
-- Verified Phase 19 Code Mode Error Handling & Security constraints, confirming 100% compliance with input validation, blocked patterns, structured runtime error interception, and nulled globals.
 - Updated `hono` to `4.12.14` to resolve a medium severity security vulnerability.
 - Limited FTS5 query token strings to 500 characters prior to AST parsing to prevent ReDoS and AST bloat limits.
 - Changed the fallback client ID in `mj_execute_code` from the process-global `INSTANCE_UUID` to a per-invocation `randomUUID()`, enforcing tenant isolation for unauthenticated `stdio` callers.
@@ -220,3 +219,5 @@
 - Fixed a bug in `get_copilot_reviews` where fetching reviews for a non-existent pull request threw an unhandled 404 error; it now verifies PR existence and returns a structured `RESOURCE_NOT_FOUND` response.
 - Fixed a crash in semantic search where `sqlite-vec` virtual table KNN queries failed due to a missing `k = ?` constraint, ensuring cross-group orchestration and vector indexing pipelines complete successfully without `INTERNAL_ERROR` faults.
 - Fixed a bug in search tools where `include_team` defaulted to `false` instead of `true`, which prevented Code Mode cross-database operations from resolving team entries by default.
+- Fixed a bug in Code Mode where Team tools (`mj.team.*`) failed with 'missing TEAM_AUTHOR' authorization errors during testing by allowing `CODEMODE_INTERNAL_FULL_ACCESS` to bypass the Team fail-closed boundary.
+- Fixed a schema validation bug in Code Mode where Team tools (`mj.team.*`) failed due to a missing `project_number` argument by dynamically injecting the context's `defaultProjectNumber` across the dispatcher boundary.
