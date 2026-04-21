@@ -344,7 +344,8 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
       "command": "memory-journal-mcp",
       "env": {
         "GITHUB_TOKEN": "ghp_your_token_here",
-        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/your/git/repo\",\"project_number\":1}}"
+        "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/your/git/repo\",\"project_number\":1}}",
+        "ALLOWED_IO_ROOTS": "/path/to/your/git/repo"
       }
     }
   }
@@ -365,6 +366,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "TEAM_DB_PATH": "/path/to/shared/team.db",
         "GITHUB_TOKEN": "ghp_your_token_here",
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/path/to/repo\",\"project_number\":1},\"other-repo\":{\"path\":\"/path/to/other\",\"project_number\":5}}",
+        "ALLOWED_IO_ROOTS": "/path/to/repo,/path/to/other,/path/to/your/skills",
         "AUTO_REBUILD_INDEX": "true",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
@@ -379,7 +381,9 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "BRIEFING_COPILOT_REVIEWS": "true",
         "RULES_FILE_PATH": "/path/to/your/RULES.md",
         "SKILLS_DIR_PATH": "/path/to/your/skills",
-        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan"
+        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan",
+        "AUDIT_LOG_PATH": "/path/to/your/mcp-audit.jsonl",
+        "TEAM_AUTHOR": "your_username"
       }
     }
   }

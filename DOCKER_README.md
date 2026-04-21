@@ -208,7 +208,8 @@ Add this to your `~/.cursor/mcp.json`, Claude Desktop config, or equivalent:
         "writenotenow/memory-journal-mcp:latest"
       ],
       "env": {
-        "GITHUB_TOKEN": "ghp_your_token_here"
+        "GITHUB_TOKEN": "ghp_your_token_here",
+        "ALLOWED_IO_ROOTS": "/app/repo"
       }
     }
   }
@@ -246,6 +247,7 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "GITHUB_TOKEN": "ghp_your_token_here",
         "TEAM_DB_PATH": "/app/data/team.db",
         "PROJECT_REGISTRY": "{\"my-repo\":{\"path\":\"/app/projects/repo1\",\"project_number\":1},\"other-repo\":{\"path\":\"/app/projects/repo2\",\"project_number\":5}}",
+        "ALLOWED_IO_ROOTS": "/app/projects,/app/data,/app/skills",
         "AUTO_REBUILD_INDEX": "true",
         "MEMORY_JOURNAL_MCP_TOOL_FILTER": "codemode",
         "CODEMODE_INTERNAL_FULL_ACCESS": "true",
@@ -260,7 +262,9 @@ Showcasing the full power of the server, including Multi-Project Routing, Team C
         "BRIEFING_COPILOT_REVIEWS": "true",
         "RULES_FILE_PATH": "/app/rules.md",
         "SKILLS_DIR_PATH": "/app/skills",
-        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan"
+        "MEMORY_JOURNAL_WORKFLOW_SUMMARY": "/deploy: prod deployment | /audit: security scan",
+        "AUDIT_LOG_PATH": "/app/data/mcp-audit.jsonl",
+        "TEAM_AUTHOR": "your_username"
       }
     }
   }
