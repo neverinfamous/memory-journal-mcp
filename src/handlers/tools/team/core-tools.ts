@@ -115,7 +115,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     teamDb.flushSave()
                     
-                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) : undefined;
+                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) as Record<string, unknown> : undefined;
 
                     return {
                         success: true,
@@ -145,7 +145,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const { entry_id, include_relationships, project_number } = TeamGetEntryByIdSchema.parse(params)
                     const entry = teamDb.getEntryById(entry_id)
 
-                    if (entry?.projectNumber !== project_number) {
+                    if (!entry || entry.projectNumber !== project_number) {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} not found or does not belong to project ${project_number}`,
@@ -157,7 +157,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const author = fetchAuthor(teamDb, entry_id)
-                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) : undefined;
+                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) as Record<string, unknown> : undefined;
                     const enrichedEntry = { ...entry, author, flagMetadata: parsedFlagMetadata }
 
                     const result: Record<string, unknown> = {
@@ -207,7 +207,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const enriched = entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,
-                        flagMetadata: e.entryType === 'flag' && e.autoContext ? JSON.parse(e.autoContext) : undefined,
+                        flagMetadata: e.entryType === 'flag' && e.autoContext ? JSON.parse(e.autoContext) as Record<string, unknown> : undefined,
                     }))
 
                     return { entries: enriched, count: enriched.length }

@@ -36,12 +36,12 @@ const created = await mj.team.teamCreateEntry({
   content: 'CM4 team entry test',
   tags: ['codemode4-team-test'],
   entry_type: 'standup',
-  project_number: 5
+  project_number: 5,
 })
 const withAuthor = await mj.team.teamCreateEntry({
   content: 'CM4 team explicit author',
   author: 'CM4Bot',
-  project_number: 5
+  project_number: 5,
 })
 const recent = await mj.team.teamGetRecent({ limit: 5, project_number: 5 })
 const search = await mj.team.teamSearch({ query: 'CM4 team entry test', project_number: 5 })
@@ -49,9 +49,12 @@ const tagSearch = await mj.team.teamSearch({ tags: ['codemode4-team-test'], proj
 const combined = await mj.team.teamSearch({
   query: 'team',
   tags: ['codemode4-team-test'],
-  project_number: 5
+  project_number: 5,
 })
-const hybridAuto = await mj.team.teamSearch({ query: 'how did we fix performance', project_number: 5 })
+const hybridAuto = await mj.team.teamSearch({
+  query: 'how did we fix performance',
+  project_number: 5,
+})
 const forcedFts = await mj.team.teamSearch({ query: 'CM4', mode: 'fts', project_number: 5 })
 const noArgs = await mj.team.teamSearch({ project_number: 5 })
 
@@ -60,7 +63,7 @@ const detail = await mj.team.teamGetEntryById({ entry_id: created.entry.id, proj
 const detailNoRels = await mj.team.teamGetEntryById({
   entry_id: created.entry.id,
   include_relationships: false,
-  project_number: 5
+  project_number: 5,
 })
 const tags = await mj.team.teamListTags({ project_number: 5 })
 
@@ -98,8 +101,8 @@ return {
 
 ### 28.2 Team Error Paths
 
-| Test               | Code                                                                                                                | Expected Result                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Test               | Code                                                                                                                                   | Expected Result                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid", project_number: 5 });`                                 | `{ success: false, error: "..." }` |
 | Nonexistent get    | `return await mj.team.teamGetEntryById({ entry_id: 999999, project_number: 5 });`                                                      | `{ success: false, error: "..." }` |
 | Nonexistent update | `return await mj.team.teamUpdateEntry({ entry_id: 999999, content: "x", project_number: 5 });`                                         | `{ success: false, error: "..." }` |
@@ -115,19 +118,19 @@ return {
 const results = await mj.team.teamSearchByDateRange({
   start_date: '2026-01-01',
   end_date: '2026-12-31',
-  project_number: 5
+  project_number: 5,
 })
 const typed = await mj.team.teamSearchByDateRange({
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'standup',
-  project_number: 5
+  project_number: 5,
 })
 const tagged = await mj.team.teamSearchByDateRange({
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   tags: ['codemode4-team-test'],
-  project_number: 5
+  project_number: 5,
 })
 return {
   hasEntries: Array.isArray(results.entries),
@@ -146,13 +149,13 @@ return {
 
 ## Success Criteria
 
-- [x] `team_create_entry` with auto-detected and explicit `author` works
-- [x] `team_get_recent` returns entries with `author` field
-- [x] `team_search` filters by text, tags, and combined
-- [x] `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
-- [x] `team_list_tags` returns tag list from team database
-- [x] `team_search_by_date_range` filters by date range, entry_type, and tags
-- [x] Invalid `entry_type` on team create returns structured error
-- [x] Nonexistent IDs return structured errors for get, update, delete, link
-- [x] Invalid date range returns structured error with format hint
-- [x] Merge same tag returns structured error
+- [ ] `team_create_entry` with auto-detected and explicit `author` works
+- [ ] `team_get_recent` returns entries with `author` field
+- [ ] `team_search` filters by text, tags, and combined
+- [ ] `team_get_entry_by_id` returns entry detail with `importance` and optional `relationships`
+- [ ] `team_list_tags` returns tag list from team database
+- [ ] `team_search_by_date_range` filters by date range, entry_type, and tags
+- [ ] Invalid `entry_type` on team create returns structured error
+- [ ] Nonexistent IDs return structured errors for get, update, delete, link
+- [ ] Invalid date range returns structured error with format hint
+- [ ] Merge same tag returns structured error
