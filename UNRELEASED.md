@@ -15,6 +15,7 @@
 - Verified and finalized Code Mode (worker_threads) sandboxing patterns, database adapter boundaries, and explicit structured error generation across all 70 core and team tools.
 - Formally certified Phase 10 Team Collaboration (25 tools + 4 resources) functionality, including successful validation of the Hush Protocol flag lifecycle (pass, resolve, idempotent transitions) and cross-project insights filtering.
 - Formally certified Phase 14 Admin Tool Group (6 tools), ensuring deterministic boundary enforcement for soft-deletes, tag merges, and vector index initializations, with all schema validations returning structured errors.
+- Formally certified Phase 15 Backup & Export Tool Group (4 tools), ensuring strict path traversal protections, non-destructive deletion boundaries, and exact filter enforcement for database exports and restoration processes.
 
 **Dependency Updates**
 
