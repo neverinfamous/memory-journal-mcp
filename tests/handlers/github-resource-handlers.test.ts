@@ -389,7 +389,7 @@ describe('GitHub Resource Handlers', () => {
             )
 
             expect(typeof result.data).toBe('string')
-            expect(result.data as string).toContain('NoGitHub')
+            expect(result.data as string).toContain('GitHub integration not available')
         })
     })
 

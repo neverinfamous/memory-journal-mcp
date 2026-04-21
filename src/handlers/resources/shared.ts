@@ -48,7 +48,7 @@ export async function resolveGitHubRepo(
 
     let activeGithub = github
     if (targetRepo) {
-        if (!/^[a-zA-Z0-9_.-]+$/.test(targetRepo)) {
+        if (!/^[a-zA-Z0-9_.-]+(\/[a-zA-Z0-9_.-]+)?$/.test(targetRepo)) {
             return {
                 data: { error: 'Invalid repository name format' },
                 annotations: { lastModified }

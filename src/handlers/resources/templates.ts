@@ -9,12 +9,13 @@
 import { ICON_ISSUE, ICON_PR } from '../../constants/icons.js'
 import { ASSISTANT_FOCUSED, MEDIUM_PRIORITY } from '../../utils/resource-annotations.js'
 import type { InternalResourceDef, ResourceContext } from './shared.js'
+import { resolveGitHubRepo, isResourceError } from './shared.js'
 
 /**
  * Get template resource definitions
  */
 export function getTemplateResourceDefinitions(): InternalResourceDef[] {
-    return [
+    const definitions: InternalResourceDef[] = [
         {
             uri: 'memory://projects/{number}/timeline',
             name: 'Project Timeline',
@@ -174,32 +175,24 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'application/json',
             annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/kanban\/(\d+)/.exec(uri)
-                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+                const match = /memory:\/\/kanban\/(?:(.*)\/)?(\d+)$/.exec(uri)
+                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
 
                 if (projectNumber === null) {
                     return { error: 'Invalid project number' }
                 }
 
-                if (!context.github) {
-                    return {
-                        error: 'GitHub integration not available',
-                        hint: 'Set GITHUB_TOKEN environment variable.',
-                    }
-                }
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo,
+                    context.runtime
+                )
+                if (isResourceError(resolved)) return resolved.data
+                const { owner, repo, github } = resolved
 
-                const repoInfo = await context.github.getRepoInfo()
-                const owner = repoInfo.owner
-                const repo = repoInfo.repo ?? undefined
-
-                if (!owner) {
-                    return {
-                        error: 'Could not detect repository owner',
-                        hint: 'Run the MCP server from a valid git repository or configure PROJECT_REGISTRY.',
-                    }
-                }
-
-                const board = await context.github.getProjectKanban(owner, projectNumber, repo)
+                const board = await github.getProjectKanban(owner, projectNumber, repo)
                 if (!board) {
                     return {
                         error: `Project #${String(projectNumber)} not found or Status field not configured`,
@@ -229,26 +222,30 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             mimeType: 'text/plain',
             annotations: MEDIUM_PRIORITY,
             handler: async (uri: string, context: ResourceContext) => {
-                const match = /memory:\/\/kanban\/(\d+)\/diagram/.exec(uri)
-                const projectNumber = match?.[1] ? parseInt(match[1], 10) : null
+                const match = /memory:\/\/kanban\/(?:(.*)\/)?(\d+)\/diagram$/.exec(uri)
+                const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
+                const projectNumber = match?.[2] ? parseInt(match[2], 10) : null
 
                 if (projectNumber === null) {
                     return { error: 'Invalid project number' }
                 }
 
-                if (!context.github) {
-                    return 'graph LR\n  NoGitHub["GitHub integration not available \u2014 set GITHUB_TOKEN or enable GitHub integration"]'
+                const resolved = await resolveGitHubRepo(
+                    context.github,
+                    context.briefingConfig,
+                    targetRepo,
+                    context.runtime
+                )
+                if (isResourceError(resolved)) {
+                    // It returns a mermaid graph because the MIME type is text/plain.
+                    const errObj = resolved.data as { error: string; hint?: string }
+                    return `graph LR\n  Error["${errObj.error.replace(/["[\]]/g, "'")} \u2014 ${
+                        errObj.hint ? errObj.hint.replace(/["[\]]/g, "'") : ''
+                    }"]`
                 }
+                const { owner, repo, github } = resolved
 
-                const repoInfo = await context.github.getRepoInfo()
-                const owner = repoInfo.owner
-                const repo = repoInfo.repo ?? undefined
-
-                if (!owner) {
-                    return 'graph LR\n  NoOwner["Repository owner not detected \u2014 configure PROJECT_REGISTRY or run the server from within a valid git repository"]'
-                }
-
-                const board = await context.github.getProjectKanban(owner, projectNumber, repo)
+                const board = await github.getProjectKanban(owner, projectNumber, repo)
                 if (!board) {
                     return `graph LR\n  NotFound["Project #${String(projectNumber)} not found \u2014 ensure project exists with a Status field"]`
                 }
@@ -297,4 +294,23 @@ export function getTemplateResourceDefinitions(): InternalResourceDef[] {
             },
         },
     ]
+
+    // Generate dynamic `{repo}` variants for multi-project registry support
+    const dynamicDefinitions: InternalResourceDef[] = []
+
+    for (const def of definitions) {
+        if (def.uri.startsWith('memory://kanban/')) {
+            const dynamicUri = def.uri.replace('{project_number}', '{+repo}/{project_number}')
+            dynamicDefinitions.push({
+                ...def,
+                uri: dynamicUri,
+                name: def.name + ' (Dynamic)',
+                description:
+                    def.description +
+                    ' (Supports explicit multi-project repository targeting via {repo})',
+            })
+        }
+    }
+
+    return [...definitions, ...dynamicDefinitions]
 }

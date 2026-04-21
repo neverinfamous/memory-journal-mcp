@@ -227,3 +227,4 @@
 - Fixed a bug in `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped, causing complex NOT queries to fall back to less precise LIKE searches.
 - Fixed an issue where the Code Mode sandbox result size limitation error omitted the actual serialized payload size in KB, complicating agent remediation.
 - Fixed path traversal boundary errors in the `memory://rules` and `memory://skills` resource handlers by dynamically expanding `allowedIoRoots` to include explicit `RULES_FILE_PATH` and `SKILLS_DIR_PATH` targets during file reads, and enforcing explicit directory existence checks.
+- Updated test assertions in `template-github-branches.test.ts` and `github-resource-handlers.test.ts` to align with the new, structured multi-project error strings returned by `resolveGitHubRepo`.

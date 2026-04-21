@@ -268,7 +268,7 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1',
                 createMockContext({ github }) as never
             )) as Record<string, unknown>
-            expect(result.error).toContain('Could not detect repository owner')
+            expect(result.error).toContain('Could not detect repository')
         })
 
         it('should return error when board not found', async () => {
@@ -305,7 +305,7 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1/diagram',
                 createMockContext() as never
             )) as string
-            expect(result).toContain('NoGitHub')
+            expect(result).toContain('GitHub integration not available')
         })
 
         it('should return no-owner mermaid', async () => {
@@ -319,12 +319,12 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1/diagram',
                 createMockContext({ github }) as never
             )) as string
-            expect(result).toContain('NoOwner')
+            expect(result).toContain('Could not detect repository')
         })
 
         it('should return not-found mermaid', async () => {
             const github = {
-                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: null }),
+                getRepoInfo: vi.fn().mockResolvedValue({ owner: 'o', repo: 'r' }),
                 getProjectKanban: vi.fn().mockResolvedValue(null),
             }
             const resource = resources.find(
@@ -334,7 +334,7 @@ describe('Template resources — branch coverage', () => {
                 'memory://kanban/1/diagram',
                 createMockContext({ github }) as never
             )) as string
-            expect(result).toContain('NotFound')
+            expect(result).toContain('not found')
         })
 
         it('should render diagram with all item types', async () => {
