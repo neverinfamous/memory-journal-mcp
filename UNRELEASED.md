@@ -8,7 +8,7 @@
 - A `Map` caching layer tied to the local workspace path to minimize redundant OctoKit and Git instantiations.
 
 ### Changed
-- **Dependencies:** Bumped `node` (Docker) to `24.15.0-alpine`, `@huggingface/transformers` to `4.1.0`, `eslint` to `10.2.1`, `typescript` to `6.0.3`. Updated GitHub Actions (`hashgraph-online/skill-publish`, `dependabot/fetch-metadata`, `docker/build-push-action`, `actions/github-script`, `actions/setup-node`).
+- **Dependencies:** Bumped `node` (Docker) to `24.15.0-alpine`, `@huggingface/transformers` to `4.1.0`, `eslint` to `10.2.1`, `typescript` to `6.0.3`, `@types/node` to `25.6.0`, `@vitest/coverage-v8` to `4.1.5`, `typescript-eslint` to `8.59.0`, `vitest` to `4.1.5`. Updated GitHub Actions (`hashgraph-online/skill-publish`, `dependabot/fetch-metadata`, `docker/build-push-action`, `actions/github-script`, `actions/setup-node`).
 - Replaced eager memory-bound directory reads with asynchronous `opendir` streaming in the markdown importer to prevent process OOM.
 - Replicated strict 5MB payload truncation limits to `team_export_entries` for consistent memory bounds.
 - Enforced strict IP-binding session isolation for Bearer-Token Auth Mode.

@@ -40,7 +40,6 @@ import {
     registerPrompts,
     type ResourceDefinition,
     type PromptDefinition,
-    type ResourceReadHandler,
 } from './registration.js'
 import { VERSION } from '../version.js'
 import { ServerRuntime } from '../utils/maintenance-lock.js'
@@ -360,13 +359,26 @@ export async function createServer(options: ServerOptions): Promise<void> {
         
             for (const tool of staticTools) {
                 // Build tool options matching MCP SDK expectations
-                const toolOptions: Record<string, unknown> = {
+                const toolOptions: {
+                    description?: string
+                    title?: string
+                    inputSchema?: z.ZodType
+                    outputSchema?: z.ZodType
+                    annotations?: {
+                        title?: string
+                        readOnlyHint?: boolean
+                        destructiveHint?: boolean
+                        idempotentHint?: boolean
+                        openWorldHint?: boolean
+                    }
+                    icons?: unknown
+                } = {
                     description: tool.description,
                 }
         
                 // MCP 2025-11-25: Pass title for human-readable display
                 if (tool.title) {
-                    toolOptions['title'] = tool.title
+                    toolOptions.title = tool.title
                 }
         
                 if (tool.inputSchema !== undefined) {
@@ -375,7 +387,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         typeof schema === 'object' &&
                         schema !== null &&
                         'partial' in schema &&
-                        typeof (schema as { partial: unknown }).partial === 'function'
+                        typeof (schema).partial === 'function'
                     ) {
                         // DOCUMENTATION (P3 #8): Two-Schema Pattern
                         // We use a strict `inputSchema` for tool definitions so LLMs see exactly what is required.
@@ -393,13 +405,13 @@ export async function createServer(options: ServerOptions): Promise<void> {
                             const relaxed = (
                                 schema as { partial: () => { passthrough?: () => z.ZodType } }
                             ).partial()
-                            toolOptions['inputSchema'] =
+                            toolOptions.inputSchema =
                                 typeof relaxed.passthrough === 'function' ? relaxed.passthrough() : schema
                         } catch {
-                            toolOptions['inputSchema'] = schema
+                            toolOptions.inputSchema = schema
                         }
                     } else {
-                        toolOptions['inputSchema'] = schema
+                        toolOptions.inputSchema = schema
                     }
                 }
         
@@ -410,27 +422,27 @@ export async function createServer(options: ServerOptions): Promise<void> {
                         typeof outSchema === 'object' &&
                         outSchema !== null &&
                         'passthrough' in outSchema &&
-                        typeof (outSchema as { passthrough: unknown }).passthrough === 'function'
+                        typeof (outSchema).passthrough === 'function'
                     ) {
                         try {
-                            toolOptions['outputSchema'] = (
+                            toolOptions.outputSchema = (
                                 outSchema as { passthrough: () => z.ZodType }
                             ).passthrough()
                         } catch {
-                            toolOptions['outputSchema'] = outSchema
+                            toolOptions.outputSchema = outSchema
                         }
                     } else {
-                        toolOptions['outputSchema'] = outSchema
+                        toolOptions.outputSchema = outSchema
                     }
                 }
         
                 if (tool.annotations !== undefined) {
-                    toolOptions['annotations'] = tool.annotations
+                    toolOptions.annotations = tool.annotations
                 }
         
                 // MCP 2025-11-25: Pass icons for visual representation
                 if (tool.icons) {
-                    toolOptions['icons'] = tool.icons
+                    toolOptions.icons = tool.icons
                 }
         
                 // Capture whether this tool has outputSchema for response handling
@@ -438,11 +450,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         
                 server.registerTool(
                     tool.name,
-                    toolOptions as {
-                        description?: string
-                        inputSchema?: z.ZodType
-                        outputSchema?: z.ZodType
-                    },
+                    toolOptions,
                     async (args, extra) => {
                         try {
                             // Build progress context for progress notifications
@@ -575,7 +583,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
             registerResources(
                 server,
                 resources as ResourceDefinition[],
-                handleResourceRead as ResourceReadHandler,
+                handleResourceRead,
                 runtime
             )
         

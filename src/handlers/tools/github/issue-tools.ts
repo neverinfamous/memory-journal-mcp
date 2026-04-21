@@ -8,8 +8,6 @@ import { z } from 'zod'
 import type {
     ToolDefinition,
     ToolContext,
-    EntryType,
-    SignificanceType,
 } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
@@ -100,7 +98,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
 
                     const entry = db.createEntry({
                         content: entryContent,
-                        entryType: 'planning' as EntryType,
+                        entryType: 'planning',
                         tags: input.tags ?? ['github', 'issue-created', 'pending'],
                         isPersonal: false,
                         significanceType: null,
@@ -349,10 +347,10 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
 
                     const entry = db.createEntry({
                         content: entryContent,
-                        entryType: 'bug_fix' as EntryType,
+                        entryType: 'bug_fix',
                         tags: input.tags ?? ['github', 'issue-closed', 'resolution', 'pending'],
                         isPersonal: false,
-                        significanceType: 'blocker_resolved' as SignificanceType,
+                        significanceType: 'blocker_resolved',
                         issueNumber: input.issue_number,
                         projectOwner: resolved.owner,
                     })

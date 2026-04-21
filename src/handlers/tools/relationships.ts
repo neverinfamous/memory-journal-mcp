@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod'
-import type { ToolDefinition, ToolContext, RelationshipType } from '../../types/index.js'
+import type { ToolDefinition, ToolContext } from '../../types/index.js'
 import { formatHandlerError } from '../../utils/error-helpers.js'
 import { ResourceNotFoundError, ValidationError } from '../../types/errors.js'
 import { RelationshipOutputSchema, relaxedNumber } from './schemas.js'
@@ -189,7 +189,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                     const relationship = db.linkEntries(
                         input.from_entry_id,
                         input.to_entry_id,
-                        input.relationship_type as RelationshipType,
+                        input.relationship_type,
                         input.description
                     )
                     return { success: true, relationship }

@@ -24,8 +24,7 @@ import {
     MAX_QUERY_LIMIT,
 } from '../schemas.js'
 import { calcPerDbLimit, mergeAndDedup, passMetadataFilters } from './helpers.js'
-import type { ISearchFilters } from './helpers.js'
-import { resolveSearchMode, type SearchMode } from './auto.js'
+import { resolveSearchMode } from './auto.js'
 import { ftsSearch } from './fts.js'
 import { hybridSearch } from './hybrid.js'
 import type { SemanticSearchResult } from '../../../vector/vector-search-manager.js'
@@ -238,7 +237,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = SearchEntriesSchema.parse(params)
                     const query = input.query?.trim() || ''
-                    const mode = input.mode as SearchMode
+                    const mode = input.mode
 
                     // Validate: at least one filter or query must be provided to prevent bare searches
                     const hasFilters =
@@ -326,7 +325,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                     if (
                                         !passMetadataFilters(
                                             entry,
-                                            searchOptions as ISearchFilters,
+                                            searchOptions,
                                             db
                                         )
                                     )
@@ -588,7 +587,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
 
-                            if (!passMetadataFilters(entry, filterOptions as ISearchFilters, db))
+                            if (!passMetadataFilters(entry, filterOptions, db))
                                 return null
 
                             // Exclude the source entry from find-related results
