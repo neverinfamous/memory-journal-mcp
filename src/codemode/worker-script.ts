@@ -254,22 +254,27 @@ parentPort?.on('message', (msg: unknown) => {
                                 bytes += 5 // brackets/keys/null overhead
                             }
                             
-                            if (bytes > egressLimit) throw new Error('EgressLimitExceeded')
+                            if (bytes > egressLimit) {
+                                throw new Error(`EgressLimitExceeded:${bytes}`)
+                            }
                             return value
                         }
                     )
 
-                    if (resultJson) {
+                    if (resultJson !== undefined) {
                         const byteLength = Buffer.byteLength(resultJson, 'utf8')
                         if (byteLength > egressLimit) {
-                            throw new Error('EgressLimitExceeded')
+                            throw new Error(`EgressLimitExceeded:${byteLength}`)
                         }
                     }
                 } catch (err) {
                     result.success = false
                     const egressLimit = maxResultSize ?? 100 * 1024
-                    if (err instanceof Error && err.message === 'EgressLimitExceeded') {
-                        result.error = `Output limit exceeded: Result serialization exceeded the ${Math.round(egressLimit / 1024)}KB boundary. Please aggregate or filter your results to reduce the payload size.`
+                    if (err instanceof Error && err.message.startsWith('EgressLimitExceeded:')) {
+                        const actualBytesStr = err.message.split(':')[1]
+                        const actualBytes = actualBytesStr !== undefined ? Number(actualBytesStr) : egressLimit + 1
+                        const actualKb = (actualBytes / 1024).toFixed(1)
+                        result.error = `Output limit exceeded: Result serialization exceeded the ${Math.round(egressLimit / 1024)}KB boundary (Actual size: >${actualKb}KB). Please aggregate or filter your results to reduce the payload size.`
                     } else {
                         result.error = `Result could not be serialized or exceeded memory limits: ${err instanceof Error ? err.message : String(err)}`
                     }

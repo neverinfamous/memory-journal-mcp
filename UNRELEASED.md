@@ -11,8 +11,6 @@
 
 ### Changed
 
-- Verified complete Phase 2 GitHub Integration suite for v7.5.0, confirming 16 read-only, Kanban, and lifecycle tools operate correctly in multi-project and Code Mode execution environments.
-
 **Dependency Updates**
 
 - Bumped `@huggingface/transformers` to `4.1.0`.
@@ -227,3 +225,4 @@
 - Fixed a bug in Code Mode where Team tools (`mj.team.*`) failed with 'missing TEAM_AUTHOR' authorization errors during testing by allowing `CODEMODE_INTERNAL_FULL_ACCESS` to bypass the Team fail-closed boundary.
 - Fixed a schema validation bug in Code Mode where Team tools (`mj.team.*`) failed due to a missing `project_number` argument by dynamically injecting the context's `defaultProjectNumber` across the dispatcher boundary.
 - Fixed a bug in `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped, causing complex NOT queries to fall back to less precise LIKE searches.
+- Fixed an issue where the Code Mode sandbox result size limitation error omitted the actual serialized payload size in KB, complicating agent remediation.
