@@ -113,6 +113,7 @@
 
 ### Security
 
+- Verified Phase 19 Code Mode Error Handling & Security constraints, confirming 100% compliance with input validation, blocked patterns, structured runtime error interception, and nulled globals.
 - Updated `hono` to `4.12.14` to resolve a medium severity security vulnerability.
 - Limited FTS5 query token strings to 500 characters prior to AST parsing to prevent ReDoS and AST bloat limits.
 - Changed the fallback client ID in `mj_execute_code` from the process-global `INSTANCE_UUID` to a per-invocation `randomUUID()`, enforcing tenant isolation for unauthenticated `stdio` callers.
