@@ -342,10 +342,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
                 `SELECT v.entry_id, v.distance 
                  FROM vec_embeddings v
                  JOIN memory_journal mj ON v.entry_id = mj.id
-                 WHERE v.embedding MATCH ? AND mj.deleted_at IS NULL 
+                 WHERE v.embedding MATCH ? AND v.k = ? AND mj.deleted_at IS NULL 
                  ORDER BY v.distance LIMIT ?`
             )
-            .all(embedding, limit) as { entry_id: number; distance: number }[]
+            .all(embedding, limit * 4, limit) as { entry_id: number; distance: number }[]
     }
 
     getVector(entryId: number): Float32Array | null {
