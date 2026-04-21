@@ -45,7 +45,6 @@
 
 ### Fixed
 
-- Validated and stabilized Phase 28 Team Administration Tools via Code Mode, ensuring deterministic CRUD operations and error paths.
 - Restored project test coverage above 90% by adding targeted unit tests for `MaintenanceManager`, `TokenValidator`, HTTP stateful transports, server registration, and Code Mode handlers.
 - Excluded unmeasurable runtime scripts and empty barrel files from Vitest metrics to accurately reflect 90%+ line coverage.
 - Multi-project repository fallback failures for naked resource URIs and global GitHub resources by iterating `PROJECT_REGISTRY`.
@@ -61,7 +60,7 @@
 - Silent error suppression in `mcp-server.ts`, `backup.ts`, and `team.ts` by ensuring warnings propagate to `stderr`.
 - False-positive `--cors-origin` tooltip configurations back to its `none` baseline.
 - Code Mode sandbox crashes when encountering `[Circular]` references.
-- Code Mode test regressions where `flagMetadata` was omitted for Hush Protocol flags.
+- Code Mode test regressions where `flagMetadata` was omitted for Hush Protocol flags, verifying full idempotency and vocabulary validation.
 - RFC 9728 `Content-Type` header emission in the OAuth metadata endpoint.
 - Standard MCP protocol compliance for legacy SSE transport by supporting `sessionId` in query strings.
 - Prompt handler failures now surfacing as proper MCP protocol errors.
