@@ -181,11 +181,11 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    return { 
-                        success, 
-                        entryId: entry_id, 
+                    return {
+                        success,
+                        entryId: entry_id,
                         permanent,
-                        ...(warning ? { warning } : {})
+                        ...(warning ? { warning } : {}),
                     }
                 } catch (err) {
                     return formatHandlerError(err)
@@ -295,10 +295,8 @@ export function getAdminTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                         }
                     }
-                    const { indexed, failed, firstError, partial } = await vectorManager.rebuildIndex(
-                        db,
-                        progress
-                    )
+                    const { indexed, failed, firstError, partial } =
+                        await vectorManager.rebuildIndex(db, progress)
                     const success = indexed > 0 || failed === 0
                     return {
                         success,

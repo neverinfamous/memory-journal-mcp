@@ -28,7 +28,6 @@ import { getBackupTools } from './backup.js'
 import { getTeamTools } from './team/index.js'
 import { getGitHubIntegration } from '../../github/github-integration/index.js'
 
-
 // =============================================================================
 // Input / Output Schemas
 // =============================================================================
@@ -97,7 +96,6 @@ function sweepCaches(): void {
 const MAX_SANDBOX_POOLS = 50
 
 function evictExcessCaches(): void {
-
     while (securityManagerMap.size >= MAX_SANDBOX_POOLS) {
         const oldestId = securityManagerMap.keys().next().value
         if (oldestId !== undefined) {
@@ -122,10 +120,10 @@ function getSecurityManager(clientId: string): CodeModeSecurityManager {
             parsedMaxSize > 0
                 ? { maxResultSize: parsedMaxSize }
                 : undefined
-        
+
         entry = {
             instance: new CodeModeSecurityManager(overrides),
-            lastAccessed: Date.now()
+            lastAccessed: Date.now(),
         }
         securityManagerMap.set(clientId, entry)
     } else {
@@ -176,9 +174,10 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
     const filterConfig = context.config?.filterConfig
     const bypassFilter = context.config?.codemodeInternalFullAccess === true
 
-    cachedNonCodeModeTools = filterConfig && !bypassFilter
-        ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
-        : allTools
+    cachedNonCodeModeTools =
+        filterConfig && !bypassFilter
+            ? allTools.filter((t) => filterConfig.enabledTools.has(t.name))
+            : allTools
 
     cachedCodeModeContext = context
     return cachedNonCodeModeTools
@@ -187,9 +186,6 @@ function collectNonCodeModeTools(context: ToolContext): ToolDefinition[] {
 // =============================================================================
 // Tool Definitions & Access Control
 // =============================================================================
-
-
-
 
 export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
     return [
@@ -221,7 +217,8 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // Context extraction for rate limiting and tenant isolation
                     const reqCtx = getRequestContext()
                     const authCtx = getAuthContext()
-                    const clientId = authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
+                    const clientId =
+                        authCtx?.claims?.sub || reqCtx?.sessionId || reqCtx?.ip || 'stdio-client'
 
                     // Security validation
                     const security = getSecurityManager(clientId)
@@ -261,7 +258,7 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                             if (registryEntry) {
                                 const injectedGithub = getGitHubIntegration(
-                                    registryEntry.path, 
+                                    registryEntry.path,
                                     undefined,
                                     process.env['GITHUB_TOKEN']
                                 )
@@ -301,18 +298,27 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
                     // and audit interception apply to all inner tool calls.
                     const dispatcher = sessionContext.config?.dispatch
                     if (!dispatcher) {
-                        throw new ConfigurationError('Code Mode is unavailable in the current configuration.')
+                        throw new ConfigurationError(
+                            'Code Mode is unavailable in the current configuration.'
+                        )
                     }
-                    
+
                     const capturedReqCtx = reqCtx
                     const capturedAuthCtx = authCtx
 
-                    const secureDispatcher = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+                    const secureDispatcher = async (
+                        name: string,
+                        args: Record<string, unknown>
+                    ): Promise<unknown> => {
                         // Inject defaultProjectNumber into args to propagate repo context across the dispatcher boundary
                         if (
                             sessionContext.config?.defaultProjectNumber !== undefined &&
                             !('project_number' in args) &&
-                            (name === 'create_entry' || name === 'update_entry' || name === 'delete_entry' || name.startsWith('team_') || name === 'pass_flag')
+                            (name === 'create_entry' ||
+                                name === 'update_entry' ||
+                                name === 'delete_entry' ||
+                                name.startsWith('team_') ||
+                                name === 'pass_flag')
                         ) {
                             args['project_number'] = sessionContext.config.defaultProjectNumber
                         }
@@ -324,29 +330,34 @@ export function getCodeModeTools(context: ToolContext): ToolDefinition[] {
 
                         const executeAuth = (): Promise<unknown> => {
                             if (capturedAuthCtx) {
-                                return runWithAuthContext(capturedAuthCtx, () => dispatcher(name, args))
+                                return runWithAuthContext(capturedAuthCtx, () =>
+                                    dispatcher(name, args)
+                                )
                             }
                             return dispatcher(name, args)
                         }
-                        
-                        const mm = sessionContext.config?.runtime?.maintenanceManager;
-                        if (mm) mm.yieldJob();
+
+                        const mm = sessionContext.config?.runtime?.maintenanceManager
+                        if (mm) mm.yieldJob()
                         try {
-                            let result: unknown;
+                            let result: unknown
                             if (capturedReqCtx) {
-                                result = await requestContextStorage.run(capturedReqCtx, executeAuth)
+                                result = await requestContextStorage.run(
+                                    capturedReqCtx,
+                                    executeAuth
+                                )
                             } else {
                                 result = await executeAuth()
                             }
-                            return result;
+                            return result
                         } catch (error) {
                             return {
                                 success: false,
                                 error: error instanceof Error ? error.message : String(error),
-                                code: 'DISPATCH_ERROR'
+                                code: 'DISPATCH_ERROR',
                             }
                         } finally {
-                            if (mm) mm.resumeJob();
+                            if (mm) mm.resumeJob()
                         }
                     }
 

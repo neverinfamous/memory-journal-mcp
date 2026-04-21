@@ -10,7 +10,11 @@ import * as path from 'node:path'
 import type { BriefingConfig, ResourceContext } from '../../shared.js'
 import { logger } from '../../../../utils/logger.js'
 import { parseFlagContext } from '../../../../types/auto-context.js'
-import { markUntrustedContentInline, assertSafeFilePath, assertSafeDirectoryPath } from '../../../../utils/security-utils.js'
+import {
+    markUntrustedContentInline,
+    assertSafeFilePath,
+    assertSafeDirectoryPath,
+} from '../../../../utils/security-utils.js'
 
 // ============================================================================
 // Journal Context
@@ -87,7 +91,9 @@ export function buildJournalContext(
                 id: entry.id,
                 timestamp: entry.timestamp,
                 type: entry.entryType,
-                preview: markUntrustedContentInline(c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')),
+                preview: markUntrustedContentInline(
+                    c.slice(0, PREVIEW_LENGTH) + (c.length > PREVIEW_LENGTH ? '...' : '')
+                ),
             }
         })
         latestSessionSummary = sessionSummaries[0]
@@ -153,7 +159,7 @@ export function buildTeamContext(
                     type: e.entryType,
                     preview: markUntrustedContentInline(
                         content.slice(0, TEAM_PREVIEW_LENGTH) +
-                        (content.length > TEAM_PREVIEW_LENGTH ? '...' : '')
+                            (content.length > TEAM_PREVIEW_LENGTH ? '...' : '')
                     ),
                 }
             })
@@ -191,7 +197,10 @@ export interface SkillsDir {
 const MS_PER_HOUR = 3_600_000
 const MS_PER_DAY = 86_400_000
 
-export function buildRulesFileInfo(rulesFilePath: string | undefined, allowedIoRoots: string[] = []): RulesFile | undefined {
+export function buildRulesFileInfo(
+    rulesFilePath: string | undefined,
+    allowedIoRoots: string[] = []
+): RulesFile | undefined {
     if (!rulesFilePath) return undefined
 
     try {
@@ -223,7 +232,10 @@ export function buildRulesFileInfo(rulesFilePath: string | undefined, allowedIoR
     }
 }
 
-export function buildSkillsDirInfo(skillsDirPath: string | undefined, allowedIoRoots: string[] = []): SkillsDir | undefined {
+export function buildSkillsDirInfo(
+    skillsDirPath: string | undefined,
+    allowedIoRoots: string[] = []
+): SkillsDir | undefined {
     if (!skillsDirPath) return undefined
 
     try {
@@ -277,24 +289,19 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
             .map((entry) => {
                 const ctx = parseFlagContext(entry.autoContext)
                 if (!ctx || ctx.resolved) return null
-                
+
                 const content = entry.content ?? ''
                 return {
                     id: entry.id,
                     flag_type: ctx.flag_type,
                     target_user: ctx.target_user ?? null,
                     preview: markUntrustedContentInline(
-                        content.slice(0, 80) +
-                        (content.length > 80 ? '...' : '')
+                        content.slice(0, 80) + (content.length > 80 ? '...' : '')
                     ),
                     timestamp: entry.timestamp,
                 }
             })
-            .filter(
-                (
-                    f
-                ): f is NonNullable<typeof f> => f !== null
-            )
+            .filter((f): f is NonNullable<typeof f> => f !== null)
 
         if (activeFlags.length === 0) return undefined
 
@@ -311,4 +318,3 @@ export function buildFlagsContext(context: ResourceContext): FlagSummary | undef
         return undefined
     }
 }
-

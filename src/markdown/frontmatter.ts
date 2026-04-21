@@ -67,7 +67,7 @@ const FrontmatterSchema = z.object({
  */
 export function serializeFrontmatter(data: FrontmatterData | null | undefined): string {
     if (!data || Object.keys(data).length === 0) return ''
-    
+
     // Create a plain object without circular reference risks
     const cleanData: Partial<FrontmatterData> = {}
     if (data.mj_id !== undefined) cleanData.mj_id = data.mj_id
@@ -76,7 +76,8 @@ export function serializeFrontmatter(data: FrontmatterData | null | undefined): 
     if (data.tags && data.tags.length > 0) cleanData.tags = data.tags
     if (data.timestamp !== undefined) cleanData.timestamp = data.timestamp
     if (data.significance !== undefined) cleanData.significance = data.significance
-    if (data.relationships && data.relationships.length > 0) cleanData.relationships = data.relationships
+    if (data.relationships && data.relationships.length > 0)
+        cleanData.relationships = data.relationships
     if (data.source !== undefined) cleanData.source = data.source
 
     if (Object.keys(cleanData).length === 0) return ''
@@ -133,7 +134,9 @@ export function parseFrontmatter(content: string): ParseResult {
             throw err
         }
     } else {
-        throw new Error('Invalid frontmatter: Frontmatter must be strict JSON enclosed in { } braces.')
+        throw new Error(
+            'Invalid frontmatter: Frontmatter must be strict JSON enclosed in { } braces.'
+        )
     }
 
     // Validate against schema

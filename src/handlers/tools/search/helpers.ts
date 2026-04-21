@@ -14,7 +14,6 @@ import type { JournalEntry } from '../../../types/index.js'
 import type { IDatabaseAdapter } from '../../../database/core/interfaces.js'
 import * as crypto from 'node:crypto'
 
-
 // ============================================================================
 // Types
 // ============================================================================
@@ -83,7 +82,10 @@ export function mergeAndDedup(
     for (const entry of all) {
         // Stop deduplicating cross-DB by content alone to prevent dropping identical text entries.
         // Use source + id, fallback to source + content hash.
-        const entryId = typeof entry['id'] === 'number' || typeof entry['id'] === 'string' ? String(entry['id']) : ''
+        const entryId =
+            typeof entry['id'] === 'number' || typeof entry['id'] === 'string'
+                ? String(entry['id'])
+                : ''
         const key = entryId
             ? `${entry.source}:${entryId}`
             : crypto.createHash('sha256').update(`${entry.source}:${entry.content}`).digest('hex')

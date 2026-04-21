@@ -85,7 +85,9 @@ export function searchEntries(
     const { db, tagsMgr } = context
 
     if (queryStr.length > 500) {
-        throw new ValidationError('Search query exceeds maximum length of 500 characters. Please refine your search.')
+        throw new ValidationError(
+            'Search query exceeds maximum length of 500 characters. Please refine your search.'
+        )
     }
 
     // Try FTS5 first for relevance-ranked results, fall back to LIKE on syntax error
@@ -98,18 +100,18 @@ export function searchEntries(
         } catch (error) {
             // FTS5 syntax error (e.g. unbalanced quotes, special chars) — fall back to LIKE
             // Rethrow if it's an infrastructural error (like missing extension)
-            const isSyntaxError = error instanceof Error && (
-                error.message.includes('syntax error') ||
-                error.message.includes('no such column') ||
-                error.message.includes('unterminated string') ||
-                error.message.includes('unrecognized token')
-            )
-            
+            const isSyntaxError =
+                error instanceof Error &&
+                (error.message.includes('syntax error') ||
+                    error.message.includes('no such column') ||
+                    error.message.includes('unterminated string') ||
+                    error.message.includes('unrecognized token'))
+
             if (!isSyntaxError) {
                 // Infrastructural error - rethrow
                 throw error
             }
-            
+
             // Syntax error - fall back to LIKE with degraded flag
             const { sql, params } = buildSearchQuery(queryStr, options, false)
             const stmt = db.prepare(sql)
@@ -317,7 +319,7 @@ export function searchByDateRange(
     if (useImportance) {
         query += `WITH ${buildImportanceCte()} `
     }
-    
+
     query += `
         SELECT DISTINCT ${ALIASED_ENTRY_COLUMNS}${importanceCol} FROM memory_journal e
     `
@@ -387,8 +389,8 @@ export function searchByDateRange(
 /**
  * Rigorous FTS5 Query Sanitization
  *
- * Prevents FTS5 catastrophic backtracking (ReDoS) and application-level syntax crashes 
- * by aggressively stripping FTS control syntax and forcing queries into safe, 
+ * Prevents FTS5 catastrophic backtracking (ReDoS) and application-level syntax crashes
+ * by aggressively stripping FTS control syntax and forcing queries into safe,
  * implicit AND-token sequences.
  *
  * Threat Vectors Mitigated:
@@ -398,68 +400,68 @@ export function searchByDateRange(
  * - Naked booleans (`word AND OR NOT word`) confusing the FTS AST parser
  */
 function sanitizeFtsQuery(query: string): string {
-    if (!query) return '';
+    if (!query) return ''
 
     // Strip quotes entirely to prevent unterminated string syntax errors
-    const noQuotes = query.replace(/"/g, ' ');
-    const tokens = noQuotes.split(/\s+/);
-    const safeTokens: string[] = [];
+    const noQuotes = query.replace(/"/g, ' ')
+    const tokens = noQuotes.split(/\s+/)
+    const safeTokens: string[] = []
 
     for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        if (!token) continue;
-        
+        const token = tokens[i]
+        if (!token) continue
+
         // Strip out non-alphanumeric characters, except hyphen, underscore, and asterisk
-        let sanitizedToken = token.replace(/[^a-zA-Z0-9_\-*]/g, '');
-        if (!sanitizedToken) continue;
+        let sanitizedToken = token.replace(/[^a-zA-Z0-9_\-*]/g, '')
+        if (!sanitizedToken) continue
 
         // Ensure asterisk is only at the end of the token for prefix matching,
         // preventing standalone asterisks or inner asterisks which cause syntax errors.
-        const hasAsterisk = token.endsWith('*');
-        sanitizedToken = sanitizedToken.replace(/\*/g, '');
+        const hasAsterisk = token.endsWith('*')
+        sanitizedToken = sanitizedToken.replace(/\*/g, '')
         if (hasAsterisk && sanitizedToken.length > 0) {
-            sanitizedToken += '*';
+            sanitizedToken += '*'
         }
-        
-        if (!sanitizedToken || sanitizedToken === '*') continue;
+
+        if (!sanitizedToken || sanitizedToken === '*') continue
 
         // Drop NEAR as it causes ReDoS
-        if (/^NEAR$/i.test(sanitizedToken)) continue;
+        if (/^NEAR$/i.test(sanitizedToken)) continue
 
-        const isOperator = /^(AND|OR|NOT)$/i.test(sanitizedToken);
+        const isOperator = /^(AND|OR|NOT)$/i.test(sanitizedToken)
         if (isOperator) {
             // Must be uppercase for FTS5
-            sanitizedToken = sanitizedToken.toUpperCase();
-            
+            sanitizedToken = sanitizedToken.toUpperCase()
+
             // Operators cannot be the first token
-            if (safeTokens.length === 0) continue;
-            
+            if (safeTokens.length === 0) continue
+
             // Operators cannot be preceded by another operator
-            const prevToken = safeTokens[safeTokens.length - 1];
+            const prevToken = safeTokens[safeTokens.length - 1]
             if (prevToken && /^(AND|OR|NOT)$/.test(prevToken)) {
                 // If there are adjacent operators, skip the current one
-                continue;
+                continue
             }
-            
+
             // Operators must have a valid subsequent non-operator token
-            let hasValidNext = false;
+            let hasValidNext = false
             for (let j = i + 1; j < tokens.length; j++) {
-                const rawNext = tokens[j];
-                if (!rawNext) continue;
-                
-                let nextToken = rawNext.replace(/[^a-zA-Z0-9_\-*]/g, '');
-                nextToken = nextToken.replace(/\*/g, '');
+                const rawNext = tokens[j]
+                if (!rawNext) continue
+
+                let nextToken = rawNext.replace(/[^a-zA-Z0-9_\-*]/g, '')
+                nextToken = nextToken.replace(/\*/g, '')
                 if (nextToken && !/^(AND|OR|NOT|NEAR)$/i.test(nextToken)) {
-                    hasValidNext = true;
-                    break;
+                    hasValidNext = true
+                    break
                 }
             }
-            
-            if (!hasValidNext) continue;
+
+            if (!hasValidNext) continue
         }
 
-        safeTokens.push(sanitizedToken);
+        safeTokens.push(sanitizedToken)
     }
 
-    return safeTokens.join(' ');
+    return safeTokens.join(' ')
 }

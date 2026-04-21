@@ -38,8 +38,13 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { from_entry_id, to_entry_id, relationship_type, description, project_number } =
-                        TeamLinkEntriesSchema.parse(params)
+                    const {
+                        from_entry_id,
+                        to_entry_id,
+                        relationship_type,
+                        description,
+                        project_number,
+                    } = TeamLinkEntriesSchema.parse(params)
 
                     // Guard: self-referential links are not meaningful
                     if (from_entry_id === to_entry_id) {
@@ -62,7 +67,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             error: `Team entry ${String(from_entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and project number, and try again',
+                            suggestion:
+                                'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
@@ -73,7 +79,8 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                             error: `Team entry ${String(to_entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and project number, and try again',
+                            suggestion:
+                                'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
@@ -199,10 +206,7 @@ export function getTeamRelationshipTools(context: ToolContext): ToolDefinition[]
                         if (entry) {
                             let label = entry.content.substring(0, 40).replace(/\n/g, ' ')
                             if (entry.content.length > 40) label += '...'
-                            label = label
-                                .replace(/"/g, "'")
-                                .replace(/\[/g, '(')
-                                .replace(/\]/g, ')')
+                            label = label.replace(/"/g, "'").replace(/\[/g, '(').replace(/\]/g, ')')
                             nodes.set(eid, label)
                         }
 

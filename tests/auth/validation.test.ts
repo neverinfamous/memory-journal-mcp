@@ -25,10 +25,12 @@ describe('enforceAccessBoundary', () => {
         process.env['CODEMODE_INTERNAL_FULL_ACCESS'] = 'false'
         vi.mocked(authContext.getAuthContext).mockReturnValue(undefined)
 
-        expect(() => enforceAccessBoundary('memory://team/test', 'resource'))
-            .toThrow(PermissionError)
-        expect(() => enforceAccessBoundary('memory://team/test', 'resource'))
-            .toThrow(/missing TEAM_AUTHOR or active OAuth session/)
+        expect(() => enforceAccessBoundary('memory://team/test', 'resource')).toThrow(
+            PermissionError
+        )
+        expect(() => enforceAccessBoundary('memory://team/test', 'resource')).toThrow(
+            /missing TEAM_AUTHOR or active OAuth session/
+        )
     })
 
     it('should allow team target if CODEMODE_INTERNAL_FULL_ACCESS is true', () => {
@@ -46,11 +48,12 @@ describe('enforceAccessBoundary', () => {
         })
 
         const mockAuditLogger = {
-            logDenial: vi.fn()
+            logDenial: vi.fn(),
         }
 
-        expect(() => enforceAccessBoundary('memory://audit', 'resource', undefined, mockAuditLogger as any))
-            .toThrow(PermissionError)
+        expect(() =>
+            enforceAccessBoundary('memory://audit', 'resource', undefined, mockAuditLogger as any)
+        ).toThrow(PermissionError)
         expect(mockAuditLogger.logDenial).toHaveBeenCalledWith(
             'memory://audit',
             'Insufficient scope',
@@ -75,11 +78,17 @@ describe('enforceAccessBoundary', () => {
         process.env['TEAM_AUTHOR'] = 'test-author'
 
         const mockAuditLogger = {
-            logDenial: vi.fn()
+            logDenial: vi.fn(),
         }
 
-        expect(() => enforceAccessBoundary('team_create_entry', 'tool', { requiresTeamScope: true }, mockAuditLogger as any))
-            .toThrow(PermissionError)
+        expect(() =>
+            enforceAccessBoundary(
+                'team_create_entry',
+                'tool',
+                { requiresTeamScope: true },
+                mockAuditLogger as any
+            )
+        ).toThrow(PermissionError)
         expect(mockAuditLogger.logDenial).toHaveBeenCalledWith(
             'team_create_entry',
             'Insufficient scope',

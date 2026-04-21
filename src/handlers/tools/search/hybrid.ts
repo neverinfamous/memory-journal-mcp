@@ -96,7 +96,10 @@ export async function hybridSearch(
         // Semantic search (returns [] if vectorManager is unavailable)
         vectorManager
             ? vectorManager.search(query, overfetchLimit, 0.15).catch((err: unknown) => {
-                  logger.warning(`Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`, { module: 'HybridSearch' })
+                  logger.warning(
+                      `Semantic search degraded: ${err instanceof Error ? err.message : String(err)}`,
+                      { module: 'HybridSearch' }
+                  )
                   semanticDegraded = true
                   return []
               }) // Lower threshold for broader recall
@@ -137,7 +140,8 @@ export async function hybridSearch(
         entries.push({ ...entry, source: 'personal' as const })
     }
 
-    const isDegraded = (ftsResults as unknown as { degraded?: boolean }).degraded === true || semanticDegraded
+    const isDegraded =
+        (ftsResults as unknown as { degraded?: boolean }).degraded === true || semanticDegraded
 
     return { entries, fusionScores, degraded: isDegraded }
 }

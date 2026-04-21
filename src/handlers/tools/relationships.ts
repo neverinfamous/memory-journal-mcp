@@ -251,7 +251,7 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         tags: input.tags,
                         relationshipType: input.relationship_type,
                         depth: input.depth,
-                        limit: input.limit
+                        limit: input.limit,
                     })
 
                     if (results.nodes.length === 0) {
@@ -274,14 +274,15 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
                         let contentPreview = content
                             .slice(0, MERMAID_CONTENT_PREVIEW_LENGTH)
                             .replace(/\n/g, ' ')
-                        if (content.length > MERMAID_CONTENT_PREVIEW_LENGTH)
-                            contentPreview += '...'
+                        if (content.length > MERMAID_CONTENT_PREVIEW_LENGTH) contentPreview += '...'
                         contentPreview = contentPreview
                             .replace(/"/g, "'")
                             .replace(/\[/g, '(')
                             .replace(/\]/g, ')')
                         const entryTypeShort = node.group.slice(0, 20)
-                        mermaidLines.push(`    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]`)
+                        mermaidLines.push(
+                            `    E${node.id}["#${node.id}: ${contentPreview}<br/>${entryTypeShort}"]`
+                        )
                     }
 
                     mermaidLines.push('')
@@ -299,7 +300,9 @@ export function getRelationshipTools(context: ToolContext): ToolDefinition[] {
 
                     for (const edge of results.edges) {
                         const arrow = relSymbols[edge.type] ?? '-->'
-                        mermaidLines.push(`    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}`)
+                        mermaidLines.push(
+                            `    E${String(edge.from)} ${arrow}|${edge.type}| E${String(edge.to)}`
+                        )
                     }
 
                     mermaidLines.push('')

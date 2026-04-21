@@ -9,14 +9,47 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -58,7 +91,9 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_create_entry',
                 {
-                project_number: 1, content: 'Team entry alpha' },
+                    project_number: 1,
+                    content: 'Team entry alpha',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -77,7 +112,10 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_create_entry',
                 {
-                project_number: 1, content: 'Entry by Alice', author: 'Alice' },
+                    project_number: 1,
+                    content: 'Entry by Alice',
+                    author: 'Alice',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -94,7 +132,7 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_create_entry',
                 {
-                project_number: 1,
+                    project_number: 1,
                     content: 'Tagged team entry',
                     entry_type: 'project_decision',
                     tags: ['team-tag-1', 'team-tag-2'],
@@ -116,7 +154,9 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_create_entry',
                 {
-                project_number: 1, content: 'Should fail' },
+                    project_number: 1,
+                    content: 'Should fail',
+                },
                 personalDb
                 // No teamDb passed
             )) as { success: boolean; error: string }
@@ -135,7 +175,9 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_get_recent',
                 {
-                project_number: 1, limit: 5 },
+                    project_number: 1,
+                    limit: 5,
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -155,7 +197,9 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_get_recent',
                 {
-                project_number: 1, limit: 1 },
+                    project_number: 1,
+                    limit: 1,
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -168,8 +212,13 @@ describe('Team Tool Handlers', () => {
         })
 
         it('should return error when team DB not configured', async () => {
-            const result = (await callTool('team_get_recent', {
-                project_number: 1,}, personalDb)) as {
+            const result = (await callTool(
+                'team_get_recent',
+                {
+                    project_number: 1,
+                },
+                personalDb
+            )) as {
                 success: boolean
                 error: string
             }
@@ -188,7 +237,9 @@ describe('Team Tool Handlers', () => {
             await callTool(
                 'team_create_entry',
                 {
-                project_number: 1, content: 'Searchable team xyz987' },
+                    project_number: 1,
+                    content: 'Searchable team xyz987',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -200,7 +251,9 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_search',
                 {
-                project_number: 1, query: 'xyz987' },
+                    project_number: 1,
+                    query: 'xyz987',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -216,7 +269,10 @@ describe('Team Tool Handlers', () => {
             await callTool(
                 'team_create_entry',
                 {
-                project_number: 1, content: 'Tag-searchable entry', tags: ['unique-search-tag'] },
+                    project_number: 1,
+                    content: 'Tag-searchable entry',
+                    tags: ['unique-search-tag'],
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -228,7 +284,9 @@ describe('Team Tool Handlers', () => {
             const result = (await callTool(
                 'team_search',
                 {
-                project_number: 1, tags: ['unique-search-tag'] },
+                    project_number: 1,
+                    tags: ['unique-search-tag'],
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -241,8 +299,14 @@ describe('Team Tool Handlers', () => {
         })
 
         it('should return error when team DB not configured', async () => {
-            const result = (await callTool('team_search', {
-                project_number: 1, query: 'test' }, personalDb)) as {
+            const result = (await callTool(
+                'team_search',
+                {
+                    project_number: 1,
+                    query: 'test',
+                },
+                personalDb
+            )) as {
                 success: boolean
                 error: string
             }
@@ -274,7 +338,7 @@ describe('Team Tool Handlers', () => {
                 author?: string
             }
 
-            console.log("DEBUG RESULT:", result)
+            console.log('DEBUG RESULT:', result)
             expect(result.success).toBe(true)
             expect(result.sharedWithTeam).toBe(true)
             expect(result.author).toBeDefined()
@@ -283,7 +347,9 @@ describe('Team Tool Handlers', () => {
             const teamResults = (await callTool(
                 'team_search',
                 {
-                project_number: 1, query: 'abc123' },
+                    project_number: 1,
+                    query: 'abc123',
+                },
                 personalDb,
                 undefined,
                 undefined,

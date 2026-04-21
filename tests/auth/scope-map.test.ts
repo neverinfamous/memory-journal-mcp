@@ -33,7 +33,9 @@ describe('scope-map', () => {
         })
 
         it('should throw error for unknown tools', () => {
-            expect(() => getRequiredScope('nonexistent_tool_xyz')).toThrow('CRITICAL SECURITY FAILURE')
+            expect(() => getRequiredScope('nonexistent_tool_xyz')).toThrow(
+                'CRITICAL SECURITY FAILURE'
+            )
         })
     })
 
@@ -47,7 +49,7 @@ describe('scope-map', () => {
             const map = getToolScopeMap()
 
             for (const [group, tools] of Object.entries(TOOL_GROUPS)) {
-            const expectedScope = TOOL_GROUP_SCOPES[group as ToolGroup]
+                const expectedScope = TOOL_GROUP_SCOPES[group as ToolGroup]
                 for (const tool of tools) {
                     let expected = expectedScope
                     // import_markdown (personal journal) stays at write
@@ -56,7 +58,14 @@ describe('scope-map', () => {
                         expected = 'write'
                     } else if (tool === 'team_import_markdown') {
                         expected = 'team'
-                    } else if (['create_entry', 'create_entry_minimal', 'link_entries', 'export_markdown'].includes(tool)) {
+                    } else if (
+                        [
+                            'create_entry',
+                            'create_entry_minimal',
+                            'link_entries',
+                            'export_markdown',
+                        ].includes(tool)
+                    ) {
                         expected = 'write'
                     }
                     expect(map.get(tool)).toBe(expected)

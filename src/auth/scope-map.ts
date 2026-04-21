@@ -36,7 +36,9 @@ for (const [toolName, scope] of Object.entries(TOOL_SCOPE_OVERRIDES)) {
 export function getRequiredScope(toolName: string): StandardScope {
     const scope = toolScopeMap.get(toolName)
     if (!scope) {
-        throw new Error(`CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`)
+        throw new Error(
+            `CRITICAL SECURITY FAILURE: Tool '${toolName}' is missing from scope mapping`
+        )
     }
     return scope
 }

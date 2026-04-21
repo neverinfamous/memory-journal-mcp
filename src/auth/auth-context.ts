@@ -40,8 +40,6 @@ export function getAuthContext(): AuthenticatedContext | undefined {
     return authContextStorage.getStore()
 }
 
-
-
 /**
  * Run a callback within a specific auth context.
  * Alias for runWithAuthContext with synchronous return type.

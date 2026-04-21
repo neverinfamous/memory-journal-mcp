@@ -94,24 +94,32 @@ export function registerResources(
                 meta,
                 async (uri: URL, _variables: Variables) => {
                     if (!runtime) {
-                        throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
+                        throw new ConfigurationError(
+                            'ServerRuntime is logically required for secure resource execution.'
+                        )
                     }
                     const auditLog = runtime.auditLogger
                     enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
                     return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                        return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
+                        return runtime.maintenanceManager.withActiveJob(() =>
+                            handleResourceRead(uri, mimeType)
+                        )
                     })
                 }
             )
         } else {
             server.registerResource(resDef.name, resDef.uri, meta, async (uri: URL) => {
                 if (!runtime) {
-                    throw new ConfigurationError('ServerRuntime is logically required for secure resource execution.')
+                    throw new ConfigurationError(
+                        'ServerRuntime is logically required for secure resource execution.'
+                    )
                 }
                 const auditLog = runtime.auditLogger
                 enforceAccessBoundary(uri.href, 'resource', resDef.capabilities, auditLog)
                 return auditOperation(auditLog, 'resource', resDef.name, async () => {
-                    return runtime.maintenanceManager.withActiveJob(() => handleResourceRead(uri, mimeType))
+                    return runtime.maintenanceManager.withActiveJob(() =>
+                        handleResourceRead(uri, mimeType)
+                    )
                 })
             })
         }
@@ -158,12 +166,19 @@ export function registerPrompts(
             },
             (providedArgs) => {
                 if (!runtime) {
-                    throw new ConfigurationError('ServerRuntime is logically required for secure prompt execution.')
+                    throw new ConfigurationError(
+                        'ServerRuntime is logically required for secure prompt execution.'
+                    )
                 }
                 const auditLog = runtime.auditLogger
                 enforceAccessBoundary(promptDef.name, 'prompt', promptDef.capabilities, auditLog)
                 return auditOperation(auditLog, 'prompt', promptDef.name, async () => {
-                    const executePrompt = (): Promise<{ messages: { role: 'user' | 'assistant'; content: { type: 'text'; text: string } }[] }> => {
+                    const executePrompt = (): Promise<{
+                        messages: {
+                            role: 'user' | 'assistant'
+                            content: { type: 'text'; text: string }
+                        }[]
+                    }> => {
                         const args = providedArgs as Record<string, string>
                         const promptResult = getPrompt(promptDef.name, args, db, teamDb)
                         return Promise.resolve({
@@ -173,7 +188,7 @@ export function registerPrompts(
                             })),
                         })
                     }
-                    
+
                     return await runtime.maintenanceManager.withActiveJob(executePrompt)
                 })
             }

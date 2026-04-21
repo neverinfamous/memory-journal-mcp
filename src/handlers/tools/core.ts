@@ -203,7 +203,6 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                         workflowStatus: input.workflow_status,
                     })
 
-
                     // Share with team if requested
                     let sharedWithTeam = false
                     let author: string | undefined
@@ -212,11 +211,17 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                     if (input.share_with_team && teamDb) {
                         try {
                             const authCtx = getAuthContext()
-                            const hasTeamScope = hasScope(authCtx?.claims?.scopes ?? [], SCOPES.TEAM)
+                            const hasTeamScope = hasScope(
+                                authCtx?.claims?.scopes ?? [],
+                                SCOPES.TEAM
+                            )
                             const envAuthor = process.env['TEAM_AUTHOR']?.trim()
-                            const codemodeBypass = context.config?.codemodeInternalFullAccess === true
+                            const codemodeBypass =
+                                context.config?.codemodeInternalFullAccess === true
                             if (!hasTeamScope && !envAuthor && !codemodeBypass) {
-                                throw new Error('Insufficient scope: team scope is required to share entries with the team')
+                                throw new Error(
+                                    'Insufficient scope: team scope is required to share entries with the team'
+                                )
                             }
                             author = resolveAuthenticatedAuthor()
                             const teamEntry = teamDb.createEntry({
@@ -242,11 +247,14 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                             teamDb.flushSave()
                             sharedWithTeam = true
                         } catch (error) {
-                            logger.error('Failed to share entry with team DB, retaining personal entry', {
-                                module: 'TOOL',
-                                operation: 'create-entry',
-                                error: error instanceof Error ? error.message : String(error),
-                            })
+                            logger.error(
+                                'Failed to share entry with team DB, retaining personal entry',
+                                {
+                                    module: 'TOOL',
+                                    operation: 'create-entry',
+                                    error: error instanceof Error ? error.message : String(error),
+                                }
+                            )
                             teamError = error instanceof Error ? error.message : String(error)
                         }
                     }
@@ -262,7 +270,9 @@ export function getCoreTools(context: ToolContext): ToolDefinition[] {
                                 input.issue_url
                             )
                             if (resolvedUrl) {
-                                const updatedEntry = db.updateEntry(entry.id, { issueUrl: resolvedUrl })
+                                const updatedEntry = db.updateEntry(entry.id, {
+                                    issueUrl: resolvedUrl,
+                                })
                                 if (updatedEntry) {
                                     entry = updatedEntry
                                 }

@@ -47,9 +47,12 @@ export const metricsSummaryResource: InternalResourceDef = {
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const s = ctx.runtime?.metrics.getSummary()
-        
+
         if (!s) {
-            return { data: 'metrics_summary:\n  error: Metrics not available\n', annotations: { lastModified } }
+            return {
+                data: 'metrics_summary:\n  error: Metrics not available\n',
+                annotations: { lastModified },
+            }
         }
 
         const errorRate =
@@ -135,9 +138,12 @@ export const metricsSystemResource: InternalResourceDef = {
     handler: (_uri: string, ctx: ResourceContext): ResourceResult => {
         const lastModified = nowIso()
         const sys = ctx.runtime?.metrics.getSystemMetrics()
-        
+
         if (!sys) {
-            return { data: 'system_metrics:\n  error: Metrics not available\n', annotations: { lastModified } }
+            return {
+                data: 'system_metrics:\n  error: Metrics not available\n',
+                annotations: { lastModified },
+            }
         }
 
         const text =

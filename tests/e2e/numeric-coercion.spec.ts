@@ -137,12 +137,14 @@ test.describe('Numeric Coercion: Code Mode', () => {
 test.describe('Numeric Coercion: Team', () => {
     test('team_get_entry_by_id with entry_id: "abc" → handler error', async () => {
         await assertNumericCoercion('team_get_entry_by_id', {
-                project_number: 1, entry_id: 'abc' })
+            project_number: 1,
+            entry_id: 'abc',
+        })
     })
 
     test('team_update_entry with entry_id: "abc" → handler error', async () => {
         await assertNumericCoercion('team_update_entry', {
-                project_number: 1,
+            project_number: 1,
             entry_id: 'abc',
             content: 'updated',
         })
@@ -150,11 +152,16 @@ test.describe('Numeric Coercion: Team', () => {
 
     test('team_delete_entry with entry_id: "abc" → handler error', async () => {
         await assertNumericCoercion('team_delete_entry', {
-                project_number: 1, entry_id: 'abc' })
+            project_number: 1,
+            entry_id: 'abc',
+        })
     })
 
     test('team_search with limit: "abc" → handler error', async () => {
         await assertNumericCoercion('team_search', {
-                project_number: 1, query: 'test', limit: 'abc' })
+            project_number: 1,
+            query: 'test',
+            limit: 'abc',
+        })
     })
 })

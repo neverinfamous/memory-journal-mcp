@@ -86,8 +86,6 @@ describe('auth-context', () => {
         })
     })
 
-
-
     describe('isAuthenticated', () => {
         it('should return false when no context', () => {
             expect(isAuthenticated()).toBe(false)

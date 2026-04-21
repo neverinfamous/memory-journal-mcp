@@ -8,14 +8,47 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -47,16 +80,7 @@ describe('Team Flag Tool Handlers', () => {
     })
 
     const callTeamTool = async (name: string, args: Record<string, unknown>) =>
-        callTool(
-            name,
-            args,
-            personalDb,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            teamDb
-        )
+        callTool(name, args, personalDb, undefined, undefined, undefined, undefined, teamDb)
 
     describe('team_pass_flag', () => {
         it('should create a flag entry', async () => {
@@ -64,7 +88,7 @@ describe('Team Flag Tool Handlers', () => {
                 flag_type: 'needs_review',
                 message: 'Please review',
                 target_user: 'alice',
-                project_number: 1
+                project_number: 1,
             })) as Record<string, any>
 
             expect(result.success).toBe(true)
@@ -91,20 +115,20 @@ describe('Team Flag Tool Handlers', () => {
             const createResult = (await callTeamTool('team_pass_flag', {
                 flag_type: 'blocker',
                 message: 'blocked on database migration',
-                project_number: 1
+                project_number: 1,
             })) as Record<string, any>
-            
+
             const flagId = createResult.entry.id
 
             const resolveResult = (await callTeamTool('team_resolve_flag', {
                 flag_id: flagId,
                 resolution: 'migration complete',
-                project_number: 1
+                project_number: 1,
             })) as Record<string, any>
 
             expect(resolveResult.success).toBe(true)
             expect(resolveResult.resolved).toBe(true)
-            
+
             const updatedEntry = teamDb.getEntryById(flagId)
             const context = JSON.parse(updatedEntry!.autoContext!)
             expect(context.resolved).toBe(true)
@@ -113,11 +137,10 @@ describe('Team Flag Tool Handlers', () => {
         })
 
         it('should require team DB', async () => {
-            const result = (await callTool(
-                'team_resolve_flag',
-                { flag_id: 1 },
-                personalDb
-            )) as { success: boolean; error: string }
+            const result = (await callTool('team_resolve_flag', { flag_id: 1 }, personalDb)) as {
+                success: boolean
+                error: string
+            }
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')

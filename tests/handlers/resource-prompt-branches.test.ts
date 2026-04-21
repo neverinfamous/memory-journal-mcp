@@ -303,7 +303,7 @@ describe('Team resources — branch coverage', () => {
                 getStatistics: vi.fn().mockReturnValue({ totalEntries: 10 }),
                 getAuthorStatistics: vi.fn().mockReturnValue([
                     { author: 'alice', count: 5 },
-                    { author: 'bob', count: 3 }
+                    { author: 'bob', count: 3 },
                 ]),
             })
             const context = createMockContext({ teamDb })

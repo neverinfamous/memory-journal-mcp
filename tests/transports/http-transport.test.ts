@@ -223,7 +223,9 @@ describe('HttpTransport', () => {
                 stateless: true,
             }
             const transport = new HttpTransport(config)
-            await expect(transport.start((() => mockServer) as never, null)).rejects.toThrow(/FATAL/)
+            await expect(transport.start((() => mockServer) as never, null)).rejects.toThrow(
+                /FATAL/
+            )
         })
     })
 
@@ -569,7 +571,8 @@ describe('HttpTransport', () => {
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
             const transport = new HttpTransport(config)
-            await transport.start(((() => mockServer) as never),
+            await transport.start(
+                (() => mockServer) as never,
                 mockScheduler as unknown as Parameters<HttpTransport['start']>[1]
             )
 
@@ -604,7 +607,8 @@ describe('HttpTransport', () => {
             }
             const mockScheduler = { start: vi.fn(), stop: vi.fn() }
             const transport = new HttpTransport(config)
-            await transport.start(((() => mockServer) as never),
+            await transport.start(
+                (() => mockServer) as never,
                 mockScheduler as unknown as Parameters<HttpTransport['start']>[1]
             )
             await transport.stop(mockScheduler as unknown as Parameters<HttpTransport['stop']>[0])
@@ -750,7 +754,7 @@ describe('HttpTransport', () => {
             const originalFetch = global.fetch
             global.fetch = vi.fn().mockResolvedValue({
                 ok: true,
-                json: async () => ({ keys: [] })
+                json: async () => ({ keys: [] }),
             }) as unknown as typeof fetch
 
             try {
@@ -772,6 +776,5 @@ describe('HttpTransport', () => {
                 global.fetch = originalFetch
             }
         })
-
     })
 })

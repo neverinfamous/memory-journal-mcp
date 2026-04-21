@@ -246,7 +246,9 @@ describe('CodeModeSecurityManager', () => {
         it('should reject truly non-serializable results', () => {
             // An object with a getter that throws will fail both v8.serialize and JSON.stringify
             const obj = {
-                get val() { throw new Error('Serialization blocked') }
+                get val() {
+                    throw new Error('Serialization blocked')
+                },
             }
             const result = security.validateResultSize(obj)
             expect(result.valid).toBe(false)
@@ -257,7 +259,9 @@ describe('CodeModeSecurityManager', () => {
             // Function triggers the fallback to JSON.stringify
             // Mock JSON.stringify to throw RangeError for size limits
             const origStringify = JSON.stringify
-            JSON.stringify = () => { throw new RangeError('Invalid string length') }
+            JSON.stringify = () => {
+                throw new RangeError('Invalid string length')
+            }
             try {
                 const result = security.validateResultSize({ data: 'test', fn: () => {} })
                 expect(result.valid).toBe(false)

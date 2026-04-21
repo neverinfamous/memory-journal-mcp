@@ -172,7 +172,7 @@ export function getTeamIoTools(context: ToolContext): ToolDefinition[] {
                     } else {
                         entries = teamDb.searchEntries('', {
                             limit,
-                            projectNumber: input.project_number
+                            projectNumber: input.project_number,
                         })
                     }
 

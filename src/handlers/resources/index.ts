@@ -99,7 +99,16 @@ export async function readResource(
     runtime?: ServerRuntime
 ): Promise<{ data: unknown; annotations?: { lastModified?: string } }> {
     const resources = getAllResourceDefinitions(runtime)
-    const context = { db, teamDb, vectorManager, filterConfig, github, scheduler, briefingConfig, runtime }
+    const context = {
+        db,
+        teamDb,
+        vectorManager,
+        filterConfig,
+        github,
+        scheduler,
+        briefingConfig,
+        runtime,
+    }
 
     // Strip query parameters for matching, but pass full URI to handler
     const baseUri = getBaseUri(uri)
@@ -133,7 +142,12 @@ export async function readResource(
             const regex = new RegExp(`^${pattern}$`)
             if (regex.test(baseUri)) {
                 // Authorization Hook: Enforce scope if auth context exists
-                enforceAccessBoundary(baseUri, 'resource', resource.capabilities, runtime?.auditLogger)
+                enforceAccessBoundary(
+                    baseUri,
+                    'resource',
+                    resource.capabilities,
+                    runtime?.auditLogger
+                )
 
                 const result = await Promise.resolve(resource.handler(uri, context))
                 if (isResourceResult(result)) {

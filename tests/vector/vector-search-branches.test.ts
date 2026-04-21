@@ -45,8 +45,6 @@ describe('VectorSearchManager — branch coverage', () => {
         await expect(manager.search('test query')).rejects.toThrow('Vector database not available')
     })
 
-    
-
     it('should return stats with zero values when no db', async () => {
         const manager = new VectorSearchManager(null as any)
         Object.assign(manager, { initialized: true })
@@ -78,6 +76,4 @@ describe('VectorSearchManager — branch coverage', () => {
         await expect(manager.search('query')).rejects.toThrow('Vector database not available')
         expect(initSpy).toHaveBeenCalled()
     })
-
-    
 })

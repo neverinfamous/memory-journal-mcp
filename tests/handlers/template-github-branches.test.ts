@@ -449,7 +449,7 @@ describe('GitHub resources — branch coverage', () => {
                             url: '',
                             createdAt: '',
                         },
-                    ]
+                    ],
                 }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),
@@ -482,7 +482,7 @@ describe('GitHub resources — branch coverage', () => {
                             url: '',
                             createdAt: '',
                         },
-                    ]
+                    ],
                 }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),
@@ -515,7 +515,7 @@ describe('GitHub resources — branch coverage', () => {
                             url: '',
                             createdAt: '',
                         },
-                    ]
+                    ],
                 }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),
@@ -585,7 +585,7 @@ describe('GitHub resources — branch coverage', () => {
                             closedIssues: 7,
                             dueOn: '2025-06-01',
                         },
-                    ]
+                    ],
                 }),
                 getIssues: vi.fn().mockResolvedValue([]),
                 getPullRequests: vi.fn().mockResolvedValue([]),

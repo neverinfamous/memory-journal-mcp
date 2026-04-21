@@ -19,7 +19,7 @@ export default defineConfig({
                 'src/cli.ts',
                 'src/codemode/worker-script.ts',
                 'src/handlers/tools/core/fields-mixin.ts',
-                'src/types/**'
+                'src/types/**',
             ],
         },
         hookTimeout: 30_000,

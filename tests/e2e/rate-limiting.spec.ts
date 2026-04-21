@@ -41,14 +41,20 @@ test.describe('Rate Limiting', () => {
                 '--db',
                 './.test-output/e2e/test-e2e-rate-default.db',
             ],
-            { cwd: process.cwd(), stdio: 'pipe', env: { ...process.env, ALLOWED_IO_ROOTS: process.cwd() } }
+            {
+                cwd: process.cwd(),
+                stdio: 'pipe',
+                env: { ...process.env, ALLOWED_IO_ROOTS: process.cwd() },
+            }
         )
 
         for (let i = 0; i < 30; i++) {
             try {
                 const res = await fetch(`http://localhost:${RATE_PORT + 1}/health`)
                 if (res.ok) break
-            } catch { /* Not ready */ }
+            } catch {
+                /* Not ready */
+            }
             await delay(500)
         }
 
@@ -59,11 +65,20 @@ test.describe('Rate Limiting', () => {
                 promises.push(
                     fetch(`http://localhost:${RATE_PORT + 1}/mcp`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Accept: 'application/json, text/event-stream',
+                        },
                         body: JSON.stringify({
-                            jsonrpc: '2.0', id: i + 1, method: 'initialize',
-                            params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'default-test', version: '1.0' } }
-                        })
+                            jsonrpc: '2.0',
+                            id: i + 1,
+                            method: 'initialize',
+                            params: {
+                                protocolVersion: '2025-03-26',
+                                capabilities: {},
+                                clientInfo: { name: 'default-test', version: '1.0' },
+                            },
+                        }),
                     })
                 )
             }
@@ -106,7 +121,8 @@ test.describe('Rate Limiting', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
+                    ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '5',
                 },
             }
@@ -175,7 +191,8 @@ test.describe('Rate Limiting', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
+                    ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '3',
                 },
             }
@@ -244,7 +261,8 @@ test.describe('Rate Limiting', () => {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
+                    ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '2',
                 },
             }

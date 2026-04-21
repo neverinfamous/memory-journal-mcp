@@ -87,7 +87,7 @@ vi.mock('../../src/auth/scope-map.js', () => ({
         if (toolName.startsWith('fake_')) return 'core'
         // Fallback or throw if we wanted to enforce it here
         return 'core'
-    })
+    }),
 }))
 
 // ============================================================================
@@ -234,7 +234,7 @@ vi.mock('../../src/github/github-integration/index.js', () => ({
             clearCache: vi.fn(),
             invalidateCache: vi.fn(),
         }
-    }
+    },
 }))
 
 // Mock express to avoid actual HTTP server creation
@@ -280,7 +280,7 @@ vi.spyOn(process, 'on').mockImplementation((event: any, handler: any) => {
     }
     return process
 })
-vi.spyOn(process, 'exit').mockImplementation((function () {}) as never)
+vi.spyOn(process, 'exit').mockImplementation(function () {} as never)
 
 // ============================================================================
 // Import after mocks
@@ -446,7 +446,6 @@ describe('McpServer', function () {
             expect(mockDbInitialize).toHaveBeenCalledTimes(2)
         })
     })
-
 
     // ========================================================================
     // Resource registration
@@ -643,11 +642,13 @@ describe('McpServer', function () {
 
             const text = result.content[0]!.text
             expect(text).toContain('[Structured output attached]')
-            
+
             const struct = result as { structuredContent?: { success: boolean; error: string } }
             expect(struct.structuredContent).toBeDefined()
             expect(struct.structuredContent!.success).toBe(false)
-            expect(struct.structuredContent!.error).toContain('An internal error occurred during tool execution. Please check the server logs for more details.')
+            expect(struct.structuredContent!.error).toContain(
+                'An internal error occurred during tool execution. Please check the server logs for more details.'
+            )
         })
 
         it('should return legacy error content when JSON stringify blows up on missing outputSchema (triggering global catch)', async function () {
@@ -680,7 +681,7 @@ describe('McpServer', function () {
 
             // because it lacks outputSchema, the error catch block uses `hasOutputSchema: false`, returning isError: true
             expect(result.isError).toBe(true)
-            
+
             const parsed = JSON.parse(result.content[0]!.text) as {
                 success: boolean
                 error: string

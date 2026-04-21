@@ -121,7 +121,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         const columns = new Set(tableInfo.map((row) => row.name))
 
         const added: string[] = []
-        
+
         db.transaction(() => {
             for (const col of SHARED_MIGRATION_COLUMNS) {
                 if (!columns.has(col.name)) {
@@ -139,7 +139,9 @@ export class NativeConnectionManager implements IDatabaseConnection {
             let ftsCount = 0
             try {
                 ftsCount = (
-                    db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }
+                    db.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
+                        c: number
+                    }
                 ).c
             } catch {
                 // Shadow table doesn't exist yet or FTS5 disabled
@@ -148,23 +150,23 @@ export class NativeConnectionManager implements IDatabaseConnection {
             const entryCount = (
                 db.prepare('SELECT COUNT(*) as c FROM memory_journal').get() as { c: number }
             ).c
-            let needsRebuild = false;
-            let rebuildReason = '';
+            let needsRebuild = false
+            let rebuildReason = ''
 
             if (ftsCount === 0 && entryCount > 0) {
-                needsRebuild = true;
-                rebuildReason = 'fts5:populated';
+                needsRebuild = true
+                rebuildReason = 'fts5:populated'
             } else if (ftsCount > entryCount) {
                 // Ghost entries: FTS has more rows than the journal (hard deletes before the
                 // fts_content_ad trigger existed). Rebuild to remove stale FTS tokens.
-                needsRebuild = true;
-                rebuildReason = 'fts5:rebuilt-ghost-cleanup';
+                needsRebuild = true
+                rebuildReason = 'fts5:rebuilt-ghost-cleanup'
             }
 
             if (needsRebuild) {
-                added.push(rebuildReason);
+                added.push(rebuildReason)
                 // Defer rebuilding FTS5 index to prevent blocking server startup
-                const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000;
+                const deferMs = process.env['NODE_ENV'] === 'test' ? 10 : 5000
                 setTimeout(() => {
                     // Start a detached node process to rebuild the index without blocking the main event loop
                     const code = `
@@ -172,15 +174,22 @@ export class NativeConnectionManager implements IDatabaseConnection {
                         const db = new Database(process.argv[1]);
                         db.exec("INSERT INTO fts_content(fts_content) VALUES ('rebuild')");
                         db.close();
-                    `;
+                    `
                     execFile('node', ['-e', code, this.dbPath], (err, _stdout, stderr) => {
                         if (err) {
-                            logger.error('Failed to rebuild FTS5 index in background process', { module: 'NativeConnectionManager', error: err?.message || 'unknown error', stderr });
+                            logger.error('Failed to rebuild FTS5 index in background process', {
+                                module: 'NativeConnectionManager',
+                                error: err?.message || 'unknown error',
+                                stderr,
+                            })
                         } else {
-                            logger.info(`Deferred FTS5 rebuild completed (${rebuildReason}) in background process`, { module: 'NativeConnectionManager', dbPath: this.dbPath });
+                            logger.info(
+                                `Deferred FTS5 rebuild completed (${rebuildReason}) in background process`,
+                                { module: 'NativeConnectionManager', dbPath: this.dbPath }
+                            )
                         }
-                    });
-                }, deferMs);
+                    })
+                }, deferMs)
             }
         })()
 
@@ -207,7 +216,7 @@ export class NativeConnectionManager implements IDatabaseConnection {
         ]
 
         const added: string[] = []
-        
+
         db.transaction(() => {
             for (const col of teamColumns) {
                 if (!columns.has(col.name)) {
@@ -237,11 +246,16 @@ export class NativeConnectionManager implements IDatabaseConnection {
         // Strip string literals to safely check for multiple statements
         // SQLite uses single quotes for strings and double quotes for identifiers
         const strippedSql = sql.replace(/'[^']*'/g, '').replace(/"[^"]*"/g, '')
-        const statements = strippedSql.split(';').map(s => s.trim()).filter(s => s.length > 0)
-        
+        const statements = strippedSql
+            .split(';')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+
         // Reject multiple statements separated by semicolon to prevent unparameterized footguns
         if (statements.length > 1) {
-            throw new Error('Multi-statement queries via exec() are strictly forbidden. Use properly parameterized adapter methods instead.')
+            throw new Error(
+                'Multi-statement queries via exec() are strictly forbidden. Use properly parameterized adapter methods instead.'
+            )
         }
 
         // Use pre-compiled regex to detect true mutations that should return an empty set

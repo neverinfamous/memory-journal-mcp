@@ -8,14 +8,47 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 describe('Team Analytics Tool Handlers', () => {
@@ -111,8 +144,12 @@ describe('Team Analytics Tool Handlers', () => {
             isPersonal: false,
             projectNumber: 303,
         })
-        const rawDb = teamDb["connection"].getNativeDb() as any
-        rawDb.prepare(`UPDATE memory_journal SET timestamp = datetime('now', '-10 days') WHERE id = ?`).run(oldEntry.id)
+        const rawDb = teamDb['connection'].getNativeDb() as any
+        rawDb
+            .prepare(
+                `UPDATE memory_journal SET timestamp = datetime('now', '-10 days') WHERE id = ?`
+            )
+            .run(oldEntry.id)
         teamDb.flushSave()
     })
 

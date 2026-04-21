@@ -90,7 +90,10 @@ describe('checkRateLimit', () => {
 
         const result = checkRateLimit(req as never, config, rateLimitMap)
 
-        const expectedHash = require('node:crypto').createHash('sha256').update('10.0.0.1').digest('hex')
+        const expectedHash = require('node:crypto')
+            .createHash('sha256')
+            .update('10.0.0.1')
+            .digest('hex')
 
         expect(result.allowed).toBe(true)
         expect(rateLimitMap.has(expectedHash)).toBe(true)
@@ -123,7 +126,10 @@ describe('checkRateLimit', () => {
         } as HttpTransportConfig
         const rateLimitMap = new Map<string, RateLimitEntry>()
         const req = mockReq({ ip: '10.0.0.1' })
-        const expectedHash = require('node:crypto').createHash('sha256').update('10.0.0.1').digest('hex')
+        const expectedHash = require('node:crypto')
+            .createHash('sha256')
+            .update('10.0.0.1')
+            .digest('hex')
 
         // Use up the limit
         checkRateLimit(req as never, config, rateLimitMap)

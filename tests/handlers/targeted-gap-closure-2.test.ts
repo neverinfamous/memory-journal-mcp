@@ -18,18 +18,52 @@ import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
-(globalThis as any).__MOCK_AUTH__ = true;
+;(globalThis as any).__MOCK_AUTH__ = true
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
         getAuthContext: () => {
-            if ((globalThis as any).__MOCK_AUTH__) return { authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } }
+            if ((globalThis as any).__MOCK_AUTH__)
+                return {
+                    authenticated: true,
+                    claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+                }
             return actual.getAuthContext()
-        }
+        },
     }
 })
 
@@ -273,8 +307,14 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team vector tools without teamDb', () => {
         it('team_semantic_search should return error', async () => {
-            const result = (await callTool('team_semantic_search', {
-                project_number: 1, query: 'test' }, db)) as {
+            const result = (await callTool(
+                'team_semantic_search',
+                {
+                    project_number: 1,
+                    query: 'test',
+                },
+                db
+            )) as {
                 error: string
             }
 
@@ -299,8 +339,14 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('team_add_to_vector_index should return error', async () => {
-            const result = (await callTool('team_add_to_vector_index', {
-                project_number: 1, entry_id: 1 }, db)) as {
+            const result = (await callTool(
+                'team_add_to_vector_index',
+                {
+                    project_number: 1,
+                    entry_id: 1,
+                },
+                db
+            )) as {
                 error: string
             }
 
@@ -314,15 +360,25 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team backup tools without teamDb', () => {
         it('team_backup should return error', async () => {
-            const result = (await callTool('team_backup', {
-                project_number: 1,}, db)) as { error: string }
+            const result = (await callTool(
+                'team_backup',
+                {
+                    project_number: 1,
+                },
+                db
+            )) as { error: string }
 
             expect(result.error).toContain('Team database not configured')
         })
 
         it('team_list_backups should return error', async () => {
-            const result = (await callTool('team_list_backups', {
-                project_number: 1,}, db)) as { error: string }
+            const result = (await callTool(
+                'team_list_backups',
+                {
+                    project_number: 1,
+                },
+                db
+            )) as { error: string }
 
             expect(result.error).toContain('Team database not configured')
         })
@@ -334,8 +390,14 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
     describe('team export tools without teamDb', () => {
         it('team_export_entries should return error', async () => {
-            const result = (await callTool('team_export_entries', {
-                project_number: 1, format: 'json' }, db)) as {
+            const result = (await callTool(
+                'team_export_entries',
+                {
+                    project_number: 1,
+                    format: 'json',
+                },
+                db
+            )) as {
                 error: string
             }
 
@@ -352,7 +414,10 @@ describe('Targeted Gap Closure — Batch 2', () => {
             const result = (await callTool(
                 'team_update_entry',
                 {
-                project_number: 1, entry_id: 1, content: 'test' },
+                    project_number: 1,
+                    entry_id: 1,
+                    content: 'test',
+                },
                 db
             )) as { error: string }
 
@@ -360,8 +425,14 @@ describe('Targeted Gap Closure — Batch 2', () => {
         })
 
         it('team_delete_entry should return error', async () => {
-            const result = (await callTool('team_delete_entry', {
-                project_number: 1, entry_id: 1 }, db)) as {
+            const result = (await callTool(
+                'team_delete_entry',
+                {
+                    project_number: 1,
+                    entry_id: 1,
+                },
+                db
+            )) as {
                 error: string
             }
 
@@ -386,10 +457,10 @@ describe('Targeted Gap Closure — Batch 2', () => {
 
 describe('Auth Context', () => {
     beforeAll(() => {
-        (globalThis as any).__MOCK_AUTH__ = false;
+        ;(globalThis as any).__MOCK_AUTH__ = false
     })
     afterAll(() => {
-        (globalThis as any).__MOCK_AUTH__ = true;
+        ;(globalThis as any).__MOCK_AUTH__ = true
     })
 
     it('getAuthContext should return undefined outside of auth context', () => {
@@ -425,15 +496,17 @@ describe('Auth Context', () => {
         expect(result?.claims?.sub).toBe('alias-test')
     })
 
-
-
     it('isAuthenticated should return false outside context', () => {
         expect(isAuthenticated()).toBe(false)
     })
 
     it('isAuthenticated should return true within auth context', () => {
         const result = runWithAuthContext(
-            { authenticated: true, claims: { sub: 'user', scopes: [], exp: 0, iat: 0 }, scopes: [] },
+            {
+                authenticated: true,
+                claims: { sub: 'user', scopes: [], exp: 0, iat: 0 },
+                scopes: [],
+            },
             () => isAuthenticated()
         )
         expect(result).toBe(true)
@@ -445,14 +518,20 @@ describe('Auth Context', () => {
 
     it('getAuthenticatedScopes should return scopes within auth context', () => {
         const result = runWithAuthContext(
-            { authenticated: true, claims: { sub: 'user', scopes: ['read', 'write'], exp: 0, iat: 0 }, scopes: ['read', 'write'] },
+            {
+                authenticated: true,
+                claims: { sub: 'user', scopes: ['read', 'write'], exp: 0, iat: 0 },
+                scopes: ['read', 'write'],
+            },
             () => getAuthenticatedScopes()
         )
         expect(result).toEqual(['read', 'write'])
     })
 
     it('getAuthenticatedScopes should return empty for unauthenticated context', () => {
-        const result = runWithAuthContext({ authenticated: false, scopes: [] }, () => getAuthenticatedScopes())
+        const result = runWithAuthContext({ authenticated: false, scopes: [] }, () =>
+            getAuthenticatedScopes()
+        )
         expect(result).toEqual([])
     })
 })

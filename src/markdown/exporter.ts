@@ -112,13 +112,12 @@ export async function exportEntriesToMarkdown(
 
     const validEntries = entries.filter((e) => e.content.trim())
     skipped += entries.length - validEntries.length
-    
+
     // Batch fetch relationships
     // We do not catch and swallow errors here. If relationship fetch fails, we must
     // explicitly fail the export to prevent generating corrupt files that lack their
     // associated relationship data, preserving interchange fidelity.
     const relationshipsMap = db.getRelationshipsForEntries(validEntries.map((e) => e.id))
-
 
     for (const entry of validEntries) {
         // Build frontmatter data
@@ -158,43 +157,54 @@ export async function exportEntriesToMarkdown(
         const filename = generateFilename(entry.id, entry.content)
         const filepath = join(resolvedOutputDir, filename)
 
-        let handle;
+        let handle
         try {
             // Mitigate TOCTOU by verifying the actual resolved path immediately before open
             // using native realpath to bypass Node.js cache
             const preRealpath = realpathSync.native(resolvedOutputDir)
 
             // constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW
-            handle = await open(filepath, constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o600)
-            
+            handle = await open(
+                filepath,
+                constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
+                0o600
+            )
+
             // Post-open verification to mitigate TOCTOU (Node.js lacks openat)
             const postRealpath = realpathSync.native(resolvedOutputDir)
             if (preRealpath !== postRealpath) {
-                throw new Error(`Directory swapped during export operation! Aborting to prevent path traversal.`)
+                throw new Error(
+                    `Directory swapped during export operation! Aborting to prevent path traversal.`
+                )
             }
-            
+
             // Verify the final real path is still within allowed roots
             assertSafeDirectoryPath(postRealpath, allowedRoots)
-            
+
             await handle.writeFile(fileContent, 'utf-8')
             files.push(filename)
         } catch (err: unknown) {
-            if (err instanceof Error && (err.message.includes('became a symlink') || err.message.includes('Directory swapped'))) {
+            if (
+                err instanceof Error &&
+                (err.message.includes('became a symlink') ||
+                    err.message.includes('Directory swapped'))
+            ) {
                 throw err
             }
-            
-            const code = err instanceof Error && 'code' in err ? (err as {code?: string}).code : undefined;
+
+            const code =
+                err instanceof Error && 'code' in err ? (err as { code?: string }).code : undefined
             if (code === 'ELOOP' || code === 'EEXIST') {
                 logger.warning('Refusing to overwrite symlink during export', {
                     module: 'Exporter',
-                    filepath
+                    filepath,
                 })
                 skipped++
             } else {
                 logger.error('Failed to write markdown file', {
                     module: 'Exporter',
                     filepath,
-                    error: err instanceof Error ? err.message : String(err)
+                    error: err instanceof Error ? err.message : String(err),
                 })
                 skipped++
             }

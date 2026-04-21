@@ -12,14 +12,47 @@ import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import * as fs from 'node:fs'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -156,8 +189,16 @@ describe('Team tools with teamDb but no vectorManager', () => {
         await teamDb.initialize()
 
         // Create some entries for team tools to operate on
-        teamDb.createEntry({ content: 'Team entry for catch block test', tags: ['catch-test'], projectNumber: 1 })
-        teamDb.createEntry({ content: 'Another team entry', tags: ['catch-test', 'extra'], projectNumber: 1 })
+        teamDb.createEntry({
+            content: 'Team entry for catch block test',
+            tags: ['catch-test'],
+            projectNumber: 1,
+        })
+        teamDb.createEntry({
+            content: 'Another team entry',
+            tags: ['catch-test', 'extra'],
+            projectNumber: 1,
+        })
     })
 
     afterAll(() => {
@@ -177,7 +218,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_semantic_search',
             {
-                project_number: 1, query: 'test' },
+                project_number: 1,
+                query: 'test',
+            },
             db,
             undefined,
             undefined,
@@ -222,7 +265,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_add_to_vector_index',
             {
-                project_number: 1, entry_id: 1 },
+                project_number: 1,
+                entry_id: 1,
+            },
             db,
             undefined,
             undefined,
@@ -239,7 +284,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_update_entry',
             {
-                project_number: 1, entry_id: 'bad' },
+                project_number: 1,
+                entry_id: 'bad',
+            },
             db,
             undefined,
             undefined,
@@ -256,7 +303,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_delete_entry',
             {
-                project_number: 1, entry_id: 'bad' },
+                project_number: 1,
+                entry_id: 'bad',
+            },
             db,
             undefined,
             undefined,
@@ -290,7 +339,8 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_backup',
             {
-                project_number: 1,},
+                project_number: 1,
+            },
             db,
             undefined,
             undefined,
@@ -305,7 +355,8 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_list_backups',
             {
-                project_number: 1,},
+                project_number: 1,
+            },
             db,
             undefined,
             undefined,
@@ -322,7 +373,11 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             {
-                project_number: 1, format: 'json', start_date: '2020-01-01', end_date: '2030-12-31' },
+                project_number: 1,
+                format: 'json',
+                start_date: '2020-01-01',
+                end_date: '2030-12-31',
+            },
             db,
             undefined,
             undefined,
@@ -342,7 +397,11 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             {
-                project_number: 1, format: 'markdown', entry_type: 'personal_reflection', limit: 5 },
+                project_number: 1,
+                format: 'markdown',
+                entry_type: 'personal_reflection',
+                limit: 5,
+            },
             db,
             undefined,
             undefined,
@@ -362,7 +421,11 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             {
-                project_number: 1, format: 'json', tags: ['catch-test'], limit: 5 },
+                project_number: 1,
+                format: 'json',
+                tags: ['catch-test'],
+                limit: 5,
+            },
             db,
             undefined,
             undefined,
@@ -382,7 +445,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_export_entries',
             {
-                project_number: 1, format: 'json' },
+                project_number: 1,
+                format: 'json',
+            },
             db,
             undefined,
             undefined,
@@ -403,7 +468,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_update_entry',
             {
-                project_number: 1, entry_id: 99999, content: 'test' },
+                project_number: 1,
+                entry_id: 99999,
+                content: 'test',
+            },
             db,
             undefined,
             undefined,
@@ -419,7 +487,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_delete_entry',
             {
-                project_number: 1, entry_id: 99999 },
+                project_number: 1,
+                entry_id: 99999,
+            },
             db,
             undefined,
             undefined,
@@ -470,7 +540,10 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_update_entry',
             {
-                project_number: 1, entry_id: newId, content: 'Updated team content' },
+                project_number: 1,
+                entry_id: newId,
+                content: 'Updated team content',
+            },
             db,
             undefined,
             undefined,
@@ -492,7 +565,9 @@ describe('Team tools with teamDb but no vectorManager', () => {
         const result = (await callTool(
             'team_delete_entry',
             {
-                project_number: 1, entry_id: 2 },
+                project_number: 1,
+                entry_id: 2,
+            },
             db,
             undefined,
             undefined,

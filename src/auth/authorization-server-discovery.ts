@@ -63,7 +63,7 @@ export class AuthorizationServerDiscovery {
         }
 
         const metadataUrl = `${this.authServerUrl}/.well-known/oauth-authorization-server`
-        
+
         let parsedUrl: URL
         try {
             parsedUrl = new URL(metadataUrl)
@@ -83,23 +83,34 @@ export class AuthorizationServerDiscovery {
         try {
             const { promises: dns } = await import('node:dns')
             const { address } = await dns.lookup(host)
-            
-            const isLoopback = address === 'localhost' || address === '127.0.0.1' || address === '::1' || address.startsWith('127.') || address === '0.0.0.0' || address === '::'
-            const isPrivateV4 = address.startsWith('10.') || address.startsWith('192.168.') || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(address)
+
+            const isLoopback =
+                address === 'localhost' ||
+                address === '127.0.0.1' ||
+                address === '::1' ||
+                address.startsWith('127.') ||
+                address === '0.0.0.0' ||
+                address === '::'
+            const isPrivateV4 =
+                address.startsWith('10.') ||
+                address.startsWith('192.168.') ||
+                /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(address)
             const isLinkLocal = address.startsWith('169.254.')
             const isPrivateV6 = address.startsWith('fc') || address.startsWith('fd')
-            
+
             if (isLoopback || isPrivateV4 || isLinkLocal || isPrivateV6) {
-                throw new ConfigurationError(`SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`)
+                throw new ConfigurationError(
+                    `SSRF Protection: Requests to private/loopback network addresses are prohibited. Resolved IP: ${address}`
+                )
             }
-            
+
             // Store the safe resolved IP to pin the connection and prevent TOCTOU
             parsedUrl.hostname = address
         } catch (err) {
             if (err instanceof ConfigurationError) throw err
             throw new ConfigurationError(`Failed to resolve authorization server hostname: ${host}`)
         }
-        
+
         const resolvedAddress = parsedUrl.hostname
         parsedUrl.hostname = host // restore for the request options
 
@@ -110,35 +121,54 @@ export class AuthorizationServerDiscovery {
 
         try {
             const metadata = await new Promise<AuthorizationServerMetadata>((resolve, reject) => {
-                const req = https.request(metadataUrl, {
-                    method: 'GET',
-                    headers: {
-                        Accept: 'application/json',
-                        Host: parsedUrl.host
+                const req = https.request(
+                    metadataUrl,
+                    {
+                        method: 'GET',
+                        headers: {
+                            Accept: 'application/json',
+                            Host: parsedUrl.host,
+                        },
+                        lookup: (_hostname, _options, callback) => {
+                            // SSRF Protection: Pin connection to the pre-validated IP to eliminate TOCTOU
+                            callback(null, resolvedAddress, resolvedAddress.includes(':') ? 6 : 4)
+                        },
+                        timeout: this.timeout,
                     },
-                    lookup: (_hostname, _options, callback) => {
-                        // SSRF Protection: Pin connection to the pre-validated IP to eliminate TOCTOU
-                        callback(null, resolvedAddress, resolvedAddress.includes(':') ? 6 : 4)
-                    },
-                    timeout: this.timeout
-                }, (res) => {
-                    if (res.statusCode === undefined || res.statusCode < 200 || res.statusCode >= 300) {
-                        reject(new ConfigurationError(`HTTP ${String(res.statusCode ?? 'unknown')}: ${res.statusMessage || ''}`))
-                        return
-                    }
-                    const chunks: Buffer[] = []
-                    res.on('data', (d: Buffer) => chunks.push(d))
-                    res.on('end', () => {
-                        try {
-                            resolve(JSON.parse(Buffer.concat(chunks).toString()) as AuthorizationServerMetadata)
-                        } catch {
-                            reject(new ConfigurationError('Invalid JSON response'))
+                    (res) => {
+                        if (
+                            res.statusCode === undefined ||
+                            res.statusCode < 200 ||
+                            res.statusCode >= 300
+                        ) {
+                            reject(
+                                new ConfigurationError(
+                                    `HTTP ${String(res.statusCode ?? 'unknown')}: ${res.statusMessage || ''}`
+                                )
+                            )
+                            return
                         }
-                    })
-                })
-                
+                        const chunks: Buffer[] = []
+                        res.on('data', (d: Buffer) => chunks.push(d))
+                        res.on('end', () => {
+                            try {
+                                resolve(
+                                    JSON.parse(
+                                        Buffer.concat(chunks).toString()
+                                    ) as AuthorizationServerMetadata
+                                )
+                            } catch {
+                                reject(new ConfigurationError('Invalid JSON response'))
+                            }
+                        })
+                    }
+                )
+
                 req.on('error', reject)
-                req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')) })
+                req.on('timeout', () => {
+                    req.destroy()
+                    reject(new Error('Request timeout'))
+                })
                 req.end()
             })
 

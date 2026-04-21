@@ -21,7 +21,7 @@ describe('Digest Analytics', () => {
         }
         adapter = new DatabaseAdapter(testDbPath)
         await adapter.initialize()
-        db = adapter["connection"].getNativeDb() as Database
+        db = adapter['connection'].getNativeDb() as Database
     })
 
     afterAll(() => {

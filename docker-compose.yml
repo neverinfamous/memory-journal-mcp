@@ -61,9 +61,10 @@ services:
       - mcp-net
     ports:
       - '3000:3000'
-    command: ['node', 'dist/cli.js', '--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
+    command:
+      ['node', 'dist/cli.js', '--transport', 'http', '--port', '3000', '--server-host', '0.0.0.0']
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 30s
       timeout: 10s
       retries: 3

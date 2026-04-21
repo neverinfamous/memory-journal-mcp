@@ -80,14 +80,19 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     // SEC-2.3: Bind authorship to the authenticated principal when OAuth is active.
                     const authCtx = getAuthContext()
-                    if (authCtx?.authenticated && authCtx.claims?.sub && input.author !== undefined) {
+                    if (
+                        authCtx?.authenticated &&
+                        authCtx.claims?.sub &&
+                        input.author !== undefined
+                    ) {
                         if (input.author !== authCtx.claims.sub) {
                             return {
                                 success: false,
                                 error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authCtx.claims.sub}". Omit the author field to use your identity automatically.`,
                                 code: 'PERMISSION_DENIED',
                                 category: 'auth',
-                                suggestion: 'Omit the author field to use your authenticated identity automatically.',
+                                suggestion:
+                                    'Omit the author field to use your authenticated identity automatically.',
                                 recoverable: false,
                             }
                         }
@@ -132,7 +137,11 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: true,
-                        entry: { ...entry, author, flagMetadata: flagContext as Record<string, unknown> },
+                        entry: {
+                            ...entry,
+                            author,
+                            flagMetadata: flagContext as Record<string, unknown>,
+                        },
                         flag_type: input.flag_type,
                         target_user: targetUser,
                         resolved: false,
@@ -184,7 +193,8 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                             error: `Entry ${String(input.flag_id)} is not a flag (type: ${entry.entryType})`,
                             code: 'VALIDATION_ERROR',
                             category: 'validation',
-                            suggestion: 'Use team_resolve_flag only on entries created by team_pass_flag',
+                            suggestion:
+                                'Use team_resolve_flag only on entries created by team_pass_flag',
                             recoverable: true,
                         }
                     }
@@ -205,7 +215,11 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
                         const author = fetchAuthor(teamDb, input.flag_id)
                         return {
                             success: true,
-                            entry: { ...entry, author, flagMetadata: flagCtx as Record<string, unknown> },
+                            entry: {
+                                ...entry,
+                                author,
+                                flagMetadata: flagCtx as Record<string, unknown>,
+                            },
                             flag_type: flagCtx.flag_type,
                             resolved: true,
                             resolution: flagCtx.resolution,
@@ -238,7 +252,13 @@ export function getTeamFlagTools(context: ToolContext): ToolDefinition[] {
 
                     return {
                         success: true,
-                        entry: updatedEntry ? { ...updatedEntry, author, flagMetadata: updatedContext as Record<string, unknown> } : undefined,
+                        entry: updatedEntry
+                            ? {
+                                  ...updatedEntry,
+                                  author,
+                                  flagMetadata: updatedContext as Record<string, unknown>,
+                              }
+                            : undefined,
                         flag_type: flagCtx.flag_type,
                         resolved: true,
                         resolution: input.resolution ?? null,

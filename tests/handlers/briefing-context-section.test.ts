@@ -257,7 +257,9 @@ describe('buildTeamContext', () => {
 
         // Team info preview uses 60 chars, team entries preview uses 80 chars
         expect(result!.teamInfo.latestPreview).toContain('...')
-        expect(result!.teamLatestEntries![0]!.preview).toMatch(/\.\.\.<\/untrusted_remote_content>$/)
+        expect(result!.teamLatestEntries![0]!.preview).toMatch(
+            /\.\.\.<\/untrusted_remote_content>$/
+        )
     })
 })
 

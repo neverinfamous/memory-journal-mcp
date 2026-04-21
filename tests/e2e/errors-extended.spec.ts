@@ -292,20 +292,24 @@ test.describe('Errors: Backup', () => {
 // =============================================================================
 
 test.describe('Errors: Team', () => {
-    const TEAM_EXT_PORT = 3122;
-    let client: import('@modelcontextprotocol/sdk/client/index.js').Client;
+    const TEAM_EXT_PORT = 3122
+    let client: import('@modelcontextprotocol/sdk/client/index.js').Client
 
     test.beforeAll(async () => {
         await startServer(TEAM_EXT_PORT, ['--auth-token', 'test-token'], 'errors-extended-team', {
-            env: { ...process.env, TEAM_DB_PATH: './.test-output/e2e/test-e2e-errors-extended-team.db', MCP_AUTH_SCOPES: 'read,write,team' }
-        });
-        client = await createClient(TEAM_EXT_PORT, 'test-token');
-    });
+            env: {
+                ...process.env,
+                TEAM_DB_PATH: './.test-output/e2e/test-e2e-errors-extended-team.db',
+                MCP_AUTH_SCOPES: 'read,write,team',
+            },
+        })
+        client = await createClient(TEAM_EXT_PORT, 'test-token')
+    })
 
     test.afterAll(async () => {
-        if (client) await client.close();
-        await stopServer(TEAM_EXT_PORT);
-    });
+        if (client) await client.close()
+        await stopServer(TEAM_EXT_PORT)
+    })
 
     test('team_get_entry_by_id with nonexistent ID → structured error', async () => {
         const p = await callToolAndParse(client, 'team_get_entry_by_id', {

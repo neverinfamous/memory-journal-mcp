@@ -52,7 +52,7 @@ function createMockDbAdapter() {
         getRawDb: vi.fn().mockReturnValue(mockDb),
         getActiveEntryCount: vi.fn().mockReturnValue(0),
         getEntriesPage: vi.fn().mockReturnValue([]),
-        
+
         // Proxy new adapter primitives to the original test assertions
         getVector: (entryId: number) => {
             const raw = mockGet(entryId)
@@ -82,14 +82,16 @@ function createMockDbAdapter() {
         },
         clearVectors: () => mockPrepare('DELETE FROM vec_embeddings'),
         cleanupStaleVectors: () => {
-            mockPrepare('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)')
+            mockPrepare(
+                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+            )
             mockRun()
         },
         getVectorCount: () => {
             const res = mockGet()
             return res ? res.count : 0
         },
-        executeInTransaction: (cb: any) => cb()
+        executeInTransaction: (cb: any) => cb(),
     } as unknown as IDatabaseAdapter
 
     return { adapter, mockDb }
@@ -268,7 +270,9 @@ describe('VectorSearchManager', () => {
                 'Init failed during search string error'
             )
             const vm2 = new VectorSearchManager(adapter)
-            await expect(vm2.search('query')).rejects.toThrow('Init failed during search string error')
+            await expect(vm2.search('query')).rejects.toThrow(
+                'Init failed during search string error'
+            )
         })
     })
 
@@ -417,7 +421,6 @@ describe('VectorSearchManager', () => {
             expect(result.failed).toBe(0)
             expect(result.firstError).toBeNull()
             // DELETE to clear + 2 INSERTs
-            
         })
 
         it('should clear stale embeddings after successful rebuild', async () => {
@@ -429,7 +432,9 @@ describe('VectorSearchManager', () => {
                 getActiveEntryCount: vi.fn().mockReturnValue(1),
                 getEntriesPage: vi.fn().mockReturnValue([{ id: 1, content: 'Active entry' }]),
                 cleanupStaleVectors: () => {
-                    mockPrepare('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)')
+                    mockPrepare(
+                        'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+                    )
                     mockRun()
                 },
                 executeInTransaction: vi.fn().mockImplementation((cb: any) => cb()),
@@ -438,7 +443,9 @@ describe('VectorSearchManager', () => {
             const result = await vm.rebuildIndex(mockDb as unknown as DatabaseAdapter)
             expect(result.indexed).toBe(1)
 
-            expect(mockPrepare).toHaveBeenCalledWith('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)')
+            expect(mockPrepare).toHaveBeenCalledWith(
+                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+            )
         })
 
         it('should return 0 when db not available', async () => {

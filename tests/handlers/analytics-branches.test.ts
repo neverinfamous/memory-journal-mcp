@@ -98,7 +98,9 @@ describe('analytics tools — branch coverage', () => {
     describe('get_cross_project_insights', () => {
         it('should return empty result when no projects match', () => {
             const db = createMockDb({
-                getCrossProjectInsights: vi.fn().mockReturnValue({ projects: [], inactiveProjects: [] }),
+                getCrossProjectInsights: vi
+                    .fn()
+                    .mockReturnValue({ projects: [], inactiveProjects: [] }),
             })
             const handler = getInsightsHandler(db)
 
@@ -109,7 +111,9 @@ describe('analytics tools — branch coverage', () => {
 
         it('should filter by start_date and end_date', () => {
             const db = createMockDb({
-                getCrossProjectInsights: vi.fn().mockReturnValue({ projects: [], inactiveProjects: [] }),
+                getCrossProjectInsights: vi
+                    .fn()
+                    .mockReturnValue({ projects: [], inactiveProjects: [] }),
             })
             const handler = getInsightsHandler(db)
 
@@ -121,7 +125,7 @@ describe('analytics tools — branch coverage', () => {
                 startDate: '2025-01-01',
                 endDate: '2025-03-31',
                 minEntries: 3,
-                inactiveThresholdDays: expect.any(Number)
+                inactiveThresholdDays: expect.any(Number),
             })
         })
 
@@ -129,13 +133,28 @@ describe('analytics tools — branch coverage', () => {
             const db = createMockDb({
                 getCrossProjectInsights: vi.fn().mockReturnValue({
                     projects: [
-                        { project_number: 1, entry_count: 10, first_entry: '2025-01-01', last_entry: '2025-01-10', active_days: 5, top_tags: [{name: 'bug', count: 8}, {name: 'feature', count: 4}] },
-                        { project_number: 2, entry_count: 5, first_entry: '2025-01-05', last_entry: '2025-01-08', active_days: 3, top_tags: [{name: 'docs', count: 3}] }
+                        {
+                            project_number: 1,
+                            entry_count: 10,
+                            first_entry: '2025-01-01',
+                            last_entry: '2025-01-10',
+                            active_days: 5,
+                            top_tags: [
+                                { name: 'bug', count: 8 },
+                                { name: 'feature', count: 4 },
+                            ],
+                        },
+                        {
+                            project_number: 2,
+                            entry_count: 5,
+                            first_entry: '2025-01-05',
+                            last_entry: '2025-01-08',
+                            active_days: 3,
+                            top_tags: [{ name: 'docs', count: 3 }],
+                        },
                     ],
-                    inactiveProjects: [
-                        { project_number: 2, last_entry_date: '2025-01-08' }
-                    ]
-                })
+                    inactiveProjects: [{ project_number: 2, last_entry_date: '2025-01-08' }],
+                }),
             })
             const handler = getInsightsHandler(db)
 
@@ -159,10 +178,17 @@ describe('analytics tools — branch coverage', () => {
             const db = createMockDb({
                 getCrossProjectInsights: vi.fn().mockReturnValue({
                     projects: [
-                        { project_number: 1, entry_count: 10, first_entry: '2025-01-01', last_entry: '2025-01-10', active_days: 5, top_tags: [] }
+                        {
+                            project_number: 1,
+                            entry_count: 10,
+                            first_entry: '2025-01-01',
+                            last_entry: '2025-01-10',
+                            active_days: 5,
+                            top_tags: [],
+                        },
                     ],
-                    inactiveProjects: []
-                })
+                    inactiveProjects: [],
+                }),
             })
             const handler = getInsightsHandler(db)
 

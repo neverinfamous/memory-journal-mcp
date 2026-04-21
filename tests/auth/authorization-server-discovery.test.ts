@@ -13,12 +13,12 @@ import {
 } from '../../src/auth/authorization-server-discovery.js'
 
 const { mockHttpsRequestFn } = vi.hoisted(() => ({
-    mockHttpsRequestFn: vi.fn()
+    mockHttpsRequestFn: vi.fn(),
 }))
 
 vi.mock('node:https', () => ({
     default: { request: mockHttpsRequestFn },
-    request: mockHttpsRequestFn
+    request: mockHttpsRequestFn,
 }))
 
 function mockHttpsRequest(metadata: any, statusCode = 200) {
@@ -42,14 +42,14 @@ function mockHttpsRequest(metadata: any, statusCode = 200) {
         }
         return mockReq as any
     })
-    
+
     return mockHttpsRequestFn
 }
 
 vi.mock('node:dns', () => ({
     promises: {
-        lookup: vi.fn().mockResolvedValue({ address: '203.0.113.1' })
-    }
+        lookup: vi.fn().mockResolvedValue({ address: '203.0.113.1' }),
+    },
 }))
 
 describe('AuthorizationServerDiscovery', () => {

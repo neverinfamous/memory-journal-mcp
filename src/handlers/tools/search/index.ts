@@ -59,7 +59,11 @@ const SearchEntriesSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod enum errors reach the handler */
@@ -88,7 +92,11 @@ const SearchEntriesSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -108,7 +116,11 @@ const SearchByDateRangeSchema = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod errors reach the handler */
@@ -128,7 +140,11 @@ const SearchByDateRangeSchemaMcp = z.object({
         .optional()
         .default('timestamp')
         .describe('Sort results by timestamp (default) or importance score'),
-    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Strict schema — used inside handler for structured Zod errors */
@@ -160,7 +176,11 @@ const SemanticSearchSchema = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 /** Relaxed schema — passed to SDK inputSchema so Zod min/max errors reach the handler */
@@ -183,7 +203,11 @@ const SemanticSearchSchemaMcp = z.object({
         .optional()
         .default(true)
         .describe('Include hint when no results found (default: true)'),
-    include_team: z.boolean().optional().default(true).describe('Include team entries in the search results'),
+    include_team: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe('Include team entries in the search results'),
 })
 
 // ============================================================================
@@ -322,14 +346,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                                 .map((r) => {
                                     const entry = entriesMap.get(r.entryId)
                                     if (!entry) return null
-                                    if (
-                                        !passMetadataFilters(
-                                            entry,
-                                            searchOptions,
-                                            db
-                                        )
-                                    )
-                                        return null
+                                    if (!passMetadataFilters(entry, searchOptions, db)) return null
                                     return { ...entry, source: 'personal' as const }
                                 })
                                 .filter((e): e is NonNullable<typeof e> => e !== null)
@@ -476,7 +493,12 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             input.limit,
                             input.sort_by
                         )
-                        return { success: true, entries: merged, count: merged.length, degraded: false }
+                        return {
+                            success: true,
+                            entries: merged,
+                            count: merged.length,
+                            degraded: false,
+                        }
                     }
 
                     return {
@@ -574,7 +596,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                         endDate: input.end_date,
                         includeTeam: input.include_team,
                     }
-                    
+
                     if (input.tags && input.tags.length > 0) {
                         const tagsMap = db.getTagsForEntries(entryIds)
                         for (const entry of entriesMap.values()) {
@@ -587,8 +609,7 @@ export function getSearchTools(context: ToolContext): ToolDefinition[] {
                             const entry = entriesMap.get(r.entryId)
                             if (!entry) return null
 
-                            if (!passMetadataFilters(entry, filterOptions, db))
-                                return null
+                            if (!passMetadataFilters(entry, filterOptions, db)) return null
 
                             // Exclude the source entry from find-related results
                             if (input.entry_id !== undefined && entry.id === input.entry_id)

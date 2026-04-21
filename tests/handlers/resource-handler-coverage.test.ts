@@ -203,7 +203,10 @@ describe('Resource Handler Coverage', () => {
 
         it('should return error when RULES_FILE_PATH points to nonexistent file', async () => {
             const originalPath = require('node:path')
-            process.env['RULES_FILE_PATH'] = originalPath.join(process.cwd(), 'nonexistent/path/RULES.md')
+            process.env['RULES_FILE_PATH'] = originalPath.join(
+                process.cwd(),
+                'nonexistent/path/RULES.md'
+            )
 
             const result = await readResource('memory://rules', db)
             const data = result.data as { configured: boolean; error: string }
@@ -264,7 +267,10 @@ describe('Resource Handler Coverage', () => {
 
         it('should return error when SKILLS_DIR_PATH points to nonexistent directory', async () => {
             const originalPath = require('node:path')
-            process.env['SKILLS_DIR_PATH'] = originalPath.join(process.cwd(), 'nonexistent/skills/dir')
+            process.env['SKILLS_DIR_PATH'] = originalPath.join(
+                process.cwd(),
+                'nonexistent/skills/dir'
+            )
 
             const result = await readResource('memory://skills', db)
             const data = result.data as {

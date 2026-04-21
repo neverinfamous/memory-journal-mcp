@@ -57,7 +57,10 @@ describe('VectorSearchManager - error coverage', () => {
     })
 
     it('covers initError in rebuildIndex', async () => {
-        const mockDb = { clearVectors: vi.fn(), getActiveEntryCount: vi.fn().mockReturnValue(0) } as unknown as IDatabaseAdapter
+        const mockDb = {
+            clearVectors: vi.fn(),
+            getActiveEntryCount: vi.fn().mockReturnValue(0),
+        } as unknown as IDatabaseAdapter
         const manager = new VectorSearchManager(mockDb)
         vi.spyOn(manager, 'initialize').mockRejectedValue(new Error('init reb err'))
         const res = await manager.rebuildIndex(mockDb)

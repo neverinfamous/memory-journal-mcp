@@ -57,8 +57,6 @@ export class VectorSearchManager {
         this.modelName = modelName
     }
 
-
-
     /**
      * Check if vector search is initialized
      */
@@ -79,7 +77,9 @@ export class VectorSearchManager {
 
                 // Load embedding model (downloads on first use, ~23MB)
                 // Dynamic import avoids 1.5s cold-start penalty from eagerly loading the module
-                logger.info(`Loading embedding model: ${this.modelName}`, { module: 'VectorSearch' })
+                logger.info(`Loading embedding model: ${this.modelName}`, {
+                    module: 'VectorSearch',
+                })
                 const { pipeline } = await import('@huggingface/transformers')
                 this.embedder = await pipeline('feature-extraction', this.modelName, {
                     dtype: 'q8', // Quantized int8 for faster inference and smaller model size
@@ -101,7 +101,7 @@ export class VectorSearchManager {
                 this.initPromise = null
             }
         })()
-        
+
         return this.initPromise
     }
 
@@ -122,11 +122,13 @@ export class VectorSearchManager {
 
         // Convert to number array
         const embedding = Array.from(output.data)
-        
+
         if (embedding.length !== EMBEDDING_DIMENSIONS) {
-            throw new Error(`Embedding dimension mismatch: expected ${String(EMBEDDING_DIMENSIONS)}, got ${String(embedding.length)}`)
+            throw new Error(
+                `Embedding dimension mismatch: expected ${String(EMBEDDING_DIMENSIONS)}, got ${String(embedding.length)}`
+            )
         }
-        
+
         return embedding
     }
 
@@ -155,7 +157,7 @@ export class VectorSearchManager {
             const embedding = await this.generateEmbedding(content)
 
             const vec = new Float32Array(embedding)
-            
+
             this.dbAdapter.upsertVector(entryId, vec)
 
             logger.debug('Added entry to vector index', {
@@ -340,8 +342,6 @@ export class VectorSearchManager {
         // then inserted into SQLite (synchronous, fast, concurrency-safe via WAL)
         await sendProgress(progress, 0, totalEntries, 'Starting vector index rebuild...')
 
-
-
         let indexed = 0
         let failed = 0
         let processed = 0
@@ -388,13 +388,16 @@ export class VectorSearchManager {
                 const validVectors: { entryId: number; embedding: Float32Array }[] = []
                 for (const { entry, embedding, error: embError } of embeddings) {
                     if (embedding !== null) {
-                        validVectors.push({ entryId: entry.id, embedding: new Float32Array(embedding) })
+                        validVectors.push({
+                            entryId: entry.id,
+                            embedding: new Float32Array(embedding),
+                        })
                     } else {
                         failed++
                         if (embError !== null) firstError ??= embError
                     }
                 }
-                
+
                 if (validVectors.length > 0) {
                     try {
                         this.dbAdapter.upsertVectors(validVectors)
@@ -422,9 +425,9 @@ export class VectorSearchManager {
                         `Indexed ${String(indexed)} of ${String(totalEntries)} entries`
                     )
                 }
-                
+
                 processed += batch.length
-                
+
                 if (options?.isCancelled?.()) {
                     firstError ??= 'Operation cancelled'
                     partial = true
@@ -460,7 +463,10 @@ export class VectorSearchManager {
             this.dbAdapter.cleanupStaleVectors()
             logger.info('Cleared stale embeddings post-rebuild', { module: 'VectorSearch' })
         } catch (cleanupError) {
-            logger.warning('Failed to clear stale embeddings', { module: 'VectorSearch', error: String(cleanupError) })
+            logger.warning('Failed to clear stale embeddings', {
+                module: 'VectorSearch',
+                error: String(cleanupError),
+            })
         }
 
         return { indexed, failed, firstError, partial }
@@ -471,7 +477,12 @@ export class VectorSearchManager {
      */
     getStats(): { itemCount: number; modelName: string; dimensions: number; isReady: boolean } {
         if (!this.db) {
-            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS, isReady: this.initialized }
+            return {
+                itemCount: 0,
+                modelName: this.modelName,
+                dimensions: EMBEDDING_DIMENSIONS,
+                isReady: this.initialized,
+            }
         }
 
         try {
@@ -487,7 +498,12 @@ export class VectorSearchManager {
                 module: 'VectorSearch',
                 error: error instanceof Error ? error.message : String(error),
             })
-            return { itemCount: 0, modelName: this.modelName, dimensions: EMBEDDING_DIMENSIONS, isReady: this.initialized }
+            return {
+                itemCount: 0,
+                modelName: this.modelName,
+                dimensions: EMBEDDING_DIMENSIONS,
+                isReady: this.initialized,
+            }
         }
     }
 }

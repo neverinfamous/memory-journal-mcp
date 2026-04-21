@@ -47,18 +47,25 @@ export class TokenValidator {
         const issuerUrl = new URL(this.issuer)
         const jwksUrl = new URL(this.jwksUri)
 
-        const isLoopback = (host: string): boolean => host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+        const isLoopback = (host: string): boolean =>
+            host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
 
         if (issuerUrl.protocol !== 'https:' && !isLoopback(issuerUrl.hostname)) {
-            throw new Error(`Security Violation: Issuer must use HTTPS protocol (got ${this.issuer})`)
+            throw new Error(
+                `Security Violation: Issuer must use HTTPS protocol (got ${this.issuer})`
+            )
         }
 
         if (jwksUrl.protocol !== 'https:' && !isLoopback(jwksUrl.hostname)) {
-            throw new Error(`Security Violation: JWKS URI must use HTTPS protocol (got ${this.jwksUri})`)
+            throw new Error(
+                `Security Violation: JWKS URI must use HTTPS protocol (got ${this.jwksUri})`
+            )
         }
 
         if (issuerUrl.origin !== jwksUrl.origin) {
-            throw new Error(`Security Violation: JWKS URI origin (${jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`)
+            throw new Error(
+                `Security Violation: JWKS URI origin (${jwksUrl.origin}) does not match Issuer origin (${issuerUrl.origin})`
+            )
         }
 
         const issuerHost = new URL(this.issuer).hostname
@@ -303,17 +310,17 @@ export class TokenValidator {
                 return '[configured]'
             }
         })()
-        
+
         logger.info(`Pre-fetching JWKS from: ${jwksHost}`, {
             module: 'AUTH',
             operation: 'jwks-preload',
         })
 
         try {
-            const response = await fetch(this.jwksUri, { 
+            const response = await fetch(this.jwksUri, {
                 method: 'GET',
                 signal: AbortSignal.timeout(10000),
-                redirect: 'error'
+                redirect: 'error',
             })
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`)

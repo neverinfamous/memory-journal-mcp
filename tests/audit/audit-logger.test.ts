@@ -377,7 +377,10 @@ describe('AuditLogger', () => {
             try {
                 logger.log(fakeEntry())
                 await logger.flush()
-                expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Write failed'), expect.any(Object))
+                expect(errorSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('Write failed'),
+                    expect.any(Object)
+                )
             } finally {
                 errorSpy.mockRestore()
                 await logger.close()

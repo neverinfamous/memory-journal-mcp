@@ -117,19 +117,25 @@ export function setupStateful(
                     if (reqSubject !== expectedSub) {
                         res.status(403).json({
                             jsonrpc: '2.0',
-                            error: { code: JSONRPC_SERVER_ERROR, message: 'Forbidden: Session belongs to a different subject' },
+                            error: {
+                                code: JSONRPC_SERVER_ERROR,
+                                message: 'Forbidden: Session belongs to a different subject',
+                            },
                             id: null,
                         })
                         return
                     }
-                    
+
                     if (ctx.sessionCreatedAt) {
                         const createdAt = ctx.sessionCreatedAt.get(sessionId) ?? Date.now()
                         // 24 hour absolute TTL
                         if (Date.now() - createdAt > 86400000) {
                             res.status(401).json({
                                 jsonrpc: '2.0',
-                                error: { code: JSONRPC_SERVER_ERROR, message: 'Unauthorized: Session absolute TTL expired' },
+                                error: {
+                                    code: JSONRPC_SERVER_ERROR,
+                                    message: 'Unauthorized: Session absolute TTL expired',
+                                },
                                 id: null,
                             })
                             return
@@ -154,7 +160,10 @@ export function setupStateful(
                 if (sessionId !== undefined) {
                     const t = ctx.transports.get(sessionId)
                     if (!t) {
-                        logger.error('Missing transport for active session', { module: 'HTTP', sessionId })
+                        logger.error('Missing transport for active session', {
+                            module: 'HTTP',
+                            sessionId,
+                        })
                         throw new Error('Critical: session ID exists but transport was lost')
                     }
                     targetTransport = t
@@ -169,11 +178,14 @@ export function setupStateful(
                             maxSessions = parsed
                         }
                     }
-                    
+
                     if (ctx.transports.size + ctx.sseTransports.size >= maxSessions) {
                         res.status(429).json({
                             jsonrpc: '2.0',
-                            error: { code: JSONRPC_SERVER_ERROR, message: 'Too Many Requests: Maximum active sessions reached' },
+                            error: {
+                                code: JSONRPC_SERVER_ERROR,
+                                message: 'Too Many Requests: Maximum active sessions reached',
+                            },
                             id: null,
                         })
                         return
@@ -190,7 +202,9 @@ export function setupStateful(
                             ctx.transports.set(sid, newTransport)
                             ctx.touchSession(sid)
 
-                            const authReq = req as unknown as { auth?: { sub?: string; subject?: string } }
+                            const authReq = req as unknown as {
+                                auth?: { sub?: string; subject?: string }
+                            }
                             const reqSubject = authReq.auth?.sub ?? authReq.auth?.subject
                             if (reqSubject) {
                                 ctx.sessionSubjects.set(sid, reqSubject)
@@ -221,23 +235,23 @@ export function setupStateful(
                         await newServer.connect(newTransport)
                         ctx.serverConnected = true
                     }
-                    
+
                     const priorLock: Promise<void> = ctx.connectionLock ?? Promise.resolve()
-                    
+
                     // Chain the attempt
                     const attempt = priorLock.then(doConnect)
-                    
+
                     // The global lock chain swallows errors to allow subsequent requests to proceed
                     ctx.connectionLock = attempt.catch((err: unknown) => {
-                        logger.error('Background connection setup failed, releasing lock', { 
-                            module: 'HTTP', 
-                            error: err instanceof Error ? err.message : String(err) 
+                        logger.error('Background connection setup failed, releasing lock', {
+                            module: 'HTTP',
+                            error: err instanceof Error ? err.message : String(err),
                         })
                     })
-                    
+
                     // Block the current request on the attempt success
                     await attempt
-                    
+
                     targetTransport = newTransport
                 }
 
@@ -304,7 +318,7 @@ export function setupStateful(
             res.status(403).send('Forbidden: Session belongs to a different subject')
             return
         }
-        
+
         if (ctx.sessionCreatedAt) {
             const createdAt = ctx.sessionCreatedAt.get(sessionId) ?? Date.now()
             // 24 hour absolute TTL

@@ -13,6 +13,7 @@
    - **FORMATTING**: Group related properties (use `<br>` for line breaks).
    - **REQUIRED GROUPS**: GitHub, Issues, Entry Counts, Latest Entries/Summaries, Analytics, Milestones, Workspaces.
 6. **STOP & WAIT**: Do NOT autonomously resume past tasks or start work on new issues. The briefing is strictly for context.
+
 - **AntiGravity**: Tools are `mcp_{name}_{tool}` → server name = `memory-journal-mcp`
 - **Cursor**: Tools are `user-{name}-{tool}` → server name = `user-memory-journal-mcp`
 - **Other clients**: Use configured name exactly. Use tool-prefix discovery if unsure.

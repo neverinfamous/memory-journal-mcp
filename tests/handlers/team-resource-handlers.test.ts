@@ -12,7 +12,10 @@ vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 describe('Team Resource Handlers', () => {
@@ -44,16 +47,16 @@ describe('Team Resource Handlers', () => {
             resolved: false,
             resolved_at: null,
             resolution: null,
-            author: 'Alice'
+            author: 'Alice',
         }
         const entry3 = teamDb.createEntry({
             content: 'flag:blocker @neverinfamous: API is down',
             entryType: 'flag',
-            autoContext: JSON.stringify(flagContext)
+            autoContext: JSON.stringify(flagContext),
         })
 
         // Set author on entries via raw SQL
-        const rawDb = teamDb["connection"].getNativeDb() as any
+        const rawDb = teamDb['connection'].getNativeDb() as any
         rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Alice', entry1.id)
         rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Bob', entry2.id)
         rawDb.prepare('UPDATE memory_journal SET author = ? WHERE id = ?').run('Alice', entry3.id)
@@ -195,7 +198,11 @@ describe('Team Resource Handlers', () => {
             )
 
             const data = result.data as {
-                activeFlags: { flag_type: string; target_user: string | null; author: string | null }[]
+                activeFlags: {
+                    flag_type: string
+                    target_user: string | null
+                    author: string | null
+                }[]
                 count: number
             }
             expect(data.count).toBeGreaterThan(0)
@@ -255,7 +262,7 @@ describe('Team Resource Handlers', () => {
                 undefined, // filterConfig
                 undefined, // github
                 undefined, // scheduler
-                teamDb,    // teamDb
+                teamDb, // teamDb
                 { flagVocabulary: ['urgent', 'review'] } as any // briefingConfig
             )
 

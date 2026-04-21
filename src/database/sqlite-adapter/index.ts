@@ -239,7 +239,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return this.backupMgr.deleteOldBackups(keepCount)
     }
 
-    async restoreFromFile(filename: string, runtime?: unknown): Promise<{
+    async restoreFromFile(
+        filename: string,
+        runtime?: unknown
+    ): Promise<{
         restoredFrom: string
         previousEntryCount: number
         newEntryCount: number
@@ -321,8 +324,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     upsertVectors(vectors: { entryId: number; embedding: Float32Array }[]): void {
         const db = this.connection.getNativeDb()
         const deleteStmt = db.prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
-        const insertStmt = db.prepare('INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)')
-        
+        const insertStmt = db.prepare(
+            'INSERT INTO vec_embeddings(entry_id, embedding) VALUES (?, ?)'
+        )
+
         db.transaction(() => {
             for (const vec of vectors) {
                 const bigId = BigInt(vec.entryId)
@@ -358,7 +363,10 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     deleteVector(entryId: number): void {
-        this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings WHERE entry_id = ?').run(BigInt(entryId))
+        this.connection
+            .getNativeDb()
+            .prepare('DELETE FROM vec_embeddings WHERE entry_id = ?')
+            .run(BigInt(entryId))
     }
 
     clearVectors(): void {
@@ -374,7 +382,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     cleanupStaleVectors(): void {
-        this.connection.getNativeDb().prepare('DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)').run()
+        this.connection
+            .getNativeDb()
+            .prepare(
+                'DELETE FROM vec_embeddings WHERE entry_id NOT IN (SELECT id FROM memory_journal WHERE deleted_at IS NULL)'
+            )
+            .run()
     }
 
     executeInTransaction<T>(cb: () => T): T {
@@ -382,22 +395,28 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     getWorkflowActionEntries(limit: number): JournalEntry[] {
-        const rows = this.connection.exec(`
+        const rows = this.connection.exec(
+            `
             SELECT * FROM memory_journal
             WHERE workflow_run_id IS NOT NULL AND deleted_at IS NULL
             ORDER BY timestamp DESC
             LIMIT ?
-        `, [limit])
-        
+        `,
+            [limit]
+        )
+
         if (!rows[0] || rows[0].values.length === 0) return []
-        
+
         const cols = rows[0].columns
-        const entryIds = rows[0].values.map(row => row[cols.indexOf('id')] as number)
+        const entryIds = rows[0].values.map((row) => row[cols.indexOf('id')] as number)
         const tagsMap = new Map<number, string[]>()
-        
+
         if (entryIds.length > 0) {
             const placeholders = entryIds.map(() => '?').join(',')
-            const tagRows = this.connection.exec(`SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`, entryIds)
+            const tagRows = this.connection.exec(
+                `SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`,
+                entryIds
+            )
             if (tagRows[0] && tagRows[0].values.length > 0) {
                 const tagCols = tagRows[0].columns
                 const entryIdIdx = tagCols.indexOf('entry_id')
@@ -449,16 +468,19 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         params.push(limit)
 
         const rows = this.connection.exec(sql, params)
-        
+
         if (!rows[0] || rows[0].values.length === 0) return []
-        
+
         const cols = rows[0].columns
-        const entryIds = rows[0].values.map(row => row[cols.indexOf('id')] as number)
+        const entryIds = rows[0].values.map((row) => row[cols.indexOf('id')] as number)
         const tagsMap = new Map<number, string[]>()
-        
+
         if (entryIds.length > 0) {
             const placeholders = entryIds.map(() => '?').join(',')
-            const tagRows = this.connection.exec(`SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`, entryIds)
+            const tagRows = this.connection.exec(
+                `SELECT entry_tags.entry_id, tags.name as tag FROM entry_tags JOIN tags ON entry_tags.tag_id = tags.id WHERE entry_tags.entry_id IN (${placeholders})`,
+                entryIds
+            )
             if (tagRows[0] && tagRows[0].values.length > 0) {
                 const tagCols = tagRows[0].columns
                 const entryIdIdx = tagCols.indexOf('entry_id')
@@ -492,10 +514,14 @@ export class DatabaseAdapter implements IDatabaseAdapter {
     }
 
     getRecentGraphRelationships(limit: number): {
-        from_entry_id: number; to_entry_id: number; relationship_type: string;
-        from_content: string; to_content: string;
+        from_entry_id: number
+        to_entry_id: number
+        relationship_type: string
+        from_content: string
+        to_content: string
     }[] {
-        const rows = this.connection.exec(`
+        const rows = this.connection.exec(
+            `
             SELECT
                 r.from_entry_id, r.to_entry_id, r.relationship_type,
                 e1.content as from_content,
@@ -506,12 +532,14 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             WHERE e1.deleted_at IS NULL AND e2.deleted_at IS NULL
             ORDER BY r.created_at DESC
             LIMIT ?
-        `, [limit])
+        `,
+            [limit]
+        )
 
         if (!rows[0] || rows[0].values.length === 0) return []
-        
+
         const cols = rows[0].columns
-        return rows[0].values.map(row => ({
+        return rows[0].values.map((row) => ({
             from_entry_id: row[cols.indexOf('from_entry_id')] as number,
             to_entry_id: row[cols.indexOf('to_entry_id')] as number,
             relationship_type: row[cols.indexOf('relationship_type')] as string,
@@ -584,11 +612,11 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         return computeDigest(this.connection.getNativeDb()) as unknown as Record<string, unknown>
     }
 
-    getCrossProjectInsights(options: { 
-        startDate?: string; 
-        endDate?: string; 
-        minEntries: number; 
-        inactiveThresholdDays: number 
+    getCrossProjectInsights(options: {
+        startDate?: string
+        endDate?: string
+        minEntries: number
+        inactiveThresholdDays: number
     }): {
         projects: Record<string, unknown>[]
         inactiveProjects: { project_number: number; last_entry_date: string }[]
@@ -632,7 +660,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         }
 
         if (projects.length > 0) {
-            const projectNumbers = projects.map(p => p['project_number'] as number)
+            const projectNumbers = projects.map((p) => p['project_number'] as number)
             const placeholders = projectNumbers.map(() => '?').join(',')
             const tagsResult = this.connection.exec(
                 `
@@ -646,7 +674,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
                 `,
                 projectNumbers
             )
-            const tagMap = new Map<number, {name: string, count: number}[]>()
+            const tagMap = new Map<number, { name: string; count: number }[]>()
             if (tagsResult[0]) {
                 for (const row of tagsResult[0].values) {
                     const pNum = row[0] as number
@@ -668,7 +696,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         const cutoffDate = new Date(Date.now() - options.inactiveThresholdDays * msPerDay)
             .toISOString()
             .split('T')[0]
-            
+
         const inactiveResult = this.connection.exec(
             `
             SELECT project_number, MAX(DATE(timestamp)) as last_entry_date
@@ -700,7 +728,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
         depth: number
         limit: number
     }): {
-        nodes: { id: string | number; label: string; group: string; metadata?: Record<string, unknown> }[]
+        nodes: {
+            id: string | number
+            label: string
+            group: string
+            metadata?: Record<string, unknown>
+        }[]
         edges: { from: string | number; to: string | number; label: string; type: string }[]
     } {
         let entriesResult: QueryResult[]
@@ -763,7 +796,12 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             )
         }
 
-        const nodes: { id: string | number; label: string; group: string; metadata: { is_personal: boolean, content: string } }[] = []
+        const nodes: {
+            id: string | number
+            label: string
+            group: string
+            metadata: { is_personal: boolean; content: string }
+        }[] = []
         if (entriesResult[0] && entriesResult[0].values.length > 0) {
             const cols = entriesResult[0].columns
             for (const row of entriesResult[0].values) {
@@ -773,15 +811,16 @@ export class DatabaseAdapter implements IDatabaseAdapter {
                     label: `Node ${row[cols.indexOf('id')] as number}`,
                     metadata: {
                         content: row[cols.indexOf('content')] as string,
-                        is_personal: Boolean(row[cols.indexOf('is_personal')])
-                    }
+                        is_personal: Boolean(row[cols.indexOf('is_personal')]),
+                    },
                 })
             }
         }
 
-        const edges: { from: string | number; to: string | number; label: string; type: string }[] = []
+        const edges: { from: string | number; to: string | number; label: string; type: string }[] =
+            []
         if (nodes.length > 0) {
-            const entryIds = nodes.map(n => n.id as number)
+            const entryIds = nodes.map((n) => n.id as number)
             const placeholders = entryIds.map(() => '?').join(',')
 
             let relsQuery = `
@@ -804,7 +843,7 @@ export class DatabaseAdapter implements IDatabaseAdapter {
                         from: row[0] as number,
                         to: row[1] as number,
                         label: row[2] as string,
-                        type: row[2] as string
+                        type: row[2] as string,
                     })
                 }
             }
@@ -900,10 +939,8 @@ export class DatabaseAdapter implements IDatabaseAdapter {
             FROM memory_journal
             WHERE deleted_at IS NULL`
         )
-        const totalAuthors =
-            (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
-        const totalEntries =
-            (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0
+        const totalAuthors = (totalsResult[0]?.values[0]?.[0] as number | undefined) ?? 0
+        const totalEntries = (totalsResult[0]?.values[0]?.[1] as number | undefined) ?? 0
 
         return {
             totalAuthors,

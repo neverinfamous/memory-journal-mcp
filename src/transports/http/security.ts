@@ -52,7 +52,9 @@ export function checkRateLimit(
     const clientIdentity = createHash('sha256').update(rawIdentity).digest('hex')
     const now = Date.now()
     const windowMs = config.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS
-    let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX'] ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10) : NaN
+    let envMaxRequests = process.env['MCP_RATE_LIMIT_MAX']
+        ? parseInt(process.env['MCP_RATE_LIMIT_MAX'], 10)
+        : NaN
     if (Number.isNaN(envMaxRequests) || envMaxRequests <= 0) {
         envMaxRequests = DEFAULT_RATE_LIMIT_MAX_REQUESTS
     }
@@ -138,12 +140,13 @@ export function setSecurityHeaders(res: Response, config: HttpTransportConfig): 
  */
 export function setCorsHeaders(req: Request, res: Response, config: HttpTransportConfig): boolean {
     let corsOrigins = config.corsOrigins ?? []
-    const isLocalhost = config.host === 'localhost' || config.host === '127.0.0.1' || config.host === '::1'
+    const isLocalhost =
+        config.host === 'localhost' || config.host === '127.0.0.1' || config.host === '::1'
     const hasAuth = Boolean(config.authToken) || config.oauthEnabled === true
 
     // Hard-block wildcard CORS on localhost if no auth is configured to prevent local-browser CSRF
     if (isLocalhost && !hasAuth && corsOrigins.includes('*')) {
-        corsOrigins = corsOrigins.filter(o => o !== '*')
+        corsOrigins = corsOrigins.filter((o) => o !== '*')
     }
 
     const isWildcard = corsOrigins.includes('*')

@@ -39,8 +39,13 @@ export function getBaseURL(testInfo: TestInfo): string {
  * Caller is responsible for calling client.close() in afterAll.
  */
 export async function createClient(port = 3100, authToken?: string): Promise<Client> {
-    const transportOptions = authToken ? { requestInit: { headers: { Authorization: `Bearer ${authToken}` } } } : undefined;
-    const transport = new StreamableHTTPClientTransport(new URL(`http://localhost:${port}/mcp`), transportOptions);
+    const transportOptions = authToken
+        ? { requestInit: { headers: { Authorization: `Bearer ${authToken}` } } }
+        : undefined
+    const transport = new StreamableHTTPClientTransport(
+        new URL(`http://localhost:${port}/mcp`),
+        transportOptions
+    )
     const client = new Client(
         { name: 'payload-contract-test', version: '1.0.0' },
         { capabilities: {} }
@@ -61,7 +66,10 @@ export async function callToolAndParse(
     const response = await client.callTool({ name: toolName, arguments: args })
 
     if (response.isError) {
-        console.error('Tool call returned isError: true. Response:', JSON.stringify(response, null, 2))
+        console.error(
+            'Tool call returned isError: true. Response:',
+            JSON.stringify(response, null, 2)
+        )
     }
     expect(response.isError).toBeUndefined()
     expect(Array.isArray(response.content)).toBe(true)
@@ -176,7 +184,7 @@ export async function startServer(
             '--port',
             String(port),
             '--db',
-            options?.cwd 
+            options?.cwd
                 ? join(options.cwd, `test-e2e-${suffix}.db`)
                 : join(process.cwd(), '.test-output', 'e2e', `test-e2e-${suffix}.db`),
             ...args,
@@ -186,7 +194,8 @@ export async function startServer(
             stdio: 'pipe',
             env: Object.fromEntries(
                 Object.entries({
-                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
+                    ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: args.some((a) => a === '--rate-limit-max')
                         ? undefined
                         : '10000',
@@ -196,7 +205,9 @@ export async function startServer(
         }
     )
 
-    const logStream = createWriteStream(join(process.cwd(), '.test-output', 'e2e', `server-${port}.log`))
+    const logStream = createWriteStream(
+        join(process.cwd(), '.test-output', 'e2e', `server-${port}.log`)
+    )
     serverProcess.stdout?.pipe(logStream)
     serverProcess.stderr?.pipe(logStream)
 
@@ -212,7 +223,7 @@ export async function startServer(
         }
         await delay(500)
     }
-    
+
     serverProcess.kill()
     throw new Error(`Server on port ${port} did not start within timeout`)
 }

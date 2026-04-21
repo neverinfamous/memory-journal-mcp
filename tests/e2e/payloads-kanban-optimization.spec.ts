@@ -36,7 +36,7 @@ test.describe('Payload Contracts: Kanban Optimization (E2E)', () => {
     function getText(response: Awaited<ReturnType<typeof client.callTool>>): string {
         const content = response.content as Array<{ type: string; text: string }>
         const text = content[0]!.text
-        
+
         if (text === '[Structured output attached]' && content.length > 1) {
             const structural = content[1] as any
             if (structural.type === 'structuredContent') {

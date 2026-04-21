@@ -80,7 +80,9 @@ describe('NativeConnectionManager exec branches', () => {
             conn.exec(
                 "INSERT INTO tags (name, usage_count) VALUES ('a', 1); INSERT INTO tags (name, usage_count) VALUES ('b', 2);"
             )
-        }).toThrow('Multi-statement queries via exec() are strictly forbidden. Use properly parameterized adapter methods instead.')
+        }).toThrow(
+            'Multi-statement queries via exec() are strictly forbidden. Use properly parameterized adapter methods instead.'
+        )
     })
 
     it('should handle SELECT returning rows with columns/values', () => {

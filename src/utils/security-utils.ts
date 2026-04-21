@@ -167,7 +167,9 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     // 3. Define safe boundaries
     const rawRoots: string[] = providedRoots
     if (rawRoots.length === 0) {
-        throw new PathTraversalError('No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.')
+        throw new PathTraversalError(
+            'No allowed input/output roots configured for sandbox boundary. Please configure ALLOWED_IO_ROOTS env variable or pass --allowed-io-roots with absolute paths (e.g. C:\\my\\path) to enable filesystem operations.'
+        )
     }
     const allowedRoots: string[] = []
 
@@ -180,14 +182,16 @@ export function assertSafeDirectoryPath(dirPath: string, providedRoots: string[]
     }
 
     // 4. Verify the targetPath is structurally inside at least one allowed root
-    const isAllowed = allowedRoots.some(root => {
+    const isAllowed = allowedRoots.some((root) => {
         const rel = path.relative(root, targetPath)
         // If relative path is '..' or starts with '../' (or '..\'), it escapes the root
         return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)
     })
 
     if (!isAllowed) {
-        throw new PathTraversalError(`Directory path escapes allowed sandbox boundaries: ${dirPath}`)
+        throw new PathTraversalError(
+            `Directory path escapes allowed sandbox boundaries: ${dirPath}`
+        )
     }
 }
 
@@ -203,7 +207,9 @@ export function assertSafeFilePath(filePath: string, providedRoots: string[]): v
     try {
         const stats = fs.lstatSync(filePath)
         if (stats.isSymbolicLink()) {
-            throw new PathTraversalError(`Symlinks are strictly forbidden for file operations: ${filePath}`)
+            throw new PathTraversalError(
+                `Symlinks are strictly forbidden for file operations: ${filePath}`
+            )
         }
     } catch (err: unknown) {
         // If file doesn't exist, that's fine, but if it's our error, throw it
@@ -262,19 +268,19 @@ export function sanitizeErrorForLogging(message: string): string {
 /**
  * Marks free-text content as untrusted remote origin for LLM instruction consumption.
  * Defends against prompt-injection by surrounding external inputs with tags.
- * 
+ *
  * Will not insert nested tags if the content is already marked.
  */
 export function markUntrustedContent(content: string | undefined | null): string {
     if (!content) return ''
     let trimmed = content.trim()
     if (!trimmed) return ''
-    
+
     // Strip any existing tags to prevent breakout/nesting
     trimmed = trimmed.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
     // Escape HTML entities to prevent prompt injection
     trimmed = trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    
+
     return `<untrusted_remote_content>\n${trimmed}\n</untrusted_remote_content>`
 }
 
@@ -284,12 +290,12 @@ export function markUntrustedContent(content: string | undefined | null): string
 export function markUntrustedContentInline(content: string | undefined | null): string {
     if (!content) return ''
     let cleaned = content
-    
+
     // Strip existing wrappers to normalize for inline layout
     cleaned = cleaned.replace(/<\/?untrusted_remote_content[^>]*>/gi, '')
     // Escape HTML entities to prevent prompt injection
     cleaned = cleaned.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    
+
     return `<untrusted_remote_content>${cleaned}</untrusted_remote_content>`
 }
 
@@ -324,9 +330,12 @@ export function resolveAuthenticatedAuthor(): string {
     if (authCtx?.authenticated && authCtx.claims) {
         const claims = authCtx.claims
         const email = typeof claims['email'] === 'string' ? claims['email'] : undefined
-        const prefName = typeof claims['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
+        const prefName =
+            typeof claims['preferred_username'] === 'string'
+                ? claims['preferred_username']
+                : undefined
         const subject = typeof claims['subject'] === 'string' ? claims['subject'] : undefined
-        
+
         const claimAuthor = email ?? prefName ?? claims.sub ?? subject
         if (claimAuthor) {
             return sanitizeAuthor(claimAuthor)

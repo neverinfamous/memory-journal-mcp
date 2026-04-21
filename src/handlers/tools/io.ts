@@ -66,7 +66,10 @@ const ExportEntriesOutputSchema = z
         entries: z.array(EntryOutputSchema).optional(),
         count: z.number().optional(),
         content: z.string().optional(),
-        truncated: z.boolean().optional().describe('True if the results were truncated to fit within payload limits'),
+        truncated: z
+            .boolean()
+            .optional()
+            .describe('True if the results were truncated to fit within payload limits'),
         success: z.boolean().optional(),
         error: z.string().optional(),
     })
@@ -221,14 +224,14 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                             logger.warning('Export payload exceeded 5MB cap, truncating results', {
                                 module: 'IO',
                                 limit,
-                                actualCount: boundedEntries.length
+                                actualCount: boundedEntries.length,
                             })
                             break
                         }
                         currentBytes += entrySize
                         boundedEntries.push(entry)
                     }
-                    
+
                     entries = boundedEntries
 
                     await sendProgress(
@@ -330,7 +333,12 @@ export function getIoTools(context: ToolContext): ToolDefinition[] {
                         significance: e.significanceType ?? undefined,
                     }))
 
-                    const result = await exportEntriesToMarkdown(exportable, input.output_dir, db, allowedRoots)
+                    const result = await exportEntriesToMarkdown(
+                        exportable,
+                        input.output_dir,
+                        db,
+                        allowedRoots
+                    )
 
                     await sendProgress(progress, 3, 3, 'Export complete')
                     return result

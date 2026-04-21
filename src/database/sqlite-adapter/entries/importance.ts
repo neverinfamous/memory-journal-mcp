@@ -123,7 +123,7 @@ export function getEntriesByIdsWithImportance(
 
     const { db } = context
     const round2 = (n: number): number => Math.round(n * 100) / 100
-    
+
     const validIds = Array.from(entriesMap.keys())
     const marks = validIds.map(() => '?').join(', ')
 
@@ -139,8 +139,12 @@ export function getEntriesByIdsWithImportance(
         )
         GROUP BY entry_id
     `
-    const rows = db.prepare(sql).all(...validIds, ...validIds) as { entry_id: number; rel_count: number; causal_count: number }[]
-    
+    const rows = db.prepare(sql).all(...validIds, ...validIds) as {
+        entry_id: number
+        rel_count: number
+        causal_count: number
+    }[]
+
     const relData = new Map<number, { relCount: number; causalCount: number }>()
     for (const row of rows) {
         relData.set(row.entry_id, {
@@ -154,7 +158,7 @@ export function getEntriesByIdsWithImportance(
 
     for (const [id, entry] of entriesMap.entries()) {
         const stats = relData.get(id) ?? { relCount: 0, causalCount: 0 }
-        
+
         const significanceRaw = entry.significanceType ? 1.0 : 0.0
         const relationshipsRaw = Math.min(stats.relCount / MAX_RELATIONSHIP_SCORE_AT, 1.0)
         const causalRaw = Math.min(stats.causalCount / MAX_CAUSAL_SCORE_AT, 1.0)
@@ -172,9 +176,9 @@ export function getEntriesByIdsWithImportance(
 
         const score = round2(
             significanceRaw * w.significance +
-            relationshipsRaw * w.relationships +
-            causalRaw * w.causal +
-            recencyRaw * w.recency
+                relationshipsRaw * w.relationships +
+                causalRaw * w.causal +
+                recencyRaw * w.recency
         )
 
         result.set(id, { entry, importance: { score, breakdown } })

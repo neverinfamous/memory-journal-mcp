@@ -684,16 +684,14 @@ export const TeamCollaborationMatrixOutputSchema = z
 // ============================================================================
 
 /** Default flag vocabulary */
-export const DEFAULT_FLAG_VOCABULARY = [
-    'blocker',
-    'needs_review',
-    'help_requested',
-    'fyi',
-] as const
+export const DEFAULT_FLAG_VOCABULARY = ['blocker', 'needs_review', 'help_requested', 'fyi'] as const
 
 /** pass_team_flag — strict */
 export const PassTeamFlagSchema = z.object({
-    flag_type: z.string().min(1).describe('Flag type from vocabulary (e.g., blocker, needs_review)'),
+    flag_type: z
+        .string()
+        .min(1)
+        .describe('Flag type from vocabulary (e.g., blocker, needs_review)'),
     message: z.string().min(1).max(49_000).describe('Flag message describing the issue or request'),
     target_user: z.string().optional().describe('Target user to flag (e.g., @sarah)'),
     link: z.string().optional().describe('Related file path, URL, or reference'),
@@ -751,4 +749,3 @@ export const ResolveFlagOutputSchema = z
         error: z.string().optional(),
     })
     .extend(ErrorFieldsMixin.shape)
-

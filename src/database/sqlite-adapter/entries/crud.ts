@@ -10,7 +10,9 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     // Strict validation to prevent malformed dates (e.g. string manipulation crashes downstream)
     const isoRegex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/
     if (!isoRegex.test(timestamp)) {
-        throw new Error(`Invalid timestamp format: ${timestamp}. Expected ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss.sssZ).`)
+        throw new Error(
+            `Invalid timestamp format: ${timestamp}. Expected ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss.sssZ).`
+        )
     }
 
     // SQLite expects standard ISO format
@@ -22,9 +24,22 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
     const txn = db.transaction(() => {
         // Build dynamic columns and values
         const columns = [
-            'entry_type', 'content', 'timestamp', 'is_personal', 'significance_type', 'auto_context',
-            'project_number', 'project_owner', 'issue_number', 'issue_url', 'pr_number', 'pr_url', 'pr_status',
-            'workflow_run_id', 'workflow_name', 'workflow_status'
+            'entry_type',
+            'content',
+            'timestamp',
+            'is_personal',
+            'significance_type',
+            'auto_context',
+            'project_number',
+            'project_owner',
+            'issue_number',
+            'issue_url',
+            'pr_number',
+            'pr_url',
+            'pr_status',
+            'workflow_run_id',
+            'workflow_name',
+            'workflow_status',
         ]
         const values = [
             input.entryType ?? 'personal_reflection',
@@ -42,7 +57,7 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
             input.prStatus || null,
             input.workflowRunId ?? null,
             input.workflowName || null,
-            input.workflowStatus || null
+            input.workflowStatus || null,
         ]
 
         if (input.author !== undefined) {
@@ -67,7 +82,9 @@ export function createEntry(context: EntriesSharedContext, input: CreateEntryInp
 
     const entry = getEntryById(context, insertId)
     if (!entry) {
-        throw new Error(`Storage Inconsistency Anomaly: Entry with ID ${insertId} successfully written but could not be read back.`)
+        throw new Error(
+            `Storage Inconsistency Anomaly: Entry with ID ${insertId} successfully written but could not be read back.`
+        )
     }
     return entry
 }

@@ -19,7 +19,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { assertSafeFilePath, assertSafeDirectoryPath, markUntrustedContentInline } from '../../../utils/security-utils.js'
+import {
+    assertSafeFilePath,
+    assertSafeDirectoryPath,
+    markUntrustedContentInline,
+} from '../../../utils/security-utils.js'
 
 export const recentResource: InternalResourceDef = {
     uri: 'memory://recent',
@@ -57,26 +61,26 @@ export const significantResource: InternalResourceDef = {
         const MAX_REL_SCORE_AT = 5
         const MAX_CAUSAL_SCORE_AT = 3
 
-        const entryIds = entries.map(e => e.id)
+        const entryIds = entries.map((e) => e.id)
         const relationshipsMap = context.db.getRelationshipsForEntries(entryIds)
 
         const entriesWithImportance = entries.map((entry) => {
             const relationships = relationshipsMap.get(entry.id) ?? []
             const relCount = relationships.length
-            const causalCount = relationships.filter(r => ['blocked_by', 'resolved', 'caused'].includes(r.relationshipType)).length
-            
+            const causalCount = relationships.filter((r) =>
+                ['blocked_by', 'resolved', 'caused'].includes(r.relationshipType)
+            ).length
+
             const timestampMs = new Date(entry.timestamp).getTime()
-            const daysSince = Math.floor(
-                (now - timestampMs) / MS_PER_DAY
-            )
+            const daysSince = Math.floor((now - timestampMs) / MS_PER_DAY)
             const recency = Math.max(0, 1 - daysSince / RECENCY_WINDOW_DAYS)
 
             const importance =
                 Math.round(
-                    (1.0 * 0.3 + 
-                        Math.min(relCount / MAX_REL_SCORE_AT, 1.0) * 0.35 + 
-                        Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0) * 0.2 + 
-                        recency * 0.15) * 
+                    (1.0 * 0.3 +
+                        Math.min(relCount / MAX_REL_SCORE_AT, 1.0) * 0.35 +
+                        Math.min(causalCount / MAX_CAUSAL_SCORE_AT, 1.0) * 0.2 +
+                        recency * 0.15) *
                         100
                 ) / 100
 
@@ -181,7 +185,8 @@ export const rulesResource: InternalResourceDef = {
             }
 
             const stat = await fs.promises.stat(rulesPath)
-            if (stat.size > 1024 * 1024) { // 1MB limit for rules
+            if (stat.size > 1024 * 1024) {
+                // 1MB limit for rules
                 throw new Error('Rules file exceeds 1MB limit')
             }
 
@@ -190,7 +195,7 @@ export const rulesResource: InternalResourceDef = {
 
             cachedRulesMap.set(rulesPath, {
                 content,
-                timestamp: Date.now()
+                timestamp: Date.now(),
             })
 
             // Bounded cache
@@ -306,7 +311,9 @@ async function scanSkillsDir(
         const excerptLine = lines.find(
             (l) => l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('---')
         )
-        const excerpt = excerptLine ? markUntrustedContentInline(excerptLine.trim().slice(0, 160)) : ''
+        const excerpt = excerptLine
+            ? markUntrustedContentInline(excerptLine.trim().slice(0, 160))
+            : ''
 
         skills.push({ name: entry.name, path: skillMdPath, excerpt, source })
     }
@@ -322,7 +329,8 @@ export const skillsResource: InternalResourceDef = {
     icons: [ICON_BRIEFING],
     annotations: { ...MEDIUM_PRIORITY, audience: ['assistant'] },
     handler: async (_uri: string, context: ResourceContext): Promise<ResourceResult> => {
-        const userSkillsDir = context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
+        const userSkillsDir =
+            context.briefingConfig?.skillsDirPath ?? process.env['SKILLS_DIR_PATH']
         const shippedSkillsDir = getShippedSkillsDir()
         const hasAnySource = !!userSkillsDir || !!shippedSkillsDir
 
@@ -341,7 +349,7 @@ export const skillsResource: InternalResourceDef = {
                         configured: true,
                         error: err instanceof Error ? err.message : String(err),
                         skills: [],
-                        count: 0
+                        count: 0,
                     },
                 }
             }
@@ -360,15 +368,16 @@ export const skillsResource: InternalResourceDef = {
             const currentDirs = `${userSkillsDir ?? ''}|${shippedSkillsDir ?? ''}`
 
             const cached = cachedSkillsMap.get(currentDirs)
-            if (
-                cached &&
-                Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS
-            ) {
+            if (cached && Date.now() - cached.timestamp < SKILLS_CACHE_TTL_MS) {
                 return {
                     data: {
                         configured: true,
                         // Prevent path disclosure of host directories
-                        skills: cached.skills.map(s => ({ name: s.name, excerpt: s.excerpt, source: s.source })),
+                        skills: cached.skills.map((s) => ({
+                            name: s.name,
+                            excerpt: s.excerpt,
+                            source: s.source,
+                        })),
                         count: cached.skills.length,
                     },
                 }
@@ -396,7 +405,7 @@ export const skillsResource: InternalResourceDef = {
 
             cachedSkillsMap.set(currentDirs, {
                 skills,
-                timestamp: Date.now()
+                timestamp: Date.now(),
             })
 
             // Bounded cache
@@ -409,7 +418,11 @@ export const skillsResource: InternalResourceDef = {
                 data: {
                     configured: true,
                     // Prevent path disclosure of host directories
-                    skills: skills.map(s => ({ name: s.name, excerpt: s.excerpt, source: s.source })),
+                    skills: skills.map((s) => ({
+                        name: s.name,
+                        excerpt: s.excerpt,
+                        source: s.source,
+                    })),
                     count: skills.length,
                 },
             }

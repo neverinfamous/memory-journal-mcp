@@ -55,10 +55,16 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     let author: string
                     if (authCtx?.authenticated) {
                         const claims = authCtx.claims
-                        const email = typeof claims?.['email'] === 'string' ? claims['email'] : undefined
-                        const prefName = typeof claims?.['preferred_username'] === 'string' ? claims['preferred_username'] : undefined
-                        const subject = typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
-                        const authId = claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
+                        const email =
+                            typeof claims?.['email'] === 'string' ? claims['email'] : undefined
+                        const prefName =
+                            typeof claims?.['preferred_username'] === 'string'
+                                ? claims['preferred_username']
+                                : undefined
+                        const subject =
+                            typeof claims?.['subject'] === 'string' ? claims['subject'] : undefined
+                        const authId =
+                            claims?.sub ?? email ?? prefName ?? subject ?? resolveAuthor()
 
                         if (input.author !== undefined && input.author !== authId) {
                             return {
@@ -66,7 +72,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                                 error: `Author mismatch: supplied author "${input.author}" does not match authenticated principal "${authId}". Omit the author field to use your identity automatically.`,
                                 code: 'PERMISSION_DENIED',
                                 category: 'auth',
-                                suggestion: 'Omit the author field to use your authenticated identity automatically.',
+                                suggestion:
+                                    'Omit the author field to use your authenticated identity automatically.',
                                 recoverable: false,
                             }
                         }
@@ -76,17 +83,18 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             author = input.author
                         } else {
                             const systemAuthor = resolveAuthor()
-                        if (systemAuthor === 'unknown') {
-                            return {
-                                success: false,
-                                error: 'Identity cannot be resolved securely. In non-OAuth environments, you must set the TEAM_AUTHOR environment variable to claim an identity.',
-                                code: 'PERMISSION_DENIED',
-                                category: 'auth',
-                                suggestion: 'Set the TEAM_AUTHOR environment variable or enable OAuth.',
-                                recoverable: false,
+                            if (systemAuthor === 'unknown') {
+                                return {
+                                    success: false,
+                                    error: 'Identity cannot be resolved securely. In non-OAuth environments, you must set the TEAM_AUTHOR environment variable to claim an identity.',
+                                    code: 'PERMISSION_DENIED',
+                                    category: 'auth',
+                                    suggestion:
+                                        'Set the TEAM_AUTHOR environment variable or enable OAuth.',
+                                    recoverable: false,
+                                }
                             }
-                        }
-                        author = systemAuthor
+                            author = systemAuthor
                         }
                     }
 
@@ -114,8 +122,11 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     })
 
                     teamDb.flushSave()
-                    
-                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) as Record<string, unknown> : undefined;
+
+                    const parsedFlagMetadata =
+                        entry.entryType === 'flag' && entry.autoContext
+                            ? (JSON.parse(entry.autoContext) as Record<string, unknown>)
+                            : undefined
 
                     return {
                         success: true,
@@ -142,7 +153,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { entry_id, include_relationships, project_number } = TeamGetEntryByIdSchema.parse(params)
+                    const { entry_id, include_relationships, project_number } =
+                        TeamGetEntryByIdSchema.parse(params)
                     const entry = teamDb.getEntryById(entry_id)
 
                     if (!entry || entry.projectNumber !== project_number) {
@@ -151,13 +163,17 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                             error: `Team entry ${String(entry_id)} not found or does not belong to project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and project number, and try again',
+                            suggestion:
+                                'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }
 
                     const author = fetchAuthor(teamDb, entry_id)
-                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) as Record<string, unknown> : undefined;
+                    const parsedFlagMetadata =
+                        entry.entryType === 'flag' && entry.autoContext
+                            ? (JSON.parse(entry.autoContext) as Record<string, unknown>)
+                            : undefined
                     const enrichedEntry = { ...entry, author, flagMetadata: parsedFlagMetadata }
 
                     const result: Record<string, unknown> = {
@@ -207,7 +223,10 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     const enriched = entries.map((e) => ({
                         ...e,
                         author: authorMap.get(e.id) ?? null,
-                        flagMetadata: e.entryType === 'flag' && e.autoContext ? JSON.parse(e.autoContext) as Record<string, unknown> : undefined,
+                        flagMetadata:
+                            e.entryType === 'flag' && e.autoContext
+                                ? (JSON.parse(e.autoContext) as Record<string, unknown>)
+                                : undefined,
                     }))
 
                     return { entries: enriched, count: enriched.length }

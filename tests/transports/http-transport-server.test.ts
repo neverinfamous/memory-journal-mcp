@@ -169,7 +169,9 @@ describe('HttpTransport', () => {
         } as never)
 
         const mockServer = { connect: vi.fn() }
-        await expect(transport.start(mockServer as never, null)).rejects.toThrow(/FATAL.*wildcard CORS/i)
+        await expect(transport.start(mockServer as never, null)).rejects.toThrow(
+            /FATAL.*wildcard CORS/i
+        )
     })
 
     it('should warn when no auth token configured', async () => {

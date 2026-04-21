@@ -51,7 +51,7 @@ export async function resolveGitHubRepo(
         if (!/^[a-zA-Z0-9_.-]+(\/[a-zA-Z0-9_.-]+)?$/.test(targetRepo)) {
             return {
                 data: { error: 'Invalid repository name format' },
-                annotations: { lastModified }
+                annotations: { lastModified },
             }
         }
         const registry = config?.projectRegistry
@@ -63,7 +63,7 @@ export async function resolveGitHubRepo(
         } else {
             return {
                 data: { error: `Repository not found in registry: ${targetRepo}` },
-                annotations: { lastModified }
+                annotations: { lastModified },
             }
         }
     }

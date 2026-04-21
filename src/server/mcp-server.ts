@@ -21,10 +21,7 @@ import {
     getEnabledGroups,
     type ToolFilterConfig,
 } from '../filtering/tool-filter.js'
-import {
-    getTools,
-    callTool,
-} from '../handlers/tools/index.js'
+import { getTools, callTool } from '../handlers/tools/index.js'
 import { getRequiredScope } from '../auth/scope-map.js'
 import { getResources, readResource } from '../handlers/resources/index.js'
 import { getPrompts } from '../handlers/prompts/index.js'
@@ -93,7 +90,6 @@ export interface ServerOptions {
 export async function createServer(options: ServerOptions): Promise<void> {
     const { transport, dbPath, teamDbPath, toolFilter, defaultProjectNumber } = options
 
-
     // Initialize database
     const db = await DatabaseAdapterFactory.create(dbPath)
     await db.initialize()
@@ -125,7 +121,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     // Initialize vector search manager (lazy loading - model loads on first use)
     const vectorManager = new VectorSearchManager(db)
-    
+
     // Initialize team vector search manager if team DB is configured
     let teamVectorManager: VectorSearchManager | undefined
     if (teamDb) {
@@ -136,7 +132,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
     // Auto-rebuild vector index if enabled (non-blocking)
     if (options.autoRebuildIndex) {
         logger.info('Auto-rebuilding vector index in background...', { module: 'McpServer' })
-        vectorManager.initialize()
+        vectorManager
+            .initialize()
             .then(async () => {
                 const { indexed: count } = await vectorManager.rebuildIndex(db)
                 logger.info('Vector index rebuilt in background', {
@@ -145,23 +142,37 @@ export async function createServer(options: ServerOptions): Promise<void> {
                 })
             })
             .catch((err: unknown) => {
-                logger.error('Background vector init/rebuild failed', { module: 'McpServer', error: err })
+                logger.error('Background vector init/rebuild failed', {
+                    module: 'McpServer',
+                    error: err,
+                })
             })
-        
+
         if (teamVectorManager) {
             teamVectorManager.initialize().catch((err: unknown) => {
-                logger.error('Background team vector init failed', { module: 'McpServer', error: err })
+                logger.error('Background team vector init failed', {
+                    module: 'McpServer',
+                    error: err,
+                })
             })
-            logger.info('Team vector search manager eager initialization started in background', { module: 'McpServer' })
+            logger.info('Team vector search manager eager initialization started in background', {
+                module: 'McpServer',
+            })
         }
     } else {
         // Otherwise, eager-load the model in the background so the first request isn't blocked
-        logger.info('Vector search manager eager initialization started in background', { module: 'McpServer' })
-        vectorManager.initialize()
+        logger.info('Vector search manager eager initialization started in background', {
+            module: 'McpServer',
+        })
+        vectorManager
+            .initialize()
             .then(async () => {
                 // Initialize team vector sequentially to avoid concurrent ONNX model loading crashes
                 if (teamVectorManager) {
-                    logger.info('Team vector search manager eager initialization started in background', { module: 'McpServer' })
+                    logger.info(
+                        'Team vector search manager eager initialization started in background',
+                        { module: 'McpServer' }
+                    )
                     await teamVectorManager.initialize()
                 }
             })
@@ -194,7 +205,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         logger.warning('Failed to pre-populate GitHub repository cache', {
             module: 'McpServer',
             path: githubPath,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
         })
     }
 
@@ -258,9 +269,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
             throw new Error(errorMsg)
         }
         allowedIoRoots = [] // Empty array means NO filesystem access
-        logger.warning('⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.', {
-            module: 'McpServer'
-        })
+        logger.warning(
+            '⚠️ SECURITY WARNING: ALLOWED_IO_ROOTS not explicitly provided. Defaulting to empty array (NO filesystem access). You MUST specify --allowed-io-roots (or ALLOWED_IO_ROOTS env var) to enable filesystem tools.',
+            {
+                module: 'McpServer',
+            }
+        )
     }
 
     logger.info('IO sandbox configured', {
@@ -280,10 +294,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
         runtime,
     }
 
-    const dispatch = (
-        name: string,
-        args: Record<string, unknown>
-    ): Promise<unknown> =>
+    const dispatch = (name: string, args: Record<string, unknown>): Promise<unknown> =>
         callTool(
             name,
             args,
@@ -330,7 +341,7 @@ export async function createServer(options: ServerOptions): Promise<void> {
 
     const createServerInstance = (): McpServer => {
         // Generate dynamic instructions based on enabled tools and prompts
-        // (Latest DB entry is omitted here to decouple session setup from DB latency; 
+        // (Latest DB entry is omitted here to decouple session setup from DB latency;
         // agents get this context from the mandatory memory://briefing read instead).
         const instructions = generateInstructions(
             enabledToolSet,
@@ -342,258 +353,256 @@ export async function createServer(options: ServerOptions): Promise<void> {
             options.instructionLevel ?? 'standard',
             enabledGroups
         )
-        
+
         // Create MCP server with capabilities and instructions
         const server = new McpServer(
-                {
-                    name: 'memory-journal-mcp',
-                    version: VERSION,
+            {
+                name: 'memory-journal-mcp',
+                version: VERSION,
+            },
+            {
+                capabilities: {
+                    logging: {},
                 },
-                {
-                    capabilities: {
-                        logging: {},
-                    },
-                    instructions,
-                }
-            )
-        
-            for (const tool of staticTools) {
-                // Build tool options matching MCP SDK expectations
-                const toolOptions: {
-                    description?: string
+                instructions,
+            }
+        )
+
+        for (const tool of staticTools) {
+            // Build tool options matching MCP SDK expectations
+            const toolOptions: {
+                description?: string
+                title?: string
+                inputSchema?: z.ZodType
+                outputSchema?: z.ZodType
+                annotations?: {
                     title?: string
-                    inputSchema?: z.ZodType
-                    outputSchema?: z.ZodType
-                    annotations?: {
-                        title?: string
-                        readOnlyHint?: boolean
-                        destructiveHint?: boolean
-                        idempotentHint?: boolean
-                        openWorldHint?: boolean
-                    }
-                    icons?: unknown
-                } = {
-                    description: tool.description,
+                    readOnlyHint?: boolean
+                    destructiveHint?: boolean
+                    idempotentHint?: boolean
+                    openWorldHint?: boolean
                 }
-        
-                // MCP 2025-11-25: Pass title for human-readable display
-                if (tool.title) {
-                    toolOptions.title = tool.title
-                }
-        
-                if (tool.inputSchema !== undefined) {
-                    const schema = tool.inputSchema
-                    if (
-                        typeof schema === 'object' &&
-                        schema !== null &&
-                        'partial' in schema &&
-                        typeof (schema).partial === 'function'
-                    ) {
-                        // DOCUMENTATION (P3 #8): Two-Schema Pattern
-                        // We use a strict `inputSchema` for tool definitions so LLMs see exactly what is required.
-                        // However, the MCP SDK strictly validates incoming JSON against this schema before reaching our handlers.
-                        // By using `.partial().passthrough()` here, we relax the schema for the SDK, allowing our
-                        // own handler logic to perform the strict validation, sanitize data, and return structured error
-                        // messages instead of the SDK crashing or returning opaque generic errors.
-                        // 
-                        // .partial() makes all fields optional so the SDK accepts `{}`.
-                        // .passthrough() preserves unrecognized keys so handler can normalize.
-                        // Wrapped in try/catch: if partial() returns something without passthrough()
-                        // (non-ZodObject wrapper), fall back to the original schema to avoid
-                        // a startup throw.
-                        try {
-                            const relaxed = (
-                                schema as { partial: () => { passthrough?: () => z.ZodType } }
-                            ).partial()
-                            toolOptions.inputSchema =
-                                (typeof relaxed.passthrough === 'function' ? relaxed.passthrough() : schema) as unknown as z.ZodType
-                        } catch {
-                            toolOptions.inputSchema = schema as unknown as z.ZodType
-                        }
-                    } else {
-                        toolOptions.inputSchema = schema as unknown as z.ZodType
-                    }
-                }
-        
-                // MCP 2025-11-25: Pass outputSchema for structured responses
-                if (tool.outputSchema !== undefined) {
-                    const outSchema = tool.outputSchema
-                    if (
-                        typeof outSchema === 'object' &&
-                        outSchema !== null &&
-                        'passthrough' in outSchema &&
-                        typeof (outSchema).passthrough === 'function'
-                    ) {
-                        try {
-                            toolOptions.outputSchema = (
-                                outSchema as { passthrough: () => z.ZodType }
-                            ).passthrough()
-                        } catch {
-                            toolOptions.outputSchema = outSchema as unknown as z.ZodType
-                        }
-                    } else {
-                        toolOptions.outputSchema = outSchema as unknown as z.ZodType
-                    }
-                }
-        
-                if (tool.annotations !== undefined) {
-                    toolOptions.annotations = tool.annotations
-                }
-        
-                // MCP 2025-11-25: Pass icons for visual representation
-                if (tool.icons) {
-                    toolOptions.icons = tool.icons
-                }
-        
-                // Capture whether this tool has outputSchema for response handling
-                const hasOutputSchema = Boolean(tool.outputSchema)
-        
-                server.registerTool(
-                    tool.name,
-                    toolOptions,
-                    async (args, extra) => {
-                        try {
-                            // Build progress context for progress notifications
-                            // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
-                            const extraMeta = extra as { _meta?: { progressToken?: string | number } }
-                            const progressToken = extraMeta?._meta?.progressToken
-                            const progressContext =
-                                progressToken !== undefined
-                                    ? { server: server.server, progressToken }
-                                    : undefined
-        
-                            const result = await callTool(
-                                tool.name,
-                                args as Record<string, unknown>,
-                                db,
-                                vectorManager,
-                                github,
-                                customToolHandlerConfig,
-                                progressContext,
-                                teamDb,
-                                teamVectorManager
-                            )
-        
-                            // MCP 2025-11-25: If tool has outputSchema, return both:
-                            // - structuredContent: validated JSON for clients that support it
-                            // - content: compact text fallback (~15-20% payload reduction per §3.1)
-                            if (hasOutputSchema) {
-                                // Protocol Optimization: Return structured objects natively without redundant text stringification.
-                                // Emits a lightweight marker for clients that don't support structuredContent.
-                                return {
-                                    content: [
-                                        {
-                                            type: 'text' as const,
-                                            text: '[Structured output attached]',
-                                        },
-                                    ],
-                                    structuredContent: result as Record<string, unknown>,
-                                }
-                            }
-        
-                            // Otherwise, return text content
-                            return {
-                                content: [
-                                    {
-                                        type: 'text' as const,
-                                        text:
-                                            typeof result === 'string'
-                                                ? result
-                                                : JSON.stringify(result, null, 2),
-                                    },
-                                ],
-                            }
-                        } catch (error) {
-                            let errorResult: Record<string, unknown>
-                            if (error instanceof Error && 'toResponse' in error && typeof (error as { toResponse?: unknown }).toResponse === 'function') {
-                                errorResult = (error as { toResponse: () => Record<string, unknown> }).toResponse()
-                            } else {
-                                const errorMessage = error instanceof Error ? error.message : String(error)
-                                errorResult = {
-                                    success: false,
-                                    error: errorMessage,
-                                    code: 'INTERNAL_ERROR',
-                                    category: 'internal',
-                                    recoverable: false,
-                                }
-                            }
-                            return {
-                                content: [
-                                    {
-                                        type: 'text' as const,
-                                        text: JSON.stringify(errorResult, null, 2),
-                                    },
-                                ],
-                                ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
-                                isError: true,
-                            }
-                        }
-                    }
-                )
+                icons?: unknown
+            } = {
+                description: tool.description,
             }
 
-        // Resource read handler shared by template and static branches (D2 fix)
-            const handleResourceRead = async (
-                uri: URL,
-                mimeType: string
-            ): Promise<{
-                contents: {
-                    uri: string
-                    mimeType: string
-                    text: string
-                    annotations?: Record<string, unknown>
-                }[]
-            }> => {
-                const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
-                    ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
-                    // Ensure defaultProjectNumber is available to resource handlers
-                    // (may come via briefingConfig from CLI, or directly from server options)
-                    defaultProjectNumber:
-                        options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
-                    projectRegistry: options.projectRegistry,
-                    flagVocabulary: options.flagVocabulary,
-                    allowedIoRoots: allowedIoRoots,
-                }
-                const result = await readResource(
-                    uri.href,
-                    db,
-                    vectorManager,
-                    filterConfig,
-                    github,
-                    scheduler,
-                    teamDb,
-                    activeBriefingConfig,
-                    runtime
-                )
-                const dataStr =
-                    typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
-                return {
-                    contents: [
-                        {
-                            uri: uri.href,
-                            mimeType,
-                            text: dataStr,
-                            ...(result.annotations ? { annotations: result.annotations } : {}),
-                        },
-                    ],
+            // MCP 2025-11-25: Pass title for human-readable display
+            if (tool.title) {
+                toolOptions.title = tool.title
+            }
+
+            if (tool.inputSchema !== undefined) {
+                const schema = tool.inputSchema
+                if (
+                    typeof schema === 'object' &&
+                    schema !== null &&
+                    'partial' in schema &&
+                    typeof schema.partial === 'function'
+                ) {
+                    // DOCUMENTATION (P3 #8): Two-Schema Pattern
+                    // We use a strict `inputSchema` for tool definitions so LLMs see exactly what is required.
+                    // However, the MCP SDK strictly validates incoming JSON against this schema before reaching our handlers.
+                    // By using `.partial().passthrough()` here, we relax the schema for the SDK, allowing our
+                    // own handler logic to perform the strict validation, sanitize data, and return structured error
+                    // messages instead of the SDK crashing or returning opaque generic errors.
+                    //
+                    // .partial() makes all fields optional so the SDK accepts `{}`.
+                    // .passthrough() preserves unrecognized keys so handler can normalize.
+                    // Wrapped in try/catch: if partial() returns something without passthrough()
+                    // (non-ZodObject wrapper), fall back to the original schema to avoid
+                    // a startup throw.
+                    try {
+                        const relaxed = (
+                            schema as { partial: () => { passthrough?: () => z.ZodType } }
+                        ).partial()
+                        toolOptions.inputSchema = (typeof relaxed.passthrough === 'function'
+                            ? relaxed.passthrough()
+                            : schema) as unknown as z.ZodType
+                    } catch {
+                        toolOptions.inputSchema = schema as unknown as z.ZodType
+                    }
+                } else {
+                    toolOptions.inputSchema = schema as unknown as z.ZodType
                 }
             }
-        
-            // Register resources (reusing resources from instruction generation)
-            registerResources(
-                server,
-                resources as ResourceDefinition[],
-                handleResourceRead,
+
+            // MCP 2025-11-25: Pass outputSchema for structured responses
+            if (tool.outputSchema !== undefined) {
+                const outSchema = tool.outputSchema
+                if (
+                    typeof outSchema === 'object' &&
+                    outSchema !== null &&
+                    'passthrough' in outSchema &&
+                    typeof outSchema.passthrough === 'function'
+                ) {
+                    try {
+                        toolOptions.outputSchema = (
+                            outSchema as { passthrough: () => z.ZodType }
+                        ).passthrough()
+                    } catch {
+                        toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                    }
+                } else {
+                    toolOptions.outputSchema = outSchema as unknown as z.ZodType
+                }
+            }
+
+            if (tool.annotations !== undefined) {
+                toolOptions.annotations = tool.annotations
+            }
+
+            // MCP 2025-11-25: Pass icons for visual representation
+            if (tool.icons) {
+                toolOptions.icons = tool.icons
+            }
+
+            // Capture whether this tool has outputSchema for response handling
+            const hasOutputSchema = Boolean(tool.outputSchema)
+
+            server.registerTool(tool.name, toolOptions, async (args, extra) => {
+                try {
+                    // Build progress context for progress notifications
+                    // Extract progressToken from extra._meta (SDK passes RequestHandlerExtra)
+                    const extraMeta = extra as { _meta?: { progressToken?: string | number } }
+                    const progressToken = extraMeta?._meta?.progressToken
+                    const progressContext =
+                        progressToken !== undefined
+                            ? { server: server.server, progressToken }
+                            : undefined
+
+                    const result = await callTool(
+                        tool.name,
+                        args as Record<string, unknown>,
+                        db,
+                        vectorManager,
+                        github,
+                        customToolHandlerConfig,
+                        progressContext,
+                        teamDb,
+                        teamVectorManager
+                    )
+
+                    // MCP 2025-11-25: If tool has outputSchema, return both:
+                    // - structuredContent: validated JSON for clients that support it
+                    // - content: compact text fallback (~15-20% payload reduction per §3.1)
+                    if (hasOutputSchema) {
+                        // Protocol Optimization: Return structured objects natively without redundant text stringification.
+                        // Emits a lightweight marker for clients that don't support structuredContent.
+                        return {
+                            content: [
+                                {
+                                    type: 'text' as const,
+                                    text: '[Structured output attached]',
+                                },
+                            ],
+                            structuredContent: result as Record<string, unknown>,
+                        }
+                    }
+
+                    // Otherwise, return text content
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text:
+                                    typeof result === 'string'
+                                        ? result
+                                        : JSON.stringify(result, null, 2),
+                            },
+                        ],
+                    }
+                } catch (error) {
+                    let errorResult: Record<string, unknown>
+                    if (
+                        error instanceof Error &&
+                        'toResponse' in error &&
+                        typeof (error as { toResponse?: unknown }).toResponse === 'function'
+                    ) {
+                        errorResult = (
+                            error as { toResponse: () => Record<string, unknown> }
+                        ).toResponse()
+                    } else {
+                        const errorMessage = error instanceof Error ? error.message : String(error)
+                        errorResult = {
+                            success: false,
+                            error: errorMessage,
+                            code: 'INTERNAL_ERROR',
+                            category: 'internal',
+                            recoverable: false,
+                        }
+                    }
+                    return {
+                        content: [
+                            {
+                                type: 'text' as const,
+                                text: JSON.stringify(errorResult, null, 2),
+                            },
+                        ],
+                        ...(hasOutputSchema ? { structuredContent: errorResult } : {}),
+                        isError: true,
+                    }
+                }
+            })
+        }
+
+        // Resource read handler shared by template and static branches (D2 fix)
+        const handleResourceRead = async (
+            uri: URL,
+            mimeType: string
+        ): Promise<{
+            contents: {
+                uri: string
+                mimeType: string
+                text: string
+                annotations?: Record<string, unknown>
+            }[]
+        }> => {
+            const activeBriefingConfig: typeof DEFAULT_BRIEFING_CONFIG = {
+                ...(options.briefingConfig ?? DEFAULT_BRIEFING_CONFIG),
+                // Ensure defaultProjectNumber is available to resource handlers
+                // (may come via briefingConfig from CLI, or directly from server options)
+                defaultProjectNumber:
+                    options.briefingConfig?.defaultProjectNumber ?? defaultProjectNumber,
+                projectRegistry: options.projectRegistry,
+                flagVocabulary: options.flagVocabulary,
+                allowedIoRoots: allowedIoRoots,
+            }
+            const result = await readResource(
+                uri.href,
+                db,
+                vectorManager,
+                filterConfig,
+                github,
+                scheduler,
+                teamDb,
+                activeBriefingConfig,
                 runtime
             )
-        
-            // Register prompts (reusing prompts from instruction generation)
-            registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
+            const dataStr =
+                typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2)
+            return {
+                contents: [
+                    {
+                        uri: uri.href,
+                        mimeType,
+                        text: dataStr,
+                        ...(result.annotations ? { annotations: result.annotations } : {}),
+                    },
+                ],
+            }
+        }
+
+        // Register resources (reusing resources from instruction generation)
+        registerResources(server, resources as ResourceDefinition[], handleResourceRead, runtime)
+
+        // Register prompts (reusing prompts from instruction generation)
+        registerPrompts(server, prompts as PromptDefinition[], db, teamDb, runtime)
 
         return server
     }
 
-        // Start server based on transport
+    // Start server based on transport
     if (transport === 'stdio') {
         const stdioTransport = new StdioServerTransport()
         const server = createServerInstance()
@@ -616,7 +625,8 @@ export async function createServer(options: ServerOptions): Promise<void> {
         const port = options.port ?? 3000
         const host = options.host ?? 'localhost'
         const corsRaw = process.env['MCP_CORS_ORIGIN']
-        const corsOrigins = options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()) : [])
+        const corsOrigins =
+            options.corsOrigins ?? (corsRaw ? corsRaw.split(',').map((s) => s.trim()) : [])
         const authToken = options.authToken ?? process.env['MCP_AUTH_TOKEN'] ?? undefined
 
         const httpTransport = new HttpTransport({

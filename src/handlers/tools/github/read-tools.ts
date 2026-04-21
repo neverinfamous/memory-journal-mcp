@@ -20,7 +20,6 @@ import { resolveOwnerRepo } from './helpers.js'
 import type { GitHubIntegration } from '../../../github/github-integration/index.js'
 import { markUntrustedContent } from '../../../utils/security-utils.js'
 
-
 // ============================================================================
 // Tool Definitions
 // ============================================================================
@@ -217,14 +216,19 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     const truncateBody = input.truncate_body
                     let bodyTruncated = false
                     let bodyFullLength: number | undefined
-                    if (truncateBody > 0 && safeIssue.body && safeIssue.body.length > truncateBody) {
+                    if (
+                        truncateBody > 0 &&
+                        safeIssue.body &&
+                        safeIssue.body.length > truncateBody
+                    ) {
                         bodyFullLength = safeIssue.body.length
-                        safeIssue.body = safeIssue.body.slice(0, truncateBody) + `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
+                        safeIssue.body =
+                            safeIssue.body.slice(0, truncateBody) +
+                            `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
                         bodyTruncated = true
                     }
-                    
-                    safeIssue.body = markUntrustedContent(safeIssue.body)
 
+                    safeIssue.body = markUntrustedContent(safeIssue.body)
 
                     // Fetch comments if requested
                     let comments: { author: string; body: string; createdAt: string }[] | undefined
@@ -313,18 +317,15 @@ export function getGitHubReadTools(context: ToolContext): ToolDefinition[] {
                     const truncateBody = input.truncate_body
                     let bodyTruncated = false
                     let bodyFullLength: number | undefined
-                    if (
-                        truncateBody > 0 &&
-                        safePr.body &&
-                        safePr.body.length > truncateBody
-                    ) {
+                    if (truncateBody > 0 && safePr.body && safePr.body.length > truncateBody) {
                         bodyFullLength = safePr.body.length
-                        safePr.body = safePr.body.slice(0, truncateBody) + `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
+                        safePr.body =
+                            safePr.body.slice(0, truncateBody) +
+                            `\n\n[Truncated... remaining ${bodyFullLength - truncateBody} chars]`
                         bodyTruncated = true
                     }
-                    
-                    safePr.body = markUntrustedContent(safePr.body)
 
+                    safePr.body = markUntrustedContent(safePr.body)
 
                     return {
                         pullRequest: {

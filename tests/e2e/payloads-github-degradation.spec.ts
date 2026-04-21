@@ -49,14 +49,14 @@ test.describe('Payload Contracts: GitHub Config Degradation', () => {
     })
 
     test('get_github_issues returns requiresUserInput: true without auto-detect env', async () => {
-        const payload = await callToolAndParse(client, 'get_github_issues', {}) as any
+        const payload = (await callToolAndParse(client, 'get_github_issues', {})) as any
 
         expect(typeof payload).toBe('object')
         expect(payload.requiresUserInput).toBe(true)
     })
 
     test('get_github_context degrades gracefully to returning missing state', async () => {
-        const payload = await callToolAndParse(client, 'get_github_context', {}) as any
+        const payload = (await callToolAndParse(client, 'get_github_context', {})) as any
 
         expect(payload.repoName).toBeNull()
         expect(payload.issueCount).toBe(0)

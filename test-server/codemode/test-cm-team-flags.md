@@ -73,27 +73,27 @@ const result = {
   autoCtxTarget: flagMeta?.target_user,
   autoCtxLink: flagMeta?.link,
   autoCtxResolved: flagMeta?.resolved,
-};
-return result;
+}
+return result
 ```
 
-| Check             | Expected                                |
-| ----------------- | --------------------------------------- |
-| `blockerSuccess`  | `true`                                  |
-| `blockerFlagType` | `"blocker"`                             |
-| `blockerTarget`   | `"sarah"` (@ prefix stripped)           |
-| `blockerResolved` | `false`                                 |
-| `blockerHasAuthor`| `true`                                  |
-| `fyiSuccess`      | `true`                                  |
-| `reviewSuccess`   | `true`                                  |
-| `helpSuccess`     | `true`                                  |
-| `entryType`       | `"flag"`                                |
-| `hasTags`         | `true`                                  |
-| `hasTargetTag`    | `true`                                  |
-| `autoCtxFlagType` | `"blocker"`                             |
-| `autoCtxTarget`   | `"sarah"`                               |
-| `autoCtxLink`     | `"src/database/migrations/005.ts"`      |
-| `autoCtxResolved` | `false`                                 |
+| Check              | Expected                           |
+| ------------------ | ---------------------------------- |
+| `blockerSuccess`   | `true`                             |
+| `blockerFlagType`  | `"blocker"`                        |
+| `blockerTarget`    | `"sarah"` (@ prefix stripped)      |
+| `blockerResolved`  | `false`                            |
+| `blockerHasAuthor` | `true`                             |
+| `fyiSuccess`       | `true`                             |
+| `reviewSuccess`    | `true`                             |
+| `helpSuccess`      | `true`                             |
+| `entryType`        | `"flag"`                           |
+| `hasTags`          | `true`                             |
+| `hasTargetTag`     | `true`                             |
+| `autoCtxFlagType`  | `"blocker"`                        |
+| `autoCtxTarget`    | `"sarah"`                          |
+| `autoCtxLink`      | `"src/database/migrations/005.ts"` |
+| `autoCtxResolved`  | `false`                            |
 
 ### 28.13 Vocabulary Validation & Error Paths
 
@@ -136,22 +136,22 @@ const result = {
   resolveGhostCode: resolveGhost.code,
   resolveEmptyError: resolveEmpty.success === false,
   resolveWrongTypeError: resolveWrongType.success === false || resolveWrongType.skipped === true,
-};
-return result;
+}
+return result
 ```
 
-| Check                  | Expected                                      |
-| ---------------------- | --------------------------------------------- |
-| `badTypeError`         | `true` (invalid vocabulary term)              |
-| `badTypeCode`          | `"VALIDATION_ERROR"`                          |
-| `badTypeHasSuggestion` | `true` (lists valid types)                    |
-| `noTypeError`          | `true` (flag_type required)                   |
-| `noMessageError`       | `true` (message required)                     |
-| `emptyError`           | `true` (both required)                        |
-| `resolveGhostError`    | `true` (entry not found)                      |
-| `resolveGhostCode`     | `"RESOURCE_NOT_FOUND"`                        |
-| `resolveEmptyError`    | `true` (flag_id required)                     |
-| `resolveWrongTypeError`| `true` (entry is not a flag)                  |
+| Check                   | Expected                         |
+| ----------------------- | -------------------------------- |
+| `badTypeError`          | `true` (invalid vocabulary term) |
+| `badTypeCode`           | `"VALIDATION_ERROR"`             |
+| `badTypeHasSuggestion`  | `true` (lists valid types)       |
+| `noTypeError`           | `true` (flag_type required)      |
+| `noMessageError`        | `true` (message required)        |
+| `emptyError`            | `true` (both required)           |
+| `resolveGhostError`     | `true` (entry not found)         |
+| `resolveGhostCode`      | `"RESOURCE_NOT_FOUND"`           |
+| `resolveEmptyError`     | `true` (flag_id required)        |
+| `resolveWrongTypeError` | `true` (entry is not a flag)     |
 
 ### 28.14 Flag Resolution Lifecycle
 
@@ -202,8 +202,8 @@ const result = {
   reResolveOriginal: reResolved.resolution === 'Fixed by migration hotfix',
   bareResolveSuccess: bareResolved.success,
   bareResolveNoComment: bareResolved.resolution === null,
-};
-return result;
+}
+return result
 ```
 
 | Check                  | Expected                              |
@@ -265,16 +265,16 @@ const result = {
   typeSearchAllFlags: typeSearch.entries?.every((e) => e.entryType === 'flag') ?? true,
   cleanedUp: deleted,
   cleanedAll: deleted === uniqueIds.length,
-};
-return result;
+}
+return result
 ```
 
-| Check               | Expected                         |
-| ------------------- | -------------------------------- |
-| `tagSearchCount`    | ≥ 1                              |
-| `typeSearchCount`   | ≥ 1                              |
-| `typeSearchAllFlags`| `true` (filter enforced)         |
-| `cleanedAll`        | `true` (all test entries deleted)|
+| Check                | Expected                          |
+| -------------------- | --------------------------------- |
+| `tagSearchCount`     | ≥ 1                               |
+| `typeSearchCount`    | ≥ 1                               |
+| `typeSearchAllFlags` | `true` (filter enforced)          |
+| `cleanedAll`         | `true` (all test entries deleted) |
 
 ---
 

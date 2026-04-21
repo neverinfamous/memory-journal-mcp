@@ -62,7 +62,11 @@ describe('GitHubClient — branch coverage', () => {
         })
 
         it('should delete expired entries and return undefined', () => {
-            client.apiCache.set('expired', { data: 'old', timestamp: Date.now() - 10 * 60 * 1000, sizeBytes: 9 })
+            client.apiCache.set('expired', {
+                data: 'old',
+                timestamp: Date.now() - 10 * 60 * 1000,
+                sizeBytes: 9,
+            })
             expect(client.getCached('expired')).toBeUndefined()
             expect(client.apiCache.has('expired')).toBe(false)
         })
@@ -75,7 +79,11 @@ describe('GitHubClient — branch coverage', () => {
         })
 
         it('should return undefined for expired entry with custom TTL', () => {
-            client.apiCache.set('old-ttl', { data: 'stale', timestamp: Date.now() - 120_000, sizeBytes: 10 })
+            client.apiCache.set('old-ttl', {
+                data: 'stale',
+                timestamp: Date.now() - 120_000,
+                sizeBytes: 10,
+            })
             expect(client.getCachedWithTtl('old-ttl', 60_000)).toBeUndefined()
             expect(client.apiCache.has('old-ttl')).toBe(false)
         })
@@ -412,13 +420,17 @@ describe('Error helpers — branch coverage', () => {
         it('should handle plain Error', () => {
             const result = formatHandlerError(new Error('oops'))
             expect(result.success).toBe(false)
-            expect(result.error).toBe('An internal error occurred during tool execution. Please check the server logs for more details.')
+            expect(result.error).toBe(
+                'An internal error occurred during tool execution. Please check the server logs for more details.'
+            )
             expect(result.code).toBe('INTERNAL_ERROR')
         })
 
         it('should handle non-Error throw (string)', () => {
             const result = formatHandlerError('string error')
-            expect(result.error).toBe('An internal error occurred during tool execution. Please check the server logs for more details.')
+            expect(result.error).toBe(
+                'An internal error occurred during tool execution. Please check the server logs for more details.'
+            )
             expect(result.code).toBe('INTERNAL_ERROR')
         })
     })

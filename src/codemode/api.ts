@@ -233,7 +233,11 @@ export class JournalApi {
         // Create group-specific APIs for all 9 groups
         this.core = createGroupApi('core', this.toolsByGroup.get('core') ?? [], dispatcher)
         this.search = createGroupApi('search', this.toolsByGroup.get('search') ?? [], dispatcher)
-        this.analytics = createGroupApi('analytics', this.toolsByGroup.get('analytics') ?? [], dispatcher)
+        this.analytics = createGroupApi(
+            'analytics',
+            this.toolsByGroup.get('analytics') ?? [],
+            dispatcher
+        )
         this.relationships = createGroupApi(
             'relationships',
             this.toolsByGroup.get('relationships') ?? [],

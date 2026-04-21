@@ -123,12 +123,16 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
     })
 
     test('should read memory://github/milestones', async () => {
-        await expect(client.readResource({ uri: 'memory://github/milestones' })).rejects.toThrow('GitHub API not available')
+        await expect(client.readResource({ uri: 'memory://github/milestones' })).rejects.toThrow(
+            'GitHub API not available'
+        )
     })
 
     // --- Graph resources ---
     test('should read memory://graph/actions', async () => {
-        await expect(client.readResource({ uri: 'memory://graph/actions' })).rejects.toThrow('GitHub API not available')
+        await expect(client.readResource({ uri: 'memory://graph/actions' })).rejects.toThrow(
+            'GitHub API not available'
+        )
     })
 
     test('should read memory://actions/recent', async () => {
@@ -140,5 +144,4 @@ test.describe('E2E Resource Reads: Complete Coverage', () => {
         const text = (response.contents[0] as { text: string }).text
         expect(typeof text).toBe('string')
     })
-
 })

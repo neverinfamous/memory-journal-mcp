@@ -34,8 +34,8 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const input = TeamBackupSchema.parse(params)
-                    
-                    let result;
+
+                    let result
                     try {
                         result = await teamDb.exportToFile(input.name)
                     } catch (exportErr) {
@@ -44,7 +44,8 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                             error: `Backup failed: ${exportErr instanceof Error ? exportErr.message : String(exportErr)}`,
                             code: 'BACKUP_FAILED',
                             category: 'system',
-                            suggestion: 'Check file system permissions, available disk space, and ensure the backup directory is writable.',
+                            suggestion:
+                                'Check file system permissions, available disk space, and ensure the backup directory is writable.',
                             recoverable: false,
                         }
                     }
@@ -77,7 +78,10 @@ export function getTeamBackupTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const backups = teamDb.listBackups()
-                    const maskedBackups = backups.map(b => ({ ...b, path: path.basename(b.path) }))
+                    const maskedBackups = backups.map((b) => ({
+                        ...b,
+                        path: path.basename(b.path),
+                    }))
 
                     return {
                         success: true,

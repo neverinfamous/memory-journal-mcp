@@ -84,7 +84,9 @@ const VALID_ENTRY_TYPES = new Set<string>([
 function toEntryType(value: string | undefined): EntryType | undefined {
     if (value === undefined) return undefined
     if (!VALID_ENTRY_TYPES.has(value)) {
-        throw new Error(`Invalid entry type: ${value}. Must be one of: ${Array.from(VALID_ENTRY_TYPES).join(', ')}`)
+        throw new Error(
+            `Invalid entry type: ${value}. Must be one of: ${Array.from(VALID_ENTRY_TYPES).join(', ')}`
+        )
     }
     return value as EntryType
 }
@@ -120,7 +122,7 @@ export async function importMarkdownEntries(
     allowedRoots: string[]
 ): Promise<ImportResult> {
     const { dry_run = false, limit = 100, author, project_number } = options
-    
+
     // Dynamically enforce bounded root
     assertSafeDirectoryPath(sourceDir, allowedRoots)
 
@@ -160,7 +162,7 @@ export async function importMarkdownEntries(
     const parsedFiles: ParsedFile[] = []
 
     for (const filename of mdFiles) {
-        let handle;
+        let handle
         try {
             const filepath = join(sourceDir, filename)
 
@@ -171,9 +173,14 @@ export async function importMarkdownEntries(
             try {
                 handle = await open(filepath, constants.O_RDONLY | constants.O_NOFOLLOW)
             } catch (err: unknown) {
-                const code = err instanceof Error && 'code' in err ? (err as {code?: string}).code : undefined;
+                const code =
+                    err instanceof Error && 'code' in err
+                        ? (err as { code?: string }).code
+                        : undefined
                 if (code === 'ELOOP') {
-                    throw new Error(`Refusing to read symlink during import: ${filename}`, { cause: err })
+                    throw new Error(`Refusing to read symlink during import: ${filename}`, {
+                        cause: err,
+                    })
                 }
                 throw err
             }
@@ -195,10 +202,10 @@ export async function importMarkdownEntries(
                 continue
             }
 
-            parsedFiles.push({ 
-                filename, 
-                body, 
-                metadata: metadata
+            parsedFiles.push({
+                filename,
+                body,
+                metadata: metadata,
             })
         } catch (err) {
             result.errors.push({
@@ -214,12 +221,11 @@ export async function importMarkdownEntries(
     }
 
     // Phase 2: Perform DB operations in a transaction
-    const vectorQueue: { entryId: number, body: string, filename: string }[] = []
+    const vectorQueue: { entryId: number; body: string; filename: string }[] = []
 
     db.executeInTransaction(() => {
         for (const file of parsedFiles) {
             const { filename, body, metadata } = file
-
 
             if (dry_run) {
                 // In dry-run mode, just classify what would happen
@@ -326,7 +332,7 @@ export async function importMarkdownEntries(
                 })
             }
         }
-        
+
         // If vector indexing fails, we mark the import as a partial success
         if (hasVectorErrors) {
             result.success = false

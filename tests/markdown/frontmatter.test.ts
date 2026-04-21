@@ -72,8 +72,6 @@ Content`
         expect(body).toBe('Content')
     })
 
-
-
     it('should require the first delimiter to be on line 1 to be treated as frontmatter', () => {
         const markdown = `
 ---
@@ -90,7 +88,9 @@ Body`
         const markdown = `---
 mj_id: 123
 Body without closing delimiter`
-        expect(() => parseFrontmatter(markdown)).toThrow('Invalid frontmatter: Found opening --- fence but no closing --- fence')
+        expect(() => parseFrontmatter(markdown)).toThrow(
+            'Invalid frontmatter: Found opening --- fence but no closing --- fence'
+        )
     })
 
     it('should throw an error if frontmatter fails schema validation', () => {
@@ -102,8 +102,6 @@ Body without closing delimiter`
 Body`
         expect(() => parseFrontmatter(markdown)).toThrow(/Invalid frontmatter.*mj_id/i)
     })
-
-
 })
 
 describe('serializeFrontmatter', () => {

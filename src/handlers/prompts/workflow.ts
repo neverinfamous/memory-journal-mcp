@@ -121,7 +121,12 @@ Format as:
 - Action items
 
 Sources:
-${markUntrustedContent(entries.slice(0, 20).map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 200)}`).join('\n\n'))}`,
+${markUntrustedContent(
+    entries
+        .slice(0, 20)
+        .map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 200)}`)
+        .join('\n\n')
+)}`,
                             },
                         },
                     ],
@@ -185,7 +190,12 @@ Statistics: ${JSON.stringify(stats, null, 2)}
 Provide insights on patterns, productivity, and recommendations.
 
 Sources (${String(entries.length)} total):
-${markUntrustedContent(entries.slice(0, 15).map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 100)}` ).join('\n'))}`,
+${markUntrustedContent(
+    entries
+        .slice(0, 15)
+        .map((e) => `[${e.timestamp}] ${e.entryType}: ${e.content.slice(0, 100)}`)
+        .join('\n')
+)}`,
                             },
                         },
                     ],
@@ -205,9 +215,7 @@ ${markUntrustedContent(entries.slice(0, 15).map((e) => `[${e.timestamp}] ${e.ent
                     type: e.entryType,
                     timestamp: e.timestamp,
                     content: markUntrustedContentInline(
-                        e.content.length > 250
-                            ? e.content.slice(0, 250) + '...'
-                            : e.content
+                        e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
                     ),
                 }))
 

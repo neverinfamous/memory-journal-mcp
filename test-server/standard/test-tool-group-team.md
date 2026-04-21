@@ -17,15 +17,15 @@
 
 ## 1. Structured Error Matrix
 
-| Tool                        | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch    |
-| --------------------------- | ---------------------------------------------------- | --------------------------------- | -------------------- |
-| All Team Tools              | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A                  |
-| `team_create_entry`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`       |
-| `team_update_entry`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"`    |
-| `team_search_by_date_range` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`       |
-| `team_merge_tags`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A                  |
-| `pass_team_flag`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`     |
-| `resolve_team_flag`         | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`     |
+| Tool                        | Domain Error Test                                    | Zod Empty Param (`{}`)            | Zod Type Mismatch |
+| --------------------------- | ---------------------------------------------------- | --------------------------------- | ----------------- |
+| All Team Tools              | Team DB not configured -> Returns `{success: false}` | N/A                               | N/A               |
+| `team_create_entry`         | `entry_type: "invalid"`                              | ⚠️ Should return validation error | `content: 123`    |
+| `team_update_entry`         | `entry_id: 999999`                                   | ⚠️ Should return validation error | `entry_id: "abc"` |
+| `team_search_by_date_range` | `start_date: "Jan 1"`                                | ⚠️ Should return validation error | `limit: "abc"`    |
+| `team_merge_tags`           | `source_tag: "x"; target_tag: "x"`                   | ⚠️ Should return validation error | N/A               |
+| `pass_team_flag`            | `flag_type: "urgent"` (invalid vocab)                | ⚠️ Should return validation error | `flag_type: 123`  |
+| `resolve_team_flag`         | `flag_id: 999999` (not found)                        | ⚠️ Should return validation error | `flag_id: "abc"`  |
 
 ### Specific Domain Checks
 

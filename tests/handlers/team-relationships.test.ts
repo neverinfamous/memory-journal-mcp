@@ -8,14 +8,47 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -45,7 +78,10 @@ describe('Team Relationship Tool Handlers', () => {
         const res1 = (await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Node A', tags: ['node-tag'] },
+                project_number: 1,
+                content: 'Node A',
+                tags: ['node-tag'],
+            },
             personalDb,
             undefined,
             undefined,
@@ -56,7 +92,10 @@ describe('Team Relationship Tool Handlers', () => {
         const res2 = (await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Node B', tags: ['node-tag'] },
+                project_number: 1,
+                content: 'Node B',
+                tags: ['node-tag'],
+            },
             personalDb,
             undefined,
             undefined,
@@ -67,7 +106,9 @@ describe('Team Relationship Tool Handlers', () => {
         const res3 = (await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Node C' },
+                project_number: 1,
+                content: 'Node C',
+            },
             personalDb,
             undefined,
             undefined,
@@ -128,7 +169,12 @@ describe('Team Relationship Tool Handlers', () => {
         it('should detect duplicate relationships', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { project_number: 1, from_entry_id: e1, to_entry_id: e2, relationship_type: 'blocked_by' },
+                {
+                    project_number: 1,
+                    from_entry_id: e1,
+                    to_entry_id: e2,
+                    relationship_type: 'blocked_by',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -145,7 +191,12 @@ describe('Team Relationship Tool Handlers', () => {
         it('should return error if from_entry_id is not found', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { project_number: 1, from_entry_id: 999, to_entry_id: e2, relationship_type: 'references' },
+                {
+                    project_number: 1,
+                    from_entry_id: 999,
+                    to_entry_id: e2,
+                    relationship_type: 'references',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -161,7 +212,12 @@ describe('Team Relationship Tool Handlers', () => {
         it('should return error if to_entry_id is not found', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { project_number: 1, from_entry_id: e1, to_entry_id: 999, relationship_type: 'references' },
+                {
+                    project_number: 1,
+                    from_entry_id: e1,
+                    to_entry_id: 999,
+                    relationship_type: 'references',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -177,7 +233,12 @@ describe('Team Relationship Tool Handlers', () => {
         it('should return error if team DB is not configured', async () => {
             const result = (await callTool(
                 'team_link_entries',
-                { project_number: 1, from_entry_id: e1, to_entry_id: e2, relationship_type: 'references' },
+                {
+                    project_number: 1,
+                    from_entry_id: e1,
+                    to_entry_id: e2,
+                    relationship_type: 'references',
+                },
                 personalDb
             )) as any
 
@@ -190,7 +251,12 @@ describe('Team Relationship Tool Handlers', () => {
         beforeAll(async () => {
             await callTool(
                 'team_link_entries',
-                { project_number: 1, from_entry_id: e2, to_entry_id: e3, relationship_type: 'caused' },
+                {
+                    project_number: 1,
+                    from_entry_id: e2,
+                    to_entry_id: e3,
+                    relationship_type: 'caused',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -204,7 +270,10 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 {
-                project_number: 1, entry_id: e1, depth: 2 },
+                    project_number: 1,
+                    entry_id: e1,
+                    depth: 2,
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -225,7 +294,9 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 {
-                project_number: 1, tag: 'node-tag' },
+                    project_number: 1,
+                    tag: 'node-tag',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -247,7 +318,8 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 {
-                project_number: 1,},
+                    project_number: 1,
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -265,7 +337,9 @@ describe('Team Relationship Tool Handlers', () => {
             const result = (await callTool(
                 'team_visualize_relationships',
                 {
-                project_number: 1, tag: 'nonexistent-tag' },
+                    project_number: 1,
+                    tag: 'nonexistent-tag',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -281,8 +355,13 @@ describe('Team Relationship Tool Handlers', () => {
         })
 
         it('should return error if team DB is not configured', async () => {
-            const result = (await callTool('team_visualize_relationships', {
-                project_number: 1,}, personalDb)) as any
+            const result = (await callTool(
+                'team_visualize_relationships',
+                {
+                    project_number: 1,
+                },
+                personalDb
+            )) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')

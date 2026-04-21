@@ -17,7 +17,7 @@ export class TagsManager {
 
     linkTagsToEntry(entryId: number, tagNames: string[]): void {
         if (tagNames.length === 0) return
-        
+
         const linkOp = this.db.transaction(() => {
             const db = this.db
 
@@ -51,7 +51,7 @@ export class TagsManager {
                  WHERE id IN (${updatePlaceholders})`
             ).run(...tagIds)
         })
-        
+
         linkOp()
     }
 

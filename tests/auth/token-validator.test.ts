@@ -66,31 +66,48 @@ describe('TokenValidator', () => {
         })
 
         it('should throw if issuer does not use HTTPS and is not loopback', () => {
-            expect(() => new TokenValidator({ ...config, issuer: 'http://auth.example.com' }))
-                .toThrow(/Issuer must use HTTPS protocol/)
+            expect(
+                () => new TokenValidator({ ...config, issuer: 'http://auth.example.com' })
+            ).toThrow(/Issuer must use HTTPS protocol/)
         })
 
         it('should throw if JWKS URI does not use HTTPS and is not loopback', () => {
-            expect(() => new TokenValidator({ ...config, jwksUri: 'http://auth.example.com/.well-known/jwks.json' }))
-                .toThrow(/JWKS URI must use HTTPS protocol/)
+            expect(
+                () =>
+                    new TokenValidator({
+                        ...config,
+                        jwksUri: 'http://auth.example.com/.well-known/jwks.json',
+                    })
+            ).toThrow(/JWKS URI must use HTTPS protocol/)
         })
 
         it('should throw if JWKS URI origin does not match Issuer origin', () => {
-            expect(() => new TokenValidator({ ...config, jwksUri: 'https://other.example.com/.well-known/jwks.json' }))
-                .toThrow(/JWKS URI origin.*does not match Issuer origin/)
+            expect(
+                () =>
+                    new TokenValidator({
+                        ...config,
+                        jwksUri: 'https://other.example.com/.well-known/jwks.json',
+                    })
+            ).toThrow(/JWKS URI origin.*does not match Issuer origin/)
         })
-        
+
         it('should allow loopback for issuer and jwksUri', () => {
-            expect(() => new TokenValidator({ 
-                jwksUri: 'http://localhost:8080/.well-known/jwks.json', 
-                issuer: 'http://localhost:8080', 
-                audience: 'memory-journal-mcp' 
-            })).not.toThrow()
-            expect(() => new TokenValidator({ 
-                jwksUri: 'http://127.0.0.1:8080/.well-known/jwks.json', 
-                issuer: 'http://127.0.0.1:8080', 
-                audience: 'memory-journal-mcp' 
-            })).not.toThrow()
+            expect(
+                () =>
+                    new TokenValidator({
+                        jwksUri: 'http://localhost:8080/.well-known/jwks.json',
+                        issuer: 'http://localhost:8080',
+                        audience: 'memory-journal-mcp',
+                    })
+            ).not.toThrow()
+            expect(
+                () =>
+                    new TokenValidator({
+                        jwksUri: 'http://127.0.0.1:8080/.well-known/jwks.json',
+                        issuer: 'http://127.0.0.1:8080',
+                        audience: 'memory-journal-mcp',
+                    })
+            ).not.toThrow()
         })
     })
 
@@ -285,7 +302,7 @@ describe('TokenValidator', () => {
             const validator = new TokenValidator(config)
             const result = await validator.validate('any-token')
 
-            // The validate method catches errors and passes them to handleValidationError, 
+            // The validate method catches errors and passes them to handleValidationError,
             // which falls back to TOKEN_INVALID for unknown errors
             expect(result.valid).toBe(false)
             expect(result.errorCode).toBe(AUTH_ERROR_CODES.TOKEN_INVALID)

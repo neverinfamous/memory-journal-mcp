@@ -59,7 +59,7 @@ export const healthResource: InternalResourceDef = {
         const metricsSummary = (() => {
             try {
                 const s = context.runtime?.metrics.getSummary()
-                if (!s) return null;
+                if (!s) return null
                 return {
                     totalCalls: s.totalCalls,
                     totalErrors: s.totalErrors,

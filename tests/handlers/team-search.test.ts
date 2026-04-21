@@ -3,14 +3,47 @@ import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import * as fs from 'fs'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -37,7 +70,10 @@ describe('Team Search Tool Handlers', () => {
         const r1 = (await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Strategic Search test 1', tags: ['strategy', 'shared'] },
+                project_number: 1,
+                content: 'Strategic Search test 1',
+                tags: ['strategy', 'shared'],
+            },
             personalDb,
             undefined,
             undefined,
@@ -48,7 +84,10 @@ describe('Team Search Tool Handlers', () => {
         const r2 = (await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Tactical Search test 2', tags: ['tactics'] },
+                project_number: 1,
+                content: 'Tactical Search test 2',
+                tags: ['tactics'],
+            },
             personalDb,
             undefined,
             undefined,
@@ -75,7 +114,9 @@ describe('Team Search Tool Handlers', () => {
             const result = (await callTool(
                 'team_search',
                 {
-                project_number: 1, query: 'Strategic' },
+                    project_number: 1,
+                    query: 'Strategic',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -89,8 +130,14 @@ describe('Team Search Tool Handlers', () => {
         })
 
         it('should return error if no team db', async () => {
-            const result = (await callTool('team_search', {
-                project_number: 1, query: 'test' }, personalDb)) as any
+            const result = (await callTool(
+                'team_search',
+                {
+                    project_number: 1,
+                    query: 'test',
+                },
+                personalDb
+            )) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('not configured')
         })
@@ -101,7 +148,7 @@ describe('Team Search Tool Handlers', () => {
             const result = (await callTool(
                 'team_search_by_date_range',
                 {
-                project_number: 1,
+                    project_number: 1,
                     start_date: '2020-01-01',
                     end_date: '2030-01-01',
                     tags: ['shared'],
@@ -123,7 +170,7 @@ describe('Team Search Tool Handlers', () => {
             const result = (await callTool(
                 'team_search_by_date_range',
                 {
-                project_number: 1,
+                    project_number: 1,
                     start_date: '2030-01-01',
                     end_date: '2020-01-01',
                 },
@@ -143,7 +190,9 @@ describe('Team Search Tool Handlers', () => {
             const result = (await callTool(
                 'team_search_by_date_range',
                 {
-                project_number: 1, start_date: '2020-01-01' },
+                    project_number: 1,
+                    start_date: '2020-01-01',
+                },
                 personalDb
             )) as any
             expect(result.success).toBe(false)

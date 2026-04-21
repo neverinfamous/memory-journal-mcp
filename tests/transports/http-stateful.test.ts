@@ -73,7 +73,7 @@ function createMockCtx(): StatefulContext {
         sessionLocks: new Map(),
         touchSession: vi.fn(),
         serverConnected: false,
-        sessionCreatedAt: new Map()
+        sessionCreatedAt: new Map(),
     }
 }
 
@@ -322,7 +322,10 @@ describe('setupStateful', () => {
         const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['post']!['/mcp']!
 
-        const req = mockReq({ headers: { 'mcp-session-id': 'auth-session' }, auth: { sub: 'user-2' } })
+        const req = mockReq({
+            headers: { 'mcp-session-id': 'auth-session' },
+            auth: { sub: 'user-2' },
+        })
         const res = mockRes()
         handler(req, res)
 
@@ -332,7 +335,9 @@ describe('setupStateful', () => {
         expect(res['json'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
             expect.objectContaining({
                 error: expect.objectContaining({
-                    message: expect.stringContaining('Forbidden: Session belongs to a different subject'),
+                    message: expect.stringContaining(
+                        'Forbidden: Session belongs to a different subject'
+                    ),
                 }),
             })
         )
@@ -499,12 +504,17 @@ describe('setupStateful', () => {
         const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['get']!['/mcp']!
 
-        const req = mockReq({ headers: { 'mcp-session-id': 'auth-session' }, auth: { sub: 'user-2' } })
+        const req = mockReq({
+            headers: { 'mcp-session-id': 'auth-session' },
+            auth: { sub: 'user-2' },
+        })
         const res = mockRes()
         handler(req, res)
 
         expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(403)
-        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(expect.stringContaining('Forbidden'))
+        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+            expect.stringContaining('Forbidden')
+        )
 
         clearInterval(timer)
     })
@@ -525,7 +535,9 @@ describe('setupStateful', () => {
         handler(req, res)
 
         expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(401)
-        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(expect.stringContaining('Unauthorized: Session absolute TTL expired'))
+        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+            expect.stringContaining('Unauthorized: Session absolute TTL expired')
+        )
 
         clearInterval(timer)
     })
@@ -608,12 +620,17 @@ describe('setupStateful', () => {
         const timer = setupStateful(ctx, app as never, (() => server) as never)
         const handler = app.routes['delete']!['/mcp']!
 
-        const req = mockReq({ headers: { 'mcp-session-id': 'auth-session' }, auth: { sub: 'user-2' } })
+        const req = mockReq({
+            headers: { 'mcp-session-id': 'auth-session' },
+            auth: { sub: 'user-2' },
+        })
         const res = mockRes()
         handler(req, res)
 
         expect(res['status'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(403)
-        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(expect.stringContaining('Forbidden'))
+        expect(res['send'] as ReturnType<typeof vi.fn>).toHaveBeenCalledWith(
+            expect.stringContaining('Forbidden')
+        )
 
         clearInterval(timer)
     })

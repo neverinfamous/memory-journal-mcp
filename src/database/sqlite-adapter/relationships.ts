@@ -71,7 +71,7 @@ export class RelationshipsManager {
     getRelationshipsForEntries(entryIds: number[]): Map<number, Relationship[]> {
         const result = new Map<number, Relationship[]>()
         if (entryIds.length === 0) return result
-        
+
         for (const id of entryIds) {
             result.set(id, [])
         }

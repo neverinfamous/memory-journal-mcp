@@ -248,10 +248,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                         }
                     }
 
-                    const { indexed, failed, firstError, partial } = await teamVectorManager.rebuildIndex(
-                        teamDb,
-                        progress
-                    )
+                    const { indexed, failed, firstError, partial } =
+                        await teamVectorManager.rebuildIndex(teamDb, progress)
                     const success = indexed > 0 || failed === 0
                     return {
                         success,
@@ -307,7 +305,8 @@ export function getTeamVectorTools(context: ToolContext): ToolDefinition[] {
                             error: `Team entry ${String(entry_id)} not found or lacks permission for project ${project_number}`,
                             code: 'RESOURCE_NOT_FOUND',
                             category: 'resource',
-                            suggestion: 'Verify the team entry ID and project number, and try again',
+                            suggestion:
+                                'Verify the team entry ID and project number, and try again',
                             recoverable: true,
                         }
                     }

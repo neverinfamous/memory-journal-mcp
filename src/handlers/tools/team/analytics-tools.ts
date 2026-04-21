@@ -111,10 +111,15 @@ export function getTeamAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             sum + (p['entry_count'] as number),
                         0
                     )
-                    const distribution = limitedProjects.slice(0, 5).map((p: Record<string, unknown>) => ({
-                        project_number: p['project_number'] as number,
-                        percentage: (((p['entry_count'] as number) / totalEntries) * 100).toFixed(1),
-                    }))
+                    const distribution = limitedProjects
+                        .slice(0, 5)
+                        .map((p: Record<string, unknown>) => ({
+                            project_number: p['project_number'] as number,
+                            percentage: (
+                                ((p['entry_count'] as number) / totalEntries) *
+                                100
+                            ).toFixed(1),
+                        }))
 
                     return {
                         success: true,

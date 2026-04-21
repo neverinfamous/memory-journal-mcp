@@ -77,7 +77,7 @@ export class HttpTransport {
             enableRateLimit: config.enableRateLimit ?? true,
         }
         this.app = express()
-        
+
         if (this.config.trustProxy) {
             // Enable express trust proxy for rate limiting (Issue #6: explicit proxy boundary)
             this.app.set('trust proxy', 'loopback') // Default to loopback for proxy chain safety
@@ -165,8 +165,6 @@ export class HttpTransport {
         const maxBody = this.config.maxBodySize ?? DEFAULT_MAX_BODY_BYTES
         this.app.use(express.json({ limit: maxBody }) as RequestHandler)
 
-
-
         // Built-in rate limiting (Moved before Auth for DoS prevention)
         if (this.config.enableRateLimit !== false) {
             this.app.use((req: Request, res: Response, next: () => void) => {
@@ -206,7 +204,6 @@ export class HttpTransport {
 
         // Authentication middleware
         if (this.config.oauthEnabled && this.config.oauthIssuer && this.config.oauthAudience) {
-            
             if (this.config.oauthIssuer.startsWith('http://')) {
                 if (!this.config.allowPlaintextLoopbackOAuth) {
                     const errorMsg = `FATAL: OAuth issuer '${this.config.oauthIssuer}' targets a plaintext protocol. You MUST deliberately set 'allowPlaintextLoopbackOAuth: true' in config to bypass strict discovery bound.`
@@ -215,7 +212,11 @@ export class HttpTransport {
                 }
                 try {
                     const url = new URL(this.config.oauthIssuer)
-                    if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1' && url.hostname !== '[::1]') {
+                    if (
+                        url.hostname !== 'localhost' &&
+                        url.hostname !== '127.0.0.1' &&
+                        url.hostname !== '[::1]'
+                    ) {
                         throw new Error()
                     }
                 } catch {
@@ -230,7 +231,7 @@ export class HttpTransport {
                 logger.error(errorMsg, { module: 'HTTP' })
                 throw new Error(errorMsg)
             }
-            
+
             // OAuth 2.1 authentication
             const jwksUri =
                 this.config.oauthJwksUri ?? `${this.config.oauthIssuer}/.well-known/jwks.json`
@@ -241,7 +242,7 @@ export class HttpTransport {
                 audience: this.config.oauthAudience,
                 clockTolerance: this.config.oauthClockTolerance ?? 60,
             })
-            
+
             // Validate OAuth at startup
             await tokenValidator.preload()
 
@@ -279,13 +280,14 @@ export class HttpTransport {
         // Propagate authenticated context into core dispatch
         this.app.use((req: Request, _res: Response, next: () => void) => {
             if (req.auth) {
-                runWithAuthContext({ authenticated: true, claims: req.auth, scopes: req.auth.scopes }, next)
+                runWithAuthContext(
+                    { authenticated: true, claims: req.auth, scopes: req.auth.scopes },
+                    next
+                )
             } else {
                 next()
             }
         })
-
-
 
         // Scope enforcement middleware
         // REMOVED: Scope validation is now handled comprehensively at the dispatch layer

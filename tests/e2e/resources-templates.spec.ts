@@ -107,14 +107,20 @@ test.describe('E2E Resource Reads: Template Resources', () => {
     })
 
     test('memory://kanban/1 returns valid response', async () => {
-        await expect(readTemplateResource('memory://kanban/1')).rejects.toThrow('GitHub API not available')
+        await expect(readTemplateResource('memory://kanban/1')).rejects.toThrow(
+            'GitHub API not available'
+        )
     })
 
     test('memory://kanban/1/diagram returns valid response', async () => {
-        await expect(readTemplateResource('memory://kanban/1/diagram')).rejects.toThrow('GitHub API not available')
+        await expect(readTemplateResource('memory://kanban/1/diagram')).rejects.toThrow(
+            'GitHub API not available'
+        )
     })
 
     test('memory://milestones/1 returns valid response', async () => {
-        await expect(readTemplateResource('memory://milestones/1')).rejects.toThrow('GitHub API not available')
+        await expect(readTemplateResource('memory://milestones/1')).rejects.toThrow(
+            'GitHub API not available'
+        )
     })
 })

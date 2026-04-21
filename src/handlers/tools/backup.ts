@@ -13,7 +13,6 @@ import { ErrorFieldsMixin } from './error-fields-mixin.js'
 import { logger } from '../../utils/logger.js'
 import * as path from 'node:path'
 
-
 // ============================================================================
 // Output Schemas
 // ============================================================================
@@ -128,7 +127,10 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
             handler: (_params: unknown) => {
                 try {
                     const backups = db.listBackups()
-                    const maskedBackups = backups.map(b => ({ ...b, path: path.basename(b.path) }))
+                    const maskedBackups = backups.map((b) => ({
+                        ...b,
+                        path: path.basename(b.path),
+                    }))
                     return {
                         backups: maskedBackups,
                         total: backups.length,
@@ -191,7 +193,7 @@ export function getBackupTools(context: ToolContext): ToolDefinition[] {
 
                     await sendProgress(progress, 1, 3, 'Preparing restore...')
                     await sendProgress(progress, 2, 3, 'Restoring database from backup...')
-                    
+
                     if (config?.runtime?.maintenanceManager) {
                         await config.runtime.maintenanceManager.acquireMaintenanceLock()
                     }

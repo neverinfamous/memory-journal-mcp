@@ -37,13 +37,14 @@ test.describe('Resources: Briefing Environment Configurations', () => {
                 '--db',
                 './.test-output/e2e/test-briefing.db',
                 '--auth-token',
-                'test-token'
+                'test-token',
             ],
             {
                 cwd: process.cwd(),
                 stdio: 'pipe',
                 env: {
-                    ...process.env, ALLOWED_IO_ROOTS: process.cwd(),
+                    ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
                     MCP_RATE_LIMIT_MAX: '10000',
                     BRIEFING_ENTRY_COUNT: '2', // Only 2 entries max
                     BRIEFING_INCLUDE_TEAM: 'true', // Force inclusion
@@ -63,7 +64,9 @@ test.describe('Resources: Briefing Environment Configurations', () => {
             await delay(500)
         }
 
-        const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), { requestInit: { headers: { Authorization: 'Bearer test-token' } } })
+        const transport = new StreamableHTTPClientTransport(new URL(`${BRIEFING_BASE}/mcp`), {
+            requestInit: { headers: { Authorization: 'Bearer test-token' } },
+        })
         client = new McpClient({ name: 'briefing-test', version: '1.0' }, { capabilities: {} })
         await client.connect(transport)
     })

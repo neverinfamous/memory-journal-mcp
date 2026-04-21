@@ -859,7 +859,9 @@ describe('MilestonesManager — branch coverage', () => {
 
     describe('updateMilestone', () => {
         it('should throw error when no octokit', async () => {
-            await expect(milestones.updateMilestone('o', 'r', 1, { title: 'new' })).rejects.toThrow()
+            await expect(
+                milestones.updateMilestone('o', 'r', 1, { title: 'new' })
+            ).rejects.toThrow()
         })
 
         it('should update milestone with dueOn null', async () => {

@@ -10,9 +10,11 @@ describe('Registration Helpers', () => {
             server.registerResource = vi.fn()
 
             registerResources(server, [{ name: 'test', uri: 'test://{var}' }], vi.fn())
-            
+
             const handler = vi.mocked(server.registerResource).mock.calls[0][3] as Function
-            await expect(handler(new URL('test://abc'), { var: 'abc' })).rejects.toThrow(ConfigurationError)
+            await expect(handler(new URL('test://abc'), { var: 'abc' })).rejects.toThrow(
+                ConfigurationError
+            )
         })
 
         it('should throw ConfigurationError if runtime is missing for static resource', async () => {
@@ -20,7 +22,7 @@ describe('Registration Helpers', () => {
             server.registerResource = vi.fn()
 
             registerResources(server, [{ name: 'test', uri: 'test://static' }], vi.fn())
-            
+
             const handler = vi.mocked(server.registerResource).mock.calls[0][3] as Function
             await expect(handler(new URL('test://static'))).rejects.toThrow(ConfigurationError)
         })
@@ -32,7 +34,7 @@ describe('Registration Helpers', () => {
             server.registerPrompt = vi.fn()
 
             registerPrompts(server, [{ name: 'test-prompt' }], {} as any)
-            
+
             const handler = vi.mocked(server.registerPrompt).mock.calls[0][2] as Function
             expect(() => handler({})).toThrow(ConfigurationError)
         })

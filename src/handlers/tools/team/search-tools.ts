@@ -39,7 +39,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { query, tags, limit, sort_by, project_number } = TeamSearchSchema.parse(params)
+                    const { query, tags, limit, sort_by, project_number } =
+                        TeamSearchSchema.parse(params)
 
                     if (project_number == null) {
                         return {
@@ -51,12 +52,14 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                             entries: [],
                             count: 0,
-                            degraded: false
+                            degraded: false,
                         }
                     }
 
                     const searchLimit =
-                        tags && tags.length > 0 ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT) : limit
+                        tags && tags.length > 0
+                            ? Math.min(Math.max(limit * 5, 50), MAX_QUERY_LIMIT)
+                            : limit
 
                     let entries = teamDb.searchEntries(query ?? '', {
                         limit: searchLimit,
@@ -89,7 +92,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { success: true, entries: enriched, count: enriched.length, degraded: false }
+                    return {
+                        success: true,
+                        entries: enriched,
+                        count: enriched.length,
+                        degraded: false,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }
@@ -110,8 +118,15 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         return { ...TEAM_DB_ERROR_RESPONSE }
                     }
 
-                    const { start_date, end_date, entry_type, tags, limit, sort_by, project_number } =
-                        TeamSearchByDateRangeSchema.parse(params)
+                    const {
+                        start_date,
+                        end_date,
+                        entry_type,
+                        tags,
+                        limit,
+                        sort_by,
+                        project_number,
+                    } = TeamSearchByDateRangeSchema.parse(params)
 
                     if (project_number == null) {
                         return {
@@ -123,7 +138,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                             recoverable: false,
                             entries: [],
                             count: 0,
-                            degraded: false
+                            degraded: false,
                         }
                     }
 
@@ -157,7 +172,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         author: authorMap.get(e.id) ?? null,
                     }))
 
-                    return { success: true, entries: enriched, count: enriched.length, degraded: false }
+                    return {
+                        success: true,
+                        entries: enriched,
+                        count: enriched.length,
+                        degraded: false,
+                    }
                 } catch (err) {
                     return formatHandlerError(err)
                 }

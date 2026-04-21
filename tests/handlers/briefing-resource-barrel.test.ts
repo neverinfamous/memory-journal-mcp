@@ -10,7 +10,10 @@ vi.mock('../../src/handlers/resources/core/briefing/github-section.js', () => ({
 }))
 
 import { dynamicBriefingResource } from '../../src/handlers/resources/core/briefing/index.js'
-import { GitHubIntegration, getGitHubIntegration } from '../../src/github/github-integration/index.js'
+import {
+    GitHubIntegration,
+    getGitHubIntegration,
+} from '../../src/github/github-integration/index.js'
 
 vi.mock('../../src/handlers/resources/core/briefing/context-section.js', () => ({
     buildJournalContext: vi.fn().mockReturnValue({

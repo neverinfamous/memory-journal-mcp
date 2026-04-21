@@ -92,7 +92,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                         currentBytes += entrySize
                         boundedEntries.push(entry)
                     }
-                    
+
                     entries = boundedEntries
 
                     await sendProgress(progress, 2, 3, 'Formatting export data...')
@@ -138,7 +138,7 @@ export function getTeamExportTools(context: ToolContext): ToolDefinition[] {
                         format,
                         data,
                         count: enriched.length,
-                        truncated
+                        truncated,
                     }
                 } catch (err) {
                     return formatHandlerError(err)

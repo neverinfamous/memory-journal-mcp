@@ -59,8 +59,6 @@ export interface IDatabaseConnection {
     getBackupsDir(): string
     getDbPath(): string
 
-
-
     /**
      * Execute a PRAGMA command.
      * Wraps the driver-specific pragma call so callers don't need getRawDb().
@@ -188,7 +186,10 @@ export interface IDatabaseAdapter {
     ): Promise<{ filename: string; path: string; sizeBytes: number }>
     listBackups(): { filename: string; path: string; sizeBytes: number; createdAt: string }[]
     deleteOldBackups(keepCount: number): { deleted: string[]; kept: number }
-    restoreFromFile(filename: string, runtime?: unknown): Promise<{
+    restoreFromFile(
+        filename: string,
+        runtime?: unknown
+    ): Promise<{
         restoredFrom: string
         previousEntryCount: number
         newEntryCount: number
@@ -223,11 +224,11 @@ export interface IDatabaseAdapter {
     pragma(command: string): void
 
     // Advanced Analytic and Relationship queries (Replaces raw queries)
-    getCrossProjectInsights(options: { 
-        startDate?: string; 
-        endDate?: string; 
-        minEntries: number; 
-        inactiveThresholdDays: number 
+    getCrossProjectInsights(options: {
+        startDate?: string
+        endDate?: string
+        minEntries: number
+        inactiveThresholdDays: number
     }): {
         projects: Record<string, unknown>[]
         inactiveProjects: { project_number: number; last_entry_date: string }[]
@@ -240,7 +241,12 @@ export interface IDatabaseAdapter {
         depth: number
         limit: number
     }): {
-        nodes: { id: string | number; label: string; group: string; metadata?: Record<string, unknown> }[]
+        nodes: {
+            id: string | number
+            label: string
+            group: string
+            metadata?: Record<string, unknown>
+        }[]
         edges: { from: string | number; to: string | number; label: string; type: string }[]
     }
 
@@ -255,8 +261,11 @@ export interface IDatabaseAdapter {
     getWorkflowActionEntries(limit: number): JournalEntry[]
     getSignificantEntries(limit: number, projectNumber?: number): JournalEntry[]
     getRecentGraphRelationships(limit: number): {
-        from_entry_id: number; to_entry_id: number; relationship_type: string;
-        from_content: string; to_content: string;
+        from_entry_id: number
+        to_entry_id: number
+        relationship_type: string
+        from_content: string
+        to_content: string
     }[]
 
     // Vector Search Primitives

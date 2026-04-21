@@ -10,12 +10,12 @@ vi.mock('node:fs/promises', () => ({
     lstat: vi.fn().mockResolvedValue({ isSymbolicLink: () => false }),
     realpath: vi.fn(),
     open: vi.fn().mockImplementation(async (path) => {
-        const fsPromises = await import('node:fs/promises');
+        const fsPromises = await import('node:fs/promises')
         return {
             stat: vi.fn().mockResolvedValue({ size: 100 }),
             readFile: () => fsPromises.readFile(path),
-            close: vi.fn()
-        };
+            close: vi.fn(),
+        }
     }),
 }))
 
@@ -46,7 +46,7 @@ describe('importMarkdownEntries', () => {
         vi.mocked(fs.opendir).mockResolvedValue([
             { isFile: () => true, name: '1-test.md' },
             { isFile: () => false, name: 'ignore-dir' },
-            { isFile: () => true, name: 'ignore.txt' }
+            { isFile: () => true, name: 'ignore.txt' },
         ] as any)
 
         mockDb.createEntry.mockReturnValue({ id: 99 })
@@ -96,7 +96,9 @@ Updated decision content`
         // Mock finding the entry
         mockDb.getEntryById.mockReturnValue({ id: 42 })
 
-        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [process.cwd()])
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.updated).toBe(1)
@@ -123,7 +125,9 @@ Restored entry`
         // Mock NOT finding the entry
         mockDb.getEntryById.mockReturnValue(null)
 
-        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [process.cwd()])
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         // From importer perspective, if it brings its own ID but it's new, it counts as creation
@@ -148,7 +152,13 @@ Updated decision content`
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
         mockDb.getEntryById.mockReturnValue({ id: 42 })
 
-        const result = await importMarkdownEntries('./import', mockDb as any, { dry_run: true }, undefined, [process.cwd()])
+        const result = await importMarkdownEntries(
+            './import',
+            mockDb as any,
+            { dry_run: true },
+            undefined,
+            [process.cwd()]
+        )
 
         expect(result.success).toBe(true)
         expect(result.dry_run).toBe(true)
@@ -179,7 +189,9 @@ Content`
         // Mock the target missing
         mockDb.getEntryById.mockImplementation((id) => (id === 999 ? null : undefined))
 
-        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [process.cwd()])
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.errors).toEqual([]) // It shouldn't be a hard error, just skipped quietly in importer mapping
@@ -198,7 +210,9 @@ Content`
   \n  `
         vi.mocked(fs.readFile).mockResolvedValue(fileContent)
 
-        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [process.cwd()])
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
         expect(result.skipped).toBe(1)
         expect(result.created).toBe(0)
     })
@@ -207,7 +221,7 @@ Content`
         // We'll return 2 files, one with mj_id (not found), one without mj_id
         vi.mocked(fs.opendir).mockResolvedValue([
             { isFile: () => true, name: '1-test.md' },
-            { isFile: () => true, name: '2-test.md' }
+            { isFile: () => true, name: '2-test.md' },
         ] as any)
         vi.mocked(fs.readFile).mockImplementation(async (path: any) => {
             if (path.toString().includes('1-test.md')) {
@@ -217,7 +231,13 @@ Content`
         })
         mockDb.getEntryById.mockReturnValue(null) // mj_id 100 not found
 
-        const result = await importMarkdownEntries('./import', mockDb as any, { dry_run: true }, undefined, [process.cwd()])
+        const result = await importMarkdownEntries(
+            './import',
+            mockDb as any,
+            { dry_run: true },
+            undefined,
+            [process.cwd()]
+        )
         expect(result.dry_run).toBe(true)
         expect(result.created).toBe(2) // Both should count as created
         expect(result.updated).toBe(0)
@@ -240,7 +260,9 @@ Content`
         // Target exists
         mockDb.getEntryById.mockImplementation((id) => (id === 999 ? { id: 999 } : undefined))
 
-        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [process.cwd()])
+        const result = await importMarkdownEntries('./import', mockDb as any, {}, undefined, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(mockDb.linkEntries).toHaveBeenCalledWith(99, 999, 'references')

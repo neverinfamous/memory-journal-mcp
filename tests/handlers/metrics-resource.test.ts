@@ -32,10 +32,9 @@ describe('Metrics Resources', () => {
 
     describe('metricsSummaryResource', () => {
         it('returns zero summary when no calls recorded', async () => {
-            const res = (await metricsSummaryResource.handler(
-                'memory://metrics/summary',
-                { runtime: { metrics } } as any
-            )) as any
+            const res = (await metricsSummaryResource.handler('memory://metrics/summary', {
+                runtime: { metrics },
+            } as any)) as any
             expect(res.data).toContain('total_calls: 0')
             expect(res.data).toContain('error_rate_pct: 0.0')
             expect(res.data).toContain('avg_duration_ms: 0')
@@ -57,10 +56,9 @@ describe('Metrics Resources', () => {
                 outputTokens: 20,
             }) // error
 
-            const res = (await metricsSummaryResource.handler(
-                'memory://metrics/summary',
-                { runtime: { metrics } } as any
-            )) as any
+            const res = (await metricsSummaryResource.handler('memory://metrics/summary', {
+                runtime: { metrics },
+            } as any)) as any
 
             expect(res.data).toContain('total_calls: 2')
             expect(res.data).toContain('total_errors: 1')
@@ -75,10 +73,9 @@ describe('Metrics Resources', () => {
 
     describe('metricsTokensResource', () => {
         it('returns warning when no tool calls recorded', async () => {
-            const res = (await metricsTokensResource.handler(
-                'memory://metrics/tokens',
-                { runtime: { metrics } } as any
-            )) as any
+            const res = (await metricsTokensResource.handler('memory://metrics/tokens', {
+                runtime: { metrics },
+            } as any)) as any
             expect(res.data).toContain('No tool calls recorded yet')
         })
 
@@ -98,10 +95,9 @@ describe('Metrics Resources', () => {
                 outputTokens: 100,
             })
 
-            const res = (await metricsTokensResource.handler(
-                'memory://metrics/tokens',
-                { runtime: { metrics } } as any
-            )) as any
+            const res = (await metricsTokensResource.handler('memory://metrics/tokens', {
+                runtime: { metrics },
+            } as any)) as any
 
             expect(res.data).toContain('tool: tool_b')
             expect(res.data).toContain('tool: tool_a')
@@ -111,10 +107,9 @@ describe('Metrics Resources', () => {
 
     describe('metricsSystemResource', () => {
         it('returns process and environment system metrics', async () => {
-            const res = (await metricsSystemResource.handler(
-                'memory://metrics/system',
-                { runtime: { metrics } } as any
-            )) as any
+            const res = (await metricsSystemResource.handler('memory://metrics/system', {
+                runtime: { metrics },
+            } as any)) as any
             expect(res.data).toContain('process_memory_mb:')
             expect(res.data).toContain('node_version:')
             expect(res.data).toContain('uptime_seconds:')
@@ -123,10 +118,9 @@ describe('Metrics Resources', () => {
 
     describe('metricsUsersResource', () => {
         it('returns hint when no users recorded', async () => {
-            const res = (await metricsUsersResource.handler(
-                'memory://metrics/users',
-                { runtime: { metrics } } as any
-            )) as any
+            const res = (await metricsUsersResource.handler('memory://metrics/users', {
+                runtime: { metrics },
+            } as any)) as any
             expect(res.data).toContain('No user tracking data available')
         })
 
@@ -156,10 +150,9 @@ describe('Metrics Resources', () => {
             })
             metrics.recordUser('bob')
 
-            const res = (await metricsUsersResource.handler(
-                'memory://metrics/users',
-                { runtime: { metrics } } as any
-            )) as any
+            const res = (await metricsUsersResource.handler('memory://metrics/users', {
+                runtime: { metrics },
+            } as any)) as any
 
             expect(res.data).toContain('user: alice')
             expect(res.data).toContain('calls: 2')

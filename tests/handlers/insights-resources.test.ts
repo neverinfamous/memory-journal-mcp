@@ -13,7 +13,10 @@ describe('Insights Resources', () => {
                     getLatestDigest: vi.fn().mockReturnValue({ scheduled: true }),
                 } as any,
             } as unknown as ResourceContext
-            const result = digestInsightsResource.handler('memory://insights/digest', context) as any
+            const result = digestInsightsResource.handler(
+                'memory://insights/digest',
+                context
+            ) as any
             expect(result.data.success).toBe(true)
             expect((result.data as any).snapshot).toEqual({ scheduled: true })
         })
@@ -28,7 +31,10 @@ describe('Insights Resources', () => {
                     }),
                 } as any,
             } as unknown as ResourceContext
-            const result = digestInsightsResource.handler('memory://insights/digest', context) as any
+            const result = digestInsightsResource.handler(
+                'memory://insights/digest',
+                context
+            ) as any
             expect(result.data.success).toBe(true)
             expect((result.data as any).snapshot).toEqual({ db_snapshot: true })
             expect((result.data as any).source).toBe('persisted')
@@ -42,7 +48,10 @@ describe('Insights Resources', () => {
                     getLatestAnalyticsSnapshot: vi.fn().mockReturnValue(null),
                 } as any,
             } as unknown as ResourceContext
-            const result = digestInsightsResource.handler('memory://insights/digest', context) as any
+            const result = digestInsightsResource.handler(
+                'memory://insights/digest',
+                context
+            ) as any
             expect(result.data.success).toBe(true)
             expect((result.data as any).snapshot).toBeNull()
             expect((result.data as any).message).toContain('No digest available')
@@ -68,8 +77,8 @@ describe('Insights Resources', () => {
                     authorActivity: [{ author: 'Alice', period: '2026-04', entry_count: 5 }],
                     crossAuthorLinks: [{ from_author: 'Alice', to_author: 'Bob', link_count: 2 }],
                     impactFactor: [{ author: 'Bob', inbound_links: 2 }],
-                    globalTotals: [{ total_authors: 2, total_entries: 10 }]
-                })
+                    globalTotals: [{ total_authors: 2, total_entries: 10 }],
+                }),
             }
             const context = { teamDb: teamDb as any } as unknown as ResourceContext
             const result = teamCollaborationResource.handler(

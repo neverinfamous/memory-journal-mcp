@@ -77,7 +77,10 @@ export function wrapWithMetrics(
                     isError: true,
                 })
             } catch (err) {
-                logger.error(`Accumulator failed to record metrics error`, { module: 'Metrics', error: err instanceof Error ? err.message : String(err) })
+                logger.error(`Accumulator failed to record metrics error`, {
+                    module: 'Metrics',
+                    error: err instanceof Error ? err.message : String(err),
+                })
             }
             throw err
         }
@@ -93,7 +96,10 @@ export function wrapWithMetrics(
                 isError,
             })
         } catch (err) {
-            logger.error(`Accumulator failed to record metrics:`, { module: 'Metrics', error: err instanceof Error ? err.message : String(err) })
+            logger.error(`Accumulator failed to record metrics:`, {
+                module: 'Metrics',
+                error: err instanceof Error ? err.message : String(err),
+            })
         }
 
         return result

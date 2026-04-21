@@ -111,12 +111,9 @@ describe('exportEntriesToMarkdown', () => {
             return map
         })
 
-        const result = await exportEntriesToMarkdown(
-            entries as any,
-            './export',
-            mockDb as any,
-            [process.cwd()]
-        )
+        const result = await exportEntriesToMarkdown(entries as any, './export', mockDb as any, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.exported_count).toBe(2)
@@ -162,12 +159,9 @@ describe('exportEntriesToMarkdown', () => {
             },
         ]
 
-        const result = await exportEntriesToMarkdown(
-            entries as any,
-            './export',
-            mockDb as any,
-            [process.cwd()]
-        )
+        const result = await exportEntriesToMarkdown(entries as any, './export', mockDb as any, [
+            process.cwd(),
+        ])
 
         expect(result.success).toBe(true)
         expect(result.exported_count).toBe(0)
@@ -177,7 +171,9 @@ describe('exportEntriesToMarkdown', () => {
 
     it('should reject exporting into the os temp directory', async () => {
         const tmpExportDir = join(tmpdir(), 'export')
-        await expect(exportEntriesToMarkdown([], tmpExportDir, mockDb as any, [tmpdir()])).rejects.toThrow(
+        await expect(
+            exportEntriesToMarkdown([], tmpExportDir, mockDb as any, [tmpdir()])
+        ).rejects.toThrow(
             /Path traversal detected|escapes allowed sandbox boundaries|Refusing to export markdown files into the OS temporary directory/
         )
         expect(fs.mkdir).not.toHaveBeenCalled()
@@ -189,10 +185,17 @@ describe('exportEntriesToMarkdown', () => {
         vi.mocked(realpathSync.native)
             .mockReturnValueOnce('/mock/safe/path') // preRealpath
             .mockReturnValueOnce('/mock/unsafe/swapped/path') // postRealpath
-            
-        const entries = [{ id: 1, content: 'Test content', timestamp: '2026-04-08T12:00:00Z', entryType: 'note' }]
-        await expect(exportEntriesToMarkdown(entries as any, './export', mockDb as any, [process.cwd()])).rejects.toThrow(
-            /Directory swapped during export operation/
-        )
+
+        const entries = [
+            {
+                id: 1,
+                content: 'Test content',
+                timestamp: '2026-04-08T12:00:00Z',
+                entryType: 'note',
+            },
+        ]
+        await expect(
+            exportEntriesToMarkdown(entries as any, './export', mockDb as any, [process.cwd()])
+        ).rejects.toThrow(/Directory swapped during export operation/)
     })
 })

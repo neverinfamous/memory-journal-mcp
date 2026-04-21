@@ -43,7 +43,7 @@ function createMockContext() {
             getPullRequest: vi.fn().mockResolvedValue({
                 number: 42,
                 title: 'Mock PR',
-                state: 'open'
+                state: 'open',
             }),
             getCopilotReviewSummary: vi.fn().mockResolvedValue({
                 prNumber: 42,
@@ -104,7 +104,7 @@ describe('getCopilotReviewTools', () => {
         const context = createMockContext()
         // Simulate missing PR
         context.github.getPullRequest.mockResolvedValueOnce(null)
-        
+
         mockResolveOwnerRepo.mockResolvedValue({
             owner: 'neverinfamous',
             repo: 'memory-journal-mcp',

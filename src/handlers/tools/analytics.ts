@@ -210,13 +210,11 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                 try {
                     const input = CrossProjectInsightsInputSchema.parse(params)
 
-
-
                     const results = db.getCrossProjectInsights({
                         startDate: input.start_date,
                         endDate: input.end_date,
                         minEntries: input.min_entries,
-                        inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS
+                        inactiveThresholdDays: INACTIVE_THRESHOLD_DAYS,
                     })
 
                     if (results.projects.length === 0) {
@@ -238,12 +236,15 @@ export function getAnalyticsTools(context: ToolContext): ToolDefinition[] {
                             sum + (p['entry_count'] as number),
                         0
                     )
-                    const distribution = results.projects.slice(0, 5).map((p: Record<string, unknown>) => ({
-                        project_number: p['project_number'] as number,
-                        percentage: (((p['entry_count'] as number) / totalEntries) * 100).toFixed(
-                            1
-                        ),
-                    }))
+                    const distribution = results.projects
+                        .slice(0, 5)
+                        .map((p: Record<string, unknown>) => ({
+                            project_number: p['project_number'] as number,
+                            percentage: (
+                                ((p['entry_count'] as number) / totalEntries) *
+                                100
+                            ).toFixed(1),
+                        }))
 
                     return {
                         success: true,

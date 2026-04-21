@@ -93,7 +93,10 @@ export const teamCollaborationResource: InternalResourceDef = {
 
         // Compute collaboration matrix live from team DB
         try {
-            const matrix = context.teamDb.getTeamCollaborationMatrix({ period: 'month', limit: 100 })
+            const matrix = context.teamDb.getTeamCollaborationMatrix({
+                period: 'month',
+                limit: 100,
+            })
             return {
                 data: { success: true, matrix },
                 annotations: { lastModified },

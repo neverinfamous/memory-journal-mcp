@@ -169,13 +169,23 @@ describe('NativeConnectionManager', () => {
             const db2 = mgr2.getNativeDb() as Database
             let ftsCount = 0
             for (let i = 0; i < 50; i++) {
-                ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+                ftsCount = (
+                    db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
+                        c: number
+                    }
+                ).c
                 if (ftsCount === 1) break
                 await new Promise((r) => setTimeout(r, 100))
             }
             if (ftsCount !== 1) {
-                console.log('MEMORY_JOURNAL ROWS:', db2.prepare('SELECT id, content FROM memory_journal').all())
-                console.log('FTS_CONTENT ROWS:', db2.prepare('SELECT rowid, * FROM fts_content').all())
+                console.log(
+                    'MEMORY_JOURNAL ROWS:',
+                    db2.prepare('SELECT id, content FROM memory_journal').all()
+                )
+                console.log(
+                    'FTS_CONTENT ROWS:',
+                    db2.prepare('SELECT rowid, * FROM fts_content').all()
+                )
             }
             expect(ftsCount).toBe(1)
             mgr2.close()
@@ -203,7 +213,11 @@ describe('NativeConnectionManager', () => {
             const db2 = mgr2.getNativeDb() as Database
             let ftsCount = 3
             for (let i = 0; i < 50; i++) {
-                ftsCount = (db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as { c: number }).c
+                ftsCount = (
+                    db2.prepare('SELECT COUNT(*) as c FROM fts_content_docsize').get() as {
+                        c: number
+                    }
+                ).c
                 if (ftsCount === 0) break
                 await new Promise((r) => setTimeout(r, 100))
             }

@@ -70,7 +70,12 @@ export class RepositoryManager {
         return { owner: null, repo: null }
     }
 
-    async getWorkflowRuns(owner: string, repo: string, limit = 10, abortSignal?: AbortSignal): Promise<GitHubWorkflowRun[]> {
+    async getWorkflowRuns(
+        owner: string,
+        repo: string,
+        limit = 10,
+        abortSignal?: AbortSignal
+    ): Promise<GitHubWorkflowRun[]> {
         if (!this.client.octokit) {
             logger.debug('GitHub API not available - no token', { module: 'GitHub' })
             throw new Error('GitHub API not available')

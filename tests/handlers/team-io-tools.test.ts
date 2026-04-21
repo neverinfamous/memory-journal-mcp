@@ -70,7 +70,10 @@ describe('getTeamIoTools', () => {
             const handler = getTeamIoTools(context).find(
                 (t) => t.name === 'team_export_markdown'
             )!.handler
-            const result = (await handler({ output_dir: '/tmp/team-out', project_number: 1 })) as any
+            const result = (await handler({
+                output_dir: '/tmp/team-out',
+                project_number: 1,
+            })) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team collaboration is not configured')
         })
@@ -99,7 +102,10 @@ describe('getTeamIoTools', () => {
                 (t) => t.name === 'team_export_markdown'
             )!.handler
 
-            const result = (await handler({ output_dir: '/tmp/team-out', project_number: 1 })) as any
+            const result = (await handler({
+                output_dir: '/tmp/team-out',
+                project_number: 1,
+            })) as any
             expect(result.success).toBe(false)
             expect(result.error).toContain('Export error')
         })
@@ -110,10 +116,10 @@ describe('getTeamIoTools', () => {
                 (t) => t.name === 'team_export_markdown'
             )!.handler
 
-            const result = (await handler({ output_dir: '/tmp/team-out', project_number: 1 })) as Record<
-                string,
-                unknown
-            >
+            const result = (await handler({
+                output_dir: '/tmp/team-out',
+                project_number: 1,
+            })) as Record<string, unknown>
 
             expect(result['success']).toBe(true)
             expect(result['exported_count']).toBe(2)
@@ -136,7 +142,11 @@ describe('getTeamIoTools', () => {
             const handler = getTeamIoTools(context as never).find(
                 (t) => t.name === 'team_import_markdown'
             )!.handler
-            const result = (await handler({ source_dir: '/tmp/team-in', limit: 1000, project_number: 1 })) as any
+            const result = (await handler({
+                source_dir: '/tmp/team-in',
+                limit: 1000,
+                project_number: 1,
+            })) as any
             expect(result.success).toBe(false)
         })
 
@@ -146,10 +156,10 @@ describe('getTeamIoTools', () => {
                 (t) => t.name === 'team_import_markdown'
             )!.handler
 
-            const result = (await handler({ source_dir: '/tmp/team-in', project_number: 1 })) as Record<
-                string,
-                unknown
-            >
+            const result = (await handler({
+                source_dir: '/tmp/team-in',
+                project_number: 1,
+            })) as Record<string, unknown>
 
             expect(result['success']).toBe(true)
             expect(result['created']).toBe(1)

@@ -253,7 +253,7 @@ parentPort?.on('message', (msg: unknown) => {
                             } else {
                                 bytes += 5 // brackets/keys/null overhead
                             }
-                            
+
                             if (bytes > egressLimit) {
                                 throw new Error(`EgressLimitExceeded:${bytes}`)
                             }
@@ -272,7 +272,8 @@ parentPort?.on('message', (msg: unknown) => {
                     const egressLimit = maxResultSize ?? 100 * 1024
                     if (err instanceof Error && err.message.startsWith('EgressLimitExceeded:')) {
                         const actualBytesStr = err.message.split(':')[1]
-                        const actualBytes = actualBytesStr !== undefined ? Number(actualBytesStr) : egressLimit + 1
+                        const actualBytes =
+                            actualBytesStr !== undefined ? Number(actualBytesStr) : egressLimit + 1
                         const actualKb = (actualBytes / 1024).toFixed(1)
                         result.error = `Output limit exceeded: Result serialization exceeded the ${Math.round(egressLimit / 1024)}KB boundary (Actual size: >${actualKb}KB). Please aggregate or filter your results to reduce the payload size.`
                     } else {

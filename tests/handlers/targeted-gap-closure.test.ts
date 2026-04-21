@@ -13,14 +13,47 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -179,8 +212,14 @@ describe('Targeted Gap Closure', () => {
 
     describe('team tools without teamDb', () => {
         it('team_create_entry should return error', async () => {
-            const result = (await callTool('team_create_entry', {
-                project_number: 1, content: 'Test entry' }, db)) as {
+            const result = (await callTool(
+                'team_create_entry',
+                {
+                    project_number: 1,
+                    content: 'Test entry',
+                },
+                db
+            )) as {
                 success: boolean
                 error: string
             }
@@ -190,8 +229,14 @@ describe('Targeted Gap Closure', () => {
         })
 
         it('team_get_recent should return error', async () => {
-            const result = (await callTool('team_get_recent', {
-                project_number: 1, limit: 5 }, db)) as {
+            const result = (await callTool(
+                'team_get_recent',
+                {
+                    project_number: 1,
+                    limit: 5,
+                },
+                db
+            )) as {
                 success: boolean
                 error: string
             }
@@ -201,8 +246,14 @@ describe('Targeted Gap Closure', () => {
         })
 
         it('team_search should return error', async () => {
-            const result = (await callTool('team_search', {
-                project_number: 1, query: 'test' }, db)) as {
+            const result = (await callTool(
+                'team_search',
+                {
+                    project_number: 1,
+                    query: 'test',
+                },
+                db
+            )) as {
                 success: boolean
                 error: string
             }
@@ -221,7 +272,7 @@ describe('Targeted Gap Closure', () => {
             const result = (await callTool(
                 'team_create_entry',
                 {
-                project_number: 1,
+                    project_number: 1,
                     content: 'Team collaboration entry',
                     tags: ['team-test'],
                 },
@@ -242,7 +293,7 @@ describe('Targeted Gap Closure', () => {
             const result = (await callTool(
                 'team_create_entry',
                 {
-                project_number: 1,
+                    project_number: 1,
                     content: 'Bad type entry',
                     entry_type: 'invalid_type_xyz',
                 },
@@ -269,7 +320,9 @@ describe('Targeted Gap Closure', () => {
             const result = (await callTool(
                 'team_get_recent',
                 {
-                project_number: 1, limit: 5 },
+                    project_number: 1,
+                    limit: 5,
+                },
                 db,
                 undefined,
                 undefined,
@@ -292,7 +345,10 @@ describe('Targeted Gap Closure', () => {
             const result = (await callTool(
                 'team_search',
                 {
-                project_number: 1, query: 'Team recent', limit: 5 },
+                    project_number: 1,
+                    query: 'Team recent',
+                    limit: 5,
+                },
                 db,
                 undefined,
                 undefined,
@@ -309,7 +365,10 @@ describe('Targeted Gap Closure', () => {
             const result = (await callTool(
                 'team_search',
                 {
-                project_number: 1, tags: ['team-test'], limit: 5 },
+                    project_number: 1,
+                    tags: ['team-test'],
+                    limit: 5,
+                },
                 db,
                 undefined,
                 undefined,
@@ -325,7 +384,9 @@ describe('Targeted Gap Closure', () => {
             const result = (await callTool(
                 'team_search',
                 {
-                project_number: 1, limit: 3 },
+                    project_number: 1,
+                    limit: 3,
+                },
                 db,
                 undefined,
                 undefined,

@@ -127,7 +127,9 @@ describe('PullRequestsManager', () => {
         it('should throw error when no octokit', async () => {
             const client = createMockClient({ octokit: null })
             const mgr = new PullRequestsManager(client as never)
-            await expect(mgr.getPullRequests('owner', 'repo')).rejects.toThrow('GitHub API not available')
+            await expect(mgr.getPullRequests('owner', 'repo')).rejects.toThrow(
+                'GitHub API not available'
+            )
         })
 
         it('should fetch and map PR states correctly', async () => {
@@ -168,7 +170,9 @@ describe('PullRequestsManager', () => {
         it('should throw error when no octokit', async () => {
             const client = createMockClient({ octokit: null })
             const mgr = new PullRequestsManager(client as never)
-            await expect(mgr.getPullRequest('owner', 'repo', 1)).rejects.toThrow('GitHub API not available')
+            await expect(mgr.getPullRequest('owner', 'repo', 1)).rejects.toThrow(
+                'GitHub API not available'
+            )
         })
 
         it('should fetch and map PR detail fields', async () => {
@@ -177,7 +181,9 @@ describe('PullRequestsManager', () => {
             const result = await mgr.getPullRequest('owner', 'repo', 1)
 
             expect(result).toBeDefined()
-            expect(result!.title).toBe('<untrusted_remote_content>Feature A</untrusted_remote_content>')
+            expect(result!.title).toBe(
+                '<untrusted_remote_content>Feature A</untrusted_remote_content>'
+            )
             expect(result!.headBranch).toBe('feature-branch')
             expect(result!.baseBranch).toBe('main')
             expect(result!.additions).toBe(100)
@@ -201,7 +207,9 @@ describe('PullRequestsManager', () => {
         it('should throw error when no octokit', async () => {
             const client = createMockClient({ octokit: null })
             const mgr = new PullRequestsManager(client as never)
-            await expect(mgr.getReviews('owner', 'repo', 1)).rejects.toThrow('GitHub API not available')
+            await expect(mgr.getReviews('owner', 'repo', 1)).rejects.toThrow(
+                'GitHub API not available'
+            )
         })
 
         it('should detect Copilot bot reviews', async () => {
@@ -231,7 +239,9 @@ describe('PullRequestsManager', () => {
         it('should throw error when no octokit', async () => {
             const client = createMockClient({ octokit: null })
             const mgr = new PullRequestsManager(client as never)
-            await expect(mgr.getReviewComments('owner', 'repo', 1)).rejects.toThrow('GitHub API not available')
+            await expect(mgr.getReviewComments('owner', 'repo', 1)).rejects.toThrow(
+                'GitHub API not available'
+            )
         })
 
         it('should detect Copilot bot comments', async () => {

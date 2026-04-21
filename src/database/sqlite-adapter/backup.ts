@@ -35,13 +35,16 @@ export class BackupManager {
         try {
             this.ctx.pragma('wal_checkpoint(TRUNCATE)')
         } catch (checkpointErr) {
-            const err = checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr)
+            const err =
+                checkpointErr instanceof Error ? checkpointErr.message : String(checkpointErr)
             logger.error('WAL checkpoint failed, aborting backup', {
                 module: 'SqliteAdapter',
                 operation: 'exportToFile',
                 error: err,
             })
-            throw new Error(`WAL checkpoint failed, backup aborted to prevent stale data: ${err}`, { cause: checkpointErr })
+            throw new Error(`WAL checkpoint failed, backup aborted to prevent stale data: ${err}`, {
+                cause: checkpointErr,
+            })
         }
         await fs.promises.copyFile(this.ctx.getDbPath(), backupPath)
 
@@ -86,7 +89,7 @@ export class BackupManager {
                     module: 'SqliteAdapter',
                     operation: 'listBackups',
                     filename,
-                    error: error instanceof Error ? error.message : 'Unknown error'
+                    error: error instanceof Error ? error.message : 'Unknown error',
                 })
             }
         }
@@ -116,7 +119,7 @@ export class BackupManager {
                     module: 'SqliteAdapter',
                     operation: 'deleteOldBackups',
                     filename: backup.filename,
-                    error: error instanceof Error ? error.message : 'Unknown error'
+                    error: error instanceof Error ? error.message : 'Unknown error',
                 })
                 failed.push(backup.filename)
             }
@@ -131,7 +134,10 @@ export class BackupManager {
         return { deleted, failed, kept: toKeep.length }
     }
 
-    async restoreFromFile(filename: string, runtime?: unknown): Promise<{
+    async restoreFromFile(
+        filename: string,
+        runtime?: unknown
+    ): Promise<{
         restoredFrom: string
         previousEntryCount: number
         newEntryCount: number
@@ -140,7 +146,7 @@ export class BackupManager {
 
         const backupsDir = this.ctx.getBackupsDir()
         const backupPath = path.resolve(backupsDir, filename)
-        
+
         if (!backupPath.startsWith(path.resolve(backupsDir))) {
             throw new ValidationError(`Path traversal detected during restore resolution.`)
         }
@@ -183,15 +189,22 @@ export class BackupManager {
             )
         }
 
-
         const lockDir = `${this.ctx.getDbPath()}.lock.d`
         const lockFile = path.join(lockDir, 'lock.json')
         const nonce = randomUUID()
         try {
             fs.mkdirSync(lockDir)
-            fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
+            fs.writeFileSync(
+                lockFile,
+                JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce })
+            )
         } catch (lockError: unknown) {
-            if (typeof lockError === 'object' && lockError !== null && 'code' in lockError && (lockError).code === 'EEXIST') {
+            if (
+                typeof lockError === 'object' &&
+                lockError !== null &&
+                'code' in lockError &&
+                lockError.code === 'EEXIST'
+            ) {
                 let isStale = false
                 try {
                     const lockContent = fs.readFileSync(lockFile, 'utf-8').trim()
@@ -199,32 +212,62 @@ export class BackupManager {
                         let holdingPid: number | undefined
                         let lockTimestamp: number | undefined
                         try {
-                            const parsed = JSON.parse(lockContent) as { pid?: number, timestamp?: number }
+                            const parsed = JSON.parse(lockContent) as {
+                                pid?: number
+                                timestamp?: number
+                            }
                             holdingPid = typeof parsed.pid === 'number' ? parsed.pid : undefined
-                            lockTimestamp = typeof parsed.timestamp === 'number' ? parsed.timestamp : undefined
+                            lockTimestamp =
+                                typeof parsed.timestamp === 'number' ? parsed.timestamp : undefined
                         } catch {
                             // Legacy raw PID string format fallback
                             holdingPid = parseInt(lockContent, 10)
                         }
-                        
+
                         if (holdingPid !== undefined && !isNaN(holdingPid)) {
                             // Check timestamp first: if older than 30 seconds, consider it stale due to crash
-                            if (lockTimestamp !== undefined && (Date.now() - lockTimestamp > 30 * 1000)) {
+                            if (
+                                lockTimestamp !== undefined &&
+                                Date.now() - lockTimestamp > 30 * 1000
+                            ) {
                                 isStale = true
-                                logger.warning('Found stale database restore lock (expired timestamp)', { path: lockDir, holdingPid, ageMs: Date.now() - lockTimestamp, module: 'SqliteAdapter' })
-                            } else if (runtime !== undefined && runtime !== null && typeof runtime === 'object' && 'maintenanceManager' in runtime) {
+                                logger.warning(
+                                    'Found stale database restore lock (expired timestamp)',
+                                    {
+                                        path: lockDir,
+                                        holdingPid,
+                                        ageMs: Date.now() - lockTimestamp,
+                                        module: 'SqliteAdapter',
+                                    }
+                                )
+                            } else if (
+                                runtime !== undefined &&
+                                runtime !== null &&
+                                typeof runtime === 'object' &&
+                                'maintenanceManager' in runtime
+                            ) {
                                 // Delegate to ServerRuntime MaintenanceManager logic
-                                const mm = (runtime as { maintenanceManager?: { isMaintenanceModeActive(): boolean } }).maintenanceManager
+                                const mm = (
+                                    runtime as {
+                                        maintenanceManager?: { isMaintenanceModeActive(): boolean }
+                                    }
+                                ).maintenanceManager
                                 if (mm !== undefined && !mm.isMaintenanceModeActive()) {
                                     isStale = true
-                                    logger.warning('Found stale database restore lock (maintenance mode inactive)', { path: lockDir, module: 'SqliteAdapter' })
+                                    logger.warning(
+                                        'Found stale database restore lock (maintenance mode inactive)',
+                                        { path: lockDir, module: 'SqliteAdapter' }
+                                    )
                                 }
                             } else {
                                 try {
                                     process.kill(holdingPid, 0)
                                 } catch (e: unknown) {
                                     // ESRCH means the process does not exist
-                                    if (e instanceof Error && (e as NodeJS.ErrnoException).code === 'ESRCH') {
+                                    if (
+                                        e instanceof Error &&
+                                        (e as NodeJS.ErrnoException).code === 'ESRCH'
+                                    ) {
                                         isStale = true
                                     }
                                 }
@@ -236,24 +279,36 @@ export class BackupManager {
                 }
 
                 if (isStale) {
-                    logger.warning('Found stale database restore lock (dead PID), atomically renaming', { path: lockDir, module: 'SqliteAdapter' })
+                    logger.warning(
+                        'Found stale database restore lock (dead PID), atomically renaming',
+                        { path: lockDir, module: 'SqliteAdapter' }
+                    )
                     try {
                         fs.renameSync(lockDir, `${lockDir}.${randomUUID()}.stale`)
                     } catch (renameErr) {
                         // If rename fails, another process likely beat us to it.
-                        throw new Error(`Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`, { cause: renameErr })
+                        throw new Error(
+                            `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                            { cause: renameErr }
+                        )
                     }
                     // Retry acquiring the lock
                     fs.mkdirSync(lockDir)
-                    fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }))
+                    fs.writeFileSync(
+                        lockFile,
+                        JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce })
+                    )
                 } else {
-                    throw new Error(`Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`, { cause: lockError })
+                    throw new Error(
+                        `Another process is currently holding the database lock at ${lockDir}. Backup restore cannot safely proceed.`,
+                        { cause: lockError }
+                    )
                 }
             } else {
                 throw lockError
             }
         }
-        
+
         try {
             const currentCountResult = this.ctx.exec(
                 'SELECT COUNT(*) FROM memory_journal WHERE deleted_at IS NULL'
@@ -270,7 +325,7 @@ export class BackupManager {
             try {
                 // Atomic backup of current DB by renaming it out of the way
                 await fs.promises.rename(this.ctx.getDbPath(), oldDbBackupPath)
-                
+
                 // Perform atomic swap of new DB into place
                 await fs.promises.rename(tempDbPath, this.ctx.getDbPath())
 
@@ -279,21 +334,28 @@ export class BackupManager {
                 await this.ctx.initialize()
 
                 // Run explicit integrity check
-                const integrityResult = this.ctx.exec('PRAGMA integrity_check');
+                const integrityResult = this.ctx.exec('PRAGMA integrity_check')
                 if (integrityResult[0]?.values[0]?.[0] !== 'ok') {
-                    throw new Error(`Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`)
+                    throw new Error(
+                        `Integrity check failed: ${String(integrityResult[0]?.values[0]?.[0])}`
+                    )
                 }
-                
+
                 // Success: clean up old DB backup
                 try {
                     await fs.promises.unlink(oldDbBackupPath)
-                } catch { /* ignore cleanup errors */ }
+                } catch {
+                    /* ignore cleanup errors */
+                }
             } catch (error) {
-                logger.error('Restore failed, rolling back to pre-restore backup using atomic rename', {
-                    module: 'SqliteAdapter',
-                    operation: 'restoreFromFile',
-                    error: error instanceof Error ? error.message : String(error)
-                })
+                logger.error(
+                    'Restore failed, rolling back to pre-restore backup using atomic rename',
+                    {
+                        module: 'SqliteAdapter',
+                        operation: 'restoreFromFile',
+                        error: error instanceof Error ? error.message : String(error),
+                    }
+                )
                 // Close DB to ensure handles are released before rollback
                 this.ctx.closeDbBeforeRestore()
                 // Rollback using fast atomic rename
@@ -312,16 +374,16 @@ export class BackupManager {
                 operation: 'restoreFromFile',
                 context: { backupPath, previousEntryCount, newEntryCount },
             })
-            
+
             return { restoredFrom: filename, previousEntryCount, newEntryCount }
         } finally {
             try {
                 fs.unlinkSync(lockFile)
                 fs.rmdirSync(lockDir)
             } catch (err: unknown) {
-                logger.warning('Failed to release OS lock directory during restore', { 
-                    path: lockDir, 
-                    error: err instanceof Error ? err.message : String(err) 
+                logger.warning('Failed to release OS lock directory during restore', {
+                    path: lockDir,
+                    error: err instanceof Error ? err.message : String(err),
                 })
             }
         }

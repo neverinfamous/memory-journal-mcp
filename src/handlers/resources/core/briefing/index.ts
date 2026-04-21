@@ -132,14 +132,16 @@ async function buildBriefingData(
             ...(skillsDir ? { skillsDir } : {}),
             ...(insights ? { insights } : {}),
             ...(flags ? { activeFlags: flags } : {}),
-            ...(config.projectRegistry ? {
-                registeredWorkspaces: Object.fromEntries(
-                    Object.entries(config.projectRegistry).map(([k, v]) => {
-                        const strippedPath = v.path.split(/[\\/]/).pop() || v.path
-                        return [k, { ...v, path: strippedPath }]
-                    })
-                )
-            } : {}),
+            ...(config.projectRegistry
+                ? {
+                      registeredWorkspaces: Object.fromEntries(
+                          Object.entries(config.projectRegistry).map(([k, v]) => {
+                              const strippedPath = v.path.split(/[\\/]/).pop() || v.path
+                              return [k, { ...v, path: strippedPath }]
+                          })
+                      ),
+                  }
+                : {}),
             behaviors: {
                 create: 'implementations, decisions, bug-fixes, milestones',
                 search: 'before decisions, referencing prior work',

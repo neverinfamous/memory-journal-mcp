@@ -105,7 +105,9 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                         'error' in resolved.data &&
                         typeof (resolved.data as Record<string, unknown>)['error'] === 'string'
                     ) {
-                        const errorMsg = (resolved.data as Record<string, unknown>)['error'] as string
+                        const errorMsg = (resolved.data as Record<string, unknown>)[
+                            'error'
+                        ] as string
                         if (errorMsg.includes('GitHub integration not available')) {
                             return 'graph LR\n  NoGitHub["GitHub integration not available — set GITHUB_TOKEN"]'
                         }
@@ -114,11 +116,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                 }
                 const { owner, repo, github } = resolved
 
-                const workflowRuns = await github.getWorkflowRuns(
-                    owner,
-                    repo,
-                    10
-                )
+                const workflowRuns = await github.getWorkflowRuns(owner, repo, 10)
 
                 if (workflowRuns.length === 0) {
                     return 'graph LR\n  NoRuns["No GitHub Actions workflow runs found for this repository"]'
@@ -169,7 +167,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
             handler: async (uri: string, context: ResourceContext) => {
                 const match = /memory:\/\/actions\/recent\/?(.*)?/.exec(uri)
                 const targetRepo = match?.[1] ? decodeURIComponent(match[1]) : undefined
-                
+
                 try {
                     const resolved = await resolveGitHubRepo(
                         context.github,
@@ -177,7 +175,7 @@ export function getGraphResourceDefinitions(): InternalResourceDef[] {
                         targetRepo,
                         context.runtime
                     )
-                    
+
                     if (!isResourceError(resolved)) {
                         const { owner, repo, github } = resolved
                         const runs = await github.getWorkflowRuns(owner, repo, 10)

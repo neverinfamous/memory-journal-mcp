@@ -33,16 +33,15 @@ export type VersionedEnvelope = z.infer<typeof VersionedEnvelopeSchema>
 /**
  * Union schema for all valid AutoContext payloads
  */
-export const AutoContextSchema = z.union([
-    FlagContextSchema,
-    VersionedEnvelopeSchema
-])
+export const AutoContextSchema = z.union([FlagContextSchema, VersionedEnvelopeSchema])
 
 /**
  * Helper to safely parse and validate autoContext JSON.
  * Returns the parsed object, or null if invalid/omitted.
  */
-export function parseAutoContext(autoContext: string | null | undefined): Record<string, unknown> | null {
+export function parseAutoContext(
+    autoContext: string | null | undefined
+): Record<string, unknown> | null {
     if (!autoContext) return null
 
     try {

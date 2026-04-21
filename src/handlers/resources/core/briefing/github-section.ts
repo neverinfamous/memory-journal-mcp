@@ -67,7 +67,7 @@ export async function buildGitHubSection(
             fetchCiStatus(github, owner, repo, config),
             fetchIssuesAndPrs(github, owner, repo, config),
             fetchMilestones(github, owner, repo, config.milestoneCount ?? 3),
-        ]);
+        ])
 
         // Batch 2: insights and copilot reviews
         const batch2 = await Promise.allSettled([
@@ -75,32 +75,59 @@ export async function buildGitHubSection(
             config.copilotReviews
                 ? fetchCopilotReviews(github, owner, repo)
                 : Promise.resolve(undefined),
-        ]);
+        ])
 
-        const [ciStatusResult, issuesAndPrsResult, milestonesResult] = batch1;
-        const [insightsResult, copilotReviewsResult] = batch2;
+        const [ciStatusResult, issuesAndPrsResult, milestonesResult] = batch1
+        const [insightsResult, copilotReviewsResult] = batch2
 
         const degradedReasons: string[] = []
 
-        const ciStatus = ciStatusResult.status === 'fulfilled' ? ciStatusResult.value : { status: 'unknown' as const, workflowSummary: undefined, degraded: true }
-        if (ciStatusResult.status === 'rejected') degradedReasons.push(`CI Status fetch failed: ${String(ciStatusResult.reason)}`)
+        const ciStatus =
+            ciStatusResult.status === 'fulfilled'
+                ? ciStatusResult.value
+                : { status: 'unknown' as const, workflowSummary: undefined, degraded: true }
+        if (ciStatusResult.status === 'rejected')
+            degradedReasons.push(`CI Status fetch failed: ${String(ciStatusResult.reason)}`)
         else if (ciStatus.degraded) degradedReasons.push('CI Status partially degraded')
 
-        const issuesAndPrs = issuesAndPrsResult.status === 'fulfilled' ? issuesAndPrsResult.value : { openIssues: 0, openIssueList: undefined, openPRs: 0, openPrList: undefined, degraded: true }
-        if (issuesAndPrsResult.status === 'rejected') degradedReasons.push(`Issues/PRs fetch failed: ${String(issuesAndPrsResult.reason)}`)
+        const issuesAndPrs =
+            issuesAndPrsResult.status === 'fulfilled'
+                ? issuesAndPrsResult.value
+                : {
+                      openIssues: 0,
+                      openIssueList: undefined,
+                      openPRs: 0,
+                      openPrList: undefined,
+                      degraded: true,
+                  }
+        if (issuesAndPrsResult.status === 'rejected')
+            degradedReasons.push(`Issues/PRs fetch failed: ${String(issuesAndPrsResult.reason)}`)
         else if (issuesAndPrs.degraded) degradedReasons.push('Issues/PRs partially degraded')
 
-        const milestonesData = milestonesResult.status === 'fulfilled' ? milestonesResult.value : { items: [], degraded: true }
-        if (milestonesResult.status === 'rejected') degradedReasons.push(`Milestones fetch failed: ${String(milestonesResult.reason)}`)
+        const milestonesData =
+            milestonesResult.status === 'fulfilled'
+                ? milestonesResult.value
+                : { items: [], degraded: true }
+        if (milestonesResult.status === 'rejected')
+            degradedReasons.push(`Milestones fetch failed: ${String(milestonesResult.reason)}`)
         else if (milestonesData.degraded) degradedReasons.push('Milestones partially degraded')
 
-        const insightsData = insightsResult.status === 'fulfilled' ? insightsResult.value : { degraded: true }
-        if (insightsResult.status === 'rejected') degradedReasons.push(`Insights fetch failed: ${String(insightsResult.reason)}`)
+        const insightsData =
+            insightsResult.status === 'fulfilled' ? insightsResult.value : { degraded: true }
+        if (insightsResult.status === 'rejected')
+            degradedReasons.push(`Insights fetch failed: ${String(insightsResult.reason)}`)
         else if (insightsData.degraded) degradedReasons.push('Insights partially degraded')
 
-        const copilotReviewsData = copilotReviewsResult.status === 'fulfilled' ? (copilotReviewsResult.value ?? {}) : { degraded: true }
-        if (copilotReviewsResult.status === 'rejected') degradedReasons.push(`Copilot Reviews fetch failed: ${String(copilotReviewsResult.reason)}`)
-        else if (copilotReviewsData.degraded) degradedReasons.push('Copilot Reviews partially degraded')
+        const copilotReviewsData =
+            copilotReviewsResult.status === 'fulfilled'
+                ? (copilotReviewsResult.value ?? {})
+                : { degraded: true }
+        if (copilotReviewsResult.status === 'rejected')
+            degradedReasons.push(
+                `Copilot Reviews fetch failed: ${String(copilotReviewsResult.reason)}`
+            )
+        else if (copilotReviewsData.degraded)
+            degradedReasons.push('Copilot Reviews partially degraded')
 
         const { openIssues, openIssueList, openPRs, openPrList } = issuesAndPrs
         const workflowSummary = ciStatus.workflowSummary
@@ -264,7 +291,10 @@ async function fetchIssuesAndPrs(
             config.issueCount > 0 && issues.length > 0
                 ? issues
                       .slice(0, config.issueCount)
-                      .map((i) => ({ number: i.number, title: markUntrustedContentInline(i.title) }))
+                      .map((i) => ({
+                          number: i.number,
+                          title: markUntrustedContentInline(i.title),
+                      }))
                 : undefined
 
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)
@@ -304,7 +334,10 @@ async function fetchMilestones(
     owner: string,
     repo: string,
     limit: number
-): Promise<{ items: { title: string; progress: string; dueOn: string | null }[], degraded?: boolean }> {
+): Promise<{
+    items: { title: string; progress: string; dueOn: string | null }[]
+    degraded?: boolean
+}> {
     if (limit <= 0) return { items: [] }
 
     try {
@@ -317,7 +350,7 @@ async function fetchMilestones(
                     progress: `${String(pct)}%`,
                     dueOn: m.dueOn,
                 }
-            })
+            }),
         }
     } catch (error) {
         logger.debug('Failed to fetch milestones', {
@@ -333,7 +366,7 @@ async function fetchInsights(
     github: GitHubIntegration,
     owner: string,
     repo: string
-): Promise<{ insights?: BriefingGitHub['insights'], degraded?: boolean }> {
+): Promise<{ insights?: BriefingGitHub['insights']; degraded?: boolean }> {
     try {
         const repoStats = await github.getRepoStats(owner, repo)
         if (!repoStats) return { degraded: true }
@@ -373,7 +406,7 @@ async function fetchCopilotReviews(
     github: GitHubIntegration,
     owner: string,
     repo: string
-): Promise<{ reviews?: BriefingGitHub['copilotReviews'], degraded?: boolean } | undefined> {
+): Promise<{ reviews?: BriefingGitHub['copilotReviews']; degraded?: boolean } | undefined> {
     try {
         const recentPrs = await github.getPullRequests(owner, repo, 'all', 10)
         let reviewed = 0
@@ -381,9 +414,9 @@ async function fetchCopilotReviews(
         let changesRequested = 0
         let totalComments = 0
 
-        const summaries = [];
+        const summaries = []
         for (const pr of recentPrs.slice(0, 5)) {
-            summaries.push(await github.getCopilotReviewSummary(owner, repo, pr.number));
+            summaries.push(await github.getCopilotReviewSummary(owner, repo, pr.number))
         }
         for (const summary of summaries) {
             if (summary.state !== 'none') {
@@ -394,7 +427,9 @@ async function fetchCopilotReviews(
             }
         }
 
-        return reviewed > 0 ? { reviews: { reviewed, approved, changesRequested, totalComments } } : undefined
+        return reviewed > 0
+            ? { reviews: { reviewed, approved, changesRequested, totalComments } }
+            : undefined
     } catch (error) {
         logger.debug('Failed to fetch Copilot reviews', {
             module: 'BRIEFING',

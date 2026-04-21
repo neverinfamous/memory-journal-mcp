@@ -25,10 +25,10 @@ test.describe('Payload Contracts: Backup Restore', () => {
 
     test('restore_backup(confirm: false) returns structured validation error', async () => {
         // When confirm is false, the handler returns a structured error response.
-        const payload = await callToolAndParse(client, 'restore_backup', {
+        const payload = (await callToolAndParse(client, 'restore_backup', {
             filename: 'nonexistent.db',
             confirm: false,
-        }) as Record<string, unknown>
+        })) as Record<string, unknown>
 
         expect(payload.success).toBe(false)
         expect(typeof payload.error).toBe('string')
@@ -38,10 +38,10 @@ test.describe('Payload Contracts: Backup Restore', () => {
     })
 
     test('restore_backup with nonexistent file returns structured error', async () => {
-        const payload = await callToolAndParse(client, 'restore_backup', {
+        const payload = (await callToolAndParse(client, 'restore_backup', {
             filename: 'nonexistent-backup-file-that-does-not-exist.db',
             confirm: true,
-        }) as Record<string, unknown>
+        })) as Record<string, unknown>
 
         expect(payload.success).toBe(false)
         expect(typeof payload.error).toBe('string')
@@ -65,10 +65,10 @@ test.describe('Payload Contracts: Backup Restore', () => {
         const backupFilename = backup.filename as string
 
         // Step 3: Restore from the backup (use filename directly from backup result)
-        const restorePayload = await callToolAndParse(client, 'restore_backup', {
+        const restorePayload = (await callToolAndParse(client, 'restore_backup', {
             filename: backupFilename,
             confirm: true,
-        }) as Record<string, unknown>
+        })) as Record<string, unknown>
 
         expect(restorePayload.success).toBe(true)
     })

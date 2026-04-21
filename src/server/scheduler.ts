@@ -105,7 +105,7 @@ export class Scheduler {
             return
         }
         this.started = true
-        
+
         // Prevent timer leaks on graceful shutdown
         process.on('SIGTERM', () => this.stop())
 
@@ -224,10 +224,13 @@ export class Scheduler {
         if (job.isRunning) {
             return
         }
-        
+
         let inMaintenance = false
         if (!this.runtime) {
-            logger.error('ServerRuntime is required to schedule jobs safely. Bypassing maintenance check.', { module: 'Scheduler' })
+            logger.error(
+                'ServerRuntime is required to schedule jobs safely. Bypassing maintenance check.',
+                { module: 'Scheduler' }
+            )
         } else {
             inMaintenance = this.runtime.maintenanceManager.isMaintenanceModeActive()
         }
@@ -235,7 +238,7 @@ export class Scheduler {
         if (inMaintenance) {
             logger.info(`Skipping scheduled job '${job.name}' due to active maintenance mode`, {
                 module: 'Scheduler',
-                operation: job.name
+                operation: job.name,
             })
             return
         }
@@ -334,7 +337,7 @@ export class Scheduler {
      * Digest job: compute analytics snapshot and persist to database.
      */
     private runDigest(): void {
-        const snapshot = (this.db.computeDigest() as unknown) as DigestSnapshot
+        const snapshot = this.db.computeDigest() as unknown as DigestSnapshot
         this.db.saveAnalyticsSnapshot('digest', snapshot as unknown as Record<string, unknown>)
         logger.info('Scheduled analytics digest computed', {
             module: 'Scheduler',

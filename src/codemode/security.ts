@@ -133,12 +133,16 @@ export class CodeModeSecurityManager {
         // Pre-flight checks to prevent OOM / V8 crashes on massive explicit arrays/strings
         if (typeof result === 'string' && result.length > this.config.maxResultSize) {
             const limitKb = Math.ceil(this.config.maxResultSize / 1024)
-            errors.push(`Result string exceeds maximum approximate size of ${String(limitKb)} KB. Extract specific fields or aggregate data.`)
+            errors.push(
+                `Result string exceeds maximum approximate size of ${String(limitKb)} KB. Extract specific fields or aggregate data.`
+            )
             return { valid: false, errors }
         }
 
         if (Array.isArray(result) && result.length > 1000) {
-            errors.push(`Result array exceeds maximum length of 1000 elements (${String(result.length)} returned). Aggregate data or reduce limit before returning.`)
+            errors.push(
+                `Result array exceeds maximum length of 1000 elements (${String(result.length)} returned). Aggregate data or reduce limit before returning.`
+            )
             return { valid: false, errors }
         }
 
@@ -151,13 +155,16 @@ export class CodeModeSecurityManager {
             } catch {
                 // Fallback to safe JSON serialization if v8 encounters uncloneable data or cyclic references
                 const cache = new Set()
-                actualBytes = Buffer.byteLength(JSON.stringify(result, (_key: string, value: unknown): unknown => {
-                    if (typeof value === 'object' && value !== null) {
-                        if (cache.has(value)) return '[Circular]'
-                        cache.add(value)
-                    }
-                    return value
-                }) || '', 'utf-8')
+                actualBytes = Buffer.byteLength(
+                    JSON.stringify(result, (_key: string, value: unknown): unknown => {
+                        if (typeof value === 'object' && value !== null) {
+                            if (cache.has(value)) return '[Circular]'
+                            cache.add(value)
+                        }
+                        return value
+                    }) || '',
+                    'utf-8'
+                )
             }
 
             if (actualBytes > this.config.maxResultSize) {

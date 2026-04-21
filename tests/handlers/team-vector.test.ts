@@ -9,14 +9,47 @@ import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { VectorSearchManager } from '../../src/vector/vector-search-manager.js'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -62,7 +95,9 @@ describe('Team Vector Tool Handlers', () => {
         await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Vector matched' },
+                project_number: 1,
+                content: 'Vector matched',
+            },
             personalDb,
             undefined,
             undefined,
@@ -101,7 +136,9 @@ describe('Team Vector Tool Handlers', () => {
     describe('team_semantic_search', () => {
         it('should return semantic search results', async () => {
             const result = (await callTeamTool('team_semantic_search', {
-                project_number: 1, query: 'test' })) as any
+                project_number: 1,
+                query: 'test',
+            })) as any
 
             expect(result.query).toBe('test')
             expect(result.count).toBeGreaterThan(0)
@@ -111,7 +148,9 @@ describe('Team Vector Tool Handlers', () => {
 
         it('should handle hints on empty results', async () => {
             const result = (await callTeamTool('team_semantic_search', {
-                project_number: 1, query: 'empty' })) as any
+                project_number: 1,
+                query: 'empty',
+            })) as any
 
             expect(result.count).toBe(0)
             expect(result.hint).toContain('No entries matched')
@@ -121,7 +160,9 @@ describe('Team Vector Tool Handlers', () => {
             const result = (await callTool(
                 'team_semantic_search',
                 {
-                project_number: 1, query: 'test' },
+                    project_number: 1,
+                    query: 'test',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -137,7 +178,9 @@ describe('Team Vector Tool Handlers', () => {
             const result = (await callTool(
                 'team_semantic_search',
                 {
-                project_number: 1, query: 'test' },
+                    project_number: 1,
+                    query: 'test',
+                },
                 personalDb
             )) as any
             expect(result.error).toContain('Team database not configured')
@@ -195,7 +238,9 @@ describe('Team Vector Tool Handlers', () => {
     describe('team_add_to_vector_index', () => {
         it('should add entry to index', async () => {
             const result = (await callTeamTool('team_add_to_vector_index', {
-                project_number: 1, entry_id: 1 })) as any
+                project_number: 1,
+                entry_id: 1,
+            })) as any
 
             expect(result.success).toBe(true)
             expect(result.entryId).toBe(1)
@@ -217,7 +262,9 @@ describe('Team Vector Tool Handlers', () => {
             const result = (await callTool(
                 'team_add_to_vector_index',
                 {
-                project_number: 1, entry_id: 1 },
+                    project_number: 1,
+                    entry_id: 1,
+                },
                 personalDb,
                 undefined,
                 undefined,

@@ -1,7 +1,7 @@
 /**
  * Payload Contract Tests: Sandbox Limits
  *
- * Validates that mj_execute_code cleanly terminates operations 
+ * Validates that mj_execute_code cleanly terminates operations
  * exceeding the execution timeout.
  */
 
@@ -34,7 +34,7 @@ test.describe('Payload Contracts: Sandbox Limits', () => {
         expect(payload.success).toBe(false)
         expect(duration).toBeLessThan(3000)
     })
-    
+
     test('Code Mode MUST terminate long-running synchronous code', async () => {
         const payload = await callToolAndParse(client, 'mj_execute_code', {
             code: 'const end = Date.now() + 5000; while(Date.now() < end) {}',

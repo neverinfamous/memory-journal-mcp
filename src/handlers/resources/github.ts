@@ -11,7 +11,12 @@ import {
     LOW_PRIORITY,
     MEDIUM_PRIORITY,
 } from '../../utils/resource-annotations.js'
-import type { GitHubIssue, GitHubPullRequest, GitHubWorkflowRun, GitHubMilestone } from '../../types/index.js'
+import type {
+    GitHubIssue,
+    GitHubPullRequest,
+    GitHubWorkflowRun,
+    GitHubMilestone,
+} from '../../types/index.js'
 import type { InternalResourceDef, ResourceContext, ResourceResult } from './shared.js'
 import { resolveGitHubRepo, isResourceError, milestoneCompletionPct } from './shared.js'
 import { markUntrustedContentInline } from '../../utils/security-utils.js'
@@ -62,28 +67,31 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 const defaultProjectNumber = context.briefingConfig?.defaultProjectNumber
 
                 const withTimeout = <T>(
-                   operation: (signal: AbortSignal) => Promise<T>,
-                   ms: number, 
-                   desc: string
+                    operation: (signal: AbortSignal) => Promise<T>,
+                    ms: number,
+                    desc: string
                 ): Promise<T> => {
                     const controller = new AbortController()
                     return Promise.race([
                         operation(controller.signal),
-                        new Promise<T>((_, reject) => setTimeout(() => {
-                            controller.abort()
-                            reject(new Error(`GitHub API timeout: ${desc}`))
-                        }, ms))
+                        new Promise<T>((_, reject) =>
+                            setTimeout(() => {
+                                controller.abort()
+                                reject(new Error(`GitHub API timeout: ${desc}`))
+                            }, ms)
+                        ),
                     ])
                 }
 
                 // Parallelize independent API calls for performance
-                const [
-                    repoContextResult,
-                    kanbanResult,
-                ] = await Promise.allSettled([
+                const [repoContextResult, kanbanResult] = await Promise.allSettled([
                     withTimeout((s) => github.getRepoContext(s), 10000, 'getRepoContext'),
                     defaultProjectNumber !== undefined
-                        ? withTimeout((s) => github.getProjectKanban(owner, defaultProjectNumber, repo, s), 10000, 'getProjectKanban')
+                        ? withTimeout(
+                              (s) => github.getProjectKanban(owner, defaultProjectNumber, repo, s),
+                              10000,
+                              'getProjectKanban'
+                          )
                         : Promise.resolve(null),
                 ])
 
@@ -98,8 +106,14 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                     commit = repoContextResult.value.commit
                     issues = (repoContextResult.value.issues ?? []).slice(0, RESOURCE_ISSUE_LIMIT)
                     prs = (repoContextResult.value.pullRequests ?? []).slice(0, RESOURCE_PR_LIMIT)
-                    workflowRuns = (repoContextResult.value.workflowRuns ?? []).slice(0, RESOURCE_WORKFLOW_LIMIT)
-                    milestonesContext = (repoContextResult.value.milestones ?? []).slice(0, RESOURCE_STATUS_MILESTONE_LIMIT)
+                    workflowRuns = (repoContextResult.value.workflowRuns ?? []).slice(
+                        0,
+                        RESOURCE_WORKFLOW_LIMIT
+                    )
+                    milestonesContext = (repoContextResult.value.milestones ?? []).slice(
+                        0,
+                        RESOURCE_STATUS_MILESTONE_LIMIT
+                    )
                 } else {
                     logger.debug('Failed to fetch repo context', {
                         module: 'RESOURCE',
@@ -333,7 +347,11 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                         ms.openIssues,
                         ms.closedIssues
                     )
-                    return { ...ms, title: markUntrustedContentInline(ms.title), completionPercentage }
+                    return {
+                        ...ms,
+                        title: markUntrustedContentInline(ms.title),
+                        completionPercentage,
+                    }
                 })
 
                 return {
@@ -394,7 +412,11 @@ export function getGitHubResourceDefinitions(): InternalResourceDef[] {
                 return {
                     data: {
                         repository: `${owner}/${repo}`,
-                        milestone: { ...milestone, title: markUntrustedContentInline(milestone.title), completionPercentage },
+                        milestone: {
+                            ...milestone,
+                            title: markUntrustedContentInline(milestone.title),
+                            completionPercentage,
+                        },
                         hint: 'Use get_github_issues tool to list issues associated with this milestone.',
                     },
                     annotations: { lastModified },

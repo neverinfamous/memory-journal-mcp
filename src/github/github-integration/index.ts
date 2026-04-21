@@ -34,23 +34,29 @@ export type { RepoInfo, IssueDetails, PullRequestDetails }
 import { createHash } from 'node:crypto'
 import type { ServerRuntime } from '../../utils/maintenance-lock.js'
 
-export function getGitHubIntegration(workingDir = '.', runtime?: ServerRuntime, token?: string): GitHubIntegration {
-    const resolvedDir = workingDir === '.' ? process.cwd() : workingDir;
-    
+export function getGitHubIntegration(
+    workingDir = '.',
+    runtime?: ServerRuntime,
+    token?: string
+): GitHubIntegration {
+    const resolvedDir = workingDir === '.' ? process.cwd() : workingDir
+
     // Support instance-scoped runtime pools for multi-tenant isolation
     if (runtime) {
-        runtime.githubClientPool ??= new Map<string, GitHubIntegration>();
-        const cacheKey = token ? `${resolvedDir}:${createHash('sha256').update(token).digest('hex').substring(0, 12)}` : resolvedDir;
-        let instance = runtime.githubClientPool.get(cacheKey);
+        runtime.githubClientPool ??= new Map<string, GitHubIntegration>()
+        const cacheKey = token
+            ? `${resolvedDir}:${createHash('sha256').update(token).digest('hex').substring(0, 12)}`
+            : resolvedDir
+        let instance = runtime.githubClientPool.get(cacheKey)
         if (!instance) {
-            instance = new GitHubIntegration(resolvedDir, token);
-            runtime.githubClientPool.set(cacheKey, instance);
+            instance = new GitHubIntegration(resolvedDir, token)
+            runtime.githubClientPool.set(cacheKey, instance)
         }
-        return instance;
+        return instance
     }
 
     // Fallback to non-pooled transient instances if no runtime is provided
-    return new GitHubIntegration(resolvedDir, token);
+    return new GitHubIntegration(resolvedDir, token)
 }
 
 /**
@@ -186,7 +192,12 @@ export class GitHubIntegration {
         return this.pullRequestsManager.getCopilotReviewSummary(owner, repo, prNumber)
     }
 
-    async getWorkflowRuns(owner: string, repo: string, limit = 10, abortSignal?: AbortSignal): Promise<GitHubWorkflowRun[]> {
+    async getWorkflowRuns(
+        owner: string,
+        repo: string,
+        limit = 10,
+        abortSignal?: AbortSignal
+    ): Promise<GitHubWorkflowRun[]> {
         return this.repositoryManager.getWorkflowRuns(owner, repo, limit, abortSignal)
     }
 
@@ -217,12 +228,36 @@ export class GitHubIntegration {
 
         const degraded: string[] = []
         if (repoInfo.owner && repoInfo.repo) {
-            const [issuesResult, prsResult, runsResult, milestonesResult] = await Promise.allSettled([
-                this.issuesManager.getIssues(repoInfo.owner, repoInfo.repo, 'open', 10, abortSignal),
-                this.pullRequestsManager.getPullRequests(repoInfo.owner, repoInfo.repo, 'open', 10, abortSignal),
-                this.repositoryManager.getWorkflowRuns(repoInfo.owner, repoInfo.repo, 10, abortSignal),
-                this.milestonesManager.getMilestones(repoInfo.owner, repoInfo.repo, 'open', 10, abortSignal)
-            ])
+            const [issuesResult, prsResult, runsResult, milestonesResult] =
+                await Promise.allSettled([
+                    this.issuesManager.getIssues(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        'open',
+                        10,
+                        abortSignal
+                    ),
+                    this.pullRequestsManager.getPullRequests(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        'open',
+                        10,
+                        abortSignal
+                    ),
+                    this.repositoryManager.getWorkflowRuns(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        10,
+                        abortSignal
+                    ),
+                    this.milestonesManager.getMilestones(
+                        repoInfo.owner,
+                        repoInfo.repo,
+                        'open',
+                        10,
+                        abortSignal
+                    ),
+                ])
 
             context.issues = issuesResult.status === 'fulfilled' ? issuesResult.value : []
             if (issuesResult.status === 'rejected') degraded.push('issues')
@@ -233,7 +268,8 @@ export class GitHubIntegration {
             context.workflowRuns = runsResult.status === 'fulfilled' ? runsResult.value : []
             if (runsResult.status === 'rejected') degraded.push('workflowRuns')
 
-            context.milestones = milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
+            context.milestones =
+                milestonesResult.status === 'fulfilled' ? milestonesResult.value : []
             if (milestonesResult.status === 'rejected') degraded.push('milestones')
         }
 

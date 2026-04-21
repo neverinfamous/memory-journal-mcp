@@ -77,16 +77,19 @@ export function createAuthMiddleware(
         }
 
         const envScopes = process.env['MCP_AUTH_SCOPES']
-        let defaultScopes = envScopes ? envScopes.split(',').map(s => s.trim()) : ['read']
-        const invalidScopes = defaultScopes.filter(s => !isValidScope(s))
+        let defaultScopes = envScopes ? envScopes.split(',').map((s) => s.trim()) : ['read']
+        const invalidScopes = defaultScopes.filter((s) => !isValidScope(s))
         if (invalidScopes.length > 0) {
-            logger.warning(`Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`, { module: 'HTTP' })
+            logger.warning(
+                `Invalid MCP_AUTH_SCOPES detected: ${invalidScopes.join(', ')}. Falling back to safe defaults.`,
+                { module: 'HTTP' }
+            )
             defaultScopes = ['read']
         }
 
         // Bind an explicit identity for shared bearer mode so that stateful sessions
         // can enforce tenant isolation even without OAuth.
-        
+
         // Derive identity from token securely.
         // We cannot use a random nonce or mcp-session-id here because standard MCP SDK clients
         // do not send mcp-session-id during initialization, which would cause the identity hash
@@ -94,15 +97,16 @@ export function createAuthMiddleware(
         // We bind the client IP to the hash to provide strict session isolation for shared tokens.
         const clientIp = getClientIp(req)
         const hashInput = `${authToken}:${clientIp}`
-        
+
         const identityHash = createHash('sha256').update(hashInput).digest('hex').substring(0, 12)
         const identity = `bearer-${identityHash}`
-        
-        ;(req as unknown as { auth?: { sub?: string; subject?: string; scopes?: string[] } }).auth = {
-            sub: identity,
-            subject: identity,
-            scopes: defaultScopes
-        }
+
+        ;(req as unknown as { auth?: { sub?: string; subject?: string; scopes?: string[] } }).auth =
+            {
+                sub: identity,
+                subject: identity,
+                scopes: defaultScopes,
+            }
         next()
     }
 }

@@ -5,10 +5,7 @@
  */
 
 import { z } from 'zod'
-import type {
-    ToolDefinition,
-    ToolContext,
-} from '../../../types/index.js'
+import type { ToolDefinition, ToolContext } from '../../../types/index.js'
 import { formatHandlerError } from '../../../utils/error-helpers.js'
 import { ValidationError } from '../../../types/errors.js'
 import {
@@ -89,12 +86,13 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     )
 
                     // 1. OUTBOX PATTERN: Create journal entry in pending state FIRST
-                    const entryContent = input.entry_content ?? 
+                    const entryContent =
+                        input.entry_content ??
                         `[PENDING] Creating GitHub issue: ${input.title}\n` +
-                        (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
-                        (input.body
-                            ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
-                            : '')
+                            (projectNumber !== undefined ? `Project: #${projectNumber}\n` : '') +
+                            (input.body
+                                ? `\nDescription: ${input.body.slice(0, 200)}${input.body.length > 200 ? '...' : ''}`
+                                : '')
 
                     const entry = db.createEntry({
                         content: entryContent,
@@ -120,7 +118,9 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     if (!issue) {
                         // Decouple journaling: mark entry as failed instead of rollback
                         db.updateEntry(entry.id, {
-                            content: entryContent + '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.'
+                            content:
+                                entryContent +
+                                '\n\n[FAILED] GitHub mutation failed: Could not create issue. Check GITHUB_TOKEN permissions.',
                         })
                         return {
                             success: false,
@@ -231,7 +231,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                         content: finalContent,
                         issueNumber: issue.number,
                         issueUrl: issue.url,
-                        tags: input.tags ?? ['github', 'issue-created']
+                        tags: input.tags ?? ['github', 'issue-created'],
                     })
 
                     return {
@@ -366,7 +366,9 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     if (!result) {
                         // Decouple journaling: mark entry as failed instead of rollback
                         db.updateEntry(entry.id, {
-                            content: entryContent + '\n\n[FAILED] GitHub mutation failed: Could not close issue. Check GITHUB_TOKEN permissions.'
+                            content:
+                                entryContent +
+                                '\n\n[FAILED] GitHub mutation failed: Could not close issue. Check GITHUB_TOKEN permissions.',
                         })
                         return {
                             success: false,
@@ -472,7 +474,7 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                     db.updateEntry(entry.id, {
                         content: finalContent,
                         issueUrl: issueDetails.url,
-                        tags: input.tags ?? ['github', 'issue-closed', 'resolution']
+                        tags: input.tags ?? ['github', 'issue-closed', 'resolution'],
                     })
 
                     return {

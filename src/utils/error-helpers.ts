@@ -67,8 +67,11 @@ export function formatHandlerError(err: unknown): ErrorResponse {
     // Unknown / raw errors — enrich via ERROR_SUGGESTIONS pattern matching
     const message = err instanceof Error ? err.message : String(err)
     const matched = matchSuggestion(message)
-    const sanitizedMessage = message.replace(/(?:[A-Za-z]:)?(?:[\\/][\w.-]+)+[\\/]?/g, '<sanitized_path>')
-    
+    const sanitizedMessage = message.replace(
+        /(?:[A-Za-z]:)?(?:[\\/][\w.-]+)+[\\/]?/g,
+        '<sanitized_path>'
+    )
+
     return {
         success: false,
         error: 'An internal error occurred during tool execution. Please check the server logs for more details.',
@@ -76,6 +79,8 @@ export function formatHandlerError(err: unknown): ErrorResponse {
         category: ErrorCategory.INTERNAL,
         recoverable: false,
         ...(matched?.suggestion ? { suggestion: matched.suggestion } : {}),
-        ...(process.env['DEBUG'] === 'true' ? { details: { internal_message: sanitizedMessage } } : {}),
+        ...(process.env['DEBUG'] === 'true'
+            ? { details: { internal_message: sanitizedMessage } }
+            : {}),
     }
 }

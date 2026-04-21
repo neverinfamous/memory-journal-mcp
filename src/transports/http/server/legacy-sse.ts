@@ -7,7 +7,11 @@ import type { StatefulContext } from './stateful.js'
 import { JSONRPC_SERVER_ERROR } from '../types.js'
 import { requestContextStorage } from '../../../utils/request-context.js'
 
-export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory: McpServerFactory): void {
+export function setupLegacySSE(
+    ctx: StatefulContext,
+    app: Express,
+    serverFactory: McpServerFactory
+): void {
     app.get('/sse', (req: Request, res: Response): void => {
         logger.info('Legacy SSE connection requested', { module: 'HTTP' })
 
@@ -20,11 +24,14 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
                 maxSessions = parsed
             }
         }
-        
+
         if (ctx.transports.size + ctx.sseTransports.size >= maxSessions) {
             res.status(429).json({
                 jsonrpc: '2.0',
-                error: { code: JSONRPC_SERVER_ERROR, message: 'Too Many Requests: Maximum active sessions reached' },
+                error: {
+                    code: JSONRPC_SERVER_ERROR,
+                    message: 'Too Many Requests: Maximum active sessions reached',
+                },
                 id: null,
             })
             return
@@ -59,7 +66,7 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
 
                 ctx.sseTransports.set(sseTransport.sessionId, sseTransport)
                 ctx.touchSession(sseTransport.sessionId)
-                
+
                 if (req.auth) {
                     ctx.sessionSubjects.set(sseTransport.sessionId, req.auth.sub)
                 }
@@ -115,7 +122,10 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
         if (expectedSub !== undefined && req.auth?.sub !== expectedSub) {
             res.status(403).json({
                 jsonrpc: '2.0',
-                error: { code: JSONRPC_SERVER_ERROR, message: 'Forbidden: Session belongs to a different subject' },
+                error: {
+                    code: JSONRPC_SERVER_ERROR,
+                    message: 'Forbidden: Session belongs to a different subject',
+                },
                 id: null,
             })
             return
@@ -128,7 +138,11 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
         // attributes (IP, sessionId) are visible to rate limiters and audit loggers.
         void requestContextStorage.run({ ip: req.ip, sessionId }, async () => {
             try {
-                await transport.handlePostMessage(req as IncomingMessage, res as ServerResponse, req.body)
+                await transport.handlePostMessage(
+                    req as IncomingMessage,
+                    res as ServerResponse,
+                    req.body
+                )
             } catch (error) {
                 logger.error('Unhandled fault in legacy SSE message handler', {
                     module: 'HTTP',
@@ -137,7 +151,10 @@ export function setupLegacySSE(ctx: StatefulContext, app: Express, serverFactory
                 if (!res.headersSent) {
                     res.status(500).json({
                         jsonrpc: '2.0',
-                        error: { code: JSONRPC_SERVER_ERROR, message: 'Internal server error during legacy SSE dispatch' },
+                        error: {
+                            code: JSONRPC_SERVER_ERROR,
+                            message: 'Internal server error during legacy SSE dispatch',
+                        },
                         id: null,
                     })
                 }

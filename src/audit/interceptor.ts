@@ -100,7 +100,7 @@ export function createAuditInterceptor(auditLogger: AuditLogger): AuditIntercept
             }
 
             const isReadScope = scope === 'read'
-            
+
             const authCtx = getAuthContext()
             const reqCtx = getRequestContext()
             const user = authCtx?.claims?.sub ?? null

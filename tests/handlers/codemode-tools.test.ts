@@ -4,15 +4,45 @@ import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import * as fs from 'fs'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] }, dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }) } as any, progress, teamDb, teamVector);
-
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+                dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/utils/request-context.js', async (importOriginal) => {
     const actual = await importOriginal<any>()
     return {
         ...actual,
-        getRequestContext: () => ({ sessionId: 'test-session-id' })
+        getRequestContext: () => ({ sessionId: 'test-session-id' }),
     }
 })
 
@@ -106,9 +136,15 @@ describe('Code Mode Tool Handlers', () => {
                 testrepo: { path: '.', project_number: 99 },
             },
             codemodeInternalFullAccess: true,
-            runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } },
+            runtime: {
+                maintenanceManager: {
+                    withActiveJob: (fn: any) => fn(),
+                    acquireMaintenanceLock: async () => {},
+                    releaseMaintenanceLock: () => {},
+                },
+            },
             io: { allowedRoots: [process.cwd()] },
-            dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 })
+            dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
         }
 
         const result = (await callTool(
@@ -145,9 +181,15 @@ describe('Code Mode Tool Handlers', () => {
                 testrepo2: { path: '.', project_number: 99 },
             },
             codemodeInternalFullAccess: true,
-            runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } },
+            runtime: {
+                maintenanceManager: {
+                    withActiveJob: (fn: any) => fn(),
+                    acquireMaintenanceLock: async () => {},
+                    releaseMaintenanceLock: () => {},
+                },
+            },
             io: { allowedRoots: [process.cwd()] },
-            dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 })
+            dispatch: vi.fn().mockResolvedValue({ success: true, result: 2 }),
         }
 
         const result = (await callTool(
@@ -160,7 +202,9 @@ describe('Code Mode Tool Handlers', () => {
         )) as any
 
         expect(result.success).toBe(false)
-        expect(result.error).toContain("Failed to initialize injected repository 'testrepo2': no git")
+        expect(result.error).toContain(
+            "Failed to initialize injected repository 'testrepo2': no git"
+        )
         spy.mockRestore()
     })
 

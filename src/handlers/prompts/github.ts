@@ -15,12 +15,20 @@ function formatPromptEntries(
     entries: JournalEntry[],
     maxCount = 50
 ): { id: number; type: string; timestamp: string; content: string }[] {
-    return entries.slice(0, maxCount).map((e: JournalEntry): { id: number; type: string; timestamp: string; content: string } => ({
-        id: e.id,
-        type: e.entryType,
-        timestamp: e.timestamp,
-        content: markUntrustedContentInline(e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content),
-    }))
+    return entries
+        .slice(0, maxCount)
+        .map(
+            (
+                e: JournalEntry
+            ): { id: number; type: string; timestamp: string; content: string } => ({
+                id: e.id,
+                type: e.entryType,
+                timestamp: e.timestamp,
+                content: markUntrustedContentInline(
+                    e.content.length > 250 ? e.content.slice(0, 250) + '...' : e.content
+                ),
+            })
+        )
 }
 
 /**

@@ -82,7 +82,9 @@ export class WorkerSandbox {
                 result.metrics = {
                     wallTimeMs: Math.round(endTime - this.currentExecution.startTime),
                     cpuTimeMs: result.metrics.cpuTimeMs,
-                    memoryUsedMb: Math.round((endRss - this.currentExecution.startRss) / 1024 / 1024),
+                    memoryUsedMb: Math.round(
+                        (endRss - this.currentExecution.startRss) / 1024 / 1024
+                    ),
                 }
 
                 const resolve = this.currentExecution.resolve
@@ -98,7 +100,9 @@ export class WorkerSandbox {
 
         this.worker.on('exit', (exitCode) => {
             if (exitCode !== 0) {
-                this.handleWorkerDeath(`Worker exited with code ${String(exitCode)} (likely timeout or OOM)`)
+                this.handleWorkerDeath(
+                    `Worker exited with code ${String(exitCode)} (likely timeout or OOM)`
+                )
             }
         })
     }
@@ -194,32 +198,35 @@ export class WorkerSandbox {
                 startRss,
                 timeoutHandle: setTimeout(() => {
                     this.worker?.terminate().catch(() => undefined)
-                }, effectiveTimeout + 1000)
+                }, effectiveTimeout + 1000),
             }
 
             hostPort.on('message', (msg: RpcRequest) => {
                 void handleRpcRequest(msg, apiBindings, hostPort, methodList)
             })
 
-            let maxResultSize = process.env['CODE_MODE_MAX_RESULT_SIZE'] 
-                ? parseInt(process.env['CODE_MODE_MAX_RESULT_SIZE'], 10) 
+            let maxResultSize = process.env['CODE_MODE_MAX_RESULT_SIZE']
+                ? parseInt(process.env['CODE_MODE_MAX_RESULT_SIZE'], 10)
                 : 100 * 1024
-                
+
             if (Number.isNaN(maxResultSize) || maxResultSize <= 0) {
                 maxResultSize = 100 * 1024
             } else if (maxResultSize > 50 * 1024 * 1024) {
                 maxResultSize = 50 * 1024 * 1024 // Cap at 50MB
             }
 
-            this.worker?.postMessage({
-                type: 'EXECUTE',
-                id: this.executionId,
-                code,
-                methodList,
-                timeoutMs: effectiveTimeout,
-                maxResultSize,
-                rpcPort: workerPort
-            }, [workerPort])
+            this.worker?.postMessage(
+                {
+                    type: 'EXECUTE',
+                    id: this.executionId,
+                    code,
+                    methodList,
+                    timeoutMs: effectiveTimeout,
+                    maxResultSize,
+                    rpcPort: workerPort,
+                },
+                [workerPort]
+            )
         })
     }
 }
@@ -255,7 +262,9 @@ async function handleRpcRequest(
         }
 
         if (typeof target === 'function') {
-            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(...req.args)
+            response.result = await (target as (...args: unknown[]) => Promise<unknown>)(
+                ...req.args
+            )
         } else {
             response.error = `Unknown method: ${req.group}.${req.method}`
         }
@@ -288,7 +297,7 @@ export class WorkerSandboxPool {
         apiBindings: Record<string, unknown>,
         timeoutMs?: number
     ): Promise<SandboxResult> {
-        let availableSandbox = this.pool.find(s => !s.isBusy)
+        let availableSandbox = this.pool.find((s) => !s.isBusy)
 
         if (!availableSandbox) {
             if (this.pool.length < this.options.maxInstances) {
@@ -307,7 +316,7 @@ export class WorkerSandboxPool {
     }
 
     getActiveCount(): number {
-        return this.pool.filter(s => s.isBusy).length
+        return this.pool.filter((s) => s.isBusy).length
     }
 
     dispose(): void {

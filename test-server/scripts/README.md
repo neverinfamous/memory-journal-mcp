@@ -32,5 +32,3 @@ node dist/cli.js --transport http --port 3099 --backup-interval 1 --keep-backups
 # Terminal 2: Test script
 node test-server/scripts/test-scheduler.mjs
 ```
-
-

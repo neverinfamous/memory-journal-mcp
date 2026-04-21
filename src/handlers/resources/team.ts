@@ -4,7 +4,12 @@ import {
     ASSISTANT_FOCUSED,
     MEDIUM_PRIORITY,
 } from '../../utils/resource-annotations.js'
-import type { InternalResourceDef, ResourceContext, ResourceResult, BriefingConfig } from './shared.js'
+import type {
+    InternalResourceDef,
+    ResourceContext,
+    ResourceResult,
+    BriefingConfig,
+} from './shared.js'
 import { DEFAULT_FLAG_VOCABULARY } from '../tools/team/schemas.js'
 import { parseFlagContext } from '../../types/auto-context.js'
 import { logger } from '../../utils/logger.js'
@@ -23,13 +28,13 @@ function enrichWithAuthor<T extends { id: number }>(
 ): (T & { author: string | null })[] {
     const teamDb = context.teamDb
     if (!teamDb || entries.length === 0) return entries.map((e: T) => ({ ...e, author: null }))
-    
-    const ids = entries.map(e => e.id)
+
+    const ids = entries.map((e) => e.id)
     const authorMap = teamDb.getAuthorsForEntries(ids)
-    
+
     return entries.map((e: T) => ({
         ...e,
-        author: authorMap.get(e.id) ?? null
+        author: authorMap.get(e.id) ?? null,
     }))
 }
 
@@ -68,10 +73,10 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
 
                 return {
                     data: {
-                        entries: enriched.map(e => ({
+                        entries: enriched.map((e) => ({
                             ...e,
                             content: markUntrustedContent(e.content),
-                            author: e.author ? sanitizeAuthor(e.author) : null
+                            author: e.author ? sanitizeAuthor(e.author) : null,
                         })),
                         count: enriched.length,
                         source: 'team',
@@ -107,7 +112,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 } catch (error: unknown) {
                     logger.warning('Failed to get team author statistics', {
                         module: 'ResourceHandler',
-                        error: error instanceof Error ? error.message : 'Unknown error'
+                        error: error instanceof Error ? error.message : 'Unknown error',
                     })
                 }
 
@@ -165,7 +170,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                             timestamp: entry.timestamp,
                             preview: markUntrustedContent(
                                 entry.content.slice(0, 120) +
-                                (entry.content.length > 120 ? '...' : '')
+                                    (entry.content.length > 120 ? '...' : '')
                             ),
                             tags: entry.tags,
                             projectNumber: entry.projectNumber ?? null,
@@ -173,8 +178,7 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                     })
                     .filter((f): f is NonNullable<typeof f> => f !== null)
 
-                const lastModified =
-                    activeFlags[0]?.timestamp ?? new Date().toISOString()
+                const lastModified = activeFlags[0]?.timestamp ?? new Date().toISOString()
 
                 return {
                     data: {
@@ -198,8 +202,10 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
                 const config: BriefingConfig | undefined = context.briefingConfig
                 const custom: string[] | undefined = config?.flagVocabulary
                 const hasCustom = Array.isArray(custom) && custom.length > 0
-                
-                const vocabulary: string[] = hasCustom ? custom.map(String) : [...DEFAULT_FLAG_VOCABULARY]
+
+                const vocabulary: string[] = hasCustom
+                    ? custom.map(String)
+                    : [...DEFAULT_FLAG_VOCABULARY]
 
                 return {
                     data: {
@@ -212,11 +218,11 @@ export function getTeamResourceDefinitions(): InternalResourceDef[] {
         },
     ]
 
-    return resources.map(resource => ({
+    return resources.map((resource) => ({
         ...resource,
         capabilities: {
             ...resource.capabilities,
-            requiresTeamScope: true
-        }
+            requiresTeamScope: true,
+        },
     }))
 }

@@ -103,7 +103,11 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
             {
                 cwd: process.cwd(),
                 stdio: 'pipe',
-                env: { ...process.env, ALLOWED_IO_ROOTS: process.cwd(), MCP_RATE_LIMIT_MAX: '10000' },
+                env: {
+                    ...process.env,
+                    ALLOWED_IO_ROOTS: process.cwd(),
+                    MCP_RATE_LIMIT_MAX: '10000',
+                },
             }
         )
 
@@ -194,7 +198,7 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
         })
         expect(res.status).toBe(200) // JSON-RPC always returns HTTP 200
         const text = await res.text()
-        
+
         let body: any
         try {
             body = JSON.parse(text)

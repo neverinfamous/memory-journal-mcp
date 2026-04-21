@@ -22,7 +22,9 @@ describe('utilities coverage', () => {
             vi.spyOn(fs.promises, 'stat').mockResolvedValue({ mtimeMs: 1234 } as any)
             const readFileSpy = vi.spyOn(fs.promises, 'readFile').mockResolvedValue('rules content')
 
-            const dummyAllowedContext = { briefingConfig: { allowedIoRoots: [process.cwd()] } } as any
+            const dummyAllowedContext = {
+                briefingConfig: { allowedIoRoots: [process.cwd()] },
+            } as any
 
             // 1. Initial read
             const result = (await rulesResource.handler('mem', dummyAllowedContext)) as any

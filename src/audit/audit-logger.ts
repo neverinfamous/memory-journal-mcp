@@ -61,7 +61,7 @@ export class AuditLogger {
     private closed = false
     private dirEnsured = false
     private readonly stderrMode: boolean
-    
+
     private _droppedCount = 0
 
     constructor(config: AuditConfig) {
@@ -88,7 +88,7 @@ export class AuditLogger {
      * Append an audit entry to the buffer.
      * Non-blocking — the entry is serialised and queued; the
      * actual file write happens on the next flush cycle.
-     * 
+     *
      * NOTE: This is a lossy operational telemetry mechanism, not a guaranteed immutable ledger.
      * Under extreme backpressure or persistent I/O failure, oldest entries will be dropped
      * to preserve memory and system stability.
@@ -102,7 +102,10 @@ export class AuditLogger {
         if (this.buffer.length > 5000) {
             this.buffer.shift()
             if (this._droppedCount === 0) {
-                logger.warning('Telemetry buffer overflow. Dropping oldest entries. Note: This log is a lossy operational telemetry mechanism.', { module: 'Audit' })
+                logger.warning(
+                    'Telemetry buffer overflow. Dropping oldest entries. Note: This log is a lossy operational telemetry mechanism.',
+                    { module: 'Audit' }
+                )
             }
             this._droppedCount++
         }
@@ -116,14 +119,18 @@ export class AuditLogger {
     /**
      * Log a denied access attempt.
      */
-    logDenial(toolName: string, reason: string, context?: {
-        user?: string | null
-        scopes?: string[]
-        category?: AuditEntry['category']
-        scope?: string
-        requestId?: string
-        sessionId?: string
-    }): void {
+    logDenial(
+        toolName: string,
+        reason: string,
+        context?: {
+            user?: string | null
+            scopes?: string[]
+            category?: AuditEntry['category']
+            scope?: string
+            requestId?: string
+            sessionId?: string
+        }
+    ): void {
         this.log({
             timestamp: new Date().toISOString(),
             requestId: context?.requestId ?? `denied-${Date.now().toString()}`,
@@ -135,7 +142,7 @@ export class AuditLogger {
             scopes: context?.scopes ?? [],
             durationMs: 0,
             success: false,
-            error: `Access Denied: ${reason}`
+            error: `Access Denied: ${reason}`,
         })
     }
 
@@ -146,40 +153,47 @@ export class AuditLogger {
     async flush(): Promise<void> {
         if (this.buffer.length === 0) return
 
-        this.flushQueue = this.flushQueue.then(async () => {
-            if (this.buffer.length === 0) return
+        this.flushQueue = this.flushQueue
+            .then(async () => {
+                if (this.buffer.length === 0) return
 
-            // Rotate before writing if the log exceeds the configured size
-            await this.rotateIfNeeded()
+                // Rotate before writing if the log exceeds the configured size
+                await this.rotateIfNeeded()
 
-            // Swap the buffer so new entries can accumulate while we write
-            const lines = this.buffer
-            this.buffer = []
+                // Swap the buffer so new entries can accumulate while we write
+                const lines = this.buffer
+                this.buffer = []
 
-            try {
-                if (this.stderrMode) {
-                    // Stderr mode: write directly, no buffering to disk
-                    process.stderr.write(lines.join('\n') + '\n')
-                } else {
-                    await this.ensureDirectory()
-                    // One appendFile call with all buffered lines — each terminated by \n
-                    await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
+                try {
+                    if (this.stderrMode) {
+                        // Stderr mode: write directly, no buffering to disk
+                        process.stderr.write(lines.join('\n') + '\n')
+                    } else {
+                        await this.ensureDirectory()
+                        // One appendFile call with all buffered lines — each terminated by \n
+                        await appendFile(this.config.logPath, lines.join('\n') + '\n', 'utf-8')
+                    }
+                } catch (err) {
+                    // Never throw — telemetry must not break tool execution
+                    const message = err instanceof Error ? err.message : String(err)
+                    logger.error(`Write failed: ${message}`, { module: 'Audit' })
+                    // Re-queue the failed lines so they aren't lost
+                    this.buffer.unshift(...lines)
+                    // Prevent infinite memory leak under permanent IO failure
+                    if (this.buffer.length > 5000) {
+                        logger.error(
+                            `Buffer overflow (${String(this.buffer.length)} entries), dropping oldest entries`,
+                            { module: 'Audit' }
+                        )
+                        const toDrop = this.buffer.length - 5000
+                        this.buffer = this.buffer.slice(-5000)
+                        this._droppedCount += toDrop
+                    }
                 }
-            } catch (err) {
-                // Never throw — telemetry must not break tool execution
-                const message = err instanceof Error ? err.message : String(err)
-                logger.error(`Write failed: ${message}`, { module: 'Audit' })
-                // Re-queue the failed lines so they aren't lost
-                this.buffer.unshift(...lines)
-                // Prevent infinite memory leak under permanent IO failure
-                if (this.buffer.length > 5000) {
-                    logger.error(`Buffer overflow (${String(this.buffer.length)} entries), dropping oldest entries`, { module: 'Audit' })
-                    const toDrop = this.buffer.length - 5000
-                    this.buffer = this.buffer.slice(-5000)
-                    this._droppedCount += toDrop
-                }
-            }
-        }).catch(() => { /* ignore */ })
+            })
+            .catch(() => {
+                /* ignore */
+            })
 
         await this.flushQueue
     }
@@ -255,7 +269,10 @@ export class AuditLogger {
                 await fh.close()
             }
         } catch (err) {
-            throw new Error(`Failed to read telemetry log: ${err instanceof Error ? err.message : String(err)}`, { cause: err })
+            throw new Error(
+                `Failed to read telemetry log: ${err instanceof Error ? err.message : String(err)}`,
+                { cause: err }
+            )
         }
     }
 

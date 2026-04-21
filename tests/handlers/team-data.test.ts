@@ -11,14 +11,47 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 
-const callTool = (name: any, params: any, db: any, vectorManager?: any, github?: any, config?: any, progress?: any, teamDb?: any, teamVector?: any) => 
-    _callTool(name, params, db, vectorManager, github, config ?? { runtime: { maintenanceManager: { withActiveJob: (fn: any) => fn(), acquireMaintenanceLock: async () => {}, releaseMaintenanceLock: () => {} } }, io: { allowedRoots: [process.cwd()] } } as any, progress, teamDb, teamVector);
+const callTool = (
+    name: any,
+    params: any,
+    db: any,
+    vectorManager?: any,
+    github?: any,
+    config?: any,
+    progress?: any,
+    teamDb?: any,
+    teamVector?: any
+) =>
+    _callTool(
+        name,
+        params,
+        db,
+        vectorManager,
+        github,
+        config ??
+            ({
+                runtime: {
+                    maintenanceManager: {
+                        withActiveJob: (fn: any) => fn(),
+                        acquireMaintenanceLock: async () => {},
+                        releaseMaintenanceLock: () => {},
+                    },
+                },
+                io: { allowedRoots: [process.cwd()] },
+            } as any),
+        progress,
+        teamDb,
+        teamVector
+    )
 
 vi.mock('../../src/auth/auth-context.js', async (importOriginal: any) => {
     const actual = await importOriginal()
     return {
         ...actual,
-        getAuthContext: () => ({ authenticated: true, claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] } })
+        getAuthContext: () => ({
+            authenticated: true,
+            claims: { sub: 'test-user', scopes: ['team', 'write', 'admin'] },
+        }),
     }
 })
 
@@ -46,7 +79,11 @@ describe('Team Backup and Export Tool Handlers', () => {
         const r1 = (await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Export test 1', tags: ['export-1'], entry_type: 'technical_note' },
+                project_number: 1,
+                content: 'Export test 1',
+                tags: ['export-1'],
+                entry_type: 'technical_note',
+            },
             personalDb,
             undefined,
             undefined,
@@ -57,7 +94,10 @@ describe('Team Backup and Export Tool Handlers', () => {
         const r2 = (await callTool(
             'team_create_entry',
             {
-                project_number: 1, content: 'Export test 2', entry_type: 'project_decision' },
+                project_number: 1,
+                content: 'Export test 2',
+                entry_type: 'project_decision',
+            },
             personalDb,
             undefined,
             undefined,
@@ -96,7 +136,9 @@ describe('Team Backup and Export Tool Handlers', () => {
             const result = (await callTool(
                 'team_export_entries',
                 {
-                project_number: 1, format: 'json' },
+                    project_number: 1,
+                    format: 'json',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -117,7 +159,9 @@ describe('Team Backup and Export Tool Handlers', () => {
             const result = (await callTool(
                 'team_export_entries',
                 {
-                project_number: 1, format: 'markdown' },
+                    project_number: 1,
+                    format: 'markdown',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -136,7 +180,11 @@ describe('Team Backup and Export Tool Handlers', () => {
             const result = (await callTool(
                 'team_export_entries',
                 {
-                project_number: 1, format: 'json', tags: ['export-1'], entry_type: 'technical_note' },
+                    project_number: 1,
+                    format: 'json',
+                    tags: ['export-1'],
+                    entry_type: 'technical_note',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -156,7 +204,9 @@ describe('Team Backup and Export Tool Handlers', () => {
             const result = (await callTool(
                 'team_export_entries',
                 {
-                project_number: 1, format: 'json' },
+                    project_number: 1,
+                    format: 'json',
+                },
                 personalDb
             )) as any
 
@@ -167,16 +217,26 @@ describe('Team Backup and Export Tool Handlers', () => {
 
     describe('team_backup and team_list_backups', () => {
         it('should return error if team DB is not configured for backup', async () => {
-            const result = (await callTool('team_backup', {
-                project_number: 1,}, personalDb)) as any
+            const result = (await callTool(
+                'team_backup',
+                {
+                    project_number: 1,
+                },
+                personalDb
+            )) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
         })
 
         it('should return error if team DB is not configured for list', async () => {
-            const result = (await callTool('team_list_backups', {
-                project_number: 1,}, personalDb)) as any
+            const result = (await callTool(
+                'team_list_backups',
+                {
+                    project_number: 1,
+                },
+                personalDb
+            )) as any
 
             expect(result.success).toBe(false)
             expect(result.error).toContain('Team database not configured')
@@ -186,7 +246,9 @@ describe('Team Backup and Export Tool Handlers', () => {
             const backupResult = (await callTool(
                 'team_backup',
                 {
-                project_number: 1, name: 'test-team-backup' },
+                    project_number: 1,
+                    name: 'test-team-backup',
+                },
                 personalDb,
                 undefined,
                 undefined,
@@ -202,7 +264,8 @@ describe('Team Backup and Export Tool Handlers', () => {
             const listResult = (await callTool(
                 'team_list_backups',
                 {
-                project_number: 1,},
+                    project_number: 1,
+                },
                 personalDb,
                 undefined,
                 undefined,
