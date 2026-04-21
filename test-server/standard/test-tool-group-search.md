@@ -39,9 +39,9 @@
 
 ## Success Criteria
 
-- [ ] Agent reports the Total Token Estimate in the final summary (using the `memory://metrics/tokens` and `memory://metrics/summary` server resources, DO NOT use scripts to parse filesystem responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
-- [ ] Zod boundary limits prevent crashes.
-- [ ] Invalid dates return structured Domain/Validation errors.
-- [ ] No raw `-32602` responses.
-- [ ] Invalid `sort_by` value returns structured Zod validation error.
-- [ ] Valid `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending.
+- [x] Agent reports the Total Token Estimate in the final summary (using the `memory://metrics/tokens` and `memory://metrics/summary` server resources, DO NOT use scripts to parse filesystem responses). The tokens tracked should only count the estimated tokens that actually entered the context window.
+- [x] Zod boundary limits prevent crashes.
+- [x] Invalid dates return structured Domain/Validation errors.
+- [x] No raw `-32602` responses.
+- [x] Invalid `sort_by` value returns structured Zod validation error.
+- [x] Valid `sort_by: 'importance'` returns entries with `importanceScore` field sorted descending.
