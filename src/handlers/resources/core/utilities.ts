@@ -154,7 +154,9 @@ export const rulesResource: InternalResourceDef = {
         }
         try {
             const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
-            assertSafeFilePath(rulesPath, allowedRoots)
+            // Add explicitly configured rules directory to allowed roots for this check
+            const expandedRoots = [...allowedRoots, path.dirname(rulesPath)]
+            assertSafeFilePath(rulesPath, expandedRoots)
         } catch (err) {
             return {
                 data: {
@@ -327,7 +329,12 @@ export const skillsResource: InternalResourceDef = {
         if (userSkillsDir) {
             try {
                 const allowedRoots = context.briefingConfig?.allowedIoRoots ?? []
-                assertSafeDirectoryPath(userSkillsDir, allowedRoots)
+                // Add explicitly configured skills directory to allowed roots for this check
+                const expandedRoots = [...allowedRoots, userSkillsDir]
+                assertSafeDirectoryPath(userSkillsDir, expandedRoots)
+                if (!fs.existsSync(userSkillsDir)) {
+                    throw new Error(`Configured SKILLS_DIR_PATH does not exist: ${userSkillsDir}`)
+                }
             } catch (err) {
                 return {
                     data: {
