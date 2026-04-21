@@ -36,29 +36,33 @@ const created = await mj.team.teamCreateEntry({
   content: 'CM4 team entry test',
   tags: ['codemode4-team-test'],
   entry_type: 'standup',
+  project_number: 5
 })
 const withAuthor = await mj.team.teamCreateEntry({
   content: 'CM4 team explicit author',
   author: 'CM4Bot',
+  project_number: 5
 })
-const recent = await mj.team.teamGetRecent({ limit: 5 })
-const search = await mj.team.teamSearch({ query: 'CM4 team entry test' })
-const tagSearch = await mj.team.teamSearch({ tags: ['codemode4-team-test'] })
+const recent = await mj.team.teamGetRecent({ limit: 5, project_number: 5 })
+const search = await mj.team.teamSearch({ query: 'CM4 team entry test', project_number: 5 })
+const tagSearch = await mj.team.teamSearch({ tags: ['codemode4-team-test'], project_number: 5 })
 const combined = await mj.team.teamSearch({
   query: 'team',
   tags: ['codemode4-team-test'],
+  project_number: 5
 })
-const hybridAuto = await mj.team.teamSearch({ query: 'how did we fix performance' })
-const forcedFts = await mj.team.teamSearch({ query: 'CM4', mode: 'fts' })
-const noArgs = await mj.team.teamSearch({})
+const hybridAuto = await mj.team.teamSearch({ query: 'how did we fix performance', project_number: 5 })
+const forcedFts = await mj.team.teamSearch({ query: 'CM4', mode: 'fts', project_number: 5 })
+const noArgs = await mj.team.teamSearch({ project_number: 5 })
 
 // New: get by ID, list tags
-const detail = await mj.team.teamGetEntryById({ entry_id: created.entry.id })
+const detail = await mj.team.teamGetEntryById({ entry_id: created.entry.id, project_number: 5 })
 const detailNoRels = await mj.team.teamGetEntryById({
   entry_id: created.entry.id,
   include_relationships: false,
+  project_number: 5
 })
-const tags = await mj.team.teamListTags({})
+const tags = await mj.team.teamListTags({ project_number: 5 })
 
 return {
   createSuccess: created.success,
@@ -96,13 +100,13 @@ return {
 
 | Test               | Code                                                                                                                | Expected Result                    |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid" });`                                 | `{ success: false, error: "..." }` |
-| Nonexistent get    | `return await mj.team.teamGetEntryById({ entry_id: 999999 });`                                                      | `{ success: false, error: "..." }` |
-| Nonexistent update | `return await mj.team.teamUpdateEntry({ entry_id: 999999, content: "x" });`                                         | `{ success: false, error: "..." }` |
-| Nonexistent delete | `return await mj.team.teamDeleteEntry({ entry_id: 999999 });`                                                       | `{ success: false, error: "..." }` |
-| Invalid date range | `return await mj.team.teamSearchByDateRange({ start_date: "Jan 1", end_date: "Jan 31" });`                          | `{ success: false, error: "..." }` |
-| Merge same tag     | `return await mj.team.teamMergeTags({ source_tag: "x", target_tag: "x" });`                                         | `{ success: false, error: "..." }` |
-| Link nonexistent   | `return await mj.team.teamLinkEntries({ from_entry_id: 999999, to_entry_id: 1, relationship_type: "references" });` | `{ success: false, error: "..." }` |
+| Invalid entry_type | `return await mj.team.teamCreateEntry({ content: "test", entry_type: "invalid", project_number: 5 });`                                 | `{ success: false, error: "..." }` |
+| Nonexistent get    | `return await mj.team.teamGetEntryById({ entry_id: 999999, project_number: 5 });`                                                      | `{ success: false, error: "..." }` |
+| Nonexistent update | `return await mj.team.teamUpdateEntry({ entry_id: 999999, content: "x", project_number: 5 });`                                         | `{ success: false, error: "..." }` |
+| Nonexistent delete | `return await mj.team.teamDeleteEntry({ entry_id: 999999, project_number: 5 });`                                                       | `{ success: false, error: "..." }` |
+| Invalid date range | `return await mj.team.teamSearchByDateRange({ start_date: "Jan 1", end_date: "Jan 31", project_number: 5 });`                          | `{ success: false, error: "..." }` |
+| Merge same tag     | `return await mj.team.teamMergeTags({ source_tag: "x", target_tag: "x", project_number: 5 });`                                         | `{ success: false, error: "..." }` |
+| Link nonexistent   | `return await mj.team.teamLinkEntries({ from_entry_id: 999999, to_entry_id: 1, relationship_type: "references", project_number: 5 });` | `{ success: false, error: "..." }` |
 
 ### 28.3 Team Date Range Search
 
@@ -111,16 +115,19 @@ return {
 const results = await mj.team.teamSearchByDateRange({
   start_date: '2026-01-01',
   end_date: '2026-12-31',
+  project_number: 5
 })
 const typed = await mj.team.teamSearchByDateRange({
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   entry_type: 'standup',
+  project_number: 5
 })
 const tagged = await mj.team.teamSearchByDateRange({
   start_date: '2026-01-01',
   end_date: '2026-12-31',
   tags: ['codemode4-team-test'],
+  project_number: 5
 })
 return {
   hasEntries: Array.isArray(results.entries),
