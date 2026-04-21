@@ -7,15 +7,8 @@
 - Explicit HTTP service-level `curl` container health-checks to `docker-compose.yml`.
 - True O(1) LRU eviction (using `Map.prototype.keys().next()`) to rate-limiting and user tracking maps to deterministically cap memory under high throughput.
 - A `Map` caching layer tied to the local workspace path to minimize redundant OctoKit and Git instantiations.
-- Explicit `resolved_owner` and `resolved_repo` schema properties on all GitHub mutations to eliminate ambient context ambiguity.
 
 ### Changed
-
-- Formally certified the v7.5.0 release baseline through comprehensive static and template resource integrity verification (30 endpoints), payload optimization validation, and cross-project resolution testing.
-- Verified and finalized Code Mode (worker_threads) sandboxing patterns, database adapter boundaries, and explicit structured error generation across all 70 core and team tools.
-- Formally certified Phase 10 Team Collaboration (25 tools + 4 resources) functionality, including successful validation of the Hush Protocol flag lifecycle (pass, resolve, idempotent transitions) and cross-project insights filtering.
-- Formally certified Phase 14 Admin Tool Group (6 tools), ensuring deterministic boundary enforcement for soft-deletes, tag merges, and vector index initializations, with all schema validations returning structured errors.
-- Formally certified Phase 15 Backup & Export Tool Group (4 tools), ensuring strict path traversal protections, non-destructive deletion boundaries, and exact filter enforcement for database exports and restoration processes.
 
 **Dependency Updates**
 
@@ -237,3 +230,4 @@
 - Updated test assertions in `template-github-branches.test.ts` and `github-resource-handlers.test.ts` to align with the new, structured multi-project error strings returned by `resolveGitHubRepo`.
 - Fixed a bug where `memory://graph/actions` and `memory://actions/recent` resources lacked `{repo}` dynamic URI support and failed to return the correct structured error format when GitHub integration was unavailable.
 - Fixed a bug in `resolveGitHubRepo` where global GitHub resources (like `memory://github/status`) failed with a generic "Could not detect repository" error outside a git directory, rather than correctly falling back to the first available project in `PROJECT_REGISTRY`.
+- Fixed an OutputSchema compliance bug in `create_github_issue_with_entry` and `close_github_issue_with_entry` where success-path responses returned `resolved_owner` and `resolved_repo` fields that were absent from their declared output schemas (`CreateGitHubIssueWithEntryOutputSchema`, `CloseGitHubIssueWithEntryOutputSchema`), causing `-32602` OutputSchema validation failures in strict MCP clients.

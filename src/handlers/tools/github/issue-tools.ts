@@ -248,8 +248,6 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             id: entry.id,
                             linkedToIssue: issue.number,
                         },
-                        resolved_owner: resolved.owner,
-                        resolved_repo: resolved.repo,
                         message:
                             `Created issue #${String(issue.number)}` +
                             (projectResult?.added ? ` (added to Project #${projectNumber})` : '') +
@@ -494,8 +492,6 @@ export function getGitHubIssueTools(context: ToolContext): ToolDefinition[] {
                             significanceType: 'blocker_resolved',
                         },
                         kanban: kanbanResult,
-                        resolved_owner: resolved.owner,
-                        resolved_repo: resolved.repo,
                         message:
                             `Closed issue #${String(input.issue_number)} and created resolution entry #${String(entry.id)}` +
                             (kanbanResult?.moved ? ' and moved to Done' : ''),
