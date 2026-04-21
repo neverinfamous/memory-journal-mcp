@@ -114,10 +114,12 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     })
 
                     teamDb.flushSave()
+                    
+                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) : undefined;
 
                     return {
                         success: true,
-                        entry: { ...entry, autoContext: undefined, author },
+                        entry: { ...entry, author, flagMetadata: parsedFlagMetadata },
                         author,
                     }
                 } catch (err) {
@@ -155,7 +157,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const author = fetchAuthor(teamDb, entry_id)
-                    const enrichedEntry = { ...entry, autoContext: undefined, author }
+                    const parsedFlagMetadata = entry.entryType === 'flag' && entry.autoContext ? JSON.parse(entry.autoContext) : undefined;
+                    const enrichedEntry = { ...entry, author, flagMetadata: parsedFlagMetadata }
 
                     const result: Record<string, unknown> = {
                         success: true,
@@ -203,8 +206,8 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     )
                     const enriched = entries.map((e) => ({
                         ...e,
-                        autoContext: undefined,
                         author: authorMap.get(e.id) ?? null,
+                        flagMetadata: e.entryType === 'flag' && e.autoContext ? JSON.parse(e.autoContext) : undefined,
                     }))
 
                     return { entries: enriched, count: enriched.length }

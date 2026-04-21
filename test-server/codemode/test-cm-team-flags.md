@@ -55,7 +55,7 @@ const help = await mj.team.passTeamFlag({
 
 // Verify entry structure
 const detail = await mj.team.teamGetEntryById({ entry_id: blocker.entry?.id })
-const autoCtx = detail.entry?.autoContext ? JSON.parse(detail.entry.autoContext) : null
+const flagMeta = detail.entry?.flagMetadata || null
 
 const result = {
   blockerSuccess: blocker.success,
@@ -69,10 +69,10 @@ const result = {
   entryType: detail.entry?.entryType,
   hasTags: detail.entry?.tags?.includes('flag:blocker'),
   hasTargetTag: detail.entry?.tags?.includes('@sarah'),
-  autoCtxFlagType: autoCtx?.flag_type,
-  autoCtxTarget: autoCtx?.target_user,
-  autoCtxLink: autoCtx?.link,
-  autoCtxResolved: autoCtx?.resolved,
+  autoCtxFlagType: flagMeta?.flag_type,
+  autoCtxTarget: flagMeta?.target_user,
+  autoCtxLink: flagMeta?.link,
+  autoCtxResolved: flagMeta?.resolved,
 };
 return result;
 ```
@@ -173,7 +173,7 @@ const resolved = await mj.team.resolveTeamFlag({
 
 // Verify resolved state
 const after = await mj.team.teamGetEntryById({ entry_id: flagId })
-const afterCtx = after.entry?.autoContext ? JSON.parse(after.entry.autoContext) : null
+const afterCtx = after.entry?.flagMetadata || null
 
 // Idempotent re-resolve
 const reResolved = await mj.team.resolveTeamFlag({

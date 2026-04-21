@@ -75,6 +75,8 @@
 
 - `team_create_entry` regression where explicit `author` claims were strictly blocked in non-OAuth environments, breaking local API test suites and custom workflows.
 - Test suite regressions in Vitest and Playwright E2E suites by properly injecting `TEAM_AUTHOR` and environment variables to satisfy newly centralized fail-closed security boundary checks.
+- Code Mode test suite regressions where `team_get_entry_by_id` omitted the structured `flagMetadata` property for Hush Protocol flags by ensuring `autoContext` is parsed during response mapping.
+- `team_pass_flag` and `team_resolve_flag` output schemas to properly return `flagMetadata` directly instead of improperly nulling out the source `autoContext` via object spread masking.
 - Unhandled `no-unsafe-return` and `no-explicit-any` ESLint regressions during Code Mode worker serialization.
 - N+1 query performance bottlenecks during team semantic search and Markdown exports by batch-fetching tags.
 - `significantResource` compute overhead by precomputing entry timestamps outside of iterative map and sort functions.
