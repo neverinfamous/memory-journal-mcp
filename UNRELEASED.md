@@ -86,6 +86,7 @@
 - Semantic search crash where `sqlite-vec` virtual table KNN queries failed due to missing `k = ?` constraints.
 - Search tools where `include_team` defaulted to `false` preventing Code Mode from resolving team entries by default.
 - `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped.
+- Verified Code Mode Admin, Backup, and Export operations via sandboxed `mj_execute_code` test matrix.
 
 ### Security
 - Updated `hono` to `4.12.14` to resolve a medium severity vulnerability.
