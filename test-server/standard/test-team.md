@@ -218,59 +218,59 @@
 
 ## Success Criteria
 
-- [ ] `team_create_entry` creates entry with auto-detected `author` field
-- [ ] `team_create_entry` accepts explicit `author` override
-- [ ] `team_get_recent` returns entries with `author` field on each entry
-- [ ] `team_search` filters by text, tags, or both
-- [ ] `team_search` properly delegates to Hybrid/RRF when `mode: 'auto'`
-- [ ] `team_get_entry_by_id` returns entry with `author`, `importance`, and optional `relationships`
-- [ ] `team_get_entry_by_id` with `include_relationships: false` omits relationship data
-- [ ] `team_get_entry_by_id` returns structured error for nonexistent ID
-- [ ] `team_list_tags` returns tags with counts
-- [ ] `team_search_by_date_range` returns entries within date range with `author` field
-- [ ] `team_search_by_date_range` filters by `entry_type` and `tags`
-- [ ] `team_search_by_date_range` rejects invalid date format with structured error
-- [ ] `team_update_entry` updates content, tags, and entry_type independently
-- [ ] `team_update_entry` returns structured error for nonexistent ID
-- [ ] `team_delete_entry` soft-deletes team entry (no `permanent` flag)
-- [ ] `team_delete_entry` returns structured error for nonexistent ID
-- [ ] `team_merge_tags` consolidates tags — source removed, entries re-tagged
-- [ ] `team_merge_tags` returns structured errors for same-tag and nonexistent source
-- [ ] `team_get_statistics` returns `totalEntries`, `entriesByType`, `entriesByPeriod`, `authors`
-- [ ] `team_get_statistics` respects `group_by` parameter
-- [ ] `team_link_entries` creates relationships, detects duplicates, errors on nonexistent IDs
-- [ ] `team_visualize_relationships` returns Mermaid diagram with `nodeCount`, `edgeCount`
-- [ ] `team_export_entries` exports JSON and markdown with optional filters
-- [ ] `team_export_markdown` exports entries to .md files successfully
-- [ ] `team_import_markdown` runs dry_runs and parses standard team features
-- [ ] `team_backup` creates named and auto-named backups with `filename`, `path`, `sizeBytes`
-- [ ] `team_list_backups` returns backup metadata array
-- [ ] `team_rebuild_vector_index` indexes team entries successfully
-- [ ] `team_get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
-- [ ] `team_semantic_search` returns semantically similar entries with `similarity` scores
-- [ ] `team_semantic_search` accepts `entry_id` for "Related by ID" lookup
-- [ ] `team_add_to_vector_index` succeeds for existing entries, errors for nonexistent
-- [ ] `team_get_cross_project_insights` returns `project_count ≥ 1` with seed entries S15–S17 present (project 5 has 3 entries, meeting `min_entries: 3`)
-- [ ] `team_get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
-- [ ] `team_get_cross_project_insights` returns `project_count: 0`, `projects: []`, and `message` when no projects meet the threshold
-- [ ] All 22 team tools return structured errors when `TEAM_DB_PATH` not configured
-- [ ] `pass_team_flag` creates entries with `entry_type: "flag"` and structured `auto_context`
-- [ ] `pass_team_flag` strips `@` prefix from `target_user` before storage
-- [ ] `pass_team_flag` generates `flag:{type}` and `@{user}` tags automatically
-- [ ] `pass_team_flag` validates against configured vocabulary (rejects invalid types)
-- [ ] `pass_team_flag` requires both `flag_type` and `message`
-- [ ] `resolve_team_flag` transitions flag to resolved state with `[RESOLVED]` content marker
-- [ ] `resolve_team_flag` is idempotent — re-resolving returns success with original state
-- [ ] `resolve_team_flag` rejects non-flag entries with `VALIDATION_ERROR`
-- [ ] `resolve_team_flag` returns `RESOURCE_NOT_FOUND` for nonexistent IDs
-- [ ] `memory://flags` returns active (unresolved) flag dashboard
-- [ ] `memory://flags/vocabulary` returns the server-wide flag vocabulary
-- [ ] `memory://briefing` includes `activeFlags` when unresolved flags exist
-- [ ] `memory://briefing` includes `localTime` for chronological grounding
-- [ ] `memory://team/recent` returns author-enriched entries with `source: "team"`
-- [ ] `memory://team/statistics` returns `configured: true`, `authors` array with `{ author, count }`
-- [ ] `memory://briefing` includes team entry count ("Team DB" row)
-- [ ] `memory://health` includes `teamDatabase` status block with `configured`, `entryCount`, `path`
-- [ ] `team_get_collaboration_matrix` returns populated `authorActivity` and `impactFactor` metrics
-- [ ] `memory://insights/digest` handles un-configured digest gracefully or returns valid JSON
-- [ ] `memory://insights/team-collaboration` returns static matrix metrics without error
+- [x] `team_create_entry` creates entry with auto-detected `author` field
+- [x] `team_create_entry` accepts explicit `author` override
+- [x] `team_get_recent` returns entries with `author` field on each entry
+- [x] `team_search` filters by text, tags, or both
+- [x] `team_search` properly delegates to Hybrid/RRF when `mode: 'auto'`
+- [x] `team_get_entry_by_id` returns entry with `author`, `importance`, and optional `relationships`
+- [x] `team_get_entry_by_id` with `include_relationships: false` omits relationship data
+- [x] `team_get_entry_by_id` returns structured error for nonexistent ID
+- [x] `team_list_tags` returns tags with counts
+- [x] `team_search_by_date_range` returns entries within date range with `author` field
+- [x] `team_search_by_date_range` filters by `entry_type` and `tags`
+- [x] `team_search_by_date_range` rejects invalid date format with structured error
+- [x] `team_update_entry` updates content, tags, and entry_type independently
+- [x] `team_update_entry` returns structured error for nonexistent ID
+- [x] `team_delete_entry` soft-deletes team entry (no `permanent` flag)
+- [x] `team_delete_entry` returns structured error for nonexistent ID
+- [x] `team_merge_tags` consolidates tags — source removed, entries re-tagged
+- [x] `team_merge_tags` returns structured errors for same-tag and nonexistent source
+- [x] `team_get_statistics` returns `totalEntries`, `entriesByType`, `entriesByPeriod`, `authors`
+- [x] `team_get_statistics` respects `group_by` parameter
+- [x] `team_link_entries` creates relationships, detects duplicates, errors on nonexistent IDs
+- [x] `team_visualize_relationships` returns Mermaid diagram with `nodeCount`, `edgeCount`
+- [x] `team_export_entries` exports JSON and markdown with optional filters
+- [x] `team_export_markdown` exports entries to .md files successfully
+- [x] `team_import_markdown` runs dry_runs and parses standard team features
+- [x] `team_backup` creates named and auto-named backups with `filename`, `path`, `sizeBytes`
+- [x] `team_list_backups` returns backup metadata array
+- [x] `team_rebuild_vector_index` indexes team entries successfully
+- [x] `team_get_vector_index_stats` returns `available`, `itemCount`, `modelName`, `dimensions`
+- [x] `team_semantic_search` returns semantically similar entries with `similarity` scores
+- [x] `team_semantic_search` accepts `entry_id` for "Related by ID" lookup
+- [x] `team_add_to_vector_index` succeeds for existing entries, errors for nonexistent
+- [x] `team_get_cross_project_insights` returns `project_count ≥ 1` with seed entries S15–S17 present (project 5 has 3 entries, meeting `min_entries: 3`)
+- [x] `team_get_cross_project_insights` response includes `top_tags`, `first_entry`, `last_entry`, `active_days`, `time_distribution` per project
+- [x] `team_get_cross_project_insights` returns `project_count: 0`, `projects: []`, and `message` when no projects meet the threshold
+- [x] All 22 team tools return structured errors when `TEAM_DB_PATH` not configured
+- [x] `pass_team_flag` creates entries with `entry_type: "flag"` and structured `auto_context`
+- [x] `pass_team_flag` strips `@` prefix from `target_user` before storage
+- [x] `pass_team_flag` generates `flag:{type}` and `@{user}` tags automatically
+- [x] `pass_team_flag` validates against configured vocabulary (rejects invalid types)
+- [x] `pass_team_flag` requires both `flag_type` and `message`
+- [x] `resolve_team_flag` transitions flag to resolved state with `[RESOLVED]` content marker
+- [x] `resolve_team_flag` is idempotent — re-resolving returns success with original state
+- [x] `resolve_team_flag` rejects non-flag entries with `VALIDATION_ERROR`
+- [x] `resolve_team_flag` returns `RESOURCE_NOT_FOUND` for nonexistent IDs
+- [x] `memory://flags` returns active (unresolved) flag dashboard
+- [x] `memory://flags/vocabulary` returns the server-wide flag vocabulary
+- [x] `memory://briefing` includes `activeFlags` when unresolved flags exist
+- [x] `memory://briefing` includes `localTime` for chronological grounding
+- [x] `memory://team/recent` returns author-enriched entries with `source: "team"`
+- [x] `memory://team/statistics` returns `configured: true`, `authors` array with `{ author, count }`
+- [x] `memory://briefing` includes team entry count ("Team DB" row)
+- [x] `memory://health` includes `teamDatabase` status block with `configured`, `entryCount`, `path`
+- [x] `team_get_collaboration_matrix` returns populated `authorActivity` and `impactFactor` metrics
+- [x] `memory://insights/digest` handles un-configured digest gracefully or returns valid JSON
+- [x] `memory://insights/team-collaboration` returns static matrix metrics without error
