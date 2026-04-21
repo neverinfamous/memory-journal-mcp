@@ -405,7 +405,10 @@ function sanitizeFtsQuery(query: string): string {
     const tokens = noQuotes.split(/\s+/);
     const safeTokens: string[] = [];
 
-    for (const token of tokens) {
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (!token) continue;
+        
         // Strip out non-alphanumeric characters, except hyphen, underscore, and asterisk
         let sanitizedToken = token.replace(/[^a-zA-Z0-9_\-*]/g, '');
         if (!sanitizedToken) continue;
@@ -420,8 +423,40 @@ function sanitizeFtsQuery(query: string): string {
         
         if (!sanitizedToken || sanitizedToken === '*') continue;
 
-        // Drop FTS5 keywords to prevent syntax errors and ReDoS
-        if (/^(AND|OR|NOT|NEAR)$/i.test(sanitizedToken)) continue;
+        // Drop NEAR as it causes ReDoS
+        if (/^NEAR$/i.test(sanitizedToken)) continue;
+
+        const isOperator = /^(AND|OR|NOT)$/i.test(sanitizedToken);
+        if (isOperator) {
+            // Must be uppercase for FTS5
+            sanitizedToken = sanitizedToken.toUpperCase();
+            
+            // Operators cannot be the first token
+            if (safeTokens.length === 0) continue;
+            
+            // Operators cannot be preceded by another operator
+            const prevToken = safeTokens[safeTokens.length - 1];
+            if (prevToken && /^(AND|OR|NOT)$/.test(prevToken)) {
+                // If there are adjacent operators, skip the current one
+                continue;
+            }
+            
+            // Operators must have a valid subsequent non-operator token
+            let hasValidNext = false;
+            for (let j = i + 1; j < tokens.length; j++) {
+                const rawNext = tokens[j];
+                if (!rawNext) continue;
+                
+                let nextToken = rawNext.replace(/[^a-zA-Z0-9_\-*]/g, '');
+                nextToken = nextToken.replace(/\*/g, '');
+                if (nextToken && !/^(AND|OR|NOT|NEAR)$/i.test(nextToken)) {
+                    hasValidNext = true;
+                    break;
+                }
+            }
+            
+            if (!hasValidNext) continue;
+        }
 
         safeTokens.push(sanitizedToken);
     }

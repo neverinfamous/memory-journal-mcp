@@ -224,4 +224,4 @@
 - Fixed a bug in search tools where `include_team` defaulted to `false` instead of `true`, which prevented Code Mode cross-database operations from resolving team entries by default.
 - Fixed a bug in Code Mode where Team tools (`mj.team.*`) failed with 'missing TEAM_AUTHOR' authorization errors during testing by allowing `CODEMODE_INTERNAL_FULL_ACCESS` to bypass the Team fail-closed boundary.
 - Fixed a schema validation bug in Code Mode where Team tools (`mj.team.*`) failed due to a missing `project_number` argument by dynamically injecting the context's `defaultProjectNumber` across the dispatcher boundary.
-- Verified Automated Scheduler job execution and process isolation in HTTP transport mode.
+- Fixed a bug in `sanitizeFtsQuery` where valid FTS5 boolean queries (AND, OR, NOT) were silently stripped, causing complex NOT queries to fall back to less precise LIKE searches.
