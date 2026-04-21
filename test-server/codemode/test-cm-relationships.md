@@ -136,7 +136,7 @@ return {
   tagVizHasMermaid: typeof vizTags.mermaid === 'string',
   deepEntryCount: vizDeep.entry_count,
   limitEntryCount: vizLimit.entry_count,
-  badNotFound: !!vizBad.message && vizBad.message.includes('not found'),
+  badNotFound: !!vizBad.error && vizBad.error.includes('not found'),
 }
 ```
 

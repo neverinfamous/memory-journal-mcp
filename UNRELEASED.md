@@ -207,7 +207,6 @@
 - Fixed cascading test suite regressions by aligning assertions with new untrusted boundary tag lengths and updating E2E context injection mocks to satisfy `codemodeInternalFullAccess` requirements.
 - Resolved a re-entrancy deadlock in Code Mode during `restore_backup` by temporarily yielding the active job count to allow the inner tool to acquire the maintenance lock.
 - Enforced proper propagation of `TEAM_AUTHOR` and `codemodeInternalFullAccess` bypass within `share_with_team` Core tools for testing environments.
-- Successfully verified Code Mode Core CRUD operations (Phase 20), validating parameter passing, structured error handling, and team sharing across 12 test paths.
 - Fixed a bug in `create_entry` where it returned a stale entry object lacking the auto-populated `issueUrl` by capturing and assigning the result of `updateEntry`.
 - Fixed a bug in `codemode.ts` where the Code Mode sandbox retrieved a globally pooled `GitHubIntegration` instance with a mismatched working directory, causing `issueUrl` auto-population to fail; the sandbox now initializes an isolated connection to guarantee correct context.
 - Fixed missing project metadata propagation in Code Mode by dynamically injecting the configured `defaultProjectNumber` into internal dispatcher arguments across the sandbox boundary, ensuring `issueUrl` auto-population consistently inherits the correct repository context.
@@ -218,6 +217,5 @@
 - Fixed a severe performance oversight in `GitHubIntegration.getRepoInfo()` where it bypassed its own cache and spawned redundant `git branch` subprocesses on every invocation, causing high latency and intermittent resolution failures in worker sandboxes.
 - Fixed a bug in `GitHubIntegration` where `getIssue`, `getPullRequest`, and `getMilestone` threw raw 404 exceptions instead of returning `null`, causing the error boundary to intercept them as generic internal errors instead of the expected structured `RESOURCE_NOT_FOUND` responses.
 - Fixed a bug in `get_copilot_reviews` where fetching reviews for a non-existent pull request threw an unhandled 404 error; it now verifies PR existence and returns a structured `RESOURCE_NOT_FOUND` response.
-- Successfully verified Code Mode IO operations (Phase 26), ensuring `mj.io.exportMarkdown` and `mj.io.importMarkdown` correctly enforce `ALLOWED_IO_ROOTS` sandbox boundaries and block path traversal attempts.
 - Fixed a crash in semantic search where `sqlite-vec` virtual table KNN queries failed due to a missing `k = ?` constraint, ensuring cross-group orchestration and vector indexing pipelines complete successfully without `INTERNAL_ERROR` faults.
-- Successfully verified Code Mode Readonly Mode (Phase 18), confirming read operations succeed and write operations are strictly blocked from the API bridge when `readonly: true` is configured.
+- Validated relationships and visualization tools (`link_entries`, `visualize_relationships`) via Code Mode sandbox, ensuring correct Mermaid graph generation, strict duplication detection, and structured error compliance.
