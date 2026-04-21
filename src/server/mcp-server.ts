@@ -406,12 +406,12 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                 schema as { partial: () => { passthrough?: () => z.ZodType } }
                             ).partial()
                             toolOptions.inputSchema =
-                                typeof relaxed.passthrough === 'function' ? relaxed.passthrough() : schema
+                                (typeof relaxed.passthrough === 'function' ? relaxed.passthrough() : schema) as unknown as z.ZodType
                         } catch {
-                            toolOptions.inputSchema = schema
+                            toolOptions.inputSchema = schema as unknown as z.ZodType
                         }
                     } else {
-                        toolOptions.inputSchema = schema
+                        toolOptions.inputSchema = schema as unknown as z.ZodType
                     }
                 }
         
@@ -429,10 +429,10 @@ export async function createServer(options: ServerOptions): Promise<void> {
                                 outSchema as { passthrough: () => z.ZodType }
                             ).passthrough()
                         } catch {
-                            toolOptions.outputSchema = outSchema
+                            toolOptions.outputSchema = outSchema as unknown as z.ZodType
                         }
                     } else {
-                        toolOptions.outputSchema = outSchema
+                        toolOptions.outputSchema = outSchema as unknown as z.ZodType
                     }
                 }
         
