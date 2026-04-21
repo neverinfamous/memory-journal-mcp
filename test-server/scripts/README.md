@@ -13,6 +13,7 @@ This directory contains standalone Node.js integration tests for `memory-journal
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------- |
 | `check-schemas.mjs`            | `tools/list` validates that all tools (except `mj_execute_code`) contain a properly serialized `outputSchema` definition              | stdio         | ~5s      |
 | `cleanup-seed-data.mjs`        | Whitelist-driven database maintenance utility replacing tests/seed artifacts while protecting real projects (#5, #13) and base seeds. | direct SQLite | ~1s      |
+| `test-admin-zod.mjs`           | Validates that the Admin tool group correctly processes empty schemas and mismatched types via strict Zod handling.                   | stdio         | ~5s      |
 | `test-instruction-levels.mjs`  | `--instruction-level` essential/standard/full token ordering                                                                          | stdio         | ~10s     |
 | `test-filter-instructions.mjs` | Filter-aware sections — validates each `--tool-filter` config includes/excludes correct sections + reports token estimates per filter | stdio         | ~90s     |
 | `test-tool-annotations.mjs`    | `tools/list` openWorldHint annotation counts (45 false + 22 true = 67)                                                                | stdio         | ~5s      |
