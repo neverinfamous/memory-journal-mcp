@@ -23,17 +23,7 @@ import {
     TeamEntryDetailOutputSchema,
     TeamTagsListOutputSchema,
 } from './schemas.js'
-
-function parseFlagContext(
-    autoContext: string | null | undefined
-): Record<string, unknown> | undefined {
-    if (!autoContext) return undefined
-    try {
-        return JSON.parse(autoContext) as Record<string, unknown>
-    } catch {
-        return undefined
-    }
-}
+import { parseFlagContext } from '../../../types/auto-context.js'
 
 // ============================================================================
 // Tool Definitions

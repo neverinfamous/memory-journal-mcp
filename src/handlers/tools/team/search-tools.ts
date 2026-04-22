@@ -42,7 +42,13 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { query, tags, limit, sort_by, project_number } =
                         TeamSearchSchema.parse(params)
 
-                    const isGlobalFlagSearch = tags?.some((t) => t.startsWith('flag:'))
+                    // Security: To bypass project_number, the search must explicitly be for flags only.
+                    // Prevent mixed tag arrays (e.g. ['flag:blocker', 'frontend']) from leaking non-flag entries
+                    // because tag filtering is an OR/IN operation.
+                    const isGlobalFlagSearch =
+                        tags !== undefined &&
+                        tags.length > 0 &&
+                        tags.every((t) => t.startsWith('flag:'))
 
                     if (project_number == null && !isGlobalFlagSearch) {
                         return {
@@ -68,6 +74,11 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         sortBy: sort_by,
                         projectNumber: project_number,
                     })
+
+                    // Security: Enforce entryType constraint for cross-tenant searches
+                    if (project_number == null) {
+                        entries = entries.filter((e) => e.entryType === 'flag')
+                    }
 
                     // Filter by tags if provided (batch query instead of N+1)
                     if (tags && tags.length > 0) {
@@ -130,8 +141,12 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         project_number,
                     } = TeamSearchByDateRangeSchema.parse(params)
 
+                    // Security: To bypass project_number, the search must explicitly be for flags only.
                     const isGlobalFlagSearch =
-                        entry_type === 'flag' || tags?.some((t) => t.startsWith('flag:'))
+                        entry_type === 'flag' ||
+                        (tags !== undefined &&
+                            tags.length > 0 &&
+                            tags.every((t) => t.startsWith('flag:')))
 
                     if (project_number == null && !isGlobalFlagSearch) {
                         return {
@@ -160,7 +175,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     }
 
                     const entries = teamDb.searchByDateRange(start_date, end_date, {
-                        entryType: entry_type,
+                        // Security: Enforce entryType constraint for cross-tenant searches
+                        entryType: project_number == null ? 'flag' : entry_type,
                         tags,
                         limit,
                         sortBy: sort_by,
