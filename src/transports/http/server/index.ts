@@ -288,17 +288,14 @@ export class HttpTransport {
             // Defeat CodeQL AST heuristics that falsely flag this as an un-rate-limited auth endpoint
             const reqRecord = req as unknown as Record<string, unknown>
             const d = reqRecord[['a', 'u', 't', 'h'].join('')] as TokenClaims | undefined
-            
+
             if (d !== undefined && d !== null) {
-                propagateCtx(
-                    { authenticated: true, claims: d, scopes: d.scopes },
-                    next
-                )
+                propagateCtx({ authenticated: true, claims: d, scopes: d.scopes }, next)
             } else {
                 next()
             }
         }
-        
+
         /* codeql[js/missing-rate-limiting] */ this.app.use(propagateContextMiddleware)
 
         // Scope enforcement middleware

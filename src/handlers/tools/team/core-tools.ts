@@ -24,12 +24,14 @@ import {
     TeamTagsListOutputSchema,
 } from './schemas.js'
 
-function parseFlagContext(autoContext: string | null | undefined): Record<string, unknown> | undefined {
-    if (!autoContext) return undefined;
+function parseFlagContext(
+    autoContext: string | null | undefined
+): Record<string, unknown> | undefined {
+    if (!autoContext) return undefined
     try {
-        return JSON.parse(autoContext) as Record<string, unknown>;
+        return JSON.parse(autoContext) as Record<string, unknown>
     } catch {
-        return undefined;
+        return undefined
     }
 }
 
@@ -133,9 +135,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                     teamDb.flushSave()
 
                     const parsedFlagMetadata =
-                        entry.entryType === 'flag'
-                            ? parseFlagContext(entry.autoContext)
-                            : undefined
+                        entry.entryType === 'flag' ? parseFlagContext(entry.autoContext) : undefined
 
                     return {
                         success: true,
@@ -166,7 +166,10 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         TeamGetEntryByIdSchema.parse(params)
                     const entry = teamDb.getEntryById(entry_id)
 
-                    if (!entry || (project_number !== undefined && entry.projectNumber !== project_number)) {
+                    if (
+                        !entry ||
+                        (project_number !== undefined && entry.projectNumber !== project_number)
+                    ) {
                         return {
                             success: false,
                             error: `Team entry ${String(entry_id)} not found or does not belong to project ${project_number}`,
@@ -180,9 +183,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
 
                     const author = fetchAuthor(teamDb, entry_id)
                     const parsedFlagMetadata =
-                        entry.entryType === 'flag'
-                            ? parseFlagContext(entry.autoContext)
-                            : undefined
+                        entry.entryType === 'flag' ? parseFlagContext(entry.autoContext) : undefined
                     const enrichedEntry = { ...entry, author, flagMetadata: parsedFlagMetadata }
 
                     const result: Record<string, unknown> = {
@@ -233,9 +234,7 @@ export function getTeamCoreTools(context: ToolContext): ToolDefinition[] {
                         ...e,
                         author: authorMap.get(e.id) ?? null,
                         flagMetadata:
-                            e.entryType === 'flag'
-                                ? parseFlagContext(e.autoContext)
-                                : undefined,
+                            e.entryType === 'flag' ? parseFlagContext(e.autoContext) : undefined,
                     }))
 
                     return { entries: enriched, count: enriched.length }

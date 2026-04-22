@@ -206,7 +206,6 @@ Control which tools are exposed via `MEMORY_JOURNAL_MCP_TOOL_FILTER` (or CLI: `-
 - `session-summary` - Create a session summary entry with accomplishments, pending items, and next-session context
 - `team-session-summary` - Create a retrospective team session summary entry securely isolated to the team database
 
-
 **[Complete prompts guide →](https://github.com/neverinfamous/memory-journal-mcp/wiki/Prompts)**
 
 ### 📡 **36 Resources** (27 Static + 9 Template)

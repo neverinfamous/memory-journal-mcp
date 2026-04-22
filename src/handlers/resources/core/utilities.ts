@@ -197,12 +197,11 @@ export const rulesResource: InternalResourceDef = {
                     timestamp: Date.now(),
                 })
 
-            // Bounded cache
-            if (cachedRulesMap.size > 100) {
-                const firstKey = cachedRulesMap.keys().next().value
-                if (firstKey) cachedRulesMap.delete(firstKey)
-            }
-
+                // Bounded cache
+                if (cachedRulesMap.size > 100) {
+                    const firstKey = cachedRulesMap.keys().next().value
+                    if (firstKey) cachedRulesMap.delete(firstKey)
+                }
             } finally {
                 await file.close()
             }
@@ -211,7 +210,9 @@ export const rulesResource: InternalResourceDef = {
             return {
                 data: cachedData ? cachedData.content : '',
                 annotations: {
-                    lastModified: new Date(cachedData ? cachedData.timestamp : Date.now()).toISOString(),
+                    lastModified: new Date(
+                        cachedData ? cachedData.timestamp : Date.now()
+                    ).toISOString(),
                 },
             }
         } catch (err) {

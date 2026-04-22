@@ -42,7 +42,7 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                     const { query, tags, limit, sort_by, project_number } =
                         TeamSearchSchema.parse(params)
 
-                    const isGlobalFlagSearch = tags?.some(t => t.startsWith('flag:'))
+                    const isGlobalFlagSearch = tags?.some((t) => t.startsWith('flag:'))
 
                     if (project_number == null && !isGlobalFlagSearch) {
                         return {
@@ -130,7 +130,8 @@ export function getTeamSearchTools(context: ToolContext): ToolDefinition[] {
                         project_number,
                     } = TeamSearchByDateRangeSchema.parse(params)
 
-                    const isGlobalFlagSearch = entry_type === 'flag' || tags?.some(t => t.startsWith('flag:'))
+                    const isGlobalFlagSearch =
+                        entry_type === 'flag' || tags?.some((t) => t.startsWith('flag:'))
 
                     if (project_number == null && !isGlobalFlagSearch) {
                         return {
