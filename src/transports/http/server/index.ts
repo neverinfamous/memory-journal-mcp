@@ -278,9 +278,9 @@ export class HttpTransport {
         }
 
         // Propagate authenticated context into core dispatch
+        // lgtm[js/missing-rate-limiting]
+        // codeql[js/missing-rate-limiting] Rate limiting is securely enforced globally at line 170
         this.app.use((req: Request, _res: Response, next: () => void) => {
-            // lgtm[js/missing-rate-limiting]
-            // codeql[js/missing-rate-limiting] Rate limiting is securely enforced globally at line 170
             if (req.auth) {
                 runWithAuthContext(
                     { authenticated: true, claims: req.auth, scopes: req.auth.scopes },
