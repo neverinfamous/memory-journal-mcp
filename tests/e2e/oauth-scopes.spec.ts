@@ -49,10 +49,6 @@ test.describe('OAuth 2.1 Scope Enforcement E2E', () => {
 
         // 2. Start mock JWKS HTTP server
         const app = express()
-        app.use((req, res, next) => {
-            console.log('JWKS Mock Received:', req.method, req.url)
-            next()
-        })
         app.get('/jwks', (req, res) => {
             res.json({ keys: [jwk] })
         })

@@ -666,7 +666,7 @@ describe('McpServer', function () {
             const spyCall = vi.spyOn(toolsModule, 'callTool').mockResolvedValueOnce({
                 invalidField: 10n,
             })
-            const server = await createServer({ transport: 'stdio', dbPath: './test-server.db' })
+            await createServer({ transport: 'stdio', dbPath: './test-server.db' })
 
             const toolCalls = mockRegisterTool.mock.calls.filter(
                 (call: unknown[]) => call[0] === 'fake_boom_tool'

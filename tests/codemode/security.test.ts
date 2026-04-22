@@ -10,7 +10,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest'
 import { CodeModeSecurityManager, DEFAULT_SECURITY_CONFIG } from '../../src/codemode/index.js'
-import * as v8 from 'node:v8'
 
 describe('CodeModeSecurityManager', () => {
     let security: CodeModeSecurityManager
