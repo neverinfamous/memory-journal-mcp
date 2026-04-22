@@ -3,4 +3,6 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.0...HEAD)
 
 ### Fixed
-- **Code Mode Stability:** Verified Code Mode Phase 26/27 Admin, Backup, & Export tools (tag merging, named/auto backups, restores, cleanup). No regressions found.
+
+### Verified
+- **Code Mode**: Completed Phase 17 stability verification for API Discoverability. Successfully validated `mj.help()`, per-group help documentation, method alias resolution, and positional argument support without regression.
