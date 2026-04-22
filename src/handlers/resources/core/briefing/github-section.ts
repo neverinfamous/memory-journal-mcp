@@ -289,12 +289,10 @@ async function fetchIssuesAndPrs(
         const openIssues = issues.length > 0 ? issues.length : 0
         const openIssueList =
             config.issueCount > 0 && issues.length > 0
-                ? issues
-                      .slice(0, config.issueCount)
-                      .map((i) => ({
-                          number: i.number,
-                          title: markUntrustedContentInline(i.title),
-                      }))
+                ? issues.slice(0, config.issueCount).map((i) => ({
+                      number: i.number,
+                      title: markUntrustedContentInline(i.title),
+                  }))
                 : undefined
 
         const prState = config.prStatusBreakdown ? ('all' as const) : ('open' as const)

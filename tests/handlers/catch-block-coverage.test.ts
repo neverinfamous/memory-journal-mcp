@@ -10,7 +10,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { callTool as _callTool } from '../../src/handlers/tools/index.js'
 import { DatabaseAdapter } from '../../src/database/sqlite-adapter/index.js'
-import * as fs from 'node:fs'
 
 const callTool = (
     name: any,

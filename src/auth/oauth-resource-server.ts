@@ -93,7 +93,10 @@ export class OAuthResourceServer {
      */
     getWWWAuthenticateHeader(error?: string, errorDescription?: string): string {
         const escapeHeaderValue = (str: string): string =>
-            str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]/g, ' ')
+            str
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '\\"')
+                .replace(/[\r\n]/g, ' ')
         const parts = [`Bearer realm="${escapeHeaderValue(this.config.resource)}"`]
 
         if (error) {
