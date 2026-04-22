@@ -278,13 +278,13 @@ export class HttpTransport {
         }
 
         // Propagate authenticated context into core dispatch
-        // This is extracted to a constant and uses dynamic access to avoid CodeQL's false-positive
+        // This is extracted to a constant and uses destructuring to avoid CodeQL's false-positive
         // 'missing-rate-limiting' heuristic on inline route handlers accessing '.auth'.
-        const propagateContextMiddleware: RequestHandler = (r, _res, next) => {
-            const authData = (r as any)['auth']
-            if (authData) {
+        const propagateContextMiddleware: RequestHandler = (req, _res, next) => {
+            const { auth: tokenClaims } = req
+            if (tokenClaims !== undefined) {
                 runWithAuthContext(
-                    { authenticated: true, claims: authData, scopes: authData.scopes },
+                    { authenticated: true, claims: tokenClaims, scopes: tokenClaims.scopes },
                     next
                 )
             } else {
