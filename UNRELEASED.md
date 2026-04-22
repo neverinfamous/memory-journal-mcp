@@ -3,7 +3,5 @@
 ## [Unreleased](https://github.com/neverinfamous/memory-journal-mcp/compare/v7.6.0...HEAD)
 
 ### Verified
-
-- **Phase 28.4–28.9: Team Administration & Collaboration via Code Mode**: Successfully executed a 12-case matrix validating `mj.team.*` tools in the sandbox. Confirmed that team metadata modifications (`teamUpdateEntry`, `teamMergeTags`), relationships mapping (`teamVisualizeRelationships`), file IO interoperability (`teamExportMarkdown`), and administration APIs strictly enforce validation schemas (requiring `project_number`) and robustly block path traversal attempts (`ALLOWED_IO_ROOTS`). Achieved full stability with 0 errors during valid execution paths.
-
+- Phase 28.1–28.3: Certified `memory-journal-mcp` Team CRUD and Search tools via Code Mode execution. Verified team entry creation (with auto/explicit author), recent limits, FTS/tag search combos, Date Range search filtering, tag listing, and structured error boundaries for nonexistent IDs and bad payloads.
 ### Added
