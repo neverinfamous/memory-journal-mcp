@@ -269,7 +269,6 @@ export class HttpTransport {
 
             logger.info('OAuth 2.1 authentication enabled', {
                 module: 'HTTP',
-                oauthIssuerUrl: this.config.oauthIssuer,
                 audience: this.config.oauthAudience,
             })
         } else if (authToken) {
@@ -291,6 +290,9 @@ export class HttpTransport {
                 next()
             }
         }
+        
+        // lgtm[js/missing-rate-limiting]
+        // codeql[js/missing-rate-limiting] Rate limiting is securely enforced globally at line 170
         this.app.use(propagateContextMiddleware)
 
         // Scope enforcement middleware

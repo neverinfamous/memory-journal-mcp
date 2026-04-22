@@ -20,12 +20,14 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      HAS_API_KEY: ${{ secrets.RB_API_KEY != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Validate Skill
-        if: ${{ secrets.RB_API_KEY != '' }}
+        if: ${{ env.HAS_API_KEY == 'true' }}
         uses: hashgraph-online/skill-publish@f9a1962fcbd8116e1e82bed3c97d9223a6206ac4 # v1.2
         with:
           api-key: ${{ secrets.RB_API_KEY }}
